@@ -679,8 +679,16 @@ nvsdmRet_t NvsdmMock::nvsdmFinalize()
     return NVSDM_SUCCESS;
 }
 
-nvsdmRet_t NvsdmMock::nvsdmDiscoverTopology(char * /* srcCA */, int /* srcPort */)
+nvsdmRet_t NvsdmMock::nvsdmDiscoverTopology(char *srcCA, int /* srcPort */)
 {
+    if (!m_init)
+    {
+        return NVSDM_ERROR_UNINITIALIZED;
+    }
+    if (srcCA != nullptr && !std::string_view(srcCA).starts_with("mlx5_"))
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
     return NVSDM_SUCCESS;
 }
 

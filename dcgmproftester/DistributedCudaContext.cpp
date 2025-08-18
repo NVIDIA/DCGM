@@ -558,11 +558,11 @@ DistributedCudaContext::DistributedCudaContext(
     std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities,
     const dcgmGroupEntityPair_t &entity,
     const std::string &cudaVisibleDevices)
-    : m_physicalGpu(physicalGpu)
+    : m_physicalGpu(std::move(physicalGpu))
     , m_cudaVisibleDevices(cudaVisibleDevices)
     , m_entity(entity)
 {
-    ReInitialize(entities);
+    ReInitialize(std::move(entities));
 }
 
 
@@ -1157,7 +1157,7 @@ int DistributedCudaContext::RunSubtestNvLinkBandwidth(void)
      */
     std::string PeerBusId;
     m_input >> PeerBusId;
-    m_cudaWorker.SetPeerByBusId(PeerBusId);
+    m_cudaWorker.SetPeerByBusId(std::move(PeerBusId));
 
     m_cudaWorker.SetWorkerToIdle();
 

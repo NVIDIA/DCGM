@@ -4237,7 +4237,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
-
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_P2P_NVLINK_STATUS,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "p2p_nvlink_status",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "P2PNS",
+                                             "C",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_GR_ENGINE_ACTIVE,
                                              DCGM_FT_DOUBLE,
                                              0,

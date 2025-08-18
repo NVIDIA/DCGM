@@ -178,6 +178,9 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
             case DCGM_CORE_SR_GET_NVLINK_STATUS:
                 dcgmReturn = ProcessGetNvLinkStatus(*(dcgm_core_msg_get_nvlink_status_t *)moduleCommand);
                 break;
+            case DCGM_CORE_SR_GET_NVLINK_P2P_STATUS:
+                dcgmReturn = ProcessGetNvLinkP2PStatus(*(dcgm_core_msg_get_nvlink_p2p_status_t *)moduleCommand);
+                break;
             case DCGM_CORE_SR_FIELDGROUP_CREATE:
             case DCGM_CORE_SR_FIELDGROUP_DESTROY:
             case DCGM_CORE_SR_FIELDGROUP_GET_INFO:
@@ -312,7 +315,7 @@ dcgmReturn_t DcgmModuleCore::ProcessCreateGroup(dcgm_core_msg_create_group_t &ms
 
     std::string groupName(msg.cg.groupName, sizeof(msg.cg.groupName));
 
-    ret = m_groupManager->AddNewGroup(connectionId, groupName, msg.cg.groupType, &groupId);
+    ret = m_groupManager->AddNewGroup(connectionId, std::move(groupName), msg.cg.groupType, &groupId);
 
     if (DCGM_ST_OK != ret)
     {
@@ -1769,6 +1772,26 @@ dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_sta
     }
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkP2PStatus(dcgm_core_msg_get_nvlink_p2p_status_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_get_nvlink_p2p_status_version);
+
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    if (msg.info.ls.version != dcgmNvLinkP2PStatus_version1)
+    {
+        DCGM_LOG_ERROR << "Struct version mismatch";
+        msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
+        return DCGM_ST_OK;
+    }
+
+    return m_cacheManager->CreateAllNvlinksP2PStatus(msg.info.ls);
 }
 
 dcgmReturn_t DcgmModuleCore::ProcessFieldgroupOp(dcgm_core_msg_fieldgroup_op_t &msg)

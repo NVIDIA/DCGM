@@ -20,7 +20,7 @@
 #include <sstream>
 
 /*****************************************************************************/
-TestParameterValue::TestParameterValue(std::string defaultValue)
+TestParameterValue::TestParameterValue(std::string const &defaultValue)
     : m_valueType(TP_T_STRING)
     , m_stringValue(defaultValue)
     , m_doubleValue(0.0)
@@ -53,7 +53,7 @@ TestParameterValue::~TestParameterValue()
 }
 
 /*****************************************************************************/
-int TestParameterValue::Set(std::string value)
+int TestParameterValue::Set(std::string const &value)
 {
     /* Possibly coerce the value into the other type */
     if (m_valueType == TP_T_STRING)
@@ -195,7 +195,7 @@ TestParameters &TestParameters::operator=(const TestParameters &other)
 }
 
 /*****************************************************************************/
-int TestParameters::AddString(std::string key, std::string value)
+int TestParameters::AddString(std::string key, std::string const &value)
 {
     if (m_globalParameters.find(key) != m_globalParameters.end())
     {
@@ -221,7 +221,7 @@ int TestParameters::AddDouble(std::string key, double value)
 }
 
 /*****************************************************************************/
-int TestParameters::AddSubTestString(std::string subTest, std::string key, std::string value)
+int TestParameters::AddSubTestString(std::string const &subTest, std::string const &key, std::string const &value)
 {
     std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
     std::map<std::string, TestParameterValue *>::iterator it;
@@ -245,7 +245,7 @@ int TestParameters::AddSubTestString(std::string subTest, std::string key, std::
 }
 
 /*****************************************************************************/
-int TestParameters::AddSubTestDouble(std::string subTest, std::string key, double value)
+int TestParameters::AddSubTestDouble(std::string const &subTest, std::string const &key, double value)
 {
     std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
     std::map<std::string, TestParameterValue *>::iterator it;
@@ -269,7 +269,7 @@ int TestParameters::AddSubTestDouble(std::string subTest, std::string key, doubl
 }
 
 /*****************************************************************************/
-int TestParameters::SetString(std::string key, std::string value, bool silent)
+int TestParameters::SetString(std::string const &key, std::string const &value, bool silent)
 {
     if (m_globalParameters.find(key) == m_globalParameters.end())
     {
@@ -286,7 +286,7 @@ int TestParameters::SetString(std::string key, std::string value, bool silent)
 }
 
 /*****************************************************************************/
-int TestParameters::SetDouble(std::string key, double value)
+int TestParameters::SetDouble(std::string const &key, double value)
 {
     if (m_globalParameters.find(key) == m_globalParameters.end())
     {
@@ -300,7 +300,10 @@ int TestParameters::SetDouble(std::string key, double value)
 }
 
 /*****************************************************************************/
-int TestParameters::SetSubTestString(std::string subTest, std::string key, std::string value, bool create)
+int TestParameters::SetSubTestString(std::string const &subTest,
+                                     std::string const &key,
+                                     std::string const &value,
+                                     bool create)
 {
     std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
 
@@ -334,7 +337,7 @@ int TestParameters::SetSubTestString(std::string subTest, std::string key, std::
 }
 
 /*****************************************************************************/
-int TestParameters::SetSubTestDouble(std::string subTest, std::string key, double value)
+int TestParameters::SetSubTestDouble(std::string const &subTest, std::string const &key, double value)
 {
     std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
 
@@ -362,7 +365,7 @@ std::string TestParameters::GetString(std::string_view key) const
 }
 
 /*****************************************************************************/
-static int bool_string_to_bool(std::string str)
+static int bool_string_to_bool(std::string const &str)
 {
     const char *cStr = str.c_str();
     char firstChar   = *cStr;
@@ -377,7 +380,7 @@ static int bool_string_to_bool(std::string str)
 }
 
 /*****************************************************************************/
-int TestParameters::GetBoolFromString(std::string key) const
+int TestParameters::GetBoolFromString(std::string const &key) const
 {
     if (auto it = m_globalParameters.find(key); it != m_globalParameters.end())
     {
@@ -400,7 +403,7 @@ double TestParameters::GetDouble(std::string_view key) const
 }
 
 /*****************************************************************************/
-std::string TestParameters::GetSubTestString(std::string subTest, std::string key)
+std::string TestParameters::GetSubTestString(std::string const &subTest, std::string const &key)
 {
     return m_subTestParameters[subTest][key]->GetString();
 }
@@ -412,13 +415,13 @@ bool TestParameters::HasKey(const std::string &key) const
 }
 
 /*****************************************************************************/
-double TestParameters::GetSubTestDouble(std::string subTest, std::string key)
+double TestParameters::GetSubTestDouble(std::string const &subTest, std::string const &key)
 {
     return m_subTestParameters[subTest][key]->GetDouble();
 }
 
 /*****************************************************************************/
-int TestParameters::GetBoolFromSubTestString(std::string subTest, std::string key)
+int TestParameters::GetBoolFromSubTestString(std::string const &subTest, std::string const &key)
 {
     std::string str = m_subTestParameters[subTest][key]->GetString();
     return bool_string_to_bool(str);

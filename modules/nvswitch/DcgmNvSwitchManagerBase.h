@@ -187,13 +187,14 @@ public:
     /**
      * Updates the watched fields for this module
      *
+     * @param now[in]              - the current time
      * @param nextUpdateTime[out]  - the earliest next time we should wake up
      *                               to update the fields
      *
      * @return DCGM_ST_OK:            Fields pushed correctly to the cache
      *         DCGM_ST_*:             Indicating any other return
      */
-    virtual dcgmReturn_t UpdateFields(timelib64_t &nextUpdateTime);
+    virtual dcgmReturn_t UpdateFields(timelib64_t &nextUpdateTime, timelib64_t now);
 
     /*************************************************************************/
     /*

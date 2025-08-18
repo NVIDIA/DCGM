@@ -28,38 +28,50 @@ typedef unsigned int dcgmCoreReqId_t; // A unique identifier for the request we 
 // A list of each possible kind of request to libdcgm.so
 typedef enum
 {
-    DcgmCoreReqIdCMGetGpuIds                    = 0,  // DcgmCacheManager::GetGpuIds()
-    DcgmCoreReqIdCMAreAllGpuIdsSameSku          = 1,  // DcgmCacheManager::AreAllGpuIdsSameSku()
-    DcgmCoreReqIdCMGetGpuCount                  = 2,  // DcgmCacheManager::GetGpuCount()
-    DcgmCoreReqIdCMAddFieldWatch                = 3,  // DcgmCacheManager::AddFieldWatch
-    DcgmCoreReqIdCMGetInt64SummaryData          = 4,  // DcgmCacheManager::GetInt64SummaryData()
-    DcgmCoreReqIdCMGetLatestSample              = 5,  // DcgmCacheManager::GetLatestSample()
-    DcgmCoreReqIdCMGetEntityNvLinkLinkStatus    = 6,  // DcgmCacheManager::GetEntityNvLinkLinkStatus()
-    DcgmCoreReqIdCMGetSamples                   = 7,  // DcgmCacheManager::GetSamples()
-    DcgmCoreReqIdCMGpuIdToNvmlIndex             = 8,  // DcgmCacheManager::GpuIdToNvmlIndex()
-    DcgmCoreReqIdCMGetMultipleLatestLiveSamples = 9,  // DcgmCacheManager::GetMultipleLatestLiveSamples()
-    DcgmCoreReqIdCMRemoveFieldWatch             = 10, // DcgmCacheManager::RemoveFieldWatch()
-    DcgmCoreReqIdCMGetAllGpuInfo                = 11, // DcgmCacheManager::GetAllGpuInfo()
-    DcgmCoreReqIdCMAppendSamples                = 12, // DcgmCacheManager::AppendSamples()
-    DcgmCoreReqIdCMSetValue                     = 13, // DcgmCacheManager::SetValue()
-    DcgmCoreReqIdCMNvmlIndexToGpuId             = 14, // DcgmCacheManager::NvmlIndexToGpuId()
-    DcgmCoreReqIdCMUpdateAllFields              = 15, // DcgmCacheManager::UpdateAllFields()
-    DcgmCoreReqIdGMVerifyAndUpdateGroupId       = 16, // DcgmGroupManager::VerifyAndUpdateGroupId()
-    DcgmCoreReqIdGMGetGroupEntities             = 17, // DcgmGroupManager::GetGroupEntities()
-    DcgmCoreReqIdGMAreAllTheSameSku             = 18, // DcgmGroupManager::AreAllTheSameSku()
-    DcgmCoreReqIdGMGetGroupGpuIds               = 19, // DcgmGroupManager::GetGroupGpuIds()
-    DcgmCoreReqIdLoggingGetSeverity             = 36, // LoggingGetSeverity()
-    DcgmCoreReqIdSendModuleCommand              = 37, // DcgmHostEngineHandler::ProcessModuleCommand()
-    DcgmCoreReqIdSendRawMessage                 = 38, // DcgmHostEngineHandler::SendRawMessageToClient()
-    DcgmCoreReqIdNotifyRequestOfCompletion      = 39, // DcgmHostEngineHandler::NotifyRequestOfCompletion()
-    DcgmCoreReqIdFGMPopulateFieldGroups         = 40, // FieldGroupManager::PopulateFieldGroups()
-    DcgmCoreReqIdFGMGetFieldGroupFields         = 41, // FieldGroupManager::GetFieldGroupFields()
-    DcgmCoreReqIdGetMigInstanceEntityId         = 45, // DcgmCacheManager::GetComputeInstanceEntityId()
-    DcgmCoreReqIdGetMigUtilization              = 46, // DcgmCacheManager::GetMigUtilization()
-    DcgmCoreReqMigIndicesForEntity              = 47, // DcgmCacheManager::GetMigIndicesForEntity()
-    DcgmCoreReqGetServiceAccount                = 48, // DcgmHostEngineHandler::GetServiceAccount()
-    DcgmCoreReqPopulateMigHierarchy             = 49, // DcgmCacheManager::PopulateMigHierarchy()
-    DcgmCoreReqIdCount                                // Always keep this one last
+    DcgmCoreReqIdCMGetGpuIds                      = 0,  // DcgmCacheManager::GetGpuIds()
+    DcgmCoreReqIdCMAreAllGpuIdsSameSku            = 1,  // DcgmCacheManager::AreAllGpuIdsSameSku()
+    DcgmCoreReqIdCMGetGpuCount                    = 2,  // DcgmCacheManager::GetGpuCount()
+    DcgmCoreReqIdCMAddFieldWatch                  = 3,  // DcgmCacheManager::AddFieldWatch
+    DcgmCoreReqIdCMGetInt64SummaryData            = 4,  // DcgmCacheManager::GetInt64SummaryData()
+    DcgmCoreReqIdCMGetLatestSample                = 5,  // DcgmCacheManager::GetLatestSample()
+    DcgmCoreReqIdCMGetEntityNvLinkLinkStatus      = 6,  // DcgmCacheManager::GetEntityNvLinkLinkStatus()
+    DcgmCoreReqIdCMGetSamples                     = 7,  // DcgmCacheManager::GetSamples()
+    DcgmCoreReqIdCMGpuIdToNvmlIndex               = 8,  // DcgmCacheManager::GpuIdToNvmlIndex()
+    DcgmCoreReqIdCMGetMultipleLatestLiveSamples   = 9,  // DcgmCacheManager::GetMultipleLatestLiveSamples()
+    DcgmCoreReqIdCMRemoveFieldWatch               = 10, // DcgmCacheManager::RemoveFieldWatch()
+    DcgmCoreReqIdCMGetAllGpuInfo                  = 11, // DcgmCacheManager::GetAllGpuInfo()
+    DcgmCoreReqIdCMAppendSamples                  = 12, // DcgmCacheManager::AppendSamples()
+    DcgmCoreReqIdCMSetValue                       = 13, // DcgmCacheManager::SetValue()
+    DcgmCoreReqIdCMNvmlIndexToGpuId               = 14, // DcgmCacheManager::NvmlIndexToGpuId()
+    DcgmCoreReqIdCMUpdateAllFields                = 15, // DcgmCacheManager::UpdateAllFields()
+    DcgmCoreReqIdGMVerifyAndUpdateGroupId         = 16, // DcgmGroupManager::VerifyAndUpdateGroupId()
+    DcgmCoreReqIdGMGetGroupEntities               = 17, // DcgmGroupManager::GetGroupEntities()
+    DcgmCoreReqIdGMAreAllTheSameSku               = 18, // DcgmGroupManager::AreAllTheSameSku()
+    DcgmCoreReqIdGMGetGroupGpuIds                 = 19, // DcgmGroupManager::GetGroupGpuIds()
+    DcgmCoreReqIdLoggingGetSeverity               = 36, // LoggingGetSeverity()
+    DcgmCoreReqIdSendModuleCommand                = 37, // DcgmHostEngineHandler::ProcessModuleCommand()
+    DcgmCoreReqIdSendRawMessage                   = 38, // DcgmHostEngineHandler::SendRawMessageToClient()
+    DcgmCoreReqIdNotifyRequestOfCompletion        = 39, // DcgmHostEngineHandler::NotifyRequestOfCompletion()
+    DcgmCoreReqIdFGMPopulateFieldGroups           = 40, // FieldGroupManager::PopulateFieldGroups()
+    DcgmCoreReqIdFGMGetFieldGroupFields           = 41, // FieldGroupManager::GetFieldGroupFields()
+    DcgmCoreReqIdGetMigInstanceEntityId           = 45, // DcgmCacheManager::GetComputeInstanceEntityId()
+    DcgmCoreReqIdGetMigUtilization                = 46, // DcgmCacheManager::GetMigUtilization()
+    DcgmCoreReqMigIndicesForEntity                = 47, // DcgmCacheManager::GetMigIndicesForEntity()
+    DcgmCoreReqGetServiceAccount                  = 48, // DcgmHostEngineHandler::GetServiceAccount()
+    DcgmCoreReqPopulateMigHierarchy               = 49, // DcgmCacheManager::PopulateMigHierarchy()
+    DcgmCoreReqIdResourceReserve                  = 50, // DcgmHostEngineHandler::ReserveResources()
+    DcgmCoreReqIdResourceFree                     = 51, // DcgmHostEngineHandler::FreeResources()
+    DcgmCoreReqIdChildProcessSpawn                = 52, // ChildProcessManager::Spawn()
+    DcgmCoreReqIdChildProcessStop                 = 53, // ChildProcessManager::Stop()
+    DcgmCoreReqIdChildProcessGetStatus            = 54, // ChildProcessManager::GetStatus()
+    DcgmCoreReqIdChildProcessWait                 = 55, // ChildProcessManager::Wait()
+    DcgmCoreReqIdChildProcessDestroy              = 56, // ChildProcessManager::Destroy()
+    DcgmCoreReqIdChildProcessGetStdErrHandle      = 57, // ChildProcessManager::GetStdErrHandle()
+    DcgmCoreReqIdChildProcessGetStdOutHandle      = 58, // ChildProcessManager::GetStdOutHandle()
+    DcgmCoreReqIdChildProcessGetDataChannelHandle = 59, // ChildProcessManager::GetDataChannelHandle()
+    DcgmCoreReqIdGetDriverVersion                 = 60, // DcgmCacheManager::GetDriverVersion()
+    DcgmCoreReqIdChildProcessManagerReset         = 61, // ChildProcessManager::Reset()
+    DcgmCoreReqIdCount                                  // Always keep this one last
 } dcgmCoreReqCmd_t;
 
 /* Callback functions for allocating and freeing DcgmModules. These are found
@@ -760,3 +772,169 @@ typedef struct
 #define dcgmCoreGetGpuInstanceHierarchy_version1 MAKE_DCGM_VERSION(dcgmCoreGetGpuInstanceHierarchy_v1, 1)
 #define dcgmCoreGetGpuInstanceHierarchy_version  dcgmCoreGetGpuInstanceHierarchy_version1
 typedef dcgmCoreGetGpuInstanceHierarchy_v1 dcgmCoreGetGpuInstanceHierarchy_t;
+
+/**
+ * Response for resource reservation request
+ */
+typedef struct
+{
+    dcgmReturn_t ret;   // !< The status of the function call
+    unsigned int token; // !< Token for the reservation, used to free resources
+} dcgmCoreResourceReserveRespParams_t;
+
+/**
+ * Parameters for resource freeing request
+ */
+typedef struct
+{
+    unsigned int token; // !< Token received during resource reservation
+} dcgmCoreResourceFreeReqParams_t;
+
+/**
+ * Complete message structure for resource reservation
+ */
+typedef struct
+{
+    dcgm_module_command_header_t header;          // Command header
+    dcgmCoreResourceReserveRespParams_t response; // Response parameters
+} dcgmCoreResourceReserve_v1;
+
+/**
+ * Complete message structure for resource freeing
+ */
+typedef struct
+{
+    dcgm_module_command_header_t header;     // Command header
+    dcgmCoreResourceFreeReqParams_t request; // Request parameters
+    dcgmReturn_t ret;                        // Return status
+} dcgmCoreResourceFree_v1;
+
+#define dcgmCoreResourceReserve_version1 MAKE_DCGM_VERSION(dcgmCoreResourceReserve_v1, 1)
+#define dcgmCoreResourceReserve_version  dcgmCoreResourceReserve_version1
+typedef dcgmCoreResourceReserve_v1 dcgmCoreResourceReserve_t;
+
+#define dcgmCoreResourceFree_version1 MAKE_DCGM_VERSION(dcgmCoreResourceFree_v1, 1)
+#define dcgmCoreResourceFree_version  dcgmCoreResourceFree_version1
+typedef dcgmCoreResourceFree_v1 dcgmCoreResourceFree_t;
+
+/**
+ * ChildProcess message structures
+ */
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmChildProcessParams_t request;
+    dcgmReturn_t ret;
+    ChildProcessHandle_t handle;
+    int pid;
+} dcgmCoreChildProcessSpawn_v1;
+
+#define dcgmCoreChildProcessSpawn_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessSpawn_v1, 1)
+#define dcgmCoreChildProcessSpawn_version  dcgmCoreChildProcessSpawn_version1
+typedef dcgmCoreChildProcessSpawn_v1 dcgmCoreChildProcessSpawn_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    ChildProcessHandle_t handle;
+    bool force;
+    dcgmReturn_t ret;
+} dcgmCoreChildProcessStop_v1;
+
+#define dcgmCoreChildProcessStop_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessStop_v1, 1)
+#define dcgmCoreChildProcessStop_version  dcgmCoreChildProcessStop_version1
+typedef dcgmCoreChildProcessStop_v1 dcgmCoreChildProcessStop_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    ChildProcessHandle_t handle;
+    dcgmChildProcessStatus_t status;
+    dcgmReturn_t ret;
+} dcgmCoreChildProcessGetStatus_v1;
+
+#define dcgmCoreChildProcessGetStatus_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessGetStatus_v1, 1)
+#define dcgmCoreChildProcessGetStatus_version  dcgmCoreChildProcessGetStatus_version1
+typedef dcgmCoreChildProcessGetStatus_v1 dcgmCoreChildProcessGetStatus_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    ChildProcessHandle_t handle;
+    int timeoutSec;
+    dcgmReturn_t ret;
+} dcgmCoreChildProcessWait_v1;
+
+#define dcgmCoreChildProcessWait_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessWait_v1, 1)
+#define dcgmCoreChildProcessWait_version  dcgmCoreChildProcessWait_version1
+typedef dcgmCoreChildProcessWait_v1 dcgmCoreChildProcessWait_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    ChildProcessHandle_t handle;
+    int sigTermTimeoutSec;
+    dcgmReturn_t ret;
+} dcgmCoreChildProcessDestroy_v1;
+
+#define dcgmCoreChildProcessDestroy_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessDestroy_v1, 1)
+#define dcgmCoreChildProcessDestroy_version  dcgmCoreChildProcessDestroy_version1
+typedef dcgmCoreChildProcessDestroy_v1 dcgmCoreChildProcessDestroy_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    ChildProcessHandle_t handle;
+    int fd;
+    dcgmReturn_t ret;
+} dcgmCoreChildProcessGetStdErrHandle_v1;
+
+#define dcgmCoreChildProcessGetStdErrHandle_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessGetStdErrHandle_v1, 1)
+#define dcgmCoreChildProcessGetStdErrHandle_version  dcgmCoreChildProcessGetStdErrHandle_version1
+typedef dcgmCoreChildProcessGetStdErrHandle_v1 dcgmCoreChildProcessGetStdErrHandle_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    ChildProcessHandle_t handle;
+    int fd;
+    dcgmReturn_t ret;
+} dcgmCoreChildProcessGetStdOutHandle_v1;
+
+#define dcgmCoreChildProcessGetStdOutHandle_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessGetStdOutHandle_v1, 1)
+#define dcgmCoreChildProcessGetStdOutHandle_version  dcgmCoreChildProcessGetStdOutHandle_version1
+typedef dcgmCoreChildProcessGetStdOutHandle_v1 dcgmCoreChildProcessGetStdOutHandle_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    ChildProcessHandle_t handle;
+    int fd;
+    dcgmReturn_t ret;
+} dcgmCoreChildProcessGetDataChannelHandle_v1;
+
+#define dcgmCoreChildProcessGetDataChannelHandle_version1 \
+    MAKE_DCGM_VERSION(dcgmCoreChildProcessGetDataChannelHandle_v1, 1)
+#define dcgmCoreChildProcessGetDataChannelHandle_version dcgmCoreChildProcessGetDataChannelHandle_version1
+typedef dcgmCoreChildProcessGetDataChannelHandle_v1 dcgmCoreChildProcessGetDataChannelHandle_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    char driverVersion[DCGM_MAX_STR_LENGTH];
+    dcgmCoreBasicResponse_t response;
+} dcgmCoreReqIdGetDriverVersion_v1;
+
+#define dcgmCoreReqIdGetDriverVersion_version1 MAKE_DCGM_VERSION(dcgmCoreReqIdGetDriverVersion_v1, 1)
+#define dcgmCoreReqIdGetDriverVersion_version  dcgmCoreReqIdGetDriverVersion_version1
+typedef dcgmCoreReqIdGetDriverVersion_v1 dcgmCoreReqIdGetDriverVersion_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmReturn_t ret;
+} dcgmCoreChildProcessManagerReset_v1;
+
+#define dcgmCoreChildProcessManagerReset_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessManagerReset_v1, 1)
+#define dcgmCoreChildProcessManagerReset_version  dcgmCoreChildProcessManagerReset_version1
+typedef dcgmCoreChildProcessManagerReset_v1 dcgmCoreChildProcessManagerReset_t;

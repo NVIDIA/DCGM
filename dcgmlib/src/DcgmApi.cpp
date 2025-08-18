@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "dcgm_multinode_internal.h"
 #include "dcgm_structs.h"
 #include "dcgm_test_apis.h"
 #include "dcgm_util.h"
@@ -30,6 +31,7 @@
 #include "dcgm_diag_structs.h"
 #include "dcgm_health_structs.h"
 #include "dcgm_introspect_structs.h"
+#include "dcgm_mndiag_structs.hpp"
 #include "dcgm_nvswitch_structs.h"
 #include "dcgm_policy_structs.h"
 #include "dcgm_profiling_structs.h"
@@ -3170,6 +3172,72 @@ dcgmReturn_t helperStopDiag(dcgmHandle_t dcgmHandle)
     return dcgmReturn;
 }
 
+uid_t helperGetEffectiveUid()
+{
+    uid_t eUid = geteuid();
+    return eUid;
+}
+
+dcgmReturn_t helperRunMnDiag(dcgmHandle_t dcgmHandle, dcgmRunMnDiag_v1 const *drmnd, dcgmMnDiagResponse_v1 *response)
+{
+    std::unique_ptr<dcgm_mndiag_msg_run_v1> msg = std::make_unique<dcgm_mndiag_msg_run_v1>();
+    dcgmReturn_t dcgmReturn { DCGM_ST_OK };
+
+    memset(msg.get(), 0, sizeof(*msg));
+    msg->header.length     = sizeof(*msg);
+    msg->header.version    = dcgm_mndiag_msg_run_version1;
+    msg->header.moduleId   = DcgmModuleIdMnDiag;
+    msg->header.subCommand = DCGM_MNDIAG_SR_RUN;
+
+    switch (response->version)
+    {
+        case dcgmMnDiagResponse_version1:
+            memcpy(&msg->params, drmnd, sizeof(dcgmRunMnDiag_v1));
+            memcpy(&msg->response, response, sizeof(dcgmMnDiagResponse_v1));
+            break;
+        default:
+            log_error("Unexpected response->version 0x{:X}", response->version);
+            return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Populate the effective uid of the caller
+    msg->effectiveUid = helperGetEffectiveUid();
+
+    constexpr unsigned int TWENTY_FOUR_HOURS_IN_MS = 86400000;
+    // coverity[overrun-buffer-arg]
+    dcgmReturn
+        = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg->header, sizeof(*msg), nullptr, TWENTY_FOUR_HOURS_IN_MS);
+
+    switch (response->version)
+    {
+        case dcgmMnDiagResponse_version1:
+            memcpy(response, &msg->response, sizeof(dcgmMnDiagResponse_v1));
+            break;
+        default:
+            log_error("Unexpected response->version 0x{:X}", response->version);
+            return DCGM_ST_GENERIC_ERROR;
+    }
+
+    return dcgmReturn;
+}
+
+dcgmReturn_t helperStopMnDiag(dcgmHandle_t dcgmHandle)
+{
+    dcgm_mndiag_msg_stop_t msg {};
+    dcgmReturn_t dcgmReturn { DCGM_ST_OK };
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdMnDiag;
+    msg.header.subCommand = DCGM_MNDIAG_SR_STOP;
+    msg.header.version    = dcgm_mndiag_msg_stop_version;
+
+    static const int SIXTY_MINUTES_IN_MS = 3600000;
+    // coverity[overrun-buffer-arg]
+    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg), nullptr, SIXTY_MINUTES_IN_MS);
+
+    return dcgmReturn;
+}
+
 /*****************************************************************************/
 static dcgmReturn_t helperHealthCheckV5(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupId, dcgmHealthResponse_v5 *response)
 {
@@ -3741,6 +3809,54 @@ dcgmReturn_t tsapiGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_
     return (dcgmReturn_t)msg.info.cmdRet;
 }
 
+dcgmReturn_t tsapiGetNvLinkP2PStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkP2PStatus_v1 *linkStatus)
+{
+    if (!linkStatus)
+    {
+        DCGM_LOG_ERROR << "Invalid pointer to the struct specifying which NvLink P2P statuses should be returned.";
+
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (linkStatus->version != dcgmNvLinkP2PStatus_version1)
+    {
+        DCGM_LOG_ERROR << "Got bad dcgmNvLinkP2PStatus version " << linkStatus->version << " instead of "
+                       << dcgmNvLinkP2PStatus_version1 << ".";
+
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    dcgm_core_msg_get_nvlink_p2p_status_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_GET_NVLINK_P2P_STATUS;
+    msg.header.version    = dcgm_core_msg_get_nvlink_p2p_status_version;
+    memcpy(&msg.info.ls, linkStatus, sizeof(msg.info.ls));
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "Return code " << ret;
+        return ret;
+    }
+
+    /* Check the status of the DCGM command */
+    if (msg.info.cmdRet != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Return code " << ret;
+        return (dcgmReturn_t)msg.info.cmdRet;
+    }
+
+    memcpy(linkStatus, &msg.info.ls, sizeof(msg.info.ls));
+
+    DCGM_LOG_DEBUG << "Got " << linkStatus->numGpus << " GPUs back. Return: " << msg.info.cmdRet;
+
+    return (dcgmReturn_t)msg.info.cmdRet;
+}
+
 dcgmReturn_t helperGetCpuHierarchySysmonMsg(dcgmHandle_t dcgmHandle, dcgm_sysmon_msg_get_cpus_t &sysmonMsg)
 {
     sysmonMsg.header.length     = sizeof(sysmonMsg);
@@ -4254,6 +4370,171 @@ static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
 static dcgmReturn_t tsapiEngineStopDiagnostic(dcgmHandle_t pDcgmHandle)
 {
     return helperStopDiag(pDcgmHandle);
+}
+
+static dcgmReturn_t tsapiEngineRunMnDiagnostic(dcgmHandle_t pDcgmHandle,
+                                               dcgmRunMnDiag_v1 const *drmnd,
+                                               dcgmMnDiagResponse_v1 *response)
+{
+    return helperRunMnDiag(pDcgmHandle, drmnd, response);
+}
+
+static dcgmReturn_t helperMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultinodeRequest_t *pRequest)
+{
+    if (!pRequest)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (pRequest->version != dcgmMultinodeRequest_version1)
+    {
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    // At this time, only mnubergemm is supported
+    if (pRequest->testType != mnubergemm)
+    {
+        log_error("Invalid test type {}", (int)pRequest->testType);
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t dcgmReturn { DCGM_ST_OK };
+    std::unique_ptr<dcgm_mndiag_msg_resource_v1> resourceMsg;
+    std::unique_ptr<dcgm_mndiag_msg_authorization_v1> authorizationMsg;
+    std::unique_ptr<dcgm_mndiag_msg_run_params_v1> runParamsMsg;
+    std::unique_ptr<dcgm_mndiag_msg_node_info_v1> nodeInfoMsg;
+
+    auto initResourceMsg = [&resourceMsg, &pRequest](unsigned int subCommand) {
+        resourceMsg = std::make_unique<dcgm_mndiag_msg_resource_v1>();
+        memset(resourceMsg.get(), 0, sizeof(*resourceMsg));
+        resourceMsg->header.length     = sizeof(*resourceMsg);
+        resourceMsg->header.version    = dcgm_mndiag_msg_resource_version1;
+        resourceMsg->header.moduleId   = DcgmModuleIdMnDiag;
+        resourceMsg->header.subCommand = subCommand;
+        memcpy(&resourceMsg->resource, &pRequest->requestData.resource, sizeof(pRequest->requestData.resource));
+    };
+
+    auto initAuthorizationMsg = [&authorizationMsg, &pRequest](unsigned int subCommand) {
+        authorizationMsg = std::make_unique<dcgm_mndiag_msg_authorization_v1>();
+        memset(authorizationMsg.get(), 0, sizeof(*authorizationMsg));
+        authorizationMsg->header.length     = sizeof(*authorizationMsg);
+        authorizationMsg->header.version    = dcgm_mndiag_msg_authorization_version1;
+        authorizationMsg->header.moduleId   = DcgmModuleIdMnDiag;
+        authorizationMsg->header.subCommand = subCommand;
+        memcpy(&authorizationMsg->authorization,
+               &pRequest->requestData.authorization,
+               sizeof(pRequest->requestData.authorization));
+    };
+
+    auto initRunParamsMsg = [&runParamsMsg, &pRequest](unsigned int subCommand) {
+        runParamsMsg = std::make_unique<dcgm_mndiag_msg_run_params_v1>();
+        memset(runParamsMsg.get(), 0, sizeof(*runParamsMsg));
+        runParamsMsg->header.length     = sizeof(*runParamsMsg);
+        runParamsMsg->header.version    = dcgm_mndiag_msg_run_params_version1;
+        runParamsMsg->header.moduleId   = DcgmModuleIdMnDiag;
+        runParamsMsg->header.subCommand = subCommand;
+        memcpy(&runParamsMsg->runParams, &pRequest->requestData.runParams, sizeof(pRequest->requestData.runParams));
+    };
+
+    auto initNodeInfoMsg = [&nodeInfoMsg, &pRequest](unsigned int subCommand) {
+        nodeInfoMsg = std::make_unique<dcgm_mndiag_msg_node_info_v1>();
+        memset(nodeInfoMsg.get(), 0, sizeof(*nodeInfoMsg));
+        nodeInfoMsg->header.length     = sizeof(*nodeInfoMsg);
+        nodeInfoMsg->header.version    = dcgm_mndiag_msg_node_info_version1;
+        nodeInfoMsg->header.moduleId   = DcgmModuleIdMnDiag;
+        nodeInfoMsg->header.subCommand = subCommand;
+    };
+
+    constexpr unsigned int SIXTY_MINUTES_IN_MS = 3600000;
+
+    switch (pRequest->requestType)
+    {
+        case ReserveResources:
+            initResourceMsg(DCGM_MNDIAG_SR_RESERVE_RESOURCES);
+            // coverity[overrun-buffer-arg]
+            dcgmReturn = dcgmModuleSendBlockingFixedRequest(
+                pDcgmHandle, &resourceMsg->header, sizeof(*resourceMsg), nullptr, SIXTY_MINUTES_IN_MS);
+            if (dcgmReturn == DCGM_ST_OK)
+            {
+                memcpy(&pRequest->requestData.resource, &resourceMsg->resource, sizeof(pRequest->requestData.resource));
+            }
+            break;
+
+        case ReleaseResources:
+            initResourceMsg(DCGM_MNDIAG_SR_RELEASE_RESOURCES);
+            // coverity[overrun-buffer-arg]
+            dcgmReturn = dcgmModuleSendBlockingFixedRequest(
+                pDcgmHandle, &resourceMsg->header, sizeof(*resourceMsg), nullptr, SIXTY_MINUTES_IN_MS);
+            if (dcgmReturn == DCGM_ST_OK)
+            {
+                memcpy(&pRequest->requestData.resource, &resourceMsg->resource, sizeof(pRequest->requestData.resource));
+            }
+            break;
+
+        case DetectProcess:
+            initResourceMsg(DCGM_MNDIAG_SR_DETECT_PROCESS);
+            // coverity[overrun-buffer-arg]
+            dcgmReturn = dcgmModuleSendBlockingFixedRequest(
+                pDcgmHandle, &resourceMsg->header, sizeof(*resourceMsg), nullptr, SIXTY_MINUTES_IN_MS);
+            if (dcgmReturn == DCGM_ST_OK)
+            {
+                memcpy(&pRequest->requestData.resource, &resourceMsg->resource, sizeof(pRequest->requestData.resource));
+            }
+            break;
+
+        case AuthorizeConnection:
+            initAuthorizationMsg(DCGM_MNDIAG_SR_AUTHORIZE_CONNECTION);
+            // coverity[overrun-buffer-arg]
+            dcgmReturn = dcgmModuleSendBlockingFixedRequest(
+                pDcgmHandle, &authorizationMsg->header, sizeof(*authorizationMsg), nullptr, SIXTY_MINUTES_IN_MS);
+            break;
+
+        case RevokeAuthorization:
+            initAuthorizationMsg(DCGM_MNDIAG_SR_REVOKE_AUTHORIZATION);
+            // coverity[overrun-buffer-arg]
+            dcgmReturn = dcgmModuleSendBlockingFixedRequest(
+                pDcgmHandle, &authorizationMsg->header, sizeof(*authorizationMsg), nullptr, SIXTY_MINUTES_IN_MS);
+            break;
+
+        case BroadcastRunParameters:
+            initRunParamsMsg(DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS);
+            // coverity[overrun-buffer-arg]
+            dcgmReturn = dcgmModuleSendBlockingFixedRequest(
+                pDcgmHandle, &runParamsMsg->header, sizeof(*runParamsMsg), nullptr, SIXTY_MINUTES_IN_MS);
+            break;
+
+        case GetNodeInfo:
+            initNodeInfoMsg(DCGM_MNDIAG_SR_GET_NODE_INFO);
+            // coverity[overrun-buffer-arg]
+            dcgmReturn = dcgmModuleSendBlockingFixedRequest(
+                pDcgmHandle, &nodeInfoMsg->header, sizeof(*nodeInfoMsg), nullptr, SIXTY_MINUTES_IN_MS);
+            memcpy(&pRequest->requestData.nodeInfo, &nodeInfoMsg->nodeInfo, sizeof(pRequest->requestData.nodeInfo));
+            break;
+
+        default:
+            log_error("Invalid request type {}", (int)pRequest->requestType);
+            return DCGM_ST_BADPARAM;
+    }
+
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        log_error("Failed to send message of dcgmMultinodeRequestType_t type {}. Return: ({}): {}",
+                  std::to_underlying(pRequest->requestType),
+                  std::to_underlying(dcgmReturn),
+                  errorString(dcgmReturn));
+        return dcgmReturn;
+    }
+    return dcgmReturn;
+}
+
+static dcgmReturn_t tsapiEngineMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultinodeRequest_t *pRequest)
+{
+    return helperMultinodeRequest(pDcgmHandle, pRequest);
+}
+
+static dcgmReturn_t tsapiEngineStopMnDiagnostic(dcgmHandle_t pDcgmHandle)
+{
+    return helperStopMnDiag(pDcgmHandle);
 }
 
 static dcgmReturn_t tsapiEngineGetPidInfo(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, dcgmPidInfo_t *pidInfo)
@@ -5453,6 +5734,45 @@ dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v2 &params)
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v3 &params)
+{
+    dcgmStartEmbeddedV2Params_v2 proxyParams { .version    = dcgmStartEmbeddedV2Params_version2,
+                                               .opMode     = params.opMode,
+                                               .dcgmHandle = params.dcgmHandle,
+                                               .logFile    = params.logFile,
+                                               .severity   = params.severity,
+                                               .denyListCount
+                                               = std::min(params.denyListCount, (unsigned int)DCGM_MODULE_ID_COUNT_V1),
+                                               .serviceAccount = params.serviceAccount,
+                                               .denyList       = {} };
+
+    // Copy as much of the denyList as will fit in v2
+    memcpy(proxyParams.denyList, params.denyList, sizeof(proxyParams.denyList));
+
+    if (auto dcgmResult = StartEmbeddedV2(proxyParams); dcgmResult != DCGM_ST_OK)
+    {
+        return dcgmResult;
+    }
+
+    params.dcgmHandle = proxyParams.dcgmHandle;
+
+    // If there are more denyList entries than can fit in v2, handle them separately
+    if (params.denyListCount > DCGM_MODULE_ID_COUNT_V1)
+    {
+        auto *instance = DcgmHostEngineHandler::Instance();
+
+        dcgmReturn_t result = instance->ApplyModuleDenylist(&params.denyList[DCGM_MODULE_ID_COUNT_V1],
+                                                            params.denyListCount - DCGM_MODULE_ID_COUNT_V1);
+
+        if (result != DCGM_ST_OK)
+        {
+            return result;
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
 /**
  * @brief Safely casts a constructor argument to the \c To type and back
  *
@@ -5545,6 +5865,10 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmStartEmbedded_v2(dcgmStartEmbeddedV2Params_v1 *
         case dcgmStartEmbeddedV2Params_version2:
         {
             return StartEmbeddedV2(SafeArgumentCast<dcgmStartEmbeddedV2Params_v2> { params });
+        }
+        case dcgmStartEmbeddedV2Params_version3:
+        {
+            return StartEmbeddedV2(SafeArgumentCast<dcgmStartEmbeddedV2Params_v3> { params });
         }
         default:
             return DCGM_ST_VER_MISMATCH;
@@ -5865,6 +6189,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmShutdown()
 #define MODULE_DIAG_NAME       "Diag"
 #define MODULE_PROFILING_NAME  "Profiling"
 #define MODULE_SYSMON_NAME     "SysMon"
+#define MODULE_MNDIAG_NAME     "MnDiag"
 
 dcgmReturn_t tsapiDcgmModuleIdToName(dcgmModuleId_t id, char const **name)
 {
@@ -5879,6 +6204,7 @@ dcgmReturn_t tsapiDcgmModuleIdToName(dcgmModuleId_t id, char const **name)
         { DcgmModuleIdHealth, MODULE_HEALTH_NAME },       { DcgmModuleIdPolicy, MODULE_POLICY_NAME },
         { DcgmModuleIdConfig, MODULE_CONFIG_NAME },       { DcgmModuleIdDiag, MODULE_DIAG_NAME },
         { DcgmModuleIdProfiling, MODULE_PROFILING_NAME }, { DcgmModuleIdSysmon, MODULE_SYSMON_NAME },
+        { DcgmModuleIdMnDiag, MODULE_MNDIAG_NAME },
     };
 
     assert(moduleNames.size() == DcgmModuleIdCount);

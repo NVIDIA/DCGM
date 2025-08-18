@@ -80,7 +80,7 @@ dcgmReturn_t DcgmCpuTopology::GetValuesFromLscpuJson(Json::Value &root)
                 // Not all NUMA nodes have CPUs; ignore those without
                 if (data.empty() == false)
                 {
-                    m_numaNodeToCoreRange[numaIndex] = data;
+                    m_numaNodeToCoreRange[numaIndex] = std::move(data);
                 }
             }
         }

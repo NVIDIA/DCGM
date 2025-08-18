@@ -73,6 +73,31 @@ TEST_CASE("ParseRangeString")
         CHECK(indices[7 + i] == i + 12);
     }
     CHECK(indices[16] == 24);
+    indices.clear();
+
+    ret = ParseRangeString("1--2", indices);
+    REQUIRE(ret == DCGM_ST_BADPARAM);
+
+    ret = ParseRangeString("1-2-3", indices);
+    REQUIRE(ret == DCGM_ST_BADPARAM);
+
+    ret = ParseRangeString("1,", indices);
+    REQUIRE(ret == DCGM_ST_BADPARAM);
+
+    ret = ParseRangeString(",5", indices);
+    REQUIRE(ret == DCGM_ST_BADPARAM);
+
+    ret = ParseRangeString("4,,7", indices);
+    REQUIRE(ret == DCGM_ST_BADPARAM);
+
+    ret = ParseRangeString("", indices);
+    REQUIRE(ret == DCGM_ST_BADPARAM);
+
+    ret = ParseRangeString("1#-9", indices);
+    REQUIRE(ret == DCGM_ST_BADPARAM);
+
+    ret = ParseRangeString("1-5$", indices);
+    REQUIRE(ret == DCGM_ST_BADPARAM);
 }
 
 TEST_CASE("TokenizeStringQuoted")

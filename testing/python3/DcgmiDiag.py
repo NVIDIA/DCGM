@@ -171,23 +171,6 @@ class DcgmiDiag:
         self.debugFile = debugFile
 
     ################################################################################
-    def DebugLevelToString(self):
-        if self.debugLevel == 0:
-            return 'NONE'
-        elif self.debugLevel == 1:
-            return 'FATAL'
-        elif self.debugLevel == 2:
-            return 'ERROR'
-        elif self.debugLevel == 3:
-            return 'WARN'
-        elif self.debugLevel == 4:
-            return 'INFO'
-        elif self.debugLevel == 5:
-            return 'DEBUG'
-        else:
-            return 'VERB'
-
-    ################################################################################
     def BuildDcgmiCommand(self):
         cmd = []
 
@@ -222,7 +205,7 @@ class DcgmiDiag:
 
             if self.debugLevel:
                 cmd.append('-d')
-                cmd.append(self.DebugLevelToString())
+                cmd.append(test_utils.DebugLevelToString(self.debugLevel))
 
         cmd.append('-j')
         

@@ -1076,7 +1076,7 @@ std::string ProcessStats::HelperHealthResultToString(dcgmHealthWatchResults_t he
 /*****************************************************************************/
 EnableWatches::EnableWatches(std::string hostname, unsigned int groupId, int updateIntervalMs, int maxKeepAgeSec)
 {
-    m_hostName         = hostname;
+    m_hostName         = std::move(hostname);
     m_groupId          = (dcgmGpuGrp_t)(long long)groupId;
     m_updateIntervalMs = updateIntervalMs;
     m_maxKeepAgeSec    = maxKeepAgeSec;
@@ -1100,7 +1100,7 @@ dcgmReturn_t EnableWatches::DoExecuteConnected()
 /*****************************************************************************/
 DisableWatches::DisableWatches(std::string hostname, unsigned int groupId)
 {
-    m_hostName = hostname;
+    m_hostName = std::move(hostname);
     mGroupId   = (dcgmGpuGrp_t)(long long)groupId;
 
     /* We want group actions to persist once this DCGMI instance exits */
@@ -1122,7 +1122,7 @@ dcgmReturn_t DisableWatches::DoExecuteConnected()
 /*****************************************************************************/
 ViewProcessStats::ViewProcessStats(std::string hostname, unsigned int groupId, unsigned int pid, bool verbose)
 {
-    m_hostName = hostname;
+    m_hostName = std::move(hostname);
     mPid       = pid;
     mVerbose   = verbose;
     mGroupId   = (dcgmGpuGrp_t)(long long)groupId;
@@ -1147,9 +1147,9 @@ dcgmReturn_t ViewProcessStats::DoExecuteConnected()
 /*****************************************************************************/
 StartJob::StartJob(std::string hostname, unsigned int groupId, std::string jobId)
 {
-    m_hostName  = hostname;
+    m_hostName  = std::move(hostname);
     mGroupId    = (dcgmGpuGrp_t)(long long)groupId;
-    this->jobId = jobId;
+    this->jobId = std::move(jobId);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -1171,8 +1171,8 @@ dcgmReturn_t StartJob::DoExecuteConnected()
 /*****************************************************************************/
 StopJob::StopJob(std::string hostname, std::string jobId)
 {
-    m_hostName  = hostname;
-    this->jobId = jobId;
+    m_hostName  = std::move(hostname);
+    this->jobId = std::move(jobId);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -1193,8 +1193,8 @@ dcgmReturn_t StopJob::DoExecuteConnected()
 /*****************************************************************************/
 RemoveJob::RemoveJob(std::string hostname, std::string jobId)
 {
-    m_hostName  = hostname;
-    this->jobId = jobId;
+    m_hostName  = std::move(hostname);
+    this->jobId = std::move(jobId);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -1215,7 +1215,7 @@ dcgmReturn_t RemoveJob::DoExecuteConnected()
 /*****************************************************************************/
 RemoveAllJobs::RemoveAllJobs(std::string hostname)
 {
-    m_hostName = hostname;
+    m_hostName = std::move(hostname);
 
     /* We want group actions to persist once this DCGMI instance exits */
     SetPersistAfterDisconnect(1);
@@ -1236,8 +1236,8 @@ dcgmReturn_t RemoveAllJobs::DoExecuteConnected()
 /*****************************************************************************/
 ViewJobStats::ViewJobStats(std::string hostname, std::string jobId, bool verbose)
 {
-    m_hostName    = hostname;
-    this->jobId   = jobId;
+    m_hostName    = std::move(hostname);
+    this->jobId   = std::move(jobId);
     this->verbose = verbose;
 
     /* We want group actions to persist once this DCGMI instance exits */

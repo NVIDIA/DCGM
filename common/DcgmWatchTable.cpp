@@ -328,15 +328,20 @@ dcgmReturn_t DcgmWatchTable::GetFieldsToUpdate(dcgmModuleId_t currentModule,
             continue;
         }
 
-        DCGM_LOG_DEBUG << "Preparing to update watchInfo 0x" << std::hex << (void *)&watchInfo << ", eg " << std::dec
-                       << watchInfo.watchKey.entityGroupId << ", eid " << watchInfo.watchKey.entityId << ", fieldId "
-                       << watchInfo.watchKey.fieldId;
-
         /* Base when we sync again on before the driver call so we don't continuously
          * get behind by how long the driver call took
          */
         nextUpdate = now + watchInfo.updateIntervalUsec;
         UpdateNextUpdateTime(earliestNextUpdate, nextUpdate);
+
+        log_debug(
+            "Preparing to update watchInfo {}, eg {}, eid {}, fieldId {}, update interval {} usec, earliest next update {} usec.",
+            &watchInfo,
+            watchInfo.watchKey.entityGroupId,
+            watchInfo.watchKey.entityId,
+            watchInfo.watchKey.fieldId,
+            watchInfo.updateIntervalUsec,
+            earliestNextUpdate);
 
         // At this point we know we want to update the field
         dcgm_field_update_info_t updateInfo;

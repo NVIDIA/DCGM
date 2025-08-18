@@ -26,6 +26,30 @@
 
 #include <sstream>
 
+namespace
+{
+dcgmReturn_t GetConsistentErrorCode(DcgmConfigManagerStatusList const *statusList)
+{
+    // If no status list or no errors, use generic error
+    if (!statusList || *(statusList->m_errorCount) == 0)
+        return DCGM_ST_GENERIC_ERROR;
+
+    // Check if all errors are the same
+    dcgmReturn_t commonError = statusList->m_statuses[0].errorCode;
+
+    for (unsigned int i = 1; i < std::min(*(statusList->m_errorCount), statusList->m_maxNumErrors); i++)
+    {
+        if (statusList->m_statuses[i].errorCode != commonError)
+        {
+            return DCGM_ST_GENERIC_ERROR; // Found inconsistent error codes
+        }
+    }
+
+    // All errors are the same, return the common error
+    return commonError;
+}
+} //namespace
+
 DcgmConfigManager::DcgmConfigManager(dcgmCoreCallbacks_t &dcc)
     : mpCoreProxy(dcc)
 {
@@ -550,9 +574,11 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
         HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, setConfig);
     }
 
-    /* If any of the operation failed. Return it as an generic error */
+    /* If any of the operation failed. Return it as specific error if all errors are the same */
     if (0 != multiPropertyRetCode)
-        return DCGM_ST_GENERIC_ERROR;
+    {
+        return GetConsistentErrorCode(statusList);
+    }
 
     return DCGM_ST_OK;
 }
@@ -976,8 +1002,11 @@ dcgmReturn_t DcgmConfigManager::SetConfig(unsigned int groupId,
     if (DCGM_ST_OK != dcgmReturn)
         grpRetCode++;
 
+    /* If any of the operation failed. Return specific error if consistent */
     if (grpRetCode)
-        return DCGM_ST_GENERIC_ERROR;
+    {
+        return GetConsistentErrorCode(statusList);
+    }
 
     return DCGM_ST_OK;
 }

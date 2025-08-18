@@ -96,6 +96,8 @@ private:
     /*
      */
     void run() override;
+
+    friend class TestDcgmModuleNvSwitch;
 };
 
 } // namespace DcgmNs

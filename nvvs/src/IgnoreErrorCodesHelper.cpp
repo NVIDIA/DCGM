@@ -190,7 +190,7 @@ std::string ParseIgnoreErrorCodesString(std::string_view inputString,
                 .entityGroupId = DCGM_FE_GPU,
                 .entityId      = gpuId,
             };
-            gpuErrorCodeMap[entity] = inputErrorCodes;
+            gpuErrorCodeMap[entity] = std::move(inputErrorCodes);
         }
     }
     return "";

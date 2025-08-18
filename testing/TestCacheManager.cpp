@@ -593,7 +593,7 @@ int TestCacheManager::TestPopulatePotentialCpuMatches()
         for (unsigned int j = 0; j < i + 1; j++)
             group.push_back(j);
 
-        affinityGroups.push_back(group);
+        affinityGroups.push_back(std::move(group));
     }
 
     PopulatePotentialCpuMatches(affinityGroups, potentialCpuMatches, numGpus);
@@ -637,7 +637,7 @@ int TestCacheManager::TestCombineAffinityGroups()
             gpuIndex++;
         }
 
-        affinityGroups.push_back(group);
+        affinityGroups.push_back(std::move(group));
     }
 
     /*
@@ -864,7 +864,7 @@ int TestCacheManager::TestMatchByIO()
     std::vector<unsigned int> group;
     for (unsigned int i = 0; i < 4; i++)
         group.push_back(i);
-    affinityGroups.push_back(group);
+    affinityGroups.push_back(std::move(group));
 
     setup_topology(top);
 
@@ -2535,7 +2535,7 @@ int TestCacheManager::TestAreAllGpuIdsSameSku()
 
     // Add a GPU with a different pci device id
     unsigned int differentPciId = cacheManager->AddFakeGpu(0x15F810DE, 0x119510DE);
-    std::vector<unsigned int> thirdGroup(gpuIds);
+    std::vector<unsigned int> thirdGroup(std::move(gpuIds));
     thirdGroup.push_back(differentPciId);
     rc = cacheManager->AreAllGpuIdsSameSku(thirdGroup);
     if (rc == 1)

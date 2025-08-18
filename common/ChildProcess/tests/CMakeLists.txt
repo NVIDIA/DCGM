@@ -33,6 +33,20 @@ target_link_libraries(childprocesstests
     rt
 )
 
+add_executable(runcmdandcollectoutputtests)
+target_sources(runcmdandcollectoutputtests PRIVATE
+    RunCmdAndCollectOutputTests.cpp
+)
+
+target_link_libraries(runcmdandcollectoutputtests
+    PRIVATE
+    dcgm_common
+    Catch2::Catch2WithMain
+    ${CMAKE_THREAD_LIBS_INIT}
+    fmt::fmt
+    rt
+)
+
 add_executable(childprocesstesttool)
 target_sources(childprocesstesttool PRIVATE
     ChildProcessTestTool.cpp
@@ -40,4 +54,5 @@ target_sources(childprocesstesttool PRIVATE
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(childprocesstests EXTRA_ARGS --colour-mode ansi)
+    catch_discover_tests(runcmdandcollectoutputtests EXTRA_ARGS --colour-mode ansi)
 endif ()

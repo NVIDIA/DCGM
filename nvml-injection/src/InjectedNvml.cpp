@@ -943,8 +943,8 @@ bool InjectedNvml::ParseOneGpuInstance(const YAML::Node &gpuInstance, AttributeH
 
     for (YAML::const_iterator it = gpuInstance.begin(); it != gpuInstance.end(); ++it)
     {
-        auto key   = it->first.as<std::string>();
-        auto value = it->second;
+        auto key          = it->first.as<std::string>();
+        auto const &value = it->second;
 
         if (handlers.contains(key))
         {
@@ -1030,8 +1030,8 @@ bool InjectedNvml::ParseOneComputeInstance(const YAML::Node &computeInstance,
 
     for (YAML::const_iterator it = computeInstance.begin(); it != computeInstance.end(); ++it)
     {
-        auto key   = it->first.as<std::string>();
-        auto value = it->second;
+        auto key          = it->first.as<std::string>();
+        auto const &value = it->second;
 
         if (handlers.contains(key))
         {
@@ -1086,8 +1086,8 @@ bool InjectedNvml::ParseOneVgpuType(const YAML::Node &vgpuType, AttributeHolder<
 
     for (YAML::const_iterator it = vgpuType.begin(); it != vgpuType.end(); ++it)
     {
-        auto key   = it->first.as<std::string>();
-        auto value = it->second;
+        auto key          = it->first.as<std::string>();
+        auto const &value = it->second;
 
         auto parsedResultOpt = nvmlReturnDeserializer.VgpuTypeHandle(key, value);
         if (parsedResultOpt)
@@ -1144,8 +1144,8 @@ bool InjectedNvml::ParseOneVgpuInstance(const YAML::Node &vgpuInstance, Attribut
 
     for (YAML::const_iterator it = vgpuInstance.begin(); it != vgpuInstance.end(); ++it)
     {
-        auto key   = it->first.as<std::string>();
-        auto value = it->second;
+        auto key          = it->first.as<std::string>();
+        auto const &value = it->second;
 
         if (handlers.contains(key))
         {
@@ -2319,13 +2319,13 @@ nvmlReturn_t InjectedNvml::RemoveGpu(std::string const &uuid)
     nvmlDeviceWithIdentifiers devIds = {
         .pciBusId = pciInfo->busId,
         .uuid     = uuid,
-        .serial   = serial,
+        .serial   = std::move(serial),
         .index    = index,
         .ah       = std::move(*ahIter),
     };
 
     // Store removed device info for restoration later
-    m_removedGpus[uuid] = devIds;
+    m_removedGpus[uuid] = std::move(devIds);
     m_deviceCollection.erase(ahIter);
     DecrementDeviceCount();
 

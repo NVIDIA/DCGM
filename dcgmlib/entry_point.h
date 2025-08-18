@@ -152,6 +152,13 @@ DCGM_ENTRY_POINT(dcgmGetNvLinkLinkStatus,
                  dcgmHandle,
                  linkStatus)
 
+DCGM_ENTRY_POINT(dcgmGetNvLinkP2PStatus,
+                 tsapiGetNvLinkP2PStatus,
+                 (dcgmHandle_t dcgmHandle, dcgmNvLinkP2PStatus_v1 *linkStatus),
+                 "({} {})",
+                 dcgmHandle,
+                 linkStatus)
+
 DCGM_ENTRY_POINT(dcgmGetCpuHierarchy,
                  tsapiGetCpuHierarchy,
                  (dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy),
@@ -688,6 +695,23 @@ DCGM_ENTRY_POINT(dcgmRunDiagnostic,
                  diagResponse)
 
 DCGM_ENTRY_POINT(dcgmStopDiagnostic, tsapiEngineStopDiagnostic, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
+
+DCGM_ENTRY_POINT(dcgmRunMnDiagnostic,
+                 tsapiEngineRunMnDiagnostic,
+                 (dcgmHandle_t pDcgmHandle, dcgmRunMnDiag_v1 const *drmnd, dcgmMnDiagResponse_v1 *response),
+                 "({}, {}, {})",
+                 pDcgmHandle,
+                 drmnd,
+                 response)
+
+DCGM_ENTRY_POINT(dcgmStopMnDiagnostic, tsapiEngineStopMnDiagnostic, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
+
+DCGM_ENTRY_POINT(dcgmMultinodeRequest,
+                 tsapiEngineMultinodeRequest,
+                 (dcgmHandle_t pDcgmHandle, dcgmMultinodeRequest_t *request),
+                 "({} {})",
+                 pDcgmHandle,
+                 request)
 
 DCGM_ENTRY_POINT(
     dcgmWatchPidFields,

@@ -192,7 +192,7 @@ void Allowlist::FillMap()
 
     try
     {
-        for (auto pair : skuMap)
+        for (auto const &pair : skuMap)
         {
             id       = pair.first;
             auto sku = pair.second;
@@ -216,7 +216,7 @@ void Allowlist::FillMap()
                         for (auto subtestIt = paramOrSubtest.begin(); subtestIt != paramOrSubtest.end(); subtestIt++)
                         {
                             const std::string subtestName = subtestIt->first.Scalar();
-                            auto subtestParam             = subtestIt->second;
+                            auto const subtestParam       = subtestIt->second;
                             DCGM_LOG_VERBOSE << "Reading " << testName << "." << subtestName
                                              << " as a double. Scalar: " << subtestParam.Scalar();
                             tp->AddSubTestDouble(testName, subtestName, subtestParam.as<double>());

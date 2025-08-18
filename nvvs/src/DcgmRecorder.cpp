@@ -25,6 +25,7 @@
 
 #include "DcgmLogging.h"
 #include "DcgmRecorder.h"
+#include "DcgmUtilities.h"
 #include "NvvsCommon.h"
 #include "PluginStrings.h"
 #include "dcgm_agent.h"
@@ -608,25 +609,27 @@ void DcgmRecorder::AddFieldThresholdViolationError(unsigned short fieldId,
         case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
 
             DCGM_ERROR_FORMAT_MESSAGE(
-                DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION, d, intValue, fieldName, gpuId, thresholdValue);
+                DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION, d, intValue, fieldName.c_str(), gpuId, thresholdValue);
 
             break;
 
         case DCGM_FI_DEV_ECC_DBE_VOL_TOTAL:
 
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_DBE_THRESHOLD_VIOLATION, d, intValue, fieldName, gpuId, thresholdValue);
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_DBE_THRESHOLD_VIOLATION, d, intValue, fieldName.c_str(), gpuId, thresholdValue);
 
             break;
 
         case DCGM_FI_DEV_ECC_SBE_VOL_TOTAL:
 
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_SBE_THRESHOLD_VIOLATION, d, intValue, fieldName, gpuId, thresholdValue);
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_SBE_THRESHOLD_VIOLATION, d, intValue, fieldName.c_str(), gpuId, thresholdValue);
 
             break;
 
         default:
 
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD, d, intValue, fieldName, gpuId, thresholdValue);
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD, d, intValue, fieldName.c_str(), gpuId, thresholdValue);
 
             break;
     }
@@ -1026,6 +1029,40 @@ int DcgmRecorder::CheckForThrottling(unsigned int gpuId,
                                      std::vector<DcgmError> &ignoredErrorList)
 {
     return CheckForClocksEvent(gpuId, startTime, fatalErrorList, ignoredErrorList);
+}
+
+int DcgmRecorder::CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &fatalErrorList)
+{
+    dcgmFieldValue_v2 value;
+    dcgmReturn_t ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER, value, 0);
+    if (ret == DCGM_ST_NOT_SUPPORTED || value.status == DCGM_ST_NOT_SUPPORTED)
+    {
+        log_debug("Skipping effective BER check because it is unsupported.");
+        return DR_SUCCESS;
+    }
+    if (ret != DCGM_ST_OK)
+    {
+        DcgmError d { gpuId };
+        DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "effective BER", gpuId);
+        fatalErrorList.push_back(d);
+        return DR_COMM_ERROR;
+    }
+
+    auto const effectiveBer = value.value.i64;
+    // Effective BER is the bit error rate itself, and a rate of 0 indicates a healthy system.
+    // However, in NVML the smallest value is 1.5e-254, to be able to compare and avoid precision issues
+    // with the decoded value, we decode it here and compare the mantissa and exponent to 15 and 255
+    // directly, rather than using the decoded field (i.e., DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT).
+    auto const [mantissa, exponent, ber] = DcgmNs::Utils::NvmlBerParser(effectiveBer);
+    if (mantissa != 15 && exponent != 255)
+    {
+        DcgmError d { gpuId };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD, d, ber, gpuId);
+        fatalErrorList.push_back(d);
+        return DR_VIOLATION;
+    }
+
+    return DR_SUCCESS;
 }
 
 dcgmReturn_t DcgmRecorder::GetCurrentFieldValue(unsigned int gpuId,

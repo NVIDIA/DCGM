@@ -128,7 +128,7 @@ void ParameterValidator::Initialize(const std::map<std::string, std::vector<dcgm
             ti.AddParameter(iter.parameterName);
         }
 
-        m_possiblePlugins[testname] = ti;
+        m_possiblePlugins[testname] = std::move(ti);
     }
 }
 

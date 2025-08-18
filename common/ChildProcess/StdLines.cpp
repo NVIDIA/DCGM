@@ -72,6 +72,12 @@ StdLines::StdLinesIterator StdLines::end()
     return StdLines::StdLinesIterator(StdOutSentinel {});
 }
 
+bool StdLines::IsEmpty()
+{
+    std::lock_guard<std::mutex> lg(m_lock);
+    return m_container.empty();
+}
+
 void StdLines::Write(std::string const &str)
 {
     std::unique_lock<std::mutex> lock(m_lock);

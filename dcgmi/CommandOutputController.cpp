@@ -269,7 +269,7 @@ void CommandOutputController::RemoveTabsAndNewlines(std::string &str)
 }
 
 /*****************************************************************************/
-std::string CommandOutputController::HelperDisplayValue(std::string val)
+std::string CommandOutputController::HelperDisplayValue(std::string const &val)
 {
     std::string str;
 
@@ -447,6 +447,6 @@ void GPUErrorOutputController::addError(dcgmStatus_t errHandle)
 /************************************************************************************/
 void GPUErrorOutputController::addErrorStringOverride(short fieldId, dcgmReturn_t errorCode, std::string replacement)
 {
-    dcgmErrorStringOverride_t temp = { replacement, fieldId, errorCode };
-    mStringOverriders.push_back(temp);
+    dcgmErrorStringOverride_t temp = { std::move(replacement), fieldId, errorCode };
+    mStringOverriders.push_back(std::move(temp));
 }

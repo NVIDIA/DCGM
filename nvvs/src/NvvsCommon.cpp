@@ -228,7 +228,7 @@ std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex)
     }
 }
 
-dcgmPerGpuTestIndices_t GetTestIndex(const std::string name)
+dcgmPerGpuTestIndices_t GetTestIndex(const std::string &name)
 {
     std::string testName = name;
     std::transform(testName.begin(), testName.end(), testName.begin(), ::tolower);

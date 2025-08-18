@@ -250,7 +250,7 @@ std::string FieldGroup::GetFieldGroupName()
 
 void FieldGroup::SetFieldIdsString(std::string fieldIdsString)
 {
-    m_fieldIdsStr = fieldIdsString;
+    m_fieldIdsStr = std::move(fieldIdsString);
 }
 
 /*****************************************************************************
@@ -307,7 +307,7 @@ dcgmReturn_t FieldGroupDestroy::DoExecuteConnected()
 /*****************************************************************************/
 FieldGroupListAll::FieldGroupListAll(std::string hostname, bool json)
 {
-    m_hostName = hostname;
+    m_hostName = std::move(hostname);
     m_json     = json;
 }
 
@@ -327,7 +327,7 @@ dcgmReturn_t FieldGroupListAll::DoExecuteConnected()
 /*****************************************************************************/
 FieldGroupInfo::FieldGroupInfo(std::string hostname, FieldGroup &obj, bool json)
 {
-    m_hostName    = hostname;
+    m_hostName    = std::move(hostname);
     fieldGroupObj = obj;
     m_json        = json;
 

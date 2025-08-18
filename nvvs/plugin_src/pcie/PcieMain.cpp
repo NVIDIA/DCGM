@@ -947,7 +947,7 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
         dcgmChildInfo_t ci {};
         ci.pid           = childPid;
         ci.outputFdIndex = fdsIndex;
-        childrenInfo.push_back(ci);
+        childrenInfo.push_back(std::move(ci));
         fdsIndex++;
     }
 
@@ -1002,7 +1002,7 @@ int outputHostDeviceBandwidthMatrix(BusGrind &bg, bool pinned)
     }
 
     /* Check our PCI link status after we've done some work on the link above */
-    if (bg_check_pci_link(bg, groupName))
+    if (bg_check_pci_link(bg, std::move(groupName)))
     {
         failedTests++;
     }
@@ -2134,6 +2134,8 @@ int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS);
     fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER);
     char fieldGroupName[128];
     char groupName[128];
     snprintf(fieldGroupName, sizeof(fieldGroupName), "pcie_field_group");
@@ -2187,7 +2189,7 @@ void bg_record_cliques(BusGrind *bg)
             }
         }
 
-        cliques.push_back(clique);
+        cliques.push_back(std::move(clique));
     }
 
     std::string p2pGroup("p2p_cliques");
@@ -2266,6 +2268,7 @@ bool bg_check_error_conditions(BusGrind *bg,
     fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS);
 
     if (bg->m_testParameters->GetBoolFromString(PCIE_STR_NVSWITCH_NON_FATAL_CHECK))
     {
@@ -2290,6 +2293,8 @@ bool bg_check_error_conditions(BusGrind *bg,
     int ret = bg->m_dcgmRecorder.CheckErrorFields(
         fieldIds, &failureThresholds, gpuId, 1000, errorList, ignoredErrorList, startTime);
 
+    int effectiveBerRet = bg->m_dcgmRecorder.CheckEffectiveBER(gpuId, errorList);
+
     for (auto const &error : ignoredErrorList)
     {
         auto newInfoMsg = SUPPRESSED_ERROR_STR + error.GetMessage();
@@ -2297,7 +2302,7 @@ bool bg_check_error_conditions(BusGrind *bg,
     }
 
     dcgmReturn_t st = bg_check_per_second_error_conditions(bg, gpuId, errorList, startTime);
-    if (ret != DR_SUCCESS || st != DCGM_ST_OK)
+    if (ret != DR_SUCCESS || effectiveBerRet != DR_SUCCESS || st != DCGM_ST_OK)
     {
         passed = false;
     }

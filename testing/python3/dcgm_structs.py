@@ -69,63 +69,70 @@ DCGM_FBC_SESSION_TYPE_HWENC   = 4   # FB capture for a NVENC HW buffer
 
 # Return types
 _dcgmReturn_t = c_uint
-DCGM_ST_OK                          =  0   # Success
-DCGM_ST_BADPARAM                    = -1   # A bad parameter was passed to a function
-DCGM_ST_GENERIC_ERROR               = -3   # A generic, unspecified error
-DCGM_ST_MEMORY                      = -4   # An out of memory error occured
-DCGM_ST_NOT_CONFIGURED              = -5   # Setting not configured
-DCGM_ST_NOT_SUPPORTED               = -6   # Feature not supported
-DCGM_ST_INIT_ERROR                  = -7   # DCGM Init error
-DCGM_ST_NVML_ERROR                  = -8   # When NVML returns error.
-DCGM_ST_PENDING                     = -9   # Object is in pending state of something else
-DCGM_ST_UNINITIALIZED               = -10  # Object is in undefined state
-DCGM_ST_TIMEOUT                     = -11  # Requested operation timed out
-DCGM_ST_VER_MISMATCH                = -12  # Version mismatch between received and understood API
-DCGM_ST_UNKNOWN_FIELD               = -13  # Unknown field id
-DCGM_ST_NO_DATA                     = -14  # No data is available
-DCGM_ST_STALE_DATA                  = -15
-DCGM_ST_NOT_WATCHED                 = -16  # The given field is not being updated by the cache manager
-DCGM_ST_NO_PERMISSION               = -17  # We are not permissioned to perform the desired action
-DCGM_ST_GPU_IS_LOST                 = -18  # GPU is no longer reachable 
-DCGM_ST_RESET_REQUIRED              = -19  # GPU requires a reset 
-DCGM_ST_FUNCTION_NOT_FOUND          = -20  # Unable to find function
-DCGM_ST_CONNECTION_NOT_VALID        = -21  # Connection to the host engine is not valid any longer
-DCGM_ST_GPU_NOT_SUPPORTED           = -22  # This GPU is not supported by DCGM
-DCGM_ST_GROUP_INCOMPATIBLE          = -23  # The GPUs of the provided group are not compatible with each other for the requested operation
-DCGM_ST_MAX_LIMIT                   = -24
-DCGM_ST_LIBRARY_NOT_FOUND           = -25  # DCGM library could not be found
-DCGM_ST_DUPLICATE_KEY               = -26  #Duplicate key passed to the function
-DCGM_ST_GPU_IN_SYNC_BOOST_GROUP     = -27  #GPU is already a part of a sync boost group
-DCGM_ST_GPU_NOT_IN_SYNC_BOOST_GROUP = -28  #GPU is a not a part of sync boost group
-DCGM_ST_REQUIRES_ROOT               = -29  #This operation cannot be performed when the host engine is running as non-root
-DCGM_ST_NVVS_ERROR                  = -30  #DCGM GPU Diagnostic was successfully executed, but reported an error.
-DCGM_ST_INSUFFICIENT_SIZE           = -31  #An input argument is not large enough
-DCGM_ST_FIELD_UNSUPPORTED_BY_API    = -32  #The given field ID is not supported by the API being called
-DCGM_ST_MODULE_NOT_LOADED           = -33  #This request is serviced by a module of DCGM that is not currently loaded
-DCGM_ST_IN_USE                      = -34  #The requested operation could not be completed because the affected resource is in use
-DCGM_ST_GROUP_IS_EMPTY              = -35  # The specified group is empty and this operation is not valid with an empty group
-DCGM_ST_PROFILING_NOT_SUPPORTED     = -36  # Profiling is not supported for this group of GPUs or GPU
-DCGM_ST_PROFILING_LIBRARY_ERROR     = -37  # The third-party Profiling module returned an unrecoverable error
-DCGM_ST_PROFILING_MULTI_PASS        = -38  # The requested profiling metrics cannot be collected in a single pass
-DCGM_ST_DIAG_ALREADY_RUNNING        = -39  # A diag instance is already running, cannot run a new diag until the current one finishes.
-DCGM_ST_DIAG_BAD_JSON               = -40  # The DCGM GPU Diagnostic returned JSON that cannot be parsed
-DCGM_ST_DIAG_BAD_LAUNCH             = -41  # Error while launching the DCGM GPU Diagnostic
-DCGM_ST_DIAG_UNUSED                 = -42  # Unused
-DCGM_ST_DIAG_THRESHOLD_EXCEEDED     = -43  # A field value met or exceeded the error threshold.
-DCGM_ST_INSUFFICIENT_DRIVER_VERSION = -44  # The installed driver version is insufficient for this API
-DCGM_ST_INSTANCE_NOT_FOUND          = -45  # The specified GPU instance does not exist
-DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND  = -46  # The specified GPU compute instance does not exist
-DCGM_ST_CHILD_NOT_KILLED            = -47  # Couldn't kill a child process within the retries
-DCGM_ST_3RD_PARTY_LIBRARY_ERROR     = -48  # Detected an error in a 3rd-party library
-DCGM_ST_INSUFFICIENT_RESOURCES      = -49  # Not enough resources available
-DCGM_ST_PLUGIN_EXCEPTION            = -50  # Exception thrown from a diagnostic plugin
-DCGM_ST_NVVS_ISOLATE_ERROR          = -51  # The diagnostic returned an error that indicates the need for isolation
-DCGM_ST_NVVS_BINARY_NOT_FOUND       = -52  # The NVVS binary was not found in the specified location
-DCGM_ST_NVVS_KILLED                 = -53  # The NVVS process was killed by a signal
-DCGM_ST_PAUSED                      = -54  # The hostengine and all modules are paused
-DCGM_ST_ALREADY_INITIALIZED         = -55  # The object is already initialized
-DCGM_ST_NVML_NOT_LOADED             = -56  # NVML couldn't be loaded on this system
-DCGM_ST_NVML_DRIVER_TIMEOUT         = -57, # NVML driver timeout error was detected
+DCGM_ST_OK                              =  0   # Success
+DCGM_ST_BADPARAM                        = -1   # A bad parameter was passed to a function
+DCGM_ST_GENERIC_ERROR                   = -3   # A generic, unspecified error
+DCGM_ST_MEMORY                          = -4   # An out of memory error occured
+DCGM_ST_NOT_CONFIGURED                  = -5   # Setting not configured
+DCGM_ST_NOT_SUPPORTED                   = -6   # Feature not supported
+DCGM_ST_INIT_ERROR                      = -7   # DCGM Init error
+DCGM_ST_NVML_ERROR                      = -8   # When NVML returns error.
+DCGM_ST_PENDING                         = -9   # Object is in pending state of something else
+DCGM_ST_UNINITIALIZED                   = -10  # Object is in undefined state
+DCGM_ST_TIMEOUT                         = -11  # Requested operation timed out
+DCGM_ST_VER_MISMATCH                    = -12  # Version mismatch between received and understood API
+DCGM_ST_UNKNOWN_FIELD                   = -13  # Unknown field id
+DCGM_ST_NO_DATA                         = -14  # No data is available
+DCGM_ST_STALE_DATA                      = -15
+DCGM_ST_NOT_WATCHED                     = -16  # The given field is not being updated by the cache manager
+DCGM_ST_NO_PERMISSION                   = -17  # We are not permissioned to perform the desired action
+DCGM_ST_GPU_IS_LOST                     = -18  # GPU is no longer reachable 
+DCGM_ST_RESET_REQUIRED                  = -19  # GPU requires a reset 
+DCGM_ST_FUNCTION_NOT_FOUND              = -20  # Unable to find function
+DCGM_ST_CONNECTION_NOT_VALID            = -21  # Connection to the host engine is not valid any longer
+DCGM_ST_GPU_NOT_SUPPORTED               = -22  # This GPU is not supported by DCGM
+DCGM_ST_GROUP_INCOMPATIBLE              = -23  # The GPUs of the provided group are not compatible with each other for the requested operation
+DCGM_ST_MAX_LIMIT                       = -24
+DCGM_ST_LIBRARY_NOT_FOUND               = -25  # DCGM library could not be found
+DCGM_ST_DUPLICATE_KEY                   = -26  #Duplicate key passed to the function
+DCGM_ST_GPU_IN_SYNC_BOOST_GROUP         = -27  #GPU is already a part of a sync boost group
+DCGM_ST_GPU_NOT_IN_SYNC_BOOST_GROUP     = -28  #GPU is a not a part of sync boost group
+DCGM_ST_REQUIRES_ROOT                   = -29  #This operation cannot be performed when the host engine is running as non-root
+DCGM_ST_NVVS_ERROR                      = -30  #DCGM GPU Diagnostic was successfully executed, but reported an error.
+DCGM_ST_INSUFFICIENT_SIZE               = -31  #An input argument is not large enough
+DCGM_ST_FIELD_UNSUPPORTED_BY_API        = -32  #The given field ID is not supported by the API being called
+DCGM_ST_MODULE_NOT_LOADED               = -33  #This request is serviced by a module of DCGM that is not currently loaded
+DCGM_ST_IN_USE                          = -34  #The requested operation could not be completed because the affected resource is in use
+DCGM_ST_GROUP_IS_EMPTY                  = -35  # The specified group is empty and this operation is not valid with an empty group
+DCGM_ST_PROFILING_NOT_SUPPORTED         = -36  # Profiling is not supported for this group of GPUs or GPU
+DCGM_ST_PROFILING_LIBRARY_ERROR         = -37  # The third-party Profiling module returned an unrecoverable error
+DCGM_ST_PROFILING_MULTI_PASS            = -38  # The requested profiling metrics cannot be collected in a single pass
+DCGM_ST_DIAG_ALREADY_RUNNING            = -39  # A diag instance is already running, cannot run a new diag until the current one finishes.
+DCGM_ST_DIAG_BAD_JSON                   = -40  # The DCGM GPU Diagnostic returned JSON that cannot be parsed
+DCGM_ST_DIAG_BAD_LAUNCH                 = -41  # Error while launching the DCGM GPU Diagnostic
+DCGM_ST_DIAG_UNUSED                     = -42  # Unused
+DCGM_ST_DIAG_THRESHOLD_EXCEEDED         = -43  # A field value met or exceeded the error threshold.
+DCGM_ST_INSUFFICIENT_DRIVER_VERSION     = -44  # The installed driver version is insufficient for this API
+DCGM_ST_INSTANCE_NOT_FOUND              = -45  # The specified GPU instance does not exist
+DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND      = -46  # The specified GPU compute instance does not exist
+DCGM_ST_CHILD_NOT_KILLED                = -47  # Couldn't kill a child process within the retries
+DCGM_ST_3RD_PARTY_LIBRARY_ERROR         = -48  # Detected an error in a 3rd-party library
+DCGM_ST_INSUFFICIENT_RESOURCES          = -49  # Not enough resources available
+DCGM_ST_PLUGIN_EXCEPTION                = -50  # Exception thrown from a diagnostic plugin
+DCGM_ST_NVVS_ISOLATE_ERROR              = -51  # The diagnostic returned an error that indicates the need for isolation
+DCGM_ST_NVVS_BINARY_NOT_FOUND           = -52  # The NVVS binary was not found in the specified location
+DCGM_ST_NVVS_KILLED                     = -53  # The NVVS process was killed by a signal
+DCGM_ST_PAUSED                          = -54  # The hostengine and all modules are paused
+DCGM_ST_ALREADY_INITIALIZED             = -55  # The object is already initialized
+DCGM_ST_NVML_NOT_LOADED                 = -56  # NVML couldn't be loaded on this system
+DCGM_ST_NVML_DRIVER_TIMEOUT             = -57  # NVML driver timeout error was detected
+DCGM_ST_NVVS_NO_AVAILABLE_TEST          = -58  # The NVVS returns no available tests (NVVS_ST_TEST_NOT_FOUND)
+DCGM_ST_MNDIAG_CONNECTION_NOT_AVAILABLE = -59  # No connection is currently authorized for multi-node diagnostic
+DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED  = -60  # The connection is not authorized for multi-node diagnostic operations
+DCGM_ST_REMOTE_SSH_CONNECTION_FAILED    = -61  # An SSH connection to a remote hostengine failed
+DCGM_ST_CHILD_SPAWN_FAILED              = -62  # A child process could not be spawned
+DCGM_ST_FILE_IO_ERROR                   = -63  # A file operation failed
+DCGM_ST_CHILD_SIGNAL_RECEIVED           = -64  # A child process received a signal
 
 DCGM_GROUP_DEFAULT = 0  # All the GPUs on the node are added to the group
 DCGM_GROUP_EMPTY   = 1  # Creates an empty group
@@ -238,63 +245,70 @@ class DCGMError(Exception):
     _valClassMapping = dict()
     # List of currently known error codes
     _error_code_to_string = {
-        DCGM_ST_OK:                          "Success",
-        DCGM_ST_BADPARAM:                    "Bad parameter passed to function",
-        DCGM_ST_GENERIC_ERROR:               "Generic unspecified error",
-        DCGM_ST_MEMORY:                      "Out of memory error",
-        DCGM_ST_NOT_CONFIGURED:              "Setting not configured",
-        DCGM_ST_NOT_SUPPORTED:               "Feature not supported",
-        DCGM_ST_INIT_ERROR:                  "DCGM initialization error",
-        DCGM_ST_NVML_ERROR:                  "NVML error",
-        DCGM_ST_PENDING:                     "Object is in a pending state",
-        DCGM_ST_UNINITIALIZED:               "Object is in an undefined state",
-        DCGM_ST_TIMEOUT:                     "Timeout",
-        DCGM_ST_VER_MISMATCH:                "API version mismatch",
-        DCGM_ST_UNKNOWN_FIELD:               "Unknown field",
-        DCGM_ST_NO_DATA:                     "No data is available",
-        DCGM_ST_STALE_DATA:                  "Data is considered stale",
-        DCGM_ST_NOT_WATCHED:                 "Field is not being updated",
-        DCGM_ST_NO_PERMISSION:               "Not permissioned",
-        DCGM_ST_GPU_IS_LOST:                 "GPU is unreachable",
-        DCGM_ST_RESET_REQUIRED:              "GPU requires a reset",
-        DCGM_ST_FUNCTION_NOT_FOUND:          "Unable to find function",
-        DCGM_ST_CONNECTION_NOT_VALID:        "The connection to the host engine is not valid any longer",
-        DCGM_ST_GPU_NOT_SUPPORTED:           "This GPU is not supported by DCGM",
-        DCGM_ST_GROUP_INCOMPATIBLE:          "GPUs are incompatible with each other for the requested operation",
-        DCGM_ST_MAX_LIMIT:                   "Max limit reached for the object",
-        DCGM_ST_LIBRARY_NOT_FOUND:           "DCGM library could not be found",
-        DCGM_ST_DUPLICATE_KEY:               "Duplicate key passed to function",
-        DCGM_ST_GPU_IN_SYNC_BOOST_GROUP:     "GPU is already a part of a sync boost group",
-        DCGM_ST_GPU_NOT_IN_SYNC_BOOST_GROUP: "GPU is not a part of the sync boost group",
-        DCGM_ST_REQUIRES_ROOT:               "This operation is not supported when the host engine is running as non root",
-        DCGM_ST_NVVS_ERROR:                  "DCGM GPU Diagnostic returned an error.",
-        DCGM_ST_INSUFFICIENT_SIZE:           "An input argument is not large enough",
-        DCGM_ST_FIELD_UNSUPPORTED_BY_API:    "The given field ID is not supported by the API being called",
-        DCGM_ST_MODULE_NOT_LOADED:           "This request is serviced by a module of DCGM that is not currently loaded",
-        DCGM_ST_IN_USE:                      "The requested operation could not be completed because the affected resource is in use",
-        DCGM_ST_GROUP_IS_EMPTY:              "The specified group is empty, and this operation is incompatible with an empty group",
-        DCGM_ST_PROFILING_NOT_SUPPORTED:     "Profiling is not supported for this group of GPUs or GPU",
-        DCGM_ST_PROFILING_LIBRARY_ERROR:     "The third-party Profiling module returned an unrecoverable error",
-        DCGM_ST_PROFILING_MULTI_PASS:        "The requested profiling metrics cannot be collected in a single pass",
-        DCGM_ST_DIAG_ALREADY_RUNNING:        "A diag instance is already running, cannot run a new diag until the current one finishes",
-        DCGM_ST_DIAG_BAD_JSON:               "The GPU Diagnostic returned Json that cannot be parsed.",
-        DCGM_ST_DIAG_BAD_LAUNCH:             "Error while launching the GPU Diagnostic.",
-        DCGM_ST_DIAG_UNUSED:                 "Unused error code",
-        DCGM_ST_DIAG_THRESHOLD_EXCEEDED:     "A field value met or exceeded the error threshold.",
-        DCGM_ST_INSUFFICIENT_DRIVER_VERSION: "The installed driver version is insufficient for this API",
-        DCGM_ST_INSTANCE_NOT_FOUND:          "The specified GPU instance does not exist",
-        DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND:  "The specified GPU compute instance does not exist",
-        DCGM_ST_CHILD_NOT_KILLED:            "Couldn't kill a child process within the retries",
-        DCGM_ST_3RD_PARTY_LIBRARY_ERROR:     "Detected an error in a 3rd-party library",
-        DCGM_ST_INSUFFICIENT_RESOURCES:      "Not enough resources available",
-        DCGM_ST_PLUGIN_EXCEPTION:            "Exception thrown from a diagnostic plugin",
-        DCGM_ST_NVVS_ISOLATE_ERROR:          "The diagnostic returned an error that indicates the need for isolation",
-        DCGM_ST_NVVS_BINARY_NOT_FOUND:       "The NVVS binary was not found in the specified location",
-        DCGM_ST_NVVS_KILLED:                 "The NVVS process was killed by a signal",
-        DCGM_ST_PAUSED:                      "The hostengine and all modules are paused",
-        DCGM_ST_ALREADY_INITIALIZED:         "The object is already initialized",
-        DCGM_ST_NVML_NOT_LOADED:             "NVML couldn't be loaded on this system",
-        DCGM_ST_NVML_DRIVER_TIMEOUT:         "NVML driver timeout error was detected",
+        DCGM_ST_OK:                              "Success",
+        DCGM_ST_BADPARAM:                        "Bad parameter passed to function",
+        DCGM_ST_GENERIC_ERROR:                   "Generic unspecified error",
+        DCGM_ST_MEMORY:                          "Out of memory error",
+        DCGM_ST_NOT_CONFIGURED:                  "Setting not configured",
+        DCGM_ST_NOT_SUPPORTED:                   "Feature not supported",
+        DCGM_ST_INIT_ERROR:                      "DCGM initialization error",
+        DCGM_ST_NVML_ERROR:                      "NVML error",
+        DCGM_ST_PENDING:                         "Object is in a pending state",
+        DCGM_ST_UNINITIALIZED:                   "Object is in an undefined state",
+        DCGM_ST_TIMEOUT:                         "Timeout",
+        DCGM_ST_VER_MISMATCH:                    "API version mismatch",
+        DCGM_ST_UNKNOWN_FIELD:                   "Unknown field",
+        DCGM_ST_NO_DATA:                         "No data is available",
+        DCGM_ST_STALE_DATA:                      "Data is considered stale",
+        DCGM_ST_NOT_WATCHED:                     "Field is not being updated",
+        DCGM_ST_NO_PERMISSION:                   "Not permissioned",
+        DCGM_ST_GPU_IS_LOST:                     "GPU is unreachable",
+        DCGM_ST_RESET_REQUIRED:                  "GPU requires a reset",
+        DCGM_ST_FUNCTION_NOT_FOUND:              "Unable to find function",
+        DCGM_ST_CONNECTION_NOT_VALID:            "The connection to the host engine is not valid any longer",
+        DCGM_ST_GPU_NOT_SUPPORTED:               "This GPU is not supported by DCGM",
+        DCGM_ST_GROUP_INCOMPATIBLE:              "GPUs are incompatible with each other for the requested operation",
+        DCGM_ST_MAX_LIMIT:                       "Max limit reached for the object",
+        DCGM_ST_LIBRARY_NOT_FOUND:               "DCGM library could not be found",
+        DCGM_ST_DUPLICATE_KEY:                   "Duplicate key passed to function",
+        DCGM_ST_GPU_IN_SYNC_BOOST_GROUP:         "GPU is already a part of a sync boost group",
+        DCGM_ST_GPU_NOT_IN_SYNC_BOOST_GROUP:     "GPU is not a part of the sync boost group",
+        DCGM_ST_REQUIRES_ROOT:                   "This operation is not supported when the host engine is running as non root",
+        DCGM_ST_NVVS_ERROR:                      "DCGM GPU Diagnostic returned an error.",
+        DCGM_ST_INSUFFICIENT_SIZE:               "An input argument is not large enough",
+        DCGM_ST_FIELD_UNSUPPORTED_BY_API:        "The given field ID is not supported by the API being called",
+        DCGM_ST_MODULE_NOT_LOADED:               "This request is serviced by a module of DCGM that is not currently loaded",
+        DCGM_ST_IN_USE:                          "The requested operation could not be completed because the affected resource is in use",
+        DCGM_ST_GROUP_IS_EMPTY:                  "The specified group is empty, and this operation is incompatible with an empty group",
+        DCGM_ST_PROFILING_NOT_SUPPORTED:         "Profiling is not supported for this group of GPUs or GPU",
+        DCGM_ST_PROFILING_LIBRARY_ERROR:         "The third-party Profiling module returned an unrecoverable error",
+        DCGM_ST_PROFILING_MULTI_PASS:            "The requested profiling metrics cannot be collected in a single pass",
+        DCGM_ST_DIAG_ALREADY_RUNNING:            "A diag instance is already running, cannot run a new diag until the current one finishes",
+        DCGM_ST_DIAG_BAD_JSON:                   "The GPU Diagnostic returned Json that cannot be parsed.",
+        DCGM_ST_DIAG_BAD_LAUNCH:                 "Error while launching the GPU Diagnostic.",
+        DCGM_ST_DIAG_UNUSED:                     "Unused error code",
+        DCGM_ST_DIAG_THRESHOLD_EXCEEDED:         "A field value met or exceeded the error threshold.",
+        DCGM_ST_INSUFFICIENT_DRIVER_VERSION:     "The installed driver version is insufficient for this API",
+        DCGM_ST_INSTANCE_NOT_FOUND:              "The specified GPU instance does not exist",
+        DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND:      "The specified GPU compute instance does not exist",
+        DCGM_ST_CHILD_NOT_KILLED:                "Couldn't kill a child process within the retries",
+        DCGM_ST_3RD_PARTY_LIBRARY_ERROR:         "Detected an error in a 3rd-party library",
+        DCGM_ST_INSUFFICIENT_RESOURCES:          "Not enough resources available",
+        DCGM_ST_PLUGIN_EXCEPTION:                "Exception thrown from a diagnostic plugin",
+        DCGM_ST_NVVS_ISOLATE_ERROR:              "The diagnostic returned an error that indicates the need for isolation",
+        DCGM_ST_NVVS_BINARY_NOT_FOUND:           "The NVVS binary was not found in the specified location",
+        DCGM_ST_NVVS_KILLED:                     "The NVVS process was killed by a signal",
+        DCGM_ST_PAUSED:                          "The hostengine and all modules are paused",
+        DCGM_ST_ALREADY_INITIALIZED:             "The object is already initialized",
+        DCGM_ST_NVML_NOT_LOADED:                 "NVML couldn't be loaded on this system",
+        DCGM_ST_NVML_DRIVER_TIMEOUT:             "NVML driver timeout error was detected",
+        DCGM_ST_NVVS_NO_AVAILABLE_TEST:          "The NVVS returns no available tests (NVVS_ST_TEST_NOT_FOUND)",
+        DCGM_ST_MNDIAG_CONNECTION_NOT_AVAILABLE: "No connection is currently authorized for multi-node diagnostic",
+        DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED:  "The connection is not authorized for multi-node diagnostic operations",
+        DCGM_ST_REMOTE_SSH_CONNECTION_FAILED:    "An SSH connection to a remote hostengine failed",
+        DCGM_ST_CHILD_SPAWN_FAILED:              "A child process could not be spawned",
+        DCGM_ST_FILE_IO_ERROR:                   "A file operation failed",
+        DCGM_ST_CHILD_SIGNAL_RECEIVED:           "A child process received a signal",
     }
 
     def __new__(typ, value):
@@ -670,8 +684,8 @@ def _dcgmErrorString(result):
 class c_dcgm_link_t(_PrintableStructure):
     _fields = [
         ('type', c_uint8),
-        ('index', c_uint32),
-        ('id', c_uint16)
+        ('index', c_uint16),
+        ('id', c_uint8)
     ]
 
 class c_dcgmConnectV2Params_v1(_PrintableStructure):
@@ -1864,7 +1878,7 @@ dcgmDiagTestAuxData_version = dcgmDiagTestAuxData_version1
 class c_dcgmDiagEntityResult_v1(_PrintableStructure):
     _fields_ = [
         ('entity', c_dcgmGroupEntityPair_t),
-        ('result', c_int),
+        ('result', c_int32),
         ('testId', c_uint),
     ]
 
@@ -2361,6 +2375,16 @@ class c_dcgmNvLinkStatus_v4(_PrintableStructure):
 
 dcgmNvLinkStatus_version4 = make_dcgm_version(c_dcgmNvLinkStatus_v4, 4)
 
+# Nvlink P2P link status.
+DvgmNvLinkP2PStatusOK                   = 0 # O.K.
+DcgmNvLinkP2PStatusChipsetNotSupported  = 1 # Chipset not supported
+DcgmNvLinkP2PStatusGpuNotSupported      = 2 # GPU not supported
+DcgmNvLinkP2PStatusTopologyNotSupported = 3 # Topology not supported
+DcgmNvLinkP2PStatusDisabledByRegKey     = 4 # Disabled by RegKey
+DcgmNvLinkP2PStatusNotSupported         = 5 # Not supported
+DcgmNvLinkP2PStatusUnknown              = 6 # Unknown
+
+
 # Bitmask values for dcgmGetFieldIdSummary
 DCGM_SUMMARY_MIN      = 0x00000001
 DCGM_SUMMARY_MAX      = 0x00000002
@@ -2370,6 +2394,28 @@ DCGM_SUMMARY_COUNT    = 0x00000010
 DCGM_SUMMARY_INTEGRAL = 0x00000020
 DCGM_SUMMARY_DIFF     = 0x00000040
 DCGM_SUMMARY_SIZE     = 7
+
+class c_dcgmNvLinkGpuP2PStatus_v1(_PrintableStructure):
+    """
+    P2P status of one of the NvLinks in a given system
+    """
+
+    _fields_ = [
+        ('entityId', c_uint),
+        ('linkStatus', c_uint * DCGM_MAX_NUM_DEVICES),
+    ]
+
+class c_dcgmNvLinkP2PStatus_v1(_PrintableStructure):
+    """
+    P2P status of all of the NvLinks in a given system
+    """
+    _fields_ = [
+        ('version', c_uint),
+        ('numGpus', c_uint),
+        ('gpus', c_dcgmNvLinkGpuP2PStatus_v1 * DCGM_MAX_NUM_DEVICES),
+    ]
+
+dcgmNvLinkP2PStatus_version1 = make_dcgm_version(c_dcgmNvLinkP2PStatus_v1, 1)
 
 class c_dcgmSummaryResponse_t(_PrintableStructure):
     class ResponseValue(DcgmUnion):
@@ -2409,7 +2455,8 @@ DcgmModuleIdConfig         = 6  # Config Module
 DcgmModuleIdDiag           = 7  # GPU Diagnostic Module
 DcgmModuleIdProfiling      = 8  # Profiling Module
 DcgmModuleIdSysmon         = 9  # System Monitoring Module
-DcgmModuleIdCount          = 10 # 1 greater than largest ID above
+DcgmModuleIdMnDiag         = 10 # Multi-Node Diagnostic Module
+DcgmModuleIdCount          = 11 # 1 greater than largest ID above
 
 # Module Status
 DcgmModuleStatusNotLoaded   = 0 # Module has not been loaded yet
@@ -2498,3 +2545,154 @@ class c_dcgmDiagStatus_v1(_PrintableStructure):
     ]
 dcgmDiagStatus_version1 = make_dcgm_version(c_dcgmDiagStatus_v1, 1)
 dcgmDiagStatus_version = dcgmDiagStatus_version1
+
+
+# ----------------------------------------
+# Multi-node diagnostic constants
+DCGM_MN_DIAG_RESPONSE_TESTS_MAX = 4  # Maximum number of tests that can be reported
+DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX = 16  # Maximum number of entities per host
+DCGM_MN_DIAG_RESPONSE_HOSTS_MAX = 72  # Maximum number of hosts that can be reported
+DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX = (DCGM_MN_DIAG_RESPONSE_HOSTS_MAX * DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
+DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX = 32  # Maximum number of per-entity errors
+DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX = 128  # Maximum number of per-entity info messages
+DCGM_MN_DIAG_RESPONSE_ERRORS_MAX = DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX
+DCGM_MN_DIAG_RESPONSE_INFO_MAX = DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX
+DCGM_MN_DIAG_RESPONSE_RESULTS_MAX = (DCGM_MN_DIAG_RESPONSE_TESTS_MAX * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX)
+DCGM_MN_DIAG_TEST_RUN_NAME_LEN = 32  # Maximum number of characters for a test name
+DCGM_MN_DIAG_AUX_DATA_LEN = 2048  # Length of auxiliary data
+DCGM_MAX_NUM_HOSTS = 72
+DCGM_ERR_MSG_LENGTH = 512
+
+DCGM_CONFIG_TARGET_STATE  = 0          # The target configuration values to be applied
+
+class c_dcgmRunMnDiag_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('hostList', (c_char * DCGM_MAX_STR_LENGTH) * DCGM_MAX_NUM_HOSTS),
+        ('testName', c_char * DCGM_MAX_STR_LENGTH),
+        ('testParms', (c_char * DCGM_MAX_TEST_PARMS_LEN_V2) * DCGM_MAX_TEST_PARMS),
+    ]
+
+c_dcgmRunMnDiag_t = c_dcgmRunMnDiag_v1
+dcgmRunMnDiag_version1 = make_dcgm_version(c_dcgmRunMnDiag_v1, 1)
+dcgmRunMnDiag_version = dcgmRunMnDiag_version1
+
+
+class c_dcgmMnDiagHosts_v1(_PrintableStructure):
+    _fields_ = [
+        ('hostname', c_char * DCGM_MAX_STR_LENGTH),
+        ('dcgmVersion', c_char * DCGM_VERSION_LEN),
+        ('driverVersion', c_char * DCGM_MAX_STR_LENGTH),
+        ('numEntities', c_uint),
+        ('entityIndices', c_uint * DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
+    ]
+
+c_dcgmMnDiagHosts_t = c_dcgmMnDiagHosts_v1
+dcgmMnDiagHosts_version1 = make_dcgm_version(c_dcgmMnDiagHosts_v1, 1)
+dcgmMnDiagHosts_version = dcgmMnDiagHosts_version1   
+
+class c_dcgmMnDiagTestAuxData_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('data', c_char * DCGM_MN_DIAG_AUX_DATA_LEN)
+    ]
+
+c_dcgmMnDiagTestAuxData_t = c_dcgmMnDiagTestAuxData_v1
+dcgmMnDiagTestAuxData_version1 = make_dcgm_version(c_dcgmMnDiagTestAuxData_v1, 1)
+dcgmMnDiagTestAuxData_version = dcgmMnDiagTestAuxData_version1
+
+class c_dcgmMnDiagTestRun_v1(_PrintableStructure):
+    _fields_ = [
+        ('name', c_char * DCGM_MN_DIAG_TEST_RUN_NAME_LEN),
+        ('pluginName', c_char * DCGM_MN_DIAG_TEST_RUN_NAME_LEN),
+        ('result', c_uint32),
+        ('numErrors', c_ubyte),
+        ('numInfo', c_ubyte),
+        ('categoryIndex', c_ubyte),
+        ('_unused1', c_ubyte),
+        ('numResults', c_ushort),
+        ('_unused2', c_ubyte * 2),
+        ('errorIndices', c_ubyte * DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX),
+        ('infoIndices', c_ubyte * DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX),
+        ('resultIndices', c_ushort * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX),
+        ('_unused3', c_ubyte * 4),
+        ('auxData', c_dcgmMnDiagTestAuxData_v1)
+    ]
+
+c_dcgmMnDiagTestRun_t = c_dcgmMnDiagTestRun_v1
+dcgmMnDiagTestRun_version1 = make_dcgm_version(c_dcgmMnDiagTestRun_v1, 1)
+dcgmMnDiagTestRun_version = dcgmMnDiagTestRun_version1
+
+class c_dcgmMnDiagEntity_v1(_PrintableStructure):
+    _fields_ = [
+        ('entity', c_dcgmGroupEntityPair_t),
+        ('hostId', c_uint),
+        ('serialNum', c_char * DCGM_MAX_STR_LENGTH),
+        ('skuDeviceId', c_char * DCGM_DEVICE_ID_LEN),
+        ('_unusedPad1', c_char * 3)
+    ]
+
+c_dcgmMnDiagEntity_t = c_dcgmMnDiagEntity_v1
+dcgmMnDiagEntity_version1 = make_dcgm_version(c_dcgmMnDiagEntity_v1, 1)
+dcgmMnDiagEntity_version = dcgmMnDiagEntity_version1
+
+class c_dcgmMnDiagError_v1(_PrintableStructure):
+    _fields_ = [
+        ('entity', c_dcgmGroupEntityPair_t),
+        ('hostId', c_uint),
+        ('testId', c_uint),
+        ('code', c_uint),
+        ('category', c_uint),
+        ('severity', c_uint),
+        ('msg', c_char * DCGM_ERR_MSG_LENGTH)
+    ]
+
+c_dcgmMnDiagError_t = c_dcgmMnDiagError_v1
+dcgmMnDiagError_version1 = make_dcgm_version(c_dcgmMnDiagError_v1, 1)
+dcgmMnDiagError_version = dcgmMnDiagError_version1
+
+class c_dcgmMnDiagInfo_v1(_PrintableStructure):
+    _fields_ = [
+        ('entity', c_dcgmGroupEntityPair_t),
+        ('hostId', c_uint),
+        ('testId', c_uint),
+        ('msg', c_char * DCGM_ERR_MSG_LENGTH)
+    ]
+
+c_dcgmMnDiagInfo_t = c_dcgmMnDiagInfo_v1
+dcgmMnDiagInfo_version1 = make_dcgm_version(c_dcgmMnDiagInfo_v1, 1)
+dcgmMnDiagInfo_version = dcgmMnDiagInfo_version1
+
+class c_dcgmMnDiagEntityResult_v1(_PrintableStructure):
+    _fields_ = [
+        ('entity', c_dcgmGroupEntityPair_t),
+        ('result', c_int32),
+        ('hostId', c_uint),
+        ('testId', c_uint)
+    ]
+
+c_dcgmMnDiagEntityResult_t = c_dcgmMnDiagEntityResult_v1
+dcgmMnDiagEntityResult_version1 = make_dcgm_version(c_dcgmMnDiagEntityResult_v1, 1)
+dcgmMnDiagEntityResult_version = dcgmMnDiagEntityResult_version1
+
+class c_dcgmMnDiagResponse_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('numHosts', c_ubyte),
+        ('numTests', c_ubyte),
+        ('numErrors', c_ushort),
+        ('numInfos', c_ushort),
+        ('numEntities', c_ushort),
+        ('numResults', c_ushort),
+        ('_unusedPad1', c_char * 2),
+        ('hosts', c_dcgmMnDiagHosts_v1 * DCGM_MN_DIAG_RESPONSE_HOSTS_MAX),
+        ('tests', c_dcgmMnDiagTestRun_v1 * DCGM_MN_DIAG_RESPONSE_TESTS_MAX),
+        ('entities', c_dcgmMnDiagEntity_v1 * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX),
+        ('errors', c_dcgmMnDiagError_v1 * DCGM_MN_DIAG_RESPONSE_ERRORS_MAX),
+        ('info', c_dcgmMnDiagInfo_v1 * DCGM_MN_DIAG_RESPONSE_INFO_MAX),
+        ('results', c_dcgmMnDiagEntityResult_v1 * DCGM_MN_DIAG_RESPONSE_RESULTS_MAX)
+    ]
+
+c_dcgmMnDiagResponse_t = c_dcgmMnDiagResponse_v1
+dcgmMnDiagResponse_version1 = make_dcgm_version(c_dcgmMnDiagResponse_v1, 1)
+dcgmMnDiagResponse_version = dcgmMnDiagResponse_version1

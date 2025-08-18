@@ -667,7 +667,7 @@ dcgmReturn_t DcgmDiagResponseWrapper::SetVersion7(dcgmDiagResponse_v7 *response)
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmDiagResponseWrapper::SetResult(std::string_view data) const
+dcgmReturn_t DcgmDiagResponseWrapper::SetResult(std::span<std::byte> data) const
 {
     dcgmReturn_t ret = DCGM_ST_OK;
 

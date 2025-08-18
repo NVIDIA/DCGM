@@ -169,6 +169,14 @@ def dcgmGetNvLinkLinkStatus(dcgm_handle):
     return linkStatus
 
 @ensure_byte_strings()
+def dcgmGetNvLinkP2PStatus(dcgm_handle, inOutStatus, version = dcgm_structs.dcgmNvLinkP2PStatus_version1):
+    # inOutStatus should be a dcgm_structs.c_dcgmNvLinkP2PStatus_v1()
+    inOutStatus.version = version
+    fn = dcgmFP("dcgmGetNvLinkP2PStatus")
+    ret = fn(dcgm_handle, byref(inOutStatus))
+    dcgm_structs._dcgmCheckReturn(ret)
+
+@ensure_byte_strings()
 def dcgmGetGpuStatus(dcgm_handle, gpuId):
     gpuStatus = c_uint()
     fn = dcgmFP("dcgmGetGpuStatus")
@@ -614,6 +622,30 @@ def helperDiagCheckReturn(ret, response):
         return helperDiagCheckReturn_v2(ret, response)
     else:
         return helperDiagCheckReturn_v1(ret, response)
+    
+def helperMnDiagCheckReturn(ret, response):
+    assert response.version >= dcgm_structs.dcgmMnDiagResponse_version1, "Expected version %d or later, got %d" % \
+        (dcgm_structs.dcgmMnDiagResponse_version1, response.version)
+
+    try:
+        dcgm_structs._dcgmCheckReturn(ret)
+    except dcgm_structs.DCGMError as e:
+        info = ""
+        delim = ""
+        # Iterate through all errors up to numErrors or max array size
+        for i in range(min(response.numErrors, dcgm_structs.DCGM_MN_DIAG_RESPONSE_ERRORS_MAX)):
+            if response.errors[i].msg:
+                info = "%s%s%s" % (info, delim, response.errors[i].msg)
+                delim = ", "
+        if info:
+            # Add error information to the raised exception
+            e.SetAdditionalInfo(info)
+            raise e
+        else:
+            raise
+
+    return response
+
 
 @ensure_byte_strings()
 def dcgmActionValidate_v2(dcgm_handle, runDiagInfo, runDiagVersion=dcgm_structs.dcgmRunDiag_version10):
@@ -654,6 +686,24 @@ def dcgmRunDiagnostic(dcgm_handle, group_id, diagLevel):
     ret = fn(dcgm_handle, group_id, diagLevel, byref(response))
 
     return helperDiagCheckReturn(ret, response)
+
+@ensure_byte_strings()
+def dcgmRunMnDiagnostic(dcgm_handle, runMnDiagInfo, runMnDiagVersion=dcgm_structs.dcgmRunMnDiag_version1):
+    response = dcgm_structs.c_dcgmMnDiagResponse_v1()
+    response.version = dcgm_structs.dcgmMnDiagResponse_version1
+
+    runMnDiagInfo.version = runMnDiagVersion
+    fn = dcgmFP("dcgmRunMnDiagnostic")
+    ret = fn(dcgm_handle, byref(runMnDiagInfo), byref(response))
+
+    return helperMnDiagCheckReturn(ret, response)
+
+@ensure_byte_strings()
+def dcgmStopMnDiagnostic(dcgm_handle):
+    fn = dcgmFP("dcgmStopMnDiagnostic")
+    ret = fn(dcgm_handle)
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
 
 @ensure_byte_strings()
 def dcgmWatchPidFields(dcgm_handle, groupId, updateFreq, maxKeepAge, maxKeepSamples):

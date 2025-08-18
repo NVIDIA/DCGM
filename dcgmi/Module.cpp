@@ -39,6 +39,7 @@
 #define MODULE_DIAG_NAME       "Diag"
 #define MODULE_PROFILING_NAME  "Profiling"
 #define MODULE_SYSMON_NAME     "SysMon"
+#define MODULE_MNDIAG_NAME     "MnDiag"
 
 // Commands
 #define DENYLIST_MODULE "Denylist Module"
@@ -118,6 +119,9 @@ dcgmReturn_t Module::moduleIdToName(dcgmModuleId_t moduleId, std::string &str)
             return DCGM_ST_OK;
         case DcgmModuleIdSysmon:
             str = MODULE_SYSMON_NAME;
+            return DCGM_ST_OK;
+        case DcgmModuleIdMnDiag:
+            str = MODULE_MNDIAG_NAME;
             return DCGM_ST_OK;
         case DcgmModuleIdCount:
             return DCGM_ST_BADPARAM;
@@ -285,6 +289,10 @@ dcgmReturn_t DenylistModule::DoExecuteConnected()
         else if (lowerModule == toLower(MODULE_DIAG_NAME))
         {
             moduleId = DcgmModuleIdDiag;
+        }
+        else if (lowerModule == toLower(MODULE_MNDIAG_NAME))
+        {
+            moduleId = DcgmModuleIdMnDiag;
         }
         else
         {

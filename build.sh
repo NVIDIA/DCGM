@@ -38,9 +38,8 @@ function usage() {
     echo "Buildscript for the DCGM project
 Usage: ${0} [options] [-- [any additional cmake arguments]]
     Where options are:
-        -d --debug           : Make debug build of the DCGM
-        -r --release         : Make release build of the DCGM
-        -s --release-symbols : Make release with debug info build of the DCGM
+        -d --debug           : Make debug build of the DCGM (CMAKE_BUILD_TYPE=Debug)
+        -r --release         : Make release build of the DCGM (CMAKE_BUILD_TYPE=RelWithDebInfo)
            --coverage        : Generated build dumps coverage information
         -p --packages        : Generate tar.gz packages once the build is done
            --deb             : Generate *.deb packages once the build is done
@@ -78,7 +77,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
           sanitizers compatibility."
 }
 
-LONGOPTS=address-san,arch:,clean,coverage,deb,debug,gcc-analyzer,help,leak-san,no-install,no-tests,packages,publication,release,release-symbols,rpm,thread-san,ub-san,vmware
+LONGOPTS=address-san,arch:,clean,coverage,deb,debug,gcc-analyzer,help,leak-san,no-install,no-tests,packages,publication,release,rpm,thread-san,ub-san,vmware
 SHORTOPTS=drsa:pchn
 
 ! PARSED=$(getopt --options=${SHORTOPTS} --longoptions=${LONGOPTS} --name "${0}" -- "$@")
@@ -159,9 +158,6 @@ while [[ $# -ne 0 ]]; do
         --release|-r)
             cmake_build_types+=(RelWithDebInfo)
             ;;
-        --release-symbols|-s)
-            cmake_build_types+=(RelWithDebInfo)
-            ;;
         --rpm)
             RPM=1
             ;;
@@ -229,7 +225,7 @@ if command -v ninja > /dev/null; then
     cmake_arguments+=(-G Ninja)
 fi
 
-for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-Release}"; do
+for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
     SUFFIX=$OS-${!ARCHITECTURE}-${CMAKE_BUILD_TYPE,,}
     CMAKE_BINARY_DIR="$DIR/_out/build/$SUFFIX"
     CMAKE_INSTALL_PREFIX="$DIR/_out/$SUFFIX"

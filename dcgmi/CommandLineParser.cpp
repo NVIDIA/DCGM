@@ -27,6 +27,7 @@
 #include "Group.h"
 #include "Health.h"
 #include "Introspect.h"
+#include "MnDiag.h"
 #include "Module.h"
 #include "NvcmTCLAP.h"
 #include "Nvlink.h"
@@ -40,6 +41,7 @@
 #include <DcgmDiagCommon.h>
 #include <DcgmStringConversions.h>
 #include <DcgmStringHelpers.h>
+#include <MnDiagCommon.h>
 #include <dcgm_fields.h>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
@@ -90,6 +92,7 @@ CommandLineParser::StaticConstructor::StaticConstructor()
     m_functionMap.insert(std::make_pair("profile", &CommandLineParser::ProcessProfileCommandLine));
     m_functionMap.insert(std::make_pair("set", &CommandLineParser::ProcessSettingsCommandLine));
     m_functionMap.insert(std::make_pair("test", &CommandLineParser::ProcessAdminCommandLine));
+    m_functionMap.insert(std::make_pair("mndiag", &CommandLineParser::ProcessMnDiagCommandLine));
 }
 
 /* Entry method into this class for a given command line provided by main()
@@ -158,6 +161,14 @@ dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *
         TCLAP::ValueArg<std::string> profileArg(
             "", "profile", "Control and list DCGM profiling metrics", false, "", "", cmd);
         TCLAP::ValueArg<std::string> settingsArg("", "set", "Configure hostengine settings", false, "", "", cmd);
+        TCLAP::ValueArg<std::string> mnDiagArg(
+            "",
+            "mndiag",
+            "Multi Node System Validation/Diagnostic [dcgmi mndiag –h for more info]",
+            false,
+            "",
+            "",
+            cmd);
 
         nvout.addToGroup("1", &subsystemArg);
         nvout.addToGroup("2", &versionArg);
@@ -218,7 +229,8 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
     std::string myName  = "discovery";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     // args are displayed in reverse order to this list
@@ -311,7 +323,8 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
     std::string myName  = "policy";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
 
     cmd.setOutput(&helpOutput);
     // args are displayed in reverse order to this list
@@ -562,7 +575,8 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
     DCGMOutput helpOutput;
     Group groupObj;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     // args are displayed in reverse order to this list
@@ -731,7 +745,8 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
     DCGMOutput helpOutput;
     FieldGroup fieldGroupObj;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     // args are displayed in reverse order to this list
@@ -848,7 +863,8 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
     DCGMOutput helpOutput;
     Config configObj;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     TCLAP::ValueArg<int> groupId(
@@ -1113,7 +1129,8 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
     std::string myName  = "health";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     TCLAP::ValueArg<std::string> groupIdArg(
@@ -1427,6 +1444,252 @@ std::string CommandLineParser::ConcatenateParameters(std::vector<std::string> co
     return ret;
 }
 
+// Helper function to expand range notation (e.g. "0-2" to "0,1,2")
+std::string CommandLineParser::ExpandRange(std::string const &range)
+{
+    std::vector<unsigned int> indices;
+    dcgmReturn_t result = DcgmNs::ParseRangeString(range, indices);
+
+    if (result != DCGM_ST_OK)
+    {
+        throw TCLAP::CmdLineParseException(fmt::format("invalid range format: {}", range));
+    }
+
+    return fmt::format("{}", fmt::join(indices, ","));
+}
+
+// Helper to validate and normalize Unix socket path
+void CommandLineParser::NormalizeUnixSocketPath(std::string &hostname, std::string_view host)
+{
+    // Split the string at the first colon to get the base hostname
+    size_t firstColonPos = hostname.find(':');
+    if (firstColonPos == 0 || firstColonPos == std::string::npos)
+    {
+        throw TCLAP::CmdLineParseException(
+            fmt::format("Invalid format in: {}. Expected format: hostname:unix:/path/to/socket", host));
+    }
+
+    std::string_view prefix(hostname.data() + firstColonPos + 1);
+
+    // Check if the prefix starts with "unix://"
+    if (!prefix.starts_with(DCGM_UNIX_SOCKET_PREFIX))
+    {
+        throw TCLAP::CmdLineParseException(
+            fmt::format("Invalid Unix socket path in: {}. Expected format after hostname: unix://path", host));
+    }
+
+    // Validate remote socket path
+    std::string_view socketPath = prefix.substr(strlen(DCGM_UNIX_SOCKET_PREFIX)); // Skip "unix://"
+
+    // If the socket path is empty or doesn't start with '/', use the default socket path
+    if (socketPath.empty())
+    {
+        hostname = fmt::format("{}{}", hostname, DCGM_DEFAULT_SOCKET_PATH);
+    }
+    else
+    {
+        // Check for additional colons in the socket path
+        if (socketPath.find(':') != std::string_view::npos)
+        {
+            throw TCLAP::CmdLineParseException(
+                fmt::format("Invalid remote socket path in: {}. Unexpected colon found in path.", host));
+        }
+
+        if (!socketPath.starts_with('/'))
+        {
+            throw TCLAP::CmdLineParseException(
+                fmt::format("Invalid remote socket path in: {}. Socket path should start with '/'.", host));
+        }
+    }
+}
+
+// Helper to validate and normalize IP
+void CommandLineParser::NormalizeIpAddress(std::string &hostname, std::string_view host)
+{
+    // Extract the hostname part without port for duplicate checking
+    std::vector<std::string> hostnameParts = dcgmTokenizeString(hostname, ":");
+    if (hostnameParts.empty())
+    {
+        throw TCLAP::CmdLineParseException(fmt::format("invalid hostname in: {}. hostname cannot be empty.", host));
+    }
+
+    if (hostnameParts.size() > 2)
+    {
+        throw TCLAP::CmdLineParseException(fmt::format(
+            "invalid hostname format (too many colons) in: {}. expected format: hostname:port=gpu0,gpu1,gpu2", host));
+    }
+    else if (hostnameParts.size() == 2)
+    {
+        // hostname[0] = hostname, hostname[1] = portnumber
+        if (hostnameParts[1].empty())
+        {
+            throw TCLAP::CmdLineParseException(
+                fmt::format("empty port in: {}. expected format: hostname:port=gpu0,gpu1,gpu2", host));
+        }
+
+        // Validate all chars of port are digits
+        if (!std::all_of(hostnameParts[1].begin(), hostnameParts[1].end(), ::isdigit))
+        {
+            throw TCLAP::CmdLineParseException(fmt::format("invalid port (non-numeric) in: {}", host));
+        }
+
+        // Validate if port in range
+        try
+        {
+            unsigned long portNum = std::stoul(hostnameParts[1]);
+            if (portNum > 65535)
+            {
+                throw TCLAP::CmdLineParseException(
+                    fmt::format("port number out of range (must be 0-65535) in: {}", host));
+            }
+        }
+        catch (std::out_of_range const &e)
+        {
+            throw TCLAP::CmdLineParseException(fmt::format("port number out of range in: {}", host));
+        }
+    }
+    else
+    {
+        // If no port is specified, append the default port
+        hostname += ":" + std::to_string(DCGM_HE_PORT_NUMBER);
+    }
+}
+
+std::vector<std::string> CommandLineParser::GetHostListVector(std::string_view hostList)
+{
+    if (hostList.empty())
+    {
+        return {};
+    }
+
+    // Use map to ensure consistent ordering for testing
+    std::map<std::string, std::string> parsedHosts;
+
+    // Store formatted hosts
+    std::vector<std::string> formattedHosts;
+
+    // Split multiple host specifications (separated by semicolons)
+    std::vector<std::string> hosts;
+    dcgmTokenizeString(std::string(hostList), ";", hosts);
+
+    // Check if the number of hosts exceeds the maximum allowed
+    if (hosts.size() > DCGM_MAX_NUM_HOSTS)
+    {
+        throw TCLAP::CmdLineParseException(fmt::format(
+            "The number of hosts {} exceeds the maximum allowed {}", parsedHosts.size(), DCGM_MAX_NUM_HOSTS));
+    }
+
+    for (auto const &host : hosts)
+    {
+        std::string hostname;
+        std::string gpuList;
+
+        // ----------------------------------------
+        // Process hostname and GPU list
+        // Find the '=' separator between hostname and GPU list
+        auto idx = host.find('=');
+        if (idx == std::string::npos)
+        {
+            // If no '=' is found, treat the entire string as hostname
+            // and use "*" to indicate all GPUs
+            hostname = host;
+            gpuList  = "*";
+        }
+        else
+        {
+            hostname = host.substr(0, idx);
+            gpuList  = host.substr(idx + 1);
+
+            // Explicitly check for empty GPU list when '=' is present
+            if (gpuList.empty())
+            {
+                throw TCLAP::CmdLineParseException(fmt::format("empty GPU list in: {}", host));
+            }
+        }
+
+        if (hostname.empty())
+        {
+            throw TCLAP::CmdLineParseException(fmt::format("invalid hostname in: {}. Hostname cannot be empty.", host));
+        }
+
+        // ----------------------------------------
+        // Process GPU list if it's not "*"
+        if (gpuList != "*")
+        {
+            // Expand any ranges in the GPU list
+            std::vector<std::string> gpuRanges;
+            dcgmTokenizeString(gpuList, ",", gpuRanges);
+
+            std::string expandedGpuList;
+            for (auto const &range : gpuRanges)
+            {
+                if (!expandedGpuList.empty())
+                {
+                    expandedGpuList += ",";
+                }
+                expandedGpuList += ExpandRange(range);
+            }
+            gpuList = std::move(expandedGpuList);
+
+            // Remove redundant GPUs and automatically sort them
+            std::set<unsigned int> uniqueNums;
+            for (auto const &gpu : dcgmTokenizeString(gpuList, ","))
+            {
+                uniqueNums.insert(std::stoul(gpu));
+            }
+
+            // Rebuild gpuList in sorted order without duplicates
+            gpuList = fmt::format("{}", fmt::join(uniqueNums, ","));
+
+            // Get total number of GPUs and validate if its greater than max
+            if (uniqueNums.size() > DCGM_MAX_NUM_DEVICES)
+            {
+                throw TCLAP::CmdLineParseException(
+                    fmt::format("GPU list too large in: {}. It should be less than DCGM_MAX_NUM_DEVICES ({}).",
+                                host,
+                                DCGM_MAX_NUM_DEVICES));
+            }
+        }
+
+        // ----------------------------------------
+        // Process host and port/unix path
+        // Check if this is a Unix socket path specification or an IP address
+        if (hostname.find(DCGM_UNIX_SOCKET_PREFIX) != std::string::npos)
+        {
+            // Handle Unix socket path validation
+            NormalizeUnixSocketPath(hostname, host);
+        }
+        else
+        {
+            // Handle IP address validation
+            NormalizeIpAddress(hostname, host);
+        }
+
+        // Check for duplicate host+port/unix path combination
+        if (parsedHosts.find(hostname) != parsedHosts.end())
+        {
+            throw TCLAP::CmdLineParseException(fmt::format("duplicate host specification for: {}", hostname));
+        }
+
+        parsedHosts[hostname] = gpuList;
+
+
+        // Build the vector of formatted host strings
+        std::string formattedHost = fmt::format("{}={}", hostname, gpuList);
+
+        // Check range length
+        if (formattedHost.length() > DCGM_MAX_STR_LENGTH)
+        {
+            throw TCLAP::CmdLineParseException(
+                fmt::format("host name and gpulist range together - {} is too long", formattedHost));
+        }
+
+        formattedHosts.push_back(std::move(formattedHost));
+    }
+
+    return formattedHosts;
+}
+
 void CommandLineParser::CheckTestDurationAndTimeout(const std::string &parameters, unsigned int timeoutSeconds)
 {
     unsigned int totalTestDuration = 0;
@@ -1449,10 +1712,158 @@ void CommandLineParser::CheckTestDurationAndTimeout(const std::string &parameter
     }
 }
 
+void CommandLineParser::ProcessAndValidateMnDiagParams(int argc,
+                                                       char const *const *argv,
+                                                       dcgmRunMnDiag_v1 &drmnd,
+                                                       std::string &hostEngineAddressValue,
+                                                       bool &hostAddressWasOverridden,
+                                                       bool &jsonOutput)
+{
+    std::string myName = "mndiag";
+    DCGMOutput helpOutput;
+
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    cmd.setOutput(&helpOutput);
+
+    // ------------------------------------------------------------
+    // Required arguments
+
+    // Hostlist to run diagnostic on (test nodes)
+    TCLAP::ValueArg<std::string> hostAddressListArg("",
+                                                    "hostList",
+                                                    "\nSemi-colon separated list of hosts/test nodes."
+                                                    "\nExamples:"
+                                                    "\n  host1;host2 (all GPUs on both hosts)"
+                                                    "\n  host1:42000;host2 (specify port, default port used is 5555)"
+                                                    "\n  host1:unix:///path/to/socket (specify Unix socket path)",
+                                                    true,
+                                                    "", // default value
+                                                    "host1:42000;host2:unix:///path/to/socket",
+                                                    cmd);
+
+
+    // Optional
+    // Head node host
+    TCLAP::ValueArg<std::string> hostEngineAddress(
+        "",
+        "hostEngineAddress",
+        "\nConnects to specified IP or fully-qualified domain name for head node host engine. This is the primary node for diagnostics.",
+        false,
+        "localhost",
+        " IP/FQDN",
+        cmd);
+
+    // Test to run
+    TCLAP::ValueArg<std::string> startMnDiag("r",
+                                             "run",
+                                             "Run multi-node diagnostic test(s)\n"
+                                             "Available tests:\n"
+                                             "  mnubergemm - Multi-node UBERGEMM test\n"
+                                             "[default: mnubergemm]",
+                                             false,
+                                             "mnubergemm", // default value
+                                             "testname",
+                                             cmd);
+
+    // Parameters Arg
+    TCLAP::MultiArg<std::string> parametersArg(
+        "p",
+        "parameters",
+        "Test parameters to set for this run.",
+        false,
+        "test_name.parameter_name=parameter_value;test_name.parameter_name2=parameter_value",
+        cmd);
+
+    // JSON output flag
+    TCLAP::SwitchArg json("j", "json", "Print the output in a json format", cmd, false);
+
+    // ------------------------------------------------------------
+    // Help output
+    helpOutput.addDescription("mndiag -- Used to run multi-node diagnostics across a cluster of nodes.");
+    helpOutput.addToGroup("1", &startMnDiag);
+    helpOutput.addToGroup("1", &hostAddressListArg);
+    helpOutput.addToGroup("1", &parametersArg);
+    helpOutput.addToGroup("1", &json);
+    helpOutput.addToGroup("1", &hostEngineAddress);
+
+    // Parse cmd line args
+    cmd.parse(argc, argv);
+
+    // ------------------------------------------------------------
+    // Validate and process args
+    std::string runValue = startMnDiag.getValue();
+    std::transform(runValue.begin(), runValue.end(), runValue.begin(), ::tolower);
+    if (runValue != "mnubergemm")
+    {
+        throw TCLAP::CmdLineParseException("Invalid test name. Only 'mnubergemm' is currently supported", "run");
+    }
+
+    // Hostlist
+    std::vector<std::string> hostListVector;
+    if (hostAddressListArg.isSet())
+    {
+        std::string hostList = hostAddressListArg.getValue();
+
+        // Check if list is empty
+        if (hostList.empty())
+        {
+            throw TCLAP::CmdLineParseException("Host list cannot be empty");
+        }
+
+        hostListVector = GetHostListVector(hostList);
+    }
+
+    // Parameters
+    std::string concatenatedParams;
+    if (parametersArg.isSet())
+    {
+        std::vector<std::string> paramList = parametersArg.getValue();
+
+        concatenatedParams = ConcatenateParameters(paramList);
+
+        if (dcgmTokenizeString(concatenatedParams, ";").size() > DCGM_MAX_TEST_PARMS)
+        {
+            throw TCLAP::CmdLineParseException(fmt::format("number of parameters {} exceeds the maximum allowed {}",
+                                                           dcgmTokenizeString(concatenatedParams, ";").size(),
+                                                           DCGM_MAX_TEST_PARMS));
+        }
+    }
+    ValidateParameters(concatenatedParams);
+
+    // Check for invalid head node address
+    if (hostEngineAddress.isSet() && hostEngineAddress.getValue().empty())
+    {
+        throw TCLAP::CmdLineParseException("Head node address cannot be empty", "host");
+    }
+
+    // Set variables
+    hostAddressWasOverridden = hostEngineAddress.isSet();
+    hostEngineAddressValue   = hostEngineAddress.getValue();
+    jsonOutput               = json.getValue();
+
+    // Initialize with default
+    drmnd.version = dcgmRunMnDiag_version1;
+
+    dcgm_mn_diag_common_populate_run_mndiag(drmnd, hostListVector, concatenatedParams, runValue);
+}
+
+dcgmReturn_t CommandLineParser::ProcessMnDiagCommandLine(int argc, char const *const *argv)
+{
+    dcgmRunMnDiag_v1 drmnd = {};
+    std::string hostEngineAddressValue;
+    bool hostAddressWasOverridden;
+    bool jsonOutput;
+
+    ProcessAndValidateMnDiagParams(argc, argv, drmnd, hostEngineAddressValue, hostAddressWasOverridden, jsonOutput);
+
+    return StartMnDiag(hostEngineAddressValue, hostAddressWasOverridden, drmnd, jsonOutput).Execute();
+}
+
 dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *const *argv)
 {
     // Check for stop diag request
-    const char *value = std::getenv(STOP_DIAG_ENV_VARIABLE_NAME);
+    char const *value = std::getenv(STOP_DIAG_ENV_VARIABLE_NAME);
     if (value != nullptr)
     {
         AbortDiag abortDiag = AbortDiag(std::string(value));
@@ -1463,7 +1874,8 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     std::string myName  = "diag";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     // args are displayed in reverse order to this list
@@ -1847,7 +2259,8 @@ dcgmReturn_t CommandLineParser::ProcessStatsCommandLine(int argc, char const *co
     std::string myName  = "stats";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     // args are displayed in reverse order to this list
@@ -1933,7 +2346,7 @@ dcgmReturn_t CommandLineParser::ProcessStatsCommandLine(int argc, char const *co
         "\n     process lifetime listed.";
 
 
-    helpOutput.addFooter(footer);
+    helpOutput.addFooter(std::move(footer));
     helpOutput.addDescription("stats -- Used to view process statistics.");
 
     helpOutput.addToGroup("1", &hostAddress);
@@ -2021,7 +2434,8 @@ dcgmReturn_t CommandLineParser::ProcessTopoCommandLine(int argc, char const *con
     std::string myName  = "topo";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     // args are displayed in reverse order to this list
@@ -2070,7 +2484,8 @@ dcgmReturn_t CommandLineParser::ProcessIntrospectCommandLine(int argc, char cons
     std::string myName  = "introspect";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     // args are displayed in reverse order to this list
@@ -2120,7 +2535,8 @@ dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc, char const *c
     std::string myName  = "nvlink";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     TCLAP::ValueArg<int> gpuId("g", "gpuid", "The GPU ID to query. Required for -e", false, 1, "gpuId", cmd);
@@ -2239,9 +2655,7 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 
     cmd.parse(argc, argv);
 
-    std::string entityIdsStr;
-
-    entityIdsStr = entityIds.getValue();
+    std::string entityIdsStr = entityIds.getValue();
 
     if (groupId.isSet() && entityIds.isSet())
     {
@@ -2264,7 +2678,7 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
     if (list.isSet())
     {
         return DeviceMonitor(hostAddress.getValue(),
-                             entityIdsStr,
+                             std::move(entityIdsStr),
                              groupId.getValue(),
                              fieldId.getValue(),
                              fieldGroupId.getValue(),
@@ -2287,7 +2701,7 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
     }
 
     return DeviceMonitor(hostAddress.getValue(),
-                         entityIdsStr,
+                         std::move(entityIdsStr),
                          groupId.getValue(),
                          fieldId.getValue(),
                          fieldGroupId.getValue(),
@@ -2303,7 +2717,8 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
     dcgmReturn_t result      = DCGM_ST_OK;
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     helpOutput.addDescription("profile -- View available profiling metrics for GPUs");
@@ -2365,7 +2780,8 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
     }
     else if (list.isSet())
     {
-        result = DcgmiProfileList(hostAddress.getValue(), entityIdsStr, groupId.getValue(), json.getValue()).Execute();
+        result = DcgmiProfileList(hostAddress.getValue(), std::move(entityIdsStr), groupId.getValue(), json.getValue())
+                     .Execute();
     }
     else
     {
@@ -2380,7 +2796,8 @@ dcgmReturn_t CommandLineParser::ProcessVersionInfoCommandLine(int argc, char con
     const std::string myName = "version";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
@@ -2399,7 +2816,8 @@ dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const 
           "subsystems. BASE logger is used for most logging messages and is likely what you want to modify. "
           "Options: BASE, SYSLOG";
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     helpOutput.addDescription("set -- Configure DCGM hostengine settings");
@@ -2429,7 +2847,8 @@ dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *c
     dcgmReturn_t result      = DCGM_ST_OK;
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     helpOutput.addDescription("modules -- Control and list DCGM modules");
@@ -2465,7 +2884,8 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     std::string myName  = "test";
     DCGMOutput helpOutput;
 
-    DCGMSubsystemCmdLine cmd(myName, _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
+    DCGMSubsystemCmdLine cmd(
+        std::move(myName), _DCGMI_FORMAL_NAME, ' ', std::string(DcgmNs::DcgmBuildInfo().GetVersion()));
     cmd.setOutput(&helpOutput);
 
     TCLAP::ValueArg<int> gpuId(

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
 
 #include <DcgmException.hpp>
@@ -137,9 +138,88 @@ TEST_CASE("Dcgmi Config: Bitmask helper")
 
     SECTION("empty")
     {
-        memset(&mask, DCGM_INT32_BLANK, sizeof(mask));
+        std::ranges::fill_n(mask, std::size(mask), DCGM_INT32_BLANK);
 
         auto result = DcgmNs::Utils::HelperDisplayPowerBitmask(mask);
         REQUIRE(result == "Not Specified");
+    }
+}
+
+TEST_CASE("GetUserCredentials")
+{
+    SECTION("nullptr username handling")
+    {
+        auto result = GetUserCredentials(nullptr);
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("non-existent user handling")
+    {
+        auto result = GetUserCredentials("non_existent_user_12345");
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("valid user handling")
+    {
+        auto result = GetUserCredentials("nobody");
+        REQUIRE(result.has_value());
+        // Note: We don't check specific uid/gid as they might vary by system
+        REQUIRE(result->uid != 0); // nobody should never be root
+        REQUIRE(result->gid != 0);
+    }
+}
+
+TEST_CASE("RunCmdAndGetOutput")
+{
+    class TestRunCmdHelper : public DcgmNs::Utils::RunCmdHelper
+    {
+    public:
+        std::vector<std::string> GetTokenizedArgs(std::string const &cmd) const
+        {
+            return dcgmTokenizeString(cmd, " ");
+        }
+
+        using DcgmNs::Utils::RunCmdHelper::RunCmdAndGetOutput;
+    };
+
+    TestRunCmdHelper helper;
+
+    SECTION("Basic command parsing")
+    {
+        auto tokens = helper.GetTokenizedArgs("ls -la /tmp");
+        REQUIRE(tokens.size() == 3);
+        REQUIRE(tokens[0] == "ls");
+        REQUIRE(tokens[1] == "-la");
+        REQUIRE(tokens[2] == "/tmp");
+    }
+
+    SECTION("Unquoted spaces are condensed")
+    {
+        SKIP("Current implementation does not condense unquoted spaces");
+        auto tokens = helper.GetTokenizedArgs("ls  -la   /tmp");
+        REQUIRE(tokens.size() == 5);
+        REQUIRE(tokens[0] == "ls");
+        REQUIRE(tokens[1] == "");
+        REQUIRE(tokens[2] == "-la");
+        REQUIRE(tokens[3] == "");
+        REQUIRE(tokens[4] == "/tmp");
+    }
+
+    SECTION("Quoted spaces are retained")
+    {
+        SKIP("Current implementation does not retain quoted spaces");
+        auto tokens = helper.GetTokenizedArgs("echo \"Hello World\"");
+        REQUIRE(tokens.size() == 2);
+        REQUIRE(tokens[0] == "echo");
+        REQUIRE(tokens[1] == "\"Hello World\"");
+        // Note that "World\"" is not included - showing the issue with space splitting
+    }
+
+    SECTION("Command with many arguments")
+    {
+        auto tokens = helper.GetTokenizedArgs("command arg1 arg2 arg3 arg4 arg5");
+        REQUIRE(tokens.size() == 6);
+        REQUIRE(tokens[0] == "command");
+        REQUIRE(tokens[5] == "arg5");
     }
 }

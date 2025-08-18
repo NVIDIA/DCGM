@@ -239,7 +239,7 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     memset(entityResults.get(), 0, sizeof(*entityResults));
     childrenInfo.clear();
     childInfo.stdoutStr = "This isn't json";
-    childrenInfo.push_back(childInfo);
+    childrenInfo.push_back(std::move(childInfo));
     ret = ProcessChildrenOutputs(childrenInfo, bg4, groupName);
     CHECK(ret == 1);
     bg4.GetResults(bg4.GetPcieTestName(), entityResults.get());
@@ -417,7 +417,7 @@ TEST_CASE("Pcie: SetCopySize")
 
         for (auto [subtest, param, expectedVal] : testData)
         {
-            double actual = tp.GetSubTestDouble(subtest, param);
+            double actual = tp.GetSubTestDouble(std::move(subtest), std::move(param));
             CHECK(actual == expectedVal);
         }
     }
@@ -448,7 +448,7 @@ TEST_CASE("Pcie: SetCopySize")
 
         for (auto [subtest, param, expectedVal] : testData)
         {
-            double actual = tp.GetSubTestDouble(subtest, param);
+            double actual = tp.GetSubTestDouble(std::move(subtest), std::move(param));
             CHECK(actual == expectedVal);
         }
     }

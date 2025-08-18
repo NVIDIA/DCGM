@@ -428,13 +428,22 @@ def helper_test_thermal_violations(handle, gpuIds):
 def helper_test_silent_thermal_violations(handle, gpuIds):
     gpuId = gpuIds[0]
     testName = TEST_DIAGNOSTIC
+
+    # First verify the test passes without any injected values
+    dd = DcgmDiag.DcgmDiag([gpuId], testNamesStr=testName, paramsStr='diagnostic.test_duration=5')
+    dd.UseFakeGpus()
+    response = dd.Execute(handle)
+    entityPair = dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId)
+    assert check_diag_result_pass(response, entityPair, testName), \
+                                  "Diagnostic should pass prior to error injection."
+
     injected_value = 2344122048
 
     dcgm_field_injection_helpers.inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
                                               injected_value, 180, verifyInsertion=True)
 
     # Start the diag
-    dd = DcgmDiag.DcgmDiag([gpuId], testNamesStr=testName, paramsStr='diagnostic.test_duration=10')
+    dd = DcgmDiag.DcgmDiag([gpuId], testNamesStr=testName, paramsStr='diagnostic.test_duration=5')
     dd.UseFakeGpus()
     response = dd.Execute(handle)
     foundError, errmsg = find_any_error_matching(response, [ dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId) ],
@@ -590,6 +599,50 @@ def test_dcgm_diag_pcie_failure(handle, gpuIds):
     entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuIds[0] )
     assert check_diag_result_fail(response, entityPair, testName), "No failure detected in diagnostic"
 
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgm_diag_pcie_failure_effective_ber(handle, gpuIds):
+    testName = "pcie"
+    gpuId = gpuIds[0]
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER, 1000, 600, True, repeatCount=5)
+
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName, paramsStr="pcie.test_duration=4;pcie.is_allowed=true;pcie.test_with_gemm=false;pcie.test_broken_p2p=false", version=g_latestDiagRunVer)
+    dd.SetWatchFrequency(5000000)
+    response = test_utils.diag_execute_wrapper(dd, handle)
+
+    # Verify that the effective BER is detected
+    for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
+        if test.name == testName:
+            break
+    assert test.name == testName, f"Expected fail result for test {testName} but none was found"
+    assert test.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"Expected fail result for test {testName} but got {test.result}"
+    assert test.numErrors > 0, f"Expected at least 1 error for test {testName}"
+    foundEffectiveBer = False
+    for i in range(test.numErrors):
+        errIdx = test.errorIndices[i]
+        if response.errors[errIdx].code == dcgm_errors.DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD:
+            foundEffectiveBer = True
+            break
+    assert foundEffectiveBer, f"Expected DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD for test {testName} but none was found"
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgm_diag_pcie_failure_symbol_errors(handle, gpuIds):
+    testName = "pcie"
+    gpuId = gpuIds[0]
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS, 1, 600, True, repeatCount=5)
+
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName, paramsStr="pcie.test_duration=4;pcie.is_allowed=true;pcie.test_with_gemm=false;pcie.test_broken_p2p=false", version=g_latestDiagRunVer)
+    dd.SetWatchFrequency(5000000)
+    response = test_utils.diag_execute_wrapper(dd, handle)
+
+    foundError, _ = find_any_error_matching(response, [ dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId) ],
+                                                 testName, "nvlink_symbol_err")
+    assert foundError, "DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS was injected but no errors were found"
+
+
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_diag_clocks_event_mask_fail_double_inject_ignore_one_string(handle, gpuIds):
@@ -675,7 +728,10 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
     testName = "memtest"
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName, paramsStr="memtest.test_duration=2",
                            version=g_latestDiagRunVer)
+    start_time = time.time()
     response = test_utils.diag_execute_wrapper(dd, handle)
+    end_time = time.time()
+    logger.info(f"{end_time - start_time:.2f} seconds spent on checking whether the GPU is healthy/supported.")
     entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuId )
     if not check_diag_result_pass(response, entityPair, testName):
         test_utils.skip_test("Skipping because GPU %s does not pass memtest. "
@@ -693,12 +749,12 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
         logger.info("Launched dcgmi process with pid: %s" % diagApp.getpid())
 
         # Ensure diag is running before sending interrupt signal
-        running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=True, attempts=50)
+        running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=True, delay=0.1, attempts=250)
         assert running, "The nvvs process did not start within 25 seconds: %s" % (debug_output)
         # There is a small race condition here - it is possible that the hostengine sends a SIGTERM before the
         # nvvs process has setup a signal handler, and so the nvvs process does not stop when SIGTERM is sent.
-        # We sleep for 1 second to reduce the possibility of this scenario
-        time.sleep(1)
+        # We sleep for 0.1 second to reduce the possibility of this scenario
+        time.sleep(0.1)
         start_time = time.time()
         diagApp.signal(signum)
         retCode = diagApp.wait()
@@ -741,7 +797,7 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
     logger.info("Testing stop on SIGTERM")
     verify_exit_code_on_signal(signal.SIGTERM)
 
-@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus() #CC makes this too slow
 @test_utils.run_only_if_mig_is_disabled()
@@ -749,30 +805,38 @@ def test_dcgm_diag_stop_on_signal_standalone(handle, gpuIds):
     helper_check_diag_stop_on_interrupt_signals(handle, gpuIds[0])
 
 def test_dcgm_diag_stop_on_interrupt_signals_dcgmi_embedded_itself():
+    # Don't proceed if there's a residual nvvs process running
+    not_running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=False, delay=0.0, attempts=1)
+    assert not_running, "A residual nvvs process is already executing and should be terminated before running this test again. pgrep output:\n%s" \
+        % debug_output
+
     dcgmi_path = get_dcgmi_path()
     diagApp = AppRunner(dcgmi_path, args=["diag", "-r", "memtest", "-i", "0",
                                                 "-p", "memtest.test_duration=2",
-                                                "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"])
+                                                "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"], env=test_utils.smallFbModeEnv)
+    start_time = time.time()
     diagApp.start(timeout=None)
     retCode = diagApp.wait()
+    end_time = time.time()
+    logger.info(f"{end_time - start_time:.2f} seconds spent on checking whether the GPU is healthy/supported.")
     if retCode != 0:
         diagApp.validate()
         test_utils.skip_test("Skip test due to basic memtest failed.")
 
     def verify_exit_code_on_signal(signum):
         diagApp = AppRunner(dcgmi_path, args=["diag", "-r", "memtest", "-i", "0",
-                                                "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"])
+                                                "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"], env=test_utils.smallFbModeEnv)
         # Start the diag
         diagApp.start(timeout=60)
         logger.info("Launched dcgmi process with pid: %s" % diagApp.getpid())
 
         # Ensure diag is running before sending interrupt signal
-        running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=True, attempts=50)
+        running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=True, delay=0.1, attempts=250)
         assert running, "The nvvs process did not start within 25 seconds: %s" % (debug_output)
         # There is a small race condition here - it is possible that the we sends a signal before the
         # nvvs process has setup a signal handler.
-        # We sleep for 1 second to reduce the possibility of this scenario
-        time.sleep(1)
+        # We sleep for 0.1 second to reduce the possibility of this scenario
+        time.sleep(0.1)
         start_time = time.time()
         diagApp.signal(signum)
         retCode = diagApp.wait()

@@ -544,7 +544,7 @@ std::string Policy::HelperFormatTimestamp(long long timestamp)
 /*****************************************************************************/
 GetPolicy::GetPolicy(std::string hostname, unsigned int groupId, bool verbose, bool json)
 {
-    m_hostName    = hostname;
+    m_hostName    = std::move(hostname);
     m_json        = json;
     this->groupId = groupId;
     this->verbose = verbose;
@@ -569,7 +569,7 @@ dcgmReturn_t GetPolicy::DoExecuteConnected()
 /*****************************************************************************/
 SetPolicy::SetPolicy(std::string hostname, dcgmPolicy_t &setPolicy, unsigned int groupId)
 {
-    m_hostName      = hostname;
+    m_hostName      = std::move(hostname);
     this->setPolicy = setPolicy;
     this->groupId   = groupId;
 
@@ -593,7 +593,7 @@ dcgmReturn_t SetPolicy::DoExecuteConnected()
 /*****************************************************************************/
 RegPolicy::RegPolicy(std::string hostname, unsigned int groupId, unsigned int condition)
 {
-    m_hostName      = hostname;
+    m_hostName      = std::move(hostname);
     this->groupId   = groupId;
     this->condition = condition;
 

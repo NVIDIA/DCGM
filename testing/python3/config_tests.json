@@ -13,6 +13,8 @@
 	"test_dcgm_embedded_nvlink_fatal",
 	"test_dcgm_embedded_nvlink_crc_threshold",
 	"test_health_check_nvlink_link_down_nvswitch_standalone",
+	"test_dcgm_health_nvlink_effective_ber_threshold",
+	"test_dcgm_health_nvlink_symbol_threshold",
 	"test_inject_struct_for_following_calls_standalone",
 	"test_dcgm_action_stats_basics_targeted_power_standalone_with_service_account",
 	"test_dcgm_diag_clocks_event_mask_fail_double_inject_ignore_one",
@@ -43,7 +45,11 @@
 	"test_thermal_violations_standalone",
 	"test_silent_thermal_violations_standalone",
 	"test_nvvs_plugin_software_inforom_embedded",
-	"test_dcgm_action_stats_basics_nvbandwidth_standalone"
+	"test_dcgm_action_stats_basics_nvbandwidth_standalone",
+	"test_dcgm_mndiag_basic_success",
+	"test_dcgm_mndiag_basic_failure",
+	"test_dcgm_mndiag_mixed_pass_fail_1",
+	"test_dcgm_mndiag_mixed_pass_fail_2"
     ],
     "modules_to_run_independent": [
     ]

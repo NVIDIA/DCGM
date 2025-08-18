@@ -18,4 +18,4 @@
 (
   find dockerfiles -type f ! -name dcgmbuild.Dockerfile &&
   find scripts/host -type f
-) | xargs sha256sum | sha256sum | cut -f1 -d ' '
+) | sort | xargs sha256sum | sha256sum | cut -f1 -d ' '

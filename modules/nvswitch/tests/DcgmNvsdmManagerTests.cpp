@@ -656,3 +656,81 @@ TEST_CASE("Pause & Resume")
         REQUIRE(ids[1] == 5566);
     }
 }
+
+SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable handling")
+{
+    NvsdmMockDevice switch0(NVSDM_DEV_TYPE_SWITCH, 0, 0xc8763, NVSDM_DEVICE_STATE_HEALTHY);
+    NvsdmMockPort port1(0, 1234);
+    NvsdmMockPort port2(1, 1234);
+    switch0.AddPort(port1);
+    switch0.AddPort(port2);
+    NvsdmMockDevice ibCx0(NVSDM_DEV_TYPE_CA, 1, 0xc8763, NVSDM_DEVICE_STATE_HEALTHY);
+    NvsdmMockPort port3(0, 1234);
+    ibCx0.AddPort(port3);
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    mockNvsdm->InjectDevice(switch0);
+    mockNvsdm->InjectDevice(ibCx0);
+    dcgmCoreCallbacks_t dcc = {};
+    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+
+    SECTION("Manager is not initialized")
+    {
+        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_0", 1);
+        REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_NVML_ERROR);
+    }
+
+    // Initialize the manager
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+    SECTION("Valid environment variable value: mlx5_0")
+    {
+        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_0", 1);
+        REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_OK);
+        REQUIRE(nsm.m_nvSwitchDevices.size() == 2);
+        REQUIRE(nsm.m_nvSwitchDevices[0].id == 0);
+        REQUIRE(nsm.m_nvSwitchDevices[1].id == 1);
+        REQUIRE(nsm.m_ibCxDevices.size() == 2);
+        REQUIRE(nsm.m_ibCxDevices[0].nvsdmDevice.id == 0);
+        REQUIRE(nsm.m_ibCxDevices[1].nvsdmDevice.id == 1);
+    }
+
+    SECTION("Valid environment variable value: mlx5_1")
+    {
+        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_1", 1);
+        REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_OK);
+        REQUIRE(nsm.m_nvSwitchDevices.size() == 2);
+        REQUIRE(nsm.m_nvSwitchDevices[0].id == 0);
+        REQUIRE(nsm.m_nvSwitchDevices[1].id == 1);
+        REQUIRE(nsm.m_ibCxDevices.size() == 2);
+        REQUIRE(nsm.m_ibCxDevices[0].nvsdmDevice.id == 0);
+        REQUIRE(nsm.m_ibCxDevices[1].nvsdmDevice.id == 1);
+    }
+
+    SECTION("Invalid environment variable value: invalid_value")
+    {
+        // Invalid values will be ignored and the default value will be used
+        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "invalid_value", 1);
+        REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_OK);
+        REQUIRE(nsm.m_nvSwitchDevices.size() == 2);
+        REQUIRE(nsm.m_nvSwitchDevices[0].id == 0);
+        REQUIRE(nsm.m_nvSwitchDevices[1].id == 1);
+        REQUIRE(nsm.m_ibCxDevices.size() == 2);
+        REQUIRE(nsm.m_ibCxDevices[0].nvsdmDevice.id == 0);
+        REQUIRE(nsm.m_ibCxDevices[1].nvsdmDevice.id == 1);
+    }
+
+    SECTION("Invalid environment variable value: ca_mlx5_1")
+    {
+        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "ca_mlx5_1", 1);
+        REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_OK);
+        REQUIRE(nsm.m_nvSwitchDevices.size() == 2);
+        REQUIRE(nsm.m_nvSwitchDevices[0].id == 0);
+        REQUIRE(nsm.m_nvSwitchDevices[1].id == 1);
+        REQUIRE(nsm.m_ibCxDevices.size() == 2);
+        REQUIRE(nsm.m_ibCxDevices[0].nvsdmDevice.id == 0);
+        REQUIRE(nsm.m_ibCxDevices[1].nvsdmDevice.id == 1);
+    }
+
+    // Clean up environment variable
+    unsetenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA");
+}

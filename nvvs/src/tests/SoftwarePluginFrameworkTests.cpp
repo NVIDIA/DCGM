@@ -68,7 +68,7 @@ public:
 };
 
 WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList)
-    : SoftwarePluginFramework(gpuList)
+    : SoftwarePluginFramework(std::move(gpuList))
 {}
 
 WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList)

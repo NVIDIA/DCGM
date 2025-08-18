@@ -109,7 +109,7 @@ public:
     }
 
     /*****************************************************************************/
-    dcgmReturn_t SetResult(std::string_view data) const;
+    dcgmReturn_t SetResult(std::span<std::byte> data) const;
 
     /*****************************************************************************/
     bool HasTest(const std::string &pluginName) const;

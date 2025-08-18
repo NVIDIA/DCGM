@@ -155,7 +155,7 @@ dcgmReturn_t dcgmi_create_field_group(dcgmHandle_t dcgmHandle,
 /*******************************************************************************/
 const char *dcgmi_parse_hostname_string(const char *hostName, bool *isUnixSocketAddress, bool logOnError)
 {
-    if (!strncmp(hostName, "unix://", 7))
+    if (std::string_view(hostName).starts_with(DCGM_UNIX_SOCKET_PREFIX))
     {
         *isUnixSocketAddress = true;
         /* Looks like a unix socket. Do some validation */
@@ -163,13 +163,13 @@ const char *dcgmi_parse_hostname_string(const char *hostName, bool *isUnixSocket
         {
             if (logOnError)
             {
-                SHOW_AND_LOG_ERROR << "Missing hostname after \"unix://\".";
+                SHOW_AND_LOG_ERROR << "Missing hostname after \"" << DCGM_UNIX_SOCKET_PREFIX << "\".";
             }
 
             return nullptr;
         }
         else
-            return &hostName[7];
+            return &hostName[strlen(DCGM_UNIX_SOCKET_PREFIX)];
     }
 
     /* No "unix://". Treat like a regular hostname */

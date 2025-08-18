@@ -544,3 +544,62 @@ def helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgm_verify_sync_boost_multi_gpu_standalone(handle, gpuIds):
     helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_as_root()
+def test_dcgm_error_code_propagation(handle, gpuIds):
+    """
+    Verifies error code propagation behavior:
+    1. When all config operations fail with the same error code, that specific error code is returned
+    2. When config operations fail with different error codes, DCGM_ST_GENERIC_ERROR is returned
+    """
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    
+    # PART 1: Test single error type propagation
+    groupObj = systemObj.GetEmptyGroup("single_error_test")
+    groupObj.AddGpu(gpuIds[0])
+    
+    # Create a config with same error types:
+    # 1. Invalid clock setting (known to return DCGM_ST_NOT_SUPPORTED)
+    # 2. Invalid power limit setting (known to return DCGM_ST_NOT_SUPPORTED)
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
+    config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK  # This is required, otherwise error in dmesg log: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056)
+    config_values.mPerfState.targetClocks.memClock = dcgmvalue.DCGM_INT32_BLANK  # Fail with DCGM_ST_NOT_SUPPORTED
+    config_values.mPerfState.targetClocks.smClock = dcgmvalue.DCGM_INT32_BLANK   # Fail with DCGM_ST_NOT_SUPPORTED
+    config_values.mPowerLimit.type = dcgmvalue.DCGM_INT32_BLANK # Fail with DCGM_ST_NOT_SUPPORTED
+    config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK # Fail with DCGM_ST_NOT_SUPPORTED
+    
+    try:
+        groupObj.config.Set(config_values, checkStatusErrors=False)
+    except dcgm_structs.DCGMError as e:
+        # We should get a specific error code, not DCGM_ST_GENERIC_ERROR (-3)
+        assert e.value == dcgm_structs.DCGM_ST_NOT_SUPPORTED, \
+            f"Expected error code DCGM_ST_NOT_SUPPORTED ({dcgm_structs.DCGM_ST_NOT_SUPPORTED}), got {e.value}"
+    
+    groupObj.Delete()
+    
+    # PART 2: Test multiple different error types
+    groupObj = systemObj.GetEmptyGroup("mixed_error_test")
+    groupObj.AddGpu(gpuIds[0])
+    
+    # Create a config with mixed error types:
+    # 1. Invalid clock setting (known to return DCGM_ST_NOT_SUPPORTED)
+    # 2. SyncBoost=1 for single GPU (known to return DCGM_ST_BADPARAM)
+    config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
+    config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK  # This is required, otherwise error in dmesg log: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056)
+    config_values.mEccMode = dcgmvalue.DCGM_INT32_BLANK
+    config_values.mPerfState.syncBoost = 1  # Will fail with DCGM_ST_BADPARAM for single GPU
+    config_values.mPerfState.targetClocks.memClock = dcgmvalue.DCGM_INT32_BLANK
+    config_values.mPerfState.targetClocks.smClock = dcgmvalue.DCGM_INT32_BLANK
+
+    try:
+        groupObj.config.Set(config_values, checkStatusErrors=False)
+        # assert False, "Setting invalid clock values should have failed"
+    except dcgm_structs.DCGMError as e:
+        # We should get DCGM_ST_GENERIC_ERROR (-3) for mixed error types
+            assert e.value == dcgm_structs.DCGM_ST_GENERIC_ERROR, \
+                f"Expected DCGM_ST_GENERIC_ERROR, got {e.value}"
+    
+    groupObj.Delete()

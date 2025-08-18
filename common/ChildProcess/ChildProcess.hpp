@@ -17,12 +17,14 @@
 #pragma once
 
 #include "FramedChannel.hpp"
+#include "IoContext.hpp"
 #include "StdLines.hpp"
 
 #include <FastPimpl.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/iterator/iterator_facade.hpp>
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -32,44 +34,82 @@
 namespace DcgmNs::Common::Subprocess
 {
 
-class ChildProcess
+class ChildProcessBase
+{
+public:
+    virtual void Create(IoContext &ioContext,
+                        boost::filesystem::path const &executable,
+                        std::optional<std::vector<std::string>> const &args                    = std::nullopt,
+                        std::optional<std::unordered_map<std::string, std::string>> const &env = std::nullopt,
+                        std::optional<std::string> const &userName                             = std::nullopt,
+                        std::optional<int> channelFd                                           = std::nullopt)
+        = 0;
+    virtual void Run()                                                                 = 0;
+    virtual void Stop(bool force = false) noexcept                                     = 0;
+    virtual void Kill(int sigTermTimeoutSec = 10) noexcept                             = 0;
+    virtual void GetStdErrBuffer(fmt::memory_buffer &errorStrings, bool block)         = 0;
+    virtual void GetStdOutBuffer(fmt::memory_buffer &errorStrings, bool block)         = 0;
+    virtual StdLines &StdOut()                                                         = 0;
+    virtual StdLines &StdErr()                                                         = 0;
+    virtual std::optional<std::reference_wrapper<FramedChannel>> GetFdChannel()        = 0;
+    virtual std::optional<pid_t> GetPid() const                                        = 0;
+    virtual bool IsAlive() const                                                       = 0;
+    virtual std::optional<int> GetExitCode() const                                     = 0;
+    virtual std::optional<int> ReceivedSignal() const                                  = 0;
+    virtual void Wait(std::optional<std::chrono::milliseconds> timeout = std::nullopt) = 0;
+
+    virtual ~ChildProcessBase() = default;
+};
+
+class ChildProcess final : public ChildProcessBase
 {
 public:
     friend class ChildProcessBuilder;
-    StdLines &StdOut();
-    StdLines &StdErr();
-    FramedChannel &GetFdChannel();
-    void Run();
+    StdLines &StdOut() override;
+    StdLines &StdErr() override;
+    void GetStdErrBuffer(fmt::memory_buffer &errString, bool block) override;
+    void GetStdOutBuffer(fmt::memory_buffer &outString, bool block) override;
+    std::optional<std::reference_wrapper<FramedChannel>> GetFdChannel() override;
+    void Run() override;
+    std::optional<pid_t> GetPid() const override;
+    bool IsAlive() const override;
+    std::optional<int> GetExitCode() const override;
+    std::optional<int> ReceivedSignal() const override;
+
+    // Wait for the process to exit. Waiting on multiple ChildProcesses at the same time
+    // is not supported.
+    void Wait(std::optional<std::chrono::milliseconds> timeout = std::nullopt) override;
+    /**
+     * Stop the child process (issues a SIGTERM, unless specified otherwise).
+     * Verify that the process was stopped with IsAlive().
+     *
+     * @param[in] force       Whether to force the process to stop with SIGKILL
+     */
+    void Stop(bool force = false) noexcept override;
+    /**
+     * Kill the child process (issues a SIGTERM, then SIGKILL if the process does not exit
+     * within sigTermTimeoutSec seconds).
+     *
+     * @param[in] sigTermTimeoutSec  Timeout in seconds for SIGTERM
+     */
+    void Kill(int sigTermTimeoutSec = 10) noexcept override;
+    void Create(IoContext &ioContext,
+                boost::filesystem::path const &executable,
+                std::optional<std::vector<std::string>> const &args                    = std::nullopt,
+                std::optional<std::unordered_map<std::string, std::string>> const &env = std::nullopt,
+                std::optional<std::string> const &userName                             = std::nullopt,
+                std::optional<int> channelFd                                           = std::nullopt) override;
     ChildProcess();
     ~ChildProcess();
-
     ChildProcess(ChildProcess const &)            = delete;
     ChildProcess &operator=(ChildProcess const &) = delete;
-
     ChildProcess(ChildProcess &&) noexcept;
     ChildProcess &operator=(ChildProcess &&) noexcept;
-    std::optional<pid_t> GetPid() const;
-    bool IsAlive() const;
-    std::optional<int> GetExitCode() const;
-    std::optional<int> ReceivedSignal() const;
-    void Wait();
 
 private:
     void Validate() const noexcept(false);
     struct Impl;
     std::unique_ptr<Impl> m_impl;
-
-    friend ChildProcess Create(boost::filesystem::path const &executable,
-                               std::vector<std::string> const &args,
-                               std::unordered_map<std::string, std::string> const &env,
-                               std::optional<std::string> const &userName,
-                               int channelFd);
 };
-
-ChildProcess Create(boost::filesystem::path const &executable,
-                    std::vector<std::string> const &args,
-                    std::unordered_map<std::string, std::string> const &env,
-                    std::optional<std::string> const &userName,
-                    int channelFd);
 
 } //namespace DcgmNs::Common::Subprocess

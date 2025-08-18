@@ -19,49 +19,6 @@ DCGM integrates into the Kubernetes ecosystem by allowing users to gather GPU te
 
 More information is available on [DCGM's official page](https://developer.nvidia.com/dcgm)
 
-## Quickstart
-
-DCGM installer packages are available on the CUDA network repository and DCGM can be easily installed using Linux package managers. 
-
-### Ubuntu LTS
-
-**Set up the CUDA network repository meta-data, GPG key:**
-
-```bash
-$ wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb
-$ sudo dpkg -i cuda-keyring_1.0-1_all.deb
-$ sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
-```
-
-**Install DCGM**
-
-```bash
-$ sudo apt-get update \
-    && sudo apt-get install -y datacenter-gpu-manager
-```
-
-### Red Hat
-
-**Set up the CUDA network repository meta-data, GPG key:**
-
-```bash
-$ sudo dnf config-manager \
-    --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
-```
-
-**Install DCGM**
-
-```bash
-$ sudo dnf clean expire-cache \
-    && sudo dnf install -y datacenter-gpu-manager
-```
-
-### Start the DCGM service
-
-```bash
-$ sudo systemctl --now enable nvidia-dcgm
-```
-
 ## Product Documentation
 
 For information on platform support, getting started and using DCGM APIs, visit the official documentation [repository](https://docs.nvidia.com/datacenter/dcgm/latest).
@@ -129,15 +86,13 @@ Once the build image is created, you can use the run `build.sh` to produce build
 The rpm will be placed in `_out/Linux-amd64-release/datacenter-gpu-manager_2.1.4_amd64.deb`; it can now be installed as needed. The script includes options for building just the binaries (default), tarballs (--packages), or RPM (--rpm) as well. A complete list of options can been seen using `./build.sh -h`.
 
 ### Running the Test Framework
-DCGM includes an extensive test suite that can be run on any system with one or more supported GPUs. After successfully building DCGM, a `datacenter-gpu-manager-tests` package is created alongside the normal DCGM package. There are multiple ways to run the tests but the most straightforward steps are the following:
-1. Install or extract the datacenter-gpu-manager-tests package
-2. Navigate to `usr/share/dcgm_tests`
-3. Execute `run_tests.sh`
+DCGM includes an extensive test suite that can be run on any system with one or more supported GPUs. After successfully building DCGM tarballs, a `datacenter-gpu-manager-tests` package is created alongside the normal DCGM package. There are multiple ways to run the tests but the most straightforward steps are the following:
+1. Extract the datacenter-gpu-manager-tests tarball
+2. Navigate to `share/dcgm_tests`
+3. Execute `sudo run_tests.sh`
 
 Notes:
-- The location of the tests depends on the type of DCGM package. If the installed package was a `.deb` or `.rpm` file then the location is `/usr/share/dcgm_tests`. If the package was `.tar.gz` then the location is relative to where it was uncompresssed.
-- The test suite utilizes DCGM's python bindings. Python version 2 is the only supported version at this time.
-- Running the tests as root is not required. However, some tests that require root permissions will not execute. For maximum test coverage running the tests as root is recommended.
+- The test suite utilizes DCGM's python bindings.
 - The entire test suite can take anywhere from 10 to >60 minutes depending on the speed of the machine, the number of gpus and the presence of additional NVIDIA hardware such as NVSwitches and NVLinks. On most systems the average time is ~30 minutes.
 - Please do note file bug reports based on test failures. While great effort is made to ensure the tests are stable and resilient transient failures will occur from time to time.
 
@@ -181,7 +136,7 @@ DCGM releases will be tagged once the release is finalized. The last commit will
 
 ## License 
 
-The source code for DCGM in this repository is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0). Binary installer packages for DCGM are available for download from the [product page](https://developer.nvidia.com/dcgm) and are licensed under the [NVIDIA DCGM SLA](https://developer.download.nvidia.com/compute/DCGM/docs/NVIDIA_DCGM_EULA_Jan_2021.pdf).
+The source code for DCGM in this repository is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0). .
 
 ## Additional Topics
 

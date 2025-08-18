@@ -1848,6 +1848,22 @@ def _get_run_diag_info(gpuIds, ignoreErrorCodes, testNameStr):
 
     return runDiagInfo
 
+def _assert_diag_result_with_error_check(resultObj, expectedResults, entityId, errorsList, errorCode):
+    if resultObj.result not in expectedResults:
+        # Check if the failure is due to the specific error code
+        errorFound = False
+        for err in errorsList:
+            if err.code == errorCode and err.entity.entityId == entityId:
+                errorFound = True
+                break
+
+        if not errorFound:
+            # If the failure is not due to the expected error, then we can skip the test
+            test_utils.skip_test(f"Test failed with unexpected result {resultObj.result} and does not contain the expected {errorCode} error, skipping test.")
+        else:
+            # If the expected error is found, then the test should have had expected results.
+            assert False, f"Expected result {expectedResults}, got {resultObj.result}."
+
 def _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuId, expectedResults, testNameStr, errorCode = None):
     inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
 
@@ -1863,9 +1879,11 @@ def _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuId, ex
 
     # Skip checking software test results
     assert response.results[1].entity.entityId == gpuId, f"Expected GPU ID {gpuId}, got {response.results[1].entity.entityId}"
-    assert response.results[1].result in expectedResults, f"Expected result in {expectedResults}, got {response.results[1].result}"
     errorFound = False
-    if not errorCode:
+    if errorCode:
+        assert response.results[1].result in expectedResults, f"Expected result in {expectedResults}, got {response.results[1].result}"
+    else:
+        _assert_diag_result_with_error_check(response.results[1], expectedResults, gpuId, response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
         errorFound = True
         assert response.numErrors == 0, f"Expected 0 errors, got {response.numErrors} errors"
         # Verify that the ignored error is in the info array
@@ -1936,7 +1954,7 @@ def test_dcgmi_diag_ignore_error_codes_multiple_gpus_only_one_passes(handle, gpu
 
     # Skip checking software test results
     assert response.results[2].entity.entityId == gpuIds[0], f"Expected GPU ID {gpuIds[0]}, got {response.results[2].entity.entityId}"
-    assert response.results[2].result in [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], f"Got result {response.results[2].result}"
+    _assert_diag_result_with_error_check(response.results[2], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[0], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
 
     assert response.results[3].entity.entityId == gpuIds[1], f"Expected GPU ID {gpuIds[1]}, got {response.results[3].entity.entityId}"
     assert response.results[3].result in [dcgm_structs.DCGM_DIAG_RESULT_FAIL], f"Got result {response.results[3].result}"
@@ -1975,9 +1993,9 @@ def test_dcgmi_diag_ignore_error_codes_multiple_gpus_all_pass(handle, gpuIds):
 
     # Skip checking software test results
     assert response.results[2].entity.entityId == gpuIds[0], f"Expected GPU ID {gpuIds[0]}, got {response.results[2].entity.entityId}"
-    assert response.results[2].result in [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], f"Got result {response.results[2].result}"
+    _assert_diag_result_with_error_check(response.results[2], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[0], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
     assert response.results[3].entity.entityId == gpuIds[1], f"Expected GPU ID {gpuIds[1]}, got {response.results[3].entity.entityId}"
-    assert response.results[3].result in [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], f"Got result {response.results[3].result}"
+    _assert_diag_result_with_error_check(response.results[3], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[1], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')

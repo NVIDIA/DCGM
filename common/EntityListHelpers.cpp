@@ -349,7 +349,7 @@ namespace detail
                                                                                              std::string const &ids)
 {
     auto entities = DcgmNs::PopulateEntitiesMap(dcgmHandle);
-    return TryParseEntityList(entities, ids);
+    return TryParseEntityList(std::move(entities), ids);
 }
 
 [[nodiscard]] std::tuple<std::vector<dcgmGroupEntityPair_t>, std::string> TryParseEntityList(EntityMap entities,
@@ -541,7 +541,7 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
             }
 
             std::vector<unsigned int> entityIds;
-            dcgmReturn_t ret = DcgmNs::ParseRangeString(entityIdStr.substr(1, closeBracket), entityIds);
+            dcgmReturn_t ret = DcgmNs::ParseRangeString(entityIdStr.substr(1, closeBracket - 1), entityIds);
             if (ret != DCGM_ST_OK)
             {
                 std::string err = fmt::format("A malformed range was specified: {}", entityIdStr);
@@ -667,7 +667,7 @@ std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(dcgmMigHierarchy_v2 const 
     DcgmNs::EntityMap entities = DcgmNs::PopulateEntitiesMap(migHierarchy, gpuIdUuids);
 
     std::vector<dcgmGroupEntityPair_t> entityGroups;
-    auto [gpuEntities, rejectedIds] = DcgmNs::TryParseEntityList(entities, std::string(entityIds));
+    auto [gpuEntities, rejectedIds] = DcgmNs::TryParseEntityList(std::move(entities), std::string(entityIds));
 
     // Fallback to old method
     std::vector<dcgmGroupEntityPair_t> oldEntityList;

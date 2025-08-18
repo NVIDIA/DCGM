@@ -21,6 +21,7 @@ target_sources(nvswitchtests
     PRIVATE
         DcgmNscqManagerTests.cpp
         DcgmNvsdmManagerTests.cpp
+        DcgmModuleNvSwitchTests.cpp
 )
     
 target_link_libraries(nvswitchtests

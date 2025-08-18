@@ -34,6 +34,9 @@
 
 #define STOP_DIAG_ENV_VARIABLE_NAME "DCGMI_STOP_DIAG_HOSTNAME"
 
+// Forward declaration for free function
+std::string Sanitize(std::string sanitize);
+
 class Diag
 {
 public:
@@ -43,11 +46,10 @@ public:
 
     void setDcgmRunDiag(dcgmRunDiag_v10 *drd);
     void setJsonOutput(bool jsonOutput);
-    std::string Sanitize(std::string sanitize);
 
-    template <typename T>
-    void DisplayVerboseInfo(CommandOutputController &cmdView, const std::string &name, T const &errorOrInfo)
-        requires std::is_same_v<T, dcgmDiagError_v1> || std::is_same_v<T, dcgmDiagInfo_v1>;
+    static void DisplayVerboseInfo(CommandOutputController &cmdView,
+                                   const std::string &name,
+                                   std::string_view errorOrInfoMsg);
 
     dcgmReturn_t GetFailureResult(dcgmDiagResponse_v12 &response);
     void HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v12 const &response);

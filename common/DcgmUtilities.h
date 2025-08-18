@@ -21,17 +21,18 @@
 
 #include "DcgmLogging.h"
 #include <chrono>
+#include <filesystem>
 #include <fmt/format.h>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <timelib.h>
 #include <type_traits>
 #include <unistd.h>
 #include <utility>
 #include <vector>
-
 
 /*************************************************************************/
 /*************************************************************************
@@ -334,8 +335,35 @@ public:
      */
     [[nodiscard]] int Release();
 
+    /**
+     * @brief Reads data from the file descriptor until it reaches the end of the file or the specified size is read.
+     * This function will try its best effort to continue reading the data even if the read is interrupted by a signal.
+     * @param[in] buffer  The buffer to read the data into
+     * @param[in] size    The number of bytes to read
+     * @return The number of bytes read, -1 if an error occurred. 0 if the end of the file is reached. Details of the
+     * error can be retrieved by GetErrno().
+     * When 0 or -1 returned, the buffer may be partially filled.
+     */
+    [[nodiscard]] virtual ssize_t ReadExact(std::byte *buffer, size_t size);
+
+    /**
+     * @brief Writes data to the file descriptor
+     * @param[in] buffer  The buffer to write the data from
+     * @param[in] size    The number of bytes to write
+     * @return The number of bytes written, -1 if an error occurred. Details of the error can be retrieved by
+     * GetErrno().
+     */
+    [[nodiscard]] virtual ssize_t Write(void const *buffer, size_t size);
+
+    /**
+     * @brief Returns the errno of the last error that occurred on the file descriptor
+     * @return The errno of the last error that occurred on the file descriptor
+     */
+    [[nodiscard]] virtual int GetErrno() const;
+
 private:
     int m_fd;
+    int m_errno;
 };
 
 
@@ -501,6 +529,69 @@ public:
  * mask should be size DCGM_POWER_PROFILE_ARRAY_SIZE
  */
 std::string HelperDisplayPowerBitmask(unsigned int const *mask);
+
+/**
+ * @brief Wait for a function to return true with a timeout
+ *
+ * This function is optimized for short timeouts (≤ 10ms range) using thread yielding
+ * instead of sleep. For longer timeouts, consider using a different approach.
+ *
+ * @tparam F            Type of the function to check (must return bool)
+ * @tparam Rep         Arithmetic type representing the number of ticks
+ * @tparam Period     Ratio representing the tick period
+ * @param fn          Function to evaluate repeatedly until it returns true
+ * @param timeout     Maximum time to wait
+ * @return true if function returned true before timeout, false otherwise
+ *
+ * @note This function is noexcept if the provided function is noexcept
+ *
+ * Example usage:
+ * @code
+ * // Wait up to 10ms
+ * bool success = WaitFor(
+ *     []() { return someCondition; },
+ *     10ms
+ * );
+ * @endcode
+ */
+template <typename F, typename Rep, typename Period>
+bool WaitFor(F &&fn, std::chrono::duration<Rep, Period> timeout) noexcept(noexcept(fn()))
+{
+    auto const startTime = std::chrono::steady_clock::now();
+    while (std::chrono::steady_clock::now() - startTime < timeout)
+    {
+        if (fn())
+        {
+            return true;
+        }
+        std::this_thread::yield();
+    }
+    return false;
+}
+
+/**
+ * @brief Parses the NVML BER value and returns the mantissa, exponent, and parsed BER value
+ *
+ * @param ber The BER value to parse
+ * @return A tuple containing the mantissa, exponent, and parsed BER value
+ */
+std::tuple<uint64_t, uint64_t, double> NvmlBerParser(int64_t ber);
+
+
+struct LogPaths
+{
+    std::filesystem::path logFileName;
+    std::filesystem::path stdoutFileName;
+    std::filesystem::path stderrFileName;
+};
+
+/**
+ * @brief Get the log file paths for a given test name
+ *
+ * @param testName The name of the test
+ * @return LogPaths The log file paths
+ */
+LogPaths GetLogFilePath(std::string_view testName);
 
 } // namespace DcgmNs::Utils
 #endif // DCGM_UTILITIES_H

@@ -133,7 +133,8 @@ DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE     = 115
 DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE     = 116
 DCGM_FR_TEST_SKIPPED                        = 117
 DCGM_FR_SRAM_THRESHOLD                      = 118
-DCGM_FR_ERROR_SENTINEL                      = 119 # MUST BE THE LAST ERROR CODE
+DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD      = 119
+DCGM_FR_ERROR_SENTINEL                      = 120 # MUST BE THE LAST ERROR CODE
 
 # Deprecated throttling-related events
 DCGM_FR_CLOCK_THROTTLE_THERMAL              = DCGM_FR_CLOCKS_EVENT_THERMAL # Deprecated: Use DCGM_FR_CLOCKS_EVENT_THERMAL instead
@@ -153,6 +154,7 @@ DCGM_ERROR_ISOLATE     = 2 # Cannot perform workload. GPU should be isolated.
 DCGM_ERROR_UNKNOWN     = 3 # This error code is not recognized
 DCGM_ERROR_TRIAGE      = 4 # This error should be triaged
 DCGM_ERROR_CONFIG      = 5 # This error can be configured
+DCGM_ERROR_RESET       = 6 # Drain and reset GPU
 
 DCGM_FR_EC_NONE              = 0
 DCGM_FR_EC_PERF_THRESHOLD    = 1
@@ -205,6 +207,11 @@ DCGM_FR_CLOCKS_EVENT_POWER_MSG       =  "Detected clocks event due to power viol
 DCGM_FR_NVLINK_ERROR_THRESHOLD_MSG   =  "Detected %ld NvLink errors on NvLink %u which exceeds threshold of %u"
 # gpu id, nvlink id
 DCGM_FR_NVLINK_DOWN_MSG              =  "GPU %u's NvLink link %d is currently down"
+# nvlinks up, expected nvlinks up
+DCGM_FR_GPU_EXPECTED_NVLINKS_UP_MSG = "Only %u NvLinks are up out of the expected %u"
+# switch id, nvlinks up, expected nvlinks up
+DCGM_FR_NVSWITCH_EXPECTED_NVLINKS_UP_MSG = "NvSwitch %u - Only %u NvLinks are up out of the expected %u"
+DCGM_FR_SRAM_THRESHOLD_MSG = "SRAM Threshold Count exceeded on GPU %d: %ld"
 # nvswitch id, nvlink id
 DCGM_FR_NVSWITCH_FATAL_ERROR_MSG     =  "Detected fatal errors on NvSwitch %u link %u"
 # nvswitch id, nvlink id

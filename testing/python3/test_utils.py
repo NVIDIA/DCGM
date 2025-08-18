@@ -38,6 +38,7 @@ import dcgmvalue
 import pydcgm
 import version
 import test_compile
+import shutil
 
 from dcgm_structs import DCGM_ST_INIT_ERROR, dcgmExceptionClass
 import nvidia_smi_utils
@@ -1329,7 +1330,7 @@ def run_with_injection_nvml():
         @wraps(fn)
         def wrapper(*args, **kwds):
             # This environment variable tells DCGM to load injection NVML
-            os.environ[INJECTION_MODE_VAR] = 'True' 
+            os.environ[INJECTION_MODE_VAR] = 'True'
             try:
                 fn(*args, **kwds)
             finally:
@@ -1366,12 +1367,12 @@ def run_with_current_system_injection_nvml():
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-            # This environment variable tells DCGM to load injection NVML
-            os.environ[INJECTION_MODE_VAR] = 'True'
             skuFileName = "current_system.yaml"
             skuFilePath = os.path.join(logger.default_log_dir, skuFileName)
             if not try_capture_nvml_env(skuFilePath):
                 skip_test(f"Skip test since we failed to capture nvml env.")
+            # This environment variable tells DCGM to load injection NVML
+            os.environ[INJECTION_MODE_VAR] = 'True'
             os.environ[NVML_YAML_FILE] = skuFilePath
             try:
                 fn(*args, **kwds)
@@ -2396,6 +2397,26 @@ def run_only_with_all_supported_gpus():
         return wrapper
     return decorator
 
+def run_only_with_all_same_sku_gpus():
+    """
+    This decorator skips a test if allGpus are not the same SKU.
+
+    This decorator must come after a decorator that provides a list of gpuIds like run_only_with_live_gpus
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            global nvmlNotLoaded
+            if nvmlNotLoaded:
+                skip_test("This test is skipped because NVML is not active on this system.")
+
+            gpuGroupList = group_gpu_ids_by_sku(kwds['handle'], kwds['gpuIds'])
+            if len(gpuGroupList) > 1:
+                skip_test("All GPUs must be the same SKU")
+            fn(*args, **kwds)
+            return
+        return wrapper
+    return decorator
 
 def get_device_names(gpu_ids, handle=None):
     dcgm_handle = pydcgm.DcgmHandle(handle=handle)
@@ -2832,6 +2853,22 @@ def diag_verify_json(jsonOutput):
     except FileNotFoundError:
         logger.info('Could not load \'dcgm_diag_schema.json\', json schema validation disabled')
 
+def mndiag_verify_json(jsonOutput):
+    """
+    Verify multi-node diagnostic JSON output against the schema
+    
+    @param jsonOutput: The JSON output from multi-node diagnostic to validate
+    """
+    try:
+        import jsonschema
+        f = open('dcgm_mndiag_schema.json')
+        schema = json.load(f)
+        jsonschema.validate(jsonOutput, schema)
+    except ImportError:
+        logger.info('Could not import jsonschema, multi-node diagnostic json schema validation disabled')
+    except FileNotFoundError:
+        logger.info('Could not load \'dcgm_mndiag_schema.json\', multi-node diagnostic json schema validation disabled')
+
 def diag_execute_wrapper(dd, handle):
     try:
         response = dd.Execute(handle)
@@ -2851,7 +2888,14 @@ def action_validate_wrapper(runDiagInfo, handle, runDiagVersion=dcgm_structs.dcg
             skip_test("Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
         else:
             raise e
-
+        
+def run_mndiagnostic_wrapper(handle, runMnDiagInfo, runMnDiagVersion=dcgm_structs.dcgmRunMnDiag_version1):
+    try:
+        response = dcgm_agent.dcgmRunMnDiagnostic(handle, runMnDiagInfo, runMnDiagVersion)
+        return response
+    except dcgm_structs.DCGMError as e:
+        raise e
+    
 def run_only_if_checking_libraries():
     '''
     Decorator to only run a test if we're verifying the modules
@@ -3234,3 +3278,148 @@ def run_only_with_nvsdm_live():
             return
         return wrapper
     return decorator
+
+
+def DebugLevelToString(debugLevel):
+    if debugLevel == 0:
+        return 'NONE'
+    elif debugLevel == 1:
+        return 'FATAL'
+    elif debugLevel == 2:
+        return 'ERROR'
+    elif debugLevel == 3:
+        return 'WARN'
+    elif debugLevel == 4:
+        return 'INFO'
+    elif debugLevel == 5:
+        return 'DEBUG'
+    else:
+        return 'VERB'
+
+def get_current_skus_env():
+    """
+    Returns a comma-separated string of the upper 16 bits (first 4 hex digits, lowercase, no 0x) of the PCI device ID for each live GPU.
+    """
+    handle = pydcgm.DcgmHandle()
+    try:
+        gpu_ids = get_live_gpu_ids(handle.handle)
+    except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
+        gpu_ids = []
+
+    if not gpu_ids:
+        return ""
+    
+    skus = set()
+    for gpu_id in gpu_ids:
+        device_attrib = dcgm_agent.dcgmGetDeviceAttributes(handle.handle, gpu_id)
+        pci_device_id = device_attrib.identifiers.pciDeviceId
+        sku = "{:04x}".format(pci_device_id >> 16)
+        skus.add(sku)
+        
+    return ",".join(skus)
+
+def get_mpirun_path():
+    """
+    Returns the path to the mpirun command.
+    """
+    mpirun_path = shutil.which("mpirun")
+    if mpirun_path == None or not os.path.exists(mpirun_path):
+        return None
+    return mpirun_path
+
+def get_mock_nvidia_smi_path():
+    """
+    Returns the path to the nvidia-smi command.
+    """
+    mock_path = "/tmp/nvidia-smi"
+    return mock_path
+
+def get_mock_mnubergemm_path():
+    """
+    Returns the path to the mock mnubergemm command.
+    """
+    mock_path = "/tmp/mock_mnubergemm"
+    return mock_path
+
+def get_mnubergemm_log_file_path():
+    """
+    Returns the path to the mnubergemm log file.
+    """
+    log_dir = os.environ.get("DCGM_HOME_DIR", "/var/log/nvidia-dcgm")
+    log_file = os.path.join(log_dir, "dcgm_mndiag_mnubergemm_stdout.txt")
+    return log_file
+
+def get_stderr_output_file_path():
+    """
+    Returns the path to the stderr output file.
+    """
+    log_dir = os.environ.get("DCGM_HOME_DIR", "/var/log/nvidia-dcgm")
+    log_file = os.path.join(log_dir, "dcgm_mndiag_mnubergemm_stderr.txt")
+    return log_file
+
+def get_updated_env_path_variable():
+    """
+    Returns the path to the mock environment.
+    """
+    mock_path = get_mock_nvidia_smi_path()
+    mock_dir = os.path.dirname(mock_path)  # Get the directory path
+    current_path = os.environ.get('PATH', '')
+    updated_path = f"{mock_dir}:{current_path}"  # Use the directory path
+    return updated_path
+
+def is_mpirun_openmpi():
+    """
+    Checks if the current mpirun is OpenMPI by running mpirun --version.
+    """
+    mpirun_path = get_mpirun_path()
+    if mpirun_path is None:
+        return False
+        
+    try:
+        result = subprocess.run(
+            [mpirun_path, '--version'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            output = (result.stdout + result.stderr).lower()
+            return 'open mpi' in output or 'openmpi' in output
+        else:
+            return False
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+def run_if_mpirun_exists():
+    """
+    Decorator factory to run the test only if mpirun exists.
+    Usage: @run_if_mpirun_exists()
+    """
+    import os
+    from functools import wraps
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            if get_mpirun_path() == None:
+                skip_test("mpirun not found")
+
+            if not is_mpirun_openmpi():
+                skip_test("OpenMPI required, but found different MPI implementation")
+
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def get_dcgm_version():
+    """
+    Returns the DCGM version.
+    """
+    version_info = dcgm_agent.dcgmVersionInfo()
+    raw_build_info = version_info.rawBuildInfoString
+    dcgm_version = None
+    for kv in raw_build_info.split(';'):
+        if kv.startswith("version:"):
+            dcgm_version = kv.split(":", 1)[1]
+            break
+    return dcgm_version

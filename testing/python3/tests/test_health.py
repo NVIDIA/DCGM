@@ -863,6 +863,77 @@ def test_dcgm_embedded_nvlink_crc_threshold(handle, gpuIds):
     helper_nvlink_crc_fatal_threshold(handle, gpuIds)
 
 @test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus()
+def test_dcgm_health_nvlink_symbol_threshold(handle, gpuIds):
+    test_utils.skip_test_if_any_nvlinks_down(handle)
+
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetEmptyGroup("test1")
+    groupObj.AddGpu(gpuIds[0])
+    gpuIds = groupObj.GetGpuIds() #Limit gpuIds to GPUs in our group
+    gpuId = gpuIds[0]
+
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
+    groupObj.health.Set(newSystems)
+
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
+                                                       dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
+                                                       0, -50)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
+                                                       dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
+                                                       1, -20)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus()
+def test_dcgm_health_nvlink_effective_ber_threshold(handle, gpuIds):
+    test_utils.skip_test_if_any_nvlinks_down(handle)
+
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetEmptyGroup("test1")
+    groupObj.AddGpu(gpuIds[0])
+    gpuIds = groupObj.GetGpuIds() #Limit gpuIds to GPUs in our group
+    gpuId = gpuIds[0]
+
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
+    groupObj.health.Set(newSystems)
+
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
+                                                       dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER,
+                                                       4095, -50)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
+                                                       dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER,
+                                                       1000, -20)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    responseV5 = groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
+
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+    assert (responseV5.incidentCount == 1)
+    assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
+    assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD)
+    assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
+
+
+@test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_standalone_health_large_groupid(handle, gpuIds):
     """

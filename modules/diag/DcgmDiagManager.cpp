@@ -18,7 +18,9 @@
 
 #include <ChildProcess/ChildProcess.hpp>
 #include <ChildProcess/ChildProcessBuilder.hpp>
+#include <ChildProcess/IoContext.hpp>
 #include <DcgmError.h>
+#include <DcgmResourceHandle.h>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
 #include <Defer.hpp>
@@ -98,11 +100,21 @@ DcgmDiagManager::~DcgmDiagManager()
 {
     DcgmLockGuard lock(&m_mutex);
     m_amShuttingDown = true;
-    if (m_nvvsPID >= 0)
+
+    // Clean up any running child process
+    if (m_childProcessHandle != 0)
     {
-        DCGM_LOG_DEBUG << "Cleaning up leftover nvvs process with pid " << m_nvvsPID;
-        KillActiveNvvs((unsigned int)-1); // don't stop until it's dead
+        log_debug("Cleaning up leftover nvvs process with pid {}", m_nvvsPID);
+
+        if (m_nvvsPID >= 0)
+        {
+            KillActiveNvvs((unsigned int)-1); // don't stop until it's dead
+        }
+
+        m_childProcessHandle = 0;
+        m_nvvsPID            = -1;
     }
+
     // The lock guard above will obey RAII. m_mutex will be destructed with this instance.
     // coverity[missing_unlock: FALSE]
 }
@@ -112,28 +124,71 @@ dcgmReturn_t DcgmDiagManager::KillActiveNvvs(unsigned int maxRetries)
     static const std::chrono::seconds SIGTERM_RETRY_DELAY = std::chrono::seconds(4);
     static const unsigned int MAX_SIGTERM_ATTEMPTS        = 4;
 
-    pid_t childPid          = m_nvvsPID;
-    unsigned int kill_count = 0;
-    bool sigkilled          = false;
+    pid_t childPid                   = m_nvvsPID;
+    unsigned int kill_count          = 0;
+    bool sigkilled                   = false;
+    ChildProcessHandle_t childHandle = m_childProcessHandle;
+    bool processExists               = true;
+    dcgmReturn_t ret                 = DCGM_ST_OK;
 
     assert(m_mutex.Poll() == DCGM_MUTEX_ST_LOCKEDBYME);
 
-    while (kill_count <= maxRetries && kill(childPid, 0) == 0)
+    // First check if we have a valid child process handle
+    if (childHandle == 0 || childPid < 0)
     {
+        log_debug("No active NVVS process to kill (handle={}; pid={})", childHandle, childPid);
+        return DCGM_ST_OK;
+    }
+
+    while (kill_count <= maxRetries && processExists)
+    {
+        // Try to get process status
+        dcgmChildProcessStatus_v1 status = {};
+        status.version                   = dcgmChildProcessStatus_version1;
+
+        // First check if the process is still running
+        dcgm_mutex_unlock(&m_mutex);
+        ret = m_coreProxy.ChildProcessGetStatus(childHandle, status);
+        dcgm_mutex_lock(&m_mutex);
+
+        if (ret != DCGM_ST_OK || !status.running)
+        {
+            log_debug("NVVS process {} is no longer running", childPid);
+            processExists = false;
+            break;
+        }
+
         // As long as the process exists, keep killing it
         if (kill_count < MAX_SIGTERM_ATTEMPTS)
         {
-            kill(childPid, SIGTERM);
+            dcgm_mutex_unlock(&m_mutex);
+            ret = m_coreProxy.ChildProcessStop(childHandle, false); // false = use SIGTERM
+            dcgm_mutex_lock(&m_mutex);
+
+            if (ret != DCGM_ST_OK)
+            {
+                log_error("Failed to send SIGTERM to process {}: {}", childPid, errorString(ret));
+            }
         }
         else
         {
+            // Escalate to SIGKILL if SIGTERM is not working
             if (sigkilled == false)
             {
-                DCGM_LOG_ERROR << "Unable to kill nvvs pid with " << MAX_SIGTERM_ATTEMPTS
-                               << " SIGTERM attempts, escalating to SIGKILL. pid: " << childPid;
+                log_error("Unable to kill NVVS pid {} with {} SIGTERM attempts, escalating to SIGKILL",
+                          childPid,
+                          MAX_SIGTERM_ATTEMPTS);
             }
 
-            kill(childPid, SIGKILL);
+            dcgm_mutex_unlock(&m_mutex);
+            ret = m_coreProxy.ChildProcessStop(childHandle, true); // true = use SIGKILL
+            dcgm_mutex_lock(&m_mutex);
+
+            if (ret != DCGM_ST_OK)
+            {
+                log_error("Failed to send SIGKILL to process {}: {}", childPid, errorString(ret));
+            }
+
             sigkilled = true;
         }
 
@@ -154,12 +209,12 @@ dcgmReturn_t DcgmDiagManager::KillActiveNvvs(unsigned int maxRetries)
         kill_count++;
     }
 
-    if (kill_count >= maxRetries)
+    if (kill_count >= maxRetries && processExists)
     {
         // Child process died and may not resume hostengine (EUD only?)
         // Resume request may block, temporary release of lock.
         dcgm_mutex_unlock(&m_mutex);
-        dcgmReturn_t dcgmReturn = PauseResumeHostEngine(false);
+        dcgmReturn_t dcgmReturn = PauseResumeHostEngine(false); // Resume hostengine
         dcgm_mutex_lock(&m_mutex);
 
         if (dcgmReturn != DCGM_ST_OK)
@@ -170,12 +225,20 @@ dcgmReturn_t DcgmDiagManager::KillActiveNvvs(unsigned int maxRetries)
             return dcgmReturn;
         }
 
-        DCGM_LOG_ERROR << "Giving up attempting to kill NVVS process " << childPid << " after " << maxRetries
-                       << " retries.";
+        log_error("Giving up attempting to kill NVVS process {} after {} retries", childPid, maxRetries);
         // m_mutex is (still) locked
         // coverity[missing_unlock: FALSE]
         return DCGM_ST_CHILD_NOT_KILLED;
     }
+
+    // Process successfully terminated
+    // Clean up the handle
+    dcgm_mutex_unlock(&m_mutex);
+    if (childHandle != 0)
+    {
+        ret = m_coreProxy.ChildProcessDestroy(childHandle, 0);
+    }
+    dcgm_mutex_lock(&m_mutex);
 
     // m_mutex is (still) locked
     // coverity[missing_unlock: FALSE]
@@ -271,7 +334,7 @@ dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, d
     cmdArgs.push_back("--specifiedtest");
     if (testNames.size() > 0)
     {
-        cmdArgs.push_back(testNames);
+        cmdArgs.push_back(std::move(testNames));
     }
     else
     {
@@ -305,7 +368,7 @@ dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, d
     if (testParms.size() > 0)
     {
         cmdArgs.push_back("--parameters");
-        cmdArgs.push_back(testParms);
+        cmdArgs.push_back(std::move(testParms));
     }
 
     return DCGM_ST_OK;
@@ -427,14 +490,14 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
     {
         cmdArgs.push_back("-l");
         std::string debugArg(drd->debugLogFile);
-        cmdArgs.push_back(debugArg);
+        cmdArgs.push_back(std::move(debugArg));
     }
 
     if (strlen(drd->statsPath) > 0)
     {
         cmdArgs.push_back("--statspath");
         std::string statsPathArg(drd->statsPath);
-        cmdArgs.push_back(statsPathArg);
+        cmdArgs.push_back(std::move(statsPathArg));
     }
 
     // Gpu ids
@@ -510,7 +573,7 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
                                                 unsigned int diagResponseVersion,
                                                 std::string const &fakeGpuIds,
                                                 std::string const &entityIds,
-                                                ExecuteWithServiceAccount useServiceAccount) const
+                                                ExecuteWithServiceAccount useServiceAccount)
 {
     dcgmReturn_t ret;
 
@@ -557,7 +620,7 @@ dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
                                                  DcgmDiagResponseWrapper &response,
                                                  std::string const &fakeGpuIds,
                                                  std::string const &entityIds,
-                                                 ExecuteWithServiceAccount useServiceAccount) const
+                                                 ExecuteWithServiceAccount useServiceAccount)
 {
     std::vector<std::string> args;
 
@@ -571,7 +634,7 @@ dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmDiagManager::PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr) const
+dcgmReturn_t DcgmDiagManager::PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr)
 {
     std::vector<std::string> args;
     std::unique_ptr<dcgmDiagResponse_v12> responseUptr = std::make_unique<dcgmDiagResponse_v12>();
@@ -583,7 +646,7 @@ dcgmReturn_t DcgmDiagManager::PerformDummyTestExecute(std::string *stdoutStr, st
 }
 
 /****************************************************************************/
-uint64_t DcgmDiagManager::GetTicket() const
+uint64_t DcgmDiagManager::GetTicket()
 {
     // It is assumed that the calling thread has locked m_mutex so we can safely modify shared variables
     m_ticket += 1;
@@ -591,7 +654,7 @@ uint64_t DcgmDiagManager::GetTicket() const
 }
 
 /****************************************************************************/
-void DcgmDiagManager::UpdateChildPID(pid_t value, uint64_t myTicket) const
+void DcgmDiagManager::UpdateChildPID(pid_t value, uint64_t myTicket)
 {
     DcgmLockGuard lock(&m_mutex);
     // Check to see if another thread has updated the pid
@@ -603,7 +666,7 @@ void DcgmDiagManager::UpdateChildPID(pid_t value, uint64_t myTicket) const
     m_nvvsPID = value;
 }
 
-static unsigned int GetStructVersion(std::string_view data)
+static unsigned int GetStructVersion(std::span<std::byte> data)
 {
     // Get the version from the first four bytes of data. If data
     // is smaller than expected, return a blank value.
@@ -626,7 +689,7 @@ static void PrintDiagStatus(dcgmDiagStatus_v1 const &diagStatus)
     log_debug("Diag status : {}", diagStatusStr.str());
 }
 
-void DcgmDiagManager::UpdateDiagStatus(std::string_view data) const
+void DcgmDiagManager::UpdateDiagStatus(std::span<std::byte> data) const
 {
     dcgmDiagStatus_v1 diagStatus {};
     DcgmFvBuffer buf;
@@ -666,37 +729,30 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
                                                      DcgmDiagResponseWrapper &response,
                                                      std::string *const stdoutStr,
                                                      std::string *const stderrStr,
-                                                     ExecuteWithServiceAccount useServiceAccount) const
+                                                     ExecuteWithServiceAccount useServiceAccount)
 {
     if (args.empty() || stdoutStr == nullptr || stderrStr == nullptr)
     {
-        DCGM_LOG_ERROR << "PerformExternalCommand: args is empty or NULL stdoutStr or stderrStr";
+        log_error("PerformExternalCommand: args is empty or NULL stdoutStr or stderrStr");
         return DCGM_ST_BADPARAM;
     }
 
-    DcgmNs::Common::Subprocess::ChildProcessBuilder builder;
-    DcgmNs::Common::Subprocess::ChildProcess process;
     std::string filename;
     fmt::memory_buffer stdoutStream;
     fmt::memory_buffer stderrStream;
     struct stat fileStat = {};
     int statSt;
-    DcgmNs::Utils::FileHandle stdoutFd;
-    DcgmNs::Utils::FileHandle stderrFd;
     pid_t pid = -1;
     uint64_t myTicket;
 
     AppendDummyArgs(args);
     std::string nvvsPath = args[0];
 
-    /* See if the program we're planning to run even exists. We have to do this because popen() will still
-     * succeed, even if the program isn't found.
-     */
+    // Validate executable exists and is accessible
     filename = nvvsPath;
-
     if (statSt = stat(filename.c_str(), &fileStat); statSt != 0)
     {
-        DCGM_LOG_ERROR << "stat of " << filename << " failed. errno " << errno << ": " << strerror(errno);
+        log_error("stat of {} failed. errno {}: {}", filename, errno, strerror(errno));
         return DCGM_ST_NVVS_BINARY_NOT_FOUND;
     }
 
@@ -738,7 +794,7 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
                         errno,
                         strerror(errno));
                     DCGM_LOG_ERROR << msg;
-                    *stderrStr = msg;
+                    *stderrStr = std::move(msg);
                     return DCGM_ST_GENERIC_ERROR;
                 }
 
@@ -764,128 +820,191 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
                     (*serviceAccount),
                     traverseSoFar.string());
                 DCGM_LOG_ERROR << msg;
-                *stderrStr = msg;
+                *stderrStr = std::move(msg);
                 return DCGM_ST_GENERIC_ERROR;
             }
         }
 
-        // skip args[0] as it is executable path
-        builder.SetExecutable(nvvsPath)
-            .SetChannelFd(NVVS_CHANNEL_FD)
-            .AddArgs(std::vector(args.begin() + 1, args.end()));
+        // Setup child process parameters
+        dcgmChildProcessParams_v1 childParams = {};
+        childParams.version                   = dcgmChildProcessParams_version1;
+        childParams.executable                = filename.c_str();
+        childParams.dataChannelFd             = NVVS_CHANNEL_FD;
         if (serviceAccount.has_value())
         {
-            builder.SetRunningUser(*serviceAccount);
+            childParams.userName = serviceAccount->c_str();
         }
-        process = builder.Build();
-        process.Run();
-        auto pidOpt = process.GetPid();
-        pid         = pidOpt.has_value() ? *pidOpt : -1;
-        // Update the nvvs pid
-        myTicket = GetTicket();
-        UpdateChildPID(pid, myTicket);
-    }
 
-    if (pid < 0)
-    {
-        DCGM_LOG_ERROR << fmt::format("Unable to run external command '{}'.", nvvsPath);
-        return DCGM_ST_DIAG_BAD_LAUNCH;
+        // skip args[0] as it is executable path
+        std::vector<const char *> argPtrs;
+        argPtrs.reserve(args.size());
+        for (size_t i = 1; i < args.size(); i++)
+        {
+            argPtrs.push_back(args[i].c_str());
+        }
+        argPtrs.push_back(nullptr);
+
+        childParams.args    = argPtrs.data();
+        childParams.numArgs = argPtrs.size() - 1;
+
+        // Get ticket for PID tracking
+        myTicket = GetTicket();
+
+        // Spawn process using proxy
+        ChildProcessHandle_t handle;
+        dcgmReturn_t ret = m_coreProxy.ChildProcessSpawn(childParams, handle, pid);
+        if (ret != DCGM_ST_OK || pid < 0)
+        {
+            log_error("Unable to run external command '{}'. Error: {}", nvvsPath, errorString(ret));
+            if (handle != 0)
+            {
+                m_coreProxy.ChildProcessDestroy(handle);
+            }
+            return DCGM_ST_DIAG_BAD_LAUNCH;
+        }
+
+        m_childProcessHandle = handle;
+        UpdateChildPID(pid, myTicket);
     }
 
     /* Do not return DCGM_ST_DIAG_BAD_LAUNCH for errors after this point since the child has been launched - use
        DCGM_ST_NVVS_ERROR or DCGM_ST_GENERIC_ERROR instead */
     log_debug("Launched external command '{}' (PID: {})", fmt::to_string(fmt::join(args, " ")), pid);
 
-    unsigned int receivedResultFrameNum = 0;
-    auto &frameChannel                  = process.GetFdChannel();
-    for (auto const &frame : frameChannel)
+
+    // Get file descriptors for stdout/stderr/data
+    int dataFd   = -1;
+    int stdoutFd = -1;
+    int stderrFd = -1;
+
+    if (auto ret = m_coreProxy.ChildProcessGetStdOutHandle(m_childProcessHandle, stdoutFd); ret != DCGM_ST_OK)
     {
-        std::string_view data(reinterpret_cast<char const *>(frame.data()), frame.size());
-        auto const &version = GetStructVersion(data);
-        switch (version)
+        log_error("Failed to get stdout handle: {}", errorString(ret));
+    }
+
+    if (auto ret = m_coreProxy.ChildProcessGetStdErrHandle(m_childProcessHandle, stderrFd); ret != DCGM_ST_OK)
+    {
+        log_error("Failed to get stderr handle: {}", errorString(ret));
+    }
+
+    if (auto ret = m_coreProxy.ChildProcessGetDataChannelHandle(m_childProcessHandle, dataFd); ret != DCGM_ST_OK)
+    {
+        log_error("Failed to get data channel handle: {}", errorString(ret));
+    }
+
+    // Read from stdout pipe
+    if (stdoutFd >= 0)
+    {
+        fmt::memory_buffer buffer;
+        ReadProcessOutput(buffer, DcgmNs::Utils::FileHandle(stdoutFd));
+        *stdoutStr = fmt::to_string(buffer);
+    }
+
+    // Read from stderr pipe
+    if (stderrFd >= 0)
+    {
+        fmt::memory_buffer buffer;
+        ReadProcessOutput(buffer, DcgmNs::Utils::FileHandle(stderrFd));
+        *stderrStr = fmt::to_string(buffer);
+    }
+
+    // Read the FD channel
+    if (dataFd >= 0)
+    {
+        DcgmNs::Utils::FileHandle dataHandle(dataFd);
+        if (auto ret = ReadDataFromFd(dataHandle, response); ret != DCGM_ST_OK)
         {
-            case dcgmDiagStatus_version1:
-                UpdateDiagStatus(data);
-                break;
-            case dcgmDiagResponse_version12:
-            case dcgmDiagResponse_version11:
-            case dcgmDiagResponse_version10:
-            case dcgmDiagResponse_version9:
-            case dcgmDiagResponse_version8:
-            case dcgmDiagResponse_version7:
+            log_error("Failed to read data from FD: {}", errorString(ret));
+            if (m_childProcessHandle != 0)
             {
-                auto const &ret = response.SetResult(data);
-                if (ret != DCGM_ST_OK)
-                {
-                    log_error("failed to set results, err: [{}]", ret);
-                    return ret;
-                }
-                receivedResultFrameNum += 1;
-                break;
+                m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
+                m_childProcessHandle = 0;
             }
-            default:
-                log_error("Unexpected struct with version {} from nvvs channel", version);
-        }
-        // Discard any results received beyond the first result; this is unexpected
-        if (receivedResultFrameNum == 1)
-        {
-            break;
+            return ret;
         }
     }
-    if (receivedResultFrameNum == 0)
+
+    log_debug("External command stdout: {}", SanitizedString(*stdoutStr));
+    log_debug("External command stderr: {}", SanitizedString(*stderrStr));
+
+    if (auto ret = m_coreProxy.ChildProcessWait(m_childProcessHandle); ret != DCGM_ST_OK)
     {
-        log_error("Diag result struct not received from NVVS.");
+        log_error("Error waiting for child process: {}", errorString(ret));
+        if (m_childProcessHandle != 0)
+        {
+            m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
+            m_childProcessHandle = 0;
+        }
+        return DCGM_ST_NVVS_ERROR;
     }
-
-    // Set output string in caller's context
-    // Do this before the error check so that if there are errors, we have more useful error messages
-    auto &stdoutLines = process.StdOut();
-    *stdoutStr        = fmt::to_string(fmt::join(stdoutLines.begin(), stdoutLines.end(), "\n"));
-
-    auto &stderrLines = process.StdErr();
-    *stderrStr        = fmt::to_string(fmt::join(stderrLines.begin(), stderrLines.end(), "\n"));
-    DCGM_LOG_DEBUG << "External command stdout: " << SanitizedString(*stdoutStr);
-    DCGM_LOG_DEBUG << "External command stderr: " << SanitizedString(*stderrStr);
 
     // Reset pid so that future runs know that nvvs is no longer running
     UpdateChildPID(-1, myTicket);
 
-    process.Wait();
-    auto exitCodeOpt = process.GetExitCode();
-    if (!exitCodeOpt)
+    // Get process status
+    dcgmChildProcessStatus_v1 status = {};
+    status.version                   = dcgmChildProcessStatus_version1;
+
+    if (auto ret = m_coreProxy.ChildProcessGetStatus(m_childProcessHandle, status); ret != DCGM_ST_OK)
+    {
+        log_error("Error getting child process status: {}", errorString(ret));
+        if (m_childProcessHandle != 0)
+        {
+            m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
+            m_childProcessHandle = 0;
+        }
+        return DCGM_ST_NVVS_ERROR;
+    }
+
+    // Handle process exit status
+    if (status.running)
     {
         log_error("The external command '{}' may still be running.", args[0]);
         return DCGM_ST_NVVS_ERROR;
     }
 
-    if (*exitCodeOpt != 0)
+    if (status.exitCode != 0)
     {
-        /* If the nvvs has a non-zero exit code, that may mean some handled exception is properly wrapped into a
-         * json object and printed to stdout. The nvvs command itself was successful from our point of view. Now
-         * it's up to the upper caller logic to decide if the stdout is valid */
-        auto receivedSignal = process.ReceivedSignal();
-        if (receivedSignal.has_value())
+        if (status.receivedSignal)
         {
             log_error("The external command '{}' returned a non-zero exit code: {}, received signal: {}.",
                       args[0],
-                      *exitCodeOpt,
-                      receivedSignal.has_value() ? std::to_string(*receivedSignal) : "None");
+                      status.exitCode,
+                      status.receivedSignalNumber);
             stderrStr->insert(0,
                               fmt::format("The DCGM diagnostic subprocess was terminated due to signal {}"
                                           "\n**************\n",
-                                          *receivedSignal));
+                                          status.receivedSignalNumber));
+            if (m_childProcessHandle != 0)
+            {
+                m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
+                m_childProcessHandle = 0;
+            }
             return DCGM_ST_NVVS_KILLED;
         }
-        if (*exitCodeOpt == NVVS_ST_TEST_NOT_FOUND)
+
+        if (status.exitCode == NVVS_ST_TEST_NOT_FOUND)
         {
+            if (m_childProcessHandle != 0)
+            {
+                m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
+                m_childProcessHandle = 0;
+            }
             return DCGM_ST_NVVS_NO_AVAILABLE_TEST;
         }
-        log_error("The external command '{}' returned a non-zero exit code: {}", args[0], *exitCodeOpt);
-        return DCGM_ST_OK;
+
+        log_error("The external command '{}' returned a non-zero exit code: {}", args[0], status.exitCode);
+    }
+
+    // Cleanup
+    if (auto ret = m_coreProxy.ChildProcessDestroy(m_childProcessHandle); ret != DCGM_ST_OK)
+    {
+        log_error("Error destroying child process: {}", errorString(ret));
     }
 
     return DCGM_ST_OK;
 }
+
 void DcgmDiagManager::AppendDummyArgs(std::vector<std::string> &args)
 {
     if (args[0] == "dummy") // for unittests
@@ -956,7 +1075,7 @@ struct ExecuteAndParseNvvsResult
  *         If the ret field is \c DCGM_ST_OK, the results field is guaranteed to be populated.
  * @note This function fills in the response system error information in case of an error.
  */
-auto ExecuteAndParseNvvs(DcgmDiagManager const &self,
+auto ExecuteAndParseNvvs(DcgmDiagManager &self,
                          DcgmDiagResponseWrapper &response,
                          dcgmRunDiag_v10 *drd,
                          std::string const &fakeGpuIds,
@@ -1071,7 +1190,7 @@ std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(DcgmCoreProxy &coreProxy, 
  * @param[in] testNames List of EUD tests to run
  * @return true if the EUD was executed, false otherwise
  */
-bool ExecuteEudPluginsAsRoot(DcgmDiagManager const &diagManager,
+bool ExecuteEudPluginsAsRoot(DcgmDiagManager &diagManager,
                              dcgmRunDiag_v10 const *drd,
                              DcgmDiagResponseWrapper &eudResponse,
                              char const *serviceAccount,
@@ -1437,6 +1556,14 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
 
     log_debug("performing action {} on group {} with validation {}", action, drd->groupId, drd->validate);
 
+    // RAII resource management - Not moving to member variable, need to release as soon as it goes out of this method
+    DcgmResourceHandle lock(m_coreProxy);
+    dcgmReturn_t resRet = lock.GetInitResult();
+    if (resRet != DCGM_ST_OK)
+    {
+        return resRet;
+    }
+
     if (drd->groupId != DCGM_GROUP_NULL)
     {
         // Verify group id is valid and update it if no GPU list was specified
@@ -1492,6 +1619,7 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
 
     return retVal;
 }
+
 dcgmReturn_t DcgmDiagManager::CanRunNewNvvsInstance() const
 {
     if (m_amShuttingDown)
@@ -1525,4 +1653,105 @@ dcgmReturn_t DcgmDiagManager::PauseResumeHostEngine(bool pause = false)
     dcgmReturn_t ret = m_coreProxy.SendModuleCommand(&msg);
     log_debug("PauseResumeHostEngine({}) returns {} ({})", pause, ret, errorString(ret));
     return ret;
+}
+
+
+dcgmReturn_t DcgmDiagManager::ReadDataFromFd(DcgmNs::Utils::FileHandle &dataFd, DcgmDiagResponseWrapper &response)
+{
+    int bytesRead;
+    unsigned int receivedResultFrameNum = 0;
+    constexpr size_t buffCapacity       = std::max({ sizeof(dcgmDiagStatus_v1),
+                                                     sizeof(dcgmDiagResponse_v12),
+                                                     sizeof(dcgmDiagResponse_v11),
+                                                     sizeof(dcgmDiagResponse_v10),
+                                                     sizeof(dcgmDiagResponse_v9),
+                                                     sizeof(dcgmDiagResponse_v8),
+                                                     sizeof(dcgmDiagResponse_v7) });
+    static_assert(buffCapacity >= sizeof(unsigned int),
+                  "buffCapacity must be greater than or equal to sizeof(unsigned int)");
+    std::vector<std::byte> buffer(buffCapacity);
+
+    while (true)
+    {
+        bytesRead = dataFd.ReadExact(buffer.data(), sizeof(unsigned int));
+        if (bytesRead == 0)
+        {
+            // EOF
+            break;
+        }
+        if (bytesRead < 0)
+        {
+            log_error("Error reading from data channel: {}", strerror(dataFd.GetErrno()));
+            break;
+        }
+
+        auto version        = GetStructVersion(buffer);
+        size_t expectedSize = 0;
+        switch (version)
+        {
+            case dcgmDiagStatus_version1:
+                expectedSize = sizeof(dcgmDiagStatus_v1);
+                break;
+            case dcgmDiagResponse_version12:
+                expectedSize = sizeof(dcgmDiagResponse_v12);
+                break;
+            case dcgmDiagResponse_version11:
+                expectedSize = sizeof(dcgmDiagResponse_v11);
+                break;
+            case dcgmDiagResponse_version10:
+                expectedSize = sizeof(dcgmDiagResponse_v10);
+                break;
+            case dcgmDiagResponse_version9:
+                expectedSize = sizeof(dcgmDiagResponse_v9);
+                break;
+            case dcgmDiagResponse_version8:
+                expectedSize = sizeof(dcgmDiagResponse_v8);
+                break;
+            case dcgmDiagResponse_version7:
+                expectedSize = sizeof(dcgmDiagResponse_v7);
+                break;
+            default:
+                log_error("Unexpected struct with version {} from nvvs channel", version);
+                return DCGM_ST_NVVS_ERROR;
+        }
+
+        if (expectedSize > buffCapacity)
+        {
+            log_error("Expected size {} is greater than buffCapacity {}", expectedSize, buffCapacity);
+            return DCGM_ST_NVVS_ERROR;
+        }
+
+        bytesRead = dataFd.ReadExact(buffer.data() + sizeof(unsigned int), expectedSize - sizeof(unsigned int));
+        if (bytesRead == 0)
+        {
+            // EOF
+            break;
+        }
+        if (bytesRead < 0)
+        {
+            log_error("Error reading from data channel: {}", strerror(dataFd.GetErrno()));
+            break;
+        }
+
+        if (version == dcgmDiagStatus_version1)
+        {
+            UpdateDiagStatus({ buffer.data(), expectedSize });
+        }
+        else
+        {
+            auto const &ret = response.SetResult({ buffer.data(), expectedSize });
+            if (ret != DCGM_ST_OK)
+            {
+                log_error("failed to set results, err: [{}]", ret);
+                return ret;
+            }
+            receivedResultFrameNum++;
+        }
+    }
+
+    if (receivedResultFrameNum == 0)
+    {
+        log_error("Diag result struct not received from NVVS.");
+    }
+    return DCGM_ST_OK;
 }

@@ -24,6 +24,8 @@ target_link_libraries(dcgmi_objects_without_main PUBLIC
     dcgmi_interface
     dcgmmodulediag_common
     diag_interface
+    dcgmmodulemndiag_common
+    mndiag_interface
     ${JSONCPP_STATIC_LIBS}
     nvmli_interface)
 
@@ -43,6 +45,7 @@ target_sources(dcgmi_objects_without_main PRIVATE
     Group.cpp
     Health.cpp
     Introspect.cpp
+    MnDiag.cpp
     Module.cpp
     Nvlink.cpp
     Policy.cpp

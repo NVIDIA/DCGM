@@ -15,6 +15,7 @@
  */
 #include <catch2/catch_all.hpp>
 
+#include "MockFileSystemOperator.h"
 #include <CpuHelpers.h>
 #include <FileSystemOperator.h>
 
@@ -22,44 +23,6 @@
 #include <fmt/core.h>
 #include <memory>
 #include <unordered_map>
-
-class MockFileSystemOperator : public FileSystemOperator
-{
-public:
-    std::optional<std::string> Read(std::string_view path) override
-    {
-        if (!m_fileWithContent.contains(std::string(path)))
-        {
-            return std::nullopt;
-        }
-        return m_fileWithContent[std::string(path)];
-    }
-
-    std::optional<std::vector<std::string>> Glob(std::string_view pattern) override
-    {
-        if (!m_mockedGlob.contains(std::string(pattern)))
-        {
-            return std::nullopt;
-        }
-        return m_mockedGlob[std::string(pattern)];
-    }
-
-    void MockFileContent(std::string const &path, std::string const &content)
-    {
-        m_fileWithContent[path] = content;
-    }
-
-    void MockGlob(std::string const &pattern, std::vector<std::string> const &paths)
-    {
-        m_mockedGlob[pattern] = paths;
-    }
-
-private:
-    // path => content
-    std::unordered_map<std::string, std::string> m_fileWithContent;
-    // pattern => paths
-    std::unordered_map<std::string, std::vector<std::string>> m_mockedGlob;
-};
 
 class MockLsHw : public LsHw
 {

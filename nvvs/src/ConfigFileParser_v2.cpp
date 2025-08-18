@@ -269,9 +269,9 @@ static void parseSubTests(YAML::Node &dstTest, const YAML::Node srcTest)
 {
     for (auto srcIt = srcTest.begin(); srcIt != srcTest.end(); ++srcIt)
     {
-        std::string key = srcIt->first.Scalar();
-        auto srcChild   = srcIt->second;
-        auto dstChild   = dstTest[key];
+        std::string key      = srcIt->first.Scalar();
+        auto const &srcChild = srcIt->second;
+        auto dstChild        = dstTest[key];
         // TODO Check we have a valid key and valid value type
         if (!srcChild.IsScalar())
         {
@@ -306,11 +306,11 @@ static void parseTests(YAML::Node &dstSku, const YAML::Node srcSku)
         }
 
         // Valid types. Descend into level 2 and start copying to dst
-        for (auto paramIt = srcTest.begin(); paramIt != srcTest.end(); paramIt++)
+        for (auto const &kv : srcTest)
         {
-            std::string paramKey   = paramIt->first.Scalar();
-            auto srcSubtestOrParam = paramIt->second;
-            auto dstSubtestOrParam = dstTest[paramKey];
+            std::string const &paramKey   = kv.first.Scalar();
+            auto const &srcSubtestOrParam = kv.second;
+            auto dstSubtestOrParam        = dstTest[paramKey];
             if (srcSubtestOrParam.IsMap())
             {
                 parseSubTests(dstSubtestOrParam, srcSubtestOrParam);

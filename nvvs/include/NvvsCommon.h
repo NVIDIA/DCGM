@@ -131,6 +131,6 @@ private:
 extern NvvsCommon nvvsCommon;
 
 std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex);
-dcgmPerGpuTestIndices_t GetTestIndex(const std::string testName);
+dcgmPerGpuTestIndices_t GetTestIndex(const std::string &testName);
 dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult);
 nvvsPluginResult_t DcgmResultToNvvsResult(dcgmDiagResult_t const result);

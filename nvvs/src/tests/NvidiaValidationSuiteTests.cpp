@@ -473,7 +473,7 @@ void WrapperNvidiaValidationSuite::WrapperEnumerateAllVisibleTests()
 
 std::vector<Test *>::iterator WrapperNvidiaValidationSuite::WrapperFindTestName(std::string test)
 {
-    return FindTestName(test);
+    return FindTestName(std::move(test));
 }
 
 void WrapperNvidiaValidationSuite::WrapperOverrideParameters(TestParameters *tp, const std::string &lowerCaseTestName)

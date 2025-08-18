@@ -624,7 +624,7 @@ DcgmGroupInfo::DcgmGroupInfo(dcgm_connection_id_t connectionId,
                              DcgmCacheManager *cacheManager)
 {
     mGroupId       = groupId;
-    mName          = name;
+    mName          = std::move(name);
     mpCacheManager = cacheManager;
     mConnectionId  = connectionId;
 }

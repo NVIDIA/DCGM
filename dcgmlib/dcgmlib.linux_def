@@ -32,6 +32,7 @@
         dcgmGetLatestValues_v2;
         dcgmGetLatestValuesForFields;
         dcgmGetNvLinkLinkStatus;
+        dcgmGetNvLinkP2PStatus;
         dcgmGetCpuHierarchy;
         dcgmGetCpuHierarchy_v2;
         dcgmGetPidInfo;
@@ -73,6 +74,7 @@
         dcgmProfPause;
         dcgmProfResume;
         dcgmRunDiagnostic;
+        dcgmRunMnDiagnostic;
         dcgmSelectGpusByTopology;
         dcgmShutdown;
         dcgmStartEmbedded;
@@ -85,6 +87,7 @@
         dcgmStatusPopError;
         dcgmStopDiagnostic;
         dcgmStopEmbedded;
+        dcgmStopMnDiagnostic;
         dcgmUnwatchFields;
         dcgmUpdateAllFields;
         dcgmVersionInfo;
@@ -133,6 +136,7 @@
         dcgmPauseTelemetryForDiag;
         dcgmResumeTelemetryForDiag;
         dcgmNvswitchGetBackend;
+        dcgmMultinodeRequest;
 
     local:
         *;

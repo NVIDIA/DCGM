@@ -51,6 +51,7 @@ target_sources(dcgm_mutex PRIVATE
 target_link_libraries(dcgm_mutex PUBLIC common_interface)
 
 add_subdirectory(ChildProcess)
+add_subdirectory(RemoteConn)
 
 target_sources(dcgm_common PRIVATE
     CpuHelpers.cpp
@@ -84,6 +85,7 @@ target_sources(dcgm_common PRIVATE
     EntityListHelpers.h
     FastPimpl.hpp
     FileSystemOperator.cpp
+    FingerprintStore.cpp
     LsHw.cpp
     LsHw.h
     MigIdParser.cpp
@@ -94,10 +96,13 @@ target_sources(dcgm_common PRIVATE
     ThreadSafeQueue.hpp
     TimeLib.cpp
     DcgmLib.cpp
-    DcgmLib.h)
+    DcgmLib.h
+    DcgmChildProcessManager.hpp
+    DcgmChildProcessManager.cpp)
 
 target_link_libraries(dcgm_common PUBLIC
     ${JSONCPP_STATIC_LIBS}
+    childprocess
     buildinfo_objects
     common_interface
     dl

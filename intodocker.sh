@@ -130,6 +130,18 @@ if [[ -t 0 ]]; then
     docker_args+=(--interactive --tty)
 fi
 
+if [[ -f "$DIR/.git" ]]; then
+    GITDIR="$(git rev-parse --path-format=absolute --git-common-dir)"
+
+    if [[ "$REMOTE_DIR" != "$DIR" ]]; then
+        docker_args+=( --mount "source=$DIR,target=$DIR,type=bind" )
+    fi
+
+    if [[ "$REMOTE_DIR" != "$(dirname $GITDIR)" ]]; then
+        docker_args+=( --mount "source=$GITDIR,target=$GITDIR,type=bind" )
+    fi
+fi
+
 if ! (docker info -f '{{println .SecurityOptions}}' | grep rootless); then
     docker_args+=(--user $(id -u):$(id -g))
 fi

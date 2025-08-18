@@ -60,10 +60,6 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
     # If it doesn't pass, skip test and add note to check GPU health
     logger.info("Checking whether %s test passes on GPU %s" % (test_name, gpuId))
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=test_name, paramsStr=paramsStr)
-    test_name_no_spaces = test_name.replace(" ", "_")
-    logname = '/tmp/nv_' + test_name_no_spaces + '%s.log'
-    dd.SetDebugLogFile(logname % 1)
-    dd.SetDebugLevel(5)
     response = test_utils.diag_execute_wrapper(dd, handle)
     entityPair = dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuId)
     if not check_diag_result_pass(response, entityPair, test_name):
@@ -88,7 +84,6 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
         test_names += "," + extraTestInfo[0]
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=test_names, paramsStr=paramsStr)
     dd.SetFailEarly(checkInterval=2) # enable fail early checks
-    dd.SetDebugLogFile(logname % 3)
 
     inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_GPU_TEMP, 150, 15, True, repeatCount=10)
 

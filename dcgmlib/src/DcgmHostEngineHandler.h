@@ -21,12 +21,14 @@
 #define DCGMHOSTENGINEHANDLER_H
 
 #include "DcgmCacheManager.h"
+#include "DcgmChildProcessManager.hpp"
 #include "DcgmCoreCommunication.h"
 #include "DcgmFieldGroup.h"
 #include "DcgmGroupManager.h"
 #include "DcgmIpc.h"
 #include "DcgmModule.h"
 #include "DcgmRequest.h"
+#include "DcgmResourceManager.h"
 #include "DcgmWatcher.h"
 #include "dcgm_agent.h"
 #include <core/DcgmModuleCore.h>
@@ -303,6 +305,15 @@ public:
     void SetServiceAccount(const char *serviceAccout);
     std::string const &GetServiceAccount() const;
 
+    /**
+     * Apply a denylist to modules
+     *
+     * @param denyList Array of module IDs to add to the denylist
+     * @param denyListCount Number of entries in denyList
+     * @return DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ApplyModuleDenylist(unsigned int const *denyList, unsigned int denyListCount);
+
     bool UsingInjectionNvml() const;
 
     dcgmReturn_t NvmlInjectFieldValue(dcgm_field_eid_t gpuId, const nvmlFieldValue_t &value);
@@ -345,6 +356,110 @@ public:
      *      - \ref DCGM_ST_*    An error occurred while trying to resume the module.
      */
     dcgmReturn_t ResumeModule(dcgmModuleId_t moduleId);
+
+    /**
+     * @brief Callback to reserve resources for a module
+     * @return Token if reservation was successful or NullOpt
+     */
+    std::optional<unsigned int> ReserveResources();
+
+    /**
+     * @brief Callback to free resources for a module
+     * @param[in] token Token to free
+     * @return True if resources were freed, false if not
+     */
+    bool FreeResources(unsigned int const &token);
+
+    /**
+     * Spawn a new child process.
+     *
+     * @param[in] params       Parameters required to spawn the child process
+     * @param[out] handle      Handle to the ChildProcess instance
+     * @param[out] pid         Process ID of the spawned process
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessSpawn(dcgmChildProcessParams_t const &params, ChildProcessHandle_t &handle, int &pid);
+
+    /**
+     * Stop the child process (issues a SIGTERM, unless specified otherwise)
+     *
+     * @param[in] handle      Handle to the ChildProcess instance
+     * @param[in] force       Whether to force the process to stop with SIGKILL
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessStop(ChildProcessHandle_t handle, bool force);
+
+    /**
+     * Get the status of the child process.
+     *
+     * @param[in] handle      Handle to the ChildProcess instance
+     * @param[out] status     Status of the child process
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessGetStatus(ChildProcessHandle_t handle, dcgmChildProcessStatus_t &status);
+
+    /**
+     * Wait for the child process to exit.
+     *
+     * @param[in] handle      Handle to the ChildProcess instance
+     * @param[in] timeoutSec  Timeout in seconds
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessWait(ChildProcessHandle_t handle, int timeoutSec);
+
+    /**
+     * Destroy the child process.
+     *
+     * @param[in] handle             Handle to the ChildProcess instance
+     * @param[in] sigTermTimeoutSec  Timeout in seconds for SIGTERM
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessDestroy(ChildProcessHandle_t handle, int sigTermTimeoutSec);
+
+    /**
+     * Get the standard error handle of the child process.
+     *
+     * @param[in] handle      Handle to the ChildProcess instance
+     * @param[out] fd         File descriptor of the standard error
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessGetStdErrHandle(ChildProcessHandle_t handle, int &fd);
+
+    /**
+     * Get the standard output handle of the child process.
+     *
+     * @param[in] handle      Handle to the ChildProcess instance
+     * @param[out] fd         File descriptor of the standard output
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessGetStdOutHandle(ChildProcessHandle_t handle, int &fd);
+
+    /**
+     * Get the data channel handle of the child process.
+     *
+     * @param[in] handle      Handle to the ChildProcess instance
+     * @param[out] fd         File descriptor of the data channel
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessGetDataChannelHandle(ChildProcessHandle_t handle, int &fd);
+
+    /**
+     * Reset the ChildProcessManager to clean state.
+     *
+     * Cleans up all processes and resets internal state to prevent
+     * signal handling corruption between runs.
+     *
+     * @returns DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t ChildProcessManagerReset();
 
 private:
     DcgmMutex m_lock = DcgmMutex(0);
@@ -532,6 +647,9 @@ private:
     std::string m_serviceAccount;
     bool m_usingInjectionNvml {};
     bool m_nvmlLoaded {};
+
+    DcgmResourceManager m_resourceManager;
+    DcgmChildProcessManager m_childProcessManager;
 };
 
 #endif /* DCGMHOSTENGINEHANDLER_H */

@@ -95,7 +95,7 @@ void CreateGroupsFromCpuAffinities(dcgmAffinity_t &affinity,
             }
         }
 
-        affinityGroups.push_back(group);
+        affinityGroups.push_back(std::move(group));
     }
 }
 
@@ -266,7 +266,7 @@ unsigned int SetIOConnectionLevels(std::vector<unsigned int> &affinityGroup,
             {
                 std::vector<DcgmGpuConnectionPair> temp;
                 temp.push_back(cp);
-                connectionLevel[score] = temp;
+                connectionLevel[score] = std::move(temp);
 
                 if (score > highestScore)
                     highestScore = score;

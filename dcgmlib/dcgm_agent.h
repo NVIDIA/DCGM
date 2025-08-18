@@ -442,6 +442,21 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dc
 
 
 /**
+ * Get the NvLink P2P status for every GPU NvLink in this system. Only GPUs that are visible to the
+ * current environment will be returned in this structure.
+ *
+ * @param dcgmHandle  IN: DCGM Handle
+ * @param linkStatus OUT: Structure in which to store NvLink P2P statuses. .version should be set to
+ *                      dcgmNvLinkP2PStatus_version1 before calling this.
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                if the call was successful.
+ *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkP2PStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkP2PStatus_v1 *linkStatus);
+
+
+/**
  * List supported CPUs and their cores present on the system
  *
  * This and other CPU APIs only support datacenter NVIDIA CPUs.  Use \ref dcgmGetCpuHierarchy_v2 to
@@ -1723,6 +1738,18 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmRunDiagnostic(dcgmHandle_t pDcgmHandle,
                                                dcgmDiagnosticLevel_t diagLevel,
                                                dcgmDiagResponse_v12 *diagResponse);
 
+
+/**
+ * Stop a diagnostic if there is one currently running.
+ *
+ * @param pDcgmHandle                   IN: DCGM Handle
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if a provided parameter is invalid or missing
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmStopDiagnostic(dcgmHandle_t pDcgmHandle);
+
 /** @} */ // Closing for DCGMAPI_PO_MI
 
 /** @} */ // Closing for DCGMAPI_PO
@@ -2019,6 +2046,37 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmProfResume(dcgmHandle_t pDcgmHandle);
  *
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmAddFakeInstances(dcgmHandle_t pDcgmHandle, dcgmMigHierarchy_v2 *hierarchy);
+
+/**
+ * Run a multi-node diagnostic test
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ * @param drmnd             IN: Multi-node diagnostic parameters. See dcgmRunMnDiag_v1
+ * @param response         OUT: Result of running the multi-node diagnostic. See dcgmMnDiagResponse_v1
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_NOT_SUPPORTED        if running the diagnostic is not supported
+ *        - \ref DCGM_ST_BADPARAM             if a provided parameter is invalid or missing
+ *        - \ref DCGM_ST_GENERIC_ERROR        an internal error has occurred
+ *        - \ref DCGM_ST_GROUP_INCOMPATIBLE   if the hosts in the group are incompatible
+ *        - \ref DCGM_ST_VER_MISMATCH         if version mismatch between drmnd and response
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmRunMnDiagnostic(dcgmHandle_t pDcgmHandle,
+                                                 dcgmRunMnDiag_v1 const *drmnd,
+                                                 dcgmMnDiagResponse_v1 *response);
+
+
+/**
+ * Stop a multi-node diagnostic if there is one currently running.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if a provided parameter is invalid or missing
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmStopMnDiagnostic(dcgmHandle_t pDcgmHandle);
 
 #ifdef __cplusplus
 }

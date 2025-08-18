@@ -88,7 +88,7 @@ if [[ "$NOBUILD" -eq 0 ]]; then
           --max-args=1 \
           --max-procs=2 \
           -- \
-          ./build.sh --release-symbols --deb --rpm --no-test --no-install --arch \
+          ./build.sh --release --deb --rpm --no-test --no-install --arch \
           <<< "amd64 aarch64"
 fi
 

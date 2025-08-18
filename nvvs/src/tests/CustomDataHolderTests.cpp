@@ -168,7 +168,7 @@ TEST_CASE("CustomStatHolder : Storing Values and Outputting in structs / JSON")
     holder.AddDiagStats(statsList);
     statsList.clear();
     get_vector_from_custom_stats(holder, statsList);
-    check_vector_for_completeness(statsList, investSet, breathsSet, bridgemenSet);
+    check_vector_for_completeness(statsList, std::move(investSet), std::move(breathsSet), bridgemenSet);
 
     Json::Value jv;
     cdh.AddCustomData(jv);

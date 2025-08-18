@@ -332,6 +332,12 @@ class BurnInHandle(object):
             del(self.dcgmSystem)
             self.dcgmSystem = None
         if self.dcgmHandle is not None:
+            # DcgmHandle.__del__() is called when the garbage collector happens to be collecting the objects,
+            # not when you lose the last reference to an object and not when you execute del object.
+            # Therefore, we need to call Shutdown() explicitly to ensure that the embedded host engine is closed.
+            # This is a temporary fix for the issue that the embedded host engine is not properly closed and can cause
+            # the CHILD_SUBREAPER (Set by the embedded host engine) not being reset.
+            self.dcgmHandle.Shutdown()
             del(self.dcgmHandle)
             self.dcgmHandle = None
 
@@ -1396,9 +1402,11 @@ class RunDcgmi():
     @staticmethod
     def print_test_header(testName):
         print(("&&&& RUNNING " + testName + "\n"))
+        print("Test %s start time: %s" % (testName, datetime.datetime.now()))
 
     @staticmethod
     def print_test_footer(testName, statusText, color):
+        print("Test %s end time: %s" % (testName, datetime.datetime.now()))
         #Don't include colors for eris
         if option_parser.options.dvssc_testing or option_parser.options.eris:
             print(("&&&& " + statusText + " " + testName + "\n"))

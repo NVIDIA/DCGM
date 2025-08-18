@@ -21,20 +21,19 @@ target_sources(childprocess PRIVATE
     ChildProcess.hpp
     SubreaperGuard.cpp
     SubreaperGuard.hpp
-    SigChldGuard.cpp
-    SigChldGuard.hpp
     ChildProcessBuilder.cpp
     ChildProcessBuilder.hpp
     StdLines.cpp
     StdLines.hpp
     Pipe.cpp
     Pipe.hpp
+    IoContext.hpp
+    IoContext.cpp
 )
 
 target_link_libraries(childprocess PUBLIC
     childprocess_interface
     dcgm_common
-    dcgm
     dcgm_logging
     fmt::fmt
     Boost::system

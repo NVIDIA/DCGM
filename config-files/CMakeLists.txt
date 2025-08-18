@@ -23,3 +23,8 @@ install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/systemd/nvidia-dcgm.service"
     DESTINATION "lib/systemd/system"
     COMPONENT Core)
+
+install(
+    FILES "systemd/nvidia-dcgm-multinode-diagnostics-generator.sh"
+    DESTINATION "lib/systemd/system-generators"
+    COMPONENT Multinode)

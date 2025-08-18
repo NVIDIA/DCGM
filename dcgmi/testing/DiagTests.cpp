@@ -117,30 +117,30 @@ SCENARIO("Diag::GetFailureResult")
 
     SECTION("Diag::Sanitize")
     {
-        CHECK(d.Sanitize("") == "");
-        CHECK(d.Sanitize(" ") == "");
-        CHECK(d.Sanitize("  ") == "");
-        CHECK(d.Sanitize(" \n\t\r\v\f ") == "");
+        CHECK(Sanitize("") == "");
+        CHECK(Sanitize(" ") == "");
+        CHECK(Sanitize("  ") == "");
+        CHECK(Sanitize(" \n\t\r\v\f ") == "");
 
-        CHECK(d.Sanitize("***") == "");
-        CHECK(d.Sanitize(" *** ") == "");
-        CHECK(d.Sanitize("   ***   ") == "");
-        CHECK(d.Sanitize("*** ") == "");
-        CHECK(d.Sanitize("***  ") == "");
+        CHECK(Sanitize("***") == "");
+        CHECK(Sanitize(" *** ") == "");
+        CHECK(Sanitize("   ***   ") == "");
+        CHECK(Sanitize("*** ") == "");
+        CHECK(Sanitize("***  ") == "");
 
-        CHECK(d.Sanitize("*****") == "**");
-        CHECK(d.Sanitize("****") == "*");
-        CHECK(d.Sanitize("**") == "**");
+        CHECK(Sanitize("*****") == "**");
+        CHECK(Sanitize("****") == "*");
+        CHECK(Sanitize("**") == "**");
 
-        CHECK(d.Sanitize("A") == "A");
-        CHECK(d.Sanitize(" A") == "A");
-        CHECK(d.Sanitize("  A") == "A");
-        CHECK(d.Sanitize("A ") == "A");
-        CHECK(d.Sanitize("A  ") == "A");
+        CHECK(Sanitize("A") == "A");
+        CHECK(Sanitize(" A") == "A");
+        CHECK(Sanitize("  A") == "A");
+        CHECK(Sanitize("A ") == "A");
+        CHECK(Sanitize("A  ") == "A");
 
-        CHECK(d.Sanitize("Some      garbage     ") == "Some      garbage");
-        CHECK(d.Sanitize("Houdini***") == "");
-        CHECK(d.Sanitize("Remove***     Before flight     ") == "Before flight");
+        CHECK(Sanitize("Some      garbage     ") == "Some      garbage");
+        CHECK(Sanitize("Houdini***") == "");
+        CHECK(Sanitize("Remove***     Before flight     ") == "Before flight");
     }
 }
 

@@ -19,6 +19,7 @@
 
 #include <dcgm_agent.h>
 #include <dcgm_fields.h>
+#include <dcgm_multinode_internal.h>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
 #include <nvml_injection_structs.h>

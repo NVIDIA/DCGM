@@ -17,7 +17,6 @@
 #define DCGMI_CLI_PARSER_H
 
 #include "dcgmi_common.h"
-
 #include <map>
 
 
@@ -60,17 +59,32 @@ private:
     static dcgmReturn_t ProcessSettingsCommandLine(int argc, char const *const *argv);
     static dcgmReturn_t ProcessVersionInfoCommandLine(int argc, char const *const *argv);
     static dcgmReturn_t ProcessAdminCommandLine(int argc, char const *const *argv);
+    static dcgmReturn_t ProcessMnDiagCommandLine(int argc, char const *const *argv);
     static unsigned int CheckGroupIdArgument(const std::string &groupId);
 
     // Helper to validate the clocks event mask parameter
     static void ValidateClocksEventMask(const std::string &clocksEventMask);
 
     static std::string ConcatenateParameters(std::vector<std::string> const &parameters);
+    static std::vector<std::string> GetHostListVector(std::string_view hostList);
+    static std::string ExpandRange(std::string const &range);
 
     static void ValidateParameters(const std::string &parameters);
 
     // Totals the requested test durations and throws an error if they exceed the requested timeout
     static void CheckTestDurationAndTimeout(const std::string &parameters, unsigned int timeoutSeconds);
+
+    // Helper methods for host list validation
+    static void NormalizeUnixSocketPath(std::string &hostname, std::string_view host);
+    static void NormalizeIpAddress(std::string &hostname, std::string_view host);
+
+    // Helper method to validate the parameters for the mnDiag command
+    static void ProcessAndValidateMnDiagParams(int argc,
+                                               char const *const *argv,
+                                               dcgmRunMnDiag_v1 &drmnd,
+                                               std::string &hostEngineAddressValue,
+                                               bool &hostAddressWasOverridden,
+                                               bool &jsonOutput);
 };
 
 #endif // DCGMI_CLI_PARSER_H

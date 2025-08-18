@@ -42,7 +42,7 @@
 class TestParameterValue
 {
 public:
-    TestParameterValue(std::string defaultValue);
+    TestParameterValue(std::string const &defaultValue);
     TestParameterValue(double defaultValue);
     TestParameterValue(const TestParameterValue &copyMe);
     ~TestParameterValue();
@@ -53,7 +53,7 @@ public:
     /* Setters. Use this from the configuration file reader. These return a
      * TP_ST_? #define on error (!0)
      */
-    int Set(std::string value);
+    int Set(std::string const &value);
     int Set(double value);
 
     /*************************************************************************/
@@ -85,30 +85,33 @@ public:
 
     /*************************************************************************/
     /* Add a global parameter to the test. Call this from the plugin stub */
-    int AddString(std::string key, std::string value);
+    int AddString(std::string key, std::string const &value);
     int AddDouble(std::string key, double value);
 
     /* Add a subtest parameter. Call this from the plugin stub  */
-    int AddSubTestString(std::string subTest, std::string key, std::string value);
-    int AddSubTestDouble(std::string subTest, std::string key, double value);
+    int AddSubTestString(std::string const &subTest, std::string const &key, std::string const &value);
+    int AddSubTestDouble(std::string const &subTest, std::string const &key, double value);
 
     /*************************************************************************/
     /* Setters. Call these from the config parser */
-    int SetString(std::string key, std::string value, bool silent = false);
-    int SetDouble(std::string key, double value);
+    int SetString(std::string const &key, std::string const &value, bool silent = false);
+    int SetDouble(std::string const &key, double value);
 
     /* Add a subtest parameter. Call this from the plugin stub  */
-    int SetSubTestString(std::string subTest, std::string key, std::string value, bool create = false);
-    int SetSubTestDouble(std::string subTest, std::string key, double value);
+    int SetSubTestString(std::string const &subTest,
+                         std::string const &key,
+                         std::string const &value,
+                         bool create = false);
+    int SetSubTestDouble(std::string const &subTest, std::string const &key, double value);
 
     /*************************************************************************/
     /* Getters. Call these from within the plugin */
     std::string GetString(std::string_view key) const;
     double GetDouble(std::string_view key) const;
-    int GetBoolFromString(std::string key) const;
-    std::string GetSubTestString(std::string subTest, std::string key);
-    double GetSubTestDouble(std::string subTest, std::string key);
-    int GetBoolFromSubTestString(std::string subTest, std::string key);
+    int GetBoolFromString(std::string const &key) const;
+    std::string GetSubTestString(std::string const &subTest, std::string const &key);
+    double GetSubTestDouble(std::string const &subTest, std::string const &key);
+    int GetBoolFromSubTestString(std::string const &subTest, std::string const &key);
     bool HasKey(const std::string &key) const;
 
     /*************************************************************************/

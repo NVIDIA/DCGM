@@ -161,7 +161,7 @@ dcgmReturn_t DcgmNscqManager::UpdateFields(unsigned short fieldId,
 
         TempData<nscqFieldType, storageType, is_vector, indexTypes...> item;
 
-        item.CollectFunc(dest, in, indicies...);
+        item.CollectFunc(dest, std::move(in), indicies...);
     };
 
     nscq_rc_t ret = nscq_session_path_observe(m_nscqSession, nscqPath, NSCQ_FN(*cb), &collector, 0);
