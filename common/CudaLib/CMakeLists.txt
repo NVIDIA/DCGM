@@ -42,6 +42,7 @@ endmacro()
 
 define_dcgm_cuda_lib(11)
 define_dcgm_cuda_lib(12)
+define_dcgm_cuda_lib(13)
 
 target_include_directories(cuda_lib_base_interface INTERFACE
     "${CUDA12_INCLUDE_DIR}")

@@ -29,8 +29,6 @@
 #include <fstream>
 #include <vector>
 
-#define __DCGM_SYSMON_SKIP_HARDWARE_CHECK__ "DCGM_SKIP_SYSMON_HARDWARE_CHECK"
-
 namespace DcgmNs
 {
 

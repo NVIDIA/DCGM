@@ -24,6 +24,16 @@
 #include "dcgm_test_apis.h"
 #include <unordered_set>
 
+// Maps XID numbers to health subsystems and severity
+struct XidHealthInfo
+{
+    dcgmHealthWatchResults_t severity; // WARN or FAIL level
+    dcgmHealthSystems_t healthSystem;  // Which subsystem this belongs to
+    std::string errorMessage;          // Human-readable error message
+    dcgmError_t errorCode;             // Specific error code from dcgmError_enum, defaults to DCGM_FR_XID_ERROR
+};
+
+
 /* This class is implements the background health check methods
  * within the hostengine
  * It is intended to set watches, monitor them on demand, and
@@ -104,10 +114,6 @@ private:
     groupWatchTable_t mGroupWatchState;
 
     DcgmMutex *m_mutex;
-
-    std::unordered_set<dcgm_field_eid_t>
-        m_gpuHadUncontainedErrorXid; /* If a GPU has had an XID 95, its value is set here.
-                                       This data structure is protected by m_mutex. */
 
     /* Prepopulated lists of fields used by various internal methods */
     std::vector<unsigned int> m_nvSwitchNonFatalFieldIds; /* NvSwitch non-fatal errors */
@@ -263,11 +269,6 @@ private:
                                             long long startTime,
                                             long long endTime,
                                             DcgmHealthResponse &response);
-    dcgmReturn_t MonitorUncontainedErrors(dcgm_field_entity_group_t entityGroupId,
-                                          dcgm_field_eid_t entityId,
-                                          long long startTime,
-                                          long long endTime,
-                                          DcgmHealthResponse &response);
 
     bool FitsGpuHardwareCheck(dcgm_field_entity_group_t entityGroupId);
 
@@ -275,6 +276,21 @@ private:
     dcgmReturn_t GetExpectedPcieReplayRate(dcgm_field_entity_group_t entityGroupId,
                                            dcgm_field_eid_t entityId,
                                            int &expectedPcieReplayRate);
+
+    void BuildXidMappings();
+    dcgmReturn_t MonitorSubsystemXids(dcgm_field_entity_group_t entityGroupId,
+                                      dcgm_field_eid_t entityId,
+                                      dcgmHealthSystems_t system,
+                                      DcgmHealthResponse &response);
+
+    // Monitored XIDs regardless of enabled subsystems
+    std::unordered_map<uint32_t, XidHealthInfo> m_devastatingXids;
+
+    // XIDs monitored based on enabled subsystems
+    std::unordered_map<dcgmHealthSystems_t, std::unordered_map<uint32_t, XidHealthInfo>> m_subsystemXids;
+
+    // Track all GPUs that have had specific XIDs
+    std::unordered_map<uint32_t, std::unordered_set<dcgm_field_eid_t>> m_gpuXidHistory;
 };
 
 #endif //_DCGM_HEALTH_WATCH_H

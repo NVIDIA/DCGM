@@ -22,5 +22,5 @@
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libTargetedStress.so.<MAJORVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libTargetedStress.so.<SOFTWAREVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/nvbandwidth
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda12-<PACKAGEVERSION>
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda12-<PACKAGEVERSION>/LICENSE
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda12-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda12-<BASEPACKAGEVERSION>/LICENSE

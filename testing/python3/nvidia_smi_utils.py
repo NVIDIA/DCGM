@@ -428,6 +428,35 @@ class NvidiaSmiJob(threading.Thread):
 
         return False
 
+def helper_nvidia_smi_xml():
+    """
+    Returns an XML representation of nvidia-smi -q output. Returns None if
+    malformed.
+    """
+
+    cmd = "nvidia-smi -q -x"
+    try:
+        nvsmiData = subprocess.check_output(shlex.split(cmd)).decode('utf-8')
+    except subprocess.CalledProcessError as e:
+        logger.error("Failed to run '%s': '%s'", cmd, e)
+        return None
+
+    xml_start = nvsmiData.find("<?xml version=")
+    if xml_start == -1:
+        logger.error("Could not locate XML preamble in nvidia-smi output: %s", nvsmiData[:256])
+        return None
+    elif xml_start > 0:
+        logger.warning("Prefix found before XML: %s" % nvsmiData[:xml_start])
+        nvsmiData = nvsmiData[xml_start:]
+
+    try:
+        tree = ET.fromstring(nvsmiData)
+    except ET.ParseError as e:
+        logger.error("Failed to parse nvidia-smi XML (%s): %s", e, nvsmiData)
+        return None
+
+    return tree
+
 def are_gpus_free():
     """
     Parses nvidia-smi xml output and discovers if any processes are using  the GPUs,
@@ -435,23 +464,9 @@ def are_gpus_free():
     False = GPUs are in use by one or more processes
     """
 
-    cmd = "nvidia-smi -q -x"
-    try:
-        nvsmiData = subprocess.check_output(shlex.split(cmd)).decode('utf-8')
-    except subprocess.CalledProcessError:
-        logger.info("The nvidia-smi XML output was malformed.")
-        return True
+    tree = helper_nvidia_smi_xml()
 
-    nvsmiData = subprocess.check_output(shlex.split(cmd)).decode('utf-8')
-    xml_start = nvsmiData.find("<?xml version=")
-    if xml_start > 0:
-        logger.warning("Prefix found before XML: %s" % nvsmiData[:xml_start])
-        nvsmiData = nvsmiData[xml_start:]
-
-    try:
-        tree = ET.fromstring(nvsmiData)
-    except ET.ParseError:
-        logger.info("The nvidia-smi XML output was malformed.")
+    if tree is None:
         return True
 
     pidList = []
@@ -475,6 +490,31 @@ def are_gpus_free():
         return False
 
     return True
+
+def is_power_smoothing_available(handle, gpuId):
+    """
+    Returns True of power smoothing is available, False otherwise.
+    """
+    tree = helper_nvidia_smi_xml()
+    if tree is None:
+        return False # We will have logged in helper_nvidia_smi_xml
+
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    gpuAttrib = dcgmSystem.discovery.GetGpuAttributes(gpuId)
+    pciBusId = gpuAttrib.identifiers.pciBusId
+
+    powerSmoothingAvailable = False
+
+    # Find if Power Smoothing is available.
+    for node in tree.iter('gpu'):
+        if (node.attrib['id'] == pciBusId):
+            for ps in node.iterfind('power_smoothing'):
+                powerSmoothingAvailable = (ps.text != "N/A" and ps.text != "Insufficient Permissions")
+                break
+            break
+
+    return powerSmoothingAvailable
 
 def get_output():
     """

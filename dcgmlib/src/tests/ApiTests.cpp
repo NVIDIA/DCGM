@@ -15,6 +15,7 @@
  */
 #include <catch2/catch_all.hpp>
 #include <dcgm_structs_internal.h>
+#include <set>
 
 
 dcgmGpuTopologyLevel_t GetSlowestPath(dcgmTopology_t &topology);
@@ -44,4 +45,20 @@ TEST_CASE("DcgmApi: Test GetSlowestPath")
     topology.element[4].path = DCGM_TOPOLOGY_BOARD;
     topology.numElements     = 5;
     REQUIRE(GetSlowestPath(topology) == DCGM_TOPOLOGY_HOSTBRIDGE);
+}
+
+extern "C" dcgmReturn_t dcgmPowerProfileIdToName(dcgmPowerProfileType_t id, char const **name);
+
+TEST_CASE("DcgmApi: Test dcgmPowerProfileIdToName")
+{
+    std::set<std::string> names;
+
+    for (unsigned int profileType = 0; profileType < DCGM_POWER_PROFILE_MAX; profileType++)
+    {
+        char const *namePtr = nullptr;
+
+        REQUIRE(dcgmPowerProfileIdToName(static_cast<dcgmPowerProfileType_t>(profileType), &namePtr) == DCGM_ST_OK);
+
+        REQUIRE(names.insert(std::string(namePtr)).second == true);
+    }
 }

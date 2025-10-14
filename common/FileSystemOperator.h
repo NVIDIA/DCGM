@@ -28,4 +28,5 @@ public:
 
     virtual std::optional<std::string> Read(std::string_view path);
     virtual std::optional<std::vector<std::string>> Glob(std::string_view pattern);
+    virtual bool Unlink(std::string_view path);
 };

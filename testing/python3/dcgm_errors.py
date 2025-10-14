@@ -134,7 +134,8 @@ DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE     = 116
 DCGM_FR_TEST_SKIPPED                        = 117
 DCGM_FR_SRAM_THRESHOLD                      = 118
 DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD      = 119
-DCGM_FR_ERROR_SENTINEL                      = 120 # MUST BE THE LAST ERROR CODE
+DCGM_FR_FALLEN_OFF_BUS                      = 120
+DCGM_FR_ERROR_SENTINEL                      = 121 # MUST BE THE LAST ERROR CODE
 
 # Deprecated throttling-related events
 DCGM_FR_CLOCK_THROTTLE_THERMAL              = DCGM_FR_CLOCKS_EVENT_THERMAL # Deprecated: Use DCGM_FR_CLOCKS_EVENT_THERMAL instead
@@ -340,6 +341,7 @@ DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE_MSG   = "GPU %u was unsuccessfully written
 DCGM_FR_BROKEN_P2P_PCIE_WRITER_DEVICE_MSG   = "GPU %u unsuccessfully wrote data to GPU %u over PCIe in a peer-to-peer test: %s"
 DCGM_FR_BROKEN_P2P_NVLINK_MEMORY_DEVICE_MSG = "GPU %u was unsuccessfully written to by GPU %u over NVLink in a peer-to-peer test: %s"
 DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE_MSG = "GPU %u unsuccessfully wrote data to GPU %u over NVLink in a peer-to-peer test: %s"
+DCGM_FR_FALLEN_OFF_BUS_MSG                 = "GPU %d has fallen off the bus"
 
 # Suggestions for next steps for the corresponding error message
 DCGM_FR_OK_NEXT                       = "N/A"
@@ -471,6 +473,7 @@ DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_NEXT      = \
     "if so, and if errors are persistent, please run a field diagnostic."
 DCGM_FR_NAN_VALUE_NEXT                       = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_NEXT   = DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT
+DCGM_FR_FALLEN_OFF_BUS_NEXT = "Please re-seat the GPU, check for thermal and power issues, and verify that there is no outstanding bug against your driver or BIOS versions. If the issue persists, please run a field diagnostic on the GPU."
 
 def dcgmErrorGetPriorityByCode(code):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmErrorGetPriorityByCode")

@@ -137,6 +137,8 @@
         dcgmResumeTelemetryForDiag;
         dcgmNvswitchGetBackend;
         dcgmMultinodeRequest;
+        dcgmPowerProfileIdToName;
+        dcgmConfigSetWorkloadPowerProfile;
 
     local:
         *;

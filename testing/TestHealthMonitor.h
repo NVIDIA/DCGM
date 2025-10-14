@@ -22,7 +22,11 @@
 
 #include "TestDcgmModule.h"
 #include "dcgm_agent.h"
+#include "dcgm_errors.h"
 #include "dcgm_structs.h"
+#include <memory>
+#include <string>
+#include <vector>
 
 class TestHealthMonitor : public TestDcgmModule
 {
@@ -38,6 +42,17 @@ public:
     std::string GetTag() override;
 
 private:
+    // Test data structure for XIDs
+    struct XidTestInfo
+    {
+        int xid;
+        char const *desc;
+        dcgmHealthWatchResults_t expectedStatus;
+        dcgmHealthSystems_t subsystem;
+        dcgmError_t expectedError;
+    };
+
+    // Test methods
     int TestHMSet();
     int TestHMCheckPCIe();
     int TestHMCheckMemSbe();
@@ -46,9 +61,24 @@ private:
     int TestHMCheckThermal();
     int TestHMCheckPower();
     int TestHMCheckNVLink();
+    int TestHMCheckXids();
+    int TestDevastatingXids();
+    int TestSubsystemXids();
+    int TestXidSeverityLevels();
+
+    dcgmReturn_t TestSingleXid(unsigned int const gpuId,
+                               int const xid,
+                               char const *const xidDesc,
+                               dcgmHealthWatchResults_t const expectedStatus,
+                               dcgmError_t const expectedError,
+                               auto const timestamp,
+                               std::unique_ptr<dcgmHealthResponse_t> &response) const;
 
     std::vector<unsigned int> m_gpus; /* List of GPUs to run on, copied in Init() */
     dcgmGpuGrp_t m_gpuGroup;          /* Group consisting of the members of m_gpus */
+
+    std::vector<XidTestInfo> m_devastatingXids;
+    std::vector<XidTestInfo> m_subsystemXids;
 };
 
 #endif /* HM */

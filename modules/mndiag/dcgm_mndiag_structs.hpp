@@ -17,6 +17,7 @@
 #ifndef DCGM_MNDIAG_STRUCTS_HPP
 #define DCGM_MNDIAG_STRUCTS_HPP
 
+#include <array>
 #include <cstddef>
 #include <dcgm_module_structs.h>
 #include <dcgm_multinode_internal.h>
@@ -33,8 +34,11 @@ constexpr std::string_view ENV_SUPPORTED_SKUS    = "DCGM_MNDIAG_SUPPORTED_SKUS";
 constexpr std::string_view ENV_ALLOW_RUN_AS_ROOT = "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT";
 
 // Default paths
-constexpr std::string_view DEFAULT_MPIRUN_PATH     = "/usr/bin/mpirun";
-constexpr std::string_view DEFAULT_MNUBERGEMM_PATH = "/usr/libexec/datacenter-gpu-manager-4/plugins/cuda12/mnubergemm";
+constexpr std::string_view DEFAULT_MPIRUN_PATH = "/usr/bin/mpirun";
+
+// Default CUDA versions
+constexpr std::array<int, 2> CUDA_VERSIONS_SUPPORTED = { 13, 12 };
+
 } //namespace MnDiagConstants
 
 // Message types

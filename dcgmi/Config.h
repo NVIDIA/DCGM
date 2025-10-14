@@ -60,6 +60,17 @@ public:
      *****************************************************************************/
     int SetArgs(unsigned int groupId, dcgmConfig_t *pConfigVal);
 
+    /*****************************************************************************
+     * This method is used to set the workload power profile arg
+     *****************************************************************************/
+    int SetWorkloadPowerProfileArg(dcgmWorkloadPowerProfile_t *pWorkloadPowerProfile);
+
+    /*****************************************************************************
+     * This method is used to run SetConfigWorkloadPowerProfile on the host-engine
+     * represented by the DCGM handle
+     *****************************************************************************/
+    dcgmReturn_t RunSetConfigWorkloadPowerProfile(dcgmHandle_t pNvcmHandle);
+
 private:
     /*****************************************************************************
      * Helper method to give proper output to compute mode values
@@ -92,6 +103,7 @@ private:
 private:
     dcgmGpuGrp_t mGroupId;
     dcgmConfig_t mConfigVal;
+    dcgmWorkloadPowerProfile_t mWorkloadPowerProfile;
 };
 
 /*****************************************************************************
@@ -147,6 +159,24 @@ public:
 protected:
     /*****************************************************************************
      * Override the Execute method to Enforce configuration
+     *****************************************************************************/
+    dcgmReturn_t DoExecuteConnected() override;
+
+private:
+    Config configObj;
+};
+
+/**
+ * Set Workload Power Profile Invoker class
+ */
+class SetConfigWorkloadPowerProfile : public Command
+{
+public:
+    SetConfigWorkloadPowerProfile(std::string hostname, Config obj);
+
+protected:
+    /*****************************************************************************
+     * Override the Execute method for Setting configuration
      *****************************************************************************/
     dcgmReturn_t DoExecuteConnected() override;
 

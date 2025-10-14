@@ -444,6 +444,25 @@ SCENARIO("overrideparameters overrides the correct parameters", "[.]")
     CLEANUP();
 }
 
+SCENARIO("InitializeParameters accepts only valid global parameters")
+{
+    SETUP();
+    std::string paramString = "generic_mode=true";
+    std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> params;
+    ParameterValidator pv = ParameterValidator(params);
+    TestParameters tp;
+    tp.AddString(PS_USE_GENERIC_MODE, "false");
+
+    WrapperNvidiaValidationSuite nvvs;
+    nvvs.WrapperInitializeParameters(paramString, pv);
+    REQUIRE(nvvsCommon.genericMode == true);
+
+    // Test with an invalid global parameter
+    paramString = "planet=roshar";
+    REQUIRE_THROWS_AS(nvvs.WrapperInitializeParameters(paramString, pv), std::runtime_error);
+    CLEANUP();
+}
+
 void WrapperNvidiaValidationSuite::WrapperProcessCommandLine(int argc, char *argv[])
 {
     processCommandLine(argc, argv);

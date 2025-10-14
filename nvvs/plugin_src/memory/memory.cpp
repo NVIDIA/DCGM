@@ -78,10 +78,11 @@ typedef enum testResult
 
 static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
 {
-    unsigned int error_h;
+    CUdeviceptr_v2 error_h;
     size_t totalMem, freeMem;
     size_t size;
-    CUdeviceptr alloc, errors;
+    CUdeviceptr_v2 alloc;
+    CUdeviceptr_v2 errors;
     CUmodule mod;
     CUfunction memsetval, memcheckval;
     CUresult cuRes;
@@ -107,7 +108,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuModuleGetGlobal(&errors, NULL, mod, "errors");
+    cuRes = cuModuleGetGlobal_v2(&errors, NULL, mod, "errors");
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
@@ -119,7 +120,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuMemGetInfo(&freeMem, &totalMem);
+    cuRes = cuMemGetInfo_v2(&freeMem, &totalMem);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
@@ -131,7 +132,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
     }
 
     // alloc as much memory as possible
-    size = freeMem;
+    size             = freeMem;
     targetAllocation = totalMem * minAllocationPcnt;
     if (size < targetAllocation)
     {
@@ -157,7 +158,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
             log_error(d.GetMessage());
             goto error_no_cleanup;
         }
-        cuRes = cuMemAlloc(&alloc, size);
+        cuRes = cuMemAlloc_v2(&alloc, size);
     } while (CUDA_ERROR_OUT_OF_MEMORY == cuRes);
 
 
@@ -222,7 +223,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
             if (CUDA_SUCCESS != cuRes)
                 goto cleanup;
 
-            cuRes = cuMemcpyDtoH(&error_h, errors, sizeof(unsigned int));
+            cuRes = cuMemcpyDtoH_v2(&error_h, errors, sizeof(unsigned int));
             if (CUDA_SUCCESS != cuRes)
                 goto cleanup;
 
@@ -243,7 +244,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
 
 cleanup:
     // Release resources
-    if (CUDA_ERROR_ECC_UNCORRECTABLE == cuMemFree(alloc))
+    if (CUDA_ERROR_ECC_UNCORRECTABLE == cuMemFree_v2(alloc))
     {
         //
         // Ignore other errors, outside the scope of the memory test
@@ -463,12 +464,12 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
         return 1;
     }
 
-    cuRes = cuCtxCreate(&memGlobals->cuCtx, 0, memGlobals->cuDevice);
+    cuRes = cuCtxCreate_v2(&memGlobals->cuCtx, 0, memGlobals->cuDevice);
     if (CUDA_SUCCESS != cuRes)
     {
         LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
                                   memGlobals->memory->GetMemoryTestName(),
-                                  "cuCtxCreate",
+                                  "cuCtxCreate_v2",
                                   cuRes,
                                   memGlobals->dcgmGpuIndex);
         return 1;

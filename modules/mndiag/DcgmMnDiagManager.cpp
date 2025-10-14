@@ -168,6 +168,7 @@ DcgmMnDiagManager::DcgmMnDiagManager(dcgmCoreCallbacks_t &dcc)
     // Supported SKUs - hardcoded - always lowercase
     m_supportedSkus = {
         "2941", // GB200 NVL
+        "31c2", // GB300 NVL-Bianca
     };
 
     LoadSupportedSkusFromEnv();
@@ -348,7 +349,13 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
 
     // Set the mnubergemm path for the MPI runner on head node
     // This makes sure that MPI runner gets the same path which is broadcasted across nodes
-    std::string mnubergemmPath = GetMnubergemmPathHeadNode();
+    std::string mnubergemmPath;
+    result = GetMnubergemmPathHeadNode(mnubergemmPath);
+    if (result != DCGM_ST_OK)
+    {
+        StopHeadNode();
+        return result;
+    }
     mpiRunner->SetMnubergemmPath(mnubergemmPath);
 
     // Generate the MPI command directly from the dcgmRunMnDiag_t struct
@@ -1165,7 +1172,7 @@ dcgmReturn_t DcgmMnDiagManager::HandleBroadcastRunParameters(dcgm_module_command
     }
     else
     {
-        log_debug("Setting mnubergemm path to {} on node {}",
+        log_debug("Setting mnubergemm path to: {} on node: {}",
                   paramMsg->runParams.mnubergemmPath,
                   static_cast<unsigned int>(m_currentNodeId));
         m_stateMachine->SetMnubergemmPath(paramMsg->runParams.mnubergemmPath);
@@ -1554,7 +1561,14 @@ dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDia
     dcgm_mndiag_msg_run_params_t dummyMsgOnHeadNode {};
     dummyMsgOnHeadNode.runParams.headNodeId = m_currentNodeId;
     memcpy(&dummyMsgOnHeadNode.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v1));
-    SafeCopyTo(dummyMsgOnHeadNode.runParams.mnubergemmPath, GetMnubergemmPathHeadNode().c_str());
+
+    std::string mnubergemmPath;
+    dcgmReturn_t result = GetMnubergemmPathHeadNode(mnubergemmPath);
+    if (result != DCGM_ST_OK)
+    {
+        return result;
+    }
+    SafeCopyTo(dummyMsgOnHeadNode.runParams.mnubergemmPath, mnubergemmPath.c_str());
 
     HandleBroadcastRunParameters((dcgm_module_command_header_t *)&dummyMsgOnHeadNode);
 
@@ -1570,39 +1584,40 @@ dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDia
             }
 
             // Launch a thread for each remote node
-            threads.emplace_back([this, hostname, connInfo, &params, &resultMutex, &results, &anyFailure]() {
-                dcgmMultinodeRequest_t request {};
-                request.version                          = dcgmMultinodeRequest_version1;
-                request.testType                         = MnDiagTestType::mnubergemm;
-                request.requestType                      = MnDiagRequestType::BroadcastRunParameters;
-                request.requestData.runParams.headNodeId = m_currentNodeId;
-                memcpy(&request.requestData.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v1));
-                SafeCopyTo(request.requestData.runParams.mnubergemmPath, GetMnubergemmPathHeadNode().c_str());
+            threads.emplace_back(
+                [this, hostname, connInfo, &params, &resultMutex, &results, &anyFailure, &mnubergemmPath]() {
+                    dcgmMultinodeRequest_t request {};
+                    request.version                          = dcgmMultinodeRequest_version1;
+                    request.testType                         = MnDiagTestType::mnubergemm;
+                    request.requestType                      = MnDiagRequestType::BroadcastRunParameters;
+                    request.requestData.runParams.headNodeId = m_currentNodeId;
+                    memcpy(&request.requestData.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v1));
+                    SafeCopyTo(request.requestData.runParams.mnubergemmPath, mnubergemmPath.c_str());
 
-                dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
+                    dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
 
-                {
-                    DcgmLockGuard lg(&resultMutex);
-                    results.emplace_back(hostname, threadResult);
+                    {
+                        DcgmLockGuard lg(&resultMutex);
+                        results.emplace_back(hostname, threadResult);
+                        if (threadResult != DCGM_ST_OK)
+                        {
+                            anyFailure = true;
+                        }
+                    }
+
+                    // Log errors for failed messages
                     if (threadResult != DCGM_ST_OK)
                     {
-                        anyFailure = true;
+                        log_error("Failed to broadcast parameters to remote node {}. Return: ({}): {}",
+                                  hostname,
+                                  std::to_underlying(threadResult),
+                                  errorString(threadResult));
                     }
-                }
-
-                // Log errors for failed messages
-                if (threadResult != DCGM_ST_OK)
-                {
-                    log_error("Failed to broadcast parameters to remote node {}. Return: ({}): {}",
-                              hostname,
-                              std::to_underlying(threadResult),
-                              errorString(threadResult));
-                }
-                else
-                {
-                    log_debug("Successfully broadcast parameters to remote node {}", hostname);
-                }
-            });
+                    else
+                    {
+                        log_debug("Successfully broadcast parameters to remote node {}", hostname);
+                    }
+                });
         }
 
         // threads will automatically join when it goes out of scope at the end of this block
@@ -1809,49 +1824,75 @@ void DcgmMnDiagManager::PopulateMpiFailureResponseStruct(MnDiagMpiRunnerBase *mp
     }
 }
 
-std::string DcgmMnDiagManager::GetMnubergemmPathHeadNode()
+dcgmReturn_t DcgmMnDiagManager::GetMnubergemmPathHeadNode(std::string &path)
 {
+    // Check if env variable is present and valid
+    log_debug("Checking for custom mnubergemm path in environment variable");
     char const *customBinPath = std::getenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-    std::string defaultBinPath(MnDiagConstants::DEFAULT_MNUBERGEMM_PATH);
-
-    std::string binPath;
     if (customBinPath && *customBinPath != '\0')
     {
-        binPath = customBinPath;
         try
         {
-            if (!std::filesystem::exists(binPath) || !std::filesystem::is_regular_file(binPath))
+            if (strlen(customBinPath) >= DCGM_MAX_STR_LENGTH)
             {
                 log_error(
-                    "Custom binary path '{}' is invalid (not a readable, executable, regular file). Falling back to default '{}'.",
-                    binPath,
-                    defaultBinPath);
-                binPath = defaultBinPath;
+                    "mnubergemmPath length set in environment variable {} exceeds destination buffer size {}. Truncation would occur.",
+                    strlen(customBinPath),
+                    DCGM_MAX_STR_LENGTH);
+                return DCGM_ST_BADPARAM;
             }
-            else if (access(binPath.c_str(), R_OK | X_OK) != 0)
+
+            if (!std::filesystem::exists(customBinPath) || !std::filesystem::is_regular_file(customBinPath))
             {
-                log_error("Custom binary path '{}' is not accessible (errno {}: {}). Falling back to default '{}'.",
-                          binPath,
-                          errno,
-                          strerror(errno),
-                          defaultBinPath);
-                binPath = defaultBinPath;
+                log_error("Custom binary path '{}' is invalid (not a readable, executable, regular file)",
+                          customBinPath);
+            }
+            else if (access(customBinPath, R_OK | X_OK) != 0)
+            {
+                log_error(
+                    "Custom binary path '{}' is not accessible (errno {}: {}).", customBinPath, errno, strerror(errno));
+            }
+            else
+            {
+                path = customBinPath;
+                log_debug("Inferred custom mnubergemm path: {}", path);
+                return DCGM_ST_OK;
             }
         }
         catch (const std::exception &e)
         {
-            log_error("Exception while validating custom binary path '{}': {}. Falling back to default '{}'.",
-                      binPath,
-                      e.what(),
-                      defaultBinPath);
-            binPath = defaultBinPath;
+            log_error("Exception while validating custom binary path '{}': {}", customBinPath, e.what());
         }
     }
-    else
+
+    // Fall back to default
+    log_debug("No custom binary path found, falling back to default");
+    std::string defaultBinPath;
+    dcgmReturn_t result = infer_mnubergemm_default_path(defaultBinPath, GetCudaVersion());
+    if (result != DCGM_ST_OK)
     {
-        binPath = defaultBinPath;
+        log_error("Failed to infer mnubergemm default path: {}", result);
+        return result;
     }
 
-    log_debug("Mnubergemm path for head node: {}", binPath);
-    return binPath;
+    log_debug("Inferred default mnubergemm path: {}", defaultBinPath);
+    path = defaultBinPath;
+
+    if (path.length() >= DCGM_MAX_STR_LENGTH)
+    {
+        log_error(
+            "mnubergemmPath length from introspection {} exceeds destination buffer size {}. Truncation would occur.",
+            path.length(),
+            DCGM_MAX_STR_LENGTH);
+        return DCGM_ST_BADPARAM;
+    }
+
+    return DCGM_ST_OK;
+}
+
+int DcgmMnDiagManager::GetCudaVersion()
+{
+    int cudaVersion = 0;
+    m_coreProxy->GetCudaVersion(cudaVersion);
+    return cudaVersion;
 }

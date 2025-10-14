@@ -48,8 +48,26 @@ injection_offset = 3
 
 ################# General tests #################
 
+def support_temperature_threshold(gpuId):
+    dcgm_nvml.nvmlInit()
+    handle = dcgm_nvml.nvmlDeviceGetHandleByIndex(gpuId)
+    supported = False
+    try:
+        _ = dcgm_nvml.nvmlDeviceGetTemperatureThreshold(handle, dcgm_nvml.NVML_TEMPERATURE_THRESHOLD_GPU_MAX)
+        supported = True
+    except:
+        supported = False
+    dcgm_nvml.nvmlShutdown()
+    return supported
+
 ##### Fail early behavior tests
 def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
+    # We will inject DCGM_FI_DEV_GPU_TEMP to trigger a failure.
+    # When the GPU does not support a temperature threshold, the temperature check will be irrelevant or meaningless
+    # and not triggering a failure.
+    if not support_temperature_threshold(gpuId):
+        test_utils.skip_test("Not testing because GPU %s does not support temperature threshold." % (gpuId))
+
     # Helper method for verifying the fail early checks for the specified test.
     duration = 2 if test_name not in { TEST_TARGETED_POWER, "targeted power" } else 30 # Prevent false failures due to min
                                                                                 # duration requirements for Targeted Power
@@ -340,7 +358,7 @@ def test_nvvs_plugins_required_symbols():
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
-@test_utils.run_with_current_system_injection_nvml()
+@test_utils.run_with_current_system_injection_nvml(skuFileName="current_test_software_on_fabric_manager.yaml")
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
 @test_utils.run_only_if_mig_is_disabled()
@@ -499,7 +517,7 @@ def test_nvvs_executes_directly(handle, gpuIds):
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
-@test_utils.run_with_current_system_injection_nvml()
+@test_utils.run_with_current_system_injection_nvml(skuFileName="current_test_software_parameters.yaml")
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
 @test_utils.run_only_if_mig_is_disabled()

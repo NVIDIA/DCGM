@@ -53,6 +53,7 @@ public:
     virtual bool AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds) const          = 0;
     virtual dcgmReturn_t GetDriverVersion(std::string &driverVersion) const            = 0;
     virtual dcgmReturn_t ChildProcessManagerReset()                                    = 0;
+    virtual dcgmReturn_t GetCudaVersion(int &cudaVersion)                              = 0;
 
     // Methods that are not from DcgmCoreProxy
     virtual DcgmCoreProxy &GetUnderlyingDcgmCoreProxy() = 0;

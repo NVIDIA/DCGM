@@ -21,6 +21,24 @@
 #include <cmath>
 #include <ranges>
 
+namespace
+{
+
+timelib64_t GetMaxSampleAge(timelib64_t maxUpdateInterval, timelib64_t maxSampleAge)
+{
+    // To use nvmlGpmMetricsGet correctly, we need at least two samples. Specifically, we should maintain at least
+    // one sample that is older than m_maxUpdateInterval. Since we ideally take a sample every m_maxUpdateInterval,
+    // we can discard all samples older than 2 * m_maxUpdateInterval. This ensures that we always have at least one
+    // sample that is more than m_maxUpdateInterval old.
+    // For example, if our polling interval is 10 seconds and we ideally take a sample every 10 seconds, but the actual
+    // sampling time might not be precise. For instance, a sample might be taken at 0 seconds, and the next intended
+    // sample would be at 10 seconds, but it might actually occur at 10.1 seconds. If we don't consider 2 *
+    // m_maxUpdateInterval, the sample at 0 seconds could be discarded, leading to a situation where we never have two
+    // samples for calculation.
+    return std::max(maxUpdateInterval * 2, maxSampleAge);
+}
+
+} //namespace
 
 /****************************************************************************/
 /* DcgmGpmManagerEntity methods */
@@ -54,6 +72,7 @@ void DcgmGpmManagerEntity::AddWatcher(unsigned short fieldId,
                             false);
     m_watchTable.GetMinAndMaxUpdateInterval(m_minUpdateInterval, m_maxUpdateInterval);
     m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_maxSampleAge);
+    m_maxSampleAge = GetMaxSampleAge(m_maxUpdateInterval, m_maxSampleAge);
 }
 
 /****************************************************************************/
@@ -65,6 +84,7 @@ void DcgmGpmManagerEntity::RemoveWatcher(unsigned short dcgmFieldId, DcgmWatcher
 
     m_watchTable.GetMinAndMaxUpdateInterval(m_minUpdateInterval, m_maxUpdateInterval);
     m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_maxSampleAge);
+    m_maxSampleAge = GetMaxSampleAge(m_maxUpdateInterval, m_maxSampleAge);
 }
 
 /****************************************************************************/
@@ -245,16 +265,11 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
     auto baselineSampleIt = m_gpmSamples.upper_bound(searchTs);
     if (baselineSampleIt == m_gpmSamples.begin())
     {
-        /* No samples available > searchTs */
+        /* No samples available <= searchTs */
         return DCGM_ST_OK;
     }
     /* Upper bound returns first sample larger. prev() will be our first match */
     baselineSampleIt = std::prev(baselineSampleIt);
-    if (baselineSampleIt == m_gpmSamples.begin())
-    {
-        /* No samples available <= searchTs */
-        return DCGM_ST_OK;
-    }
 
     bool isPercentageField = false;
     unsigned int metricId  = DcgmFieldIdToNvmlGpmMetricId(fieldId, isPercentageField);

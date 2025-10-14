@@ -196,6 +196,7 @@ class TestFrameworkSetup(object):
         test_utils.set_nvvs_bin_path()
 
     def __exit__(self, type, value, traceback):
+        logger.capture_dmesg()
         logger.close()
         del os.environ['__DCGM_TESTING_FRAMEWORK_ACTIVE']
         pass

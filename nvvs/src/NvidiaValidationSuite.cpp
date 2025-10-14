@@ -16,22 +16,25 @@
 
 #include "NvidiaValidationSuite.h"
 #include "DcgmHandle.h"
-#include "DcgmLogging.h"
 #include "DcgmSystem.h"
 #include "EntitySet.h"
 #include "IgnoreErrorCodesHelper.h"
+#include "NvvsException.hpp"
 #include "NvvsJsonStrings.h"
 #include "ParameterValidator.h"
 #include "ParsingUtility.h"
+#include "PluginInterface.h"
 #include "PluginStrings.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs_internal.h"
+
 #include <DcgmBuildInfo.hpp>
+#include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
-#include <NvvsException.hpp>
-#include <PluginInterface.h>
+#include <HangDetectHandler.h>
+#include <HangDetectMonitor.h>
 #include <cstdlib>
+#include <dcgm_fields.h>
+#include <dcgm_structs_internal.h>
 #include <iostream>
 #include <memory>
 #include <setjmp.h>
@@ -312,10 +315,50 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
     return errorStr;
 }
 
+namespace
+{
+/*****************************************************************************/
+/**
+ * NvvsHangDetectHandler is a subclass of HangDetectHandler, used to handle hang detected events.
+ */
+class NvvsHangDetectHandler : public HangDetectHandler
+{
+public:
+    NvvsHangDetectHandler()
+        : HangDetectHandler()
+    {}
+
+    /**
+     * Handle a hang detected event
+     * @throws std::runtime_error which is reported as a system error in the diagnostic response.
+     */
+    void HandleHangDetectedEvent(HangDetectedEvent const &hangEvent) override
+    {
+        auto const [pid, tid, duration] = hangEvent;
+        auto const entityType           = tid.has_value() ? "thread" : "process";
+        auto const entityId             = tid.value_or(pid);
+        auto const idType               = tid.has_value() ? "tid" : "pid";
+
+        auto const msg = fmt::format(
+            "A {} ({}: {}) has been unresponsive for {} seconds. "
+            "If the process does not exit, it may need to be killed or the system may need to be restarted. "
+            "Collect problem report logs before restarting.",
+            entityType,
+            idType,
+            entityId,
+            duration.count());
+
+        log_error(msg);
+        throw std::runtime_error(msg);
+    }
+};
+} // namespace
+
 /*****************************************************************************/
 std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 {
     std::vector<unsigned int> gpuIndices;
+    auto const beginInit = std::chrono::steady_clock::now();
 
     processCommandLine(argc, argv);
     if (nvvsCommon.quietMode)
@@ -341,26 +384,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         DCGM_LOG_DEBUG << "argc: " << argc << ". argv: " << out.str();
     }
 
-
     parser = new ConfigFileParser_v2("", fwcfg);
-
-    /*
-    startTimer();
-
-    // Mark this as the point to return too if DCGM's init takes too long
-    setjmp(exitInitialization);
-
-    // If initTimedOut is set, then we've timed out while trying to initialize DCGM and load the cuda library
-    if (initTimedOut == true)
-    {
-        std::stringstream buf;
-        buf << "We reached the " << this->initWaitTime << " second timeout while attempting to initialize DCGM";
-        buf << " and load the CUDA library.";
-        buf << "\nPlease check why these systems are unresponsive.\n";
-
-        return buf.str();
-    }
-    */
 
     dcgmReturn_t ret = dcgmHandle.ConnectToDcgm(nvvsCommon.dcgmHostname);
     if (ret != DCGM_ST_OK)
@@ -370,10 +394,6 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         return buf.str();
     }
     dcgmSystem.Init(dcgmHandle.GetHandle());
-
-    /*
-    stopTimer();
-    */
 
     if (configFile.size() > 0)
         parser->setConfigFile(configFile);
@@ -463,8 +483,24 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         return errorString;
     }
 
+    std::optional<NvvsHangDetectHandler> handler;
+    if (!nvvsCommon.hangDetectDisable)
+    {
+        handler.emplace();
+        m_detector = std::make_unique<HangDetect>();
+        auto const expirySec
+            = (nvvsCommon.hangDetectExpirySec == 0) ? DEFAULT_HANG_DETECT_EXPIRY_SEC : nvvsCommon.hangDetectExpirySec;
+        m_monitor = std::make_unique<HangDetectMonitor>(
+            *m_detector, std::chrono::seconds(DEFAULT_HANG_DETECT_CHECK_INTERVAL), std::chrono::seconds(expirySec));
+        m_monitor->SetHangDetectedHandler(&(handler.value()));
+    }
+    else
+    {
+        log_debug("HangDetectMonitor: Disabled");
+    }
+
     m_tf = new TestFramework(entitySets);
-    m_tf->loadPlugins();
+    m_tf->loadPlugins(m_monitor.get());
     if (auto ret = m_tf->SetDiagResponseVersion(nvvsCommon.diagResponseVersion); ret != DCGM_ST_OK)
     {
         std::string const errMsg
@@ -492,9 +528,31 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
 
     DistributeTests(entitySets);
 
+    auto const initDuration
+        = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - beginInit);
+    auto constexpr MAX_INIT_DURATION = std::chrono::milliseconds(1500);
+    if (initDuration > MAX_INIT_DURATION)
+    {
+        log_warning("Initialization took {}s", (initDuration.count() / 1000.00));
+    }
+    else
+    {
+        log_debug("Initialization took {}s", (initDuration.count() / 1000.00));
+    }
+
+    if (m_monitor != nullptr)
+    {
+        m_monitor->StartMonitoring();
+    }
+
     // Execute the tests... let the TF catch all exceptions and decide
     // whether to throw them higher.
+
     m_tf->Go(entitySets);
+    if (m_monitor != nullptr)
+    {
+        m_monitor->StopMonitoring();
+    }
 
     return "";
 }
@@ -907,6 +965,10 @@ void NvidiaValidationSuite::DistributeTests(std::vector<std::unique_ptr<EntitySe
                             tp->AddString(PS_PLUGIN_NAME, (*testIt)->GetPluginName());
                             tp->AddString(PS_TEST_NAME, (*testIt)->GetTestName());
                             tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
+                            if (nvvsCommon.genericMode)
+                            {
+                                tp->AddString(PS_USE_GENERIC_MODE, "True");
+                            }
 
                             (*testIt)->pushArgVectorElement(Test::NVVS_CLASS_CUSTOM, tp);
                             entitySet->AddTestObject(CUSTOM_TEST_OBJS, (*testIt));
@@ -1057,6 +1119,10 @@ bool NvidiaValidationSuite::FillTestVectors(suiteNames_enum suite, Test::testCla
             tp->AddString(PS_TEST_NAME, (*it));
             tp->AddDouble(PS_LOGFILE_TYPE, (double)nvvsCommon.logFileType);
             tp->AddDouble(PS_SUITE_LEVEL, (double)suite);
+            if (nvvsCommon.genericMode)
+            {
+                tp->AddString(PS_USE_GENERIC_MODE, "True");
+            }
 
             (*testIt)->pushArgVectorElement(testClass, tp);
             set->AddTestObject(type, *testIt);
@@ -1240,9 +1306,31 @@ void NvidiaValidationSuite::InitializeParameters(const std::string &parms, const
             }
             else
             {
-                buf << "unable to parse test, parameter name, and value from string '" << parmsVec[i]
-                    << "'. Format should be <testname>[.<subtest>].<parameter name>=<parameter value>";
-                throw std::runtime_error(buf.str());
+                if (equals == std::string::npos)
+                {
+                    parmName  = parmsVec[i];
+                    parmValue = "";
+                }
+                else
+                {
+                    parmName  = parmsVec[i].substr(0, equals);
+                    parmValue = parmsVec[i].substr(equals + 1);
+                }
+
+                if (parmName == PS_USE_GENERIC_MODE)
+                {
+                    if (parmValue.empty() || TestParameters::bool_string_to_bool(parmValue))
+                    {
+                        log_debug("User requested that supporting plugins use generic mode.");
+                        nvvsCommon.genericMode = true;
+                    }
+                }
+                else
+                {
+                    buf << "unable to parse test, parameter name, and value from string '" << parmsVec[i]
+                        << "'. Format should be <testname>[.<subtest>].<parameter name>=<parameter value> or generic_mode=<True|False>";
+                    throw std::runtime_error(buf.str());
+                }
             }
         }
     }
@@ -1466,6 +1554,18 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
             "ignore error codes",
             cmd);
 
+        TCLAP::SwitchArg hangDetectDisable(
+            "", "noHangDetect", "Disable hang detection. Default is enabled.", cmd, false);
+
+        TCLAP::ValueArg<unsigned int> hangDetectExpirySec("",
+                                                          "hangDetectExpirySec",
+                                                          "Specify the hang detect expiry in seconds. Default is "
+                                                              + std::to_string(DEFAULT_HANG_DETECT_EXPIRY_SEC) + ".",
+                                                          false,
+                                                          DEFAULT_HANG_DETECT_EXPIRY_SEC,
+                                                          "hang detect expiry",
+                                                          cmd);
+
         cmd.parse(argc, argv);
 
         configFileArg = configArg.getValue();
@@ -1494,6 +1594,8 @@ void NvidiaValidationSuite::processCommandLine(int argc, char *argv[])
         nvvsCommon.rerunAsRoot            = rerunAsRoot.isSet();
         nvvsCommon.ignoreErrorCodesString = ignoreErrorCodes.getValue();
         nvvsCommon.SetStatsPath(statsPathArg.getValue());
+        nvvsCommon.hangDetectDisable   = hangDetectDisable.isSet();
+        nvvsCommon.hangDetectExpirySec = hangDetectExpirySec.getValue();
 
         this->initWaitTime = initializationWaitTime.getValue();
 

@@ -31,10 +31,9 @@
 #include "Test.h"
 #include "TestFramework.h"
 #include "TestParameters.h"
-#include <algorithm>
-#include <iostream>
-#include <iterator>
-#include <sstream>
+
+#include <HangDetect.h>
+#include <HangDetectMonitor.h>
 #include <string>
 #include <vector>
 
@@ -104,6 +103,8 @@ protected:
     std::vector<TestParameters *> tpVect;
     std::unique_ptr<Allowlist> m_allowlist;
     FrameworkConfig fwcfg;
+    std::unique_ptr<HangDetectMonitor> m_monitor;
+    std::unique_ptr<HangDetect> m_detector;
 
     // classes
     ConfigFileParser_v2 *parser;
@@ -122,7 +123,7 @@ protected:
     unsigned int initWaitTime;
     ParameterValidator m_pv;
 
-    /***************************PROTECTED********************************/
-protected:
+    static unsigned int constexpr DEFAULT_HANG_DETECT_CHECK_INTERVAL { 60 };
+    static unsigned int constexpr DEFAULT_HANG_DETECT_EXPIRY_SEC { 600 };
 };
 } // namespace DcgmNs::Nvvs

@@ -893,6 +893,13 @@ DCGM_ENTRY_POINT(dcgmModuleIdToName,
                  id,
                  name)
 
+DCGM_ENTRY_POINT(dcgmPowerProfileIdToName,
+                 tsapiPowerProfileIdToName,
+                 (dcgmPowerProfileType_t id, char const **name),
+                 "({}, {})",
+                 id,
+                 name)
+
 DCGM_ENTRY_POINT(dcgmInjectEntityFieldValueToNvml,
                  tsapiInjectEntityFieldValueToNvml,
                  (dcgmHandle_t pDcgmHandle,
@@ -994,5 +1001,13 @@ DCGM_ENTRY_POINT(dcgmNvswitchGetBackend,
                  active,
                  backendName,
                  backendNameLength)
+
+DCGM_ENTRY_POINT(dcgmConfigSetWorkloadPowerProfile,
+                 tsapiConfigSetWorkloadPowerProfile,
+                 (dcgmHandle_t pDcgmHandle, dcgmWorkloadPowerProfile_t *workloadPowerProfile),
+                 "({}, {})",
+                 pDcgmHandle,
+                 workloadPowerProfile)
+
 
 /*****************************************************************************/

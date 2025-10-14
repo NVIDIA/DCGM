@@ -20,9 +20,6 @@
 #include <PluginCoreFunctionality.h>
 #include <PluginStrings.h>
 
-const double DUMMY_TEMPERATURE_VALUE = 30.0;
-
-
 PluginCoreFunctionality::PluginCoreFunctionality()
     : m_dcgmRecorder()
     , m_entityInfos()
@@ -181,4 +178,14 @@ std::vector<DcgmError> PluginCoreFunctionality::GetIgnoredErrors() const
 void PluginCoreFunctionality::SetRecorderIgnoreErrorCodes(gpuIgnoreErrorCodeMap_t const &map)
 {
     m_dcgmRecorder.SetIgnoreErrorCodes(map);
+}
+
+HangDetectMonitor *PluginCoreFunctionality::GetHangDetectMonitor() const
+{
+    return m_hangDetectMonitor;
+}
+
+void PluginCoreFunctionality::SetHangDetectMonitor(HangDetectMonitor *monitor)
+{
+    m_hangDetectMonitor = monitor;
 }

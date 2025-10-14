@@ -22,6 +22,7 @@ target_sources(childprocesstests PRIVATE
     ChildProcessBuilderTests.cpp
     StdLinesTests.cpp
     PipeTests.cpp
+    IoContextTests.cpp
 )
 
 target_link_libraries(childprocesstests

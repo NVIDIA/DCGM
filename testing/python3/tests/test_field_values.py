@@ -24,6 +24,7 @@ import dcgm_fields
 import dcgm_fields_internal
 import dcgm_nvml
 import dcgmvalue
+import nvidia_smi_utils
 import time
 import ctypes
 import apps
@@ -36,7 +37,6 @@ import utils
 import os
 from ctypes import *
 from dcgm_field_injection_helpers import inject_nvml_value, inject_value
-
 
 g_profilingFieldIds = [
     dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE,
@@ -60,7 +60,11 @@ g_profilingFieldIds = [
     dcgm_fields.DCGM_FI_PROF_C2C_TX_ALL_BYTES,
     dcgm_fields.DCGM_FI_PROF_C2C_TX_DATA_BYTES,
     dcgm_fields.DCGM_FI_PROF_C2C_RX_ALL_BYTES,
-    dcgm_fields.DCGM_FI_PROF_C2C_RX_DATA_BYTES ]
+    dcgm_fields.DCGM_FI_PROF_C2C_RX_DATA_BYTES,
+    dcgm_fields.DCGM_FI_PROF_HOSTMEM_CACHE_HIT,
+    dcgm_fields.DCGM_FI_PROF_HOSTMEM_CACHE_MISS,
+    dcgm_fields.DCGM_FI_PROF_PEERMEM_CACHE_HIT,
+    dcgm_fields.DCGM_FI_PROF_PEERMEM_CACHE_MISS ]
 
 for fieldId in range(dcgm_fields.DCGM_FI_PROF_NVDEC0_ACTIVE, dcgm_fields.DCGM_FI_PROF_NVDEC7_ACTIVE + 1):
     g_profilingFieldIds.append(fieldId)
@@ -291,16 +295,16 @@ def helper_validate_entities_latest_values_request(handle, gpuIds, fieldIds):
         responses[dictKey] += 1
 
 def helper_dcgm_entities_get_latest_values(handle, gpuIds):
-    #Request various combinations of DCGM field IDs. We're mixing field IDs that 
+    #Request various combinations of DCGM field IDs. We're mixing field IDs that
     #have NVML mappings and those that don't in order to try and cause failures
 
     #First, just field IDs that don't have mappings
-    nonMappedFieldIds = [dcgm_fields.DCGM_FI_DEV_BRAND, 
+    nonMappedFieldIds = [dcgm_fields.DCGM_FI_DEV_BRAND,
                          dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
                          dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
                          dcgm_fields.DCGM_FI_DEV_MEM_CLOCK,
                          dcgm_fields.DCGM_FI_DEV_VIDEO_CLOCK]
-    
+
     fieldIds = nonMappedFieldIds
     helper_validate_entities_latest_values_request(handle, gpuIds, fieldIds)
 
@@ -545,7 +549,7 @@ def helper_dcgm_values_pid_stats_realtime(handle, gpuIds):
     app2.wait()
 
     _assert_pid_utilization_rate(systemObj, groupObj,appPid)
-    _assert_pid_utilization_rate(systemObj, groupObj,app2Pid)    
+    _assert_pid_utilization_rate(systemObj, groupObj,app2Pid)
 
     ## Make sure the stats can be fetched after the process is complete
     for count in range(0,2):
@@ -593,7 +597,7 @@ def test_dcgm_values_pid_stats_realtime_remote(handle, gpuIds):
     if test_utils.is_nvswitch_detected():
         test_utils.skip_test("Skipping GPU Cuda tests on NvSwitch systems since they require the FM to be loaded")
 
-    helper_dcgm_values_pid_stats_realtime(handle, gpuIds)    
+    helper_dcgm_values_pid_stats_realtime(handle, gpuIds)
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -763,7 +767,7 @@ def test_dcgm_values_job_stats_get(handle, gpuIds):
                                                                         (jobInfo.summary.overallHealth, jobInfo.gpus[0].overallHealth)
     assert jobInfo.summary.numXidCriticalErrors == jobInfo.gpus[0].numXidCriticalErrors, "At least (%d) Xid error should have been caught, but (%d) were found" %\
                                                                         (jobInfo.summary.numXidCriticalErrors, jobInfo.gpus[0].numXidCriticalErrors)
-    assert jobInfo.summary.numXidCriticalErrors > 0, "At least one Xid error should have been caught, but (%d) were found" % jobInfo.summary.numXidCriticalErrors   
+    assert jobInfo.summary.numXidCriticalErrors > 0, "At least one Xid error should have been caught, but (%d) were found" % jobInfo.summary.numXidCriticalErrors
 
     for index in range(jobInfo.summary.numXidCriticalErrors):
         assert jobInfo.summary.xidCriticalErrorsTs[index] != 0, "Unable to find a valid timestamp for the Xid Error %d" % index
@@ -854,6 +858,20 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         dcgm_fields.DCGM_FI_DEV_DIAG_SOFTWARE_RESULT,
         dcgm_fields.DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT,
         dcgm_fields.DCGM_FI_DEV_DIAG_STATUS,
+        # NvLink PRM fields require DCGM_FE_LINK entity type instead of GPU entity type
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TOTAL_SUCCESSFUL_EVENTS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_SUCCESSFUL_RECOVERY_EVENTS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_COUNTER,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODES,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODE_ERR,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_UNCORRECTABLE_CODE,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS,
     ]
     exceptionFieldIds.extend(g_profilingFieldIds)
 
@@ -864,11 +882,32 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
     baseFieldIds = [dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
                     dcgm_fields.DCGM_FI_DEV_FB_FREE]
 
+    powerSmoothingFieldIds = [dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_ENABLED,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PRIV_LVL,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE,
+                              dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL]
+
+    ignoreFieldIds = set(('DCGM_FI_MAX_FIELDS', 'DCGM_FI_UNKNOWN', 'DCGM_FI_FIRST_NVSWITCH_FIELD_ID',
+                         'DCGM_FI_LAST_NVSWITCH_FIELD_ID', 'DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID', 'DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID'))
+
     gpuId = gpuIds[0]
     fieldIdVars = {}
 
-    ignoreFieldIds = set(('DCGM_FI_MAX_FIELDS', 'DCGM_FI_UNKNOWN', 'DCGM_FI_FIRST_NVSWITCH_FIELD_ID', 
-                         'DCGM_FI_LAST_NVSWITCH_FIELD_ID', 'DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID', 'DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID'))
+    powerSmoothingAvailable = nvidia_smi_utils.is_power_smoothing_available(handle, gpuId)
 
     #Find all of the numerical field IDs by looking at the dcgm_fields module's attributes
     for moduleAttribute in list(dcgm_fields.__dict__.keys()):
@@ -934,8 +973,11 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         elif migModeEnabled and ((fieldId == dcgm_fields.DCGM_FI_DEV_MIG_CI_INFO) and (fieldValue.status == dcgm_structs.DCGM_ST_NO_DATA)):
             logger.info("field %s (id %d) returned st DCGM_ST_NO_DATA (OK), no compute instances present" % (fieldIdName, fieldId))
         elif fieldValue.status != dcgm_structs.DCGM_ST_OK:
-            logger.error("No value for field %s (id %d). status: %d" % (fieldIdName, fieldId, fieldValue.status))
-            numErrors += 1
+            if fieldValue.status == dcgm_structs.DCGM_ST_NO_DATA and  fieldId in powerSmoothingFieldIds and not powerSmoothingAvailable:
+                logger.info("field %s (id %d) returned st DCGM_ST_NO_DATA (OK), power smoothing not available" % (fieldIdName, fieldId))
+            else:
+                logger.error("No value for field %s (id %d). status: %d" % (fieldIdName, fieldId, fieldValue.status))
+                numErrors += 1
 
         # check certain baseline fields for actual values
         if fieldId in baseFieldIds:
@@ -947,7 +989,7 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
 @test_utils.run_only_with_gpus_present()
 @test_utils.run_only_with_nvml()
 def test_dcgm_verify_manual_mode_behavior():
-    """  
+    """
     Test to verify that field values cannot be
     retrieved automatically in manual operation mode
     """
@@ -995,7 +1037,7 @@ def test_dcgm_verify_manual_mode_behavior():
 @test_utils.run_only_with_gpus_present()
 @test_utils.run_only_with_nvml()
 def test_dcgm_verify_auto_mode_behavior():
-    """  
+    """
     Test to verify that field values can be retrieved
     automatically in manual operation mode
     """
@@ -1227,11 +1269,11 @@ def test_cx_monitoring_live(handle, cxIds):
 @test_utils.run_only_if_mig_is_disabled()
 @test_utils.run_with_nvml_injected_gpus()
 def test_platform_info_fields(handle, gpuIds):
-    """  
+    """
     This test injects platform field values and verifies that they can be retrieved.
     """
     platformFields = {
-        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: ("3f26f0def26b9c79", "3f26f0de-f26b-9c79-0000-000000000000"),
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: ("3f26f0def26b9c79", "0x799c6bf2def0263f"),
         dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: ("3f26f0def26bdeaa", "3f26f0de-f26b-deaa-0000-000000000000"),
         dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER: 1,
         dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX: 2,
@@ -1284,7 +1326,7 @@ def test_platform_info_fields(handle, gpuIds):
 @test_utils.run_only_if_mig_is_disabled()
 @test_utils.run_with_nvml_injected_gpus()
 def test_platform_info_fields_invalid_values(handle, gpuIds):
-    """  
+    """
     This test injects invalid platform rack-based fields and verifies that null values
     are retrieved.
     """
@@ -1299,7 +1341,7 @@ def test_platform_info_fields_invalid_values(handle, gpuIds):
     }
 
     expectedPlatformFields = {
-        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: "3f26f0de-f26b-9c79-0000-000000000000",
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: "0x799c6bf2def0263f",
         dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: dcgmvalue.DCGM_STR_BLANK,
         dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER: dcgmvalue.DCGM_INT64_BLANK,
         dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX: dcgmvalue.DCGM_INT64_BLANK,
@@ -1452,3 +1494,141 @@ def test_nvlink_error_fields(handle, gpuIds):
     test_values = [0, 42, 2**31-1, 2**63-1]
     helper_check_field_values(handle, gpuIds, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS, test_values)
     helper_check_field_values(handle, gpuIds, dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS, test_values)
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_nvlink_error_counter(handle, gpuIds):
+    gpuId = gpuIds[0]
+
+    def mock_nvlink_error_counter(handle, gpuId, linkId, counterType, value):
+        injectedRet = nvml_injection.c_injectNvmlRet_t()
+        injectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
+        injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_ULONG_LONG
+        injectedRet.values[0].value.ULongLong = value
+        injectedRet.valueCount = 1
+
+        extraKeysType = nvml_injection_structs.c_injectNvmlVal_t * 2
+        extraKeys = extraKeysType()
+        extraKeys[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UINT
+        extraKeys[0].value.UInt = linkId
+        extraKeys[1].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_NVLINKERRORCOUNTER
+        extraKeys[1].value.NvLinkErrorCounter = counterType
+
+        ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "NvLinkErrorCounter", extraKeys, 2, injectedRet)
+        assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    def validate_nvlink_error_value(handle, gpuId, fieldId, expectedValue):
+        entity = dcgm_structs.c_dcgmGroupEntityPair_t()
+        entity.entityGroupId = dcgm_fields.DCGM_FE_GPU
+        entity.entityId = gpuId
+
+        fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(handle, [entity], [fieldId], dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
+        assert (len(fieldValues) == 1), f"Expected 1 field value, got {len(fieldValues)}"
+        fieldValue = fieldValues[0]
+        assert(fieldValue.version == dcgm_structs.dcgmFieldValue_version2), f"Version was {fieldValue.version}, expected {dcgm_structs.dcgmFieldValue_version2}"
+        assert(fieldValue.status == dcgm_structs.DCGM_ST_OK), f"Status was {fieldValue.status}, expected {dcgm_structs.DCGM_ST_OK}"
+        assert(fieldValue.ts != 0), f"Timestamp was {fieldValue.ts}, expected non-zero"
+        assert(fieldValue.unused == 0), f"Unused was {fieldValue.unused}, expected 0"
+        assert(fieldValue.fieldType == ord(dcgm_fields.DCGM_FT_INT64)), f"Field type was {fieldValue.fieldType}, expected {dcgm_fields.DCGM_FT_INT64}"
+        assert(fieldValue.value.i64 == expectedValue), f"Field value was {fieldValue.value.i64}, expected {expectedValue}"
+
+    # Define the field mappings for NVLink error counters
+    # Format: {DCGM_Field_ID: [linkId, nvmlCounterType]}
+    fieldMap = {
+        # CRC Flit Error fields (per link)
+        # NV Link flow control CRC Error Counter
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L0: [0, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L1: [1, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L2: [2, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L3: [3, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L4: [4, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L5: [5, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L6: [6, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L7: [7, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L8: [8, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L9: [9, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L10: [10, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L11: [11, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L12: [12, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L13: [13, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L14: [14, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L15: [15, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L16: [16, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L17: [17, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_FLIT],
+
+        # CRC Data Error fields (per link)
+        # NV Link data CRC Error Counter
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L0: [0, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L1: [1, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L2: [2, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L3: [3, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L4: [4, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L5: [5, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L6: [6, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L7: [7, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L8: [8, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L9: [9, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L10: [10, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L11: [11, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L12: [12, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L13: [13, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L14: [14, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L15: [15, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L16: [16, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L17: [17, dcgm_nvml.NVML_NVLINK_ERROR_DL_CRC_DATA],
+
+        # Replay Error fields (per link)
+        # NV Link Replay Error Counter
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0: [0, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1: [1, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2: [2, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3: [3, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4: [4, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5: [5, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6: [6, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7: [7, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8: [8, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9: [9, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10: [10, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11: [11, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12: [12, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13: [13, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14: [14, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15: [15, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16: [16, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17: [17, dcgm_nvml.NVML_NVLINK_ERROR_DL_REPLAY],
+
+        # Recovery Error fields (per link)
+        # NV Link Recovery Error Counter
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0: [0, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1: [1, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2: [2, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3: [3, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4: [4, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5: [5, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6: [6, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7: [7, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8: [8, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9: [9, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10: [10, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11: [11, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12: [12, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13: [13, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14: [14, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15: [15, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16: [16, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17: [17, dcgm_nvml.NVML_NVLINK_ERROR_DL_RECOVERY],
+    }
+
+    # We use the fieldId itself as the value to inject and validate
+    for fieldId, params in fieldMap.items():
+        linkId, counterType = params
+        mock_nvlink_error_counter(handle, gpuId, linkId, counterType, fieldId)
+        validate_nvlink_error_value(handle, gpuId, fieldId, fieldId)
+
+    totalErrorCountFields = [dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL, dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL, dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL, dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL]
+    for fieldId in totalErrorCountFields:
+        inject_nvml_value(handle, gpuId, fieldId, fieldId, 0)
+        validate_nvlink_error_value(handle, gpuId, fieldId, fieldId)

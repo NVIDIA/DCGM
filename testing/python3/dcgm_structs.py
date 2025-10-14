@@ -150,18 +150,18 @@ DCGM_GROUP_NULL = 0x7ffffffa
 
 DCGM_GROUP_MAX_ENTITIES_V2 = 1024 #Maximum number of entities per entity group
 
-DCGM_CHIP_ARCH_OLDER     = 1,  # All GPUs older than Kepler
-DCGM_CHIP_ARCH_KEPLER    = 2,  # All Kepler-architecture parts
-DCGM_CHIP_ARCH_MAXWELL   = 3,  # All Maxwell-architecture parts
-DCGM_CHIP_ARCH_PASCAL    = 4,  # All Pascal-architecture parts
-DCGM_CHIP_ARCH_VOLTA     = 5,  # All Volta-architecture parts
-DCGM_CHIP_ARCH_TURING    = 6,  # All Turing-architecture parts
-DCGM_CHIP_ARCH_AMPERE    = 7,  # All Ampere-architecture parts
-DCGM_CHIP_ARCH_ADA       = 8,  # All Ada-architecture parts
-DCGM_CHIP_ARCH_HOPPER    = 9,  # All Hopper-architecture parts
-DCGM_CHIP_ARCH_T3X       = 11, # All T3x-architecture parts
-
-DCGM_CHIP_ARCH_COUNT     = 11, # Keep this 2nd to last, exclude unknown
+DCGM_CHIP_ARCH_OLDER     = 1  # All GPUs older than Kepler
+DCGM_CHIP_ARCH_KEPLER    = 2  # All Kepler-architecture parts
+DCGM_CHIP_ARCH_MAXWELL   = 3  # All Maxwell-architecture parts
+DCGM_CHIP_ARCH_PASCAL    = 4  # All Pascal-architecture parts
+DCGM_CHIP_ARCH_VOLTA     = 5  # All Volta-architecture parts
+DCGM_CHIP_ARCH_TURING    = 6  # All Turing-architecture parts
+DCGM_CHIP_ARCH_AMPERE    = 7  # All Ampere-architecture parts
+DCGM_CHIP_ARCH_ADA       = 8  # All Ada-architecture parts
+DCGM_CHIP_ARCH_HOPPER    = 9  # All Hopper-architecture parts
+DCGM_CHIP_ARCH_BLACKWELL = 10 # All Blackwell-architecture parts
+DCGM_CHIP_ARCH_T3X       = 11 # All T3x-architecture parts
+DCGM_CHIP_ARCH_COUNT     = 11 # Keep this 2nd to last, exclude unknown
 
 DCGM_CHIP_ARCH_UNKNOWN   = 0xffffffff # Anything else, likely something newer
 
@@ -680,13 +680,26 @@ def _dcgmErrorString(result):
 
 # Represents a link object. type should be one of DCGM_FE_GPU or
 # DCGM_FE_SWITCH. gpuId or switchID the associated gpu or switch;
-#
+# This mirrors the C union structure in dcgm_structs.h
 class c_dcgm_link_t(_PrintableStructure):
-    _fields = [
-        ('type', c_uint8),
-        ('index', c_uint16),
-        ('id', c_uint8)
+    _fields_ = [
+        ('type', c_uint8),    # dcgm_field_entity_group_t (8 bits)
+        ('index', c_uint16),  # uint32_t (16 bits)
+        ('id', c_uint8)       # dcgm_field_eid_t gpuId/switchId (8 bits)
     ]
+
+    @property
+    def raw(self):
+        """Get the raw entity ID by manually packing the bit fields"""
+        # C bit-field layout: [id:8][index:16][type:8]
+        return (self.id << 24) | (self.index << 8) | self.type
+
+    @raw.setter
+    def raw(self, value):
+        """Set the parsed fields by manually unpacking the raw entity ID"""
+        self.type = value & 0xFF
+        self.index = (value >> 8) & 0xFFFF
+        self.id = (value >> 24) & 0xFF
 
 class c_dcgmConnectV2Params_v1(_PrintableStructure):
     _fields_ = [
@@ -2696,3 +2709,19 @@ class c_dcgmMnDiagResponse_v1(_PrintableStructure):
 c_dcgmMnDiagResponse_t = c_dcgmMnDiagResponse_v1
 dcgmMnDiagResponse_version1 = make_dcgm_version(c_dcgmMnDiagResponse_v1, 1)
 dcgmMnDiagResponse_version = dcgmMnDiagResponse_version1
+
+DCGM_WORKLOAD_PROFILE_ACTION_SET               = 0
+DCGM_WORKLOAD_PROFILE_ACTION_SET_AND_OVERWRITE = 1
+DCGM_WORKLOAD_PROFILE_ACTION_CLEAR             = 2
+
+class c_dcgmWorkloadPowerProfile_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('groupId', c_void_p),
+        ('action', c_uint),
+        ('profileMask', c_uint * DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE),
+    ]
+
+c_dcgmWorkloadPowerProfile_t = c_dcgmWorkloadPowerProfile_v1
+dcgmWorkloadPowerProfile_version1 = make_dcgm_version(c_dcgmWorkloadPowerProfile_v1, 1)
+dcgmWorkloadPowerProfile_version = dcgmWorkloadPowerProfile_version1

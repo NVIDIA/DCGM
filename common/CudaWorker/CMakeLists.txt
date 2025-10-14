@@ -37,3 +37,4 @@ endmacro()
 
 define_dcgm_cuda_worker(11)
 define_dcgm_cuda_worker(12)
+define_dcgm_cuda_worker(13)

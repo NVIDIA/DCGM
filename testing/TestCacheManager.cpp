@@ -28,9 +28,13 @@
 #include <string>
 #include <thread>
 
+using namespace std::chrono_literals;
+using namespace DcgmNs::Utils;
+
 /* No. of iterations corresponding to different sample set of vgpuIds */
-#define NUM_VGPU_LISTS             5
-#define TEST_MAX_NUM_VGPUS_PER_GPU 16
+#define NUM_VGPU_LISTS              5
+#define TEST_MAX_NUM_VGPUS_PER_GPU  16
+#define MIN_RUNTIME_FOR_CPU_CALC_MS std::chrono::milliseconds(100)
 /*****************************************************************************/
 TestCacheManager::TestCacheManager()
 {}
@@ -395,518 +399,6 @@ int TestCacheManager::TestFieldValueConversion()
 
     return retSt;
 }
-
-/*****************************************************************************/
-int TestCacheManager::TestConvertVectorToBitmask()
-{
-    uint64_t bitmask;
-    std::vector<unsigned int> gpuIds;
-    int retSt = 0;
-
-    ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
-    if (bitmask != 0)
-    {
-        fprintf(stderr, "An empty vector should produce an empty bitmask.\n");
-        retSt = 100;
-    }
-
-    gpuIds.push_back(0);
-    gpuIds.push_back(2);
-
-    ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
-    if (bitmask != (uint64_t)0x5)
-    {
-        fprintf(stderr, "Expected 0x05 but got %llx.\n", static_cast<long long>(bitmask));
-        retSt = 100;
-    }
-
-    gpuIds.push_back(7);
-    gpuIds.push_back(8);
-    gpuIds.push_back(9);
-    ConvertVectorToBitmask(gpuIds, bitmask, gpuIds.size());
-    if (bitmask != (uint64_t)0x385)
-    {
-        fprintf(stderr, "Expected 0x385 but got %llx.\n", static_cast<long long>(bitmask));
-        retSt = 100;
-    }
-
-    ConvertVectorToBitmask(gpuIds, bitmask, 2);
-    if (bitmask != (uint64_t)0x05)
-    {
-        fprintf(stderr, "Expected 0x05 but got %llx.\n", static_cast<long long>(bitmask));
-        retSt = 100;
-    }
-
-    return retSt;
-}
-
-/*****************************************************************************/
-int TestCacheManager::TestAffinityBitmasksMatch()
-{
-    dcgmAffinity_t affinity = {};
-    int retSt               = 0;
-
-    affinity.affinityMasks[0].bitmask[0] = 0x1;
-    affinity.affinityMasks[0].bitmask[1] = 0x10;
-    affinity.affinityMasks[1].bitmask[0] = 0x1;
-    if (AffinityBitmasksMatch(affinity, 0, 1) == true)
-    {
-        fprintf(stderr, "Should have failed since bitmask 1 is different for the two gpus.\n");
-        retSt = 100;
-    }
-
-    affinity.affinityMasks[1].bitmask[1] = 0x10;
-    if (AffinityBitmasksMatch(affinity, 0, 1) == false)
-    {
-        fprintf(stderr, "Shouldn't have failed since bitmask 1 is the same for the two gpus.\n");
-        retSt = 100;
-    }
-
-    affinity.affinityMasks[2].bitmask[0] = 0x10;
-    affinity.affinityMasks[3].bitmask[0] = 0x10;
-    affinity.affinityMasks[4].bitmask[0] = 0x100;
-    affinity.affinityMasks[5].bitmask[0] = 0x100;
-
-    if ((AffinityBitmasksMatch(affinity, 0, 2) == true) || (AffinityBitmasksMatch(affinity, 1, 2) == true)
-        || (AffinityBitmasksMatch(affinity, 1, 3) == true) || (AffinityBitmasksMatch(affinity, 1, 4) == true)
-        || (AffinityBitmasksMatch(affinity, 2, 4) == true) || (AffinityBitmasksMatch(affinity, 2, 5) == true))
-    {
-        fprintf(stderr, "Shouldn't have matched different bitmasks.\n");
-        retSt = 100;
-    }
-
-    if ((AffinityBitmasksMatch(affinity, 2, 3) == false) || (AffinityBitmasksMatch(affinity, 4, 5) == false))
-    {
-        fprintf(stderr, "Should have matched identical bitmasks.\n");
-        retSt = 100;
-    }
-
-    for (int i = 0; i < DCGM_AFFINITY_BITMASK_ARRAY_SIZE; i++)
-    {
-        affinity.affinityMasks[2].bitmask[i] = 0x10;
-        affinity.affinityMasks[3].bitmask[i] = 0x10;
-        affinity.affinityMasks[4].bitmask[i] = 0x100;
-        affinity.affinityMasks[5].bitmask[i] = 0x100;
-    }
-    if ((AffinityBitmasksMatch(affinity, 2, 3) == false) || (AffinityBitmasksMatch(affinity, 4, 5) == false))
-    {
-        fprintf(stderr, "Should have matched identical bitmasks.\n");
-        retSt = 100;
-    }
-
-    affinity.affinityMasks[2].bitmask[0] = 0;
-    if (AffinityBitmasksMatch(affinity, 2, 3) == true)
-    {
-        fprintf(stderr, "Shouldn't have matched different bitmasks.\n");
-        retSt = 100;
-    }
-
-    return retSt;
-}
-
-/*****************************************************************************/
-int TestCacheManager::TestCreateGroupsFromCpuAffinities()
-{
-    dcgmAffinity_t affinity = {};
-    std::vector<std::vector<unsigned int>> affinityGroups;
-    std::vector<unsigned int> gpuIds;
-    int retSt = 0;
-
-    affinity.numGpus = 8;
-
-    for (int i = 0; i < 4; i++)
-    {
-        affinity.affinityMasks[i].bitmask[0]     = 0x1;
-        affinity.affinityMasks[i].dcgmGpuId      = i;
-        affinity.affinityMasks[i + 4].bitmask[0] = 0x10;
-        affinity.affinityMasks[i + 4].dcgmGpuId  = i + 4;
-        gpuIds.push_back(i);
-    }
-
-
-    CreateGroupsFromCpuAffinities(affinity, affinityGroups, gpuIds);
-
-    if (affinityGroups.size() != 1)
-    {
-        fprintf(stderr,
-                "There should be 1 group because only some gpus were eligible, but found %d.\n",
-                static_cast<int>(affinityGroups.size()));
-        retSt = 100;
-    }
-
-    for (unsigned int i = 0; i < 4; i++)
-        gpuIds.push_back(i + 4);
-
-    affinityGroups.clear();
-
-    CreateGroupsFromCpuAffinities(affinity, affinityGroups, gpuIds);
-
-    if (affinityGroups.size() != 2)
-    {
-        fprintf(stderr, "Expected two groups to be created but found %d.\n", static_cast<int>(affinityGroups.size()));
-        retSt = 100;
-    }
-    else
-    {
-        if ((affinityGroups[0].size() != 4) || (affinityGroups[1].size() != 4))
-        {
-            fprintf(stderr, "Expected both groups to have a size of 4.\n");
-            retSt = 100;
-        }
-        else
-        {
-            for (unsigned int i = 0; i < 4; i++)
-            {
-                if (affinityGroups[0][i] != i)
-                {
-                    fprintf(stderr, "Expected group 1's gpu %u to be %u, but found %u.\n", i, i, affinityGroups[0][i]);
-                    retSt = 100;
-                    break;
-                }
-
-                if (affinityGroups[1][i] != i + 4)
-                {
-                    fprintf(
-                        stderr, "Expected group 2's gpu %u to be %u, but found %u.\n", i, i + 4, affinityGroups[0][i]);
-                    retSt = 100;
-                    break;
-                }
-            }
-        }
-    }
-
-    return retSt;
-}
-
-/*****************************************************************************/
-int TestCacheManager::TestPopulatePotentialCpuMatches()
-{
-    uint32_t numGpus = 2;
-    std::vector<std::vector<unsigned int>> affinityGroups;
-    std::vector<size_t> potentialCpuMatches;
-    int retSt = 0;
-
-    for (unsigned int i = 0; i < 4; i++)
-    {
-        std::vector<unsigned int> group;
-
-        for (unsigned int j = 0; j < i + 1; j++)
-            group.push_back(j);
-
-        affinityGroups.push_back(std::move(group));
-    }
-
-    PopulatePotentialCpuMatches(affinityGroups, potentialCpuMatches, numGpus);
-
-    if (potentialCpuMatches.size() != 3)
-    {
-        fprintf(stderr, "Expected 3 potential matches but got %d.\n", static_cast<int>(potentialCpuMatches.size()));
-        retSt = 100;
-        return retSt;
-    }
-
-    std::vector<unsigned int> &group1 = affinityGroups[potentialCpuMatches[0]];
-    std::vector<unsigned int> &group2 = affinityGroups[potentialCpuMatches[1]];
-    std::vector<unsigned int> &group3 = affinityGroups[potentialCpuMatches[2]];
-
-    if ((group1.size() != 2) || (group2.size() != 3) || (group3.size() != 4))
-    {
-        fprintf(stderr, "Potential group sizes don't match expectations.\n");
-        retSt = 100;
-        return retSt;
-    }
-
-    return retSt;
-}
-
-/*****************************************************************************/
-int TestCacheManager::TestCombineAffinityGroups()
-{
-    std::vector<std::vector<unsigned int>> affinityGroups;
-    std::vector<unsigned int> combinedGpuList;
-    unsigned int gpuIndex = 0;
-    int retSt             = 0;
-
-    for (unsigned int i = 0; i < 5; i++)
-    {
-        std::vector<unsigned int> group;
-
-        for (unsigned int j = 0; j < i + 1; j++)
-        {
-            group.push_back(gpuIndex);
-            gpuIndex++;
-        }
-
-        affinityGroups.push_back(std::move(group));
-    }
-
-    /*
-     * Looks like this:
-     * group 0 : gpu  0
-     * group 1 : gpus 1,  2
-     * group 2 : gpus 3,  4,  5
-     * group 3 : gpus 6,  7,  8,  9
-     * group 4 : gpus 10, 11, 12, 13, 14
-     */
-    CombineAffinityGroups(affinityGroups, combinedGpuList, 8);
-    for (unsigned int i = 0; i < 5; i++)
-    {
-        if (combinedGpuList[i] != i + 10)
-        {
-            fprintf(stderr, "Expected to find %u, but found %u.\n", i + 10, combinedGpuList[i]);
-            return 100;
-        }
-    }
-
-    for (unsigned int i = 0; i < 3; i++)
-    {
-        if (combinedGpuList[i + 5] != i + 3)
-        {
-            fprintf(stderr, "Expected to find %u, but found %u.\n", i + 6, combinedGpuList[i + 5]);
-            return 100;
-        }
-    }
-
-    combinedGpuList.clear();
-    CombineAffinityGroups(affinityGroups, combinedGpuList, 12);
-    for (unsigned int i = 0; i < 5; i++)
-    {
-        if (combinedGpuList[i] != i + 10)
-        {
-            fprintf(stderr, "Expected to find %u, but found %u.\n", i + 10, combinedGpuList[i]);
-            return 100;
-        }
-    }
-
-    for (unsigned int i = 0; i < 4; i++)
-    {
-        if (combinedGpuList[i + 5] != i + 6)
-        {
-            fprintf(stderr, "Expected to find %u, but found %u.\n", i + 6, combinedGpuList[i + 5]);
-            return 100;
-        }
-    }
-
-    for (unsigned int i = 0; i < 3; i++)
-    {
-        if (combinedGpuList[i + 9] != i + 3)
-        {
-            fprintf(stderr, "Expected to find %u, but found %u.\n", i + 3, combinedGpuList[i + 9]);
-            return 100;
-        }
-    }
-
-    return retSt;
-}
-
-void setup_topology(dcgmTopology_t &top)
-{
-    // Make up some topology data
-    unsigned int numElements          = 0;
-    top.element[numElements].dcgmGpuA = 0;
-    top.element[numElements].dcgmGpuB = 1;
-    top.element[numElements].path     = DCGM_TOPOLOGY_NVLINK1;
-    numElements++;
-
-    top.element[numElements].dcgmGpuA = 0;
-    top.element[numElements].dcgmGpuB = 2;
-    top.element[numElements].path     = DCGM_TOPOLOGY_NVLINK2;
-    numElements++;
-
-    top.element[numElements].dcgmGpuA = 0;
-    top.element[numElements].dcgmGpuB = 3;
-    top.element[numElements].path     = DCGM_TOPOLOGY_NVLINK2;
-    numElements++;
-
-    top.element[numElements].dcgmGpuA = 1;
-    top.element[numElements].dcgmGpuB = 2;
-    top.element[numElements].path     = DCGM_TOPOLOGY_NVLINK2;
-    numElements++;
-
-    top.element[numElements].dcgmGpuA = 1;
-    top.element[numElements].dcgmGpuB = 3;
-    top.element[numElements].path     = DCGM_TOPOLOGY_NVLINK2;
-    numElements++;
-
-    top.element[numElements].dcgmGpuA = 2;
-    top.element[numElements].dcgmGpuB = 3;
-    top.element[numElements].path     = DCGM_TOPOLOGY_NVLINK1;
-    numElements++;
-
-    top.numElements = numElements;
-}
-
-bool containsConnectionPair(const std::vector<DcgmGpuConnectionPair> &level, const DcgmGpuConnectionPair &cp)
-{
-    bool found = false;
-    for (size_t i = 0; i < level.size(); i++)
-    {
-        if (level[i] == cp)
-        {
-            found = true;
-            break;
-        }
-    }
-
-    return found;
-}
-
-/*****************************************************************************/
-int TestCacheManager::TestSetIOConnectionLevels()
-{
-    int retSt          = 0;
-    dcgmTopology_t top = {};
-    std::map<unsigned int, std::vector<DcgmGpuConnectionPair>> connectionLevel;
-
-    std::vector<unsigned int> affinityGroup;
-    for (unsigned int i = 0; i < 4; i++)
-        affinityGroup.push_back(i);
-
-    setup_topology(top);
-
-    SetIOConnectionLevels(affinityGroup, &top, connectionLevel);
-
-    if (connectionLevel.size() != 2)
-    {
-        fprintf(stderr,
-                "Expected 2 populated connection levels, but found %d.\n",
-                static_cast<int>(connectionLevel.size()));
-        retSt = 100;
-    }
-
-    if (connectionLevel[1].size() != 2)
-    {
-        fprintf(
-            stderr, "Level 0 should have 2 connections, but it has %d.\n", static_cast<int>(connectionLevel[0].size()));
-        return 100;
-    }
-
-    if (connectionLevel[2].size() != 4)
-    {
-        fprintf(
-            stderr, "Level 1 should have 4 connections, but it has %d.\n", static_cast<int>(connectionLevel[1].size()));
-        return 100;
-    }
-
-    DcgmGpuConnectionPair level1[2] = { DcgmGpuConnectionPair(0, 1), DcgmGpuConnectionPair(2, 3) };
-    DcgmGpuConnectionPair level2[4] = { DcgmGpuConnectionPair(0, 2),
-                                        DcgmGpuConnectionPair(0, 3),
-                                        DcgmGpuConnectionPair(1, 2),
-                                        DcgmGpuConnectionPair(1, 3) };
-
-    for (unsigned int i = 0; i < 2; i++)
-    {
-        if (containsConnectionPair(connectionLevel[1], level1[i]) == false)
-        {
-            fprintf(stderr, "Expected to find %u,%u in level 0, but didn't.\n", level1[i].gpu1, level1[i].gpu2);
-            return 100;
-        }
-    }
-
-    for (unsigned int i = 0; i < 4; i++)
-    {
-        if (containsConnectionPair(connectionLevel[2], level2[i]) == false)
-        {
-            fprintf(stderr, "Expected to find %u,%u in level 1, but didn't.\n", level2[i].gpu1, level2[i].gpu2);
-            return 100;
-        }
-    }
-
-    uint64_t outputGpus = 0;
-    if (HasStrongConnection(connectionLevel[1], 4, outputGpus) == true)
-    {
-        fprintf(stderr, "Level 0 doesn't have a strong connection between 4 gpus, but reported to.\n");
-        return 100;
-    }
-    if (outputGpus != 0)
-    {
-        fprintf(stderr, "Output gpus shouldn't have been set, but was.\n");
-        return 100;
-    }
-
-    if (HasStrongConnection(connectionLevel[1], 2, outputGpus) == false)
-    {
-        fprintf(stderr, "Level 0 has a strong connection between 2 gpus, but said it didn't.\n");
-        return 100;
-    }
-
-    if (outputGpus != 0x3)
-    {
-        fprintf(stderr, "Output gpus should've been set to 0x3, but is %llx.\n", static_cast<long long>(outputGpus));
-        return 100;
-    }
-
-    outputGpus = 0;
-    if (HasStrongConnection(connectionLevel[2], 4, outputGpus) == false)
-    {
-        fprintf(stderr, "Level 1 has a strong connection between 4 gpus, but said it didn't.\n");
-        return 100;
-    }
-
-    if (outputGpus != 0xF)
-    {
-        fprintf(stderr, "Output gpus should've been set to 0xF, but is %llx.\n", static_cast<long long>(outputGpus));
-        return 100;
-    }
-
-    return retSt;
-}
-
-/*****************************************************************************/
-int TestCacheManager::TestMatchByIO()
-{
-    int retSt          = 0;
-    dcgmTopology_t top = {};
-    std::vector<std::vector<unsigned int>> affinityGroups;
-    std::vector<size_t> potentialCpuMatches;
-    uint64_t outputGpus;
-
-    std::vector<unsigned int> group;
-    for (unsigned int i = 0; i < 4; i++)
-        group.push_back(i);
-    affinityGroups.push_back(std::move(group));
-
-    setup_topology(top);
-
-    potentialCpuMatches.push_back(0);
-
-    MatchByIO(affinityGroups, &top, potentialCpuMatches, 2, outputGpus);
-
-    if (outputGpus != 0x5)
-    {
-        fprintf(stderr, "Output gpus should've been set to 0x5, but is %llx.\n", static_cast<long long>(outputGpus));
-        retSt = 100;
-    }
-
-    MatchByIO(affinityGroups, &top, potentialCpuMatches, 3, outputGpus);
-
-    if (outputGpus != 0xd)
-    {
-        fprintf(stderr, "Output gpus should've been set to 0xd, but is %llx.\n", static_cast<long long>(outputGpus));
-        retSt = 100;
-    }
-
-    MatchByIO(affinityGroups, &top, potentialCpuMatches, 4, outputGpus);
-
-    if (outputGpus != 0xF)
-    {
-        fprintf(stderr, "Output gpus should've been set to 0xF, but is %llx.\n", static_cast<long long>(outputGpus));
-        retSt = 100;
-    }
-
-    // Alter the topology
-    top.element[5].path = DCGM_TOPOLOGY_NVLINK3;
-
-    MatchByIO(affinityGroups, &top, potentialCpuMatches, 2, outputGpus);
-
-    if (outputGpus != 0xC)
-    {
-        fprintf(stderr, "Output gpus should've been set to 0xC, but is %llx.\n", static_cast<long long>(outputGpus));
-    }
-
-    return retSt;
-}
-
 
 /*****************************************************************************/
 int TestCacheManager::TestWatchesVisited()
@@ -1971,29 +1463,43 @@ int TestCacheManager::TestTimedModeAwakeTime()
         return -1;
     }
 
-    std::cout << "TestTimedModeAwakeTime sleeping for 10 seconds." << std::endl;
-    /* Sleep for 10 seconds to allow timed mode to wake up a few times */
-    usleep(10 * 1000000);
+    bool testPassed = WaitFor(
+        [&]() {
+            cacheManager->GetRuntimeStats(&stats);
+
+            long long onePercentUsec = (stats.awakeTimeUsec + stats.sleepTimeUsec) / 100;
+
+            if (stats.awakeTimeUsec > onePercentUsec)
+            {
+                return false;
+            }
+
+            return true;
+        },
+        MIN_RUNTIME_FOR_CPU_CALC_MS);
 
     cacheManager->Shutdown();
 
-    cacheManager->GetRuntimeStats(&stats);
-
-    long long onePercentUsec = (stats.awakeTimeUsec + stats.sleepTimeUsec) / 100;
-
-    if (stats.awakeTimeUsec > onePercentUsec)
+    if (!testPassed)
     {
-        fprintf(stderr,
-                "Timed mode using more than 1%% CPU on idle. awakeUsec %lld. "
-                "1%% usec = %lld. Total usec: %lld\n",
-                onePercentUsec,
-                stats.awakeTimeUsec,
-                (stats.awakeTimeUsec + stats.sleepTimeUsec));
+        cacheManager->GetRuntimeStats(&stats);
 
-        /* Don't fail in debug mode */
-        if (!IsDebugBuild())
+        long long onePercentUsec = (stats.awakeTimeUsec + stats.sleepTimeUsec) / 100;
+
+        if (stats.awakeTimeUsec > onePercentUsec)
         {
-            return 1;
+            fprintf(stderr,
+                    "Timed mode using more than 1%% CPU on idle. awakeUsec %lld. "
+                    "1%% usec = %lld. Total usec: %lld\n",
+                    onePercentUsec,
+                    stats.awakeTimeUsec,
+                    (stats.awakeTimeUsec + stats.sleepTimeUsec));
+
+            /* Don't fail in debug mode */
+            if (!IsDebugBuild())
+            {
+                return 1;
+            }
         }
     }
     else
@@ -2017,7 +1523,7 @@ int TestCacheManager::TestLockstepModeAwakeTime()
 
     if (m_gpus.size() < 1)
     {
-        std::cout << "Skipping TestTimedModeAwakeTime() with 0 GPUs" << std::endl;
+        std::cout << "Skipping TestLockstepModeAwakeTime() with 0 GPUs" << std::endl;
         return 0;
     }
 
@@ -2031,34 +1537,49 @@ int TestCacheManager::TestLockstepModeAwakeTime()
        back to idle */
     cacheManager->UpdateAllFields(0);
 
-    std::cout << "TestLockstepModeAwakeTime sleeping for 10 seconds." << std::endl;
-    /* Sleep for 10 seconds to allow timed mode to wake up a few times */
-    usleep(10 * 1000000);
+    bool testPassed = WaitFor(
+        [&]() {
+            cacheManager->GetRuntimeStats(&stats);
+
+            long long onePercentUsec = (stats.awakeTimeUsec + stats.sleepTimeUsec) / 100;
+
+            if (stats.awakeTimeUsec > onePercentUsec)
+            {
+                return false;
+            }
+
+            return true;
+        },
+        MIN_RUNTIME_FOR_CPU_CALC_MS);
 
     cacheManager->Shutdown();
-    cacheManager->GetRuntimeStats(&stats);
 
-    long long onePercentUsec = (stats.awakeTimeUsec + stats.sleepTimeUsec) / 100;
-
-    if (stats.awakeTimeUsec > onePercentUsec)
+    if (!testPassed)
     {
-        fprintf(stderr,
-                "Lockstep mode using more than 1%% CPU on idle. awakeUsec %lld. "
-                "1%% usec = %lld. Total usec: %lld (IsDebug %d)\n",
-                onePercentUsec,
-                stats.awakeTimeUsec,
-                (stats.awakeTimeUsec + stats.sleepTimeUsec),
-                IsDebugBuild());
+        cacheManager->GetRuntimeStats(&stats);
 
-        /* Don't fail in debug mode */
-        if (!IsDebugBuild())
+        long long onePercentUsec = (stats.awakeTimeUsec + stats.sleepTimeUsec) / 100;
+
+        if (stats.awakeTimeUsec > onePercentUsec)
         {
-            return 1;
+            fprintf(stderr,
+                    "Lockstep mode using more than 1%% CPU on idle. awakeUsec %lld. "
+                    "1%% usec = %lld. Total usec: %lld (IsDebug %d)\n",
+                    onePercentUsec,
+                    stats.awakeTimeUsec,
+                    (stats.awakeTimeUsec + stats.sleepTimeUsec),
+                    IsDebugBuild());
+
+            /* Don't fail in debug mode */
+            if (!IsDebugBuild())
+            {
+                return 1;
+            }
         }
     }
     else
     {
-        printf("Timed mode numSleepsDone %lld, awakeTimeUsec %lld, sleepTimeUsec %lld, "
+        printf("Lockstep mode numSleepsDone %lld, awakeTimeUsec %lld, sleepTimeUsec %lld, "
                "updateCycleFinished %lld (IsDebug %d)\n",
                stats.numSleepsDone,
                stats.awakeTimeUsec,
@@ -2674,13 +2195,6 @@ int TestCacheManager::Run()
         CompleteTest("TestCountBasedQuota", TestCountBasedQuota(), Nfailed);
         CompleteTest("TestRecordingGlobal", TestRecordingGlobal(), Nfailed);
         CompleteTest("TestFieldValueConversion", TestFieldValueConversion(), Nfailed);
-        CompleteTest("TestConvertVectorToBitmask", TestConvertVectorToBitmask(), Nfailed);
-        CompleteTest("TestAffinityBitmasksMatch", TestAffinityBitmasksMatch(), Nfailed);
-        CompleteTest("TestCreateGroupsFromCpuAffinities", TestCreateGroupsFromCpuAffinities(), Nfailed);
-        CompleteTest("TestPopulatePotentialCpuMatches", TestPopulatePotentialCpuMatches(), Nfailed);
-        CompleteTest("TestCombineAffinityGroups", TestCombineAffinityGroups(), Nfailed);
-        CompleteTest("TestSetIOConnectionLevels", TestSetIOConnectionLevels(), Nfailed);
-        CompleteTest("TestMatchByIO", TestMatchByIO(), Nfailed);
         CompleteTest("TestSimulatedAttachDetach", TestSimulatedAttachDetach(), Nfailed);
         CompleteTest("TestAttachDetachNoWatches", TestAttachDetachNoWatches(), Nfailed);
         CompleteTest("TestAttachDetachWithWatches", TestAttachDetachWithWatches(), Nfailed);

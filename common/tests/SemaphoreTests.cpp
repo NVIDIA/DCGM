@@ -18,6 +18,7 @@
 #include <Semaphore.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <deque>
 #include <memory>
 #include <thread>
@@ -94,4 +95,26 @@ TEST_CASE("Semaphore: Destruction")
     th2.join();
     REQUIRE(th1_result.load(std::memory_order_acquire) == true);
     REQUIRE(th2_result.load(std::memory_order_acquire) == true);
+}
+
+TEST_CASE("Semaphore: Destruction With WaitUntil")
+{
+    Semaphore sm;
+    std::atomic_bool th1_result { false };
+    auto constexpr waitTime = std::chrono::seconds(8);
+    // any number < 8s should work, just uses 6s to make sure the test passes in any condition
+    auto constexpr timeout = std::chrono::seconds(6);
+
+    auto start = std::chrono::steady_clock::now();
+    std::thread th1([&sm, &th1_result, waitTime] {
+        th1_result.store(sm.WaitUntil(std::chrono::system_clock::now() + waitTime)
+                             == Semaphore::TimedWaitResult::Destroyed,
+                         std::memory_order_release);
+    });
+
+    sm.Destroy();
+    th1.join();
+    auto end = std::chrono::steady_clock::now();
+    REQUIRE(end - start < timeout);
+    REQUIRE(th1_result.load(std::memory_order_acquire) == true);
 }

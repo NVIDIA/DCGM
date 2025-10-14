@@ -669,6 +669,7 @@ bool ConstantPerf::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
     unsigned long failCheckInterval = m_testParameters->GetDouble(FAIL_CHECK_INTERVAL);
 
     EarlyFailChecker efc(m_testParameters.get(), failEarly, failCheckInterval, *entityInfo);
+    std::vector<pid_t> tids;
 
     try /* Catch runtime errors */
     {
@@ -679,6 +680,17 @@ bool ConstantPerf::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
                 m_device[i], *this, m_testParameters.get(), m_dcgmRecorder, failEarly, failCheckInterval);
             workerThreads[i]->Start();
             Nrunning++;
+            if (auto const tid = workerThreads[i]->GetCachedTid(); tid != 0)
+            {
+                if (auto const ret = HangDetectRegisterTask(getpid(), tid); ret == DCGM_ST_OK)
+                {
+                    tids.push_back(tid);
+                }
+                else
+                {
+                    log_error("Failed to register worker thread {} for hang detection: {}", tid, ret);
+                }
+            }
         }
 
         /* Wait for all workers to finish */
@@ -739,6 +751,20 @@ bool ConstantPerf::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
     earliestStopTime = INT64_MAX;
     for (size_t i = 0; i < m_device.size(); i++)
     {
+        // If a worker was not initialized, skip over it (e.g. we caught a bad_alloc exception)
+        if (workerThreads[i] == NULL)
+        {
+            continue;
+        }
+        // Unregister the thread from hang detection
+        if (auto const tid = workerThreads[i]->GetCachedTid(); tid != 0)
+        {
+            if (auto const ret = HangDetectUnregisterTask(getpid(), tid); ret != DCGM_ST_OK)
+            {
+                log_warning("Failed to unregister worker thread {} for hang detection: {}", tid, ret);
+            }
+        }
+
         earliestStopTime = std::min(earliestStopTime, workerThreads[i]->GetStopTime());
         delete (workerThreads[i]);
         workerThreads[i] = NULL;

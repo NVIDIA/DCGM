@@ -1023,14 +1023,6 @@ int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId,
     return rc;
 }
 
-int DcgmRecorder::CheckForThrottling(unsigned int gpuId,
-                                     timelib64_t startTime,
-                                     std::vector<DcgmError> &fatalErrorList,
-                                     std::vector<DcgmError> &ignoredErrorList)
-{
-    return CheckForClocksEvent(gpuId, startTime, fatalErrorList, ignoredErrorList);
-}
-
 int DcgmRecorder::CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &fatalErrorList)
 {
     dcgmFieldValue_v2 value;

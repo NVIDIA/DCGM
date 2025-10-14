@@ -42,6 +42,7 @@ Memory::Memory(dcgmHandle_t handle)
     tp->AddString(PS_LOGFILE, "stats_memory.json");
     tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
     tp->AddString(PS_IGNORE_ERROR_CODES, "");
+    tp->AddString(PS_USE_GENERIC_MODE, "False");
     m_infoStruct.defaultTestParameters = tp;
 }
 
@@ -78,11 +79,19 @@ void Memory::Go(std::string const &testName,
 
     if (testParameters.GetBoolFromString(MEMORY_STR_IS_ALLOWED) == false)
     {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memory");
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
-        return;
+        if (testParameters.GetBoolFromString(PS_USE_GENERIC_MODE) == false)
+        {
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memory");
+            AddInfo(testName, d.GetMessage());
+            SetResult(testName, NVVS_RESULT_SKIP);
+            return;
+        }
+        else
+        {
+            log_debug("Proceeding in generic mode.");
+            AddInfoVerbose(testName, "Running in generic mode per user request.");
+        }
     }
 
     ParseIgnoreErrorCodesParam(testName, testParameters.GetString(PS_IGNORE_ERROR_CODES));

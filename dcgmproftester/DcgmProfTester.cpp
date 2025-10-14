@@ -37,6 +37,7 @@
 #include <tclap/ValueArg.h>
 #include <tclap/ValuesConstraint.h>
 
+#include <DcgmStringHelpers.h>
 #include <chrono>
 #include <cmath>
 #include <csignal>
@@ -951,14 +952,14 @@ dcgmReturn_t DcgmProfTester::RunTests(double reportingInterval,
 
         if (!gpu->IsValidated())
         {
-            error_reporter << "GPU " << i << ", TestField " << testFieldId << " test "
-                           << "FAILED." << ReporterBase::new_line;
+            error_reporter << "GPU " << i << ", TestField " << testFieldId << " test " << "FAILED."
+                           << ReporterBase::new_line;
             failed = true;
         }
         else
         {
-            info_reporter << "GPU " << i << ", TestField " << testFieldId << " test "
-                          << "PASSED." << ReporterBase::new_line;
+            info_reporter << "GPU " << i << ", TestField " << testFieldId << " test " << "PASSED."
+                          << ReporterBase::new_line;
         }
 
         i++;
@@ -1048,6 +1049,75 @@ dcgmReturn_t DcgmProfTester::ShutdownGpuInstances(void)
     return DCGM_ST_OK;
 }
 
+std::expected<std::vector<dcgm_field_eid_t>, std::string> DcgmProfTester::GetMaxwellPascalVoltaArchGpus()
+{
+    bool const allGpuIds = m_argumentSet.GetGpuIdsString() == "all";
+    std::vector<dcgm_field_eid_t> gpuIds;
+
+    if (allGpuIds)
+    {
+        int count = 0;
+        unsigned int gpuIdList[DCGM_MAX_NUM_DEVICES];
+        dcgmReturn_t dcgmReturn = dcgmGetAllDevices(m_dcgmHandle, gpuIdList, &count);
+
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            std::string errorString = fmt::format("failed to get all devices from DCGM, error: {}", dcgmReturn);
+            log_error(errorString);
+            return std::unexpected(errorString);
+        }
+        for (int i = 0; i < count; i++)
+        {
+            gpuIds.push_back(gpuIdList[i]);
+        }
+    }
+    else
+    {
+        auto gpuIdsStr = m_argumentSet.GetGpuIdsString();
+        std::vector<std::string> gpuIdsStrs;
+        dcgmTokenizeString(gpuIdsStr, ",", gpuIdsStrs);
+        for (auto const &gpuIdStr : gpuIdsStrs)
+        {
+            try
+            {
+                gpuIds.push_back(std::stoi(gpuIdStr));
+            }
+            catch (std::invalid_argument const &)
+            {
+                std::string errorString = fmt::format("Invalid GPU ID: {}", gpuIdStr);
+                log_error(errorString);
+                return std::unexpected(errorString);
+            }
+            catch (std::out_of_range const &)
+            {
+                std::string errorString = fmt::format("GPU ID out of range: {}", gpuIdStr);
+                log_error(errorString);
+                return std::unexpected(errorString);
+            }
+        }
+    }
+
+    std::vector<dcgm_field_eid_t> foundGpus;
+    for (auto const entityId : gpuIds)
+    {
+        dcgmChipArchitecture_t chipArchitecture;
+        dcgmReturn_t ret = dcgmGetGpuChipArchitecture(m_dcgmHandle, entityId, &chipArchitecture);
+        if (ret != DCGM_ST_OK)
+        {
+            std::string errorString
+                = fmt::format("failed to get chip architecture for GPU ID {}, error: {}", entityId, ret);
+            log_error(errorString);
+            return std::unexpected(errorString);
+        }
+        if (chipArchitecture == DCGM_CHIP_ARCH_MAXWELL || chipArchitecture == DCGM_CHIP_ARCH_PASCAL
+            || chipArchitecture == DCGM_CHIP_ARCH_VOLTA)
+        {
+            foundGpus.push_back(entityId);
+        }
+    }
+    return foundGpus;
+}
+
 /*****************************************************************************/
 dcgmReturn_t DcgmProfTester::Process(std::function<dcgmReturn_t(std::shared_ptr<Arguments_t> arguments)> processFn)
 {
@@ -1093,35 +1163,6 @@ int main(int argc, char **argv)
 
         dcgmReturn_t dcgmReturn;
 
-        int cudaLoaded = 0;
-        auto cuResult  = cuDriverGetVersion(&cudaLoaded);
-        if (cuResult != CUDA_SUCCESS)
-        {
-            std::cout << "Unable to validate Cuda version. cuDriverGetVersion returned " << std::to_underlying(cuResult)
-                      << ".";
-
-            return DCGM_ST_GENERIC_ERROR;
-        }
-
-        // CUDA_VERSION_USED is defined in CMakeLists.txt file
-        int majorCudaVersionLoaded                  = cudaLoaded / 1000;
-        const int MAX_SUPPORTED_CUDA_DRIVER_VERSION = 12;
-
-        if (majorCudaVersionLoaded > MAX_SUPPORTED_CUDA_DRIVER_VERSION
-            && CUDA_VERSION_USED == MAX_SUPPORTED_CUDA_DRIVER_VERSION)
-        {
-            // Allow version 12 dcgmproftester binary to run with CUDA 13
-            std::cout << "Running version " << CUDA_VERSION_USED << " binary with CUDA driver version "
-                      << majorCudaVersionLoaded << "." << std::endl;
-        }
-        else if (majorCudaVersionLoaded != CUDA_VERSION_USED)
-        {
-            std::cout << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
-                      << ". Installed Cuda version is " << majorCudaVersionLoaded << ".";
-
-            return DCGM_ST_GENERIC_ERROR;
-        }
-
         // Ensure clean termination for code coverage tests.
         signal(SIGPIPE, signalHandler);
         signal(SIGTERM, signalHandler);
@@ -1145,6 +1186,50 @@ int main(int argc, char **argv)
             std::cout << "Error " << std::to_underlying(dcgmReturn) << " from Init(). Exiting.";
 
             return dcgmReturn;
+        }
+
+        auto maxwellPascalVoltaGpus = dpt->GetMaxwellPascalVoltaArchGpus();
+        if (!maxwellPascalVoltaGpus.has_value())
+        {
+            std::cout << "Error [" << maxwellPascalVoltaGpus.error()
+                      << "] from taking GPUs with Maxwell, Pascal, or Volta architecture. Exiting." << std::endl;
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        int cudaLoaded = 0;
+        auto cuResult  = cuDriverGetVersion(&cudaLoaded);
+        if (cuResult != CUDA_SUCCESS)
+        {
+            std::cout << "Unable to validate Cuda version. cuDriverGetVersion returned " << std::to_underlying(cuResult)
+                      << "." << std::endl;
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        // CUDA_VERSION_USED is defined in CMakeLists.txt file
+        int majorCudaVersionLoaded = cudaLoaded / 1000;
+        int minorCudaVersionLoaded = (cudaLoaded - majorCudaVersionLoaded * 1000) / 10;
+        if (maxwellPascalVoltaGpus->size() > 0 && majorCudaVersionLoaded == 13 && minorCudaVersionLoaded == 0)
+        {
+            if (CUDA_VERSION_USED != 12)
+            {
+                std::string const gpus = fmt::format("{}", fmt::join(maxwellPascalVoltaGpus.value(), ", "));
+                std::string const msg  = fmt::format(
+                    "CUDA 13.0 drops support for everything that is < 7.5 SM Cuda Compatibility. These older SKUs need to run a 12.9-linked application. "
+                     "The following GPUs are affected: {}",
+                    gpus);
+                std::cout << msg << std::endl;
+                std::cout << "Please use dcgmproftester12 instead." << std::endl;
+                return DCGM_ST_VER_MISMATCH;
+            }
+        }
+        else
+        {
+            if (majorCudaVersionLoaded != CUDA_VERSION_USED)
+            {
+                std::cout << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
+                          << ". Installed Cuda version is " << majorCudaVersionLoaded << "." << std::endl;
+                return DCGM_ST_VER_MISMATCH;
+            }
         }
 
         dcgmReturn = dpt->Process([dpt](std::shared_ptr<DcgmNs::ProfTester::Arguments_t> arguments) -> dcgmReturn_t {

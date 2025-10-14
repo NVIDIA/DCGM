@@ -856,6 +856,46 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
     return result;
 }
 
+dcgmWorkloadPowerProfile_t CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(
+    int workloadPowerProfileBit,
+    char workloadPowerProfileAction,
+    int groupId)
+{
+    dcgmWorkloadPowerProfile_t mWorkloadPowerProfile {};
+    mWorkloadPowerProfile.version = dcgmWorkloadPowerProfile_version1;
+    mWorkloadPowerProfile.groupId = groupId;
+    int val                       = workloadPowerProfileBit; // -1 to clear
+    if (val >= 0)
+    {
+        switch (workloadPowerProfileAction)
+        {
+            case 'a':
+                mWorkloadPowerProfile.action = DCGM_WORKLOAD_PROFILE_ACTION_SET;
+                break;
+            case 'c':
+                mWorkloadPowerProfile.action = DCGM_WORKLOAD_PROFILE_ACTION_CLEAR;
+                break;
+            case 'o':
+                mWorkloadPowerProfile.action = DCGM_WORKLOAD_PROFILE_ACTION_SET_AND_OVERWRITE;
+                break;
+            default:
+                throw TCLAP::CmdLineParseException("Invalid workload power profile action", "set");
+        }
+        unsigned int pIndex = val / DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM;
+        if (pIndex >= DCGM_POWER_PROFILE_ARRAY_SIZE)
+        {
+            throw TCLAP::CmdLineParseException("Invalid workload power profile index", "set");
+        }
+        mWorkloadPowerProfile.profileMask[pIndex] = (1 << (val % DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM));
+    }
+    else
+    {
+        mWorkloadPowerProfile.action = DCGM_WORKLOAD_PROFILE_ACTION_CLEAR;
+        memset(mWorkloadPowerProfile.profileMask, 0xFF, sizeof(mWorkloadPowerProfile.profileMask));
+    }
+    return mWorkloadPowerProfile;
+}
+
 dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *const *argv)
 {
     dcgmReturn_t result = DCGM_ST_OK;
@@ -907,7 +947,15 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
                                               "Configure Workload Power Profile. Index of device specific profile.",
                                               false,
                                               0,
-                                              "index (-1 to clear)");
+                                              " index (-1 to clear)");
+
+    TCLAP::ValueArg<char> workloadPowerProfileAction("w",
+                                                     "workloadpowerprofileaction",
+                                                     "Configure Workload Power Profile. Action to take on the profile. "
+                                                     "a - add, c - clear, o - overwrite",
+                                                     false,
+                                                     'a',
+                                                     "action");
 
     TCLAP::SwitchArg verbose("v", "verbose", "Display policy information per GPU.", cmd, false);
     TCLAP::SwitchArg json("j", "json", "Print the output in a json format", cmd, false);
@@ -941,6 +989,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
     cmd.add(&powerLimit);
     cmd.add(&computeMode);
     cmd.add(&workloadPowerProfile);
+    cmd.add(&workloadPowerProfileAction);
     cmd.add(&hostAddress);
 
     helpOutput.addDescription("config -- Used to configure settings for groups of GPUs.");
@@ -953,6 +1002,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
     helpOutput.addToGroup("set", &powerLimit);
     helpOutput.addToGroup("set", &computeMode);
     helpOutput.addToGroup("set", &workloadPowerProfile);
+    helpOutput.addToGroup("set", &workloadPowerProfileAction);
 
     helpOutput.addToGroup("get", &hostAddress);
     helpOutput.addToGroup("get", &groupId);
@@ -1036,12 +1086,13 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
 
         if (workloadPowerProfile.isSet())
         {
-            memset(mDeviceConfig.workloadPowerProfiles, 0, sizeof(mDeviceConfig.workloadPowerProfiles));
-            int val = workloadPowerProfile.getValue(); // -1 to clear
-            if (val >= 0)
+            dcgmWorkloadPowerProfile_t mWorkloadPowerProfile = HelperProcessWorkloadPowerProfileCommandLine(
+                workloadPowerProfile.getValue(), workloadPowerProfileAction.getValue(), groupId.getValue());
+            configObj.SetWorkloadPowerProfileArg(&mWorkloadPowerProfile);
+            result = SetConfigWorkloadPowerProfile(hostAddress.getValue(), configObj).Execute();
+            if (result != DCGM_ST_OK)
             {
-                unsigned int pIndex                         = val / DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM;
-                mDeviceConfig.workloadPowerProfiles[pIndex] = (1 << (val % DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM));
+                return result;
             }
         }
 
@@ -1388,7 +1439,9 @@ std::string CommandLineParser::ConcatenateParameters(std::vector<std::string> co
 
     for (auto const &parameter : parameters)
     {
-        // valid form: cpu_eud.passthrough_args=arg1;eud.passthrough_args=arg2
+        // valid forms:
+        //  * cpu_eud.passthrough_args=arg1;eud.passthrough_args=arg2
+        //  * genericMode=true
         std::vector<std::string> tokens;
         dcgmTokenizeString(parameter, ";", tokens);
 
@@ -1401,9 +1454,15 @@ std::string CommandLineParser::ConcatenateParameters(std::vector<std::string> co
             }
             std::string key = t.substr(0, idx);
             auto dotIdx     = key.find('.');
+            std::string argName;
             if (dotIdx == std::string::npos)
             {
-                throw TCLAP::CmdLineParseException(fmt::format("incorrect parameter format: ", t));
+                // Allow parameters with no test name to support global parameters
+                argName = key;
+            }
+            else
+            {
+                argName = key.substr(dotIdx + 1);
             }
 
             std::string value = t.substr(idx + 1);
@@ -1415,8 +1474,7 @@ std::string CommandLineParser::ConcatenateParameters(std::vector<std::string> co
                 continue;
             }
 
-            std::string argName = key.substr(dotIdx + 1);
-            auto handler        = multiDefinitionsHandlers.find(argName);
+            auto handler = multiDefinitionsHandlers.find(argName);
             if (handler == multiDefinitionsHandlers.end())
             {
                 throw TCLAP::CmdLineParseException(fmt::format("multiple definitions of {} parameter", key));
@@ -2246,10 +2304,9 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
 
     bool hostAddressWasOverridden = hostAddress.isSet();
 
-    return StartDiag { hostAddress.getValue(), hostAddressWasOverridden,
-                       concatenatedParams,     config.getValue(),
-                       json.getValue(),        drd,
-                       iterations.getValue(),  argv[0] }
+    return StartDiag { hostAddress.getValue(), hostAddressWasOverridden, concatenatedParams,
+                       config.getValue(),      json.getValue(),          drd,
+                       iterations.getValue() }
         .Execute();
 }
 

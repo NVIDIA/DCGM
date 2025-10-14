@@ -26,8 +26,9 @@
 
 #include <dcgm_structs.h>
 
-#define CPU_VENDOR_MODEL_PATH           "/sys/devices/soc0/soc_id"
+#define CPU_VENDOR_MODEL_GLOB_PATH      "/sys/devices/soc*/soc_id"
 #define CPU_CORE_SLIBLINGS_GLOB_PATTERN "/sys/devices/system/cpu/cpu*/topology/core_siblings"
+#define CPU_NODE_RANGE_PATH             "/sys/devices/system/node/has_cpu"
 
 class CpuHelpers
 {
@@ -47,12 +48,10 @@ public:
     static std::string_view GetNvidiaVendorName();
     static std::string_view GetGraceModelName();
 
-protected:
-    [[nodiscard]] unsigned int GetPhysicalCpusNum() const;
-
 private:
     void ReadPhysicalCpuIds();
-    void ReadCpuVendorAndModel(std::string_view vendorPath);
+    void FillVendorAndModelIfNvidiaCpuPresent();
+    [[nodiscard]] std::optional<std::tuple<unsigned int, unsigned int>> GetFirstLastSystemNodes() const;
 
     std::vector<dcgm_field_eid_t> m_cpuIds;
     std::string m_cpuVendor = "Unknown";

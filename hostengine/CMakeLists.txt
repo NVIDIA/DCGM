@@ -14,7 +14,7 @@
 
 if(BUILD_TESTING)
   add_library(hostengine_lib STATIC src/HostEngineCommandLine.cpp src/HostEngineOutput.cpp)
-  target_link_libraries(hostengine_lib PRIVATE common_interface)
+  target_link_libraries(hostengine_lib PRIVATE common_interface TCLAP::TCLAP)
   target_include_directories(hostengine_lib PUBLIC src)
   target_compile_definitions(hostengine_lib PRIVATE HOSTENGINE_TESTS)
 
@@ -35,6 +35,7 @@ target_link_libraries(nv-hostengine
         dcgm_interface dcgm
         buildinfo_objects
         dcgm_common
+        TCLAP::TCLAP
         transport_objects
         dcgm_logging
     PUBLIC

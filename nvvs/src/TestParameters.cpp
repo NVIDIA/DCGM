@@ -365,7 +365,7 @@ std::string TestParameters::GetString(std::string_view key) const
 }
 
 /*****************************************************************************/
-static int bool_string_to_bool(std::string const &str)
+bool TestParameters::bool_string_to_bool(std::string const &str)
 {
     const char *cStr = str.c_str();
     char firstChar   = *cStr;

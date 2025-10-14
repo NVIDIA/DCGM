@@ -144,6 +144,34 @@ dcgmReturn_t DcgmModuleConfig::ProcessEnforceConfigGpu(dcgm_config_msg_enforce_g
     return dcgmReturn;
 }
 
+/*****************************************************************************/
+dcgmReturn_t DcgmModuleConfig::ProcessSetWorkloadPowerProfile(dcgm_config_msg_set_workload_power_profile_v1 *msg)
+{
+    unsigned int groupId;
+    dcgmReturn_t dcgmReturn;
+
+    dcgmReturn = CheckVersion(&msg->header, dcgm_config_msg_set_workload_power_profile_version);
+    if (DCGM_ST_OK != dcgmReturn)
+        return dcgmReturn; /* Logging handled by helper method */
+
+    groupId = (uintptr_t)msg->workloadPowerProfile.groupId;
+
+    /* Verify group id is valid */
+    dcgmReturn = m_coreProxy.VerifyAndUpdateGroupId(&groupId);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        log_error("Error: Bad group id parameter {}", groupId);
+        return dcgmReturn;
+    }
+    msg->workloadPowerProfile.groupId = groupId;
+    dcgmReturn                        = mpConfigManager->SetWorkloadPowerProfile(&msg->workloadPowerProfile);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        log_error("SetWorkloadPowerProfile returned error {}", dcgmReturn);
+    }
+    return dcgmReturn;
+}
+
 dcgmReturn_t DcgmModuleConfig::ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand)
 {
     dcgmReturn_t retSt = DCGM_ST_OK;
@@ -193,6 +221,10 @@ dcgmReturn_t DcgmModuleConfig::ProcessMessage(dcgm_module_command_header_t *modu
 
             case DCGM_CONFIG_SR_ENFORCE_GPU:
                 retSt = ProcessEnforceConfigGpu((dcgm_config_msg_enforce_gpu_v1 *)moduleCommand);
+                break;
+
+            case DCGM_CONFIG_SR_SET_WORKLOAD_POWER_PROFILE:
+                retSt = ProcessSetWorkloadPowerProfile((dcgm_config_msg_set_workload_power_profile_v1 *)moduleCommand);
                 break;
 
             default:

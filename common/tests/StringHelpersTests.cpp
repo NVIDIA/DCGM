@@ -155,3 +155,33 @@ TEMPLATE_LIST_TEST_CASE("SafeCopyTo", "", SafeCopyToTests)
     }
     CHECK(std::memcmp(buffer, TestType::expected.array, TestType::bufferSize) == 0);
 }
+
+TEST_CASE("Trim")
+{
+    using namespace DcgmNs;
+
+    SECTION("Normal cases")
+    {
+        REQUIRE(Trim("") == "");
+        REQUIRE(Trim("a") == "a");
+        REQUIRE(Trim(" ") == "");
+        REQUIRE(Trim("\t\n\r\f\v  \t\n\r\f\v") == "");
+        REQUIRE(Trim("capoo") == "capoo");
+        REQUIRE(Trim("\t\n\r\f\v capoo") == "capoo");
+        REQUIRE(Trim("capoo \t\n\r\f\v") == "capoo");
+        REQUIRE(Trim("\t\n\r\f\v capoo\t\n\r\f\v ") == "capoo");
+        REQUIRE(Trim("capoo\t\n\r\f\v and\t\n\r\f\v dogdog") == "capoo\t\n\r\f\v and\t\n\r\f\v dogdog");
+    }
+
+    SECTION("Unicode whitespace handling")
+    {
+        REQUIRE(Trim(" \t\n\r\f\v\u00A0hello\u00A0\t\n\r\f\v ") == "\u00A0hello\u00A0");
+    }
+
+    SECTION("Performance with large strings")
+    {
+        std::string largeString(10000, ' ');
+        largeString.insert(5000, "content");
+        REQUIRE(Trim(largeString) == "content");
+    }
+}

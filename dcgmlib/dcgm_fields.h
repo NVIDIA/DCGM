@@ -1788,6 +1788,76 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_PLATFORM_MODULE_ID 577
 
 /**
+ * Link-based PRM metrics for NvLink
+ * These fields use dcgm_link_t to specify GPU ID + port number for per-link metrics
+ */
+
+/**
+ * PPRM recovery operation status
+ */
+#define DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY 580
+
+/**
+ * Time in seconds since last PRM recovery
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST 581
+
+/**
+ * Time in milliseconds between last two recoveries
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO 582
+
+/**
+ * Total successful recovery events counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TOTAL_SUCCESSFUL_EVENTS 583
+
+/**
+ * Physical layer successful recovery events
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_SUCCESSFUL_RECOVERY_EVENTS 584
+
+/**
+ * Physical layer link down counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_COUNTER 585
+
+/**
+ * PLR received codewords counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODES 586
+
+/**
+ * PLR received code error counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODE_ERR 587
+
+/**
+ * PLR received uncorrectable codes counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_UNCORRECTABLE_CODE 588
+
+/**
+ * PLR transmitted codewords counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES 589
+
+/**
+ * PLR transmitted retry codes counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES 590
+
+/**
+ * PLR transmitted retry events counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS 591
+
+/**
+ * PLR sync events counter
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS 592
+
+/**
  * Starting ID for all the internal fields
  */
 #define DCGM_FI_INTERNAL_FIELDS_0_START 600
@@ -2581,6 +2651,18 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_PROF_C2C_RX_DATA_BYTES 1079
 
 /**
+ * GPU Host Memory Utilization
+ */
+#define DCGM_FI_PROF_HOSTMEM_CACHE_HIT  1080
+#define DCGM_FI_PROF_HOSTMEM_CACHE_MISS 1081
+
+/**
+ * GPU Peer Memory Utilization
+ */
+#define DCGM_FI_PROF_PEERMEM_CACHE_HIT  1082
+#define DCGM_FI_PROF_PEERMEM_CACHE_MISS 1083
+
+/**
  * CPU Utilization, total
  */
 #define DCGM_FI_DEV_CPU_UTIL_TOTAL 1100
@@ -2982,12 +3064,124 @@ typedef unsigned int dcgm_field_eid_t;
 
 #define DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN_NS 1424
 
+/*
+** DCGM Power smoothing fields.
+*/
+
+/*
+** Enablement (0/DISABLED or 1/ENABLED)
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_ENABLED 1425
+
+/*
+** Current privilege level
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_PRIV_LVL 1426
+
+/*
+** Immediate ramp down enablement (0/DISABLED or 1/ENABLED)
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED 1427
+
+/*
+** Applied TMP ceiling value in Watts
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL 1428
+
+/*
+** Applied TMP floor value in Watts
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR 1429
+
+/*
+** Max % TMP Floor value
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING 1430
+
+/*
+** Min % TMP Floor value
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING 1431
+
+/*
+** HW Circuitry % lifetime remaining
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING 1432
+
+/*
+** Max number of preset profiles
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES 1433
+
+/*
+** % TMP floor for a given profile
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR 1434
+
+/*
+** Ramp up rate in mW/s for a given profile
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE 1435
+
+/*
+** Ramp down rate in mW/s for a given profile
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE 1436
+
+/*
+** Ramp down hysteresis value in ms for a given profile
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL 1437
+
+/*
+** Active preset profile number
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE 1438
+
+/*
+** % TMP floor for a given profile
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR 1439
+
+/*
+** Ramp up rate in mW/s for a given profile
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE 1440
+
+/*
+** Ramp down rate in mW/s for a given profile
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE 1441
+
+/*
+** Ramp down hysteresis value in ms for a given profile
+*/
+
+#define DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL 1442
+
 /**
  * 1 greater than maximum fields above. This is the 1 greater
  * than the maximum field id that could be allocated.
  */
 
-#define DCGM_FI_MAX_FIELDS 1425
+#define DCGM_FI_MAX_FIELDS (DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL + 1)
 
 
 /** @} */

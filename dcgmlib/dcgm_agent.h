@@ -930,6 +930,24 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmConfigGet(dcgmHandle_t pDcgmHandle,
                                            dcgmConfig_t deviceConfigList[],
                                            dcgmStatus_t statusHandle);
 
+/**
+ * Used to set, clear, or overwrite the workload power profile for all the GPUs present in a group.
+ *
+ * This API will return an error if the operation fails for any of the GPUs in the group.
+ *
+ * @param pDcgmHandle            IN: DCGM Handle
+ * @param workloadPowerProfile   IN: Workload power profile describing the
+ *                                 target group, requested mask, and action.
+ * @return
+ *        - \ref DCGM_ST_OK              if the workload power profile has been successfully set
+ *        - \ref DCGM_ST_BADPARAM        if an argument is invalid
+ *        - \ref DCGM_ST_VER_MISMATCH    if workloadPowerProfile->version is incorrect
+ *        - \ref DCGM_ST_GENERIC_ERROR   if an unknown error has occurred
+ *
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmConfigSetWorkloadPowerProfile(dcgmHandle_t pDcgmHandle,
+                                                               dcgmWorkloadPowerProfile_t *workloadPowerProfile);
+
 /** @} */ // Closing for DCGMAPI_DC_Setup
 
 

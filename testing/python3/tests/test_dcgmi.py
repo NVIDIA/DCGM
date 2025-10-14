@@ -589,6 +589,7 @@ def test_dcgmi_diag(handle, gpuIds):
            ["diag", "--run", "1", "--entity-id", "gpu:"+"{" + str(gpuIds[0]) + "-" + str(gpuIds[0]) + "}"], # verifies --entity-id option accepts and validates list of GPUs passed in
            ["diag", "--run", "1", "--entity-id", gpu0Info.identifiers.uuid], # verifies --entity-id option accepts GPU UUID
            ["diag", "--run", "1", "-g", str(createdGroupId)], # verifies --group can work
+           ["diag", "--run", "1", "-i", allGpusCsv, "-p", "generic_mode=true"], # This is a valid global parameter
            pciTestCmdLineArgs,
     ]
 
@@ -658,6 +659,7 @@ def test_dcgmi_diag(handle, gpuIds):
             ["diag", "--run", "1", "--expectedNumEntities", "gpu:-1"], # Test --expectedNumEntities option with invalid num gpus
             ["diag", "--run", "1", "-f", "0,1", "--expectedNumEntities", f"gpu:{len(gpuIds)}"], # Test --expectedNumEntities option cannot be used with fake gpus
             ["diag", "--run", "1", "--gpuList", allGpusCsv, "--expectedNumEntities", f"gpu:{len(gpuIds)}"], # Test --expectedNumEntities option cannot be used with gpu list
+            ["diag", "--run", "1", "-p", "funMode=true"], # Make sure we fail with an invalid global parameter
     ]
 
     if nvidiaCpuCount != 0:

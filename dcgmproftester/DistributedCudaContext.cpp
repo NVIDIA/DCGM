@@ -770,8 +770,7 @@ static int dptGetLatestDcgmValueCB(dcgm_field_entity_group_t entityGroupId,
      */
     if (values[0].status == DCGM_ST_NO_DATA)
     {
-        DCGM_LOG_WARNING << "Got DCGM_ST_NO_DATA. Timing may be off by one "
-                         << "cycle.";
+        DCGM_LOG_WARNING << "Got DCGM_ST_NO_DATA. Timing may be off by one " << "cycle.";
 
         return DCGM_ST_OK;
     }

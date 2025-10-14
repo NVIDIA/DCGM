@@ -17,15 +17,16 @@ fi
 eval set -- "$OPTS"
 
 # Default values
-CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES:-90;100}"
 NVBANDWIDTH_BUILD_BUILD_ID_SUFFIX=${NVBANDWIDTH_BUILD_BUILD_ID_SUFFIX:-}
 NVBANDWIDTH_BUILD_IMAGE_NAME=${NVBANDWIDTH_BUILD_IMAGE_NAME:-nvbandwidthbuild}
 NVBANDWIDTH_REPO_URL="${NVBANDWIDTH_REPO_URL:-https://github.com/NVIDIA/nvbandwidth}"
-NVBANDWIDTH_VERSION="${NVBANDWIDTH_VERSION:-v0.5}"
+NVBANDWIDTH_VERSION="${NVBANDWIDTH_VERSION:-V0.8}"
 
 declare -a cuda_local_repo_urls=(
-    'https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-ubuntu2404-12-8-local_12.8.0-570.86.10-1_amd64.deb'
-    'https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-ubuntu2404-12-8-local_12.8.0-570.86.10-1_arm64.deb'
+    'https://developer.download.nvidia.com/compute/cuda/12.9.1/local_installers/cuda-repo-ubuntu2004-12-9-local_12.9.1-575.57.08-1_amd64.deb'
+    'https://developer.download.nvidia.com/compute/cuda/12.9.1/local_installers/cuda-repo-ubuntu2004-12-9-local_12.9.1-575.57.08-1_arm64.deb'
+    'https://developer.download.nvidia.com/compute/cuda/13.0.0/local_installers/cuda-repo-ubuntu2204-13-0-local_13.0.0-580.65.06-1_amd64.deb'
+    'https://developer.download.nvidia.com/compute/cuda/13.0.0/local_installers/cuda-repo-ubuntu2204-13-0-local_13.0.0-580.65.06-1_arm64.deb'
 )
 
 while true; do
@@ -55,8 +56,11 @@ if [ ! -v SRC_DIR ]; then
 fi
 
 # Constants
+# Using Ubuntu 20.04 for glibc compatibility on older systems
+# Note cuda 13.0.0 doesn't have ubuntu 20.04 support, but we can use cuda 13.0.0-ubuntu 24.04 for the build
+UBUNTU_VERSION="${UBUNTU_VERSION:-20.04}"
 declare -A PLATFORMS=( ['x86_64']='amd64' ['aarch64']='arm64' )
-declare -A BASE_IMAGES=( ['amd64']='ubuntu:20.04' ['arm64']='arm64v8/ubuntu:20.04' )
+declare -A BASE_IMAGES=( ['amd64']="ubuntu:${UBUNTU_VERSION}" ['arm64']="arm64v8/ubuntu:${UBUNTU_VERSION}" )
 BUILD_PLATFORM="linux/${PLATFORMS[$(uname -m)]}"
 DIR=$(dirname $(realpath $0))
 REMOTE_DIR="/usr/local/src/nvbandwidth_src"
@@ -106,7 +110,7 @@ do
     CUDA_VERSION=$(dpkg-deb --field cuda-repo.deb Version)
     TARGET_ARCHITECTURE=$(dpkg-deb --field cuda-repo.deb Architecture)
 
-    BUILD_TAG="$NVBANDWIDTH_BUILD_IMAGE_NAME:$NVBANDWIDTH_VERSION-gcc11-cuda${CUDA_VERSION}-$TARGET_ARCHITECTURE"
+    BUILD_TAG="$NVBANDWIDTH_BUILD_IMAGE_NAME:$NVBANDWIDTH_VERSION-ubuntu${UBUNTU_VERSION}-cuda${CUDA_VERSION}-$TARGET_ARCHITECTURE"
     
     if ! docker image inspect "$LOCAL_REGISTRY/$BUILD_TAG" >/dev/null; then
         docker buildx rm mybuilder || true
@@ -159,10 +163,11 @@ do
         set -ex;
         cmake -S . \
               -B $CMAKE_BINARY_DIR \
-              -DMULTINODE=1 \
-              '-DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}' \
+              -DMULTINODE=0 \
               -DCMAKE_BUILD_TYPE=Release \
+              '-DCMAKE_CUDA_ARCHITECTURES=all' \
               '-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc' \
               '-DCMAKE_SHARED_LINKER_FLAGS=-static-libstdc++ -static-libgcc';
-        cmake --build $CMAKE_BINARY_DIR"
+        cmake --build $CMAKE_BINARY_DIR --verbose;
+        strip $CMAKE_BINARY_DIR/nvbandwidth"
 done

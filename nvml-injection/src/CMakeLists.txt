@@ -24,6 +24,9 @@ target_link_libraries(
     PRIVATE
         nvmli_interface
         sdk_nvml_interface
+        dcgm
+        dcgm_common
+        common_interface
 )
 
 target_sources(nvmli_public
@@ -48,7 +51,7 @@ target_sources(
 )
 
 target_link_libraries(nvml_injection PUBLIC nvmli_interface)
-target_link_libraries(nvml_injection PRIVATE nvmli_public sdk_nvml_interface)
+target_link_libraries(nvml_injection PRIVATE nvmli_public sdk_nvml_interface dcgm dcgm_common common_interface)
 target_link_libraries(nvml_injection PRIVATE ${YAML_STATIC_LIBS})
 target_link_libraries(nvml_injection PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/nvml-injection.linux_defs)
 target_link_libraries(nvml_injection PRIVATE fmt::fmt)

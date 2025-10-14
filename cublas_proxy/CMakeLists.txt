@@ -40,3 +40,4 @@ endmacro()
 
 add_subdirectory(Cuda11)
 add_subdirectory(Cuda12)
+add_subdirectory(Cuda13)

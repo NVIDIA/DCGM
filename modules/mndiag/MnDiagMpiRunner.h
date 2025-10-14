@@ -36,7 +36,6 @@ public:
      */
     MnDiagMpiRunner(DcgmCoreProxyBase &coreProxy)
         : MpiRunner(coreProxy)
-        , m_mnubergemmPath(MnDiagConstants::DEFAULT_MNUBERGEMM_PATH)
     {}
 
     /**
@@ -111,13 +110,6 @@ private:
      * @param nodeInfo The node info map used to populate the response structure
      */
     void ParseMnUberGemmOutput_v1(std::istream &dataStream, void *responseStruct, nodeInfoMap_t const &nodeInfo);
-
-    /**
-     * @brief Get the path to the mnubergemm binary
-     *
-     * @return std::string The path to the mnubergemm binary
-     */
-    std::string GetMnubergemmBinPath() const;
 
     unsigned int m_totalProcessCount { 0 };
     std::string m_mnubergemmPath;

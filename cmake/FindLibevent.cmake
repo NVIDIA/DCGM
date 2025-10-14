@@ -19,43 +19,94 @@
 # LIBEVENT_STATIC_LIBS, Libevent static libraries
 # Libevent_FOUND, If false, do not try to use libevent
 
-set(Libevent_EXTRA_PREFIXES / /lib /lib64 /usr/local /opt/local "$ENV{HOME}" "${Libevent_ROOT}")
-foreach(prefix ${Libevent_EXTRA_PREFIXES})
-  list(APPEND Libevent_INCLUDE_PATHS "${prefix}/include")
-  list(APPEND Libevent_LIB_PATHS "${prefix}/lib" "${prefix}/lib64")
-endforeach()
+find_path(Libevent_INCLUDE_DIR "event2/event.h")
+mark_as_advanced(Libevent_INCLUDE_DIR)
 
-find_path(LIBEVENT_INCLUDE_DIR evhttp.h event.h PATHS ${Libevent_INCLUDE_PATHS})
-find_library(LIBEVENT_STATIC_LIB NAMES libevent.a libevent_core.a libevent_extra.a PATHS ${Libevent_LIB_PATHS})
-find_library(LIBEVENT_PTHREAD_STATIC_LIB NAMES libevent_pthreads.a PATHS ${Libevent_LIB_PATHS})
+if (Libevent_INCLUDE_DIR)
+    cmake_path(GET Libevent_INCLUDE_DIR PARENT_PATH _Libevent_INSTALL_PREFIX)
 
-if (LIBEVENT_INCLUDE_DIR AND LIBEVENT_STATIC_LIB AND LIBEVENT_PTHREAD_STATIC_LIB)
-    set(Libevent_FOUND TRUE)
-    add_library(libevent_event_static STATIC IMPORTED)
-    set_target_properties(libevent_event_static PROPERTIES IMPORTED_LOCATION ${LIBEVENT_STATIC_LIB})
-    add_library(libevent_event_pthread STATIC IMPORTED)
-    set_target_properties(libevent_event_pthread PROPERTIES IMPORTED_LOCATION ${LIBEVENT_PTHREAD_STATIC_LIB})
-    set(LIBEVENT_STATIC_LIBS libevent_event_static libevent_event_pthread)
-else ()
-    set(Libevent_FOUND FALSE)
-endif ()
+    # TODO: Add dispatching based on ``Libevent_USE_STATIC_LIBS`` variable
+
+    set(_Libevent_LIBRARY_PREFIX ${CMAKE_STATIC_LIBRARY_PREFIX})
+    set(_Libevent_LIBRARY_SUFFIX ${CMAKE_STATIC_LIBRARY_SUFFIX})
+
+    find_library(Libevent_core_LIBRARY
+        NAMES ${_Libevent_LIBRARY_PREFIX}event_core${_Libevent_LIBRARY_SUFFIX}
+        HINTS "${_Libevent_INSTALL_PREFIX}")
+
+    find_library(Libevent_extra_LIBRARY
+        NAMES ${_Libevent_LIBRARY_PREFIX}event_extra${_Libevent_LIBRARY_SUFFIX}
+        HINTS "${_Libevent_INSTALL_PREFIX}")
+
+    find_library(Libevent_pthreads_LIBRARY
+        NAMES ${_Libevent_LIBRARY_PREFIX}event_pthreads${_Libevent_LIBRARY_SUFFIX}
+        HINTS "${_Libevent_INSTALL_PREFIX}")
+
+    mark_as_advanced(
+        Libevent_core_LIBRARY
+        Libevent_extra_LIBRARY
+        Libevent_pthreads_LIBRARY)
+
+    unset(_Libevent_INSTALL_PREFIX)
+endif()
+
+include(FindPackageHandleStandardArgs)
+
+find_package_handle_standard_args(Libevent
+    REQUIRED_VARS
+        Libevent_INCLUDE_DIR
+        Libevent_core_LIBRARY
+        Libevent_extra_LIBRARY
+        Libevent_pthreads_LIBRARY)
 
 if (Libevent_FOUND)
-    if (NOT Libevent_FIND_QUIETLY)
-        message(STATUS "Found libevent: ${LIBEVENT_LIB}")
-    endif ()
-else ()
-    if (Libevent_FIND_REQUIRED)
-        message(FATAL_ERROR "Could NOT find libevent and libevent_pthread.")
-    endif ()
-    message(STATUS "libevent and libevent_pthread NOT found.")
-endif ()
+    set(Libevent_INCLUDE_DIRS "${Libevent_INCLUDE_DIR}")
+    set(Libevent_LIBRARIES
+        "${Libevent_core_LIBRARY}"
+        "${Libevent_extra_LIBRARY}"
+        "${Libevent_pthreads_LIBRARY}")
 
-unset(Libevent_EXTRA_PREFIXES)
-unset(LIBEVENT_PTHREAD_STATIC_LIB)
-unset(LIBEVENT_STATIC_LIB)
+    if (NOT TARGET Libevent::core)
+        add_library(Libevent::core UNKNOWN IMPORTED)
+        set_target_properties(Libevent::core PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${Libevent_INCLUDE_DIRS}"
+            IMPORTED_LOCATION "${Libevent_core_LIBRARY}")
+    endif()
 
-mark_as_advanced(
-    LIBEVENT_STATIC_LIBS
-    LIBEVENT_INCLUDE_DIR
-    )
+    if (NOT TARGET Libevent::extra)
+        add_library(Libevent::extra UNKNOWN IMPORTED)
+        set_target_properties(Libevent::extra PROPERTIES
+            IMPORTED_LOCATION "${Libevent_extra_LIBRARY}"
+            INTERFACE_LINK_LIBRARIES Libevent::core)
+    endif()
+
+    if (NOT TARGET Libevent::pthreads)
+        add_library(Libevent::pthreads UNKNOWN IMPORTED)
+        set_target_properties(Libevent::pthreads PROPERTIES
+            IMPORTED_LOCATION "${Libevent_pthreads_LIBRARY}"
+            INTERFACE_LINK_LIBRARIES Libevent::core)
+    endif()
+
+    # TODO: Remove legacy targets and variables. Update call sites
+
+    # Legacy variables
+    set(LIBEVENT_INCLUDE_DIR "${Libevent_INCLUDE_DIRS}")
+    set(LIBEVENT_STATIC_LIB
+        "${Libevent_core_LIBRARY}"
+        "${Libevent_extra_LIBRARY}")
+    set(LIBEVENT_PTHREAD_STATIC_LIB "${Libevent_pthreads_LIBRARY}")
+    set(LIBEVENT_STATIC_LIBS libevent_event_static libevent_event_pthread)
+
+    # Legacy Targets
+    if (NOT TARGET libevent_event_static)
+        add_library(libevent_event_static UNKNOWN IMPORTED)
+        set_target_properties(libevent_event_static PROPERTIES
+            IMPORTED_LOCATION "${Libevent_core_LIBRARY}"
+            INTERFACE_LINK_LIBRARIES "${Libevent_extra_LIBRARY}")
+    endif()
+
+    if (NOT TARGET libevent_event_pthread)
+        add_library(libevent_event_pthread UNKNOWN IMPORTED)
+        set_target_properties(libevent_event_pthread PROPERTIES IMPORTED_LOCATION ${LIBEVENT_PTHREAD_STATIC_LIB})
+    endif()
+endif()

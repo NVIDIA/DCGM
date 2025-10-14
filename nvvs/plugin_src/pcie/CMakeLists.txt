@@ -33,7 +33,7 @@ macro(define_bw_checker CHECKER_NAME CUDA_VER)
             ${CUDA${CUDA_VER}_STATIC_LIBS}
             common_interface
             dcgm_cublas_proxy${CUDA_VER}
-            dcgm_cuda_worker12
+            dcgm_cuda_worker${CUDA_VER}
             dcgm_thread dcgm_common dcgm
         PUBLIC
             ${CUDA${CUDA_VER}_LIBS}

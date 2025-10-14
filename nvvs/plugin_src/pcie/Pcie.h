@@ -16,14 +16,13 @@
 #ifndef _NVVS_NVVS_BusGrind_H_
 #define _NVVS_NVVS_BusGrind_H_
 
-#include "Gpu.h"
 #include "Plugin.h"
 #include "PluginDevice.h"
 
-
 #include <cublas_proxy.hpp>
 #include <dcgm_structs.h>
-#include <iostream>
+
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -97,7 +96,7 @@ constexpr double PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY   = 10000000.0;
 constexpr double PCIE_HOPPER_AND_BEFORE_DEFAULT_BROKEN_P2P_SIZE = 4096.0;
 
 constexpr unsigned int PCIE_DEFAULT_ITERATIONS = 50;
-}; //namespace
+} //namespace
 
 class BusGrindTest;
 
@@ -114,7 +113,7 @@ public:
     bool test_p2p_off;
     bool test_broken_p2p;
     bool test_nvlink_status;
-    bool test_links;
+    bool m_test_links;
     bool check_errors;
     bool test_1;
     bool test_2;
@@ -260,6 +259,37 @@ private:
 
     friend class BusGrindTest;
 };
+
+namespace
+{
+/*****************************************************************************/
+/* Convenience class to protect a vector from concurrent appends */
+
+template <typename T>
+class ProtectedVector
+{
+private:
+    std::vector<T> m_vector;
+    mutable std::mutex m_mutex;
+
+public:
+    void PushBack(const T &value)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_vector.push_back(value);
+    }
+
+    template <typename F>
+    void ForEach(F &&func) const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        for (const auto &item : m_vector)
+        {
+            func(item);
+        }
+    }
+};
+} // namespace
 
 /*****************************************************************************/
 /* Test dimension. Used for both M and N

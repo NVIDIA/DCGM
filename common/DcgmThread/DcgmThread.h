@@ -47,6 +47,7 @@ private:
     std::condition_variable m_stopCond; /* Condition used to signal that it's time to stop */
     std::string m_threadName;           /* Textual name of this thread that will appear in gdb */
 
+    pid_t m_tid; /* Thread ID */
 public:
     /*************************************************************************/
     /*
@@ -73,12 +74,22 @@ public:
     void SetThreadName(std::string threadName);
 
     /*************************************************************************/
-    /*
-     * Static method for getting the current thread's thread ID on linux/windows
+    /**
+     * Returns the thread ID of the calling thread (not necessarily thread
+     * managed by this object). To get the thread ID of the thread managed by
+     * this object, use GetCachedTid() instead. Supports Linux and Windows.
      *
+     * @returns The thread ID of the current thread
      */
     static unsigned long GetTid();
 
+    /*************************************************************************/
+    /**
+     * Get the thread id of the thread managed by this DcgmThread object
+     *
+     * @returns The thread ID if the thread has been started, 0 otherwise
+     */
+    pid_t GetCachedTid();
 
     /*************************************************************************/
     /*

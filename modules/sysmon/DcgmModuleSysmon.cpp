@@ -65,7 +65,7 @@ DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc)
         throw std::runtime_error("Unable to start a DcgmTaskRunner");
     }
 
-    if (getenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__) == nullptr)
+    if (!CpuHelpers::SupportNonNvidiaCpu())
     {
         if (m_sysmon.AreNvidiaCpusPresent() == false)
         {
@@ -473,36 +473,6 @@ dcgmReturn_t DcgmModuleSysmon::ProcessCoreMessage(dcgm_module_command_header_t *
 }
 
 /*****************************************************************************/
-static std::tuple<unsigned int, unsigned int> getFirstLastSystemNodes()
-{
-    std::ifstream file;
-    file.open("/sys/devices/system/node/has_cpu");
-
-    // Node range expected to be in the form "x-y" or "x"
-    std::string nodeRange;
-    file >> nodeRange;
-
-    auto firstLastNode = DcgmNs::Split(nodeRange, '-');
-
-    if (firstLastNode.size() == 2)
-    {
-        unsigned int firstNode = strtoul(std::string(firstLastNode[0]).c_str(), nullptr, 10);
-        unsigned int lastNode  = strtoul(std::string(firstLastNode[1]).c_str(), nullptr, 10);
-        return { firstNode, lastNode };
-    }
-    else if (firstLastNode.size() == 1)
-    {
-        unsigned int node = strtoul(nodeRange.c_str(), nullptr, 10);
-        return { node, node };
-    }
-    else
-    {
-        log_error("Could not enumerate NODEs");
-        throw std::runtime_error("Coud not enumerate NODEs");
-    }
-}
-
-/*****************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::PopulateOwnedCoresBitmaskFromRangeString(dcgm_sysmon_cpu_t &cpu,
                                                                         const std::string &rangeStr)
 {
@@ -596,17 +566,17 @@ dcgmReturn_t DcgmModuleSysmon::PopulateCpusIfNeeded()
     {
         return DCGM_ST_ALREADY_INITIALIZED;
     }
-    auto [firstNode, lastNode] = getFirstLastSystemNodes();
     CpuHelpers cpuHelpers;
     auto cpuSerialNumbers      = cpuHelpers.GetCpuSerials();
+    auto cpuIds                = cpuHelpers.GetCpuIds();
     bool getSerialNumberFailed = false;
-    if (!cpuSerialNumbers.has_value() || cpuSerialNumbers->size() != (lastNode - firstNode + 1))
+    if (!cpuSerialNumbers.has_value() || cpuSerialNumbers->size() != cpuIds.size())
     {
         log_warning("Could not retrieve serial numbers for CPUs");
         getSerialNumberFailed = true;
     }
 
-    for (unsigned int cpuId = firstNode; cpuId <= lastNode; cpuId++)
+    for (unsigned int cpuId : cpuIds)
     {
         dcgm_sysmon_cpu_t cpu {};
         cpu.cpuId = cpuId;
@@ -1109,11 +1079,12 @@ void DcgmModuleSysmon::PopulateTemperatureFileMap()
 
     while ((entry = readdir(dir.get())) != nullptr)
     {
-        if (entry->d_type != DT_DIR || !std::string_view { entry->d_name }.starts_with(THERMAL_DIR_NAME_START))
+        if ((entry->d_type != DT_DIR && entry->d_type != DT_LNK)
+            || !std::string_view { entry->d_name }.starts_with(THERMAL_DIR_NAME_START))
         {
             // Not a socket temperature match candidate
-            log_verbose(
-                "Ignoring directory '{}' among thermal zone candidates in path {}", entry->d_type, THERMAL_BASE_PATH);
+            log_debug(
+                "Ignoring directory '{}' with type {} in path {}", entry->d_name, entry->d_type, THERMAL_BASE_PATH);
             continue;
         }
 

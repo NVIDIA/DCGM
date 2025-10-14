@@ -734,3 +734,35 @@ SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable ha
     // Clean up environment variable
     unsetenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA");
 }
+SCENARIO("nvsdmDeviceToString", "[DcgmNvsdmManager]")
+{
+    NvsdmMockDevice switch0(NVSDM_DEV_TYPE_SWITCH, 0, 0xc8763, NVSDM_DEVICE_STATE_HEALTHY);
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    mockNvsdm->InjectDevice(switch0);
+
+    dcgmCoreCallbacks_t dcc = {};
+    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+    REQUIRE(nsm.m_nvSwitchDevices.size() > 0);
+
+    GIVEN("A null device")
+    {
+        char name[NVSDM_DEV_INFO_ARRAY_SIZE];
+        REQUIRE(nsm.m_nvsdm->nvsdmDeviceToString(nullptr, name, sizeof(name)) == NVSDM_ERROR_INVALID_ARG);
+    }
+
+    GIVEN("A valid device and sufficient buffer size")
+    {
+        char name[NVSDM_DEV_INFO_ARRAY_SIZE];
+        REQUIRE(nsm.m_nvsdm->nvsdmDeviceToString(nsm.m_nvSwitchDevices[0].device, name, sizeof(name)) == NVSDM_SUCCESS);
+        INFO(name);
+        REQUIRE(strcmp(name, "SW-0") == 0);
+    }
+
+    GIVEN("A valid device but insufficient buffer size")
+    {
+        char name[NVSDM_DEV_INFO_ARRAY_SIZE - 1];
+        REQUIRE(nsm.m_nvsdm->nvsdmDeviceToString(nsm.m_nvSwitchDevices[0].device, name, sizeof(name))
+                == NVSDM_ERROR_INSUFFICIENT_SIZE);
+    }
+}

@@ -20,6 +20,7 @@
 
 #include "TargetedPower_wrapper.h"
 #include <fmt/format.h>
+#include <ranges>
 #include <stdexcept>
 
 #include <DcgmThread/DcgmThread.h>
@@ -75,6 +76,13 @@ ConstantPower::ConstantPower(dcgmHandle_t handle)
     m_testParameters->AddDouble(TP_STR_MAX_MATRIX_DIM, TP_MAX_DIMENSION * 1.0);
     m_testParameters->AddDouble(TP_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
     m_testParameters->AddString(TP_STR_IS_ALLOWED, "False");
+
+    /* Enhanced workload parameters */
+    m_testParameters->AddString(TP_STR_ENABLE_FP16_GEMM,
+                                "False"); // Disable FP16 GEMMs by default for backward compatibility
+    m_testParameters->AddDouble(TP_STR_FP64_GEMM_RATIO, 0.6); // 60% FP64 GEMMs (when FP16 enabled)
+    m_testParameters->AddDouble(TP_STR_FP16_GEMM_RATIO, 0.4); // 40% FP16 GEMMs (when FP16 enabled)
+
     m_testParameters->AddString(PS_LOGFILE, "stats_targeted_power.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_testParameters->AddString(PS_IGNORE_ERROR_CODES, "");
@@ -109,6 +117,25 @@ void ConstantPower::Cleanup()
         free(m_hostC);
     }
     m_hostC = nullptr;
+
+    if (m_hostA_fp16 != nullptr)
+    {
+        free(m_hostA_fp16);
+    }
+    m_hostA_fp16 = nullptr;
+
+    if (m_hostB_fp16 != nullptr)
+    {
+        free(m_hostB_fp16);
+    }
+    m_hostB_fp16 = nullptr;
+
+    if (m_hostC_fp16 != nullptr)
+    {
+        free(m_hostC_fp16);
+    }
+    m_hostC_fp16 = nullptr;
+
 
     for (size_t deviceIdx = 0; deviceIdx < m_device.size(); deviceIdx++)
     {
@@ -253,6 +280,35 @@ int ConstantPower::CudaInit(mallocFunc mallocImpl)
         return -1;
     }
 
+    /* Allocate FP16 host memory if FP16 GEMM is enabled */
+    bool enableFp16Gemm = m_testParameters->GetBoolFromString(TP_STR_ENABLE_FP16_GEMM);
+    if (enableFp16Gemm)
+    {
+        size_t fp16ArrayByteSize = sizeof(__half) * m_maxMatrixDim * m_maxMatrixDim;
+        m_hostA_fp16             = mallocImpl(fp16ArrayByteSize);
+        m_hostB_fp16             = mallocImpl(fp16ArrayByteSize);
+        m_hostC_fp16             = mallocImpl(fp16ArrayByteSize);
+        if (!m_hostA_fp16 || !m_hostB_fp16 || !m_hostC_fp16)
+        {
+            log_error("Error allocating {} bytes x 3 for FP16 on the host (malloc)", (int)fp16ArrayByteSize);
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC_HOST, d, fp16ArrayByteSize);
+            AddError(GetTargetedPowerTestName(), d);
+            return -1;
+        }
+
+        /* Fill FP16 arrays with random values */
+        __half *fp16A = (__half *)m_hostA_fp16;
+        __half *fp16B = (__half *)m_hostB_fp16;
+        __half *fp16C = (__half *)m_hostC_fp16;
+        for (int i = 0; i < m_maxMatrixDim * m_maxMatrixDim; i++)
+        {
+            fp16A[i] = __float2half(((float)(rand() % 100) / 50.0) - 1.0);
+            fp16B[i] = __float2half(((float)(rand() % 100) / 50.0) - 1.0);
+            fp16C[i] = __float2half(((float)(rand() % 100) / 50.0) - 1.0);
+        }
+    }
+
     /* Fill the arrays with random values */
     srand(time(NULL));
 
@@ -284,6 +340,14 @@ int ConstantPower::CudaInit(mallocFunc mallocImpl)
         }
     }
 
+    int useNstreams = (int)m_testParameters->GetDouble(TP_STR_CUDA_STREAMS_PER_GPU);
+    if (useNstreams > TP_MAX_STREAMS_PER_DEVICE || useNstreams < 1)
+    {
+        log_error("CUDA_STREAMS_PER_GPU is set to {}, which is out of range, allowed values are 1-{}",
+                  useNstreams,
+                  TP_MAX_STREAMS_PER_DEVICE);
+        return -1;
+    }
     /* Do per-device initialization */
     for (size_t deviceIdx = 0; deviceIdx < m_device.size(); deviceIdx++)
     {
@@ -301,7 +365,7 @@ int ConstantPower::CudaInit(mallocFunc mallocImpl)
         }
 
         /* Initialize cuda streams */
-        for (int i = 0; i < TP_MAX_STREAMS_PER_DEVICE; i++)
+        for (int i = 0; i < useNstreams; i++)
         {
             cuSt = cudaStreamCreate(&device->cudaStream[i]);
             if (cuSt != cudaSuccess)
@@ -382,7 +446,154 @@ int ConstantPower::CudaInit(mallocFunc mallocImpl)
                 return -1;
             }
         }
+
+        /* Allocate FP16 device memory if FP16 GEMM is enabled */
+        if (enableFp16Gemm)
+        {
+            size_t fp16ArrayByteSize = sizeof(__half) * m_maxMatrixDim * m_maxMatrixDim;
+
+            /* Allocate FP16 device memory */
+            cuSt = cudaMalloc((void **)&device->deviceA_fp16, fp16ArrayByteSize);
+            if (cuSt != cudaSuccess)
+            {
+                LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMalloc FP16 A", cuSt, device->gpuId, fp16ArrayByteSize);
+                return -1;
+            }
+
+            cuSt = cudaMalloc((void **)&device->deviceB_fp16, fp16ArrayByteSize);
+            if (cuSt != cudaSuccess)
+            {
+                LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMalloc FP16 B", cuSt, device->gpuId, fp16ArrayByteSize);
+                return -1;
+            }
+
+            for (int i = 0; i < TP_MAX_OUTPUT_MATRICES; i++)
+            {
+                cuSt = cudaMalloc((void **)&device->deviceC_fp16[i], fp16ArrayByteSize);
+                if (cuSt != cudaSuccess)
+                {
+                    LOG_CUDA_ERROR(
+                        GetTargetedPowerTestName(), "cudaMalloc FP16 C", cuSt, device->gpuId, fp16ArrayByteSize);
+                    return -1;
+                }
+            }
+
+            /* Copy FP16 host arrays to device */
+            cuSt = cudaMemcpy(device->deviceA_fp16, m_hostA_fp16, fp16ArrayByteSize, cudaMemcpyHostToDevice);
+            if (cuSt != cudaSuccess)
+            {
+                LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMemcpy FP16 A", cuSt, device->gpuId, fp16ArrayByteSize);
+                return -1;
+            }
+
+            cuSt = cudaMemcpy(device->deviceB_fp16, m_hostB_fp16, fp16ArrayByteSize, cudaMemcpyHostToDevice);
+            if (cuSt != cudaSuccess)
+            {
+                LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMemcpy FP16 B", cuSt, device->gpuId, fp16ArrayByteSize);
+                return -1;
+            }
+
+            cuSt = cudaMemcpy(device->deviceC_fp16[0], m_hostC_fp16, fp16ArrayByteSize, cudaMemcpyHostToDevice);
+            if (cuSt != cudaSuccess)
+            {
+                LOG_CUDA_ERROR(GetTargetedPowerTestName(), "cudaMemcpy FP16 C", cuSt, device->gpuId, fp16ArrayByteSize);
+                return -1;
+            }
+
+            /* Copy the rest of the FP16 C arrays from the first C array */
+            for (int i = 1; i < TP_MAX_OUTPUT_MATRICES; i++)
+            {
+                cuSt = cudaMemcpy(
+                    device->deviceC_fp16[i], device->deviceC_fp16[0], fp16ArrayByteSize, cudaMemcpyDeviceToDevice);
+                if (cuSt != cudaSuccess)
+                {
+                    LOG_CUDA_ERROR(
+                        GetTargetedPowerTestName(), "cudaMemcpy FP16 C copy", cuSt, device->gpuId, fp16ArrayByteSize);
+                    return -1;
+                }
+            }
+        }
+
+        /* Setup mixed workload streams - distribute between FP64 and FP16 */
+        double fp64Ratio = m_testParameters->GetDouble(TP_STR_FP64_GEMM_RATIO);
+        double fp16Ratio = enableFp16Gemm ? m_testParameters->GetDouble(TP_STR_FP16_GEMM_RATIO) : 0.0;
+
+        /* Normalize ratios to ensure they sum to 1.0 */
+        double totalRatio = fp64Ratio + fp16Ratio;
+        if (totalRatio <= 0.0)
+        {
+            /* Fallback: use all streams for FP64 if no valid ratios */
+            fp64Ratio = 1.0;
+            fp16Ratio = 0.0;
+        }
+        else
+        {
+            /* Scale ratios to sum to 1.0 */
+            fp64Ratio /= totalRatio;
+            fp16Ratio /= totalRatio;
+        }
+
+        /* Calculate stream allocation */
+        int totalStreams    = device->NcudaStreams;
+        int fp64StreamCount = (int)(totalStreams * fp64Ratio);
+        int fp16StreamCount = enableFp16Gemm ? (int)(totalStreams * fp16Ratio) : 0;
+
+        /* Ensure at least one stream for FP64 (always enabled) */
+        if (fp64StreamCount == 0)
+            fp64StreamCount = 1;
+
+        /* Ensure at least one stream for FP16 if enabled */
+        if (enableFp16Gemm && fp16StreamCount == 0)
+            fp16StreamCount = 1;
+
+        /* Adjust if total exceeds available streams */
+        int totalUsed = fp64StreamCount + fp16StreamCount;
+        if (totalUsed > totalStreams)
+        {
+            if (enableFp16Gemm)
+            {
+                /* Split streams evenly between FP64 and FP16 */
+                fp64StreamCount = totalStreams / 2;
+                fp16StreamCount = totalStreams - fp64StreamCount;
+            }
+            else
+            {
+                /* Use all streams for FP64 */
+                fp64StreamCount = totalStreams;
+                fp16StreamCount = 0;
+            }
+        }
+
+        /* Reserve capacity and assign streams to workload types */
+        device->fp64GemmStreams.reserve(fp64StreamCount);
+        device->fp16GemmStreams.reserve(fp16StreamCount);
+
+        int streamIndex = 0;
+        for (int i = 0; i < fp64StreamCount; i++)
+        {
+            device->fp64GemmStreams.emplace_back(device->cudaStream[streamIndex++]);
+        }
+        if (enableFp16Gemm)
+        {
+            for (int i = 0; i < fp16StreamCount; i++)
+            {
+                device->fp16GemmStreams.emplace_back(device->cudaStream[streamIndex++]);
+            }
+        }
+
+        /* Initialize matrix dimension */
+        device->currentMatrixDim = 1;
+
+        /* Log stream allocation for debugging */
+        log_debug("GPU {} stream allocation: FP64={} streams, FP16={} streams (enabled={}), Total used={}/{}",
+                  device->gpuId,
+                  device->fp64GemmStreams.size(),
+                  device->fp16GemmStreams.size(),
+                  enableFp16Gemm ? "yes" : "no",
+                  device->fp64GemmStreams.size() + device->fp16GemmStreams.size(),
+                  totalStreams);
     }
+
 
     return 0;
 }
@@ -632,6 +843,9 @@ private:
     int m_maxMatrixDim;
     bool m_failEarly;                  /* true if we should stop when we hit the first error */
     unsigned long m_failCheckInterval; /* the interval at which we should check for errors */
+    bool m_enableFp16Gemm;
+    double m_fp64GemmRatio;
+    double m_fp16GemmRatio;
 
 public:
     ConstantPowerWorker(CPDevice *device,
@@ -694,6 +908,11 @@ private:
      * Return the new matrix dimension to use for ramping up to the target power.
      */
     int RecalcMatrixDim(int currentMatrixDim, double power);
+
+    /*****************************************************************************/
+    /* Mixed Workload Methods Implementation */
+
+    cublasStatus_t QueueFP16GemmOperations(int streamIndex, int matrixDim);
 };
 
 /****************************************************************************/
@@ -741,6 +960,16 @@ bool ConstantPower::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
                     m_device[i], *this, m_testParameters.get(), m_dcgmRecorder, failEarly, failCheckInterval);
                 workerThreads[i]->Start();
                 Nrunning++;
+                auto const tid = workerThreads[i]->GetCachedTid();
+                if (tid == 0)
+                {
+                    log_error("Failed to get thread id for worker thread {}", i);
+                    continue;
+                }
+                if (auto const ret = HangDetectRegisterTask(getpid(), tid); ret != DCGM_ST_OK)
+                {
+                    log_warning("Failed to register worker thread {} for hang detection: {}", tid, ret);
+                }
             }
         }
 
@@ -814,6 +1043,15 @@ bool ConstantPower::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
             continue;
         }
 
+        // Unregister the thread from hang detection
+        if (auto const tid = workerThreads[i]->GetCachedTid(); tid != 0)
+        {
+            if (auto const ret = HangDetectUnregisterTask(getpid(), tid); ret != DCGM_ST_OK)
+            {
+                log_warning("Failed to unregister worker thread {} for hang detection: {}", tid, ret);
+            }
+        }
+
         earliestStopTime = std::min(earliestStopTime, workerThreads[i]->GetStopTime());
         delete (workerThreads[i]);
         workerThreads[i] = NULL;
@@ -860,6 +1098,9 @@ ConstantPowerWorker::ConstantPowerWorker(CPDevice *device,
     , m_stopTime(0)
     , m_failEarly(failEarly)
     , m_failCheckInterval(failCheckInterval)
+    , m_enableFp16Gemm(tp->GetBoolFromString(TP_STR_ENABLE_FP16_GEMM))
+    , m_fp64GemmRatio(tp->GetDouble(TP_STR_FP64_GEMM_RATIO))
+    , m_fp16GemmRatio(tp->GetDouble(TP_STR_FP16_GEMM_RATIO))
 {
     m_useDgemv          = tp->GetBoolFromString(TP_STR_USE_DGEMV);
     m_useDgemm          = tp->GetBoolFromString(TP_STR_USE_DGEMM);
@@ -992,21 +1233,27 @@ void ConstantPowerWorker::run()
     double lastFailureCheckTime = 0.0; /* last time we checked for failures */
     double now;
     double power;
-    int useNstreams;
     int NstreamsRequeued = 0;
     int matrixDim        = 1; /* Dimension of the matrix. Start small */
+    int lastMatrixDim    = matrixDim;
     cublasStatus_t cubSt;
 
     /* Set initial test values */
-    useNstreams = (int)m_testParameters->GetDouble(TP_STR_CUDA_STREAMS_PER_GPU);
-    matrixDim   = m_startingMatrixDim;
-    alpha       = 1.01 + ((double)(rand() % 100) / 10.0);
-    beta        = 1.01 + ((double)(rand() % 100) / 10.0);
-    floatAlpha  = (float)alpha;
-    floatBeta   = (float)beta;
+    matrixDim  = m_startingMatrixDim;
+    alpha      = 1.01 + ((double)(rand() % 100) / 10.0);
+    beta       = 1.01 + ((double)(rand() % 100) / 10.0);
+    floatAlpha = (float)alpha;
+    floatBeta  = (float)beta;
 
     /* Lock to our assigned GPU */
     cudaSetDevice(m_device->cudaDeviceIdx);
+
+    /* Log stream allocation and workload types for debugging */
+    log_debug("Starting workload for GPU {}: FP64 streams={}, FP16 GEMMs={} (streams={})",
+              m_device->gpuId,
+              m_device->fp64GemmStreams.size(),
+              m_enableFp16Gemm ? "enabled" : "disabled",
+              m_device->fp16GemmStreams.size());
 
     // printf("Running for %.1f seconds\n", m_testDuration);
     startTime            = timelib_dsecSince1970();
@@ -1018,23 +1265,23 @@ void ConstantPowerWorker::run()
     {
         NstreamsRequeued = 0;
 
-        for (int i = 0; i < useNstreams; i++)
+        /* Handle FP64/FP32 GEMM streams using dedicated stream allocation */
+        for (auto &&[i, stream] : std::views::enumerate(m_device->fp64GemmStreams))
         {
             /* Query each stream to see if it's idle (cudaSuccess return) */
-            if (cudaSuccess == cudaStreamQuery(m_device->cudaStream[i]))
+            if (cudaSuccess == cudaStreamQuery(stream))
             {
+                cubSt = CublasProxy::CublasSetStream(m_device->cublasHandle, stream);
+                if (cubSt != CUBLAS_STATUS_SUCCESS)
+                {
+                    LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                        &m_plugin, m_plugin.GetTargetedPowerTestName(), "cublasSetStream", cubSt, m_device->gpuId);
+                    m_stopTime = timelib_usecSince1970();
+                    return;
+                }
                 for (j = 0; j < m_opsPerRequeue; j++)
                 {
-                    int Cindex = ((i * useNstreams) + j) % m_device->NdeviceC;
-
-                    cubSt = CublasProxy::CublasSetStream(m_device->cublasHandle, m_device->cudaStream[i]);
-                    if (cubSt != CUBLAS_STATUS_SUCCESS)
-                    {
-                        LOG_CUBLAS_ERROR_FOR_PLUGIN(
-                            &m_plugin, m_plugin.GetTargetedPowerTestName(), "cublasSetStream", cubSt, m_device->gpuId);
-                        m_stopTime = timelib_usecSince1970();
-                        return;
-                    }
+                    int Cindex = ((i * m_opsPerRequeue) + j) % m_device->NdeviceC;
                     /* Make sure all streams have work. These are async calls, so they will
                        return immediately */
                     if (m_useDgemv)
@@ -1123,6 +1370,36 @@ void ConstantPowerWorker::run()
             }
         }
 
+        /* Additional enhanced workloads - each can be enabled independently */
+
+        /* Handle FP16 GEMM streams */
+        if (m_enableFp16Gemm && !m_device->fp16GemmStreams.empty())
+        {
+            for (auto &&[i, stream] : std::views::enumerate(m_device->fp16GemmStreams))
+            {
+                /* Query stream to see if it's idle */
+                if (cudaSuccess == cudaStreamQuery(stream))
+                {
+                    cubSt = CublasProxy::CublasSetStream(m_device->cublasHandle, stream);
+                    if (cubSt != CUBLAS_STATUS_SUCCESS)
+                    {
+                        LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                            &m_plugin, m_plugin.GetTargetedPowerTestName(), "cublasSetStream", cubSt, m_device->gpuId);
+                        m_stopTime = timelib_usecSince1970();
+                        return;
+                    }
+                    cubSt = QueueFP16GemmOperations(i, matrixDim);
+                    if (cubSt != CUBLAS_STATUS_SUCCESS)
+                    {
+                        m_stopTime = timelib_usecSince1970();
+                        return;
+                    }
+                    NstreamsRequeued++;
+                }
+            }
+        }
+
+
         /* If we didn't queue any work, sleep a bit so we don't busy wait */
         if (!NstreamsRequeued)
         {
@@ -1134,8 +1411,10 @@ void ConstantPowerWorker::run()
         /* Time to adjust? */
         if (now - lastAdjustTime > m_reAdjustInterval)
         {
-            power          = ReadPower();
-            matrixDim      = RecalcMatrixDim(matrixDim, power);
+            lastMatrixDim = matrixDim;
+            power         = ReadPower();
+            matrixDim     = RecalcMatrixDim(matrixDim, power);
+
             lastAdjustTime = now;
         }
 
@@ -1143,11 +1422,22 @@ void ConstantPowerWorker::run()
         if (now - lastPrintTime > m_printInterval)
         {
             power = ReadPower();
-            log_debug("DeviceIdx {}, Power {:.2f} W. dim: {}. minDim: {}",
-                      m_device->gpuId,
-                      power,
-                      matrixDim,
-                      m_device->minMatrixDim);
+            if (m_enableFp16Gemm)
+            {
+                log_debug("DeviceIdx {}, Power {:.2f} W. currDim: {} (FP64+FP16), nextDim: {}",
+                          m_device->gpuId,
+                          power,
+                          lastMatrixDim,
+                          matrixDim);
+            }
+            else
+            {
+                log_debug("DeviceIdx {}, Power {:.2f} W. currDim: {}, nextDim: {}",
+                          m_device->gpuId,
+                          power,
+                          lastMatrixDim,
+                          matrixDim);
+            }
             lastPrintTime = now;
         }
         /* Time to check for failure? */
@@ -1166,5 +1456,48 @@ void ConstantPowerWorker::run()
         }
     }
     m_stopTime = timelib_usecSince1970();
-    log_debug("ConstantPowerWorker deviceIndex {} finished at {}", m_device->gpuId, (long long)m_stopTime);
+    log_debug("ConstantPowerWorker deviceIndex {} finished at {} (FP16 GEMMs: {})",
+              m_device->gpuId,
+              (long long)m_stopTime,
+              m_enableFp16Gemm ? "enabled" : "disabled");
+}
+
+/*************************************************************************/
+/* Mixed Workload Methods Implementation */
+
+cublasStatus_t ConstantPowerWorker::QueueFP16GemmOperations(int streamIndex, int matrixDim)
+{
+    using namespace Dcgm;
+    cublasStatus_t cubSt = CUBLAS_STATUS_SUCCESS;
+
+    for (int j = 0; j < m_opsPerRequeue; j++)
+    {
+        int deviceCIdx = ((streamIndex * m_opsPerRequeue) + j) % m_device->NdeviceC;
+
+        __half const alpha = __float2half(1.0f);
+        __half const beta  = __float2half(0.0f);
+
+        cubSt = CublasProxy::CublasHgemm(m_device->cublasHandle,
+                                         CUBLAS_OP_N,
+                                         CUBLAS_OP_N,
+                                         matrixDim,
+                                         matrixDim,
+                                         matrixDim,
+                                         &alpha,
+                                         (__half const *)m_device->deviceA_fp16,
+                                         matrixDim,
+                                         (__half const *)m_device->deviceB_fp16,
+                                         matrixDim,
+                                         &beta,
+                                         (__half *)m_device->deviceC_fp16[deviceCIdx],
+                                         matrixDim);
+
+        if (cubSt != CUBLAS_STATUS_SUCCESS)
+        {
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                &m_plugin, m_plugin.GetTargetedPowerTestName(), "cublasHgemm", cubSt, m_device->gpuId);
+            return cubSt;
+        }
+    }
+    return CUBLAS_STATUS_SUCCESS;
 }

@@ -19,6 +19,7 @@ import dcgm_agent_internal
 import test_utils
 import time
 import dcgm_fields
+import dcgm_nvml
 from ctypes import *
 import nvml_injection
 import nvml_injection_structs
@@ -237,3 +238,41 @@ def helper_inject_with_extra_keys_for_following_calls(handle, gpuIds):
 @test_utils.run_with_nvml_injected_gpus()
 def test_inject_with_extra_keys_for_following_calls_standalone(handle, gpuIds):
     helper_inject_with_extra_keys_for_following_calls(handle, gpuIds)
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_inject_with_device_handle_parameter(handle, gpuIds):
+    gpuId = gpuIds[0]
+    def inject_p2p_status(handle, gpuId, targetGpuId, p2pStatus):
+        injectedRetsArray = nvml_injection.c_injectNvmlRet_t * 1
+        injectedRets = injectedRetsArray()
+        injectedRets[0].nvmlRet = dcgm_nvml.NVML_SUCCESS
+        injectedRets[0].values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_GPUP2PSTATUS
+        injectedRets[0].values[0].value.GpuP2PStatus = p2pStatus
+        injectedRets[0].valueCount = 1
+
+        extraKeysArray = nvml_injection_structs.c_injectNvmlVal_t * 2
+        extraKeys = extraKeysArray()
+        extraKeys[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_DEVICE
+        # For device handle parameter, we pass the GPU id. The dcgmInjectNvmlDevice will translate it to the device handle.
+        extraKeys[0].value.Device = targetGpuId
+        extraKeys[1].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_GPUP2PCAPSINDEX
+        extraKeys[1].value.GpuP2PCapsIndex = dcgm_nvml.NVML_P2P_CAPS_INDEX_NVLINK
+
+        ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "P2PStatus", extraKeys, 2, injectedRets)
+        assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    for targetGpuId in gpuIds[1:3]:
+        inject_p2p_status(handle, gpuId, targetGpuId, dcgm_nvml.NVML_P2P_STATUS_OK)
+    for targetGpuId in gpuIds[3:]:
+        inject_p2p_status(handle, gpuId, targetGpuId, dcgm_nvml.NVML_P2P_STATUS_UNKNOWN)
+
+    fieldId = dcgm_fields.DCGM_FI_DEV_P2P_NVLINK_STATUS
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgm_agent_internal.dcgmWatchFieldValue(dcgmHandle.handle, gpuId, fieldId, 60000000, 3600.0, 0)
+    dcgmSystem.UpdateAllFields(1)
+    values = dcgm_agent_internal.dcgmGetLatestValuesForFields(dcgmHandle.handle, gpuId, [fieldId, ])
+    assert (values[0].value.i64 == 0b110), f"Actual value: {values[0].value.i64}"

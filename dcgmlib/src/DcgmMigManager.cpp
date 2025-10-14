@@ -101,8 +101,7 @@ dcgmReturn_t DcgmMigManager::GetGpuIdFromInstanceId(DcgmNs::Mig::GpuInstanceId c
     {
         for (auto const &[key, val] : m_instanceIdToGpuId)
         {
-            DCGM_LOG_DEBUG << "Key: " << key << "; "
-                           << "Val: " << val;
+            DCGM_LOG_DEBUG << "Key: " << key << "; " << "Val: " << val;
         }
     }
 

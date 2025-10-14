@@ -21,6 +21,7 @@
 
 #include <fmt/format.h>
 
+#include <optional>
 #include <thread>
 
 struct IoContext::Impl
@@ -29,10 +30,10 @@ struct IoContext::Impl
     std::vector<std::jthread> ioThreads;
     std::mutex processCreationMutex;
     DcgmNs::Common::Subprocess::Detail::SubreaperGuard subreaperGuard {};
-    boost::asio::executor_work_guard<boost::asio::io_context::executor_type> workGuard;
+    std::optional<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> workGuard;
 
-    Impl()
-        : workGuard(boost::asio::make_work_guard(ioContext))
+    explicit Impl(bool enableWorkGuard)
+        : workGuard(enableWorkGuard ? std::make_optional(boost::asio::make_work_guard(ioContext)) : std::nullopt)
     {
         // Allocate the threads upfront to avoid the need to reallocate them later.
         ioThreads.reserve(1);
@@ -68,6 +69,7 @@ struct IoContext::Impl
         {
             thread.request_stop();
         }
+        workGuard.reset();
 
         for (auto &thread : ioThreads)
         {
@@ -93,8 +95,8 @@ struct IoContext::Impl
     }
 };
 
-IoContext::IoContext()
-    : m_impl(std::make_unique<Impl>())
+IoContext::IoContext(bool enableWorkGuard)
+    : m_impl(std::make_unique<Impl>(enableWorkGuard))
 {}
 
 IoContext::~IoContext() = default;

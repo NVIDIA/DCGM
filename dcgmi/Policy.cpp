@@ -158,8 +158,7 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
                 if (pPolicy[i].condition & DCGM_POLICY_COND_MAX_PAGES_RETIRED)
                 {
                     ss.str("");
-                    ss << "Max retired pages threshold"
-                       << " - " << (long long unsigned)pPolicy[i].parms[2].val.llval;
+                    ss << "Max retired pages threshold" << " - " << (long long unsigned)pPolicy[i].parms[2].val.llval;
 
                     out["Violation conditions"].setOrAppend(ss.str());
                 }
@@ -167,16 +166,14 @@ dcgmReturn_t Policy::DisplayCurrentViolationPolicy(dcgmHandle_t mNvcmHandle,
                 if (pPolicy[i].condition & DCGM_POLICY_COND_THERMAL)
                 {
                     ss.str("");
-                    ss << "Max temperature threshold"
-                       << " - " << (long long unsigned)pPolicy[i].parms[3].val.llval;
+                    ss << "Max temperature threshold" << " - " << (long long unsigned)pPolicy[i].parms[3].val.llval;
                     out["Violation conditions"].setOrAppend(ss.str());
                 }
 
                 if (pPolicy[i].condition & DCGM_POLICY_COND_POWER)
                 {
                     ss.str("");
-                    ss << "Max power threshold"
-                       << " - " << (long long unsigned)pPolicy[i].parms[4].val.llval;
+                    ss << "Max power threshold" << " - " << (long long unsigned)pPolicy[i].parms[4].val.llval;
                     out["Violation conditions"].setOrAppend(ss.str());
                 }
 

@@ -13,27 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "Pcie.h"
+
+#include "PcieMain.h"
+
+#include <CudaCommon.h>
+#include <DcgmStringHelpers.h>
+#include <DcgmThread/DcgmThread.h>
+#include <EarlyFailChecker.h>
+#include <PluginCommon.h>
+#include <PluginInterface.h>
+#include <PluginStrings.h>
+#include <TimeLib.hpp>
+#include <dcgm_fields.h>
+
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <vector>
-
-#include "CudaCommon.h"
-#include "DcgmThread/DcgmThread.h"
-#include "PluginCommon.h"
-#include <DcgmStringHelpers.h>
-#include <EarlyFailChecker.h>
-#include <TimeLib.hpp>
-
-#include "PcieMain.h"
-#include "PluginInterface.h"
-#include "dcgm_fields.h"
-#include <cstdlib>
-#include <cstring>
 
 namespace
 {
@@ -48,7 +50,7 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     , test_p2p_off(true)
     , test_broken_p2p(true)
     , test_nvlink_status(false)
-    , test_links(true)
+    , m_test_links(true)
     , check_errors(true)
     , test_1(true)
     , test_2(true)
@@ -110,6 +112,7 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     tp->AddDouble(PCIE_STR_AER_THRESHOLD, 480.0); /* 32/minute * 15 minutes */
     tp->AddDouble(PCIE_STR_PARALLEL_BW_CHECK_DURATION, 15.0);
     tp->AddString(PCIE_STR_DONT_BIND_NUMA, "False");
+    tp->AddString(PS_USE_GENERIC_MODE, "False");
 
     tp->AddSubTestDouble(
         PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
@@ -238,11 +241,19 @@ void BusGrind::Go(std::string const &testName,
 
     if (!m_testParameters->GetBoolFromString(PCIE_STR_IS_ALLOWED))
     {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, PCIE_PLUGIN_NAME);
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
-        return;
+        if (m_testParameters->GetBoolFromString(PS_USE_GENERIC_MODE) == false)
+        {
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, PCIE_PLUGIN_NAME);
+            AddInfo(testName, d.GetMessage());
+            SetResult(testName, NVVS_RESULT_SKIP);
+            return;
+        }
+        else
+        {
+            log_debug("Proceeding in generic mode.");
+            m_test_links = false;
+        }
     }
 
     ParseIgnoreErrorCodesParam(testName, m_testParameters->GetString(PS_IGNORE_ERROR_CODES));
@@ -963,7 +974,7 @@ bool BusGrind::RunTest_sm(dcgmDiagPluginEntityList_v1 const *entityInfo)
 
     /* Disable status tests while running GEMM */
     test_broken_p2p    = false;
-    test_links         = false;
+    m_test_links       = false;
     test_nvlink_status = false;
     check_errors       = false;
     test_nvlink_status = false;
@@ -995,7 +1006,20 @@ bool BusGrind::RunTest_sm(dcgmDiagPluginEntityList_v1 const *entityInfo)
                 = new SmPerfWorker(m_device[i], *this, m_testParameters, m_dcgmRecorder, failEarly, failCheckInterval);
             workerThreads[i]->Start();
             Nrunning++;
+
+            auto const tid = workerThreads[i]->GetCachedTid();
+            if (tid == 0)
+            {
+                log_error("Failed to get thread id for worker thread {}", i);
+                continue;
+            }
+
+            if (auto const ret = HangDetectRegisterTask(getpid(), tid); ret != DCGM_ST_OK)
+            {
+                log_error("Failed to register worker thread {} for hang detection: {}", tid, ret);
+            }
         }
+
         /* Wait for all workers to finish */
         while (Nrunning > 0)
         {
@@ -1061,6 +1085,14 @@ bool BusGrind::RunTest_sm(dcgmDiagPluginEntityList_v1 const *entityInfo)
     earliestStopTime = INT64_MAX;
     for (size_t i = 0; i < m_device.size(); i++)
     {
+        // Unregister the thread from hang detection
+        if (auto const tid = workerThreads[i]->GetCachedTid(); tid != 0)
+        {
+            if (auto ret = HangDetectUnregisterTask(getpid(), tid); ret != DCGM_ST_OK)
+            {
+                log_warning("Failed to unregister worker thread {} for hang detection: {}", tid, ret);
+            }
+        }
         earliestStopTime = std::min(earliestStopTime, workerThreads[i]->GetStopTime());
         delete (workerThreads[i]);
         workerThreads[i] = NULL;

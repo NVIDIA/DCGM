@@ -13,15 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef _NVVS_NVVS_Plugin_H_
-#define _NVVS_NVVS_Plugin_H_
 
-#include <iostream>
+#pragma once
+
 #include <map>
 #include <pthread.h>
-#include <signal.h>
-#include <sstream>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -29,14 +25,10 @@
 #include "DcgmError.h"
 #include "DcgmMutex.h"
 #include "DcgmRecorder.h"
-#include "Gpu.h"
 #include "NvvsCommon.h"
-#include "NvvsStructs.h"
 #include "PluginTest.h"
 #include "TestParameters.h"
 #include <NvvsStructs.h>
-
-extern const double DUMMY_TEMPERATURE_VALUE;
 
 // This is a base class for all test plugins
 // Once the EUD and Healthmon are converted to a plugin,
@@ -403,16 +395,70 @@ public:
 
     void ParseIgnoreErrorCodesParam(std::string const &testName, std::string const &param);
 
+    /**
+     * Sets the hang detection monitor for this plugin.
+     * The monitor's lifetime is managed by NVVS and must outlive this plugin.
+     *
+     * @param[in] monitor Non-owning pointer to the hang detection monitor.
+     *                    nullptr to disable hang detection.
+     */
+    void SetHangDetectMonitor(class HangDetectMonitorApi *monitor);
+
+    /**
+     * Sets the hang detection monitor for this plugin.
+     * The monitor's lifetime is managed by NVVS and must outlive this plugin.
+     *
+     * @param[in] monitor Non-owning pointer to the hang detection monitor.
+     *                    nullptr to disable hang detection.
+     */
+    void SetHangDetectMonitor(class HangDetectMonitor *monitor);
+
     gpuIgnoreErrorCodeMap_t const &GetIgnoreErrorCodes(std::string const &testName) const;
 
     bool ShouldIgnoreError(std::string const &testName,
                            dcgmGroupEntityPair_t const &entity,
                            unsigned int errorCode) const;
 
+    /*
+     * Register a task with the HangDetectMonitor
+     *
+     * @param[in] pid The process ID that owns the task
+     * @param[in] tid The thread ID of the task to register
+     *
+     * @return DCGM_ST_OK on success, appropriate error code otherwise
+     */
+    dcgmReturn_t HangDetectRegisterTask(pid_t const pid, pid_t const tid);
+
+    /*
+     * Register a process with the HangDetectMonitor
+     *
+     * @param[in] pid The process ID of the process to register
+     *
+     * @return DCGM_ST_OK on success, appropriate error code otherwise
+     */
+    dcgmReturn_t HangDetectRegisterProcess(pid_t const pid);
+
+    /*
+     * Unregister a task with the HangDetectMonitor
+     *
+     * @param[in] pid The process ID that owns the task
+     * @param[in] tid The thread ID of the task to unregister
+     *
+     * @return DCGM_ST_OK on success, appropriate error code otherwise
+     */
+    dcgmReturn_t HangDetectUnregisterTask(pid_t const pid, pid_t const tid);
+
+    /*
+     * Unregister a process with the HangDetectMonitor
+     *
+     * @param[in] pid The process ID of the process to unregister
+     *
+     * @return DCGM_ST_OK on success, appropriate error code otherwise
+     */
+    dcgmReturn_t HangDetectUnregisterProcess(pid_t const pid);
+
     /***************************PRIVATE**********************************/
-#ifndef DCGM_PLUGIN_TEST
 private:
-#endif
     /* Methods */
 
     /*************************************************************************/
@@ -432,7 +478,8 @@ private:
                  || std::is_same_v<EntityResultsType, dcgmDiagEntityResults_v2>
     dcgmReturn_t GetResultsImpl(std::string const &testName, EntityResultsType *entityResults);
 
-    dcgmDiagPluginAttr_v1 m_pluginAttr; /* The plugin attributes assigned from nvvs */
+    dcgmDiagPluginAttr_v1 m_pluginAttr;                    /* The plugin attributes assigned from nvvs */
+    HangDetectMonitorApi *m_hangDetectMonitor { nullptr }; /* Lifetime is managed by NVVS, nullptr if disabled */
 
     /***************************PROTECTED********************************/
 protected:
@@ -443,11 +490,6 @@ protected:
     /* Mutexes */
     mutable DcgmMutex m_dataMutex; /* Mutex for plugin data */
     mutable DcgmMutex m_mutex;     /* mutex for locking the plugin (for use by subclasses). */
-
-    long long DetermineMaxTemp(unsigned int gpuId,
-                               double parameterValue,
-                               DcgmRecorder &dr,
-                               dcgmDeviceThermals_t &thermals);
 };
 
 // typedef for easier referencing for the factory
@@ -456,4 +498,7 @@ extern "C" {
 extern std::map<std::string, maker_t *, std::less<std::string>> factory;
 }
 
-#endif //_NVVS_NVVS_Plugin_H_
+namespace
+{
+double constexpr DUMMY_TEMPERATURE_VALUE = 30.0;
+} // namespace

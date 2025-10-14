@@ -38,18 +38,13 @@ class DcgmProfTesterApp(app_runner.AppRunner):
             "Function Not Found",
             "(null)", # e.g. from printing %s from null ptr
             ]
-    # Maximum CUDA driver version that has a dedicated binary
-    MAX_SUPPORTED_CUDA_DRIVER_VERSION = 12
     def __init__(self, args=None, gpuIds=None, cudaDriverMajorVersion=None):
         args = args or []
         assert(cudaDriverMajorVersion is not None)
         
         path = DcgmProfTesterApp.paths[utils.platform_identifier]
         #Append the 10,11..etc to the dcgmproftester command
-        if cudaDriverMajorVersion > DcgmProfTesterApp.MAX_SUPPORTED_CUDA_DRIVER_VERSION:
-            path += str(DcgmProfTesterApp.MAX_SUPPORTED_CUDA_DRIVER_VERSION) # Use max supported version binary for newer CUDA drivers
-        else:
-            path += str(int(cudaDriverMajorVersion))
+        path += str(int(cudaDriverMajorVersion))
 
         if gpuIds is not None and "-i" in args:
             raise Exception("Do not pass both gpuIds and args with a -i option")

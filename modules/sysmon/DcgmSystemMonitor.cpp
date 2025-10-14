@@ -139,8 +139,10 @@ void DcgmSystemMonitor::PopulateSocketPowerMap(const std::string &baseDir)
 
     while ((entry = readdir(dir.get())) != nullptr)
     {
-        if (entry->d_type != DT_DIR || !std::string_view { entry->d_name }.starts_with(HWMON_DIR_NAME_START))
+        if ((entry->d_type != DT_DIR && entry->d_type != DT_LNK)
+            || !std::string_view { entry->d_name }.starts_with(HWMON_DIR_NAME_START))
         {
+            log_debug("Ignoring directory '{}' with type {} in path {}", entry->d_name, entry->d_type, baseDir.c_str());
             continue;
         }
 

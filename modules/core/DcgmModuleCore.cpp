@@ -20,6 +20,7 @@
 #include <DcgmGroupManager.h>
 #include <DcgmHostEngineHandler.h>
 #include <DcgmStringHelpers.h>
+#include <DcgmUtilities.h>
 #include <DcgmVersion.hpp>
 #include <fmt/format.h>
 #include <sstream>
@@ -2102,7 +2103,9 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
     mg->minorId                    = 0;
     mg->numFieldIds                = 0;
 
-    for (unsigned int fieldId = DCGM_FI_PROF_FIRST_ID; fieldId <= DCGM_FI_PROF_NVOFA1_ACTIVE; fieldId++)
+    using FirstGroupRange
+        = DcgmStaticRange<DCGM_FI_PROF_FIRST_ID, DCGM_FI_PROF_NVOFA1_ACTIVE, DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2>;
+    for (unsigned int fieldId = FirstGroupRange::start; fieldId <= FirstGroupRange::end; fieldId++)
     {
         mg->fieldIds[mg->numFieldIds] = fieldId;
         mg->numFieldIds++;
@@ -2113,7 +2116,10 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
     mg->minorId     = 0;
     mg->numFieldIds = 0;
 
-    for (unsigned int fieldId = DCGM_FI_PROF_NVLINK_L0_TX_BYTES; fieldId <= DCGM_FI_PROF_NVLINK_L17_RX_BYTES; fieldId++)
+    using SecondGroupRange = DcgmStaticRange<DCGM_FI_PROF_NVLINK_L0_TX_BYTES,
+                                             DCGM_FI_PROF_PEERMEM_CACHE_MISS,
+                                             DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2>;
+    for (unsigned int fieldId = SecondGroupRange::start; fieldId <= SecondGroupRange::end; fieldId++)
     {
         mg->fieldIds[mg->numFieldIds] = fieldId;
         mg->numFieldIds++;

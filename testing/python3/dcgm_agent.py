@@ -919,3 +919,25 @@ def dcgmHostengineIsHealthy(dcgmHandle):
     ret = fn(dcgmHandle, byref(heHealth))
     dcgm_structs._dcgmCheckReturn(ret)
     return heHealth
+
+@ensure_byte_strings()
+def dcgmPowerProfileIdToName(profileId):
+    """
+    Map a dcgmPowerProfileType_t to its string name.
+    """
+    fn = dcgmFP("dcgmPowerProfileIdToName")
+    namePtr = c_char_p()
+    ret = fn(c_uint32(profileId), byref(namePtr))
+    dcgm_structs._dcgmCheckReturn(ret)
+
+    if not bool(namePtr):
+        raise RuntimeError(f"No name found for power profile id {profileId}")
+
+    return namePtr.value.decode('utf-8')
+
+@ensure_byte_strings()
+def dcgmConfigSetWorkloadPowerProfile(dcgmHandle, workloadPowerProfile):
+    fn = dcgmFP("dcgmConfigSetWorkloadPowerProfile")
+    ret = fn(dcgmHandle, byref(workloadPowerProfile))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret

@@ -130,7 +130,4 @@ private:
 
     /*************************************************************************/
     double GetPowerValueFromFile(const std::string &path);
-
-    /*************************************************************************/
-    void ReadCpuVendorAndModel(const std::string &path);
 };

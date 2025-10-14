@@ -137,6 +137,28 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetDriverVersion(dcgm_module_command_
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmCoreCommunication::ProcessGetCudaVersion(dcgm_module_command_header_t *header)
+{
+    if (header == nullptr)
+    {
+        log_debug("ProcessGetCudaVersion: header is nullptr");
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreGetCudaVersion_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        log_debug("ProcessGetCudaVersion: CheckVersion failed: {}", ret);
+        return ret;
+    }
+
+    auto *gcv         = reinterpret_cast<dcgmCoreGetCudaVersion_v1 *>(header);
+    gcv->response.ret = m_cacheManagerPtr->GetCudaVersion(gcv->cudaVersion);
+    log_verbose("Writing CUDA version {} from CacheManager", gcv->cudaVersion);
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmCoreCommunication::ProcessGetGpuCount(dcgm_module_command_header_t *header)
 {
     dcgmCoreGetGpuCount_t ggc;
@@ -1672,6 +1694,12 @@ dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_hea
         case DcgmCoreReqIdChildProcessManagerReset:
         {
             ret = ProcessChildProcessManagerReset(header);
+            break;
+        }
+
+        case DcgmCoreReqIdGetCudaVersion:
+        {
+            ret = ProcessGetCudaVersion(header);
             break;
         }
 

@@ -437,8 +437,7 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
     std::vector<long long> operationsPerformed;
     GpuBurnWorker *workerThreads[DCGM_MAX_NUM_DEVICES] = { 0 };
     int st;
-    int activeThreadCount  = 0;
-    unsigned int timeCount = 0;
+    int activeThreadCount = 0;
 
     unsigned long startTime     = timelib_usecSince1970();
     bool failEarly              = m_testParameters->GetBoolFromString(FAIL_EARLY);
@@ -467,7 +466,9 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
             workerThreads[i] = new GpuBurnWorker(
                 m_device[i], *this, m_precision, m_testDuration, m_matrixDim, m_dcgmRecorder, failEarly, checkInterval);
             // initialize the worker
+            log_debug("Begin workerThreads[{}]->InitBuffers()", i);
             st = workerThreads[i]->InitBuffers();
+            log_debug("End workerThreads[{}]->InitBuffers()", i);
             if (st)
             {
                 log_debug("workerThreads[{}]->InitBuffers() st={}, stopping workers", i, st);
@@ -511,6 +512,19 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
             // Start the worker thread
             workerThreads[i]->Start();
             activeThreadCount++;
+
+            auto const tid = workerThreads[i]->GetCachedTid();
+            if (tid == 0)
+            {
+                log_error("Failed to get thread id for worker thread {}", i);
+                continue;
+            }
+
+            auto const ret = HangDetectRegisterTask(getpid(), tid);
+            if (ret != DCGM_ST_OK)
+            {
+                log_error("Failed to register worker thread {} for hang detection: {}", tid, ret);
+            }
         }
 
         log_debug("{} worker threads started, waiting until complete.", activeThreadCount);
@@ -548,8 +562,6 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
                     }
                 }
             }
-
-            timeCount++;
         }
     }
     catch (const std::exception &e)
@@ -566,6 +578,16 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
             {
                 continue;
             }
+
+            // Unregister the thread from hang detection
+            if (auto const tid = workerThreads[i]->GetCachedTid(); tid != 0)
+            {
+                if (auto const ret = HangDetectUnregisterTask(getpid(), tid); ret != DCGM_ST_OK)
+                {
+                    log_warning("Failed to unregister worker thread {} for hang detection: {}", tid, ret);
+                }
+            }
+
             // Ask each worker to stop and wait up to 3 seconds for the thread to stop
             try
             {
@@ -724,7 +746,6 @@ GpuBurnWorker::GpuBurnWorker(GpuBurnDevice *device,
     , m_f16CompareFunc()
     , m_f32CompareFunc()
     , m_f64CompareFunc()
-    , m_Cdata(0)
     , m_AdataFP64(0)
     , m_BdataFP64(0)
     , m_AdataFP32(0)
@@ -822,19 +843,19 @@ GpuBurnWorker::~GpuBurnWorker()
         DCGM_LOG_ERROR << "bind returned " << st;
     }
 
-#define LOCAL_FREE_DEVICE_PTR(devicePtr)                                                              \
-    {                                                                                                 \
-        CUresult cuSt;                                                                                \
-        if (devicePtr)                                                                                \
-        {                                                                                             \
-            cuSt = cuMemFree(devicePtr);                                                              \
-            if (cuSt != CUDA_SUCCESS)                                                                 \
-            {                                                                                         \
-                LOG_CUDA_ERROR_FOR_PLUGIN(                                                            \
-                    &m_plugin, m_plugin.GetDiagnosticTestName(), "cuMemFree", cuSt, m_device->gpuId); \
-            }                                                                                         \
-            devicePtr = 0;                                                                            \
-        }                                                                                             \
+#define LOCAL_FREE_DEVICE_PTR(devicePtr)                                                                 \
+    {                                                                                                    \
+        CUresult cuSt;                                                                                   \
+        if (devicePtr)                                                                                   \
+        {                                                                                                \
+            cuSt = cuMemFree_v2(devicePtr);                                                              \
+            if (cuSt != CUDA_SUCCESS)                                                                    \
+            {                                                                                            \
+                LOG_CUDA_ERROR_FOR_PLUGIN(                                                               \
+                    &m_plugin, m_plugin.GetDiagnosticTestName(), "cuMemFree_v2", cuSt, m_device->gpuId); \
+            }                                                                                            \
+            devicePtr = 0;                                                                               \
+        }                                                                                                \
     }
 
     LOCAL_FREE_DEVICE_PTR(m_AdataFP64);
@@ -843,7 +864,6 @@ GpuBurnWorker::~GpuBurnWorker()
     LOCAL_FREE_DEVICE_PTR(m_BdataFP64);
     LOCAL_FREE_DEVICE_PTR(m_BdataFP32);
     LOCAL_FREE_DEVICE_PTR(m_BdataFP16);
-    LOCAL_FREE_DEVICE_PTR(m_Cdata);
     LOCAL_FREE_DEVICE_PTR(m_faultyElemData);
     LOCAL_FREE_DEVICE_PTR(m_nanElemData);
 
@@ -889,10 +909,11 @@ size_t GpuBurnWorker::AvailMemory(int &st)
     }
     size_t freeMem  = 0;
     size_t totalMem = 0;
-    CUresult cuSt   = cuMemGetInfo(&freeMem, &totalMem);
+    CUresult cuSt   = cuMemGetInfo_v2(&freeMem, &totalMem);
     if (cuSt != CUDA_SUCCESS)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(&m_plugin, m_plugin.GetDiagnosticTestName(), "cuMemGetInfo", cuSt, m_device->gpuId);
+        LOG_CUDA_ERROR_FOR_PLUGIN(
+            &m_plugin, m_plugin.GetDiagnosticTestName(), "cuMemGetInfo_v2", cuSt, m_device->gpuId);
         st = -1;
         return 0;
     }
@@ -920,43 +941,113 @@ int GpuBurnWorker::InitBuffers()
     size_t resultSizeFP32 = resultSizeFP64 / 2;
     size_t resultSizeFP16 = resultSizeFP64 / 4;
 
-    m_iters = (useBytes - (2 * resultSizeFP64) - (2 * resultSizeFP32) - (2 * resultSizeFP16))
-              / resultSizeFP64; // We remove A and B sizes
+    // Calculate base iterations for double precision (this becomes our "iterations" variable in run())
+    size_t baseIterations = (useBytes - (2 * resultSizeFP64) - (2 * resultSizeFP32) - (2 * resultSizeFP16))
+                            / resultSizeFP64; // We remove A and B sizes
 
     if (IsSmallFrameBufferModeSet())
     {
         /* The minimum size is 1 output matrix */
-        m_iters = 1;
-        DCGM_LOG_DEBUG << "Setting small FB mode m_iters " << m_iters;
+        baseIterations = 1;
+        DCGM_LOG_DEBUG << "Setting small FB mode baseIterations " << baseIterations;
     }
 
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_Cdata, m_iters * resultSizeFP64));
+    // Store the base iterations for later use in run()
+    m_iters = baseIterations;
 
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_AdataFP64, resultSizeFP64));
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_BdataFP64, resultSizeFP64));
+    // Allocate input matrices A and B for all precisions
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_AdataFP64, resultSizeFP64));
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_BdataFP64, resultSizeFP64));
 
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_AdataFP32, resultSizeFP32));
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_BdataFP32, resultSizeFP32));
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_AdataFP32, resultSizeFP32));
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_BdataFP32, resultSizeFP32));
 
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_AdataFP16, resultSizeFP16));
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_BdataFP16, resultSizeFP16));
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_AdataFP16, resultSizeFP16));
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_BdataFP16, resultSizeFP16));
 
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_faultyElemData, sizeof(int)));
-    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc(&m_nanElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_faultyElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemAlloc", cuMemAlloc_v2(&m_nanElemData, sizeof(int)));
+
+    // Allocate output matrices - base vector owns all the actual device memory
+    m_CdataVecBase.reserve(baseIterations);
+    for (size_t i = 0; i < baseIterations; i++)
+    {
+        m_CdataVecBase.emplace_back(new CUdeviceptr_v2(0), CUdeviceptrDeleter {});
+        CHECK_CUDA_ERROR("cuMemAlloc_v2", cuMemAlloc_v2(m_CdataVecBase[i].get(), resultSizeFP64));
+    }
+
+    // Create views into the base memory for different precisions
+    // Double precision: 1:1 mapping to base matrices
+    m_CdataVecDouble.reserve(baseIterations);
+    for (size_t i = 0; i < baseIterations; i++)
+    {
+        m_CdataVecDouble.push_back(*m_CdataVecBase[i]);
+    }
+
+    // Single precision: 2 matrices per base matrix (each base matrix = 2 single precision matrices)
+    m_CdataVecSingle.reserve(baseIterations * 2);
+    for (size_t i = 0; i < baseIterations; i++)
+    {
+        // First half of the double precision matrix
+        m_CdataVecSingle.push_back(*m_CdataVecBase[i]);
+        // Second half of the double precision matrix
+        m_CdataVecSingle.push_back(*m_CdataVecBase[i] + resultSizeFP32);
+    }
+
+    // Half precision: 4 matrices per base matrix (each base matrix = 4 half precision matrices)
+    m_CdataVecHalf.reserve(baseIterations * 4);
+    for (size_t i = 0; i < baseIterations; i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            m_CdataVecHalf.push_back(*m_CdataVecBase[i] + j * resultSizeFP16);
+        }
+    }
+
+    // Allocate device pointer arrays for all precisions
+    m_devicePtrArrayDouble = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter {});
+    CHECK_CUDA_ERROR("cuMemAlloc_v2",
+                     cuMemAlloc_v2(m_devicePtrArrayDouble.get(), baseIterations * sizeof(CUdeviceptr_v2)));
+
+    m_devicePtrArraySingle = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter {});
+    CHECK_CUDA_ERROR("cuMemAlloc_v2",
+                     cuMemAlloc_v2(m_devicePtrArraySingle.get(), baseIterations * 2 * sizeof(CUdeviceptr_v2)));
+
+    m_devicePtrArrayHalf = CUdeviceptrWrapper(new CUdeviceptr_v2(0), CUdeviceptrDeleter {});
+    CHECK_CUDA_ERROR("cuMemAlloc_v2",
+                     cuMemAlloc_v2(m_devicePtrArrayHalf.get(), baseIterations * 4 * sizeof(CUdeviceptr_v2)));
+
+    // Populate all device pointer arrays upfront to eliminate host-to-device copies during precision switching
+
+    // Double precision device pointer array - direct copy since they already contain raw CUdeviceptr_v2
+    CHECK_CUDA_ERROR(
+        "cuMemcpyHtoD_v2",
+        cuMemcpyHtoD_v2(*m_devicePtrArrayDouble, m_CdataVecDouble.data(), baseIterations * sizeof(CUdeviceptr_v2)));
+
+    // Single precision device pointer array - direct copy since they already contain raw CUdeviceptr_v2
+    CHECK_CUDA_ERROR(
+        "cuMemcpyHtoD_v2",
+        cuMemcpyHtoD_v2(*m_devicePtrArraySingle, m_CdataVecSingle.data(), baseIterations * 2 * sizeof(CUdeviceptr_v2)));
+
+    // Half precision device pointer array - direct copy since they already contain raw CUdeviceptr_v2
+    CHECK_CUDA_ERROR(
+        "cuMemcpyHtoD_v2",
+        cuMemcpyHtoD_v2(*m_devicePtrArrayHalf, m_CdataVecHalf.data(), baseIterations * 4 * sizeof(CUdeviceptr_v2)));
 
     std::stringstream ss;
-    ss << "Allocated space for " << m_iters << " output matricies from " << useBytes << " bytes available.";
+    ss << "Allocated space for " << baseIterations << " double precision output matrices from " << useBytes
+       << " bytes available.";
     m_plugin.AddInfoVerboseForGpu(m_plugin.GetDiagnosticTestName(), m_device->gpuId, ss.str());
 
     // Populating matrices A and B
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD(m_AdataFP64, m_A_FP64.get(), resultSizeFP64));
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD(m_BdataFP64, m_B_FP64.get(), resultSizeFP64));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_AdataFP64, m_A_FP64.get(), resultSizeFP64));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_BdataFP64, m_B_FP64.get(), resultSizeFP64));
 
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD(m_AdataFP32, m_A_FP32.get(), resultSizeFP32));
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD(m_BdataFP32, m_B_FP32.get(), resultSizeFP32));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_AdataFP32, m_A_FP32.get(), resultSizeFP32));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_BdataFP32, m_B_FP32.get(), resultSizeFP32));
 
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD(m_AdataFP16, m_A_FP16.get(), resultSizeFP16));
-    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD(m_BdataFP16, m_B_FP16.get(), resultSizeFP16));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_AdataFP16, m_A_FP16.get(), resultSizeFP16));
+    CHECK_CUDA_ERROR("cuMemcpyHtoD", cuMemcpyHtoD_v2(m_BdataFP16, m_B_FP16.get(), resultSizeFP16));
 
     return InitCompareKernel();
 }
@@ -975,7 +1066,6 @@ int GpuBurnWorker::InitCompareKernel()
     CHECK_CUDA_ERROR("cuModuleGetFunction", cuModuleGetFunction(&m_f64CompareFunc, m_module, "compareFP64"));
     CHECK_CUDA_ERROR("cuFuncSetCacheConfig", cuFuncSetCacheConfig(m_f64CompareFunc, CU_FUNC_CACHE_PREFER_L1));
 
-    m_params[0] = &m_Cdata;
     m_params[1] = &m_faultyElemData;
     m_params[2] = &m_nanElemData;
     m_params[3] = &m_iters;
@@ -1002,8 +1092,8 @@ int GpuBurnWorker::Compare(int precisionIndex)
     int faultyElems = 0;
     int nanElems    = 0;
     CUfunction compare;
-    CHECK_CUDA_ERROR("cuMemsetD32", cuMemsetD32(m_faultyElemData, 0, 1));
-    CHECK_CUDA_ERROR("cuMemsetD32", cuMemsetD32(m_nanElemData, 0, 1));
+    CHECK_CUDA_ERROR("cuMemsetD32_v2", cuMemsetD32_v2(m_faultyElemData, 0, 1));
+    CHECK_CUDA_ERROR("cuMemsetD32_v2", cuMemsetD32_v2(m_nanElemData, 0, 1));
     if (precisionIndex == DIAG_HALF_PRECISION)
     {
         compare = m_f16CompareFunc;
@@ -1029,8 +1119,8 @@ int GpuBurnWorker::Compare(int precisionIndex)
                                     0,
                                     m_params,
                                     0));
-    CHECK_CUDA_ERROR("cuMemcpyDtoH", cuMemcpyDtoH(&faultyElems, m_faultyElemData, sizeof(int)));
-    CHECK_CUDA_ERROR("cuMemcpyDtoH", cuMemcpyDtoH(&nanElems, m_nanElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemcpyDtoH_v2", cuMemcpyDtoH_v2(&faultyElems, m_faultyElemData, sizeof(int)));
+    CHECK_CUDA_ERROR("cuMemcpyDtoH_v2", cuMemcpyDtoH_v2(&nanElems, m_nanElemData, sizeof(int)));
     if (faultyElems)
     {
         m_error += (long long int)faultyElems;
@@ -1072,6 +1162,8 @@ int GpuBurnWorker::Compute(int precisionIndex)
 
     for (size_t i = 0; i < m_iters && !ShouldStop(); i++)
     {
+        auto outputMatrix = (*m_CdataVec)[i]; // m_CdataVec points to vector of raw CUdeviceptr_v2
+
         if (precisionIndex == DIAG_HALF_PRECISION)
         {
             CHECK_CUBLAS_ERROR_AND_RETURN("cublasHgemm",
@@ -1087,7 +1179,7 @@ int GpuBurnWorker::Compute(int precisionIndex)
                                                                    (const __half *)m_BdataFP16,
                                                                    m_matrixDim,
                                                                    &betaH,
-                                                                   (__half *)m_Cdata + i * m_matrixDim * m_matrixDim,
+                                                                   (__half *)outputMatrix,
                                                                    m_matrixDim));
         }
         else if (precisionIndex == DIAG_SINGLE_PRECISION)
@@ -1105,7 +1197,7 @@ int GpuBurnWorker::Compute(int precisionIndex)
                                                                    (const float *)m_BdataFP32,
                                                                    m_matrixDim,
                                                                    &beta,
-                                                                   (float *)m_Cdata + i * m_matrixDim * m_matrixDim,
+                                                                   (float *)outputMatrix,
                                                                    m_matrixDim));
         }
         else
@@ -1123,7 +1215,7 @@ int GpuBurnWorker::Compute(int precisionIndex)
                                                                    (const double *)m_BdataFP64,
                                                                    m_matrixDim,
                                                                    &betaD,
-                                                                   (double *)m_Cdata + i * m_matrixDim * m_matrixDim,
+                                                                   (double *)outputMatrix,
                                                                    m_matrixDim));
         }
     }
@@ -1135,8 +1227,9 @@ void GpuBurnWorker::run()
 {
     using namespace Dcgm;
     double startTime;
-    double iterEnd = 0;
-    int iterations = m_iters;
+    double computeTime = 0;
+    double iterEnd     = 0;
+    int iterations     = m_iters;
     std::string gflopsKey(PERF_STAT_NAME);
 
     int st = Bind();
@@ -1187,6 +1280,15 @@ void GpuBurnWorker::run()
                 m_iters = iterations;
             }
 
+            double tic = timelib_dsecSince1970();
+            st         = InitBuffersForCurrentPrecision(precision);
+            double toc = timelib_dsecSince1970();
+
+            if (st || ShouldStop())
+            {
+                break;
+            }
+
             st = Compute(precision);
             if (st || ShouldStop())
             {
@@ -1204,8 +1306,11 @@ void GpuBurnWorker::run()
             m_totalOperations += m_iters;
             iterEnd = timelib_dsecSince1970();
 
+            computeTime = iterEnd - startTime - (toc - tic);
+            log_debug("computeTime: {}, InitBufferTime: {}", computeTime, toc - tic);
+
             /* Give cublas a hint to use tensor cores at the halfway point to add additional coverage */
-            if (!hintedTensorCores && (iterEnd - startTime > m_testDuration / 2.0))
+            if (!hintedTensorCores && (computeTime > m_testDuration / 2.0))
             {
                 DCGM_LOG_DEBUG << "Enabling tensor math for GPU " << m_device->gpuId;
                 CHECK_CUBLAS_ERROR("cublasSetMathMode",
@@ -1213,7 +1318,7 @@ void GpuBurnWorker::run()
                 hintedTensorCores = true;
             }
 
-            if (iterEnd - startTime > m_testDuration || ShouldStop())
+            if (computeTime > m_testDuration || ShouldStop())
             {
                 break;
             }
@@ -1222,6 +1327,33 @@ void GpuBurnWorker::run()
         double gflops = m_iters * OPS_PER_MUL / (1024 * 1024 * 1024) / (iterEnd - iterStart);
         m_plugin.SetGpuStat(m_plugin.GetDiagnosticTestName(), m_device->gpuId, gflopsKey, gflops);
 
-    } while (iterEnd - startTime < m_testDuration && !ShouldStop() && !st);
+    } while (computeTime < m_testDuration && !ShouldStop() && !st);
     m_stopTime = timelib_secSince1970();
+}
+
+/****************************************************************************/
+int GpuBurnWorker::InitBuffersForCurrentPrecision(int precisionIndex)
+{
+    // Select the appropriate pre-allocated vector and device pointer array based on precision
+    // No memory allocation or host-to-device copies needed - everything is pre-allocated and populated
+    if (precisionIndex == DIAG_HALF_PRECISION)
+    {
+        m_CdataVec       = &m_CdataVecHalf;
+        m_devicePtrArray = &m_devicePtrArrayHalf;
+    }
+    else if (precisionIndex == DIAG_SINGLE_PRECISION)
+    {
+        m_CdataVec       = &m_CdataVecSingle;
+        m_devicePtrArray = &m_devicePtrArraySingle;
+    }
+    else // DIAG_DOUBLE_PRECISION
+    {
+        m_CdataVec       = &m_CdataVecDouble;
+        m_devicePtrArray = &m_devicePtrArrayDouble;
+    }
+
+    // Pass CUdeviceptr_v2* to the kernel and use as double/float/half ** in the kernel
+    m_params[0] = (*m_devicePtrArray).get();
+
+    return 0;
 }

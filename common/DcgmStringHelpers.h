@@ -139,4 +139,11 @@ std::vector<std::string> TokenizeStringQuoted(std::string_view str, char delimit
  */
 int strictStrToInt(std::string const &str);
 
+/**
+ * @brief Returns a string with leading and trailing whitespace (checked by std::isspace) removed.
+ * @param str The string to trim
+ * @return The trimmed string
+ */
+std::string Trim(std::string_view str);
+
 } // namespace DcgmNs

@@ -270,8 +270,8 @@ public:
         // none is the first in the severity enum, verbose is the last
         if (inputSeverity < plog::none || inputSeverity > plog::verbose)
         {
-            DCGM_LOG_ERROR << "severityToString received invalid severity " << inputSeverity << ". "
-                           << "Defaulting to " << defaultSeverity;
+            DCGM_LOG_ERROR << "severityToString received invalid severity " << inputSeverity << ". " << "Defaulting to "
+                           << defaultSeverity;
             return defaultSeverity;
         }
 

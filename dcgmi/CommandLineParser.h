@@ -85,6 +85,10 @@ private:
                                                std::string &hostEngineAddressValue,
                                                bool &hostAddressWasOverridden,
                                                bool &jsonOutput);
+
+    static dcgmWorkloadPowerProfile_t HelperProcessWorkloadPowerProfileCommandLine(int workloadPowerProfile,
+                                                                                   char workloadPowerProfileAction,
+                                                                                   int groupId);
 };
 
 #endif // DCGMI_CLI_PARSER_H

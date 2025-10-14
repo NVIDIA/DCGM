@@ -13,15 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
+
+#ifndef NVVS_PLUGIN_INTERFACE_H
+#define NVVS_PLUGIN_INTERFACE_H
 
 #include "NvvsCommon.h"
 
 #include <dcgm_api_export.h>
 #include <dcgm_structs.h>
+
+#ifdef __cplusplus
 #include <string>
 #include <unordered_map>
 #include <vector>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,35 +42,53 @@ extern "C" {
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_3 3 /* 3.1.8 -> 3.2.3 */
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_4 4 /* 3.2.5 -> 3.3.6 */
 #define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_5 5 /* 3.3.7 -> 3.3.8 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_6 6 /* Current version - 4.0 */
-#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_6
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_6 6 /* 4.0.0 -> 4.2.3 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION_7 7 /* Current version - 4.3 */
+#define DCGM_DIAG_PLUGIN_INTERFACE_VERSION   DCGM_DIAG_PLUGIN_INTERFACE_VERSION_7
+
+#ifdef __cplusplus
+// hostEngineAppenderCallbackFp_t is defined in DcgmLogging.h
+class HangDetectMonitor;
+typedef HangDetectMonitor *HangDetectMonitorPtr;
+#else
+typedef void (*hostEngineAppenderCallbackFp_t)(void const *);
+typedef void *HangDetectMonitorPtr;
+#endif
 
 /* IMPORTANT:
  *
  * If you change any of the following struct or callback definitions, you need to increment
  * DCGM_DIAG_PLUGIN_INTERFACE_VERSION
  */
+
+
+#ifdef __cplusplus
+#define DCGM_MEMBER_INIT(init) = init
+#else
+#define DCGM_MEMBER_INIT(init)
+#endif
+
 typedef struct
 {
-    DcgmEntityStatus_t status         = {};
-    dcgmDeviceAttributes_t attributes = {};
+    DcgmEntityStatus_t status DCGM_MEMBER_INIT({});
+    dcgmDeviceAttributes_t attributes DCGM_MEMBER_INIT({});
 } dcgmDiagPluginEntityGpuAux_v1;
 
 union dcgmDiagPluginEntityAux_v1
 {
-    dcgmDiagPluginEntityGpuAux_v1 gpu;
+    dcgmDiagPluginEntityGpuAux_v1 gpu DCGM_MEMBER_INIT({});
 };
 
 typedef struct
 {
-    dcgmGroupEntityPair_t entity;
-    dcgmDiagPluginEntityAux_v1 auxField;
+    dcgmGroupEntityPair_t entity DCGM_MEMBER_INIT({});
+    dcgmDiagPluginEntityAux_v1 auxField DCGM_MEMBER_INIT({});
 } dcgmDiagPluginEntityInfo_v1;
 
 typedef struct
 {
-    unsigned int numEntities                                         = 0;
-    dcgmDiagPluginEntityInfo_v1 entities[DCGM_GROUP_MAX_ENTITIES_V2] = {};
+    unsigned int numEntities DCGM_MEMBER_INIT(0);
+    dcgmDiagPluginEntityInfo_v1 entities[DCGM_GROUP_MAX_ENTITIES_V2] DCGM_MEMBER_INIT({});
 } dcgmDiagPluginEntityList_v1;
 
 #define DCGM_MAX_PLUGIN_DESC_LEN       128
@@ -73,12 +96,15 @@ typedef struct
 #define DCGM_MAX_PARAMETERS_PER_PLUGIN 64
 #define DCGM_MAX_PARAMETER_NAME_LEN    50
 #define DCGM_DIAG_MAX_VALUE_LEN        50
+
+#ifdef __cplusplus
 static_assert(DCGM_MAX_PLUGIN_NAME_LEN <= std::min({ sizeof(dcgmDiagTestRun_v1().name),
                                                      sizeof(dcgmDiagTestRun_v1().pluginName),
                                                      sizeof(dcgmDiagResponse_v11().categories[0]) }));
 static_assert(DCGM_MAX_PLUGIN_NAME_LEN <= std::min({ sizeof(dcgmDiagTestRun_v2().name),
                                                      sizeof(dcgmDiagTestRun_v2().pluginName),
                                                      sizeof(dcgmDiagResponse_v12().categories[0]) }));
+#endif
 
 typedef enum
 {
@@ -108,8 +134,10 @@ typedef struct
 } dcgmDiagPluginTest_t;
 
 #define DCGM_MAX_PLUGIN_TEST_NUM 20
+#ifdef __cplusplus
 static_assert(DCGM_MAX_PLUGIN_TEST_NUM <= std::size(dcgmDiagResponse_v11().tests));
 static_assert(DCGM_MAX_PLUGIN_TEST_NUM <= std::size(dcgmDiagResponse_v12().tests));
+#endif
 
 typedef struct
 {
@@ -283,6 +311,7 @@ typedef dcgmReturn_t (*dcgmDiagGetPluginInfo_f)(unsigned int pluginInterfaceVers
  * @param loggingCallback[in]        - Callback to use to log. The nvvs process will log on each plugin's behalf
  *file
  * @param pluginAttr[in]             - Plugin attributes which provided by NVVS.
+ * @param monitor[in]                - Hang detection monitor (nullptr if disabled).
  *
  * @return DCGM_ST_OK                - if the plugin has been set up sufficiently to run.
  *         DCGM_ST_*                   if an error condition matching a DCGM error code has caused the plugin to not be
@@ -294,14 +323,16 @@ DCGM_PUBLIC_API dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                                               void **userData,
                                               DcgmLoggingSeverity_t loggingSeverity,
                                               hostEngineAppenderCallbackFp_t loggingCallback,
-                                              dcgmDiagPluginAttr_v1 const *pluginAttr);
+                                              dcgmDiagPluginAttr_v1 const *pluginAttr,
+                                              HangDetectMonitorPtr monitor);
 
 typedef dcgmReturn_t (*dcgmDiagInitializePlugin_f)(dcgmHandle_t handle,
                                                    dcgmDiagPluginStatFieldIds_t *statFieldIds,
                                                    void **userData,
                                                    DcgmLoggingSeverity_t loggingSeverity,
                                                    hostEngineAppenderCallbackFp_t loggingCallback,
-                                                   dcgmDiagPluginAttr_v1 const *pluginAttr);
+                                                   dcgmDiagPluginAttr_v1 const *pluginAttr,
+                                                   HangDetectMonitorPtr monitor);
 
 /**
  * @brief Shuts down the plugin.
@@ -368,3 +399,5 @@ typedef void (*dcgmDiagRetrieveResults_f)(char const *testName,
 #ifdef __cplusplus
 } // END extern "C"
 #endif
+
+#endif // NVVS_PLUGIN_INTERFACE_H

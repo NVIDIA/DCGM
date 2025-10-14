@@ -251,7 +251,8 @@ int main(int argc, char **argv)
             i++;
             CU_CHECK_ERROR(cuDeviceGetByPCIBusId(&device, argv[i]), "Bus id %s not matched", argv[i]);
             ASSERT(ctx[device] == NULL, "Previous ctx hasn't been destroyed on this device");
-            CU_CHECK_ERROR(cuCtxCreate(&ctx[device], 0, device), "could not create context on CUDA device %d", device);
+            CU_CHECK_ERROR(
+                cuCtxCreate_v2(&ctx[device], 0, device), "could not create context on CUDA device %d", device);
             printf("Context created\n");
         }
         else if (strcmp(argv[i], "--ctxDestroy") == 0)

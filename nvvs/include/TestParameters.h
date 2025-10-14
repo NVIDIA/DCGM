@@ -129,6 +129,7 @@ public:
     std::vector<dcgmDiagPluginTestParameter_t> GetParametersAsStruct() const;
 
     /*************************************************************************/
+    static bool bool_string_to_bool(std::string const &str);
 
 private:
     std::map<std::string, TestParameterValue *, std::less<>> m_globalParameters;

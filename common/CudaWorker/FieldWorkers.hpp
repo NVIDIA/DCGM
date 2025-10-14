@@ -459,9 +459,9 @@ public:
 class FieldWorkerPciRxTxBytes : public FieldWorkerBase
 {
     /* Allocate 100 MB of FB and pinned memory */
-    const size_t m_bufferSize = 100 * 1024 * 1024;
-    void *m_hostMem           = nullptr;
-    CUdeviceptr m_deviceMem   = (CUdeviceptr) nullptr;
+    const size_t m_bufferSize  = 100 * 1024 * 1024;
+    void *m_hostMem            = nullptr;
+    CUdeviceptr_v2 m_deviceMem = (CUdeviceptr_v2) nullptr;
 
 public:
     FieldWorkerPciRxTxBytes(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
@@ -471,7 +471,7 @@ public:
 
         DCGM_LOG_DEBUG << "Allocating host mem";
 
-        cuSt = cuMemAllocHost(&m_hostMem, m_bufferSize);
+        cuSt = cuMemAllocHost_v2(&m_hostMem, m_bufferSize);
         if (cuSt)
         {
             using fmt::v10::enums::format_as;
@@ -483,14 +483,14 @@ public:
         memset(m_hostMem, 0, m_bufferSize);
 
         DCGM_LOG_DEBUG << "Allocating device mem";
-        cuSt = cuMemAlloc(&m_deviceMem, m_bufferSize);
+        cuSt = cuMemAlloc_v2(&m_deviceMem, m_bufferSize);
         if (cuSt)
         {
-            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
             throw std::runtime_error(s);
         }
         DCGM_LOG_DEBUG << "Clearing device mem";
-        cuMemsetD32(m_deviceMem, 0, m_bufferSize);
+        cuMemsetD32_v2(m_deviceMem, 0, m_bufferSize);
     }
 
     ~FieldWorkerPciRxTxBytes()
@@ -501,10 +501,10 @@ public:
             m_hostMem = nullptr;
         }
 
-        if (m_deviceMem != (CUdeviceptr) nullptr)
+        if (m_deviceMem != (CUdeviceptr_v2) nullptr)
         {
             cuMemFree(m_deviceMem);
-            m_deviceMem = (CUdeviceptr) nullptr;
+            m_deviceMem = (CUdeviceptr_v2) nullptr;
         }
     }
 
@@ -530,11 +530,11 @@ public:
             {
                 if (m_fieldId == DCGM_FI_PROF_PCIE_RX_BYTES)
                 {
-                    cuSt = cuMemcpyHtoD(m_deviceMem, m_hostMem, m_bufferSize);
+                    cuSt = cuMemcpyHtoD_v2(m_deviceMem, m_hostMem, m_bufferSize);
                 }
                 else /* DCGM_FI_PROF_PCIE_TX_BYTES */
                 {
-                    cuSt = cuMemcpyDtoH(m_hostMem, m_deviceMem, m_bufferSize);
+                    cuSt = cuMemcpyDtoH_v2(m_hostMem, m_deviceMem, m_bufferSize);
                 }
 
                 totalBytesTransferred += m_bufferSize;
@@ -556,9 +556,9 @@ public:
 class FieldWorkerDramUtil : public FieldWorkerBase
 {
     /* Allocate 100 MB of FB and pinned memory */
-    const size_t m_bufferSize = 100 * 1024 * 1024;
-    CUdeviceptr m_deviceMem   = (CUdeviceptr) nullptr;
-    CUdeviceptr m_deviceMem2  = (CUdeviceptr) nullptr;
+    const size_t m_bufferSize   = 100 * 1024 * 1024;
+    CUdeviceptr_v2 m_deviceMem  = (CUdeviceptr_v2) nullptr;
+    CUdeviceptr_v2 m_deviceMem2 = (CUdeviceptr_v2) nullptr;
 
 public:
     FieldWorkerDramUtil(CudaWorkerDevice_t cudaDevice)
@@ -567,36 +567,36 @@ public:
         CUresult cuSt;
 
         DCGM_LOG_DEBUG << "Allocating device mem";
-        cuSt = cuMemAlloc(&m_deviceMem, m_bufferSize);
+        cuSt = cuMemAlloc_v2(&m_deviceMem, m_bufferSize);
         if (cuSt)
         {
-            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
             throw std::runtime_error(s);
         }
-        cuSt = cuMemAlloc(&m_deviceMem2, m_bufferSize);
+        cuSt = cuMemAlloc_v2(&m_deviceMem2, m_bufferSize);
         if (cuSt)
         {
-            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
             throw std::runtime_error(s);
         }
 
         DCGM_LOG_DEBUG << "Clearing device mem";
-        cuMemsetD32(m_deviceMem, 0, m_bufferSize);
-        cuMemsetD32(m_deviceMem2, 0, m_bufferSize);
+        cuMemsetD32_v2(m_deviceMem, 0, m_bufferSize);
+        cuMemsetD32_v2(m_deviceMem2, 0, m_bufferSize);
     }
 
     ~FieldWorkerDramUtil()
     {
-        if (m_deviceMem != (CUdeviceptr) nullptr)
+        if (m_deviceMem != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree(m_deviceMem);
-            m_deviceMem = (CUdeviceptr) nullptr;
+            cuMemFree_v2(m_deviceMem);
+            m_deviceMem = (CUdeviceptr_v2) nullptr;
         }
 
-        if (m_deviceMem2 != (CUdeviceptr) nullptr)
+        if (m_deviceMem2 != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree(m_deviceMem2);
-            m_deviceMem2 = (CUdeviceptr) nullptr;
+            cuMemFree_v2(m_deviceMem2);
+            m_deviceMem2 = (CUdeviceptr_v2) nullptr;
         }
     }
 
@@ -641,10 +641,10 @@ class FieldWorkerNvLinkRwBytes : public FieldWorkerBase
     std::string m_peerBusId;
 
     /* Allocate 100 MB of FB and pinned memory */
-    const size_t m_bufferSize = 100 * 1024 * 1024;
-    CUdeviceptr m_deviceMem0  = (CUdeviceptr) nullptr;
-    CUdeviceptr m_deviceMem1  = (CUdeviceptr) nullptr;
-    CUcontext m_deviceCtx1    = (CUcontext) nullptr;
+    const size_t m_bufferSize   = 100 * 1024 * 1024;
+    CUdeviceptr_v2 m_deviceMem0 = (CUdeviceptr_v2) nullptr;
+    CUdeviceptr_v2 m_deviceMem1 = (CUdeviceptr_v2) nullptr;
+    CUcontext m_deviceCtx1      = nullptr;
 
 public:
     FieldWorkerNvLinkRwBytes(CudaWorkerDevice_t cudaDevice, unsigned int fieldId, std::string peerBusId)
@@ -665,10 +665,10 @@ public:
 
         /* Create a context on the other GPU */
 
-        cuSt = cuCtxCreate(&m_deviceCtx1, CU_CTX_SCHED_BLOCKING_SYNC, peerCuDevice);
+        cuSt = cuCtxCreate_v2(&m_deviceCtx1, CU_CTX_SCHED_BLOCKING_SYNC, peerCuDevice);
         if (cuSt)
         {
-            std::string s = fmt::format("cuCtxCreate returned {}", cuSt);
+            std::string s = fmt::format("cuCtxCreate_v2 returned {}", cuSt);
             DCGM_LOG_ERROR << s;
             throw std::runtime_error(s);
         }
@@ -676,10 +676,10 @@ public:
         cuCtxSetCurrent(m_cudaDevice.m_context);
 
         DCGM_LOG_DEBUG << "Allocating device 0 mem";
-        cuSt = cuMemAlloc(&m_deviceMem0, m_bufferSize);
+        cuSt = cuMemAlloc_v2(&m_deviceMem0, m_bufferSize);
         if (cuSt)
         {
-            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
             DCGM_LOG_ERROR << s;
             throw std::runtime_error(s);
         }
@@ -689,10 +689,10 @@ public:
         cuCtxSetCurrent(m_deviceCtx1);
 
         DCGM_LOG_DEBUG << "Allocating device 1 mem";
-        cuSt = cuMemAlloc(&m_deviceMem1, m_bufferSize);
+        cuSt = cuMemAlloc_v2(&m_deviceMem1, m_bufferSize);
         if (cuSt)
         {
-            std::string s = fmt::format("cuMemAlloc returned {}", cuSt);
+            std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
             DCGM_LOG_ERROR << s;
             throw std::runtime_error(s);
         }
@@ -713,16 +713,16 @@ public:
 
     ~FieldWorkerNvLinkRwBytes()
     {
-        if (m_deviceMem0 != (CUdeviceptr) nullptr)
+        if (m_deviceMem0 != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree(m_deviceMem0);
-            m_deviceMem0 = (CUdeviceptr) nullptr;
+            cuMemFree_v2(m_deviceMem0);
+            m_deviceMem0 = (CUdeviceptr_v2) nullptr;
         }
 
-        if (m_deviceMem1 != (CUdeviceptr) nullptr)
+        if (m_deviceMem1 != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree(m_deviceMem1);
-            m_deviceMem1 = (CUdeviceptr) nullptr;
+            cuMemFree_v2(m_deviceMem1);
+            m_deviceMem1 = (CUdeviceptr_v2) nullptr;
         }
 
         if (m_deviceCtx1 != (CUcontext) nullptr)
@@ -754,16 +754,16 @@ public:
             {
                 if (m_fieldId == DCGM_FI_PROF_NVLINK_RX_BYTES)
                 {
-                    cuSt = cuMemcpyDtoD(m_deviceMem0, m_deviceMem1, m_bufferSize);
+                    cuSt = cuMemcpyDtoD_v2(m_deviceMem0, m_deviceMem1, m_bufferSize);
                 }
                 else /* DCGM_FI_PROF_NVLINK_TX_BYTES */
                 {
-                    cuSt = cuMemcpyDtoD(m_deviceMem1, m_deviceMem0, m_bufferSize);
+                    cuSt = cuMemcpyDtoD_v2(m_deviceMem1, m_deviceMem0, m_bufferSize);
                 }
 
                 if (cuSt)
                 {
-                    DCGM_LOG_ERROR << "cuMemcpy returned " << cuSt;
+                    DCGM_LOG_ERROR << "cuMemcpyDtoD_v2 returned " << cuSt;
                     return;
                 }
                 totalBytesTransferred += m_bufferSize;
@@ -780,9 +780,9 @@ class FieldWorkerTensorActivity : public FieldWorkerBase
 {
     const size_t m_defaultArrayDim = 4096; /* Default array dimension for our square matricies */
     size_t m_arrayDim;                     /* Actual array dim after the constuctor */
-    CUdeviceptr m_deviceA         = (CUdeviceptr) nullptr;
-    CUdeviceptr m_deviceB         = (CUdeviceptr) nullptr;
-    CUdeviceptr m_deviceC         = (CUdeviceptr) nullptr;
+    CUdeviceptr_v2 m_deviceA      = (CUdeviceptr_v2) nullptr;
+    CUdeviceptr_v2 m_deviceB      = (CUdeviceptr_v2) nullptr;
+    CUdeviceptr_v2 m_deviceC      = (CUdeviceptr_v2) nullptr;
     void *m_hostA                 = nullptr;
     void *m_hostB                 = nullptr;
     cublasHandle_t m_cublasHandle = nullptr;
@@ -847,12 +847,12 @@ public:
 #endif
 
         CUresult cuSt, cuSt2, cuSt3;
-        cuSt  = cuMemAlloc(&m_deviceA, arrayByteSize);
-        cuSt2 = cuMemAlloc(&m_deviceB, arrayByteSize);
-        cuSt3 = cuMemAlloc(&m_deviceC, arrayByteSize);
+        cuSt  = cuMemAlloc_v2(&m_deviceA, arrayByteSize);
+        cuSt2 = cuMemAlloc_v2(&m_deviceB, arrayByteSize);
+        cuSt3 = cuMemAlloc_v2(&m_deviceC, arrayByteSize);
         if (cuSt || cuSt2 || cuSt3)
         {
-            std::string s = fmt::format("cuMemAlloc returned  {} {} {} for {}", cuSt, cuSt2, cuSt3, arrayByteSize);
+            std::string s = fmt::format("cuMemAlloc_v2 returned  {} {} {} for {}", cuSt, cuSt2, cuSt3, arrayByteSize);
             DCGM_LOG_ERROR << s;
             throw std::runtime_error(s);
         }
@@ -925,15 +925,20 @@ public:
         }
 
         /* Just zero the output array */
-        cuMemsetD32(m_deviceC, 0, arrayByteSize);
+        cuMemsetD32_v2(m_deviceC, 0, arrayByteSize);
 
         /* Copy A and B to the device */
-        cuSt  = cuMemcpyHtoD(m_deviceA, m_hostA, arrayByteSize);
-        cuSt2 = cuMemcpyHtoD(m_deviceB, m_hostB, arrayByteSize);
+        cuSt  = cuMemcpyHtoD_v2(m_deviceA, m_hostA, arrayByteSize);
+        cuSt2 = cuMemcpyHtoD_v2(m_deviceB, m_hostB, arrayByteSize);
         if (cuSt || cuSt2)
         {
-            std::string s = fmt::format("cuMemcpyHtoD failed {} {}.", cuSt, cuSt2);
+            unsigned int apiVersion = 0;
+            cuCtxGetApiVersion(nullptr, &apiVersion);
+
+            std::string s = fmt::format(
+                "cuMemcpyHtoD_v2 failed {} {}. Currently bound context API version: {}", cuSt, cuSt2, apiVersion);
             DCGM_LOG_ERROR << s;
+
             throw std::runtime_error(s);
         }
 
@@ -963,19 +968,19 @@ public:
         /* Wait for any kernels to finish */
         cuCtxSynchronize();
 
-        if (m_deviceA != (CUdeviceptr) nullptr)
+        if (m_deviceA != 0)
         {
-            cuMemFree(m_deviceA);
+            cuMemFree_v2(m_deviceA);
         }
 
-        if (m_deviceB != (CUdeviceptr) nullptr)
+        if (m_deviceB != 0)
         {
-            cuMemFree(m_deviceB);
+            cuMemFree_v2(m_deviceB);
         }
 
-        if (m_deviceC != (CUdeviceptr) nullptr)
+        if (m_deviceC != 0)
         {
-            cuMemFree(m_deviceC);
+            cuMemFree_v2(m_deviceC);
         }
 
         if (m_hostA != nullptr)

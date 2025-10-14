@@ -455,6 +455,20 @@ typedef struct
     void *userData; // user data passed to callback function
 } dcgmcmEventSubscription_t;
 
+typedef enum
+{
+    DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_NONE              = 0,
+    DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_CLEAR             = 1,
+    DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET               = 2,
+    DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET_AND_OVERWRITE = 3
+} dcgmcmWorkloadPowerProfileAction_t;
+
+typedef struct
+{
+    dcgmcmWorkloadPowerProfileAction_t action;               //!< Action to perform
+    unsigned int profileMask[DCGM_POWER_PROFILE_ARRAY_SIZE]; //!< Bitmask of workload power profiles to update
+} dcgmcmWorkloadPowerProfile_t;
+
 /*****************************************************************************/
 class DcgmCacheManager; /* Forward declare the cache manager so it can be
                            used by DcgmCacheManagerEventThread */
@@ -1719,6 +1733,15 @@ public:
 
     std::string GetDriverVersion();
 
+    /*************************************************************************/
+    /*
+     * Get the CUDA driver version
+     *
+     * Returns: 0 on success
+     *          DCGM_ST_? #define on error.
+     */
+    dcgmReturn_t GetCudaVersion(int &cudaVersion);
+
 #ifndef TEST_DCGMCACHEMANAGER
 private:
 #endif
@@ -2438,6 +2461,15 @@ private:
                                        unsigned short const fieldId,
                                        timelib64_t const expireTime);
 
+    dcgmReturn_t ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+
+    void CachePrmField(dcgmcm_update_thread_t const &threadCtx,
+                       dcgm_field_eid_t linkEntityId,
+                       unsigned short fieldId,
+                       unsigned short requestedFieldId,
+                       uint64_t value,
+                       timelib64_t now);
+
     /*************************************************************************/
     /*
      * Use NVML functions to determine the P2P NVLink status for a given GPU
@@ -2454,4 +2486,6 @@ private:
      */
     dcgmReturn_t CreateNvlinkP2PStatus(nvmlDevice_t nvmlDevice,
                                        dcgmNvLinkGpuP2PStatus_t linkStatus[DCGM_MAX_NUM_DEVICES]);
+
+    dcgmReturn_t SetWorkloadPowerProfile(nvmlDevice_t nvmlDevice, dcgmcm_sample_t const &value);
 };

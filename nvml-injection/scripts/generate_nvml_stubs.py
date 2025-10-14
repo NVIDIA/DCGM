@@ -521,6 +521,16 @@ def is_setter(funcname):
 
     return False
 
+def is_event_api(funcname):
+    if funcname.startswith("nvmlSystemEvent") or funcname == "nvmlSystemRegisterEvents":
+        return True
+    return False
+
+def is_workload_power_profile_api(funcname):
+    if funcname.startswith("nvmlDeviceWorkloadPowerProfile"):
+        return True
+    return False
+
 def generate_setter_functions(stub_file, funcname, arg_list, arg_types, arg_names):
     generated = True
     key, version = get_function_info_from_name(funcname)
@@ -550,6 +560,21 @@ def generate_setter_functions(stub_file, funcname, arg_list, arg_types, arg_name
 
     return generated
 
+def generate_event_api_functions(stub_file, funcname, arg_list, arg_types, arg_names):
+    generated = True
+    key, version = get_function_info_from_name(funcname)
+
+    if funcname == "nvmlSystemRegisterEvents" or funcname == "nvmlSystemEventSetCreate" or funcname == "nvmlSystemEventSetFree":
+        print_generator_source_info(stub_file, 2)
+        print_body_line("std::vector<InjectionArgument> args;", stub_file, 1)
+        print_body_line("std::vector<InjectionArgument> preparedValues;", stub_file, 1)
+        print_body_line("args.push_back(InjectionArgument(%s));" % arg_names[0], stub_file, 1)
+        print_body_line(f"return injectedNvml->EventApiWrapper(__func__, \"{key}\", args, preparedValues);", stub_file, 1)
+    else:
+        generated = False
+
+    return generated
+
 cant_generate = [
     'nvmlDeviceGetVgpuMetadata',
     'nvmlDeviceSetDriverModel', # Windows only
@@ -561,7 +586,9 @@ def generate_injection_function(stub_file, funcname, arg_list, arg_types, arg_na
 
     generated = False
 
-    if is_getter(funcname):
+    if is_event_api(funcname):
+        generated = generate_event_api_functions(stub_file, funcname, arg_list, arg_types, arg_names)
+    elif is_getter(funcname) or is_workload_power_profile_api(funcname):
         generated = generate_getter_functions(stub_file, funcname, arg_list, arg_types, arg_names, justifyLen)
     elif is_setter(funcname):
         generated = generate_setter_functions(stub_file, funcname, arg_list, arg_types, arg_names)
@@ -649,6 +676,10 @@ def write_function(stub_file, funcinfo, all_functypes):
         print_body_line("if (injectedNvml->IsGetter(__func__))", stub_file, 1)
         print_body_line("{", stub_file, 1)
         print_body_line(f"return injectedNvml->GetWrapper(__func__, \"{key}\", args, preparedValues);", stub_file, 2)
+        print_body_line("}", stub_file, 1)
+        print_body_line("else if (injectedNvml->IsEventApi(__func__))", stub_file, 1)
+        print_body_line("{", stub_file, 1)
+        print_body_line(f"return injectedNvml->EventApiWrapper(__func__, \"{key}\", args, preparedValues);", stub_file, 2)
         print_body_line("}", stub_file, 1)
         print_body_line("else", stub_file, 1)
         print_body_line("{", stub_file, 1)
@@ -934,10 +965,13 @@ def write_injection_free_function(injectionCpp, struct_with_member, all_enum):
 def struct_compare_func_name(struct_name):
     return f"{struct_name}Compare"
 
+def get_cannot_compare_struct_set():
+    return {"nvmlSystemEventSet_t", "nvmlSystemEventSetCreateRequest_t", "nvmlSystemEventSetFreeRequest_t", "nvmlSystemRegisterEventRequest_t", "nvmlSystemEventSetWaitRequest_t", "nvmlGpuThermalSettings_t", "nvmlGpuDynamicPstatesInfo_t", "nvmlGpmMetric_t", "nvmlGpmMetricsGet_t"}
+
 def write_struct_compare_declare(out_file, struct_with_member, all_enum):
     print_generator_source_info(out_file, 0)
     for struct_name, _ in struct_with_member.items():
-        if struct_name == "nvmlGpuThermalSettings_t" or struct_name == "nvmlGpuDynamicPstatesInfo_t" or struct_name == "nvmlGpmMetric_t" or struct_name == "nvmlGpmMetricsGet_t":
+        if struct_name in get_cannot_compare_struct_set():
             continue
         func_name = struct_compare_func_name(struct_name)
         out_file.write(f"int {func_name}(const {struct_name} &a, const {struct_name} &b);\n")
@@ -945,7 +979,7 @@ def write_struct_compare_declare(out_file, struct_with_member, all_enum):
 def write_struct_compare_definition(out_file, struct_with_member, all_enum):
     for struct_name, member_list in struct_with_member.items():
         func_name = struct_compare_func_name(struct_name)
-        if struct_name == "nvmlGpuThermalSettings_t" or struct_name == "nvmlGpuDynamicPstatesInfo_t" or struct_name == "nvmlGpmMetric_t" or struct_name == "nvmlGpmMetricsGet_t":
+        if struct_name in get_cannot_compare_struct_set():
             continue
         print_generator_source_info(out_file, 0)
         out_file.write(f"int {func_name}(const {struct_name} &a, const {struct_name} &b)\n")
@@ -1096,7 +1130,7 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
             print_body_line(f'return m_value.{variable_name_ptr}[i] < other.m_value.{variable_name_ptr}[i] ? -1 : 1;', out_file, 5)
             print_body_line('}', out_file, 4)
             print_body_line(f'return 0;', out_file, 4)
-        elif remove_ptr_if_any(type_name) == "nvmlDevice_t" or remove_ptr_if_any(type_name) == "nvmlComputeInstance_t" or remove_ptr_if_any(type_name) == "nvmlEventSet_t" or remove_ptr_if_any(type_name) == "nvmlGpmMetricsGet_t" or remove_ptr_if_any(type_name) == "nvmlGpmSample_t" or remove_ptr_if_any(type_name) == "nvmlGpuDynamicPstatesInfo_t" or remove_ptr_if_any(type_name) == "nvmlGpuInstance_t" or remove_ptr_if_any(type_name) == "nvmlGpuThermalSettings_t" or remove_ptr_if_any(type_name) == "nvmlUnit_t" or type_name == "nvmlGpmMetric_t":
+        elif remove_ptr_if_any(type_name) == "nvmlDevice_t" or remove_ptr_if_any(type_name) == "nvmlComputeInstance_t" or remove_ptr_if_any(type_name) == "nvmlEventSet_t" or remove_ptr_if_any(type_name) == "nvmlGpmMetricsGet_t" or remove_ptr_if_any(type_name) == "nvmlGpmSample_t" or remove_ptr_if_any(type_name) == "nvmlGpuDynamicPstatesInfo_t" or remove_ptr_if_any(type_name) == "nvmlGpuInstance_t" or remove_ptr_if_any(type_name) == "nvmlGpuThermalSettings_t" or remove_ptr_if_any(type_name) == "nvmlUnit_t" or type_name == "nvmlGpmMetric_t" or remove_ptr_if_any(type_name) in get_cannot_compare_struct_set():
             # Listed types are not well-defined or may have inner struct defined, use memcmp for them
             print_generator_source_info(out_file, 5)
             print_body_line('unsigned size = m_isArray ? m_arrLen : 1;', out_file, 4)
@@ -1141,7 +1175,7 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
             print_body_line('{', out_file, 4)
             print_body_line('return 0;', out_file, 5)
             print_body_line('}', out_file, 4)
-        elif type_name == "nvmlEventSet_t" or type_name == "nvmlGpmMetricsGet_t" or type_name == "nvmlGpmSample_t" or type_name == "nvmlGpuDynamicPstatesInfo_t" or type_name == "nvmlGpuInstance_t" or type_name == "nvmlGpuThermalSettings_t" or type_name == "nvmlUnit_t" or type_name == "nvmlGpmMetric_t":
+        elif type_name == "nvmlEventSet_t" or type_name == "nvmlGpmMetricsGet_t" or type_name == "nvmlGpmSample_t" or type_name == "nvmlGpuDynamicPstatesInfo_t" or type_name == "nvmlGpuInstance_t" or type_name == "nvmlGpuThermalSettings_t" or type_name == "nvmlUnit_t" or type_name == "nvmlGpmMetric_t" or type_name in get_cannot_compare_struct_set():
             # Listed types are not well-defined or may have inner struct defined, use memcmp for them
             print_generator_source_info(out_file, 5)
             print_body_line(f'return memcmp(&m_value.{variable_name}, &other.m_value.{variable_name}, sizeof(m_value.{variable_name}));', out_file, 4)
@@ -1278,13 +1312,13 @@ def is_pynvml_missing_struct(struct_name):
         "c_nvmlGpuInstanceProfileInfo_v3_t",
         "c_nvmlComputeInstanceProfileInfo_v3_t",
         "c_nvmlDeviceCapabilities_t",
-        "c_nvmlMask255_t",
-        "c_nvmlWorkloadPowerProfileInfo_t",
-        "c_nvmlWorkloadPowerProfileProfilesInfo_t",
-        "c_nvmlWorkloadPowerProfileCurrentProfiles_t",
-        "c_nvmlWorkloadPowerProfileRequestedProfiles_t",
         "c_nvmlMarginTemperature_t",
         "c_nvmlVgpuRuntimeState_t",
+        "c_nvmlSystemEventSetCreateRequest_t",
+        "c_nvmlSystemEventSetFreeRequest_t",
+        "c_nvmlSystemEventSetWaitRequest_t",
+        "c_nvmlSystemRegisterEventRequest_t",
+        "c_nvmlSystemEventData_v1_t",
     }
     return struct_name_with_c_prefix in missing
 
@@ -1390,6 +1424,13 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"moduleId\", c_char),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
+        # PyNVML does not define c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t. Define separately here.
+        print_body_line('class c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t(Structure):', out_file, 0)
+        print_body_line("_fields_ = [", out_file, 1)
+        print_body_line("(\"operation\", c_int),", out_file, 2)
+        print_body_line("(\"updateProfilesMask\", c_nvmlMask255_t),", out_file, 2)
+        print_body_line("]\n", out_file, 1)
+
         print_body_line('class c_simpleValue_t(Union):', out_file, 0)
         print_body_line("_fields_ = [", out_file, 1)
         for struct_name, _ in struct_with_member.items():
@@ -1427,6 +1468,21 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
             elif struct_name == "nvmlEccSramErrorStatus_t":
                 # nvmlEccSramErrorStatus_t in PyNVML is c_nvmlEccSreamErrorStatus_v1_t
                 print_body_line(f"(\"{variable_name}\", c_nvmlEccSramErrorStatus_v1_t),", out_file, 2)
+            elif struct_name == "nvmlWorkloadPowerProfileInfo_t":
+                # nvmlWorkloadPowerProfileInfo_t in PyNVML is c_nvmlWorkloadPowerProfileInfo_v1_t
+                print_body_line(f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileInfo_v1_t),", out_file, 2)
+            elif struct_name == "nvmlWorkloadPowerProfileProfilesInfo_t":
+                # nvmlWorkloadPowerProfileProfilesInfo_t in PyNVML is c_nvmlWorkloadPowerProfileProfilesInfo_v1_t
+                print_body_line(f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileProfilesInfo_v1_t),", out_file, 2)
+            elif struct_name == "nvmlWorkloadPowerProfileCurrentProfiles_t":
+                # c_nvmlWorkloadPowerProfileCurrentProfiles_t in PyNVML is c_nvmlWorkloadPowerProfileCurrentProfiles_v1_t
+                print_body_line(f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileCurrentProfiles_v1_t),", out_file, 2)
+            elif struct_name == "nvmlWorkloadPowerProfileRequestedProfiles_t":
+                # nvmlWorkloadPowerProfileRequestedProfiles_t in PyNVML is c_nvmlWorkloadPowerProfileRequestedProfiles_v1_t
+                print_body_line(f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileRequestedProfiles_v1_t),", out_file, 2)
+            elif struct_name == "nvmlWorkloadPowerProfileUpdateProfiles_v1_t":
+                # c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t is not defined in PyNVML, add definition
+                print_body_line(f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t),", out_file, 2)
             else:
                 # other nvml structures will add c_ as prefix in PyNVML
                 # e.g. nvmlBAR1Memory_t => c_nvmlBAR1Memory_t
@@ -1813,6 +1869,7 @@ def write_linux_defs(output_dir, func_dict):
     linux_defs_path = '%s/%s' % (output_dir, LINUX_DEFS_PATH)
     manually_written_functions = [
         'nvmlInit_v2',
+        'nvmlInitWithFlags',
         'nvmlErrorString',
         'nvmlShutdown',
         'nvmlCreateDevice',
@@ -1944,6 +2001,11 @@ def separate_struct_by_generable(struct_with_member, all_enum):
     # The following types are not defiend well
     struct_cannot_gen_parsers["nvmlGpmSample_t"] = True
     struct_cannot_gen_parsers["nvmlDevice_t"] = True
+    struct_cannot_gen_parsers["nvmlSystemEventSet_t"] = True
+    struct_cannot_gen_parsers["nvmlSystemRegisterEventRequest_t"] = True
+    struct_cannot_gen_parsers["nvmlSystemEventSetCreateRequest_t"] = True
+    struct_cannot_gen_parsers["nvmlSystemEventSetFreeRequest_t"] = True
+    struct_cannot_gen_parsers["nvmlSystemEventSetWaitRequest_t"] = True
     struct_can_gen_parsers = {}
     for struct_name, _ in cannot_write_deserializer.items():
         struct_cannot_gen_parsers[struct_name] = True
@@ -2437,6 +2499,11 @@ def get_cannot_write_deserializer_struct(struct_with_member):
     cannot_write_deserializer_struct = {}
     cannot_write_deserializer_struct["nvmlValue_t"] = True
     cannot_write_deserializer_struct["nvmlDevice_t"] = True
+    cannot_write_deserializer_struct["nvmlSystemEventSet_t"] = True
+    cannot_write_deserializer_struct["nvmlSystemEventSetCreateRequest_t"] = True
+    cannot_write_deserializer_struct["nvmlSystemEventSetFreeRequest_t"] = True
+    cannot_write_deserializer_struct["nvmlSystemRegisterEventRequest_t"] = True
+    cannot_write_deserializer_struct["nvmlSystemEventSetWaitRequest_t"] = True
     for struct_name, member_list in struct_with_member.items():
         can = True
         for member_type, _ in member_list:
@@ -3005,11 +3072,11 @@ def get_skipped_funcs():
     skip_funcs["nvmlDeviceGetVgpuProcessUtilization"] = True
     skip_funcs["nvmlDeviceGetVgpuUtilization"] = True
     skip_funcs["nvmlDeviceGetProcessUtilization"] = True
+    skip_funcs["nvmlDeviceGetP2PStatus"] = True
     # not used
     skip_funcs["nvmlDeviceGetNvLinkUtilizationControl"] = True
     skip_funcs["nvmlSystemGetHicVersion"] = True
     skip_funcs["nvmlSystemGetTopologyGpuSet"] = True
-    skip_funcs["nvmlDeviceGetP2PStatus"] = True
     skip_funcs["nvmlGetVgpuCompatibility"] = True
 
     skip_funcs["nvmlDeviceGetPgpuMetadataString"] = True

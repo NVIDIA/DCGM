@@ -41,13 +41,13 @@
 #ifndef __MEMTEST_H__
 #define __MEMTEST_H__
 
-#include "DcgmThread/DcgmThread.h"
-#include "NvvsDeviceList.h"
-#include "cuda.h"
-#include "cuda_runtime.h"
+#include "MemoryChunkManager.h"
 #include "memtest_wrapper.h"
 #include "misc.h"
+#include <DcgmThread/DcgmThread.h>
+#include <NvvsDeviceList.h>
 
+#include <cuda.h>
 
 /*****************************************************************************/
 /* Struct for a single memtest device */
@@ -231,16 +231,18 @@ private:
 class MemtestWorker : public DcgmThread
 {
 private:
-    memtest_device_p m_device;        /* Which device this worker thread is running on */
-    Memtest &m_plugin;                /* ConstantPerf plugin for logging and failure checks */
-    TestParameters *m_testParameters; /* Read-only test parameters */
-    DcgmRecorder &m_dcgmRecorder;     /* Object for interacting with DCGM */
-    bool m_useMappedMemory;           /* Use host (mapped) or device memory */
-    unsigned int m_testDuration;      /* Duration to execute all iterations of tests */
-    bool m_failGpu;                   /* Whether to fail this gpu, set via env for testing */
+    memtest_device_p m_device;          /* Which device this worker thread is running on */
+    Memtest &m_plugin;                  /* ConstantPerf plugin for logging and failure checks */
+    TestParameters *m_testParameters;   /* Read-only test parameters */
+    DcgmRecorder &m_dcgmRecorder;       /* Object for interacting with DCGM */
+    bool m_useMappedMemory;             /* Use host (mapped) or device memory */
+    unsigned int m_testDuration;        /* Duration to execute all iterations of tests */
+    bool m_failGpu;                     /* Whether to fail this gpu, set via env for testing */
+    size_t m_numChunks;                 /* Number of memory chunks to use */
+    MemoryChunkManager m_memoryManager; /* RAII memory chunk manager */
 
     /*************************************************************************/
-    int RunTests(char *ptr, unsigned int tot_num_blocks);
+    int RunTests(MemoryChunkManager const &memoryManager);
 
 public:
     /*************************************************************************/

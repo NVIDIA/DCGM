@@ -956,6 +956,121 @@ typedef struct
 
 #endif
 
+/***************************************************************************************************/
+/** @defgroup PRMTLV PRM TLV Structures
+ * These structures are implementation details for TLV (Type-Length-Value) protocol communication.
+ *
+ * WARNING: These structures may be deleted in a future release.
+ *  @{
+ */
+/***************************************************************************************************/
+
+/*
+ * TLV (Type-Length-Value) Protocol Constants and Enums
+ */
+
+/* TLV status codes */
+enum
+{
+    OP_TLV_STATUS_OK                     = 0x0,
+    OP_TLV_STATUS_BUSY                   = 0x1,
+    OP_TLV_STATUS_BAD_TLV                = 0x3,
+    OP_TLV_STATUS_NOT_SUPP_REG           = 0x4,
+    OP_TLV_STATUS_NOT_SUPP_CLASS         = 0x5,
+    OP_TLV_STATUS_NOT_SUPP_METHOD        = 0x6,
+    OP_TLV_STATUS_BAD_PARAM              = 0x7,
+    OP_TLV_STATUS_RESOURCE_NOT_AVAILABLE = 0x8,
+    OP_TLV_STATUS_LONG_PROCESS           = 0x9,
+    OP_TLV_STATUS_INTERNAL_ERR           = 0x70,
+};
+
+/* TLV types */
+#define TLV_TYPE_END 0x0
+#define TLV_TYPE_OP  0x1
+#define TLV_TYPE_REG 0x3
+
+/* Operation TLV constants */
+#define OP_TLV_LEN_DWORDS   0x4
+#define OP_TLV_CLASS_REG    0x1
+#define OP_TLV_METHOD_QUERY 0x1
+#define OP_TLV_METHOD_WRITE 0x2
+#define OP_TLV_METHOD_EVENT 0x5
+#define OP_TLV_REQUEST      0
+#define OP_TLV_RESPONSE     1
+
+/* Register TLV constants */
+#define REG_TLV_HEADER_LEN_DWORDS 0x1
+
+/* End TLV constants */
+#define END_TLV_LEN_DWORDS 0x1
+
+/*
+ * TLV Structure Definitions
+ */
+
+/**
+ * Base TLV structure - all TLV packets start with this header
+ * Contains type and length information for TLV parsing
+ */
+typedef struct TLVBase_s
+{
+    union
+    {
+        struct
+        {
+            uint32_t reserved : 16; //!< Reserved field (contains status in responses)
+            uint32_t length   : 11; //!< Length of TLV in DWORDs
+            uint32_t type     : 5;  //!< TLV type (OP=1, REG=3, END=0)
+        } fields;
+        uint32_t header; //!< Raw header value
+    } u;
+} TLVBase;
+
+/**
+ * Operation TLV structure - defines register access operations
+ * Specifies the register to access, operation method, and transaction ID
+ */
+typedef struct OpTLV_s
+{
+    TLVBase base; //!< Named base TLV header
+    union
+    {
+        struct
+        {
+            uint32_t emadClass  : 4;  //!< EMAD class (1=Register)
+            uint32_t trapIndex  : 3;  //!< Trap index
+            uint32_t reserved2  : 1;  //!< Reserved
+            uint32_t method     : 7;  //!< Method (1=Query, 2=Write, 5=Event)
+            uint32_t r          : 1;  //!< Request/Response (0=Request, 1=Response)
+            uint32_t registerID : 16; //!< Register ID (e.g., 0x5008 for PPCNT)
+        } fields;
+        uint32_t m_methodAndRegID; //!< Raw method and register ID value
+    } u;
+    uint32_t m_tidHigh; //!< Transaction ID (upper 32 bits)
+    uint32_t m_tidLow;  //!< Transaction ID (lower 32 bits)
+} OpTLV;
+
+/**
+ * Register TLV structure - contains register data payload
+ * Follows the OpTLV and contains the actual register data
+ */
+typedef struct RegTLV_s
+{
+    TLVBase base; //!< Named base TLV header
+    /* Register data follows immediately after this header */
+} RegTLV;
+
+/**
+ * End TLV structure - optional TLV termination marker
+ * Used to mark the end of a TLV packet sequence
+ */
+typedef struct EndTLV_s
+{
+    TLVBase base; //!< Named base TLV header
+} EndTLV;
+
+/** @} */
+
 /**
  * Verify that DCGM definitions that are copies of NVML ones match up with their NVML counterparts
  */
@@ -1057,6 +1172,7 @@ DCGM_CASSERT(dcgmMnDiagResponse_version1 == (long)0x1087BE0, 1);
 DCGM_CASSERT(dcgmChildProcessParams_version1 == (long)0x01000040, 1);
 DCGM_CASSERT(dcgmChildProcessStatus_version1 == (long)0x01000014, 1);
 DCGM_CASSERT(dcgmLink_version1 == (long)0x01000004, 1);
+DCGM_CASSERT(dcgmWorkloadPowerProfile_version == (long)0x01000038, 1);
 
 #ifndef DCGM_ARRAY_CAPACITY
 #ifdef __cplusplus

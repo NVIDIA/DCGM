@@ -110,6 +110,11 @@ public:
         return m_coreProxy.ChildProcessManagerReset();
     }
 
+    dcgmReturn_t GetCudaVersion(int &cudaVersion) override
+    {
+        return m_coreProxy.GetCudaVersion(cudaVersion);
+    }
+
 private:
     DcgmCoreProxy m_coreProxy;
 };

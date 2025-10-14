@@ -35,7 +35,6 @@ public:
                    dcgmDiagPluginEntityList_v1 const *entityList,
                    unsigned int numParameters,
                    dcgmDiagPluginTestParameter_t const *testParameters);
-    std::optional<std::string> WrapperFindExecutable();
     std::vector<DcgmError> const WrapperGetErrors(std::string const &testName) const;
     void WrapperInitializeForEntityList(std::string const &testName, dcgmDiagPluginEntityList_v1 const &entityInfo);
     std::string WrapperGetNvBandwidthTestName() const;
@@ -48,11 +47,6 @@ void WrapperNVBandwidthPlugin::WrapperGo(std::string const &testName,
                                          dcgmDiagPluginTestParameter_t const *testParameters)
 {
     Go(testName, entityList, numParameters, testParameters);
-}
-
-std::optional<std::string> WrapperNVBandwidthPlugin::WrapperFindExecutable()
-{
-    return FindExecutable();
 }
 
 std::vector<DcgmError> const WrapperNVBandwidthPlugin::WrapperGetErrors(std::string const &testName) const

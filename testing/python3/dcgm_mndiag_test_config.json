@@ -1,7 +1,7 @@
 {
     "test_nodes": [
         {
-            "hostname": "",
+            "username": "",
             "ip": "",
             "sku": "",
             "hostengine_path": ""

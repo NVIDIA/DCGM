@@ -292,10 +292,10 @@ dcgmReturn_t CudaWorkerThread::AttachToCudaDeviceFromTaskThread(CUdevice device)
     }
 
     /* Do per-device initialization. */
-    if (cuSt = cuCtxCreate(&m_cudaDevice.m_context, CU_CTX_SCHED_BLOCKING_SYNC, m_cudaDevice.m_device);
+    if (cuSt = cuCtxCreate_v2(&m_cudaDevice.m_context, CU_CTX_SCHED_BLOCKING_SYNC, m_cudaDevice.m_device);
         cuSt != CUDA_SUCCESS)
     {
-        LOG_CUDA_ERROR("cuCtxCreate", cuSt, m_cudaDevice.m_device);
+        LOG_CUDA_ERROR("cuCtxCreate_v2", cuSt, m_cudaDevice.m_device);
         return DCGM_ST_GENERIC_ERROR;
     }
 

@@ -20,4 +20,4 @@ target_link_libraries(dcgm_thread_interface INTERFACE common_interface)
 target_sources(dcgm_thread PRIVATE DcgmThread.cpp)
 target_link_libraries(dcgm_thread PUBLIC dcgm_thread_interface)
 
-target_link_libraries(dcgm_thread PUBLIC ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(dcgm_thread PUBLIC ${CMAKE_THREAD_LIBS_INIT} dcgm_logging)

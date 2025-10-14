@@ -64,5 +64,5 @@
 /usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>/examples/dcgm-collectd-example.conf
 /usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>/examples/nvvs.conf
 /usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>/third-party-notices.txt
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-core-<PACKAGEVERSION>
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-core-<PACKAGEVERSION>/LICENSE
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-core-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-core-<BASEPACKAGEVERSION>/LICENSE

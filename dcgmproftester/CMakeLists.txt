@@ -64,6 +64,7 @@ endmacro()
 
 define_dcgmproftester(11)
 define_dcgmproftester(12)
+define_dcgmproftester(13)
 
 install(
     FILES DcgmProfTesterKernels.ptx

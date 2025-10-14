@@ -726,9 +726,14 @@ nvsdmRet_t NvsdmMock::nvsdmDeviceToString(nvsdmDevice_t const device, char str[]
         return NVSDM_ERROR_UNINITIALIZED;
     }
 
-    if (!device || strSize < 64)
+    if (!device)
     {
         return NVSDM_ERROR_INVALID_ARG;
+    }
+
+    if (strSize < NVSDM_DEV_INFO_ARRAY_SIZE)
+    {
+        return NVSDM_ERROR_INSUFFICIENT_SIZE;
     }
 
     NvsdmMockDevice *mockDev = reinterpret_cast<NvsdmMockDevice *>(device);

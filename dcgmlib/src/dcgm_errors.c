@@ -18,7 +18,9 @@
 #include "dcgm_structs.h"
 
 #define DCGM_ERROR_TABLE_ENTRY(errCode, severity, category) \
-    { errCode, errCode##_MSG, errCode##_NEXT, severity, category }
+    {                                                              \
+        errCode, errCode##_MSG, errCode##_NEXT, severity, category \
+    }
 
 dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_OK, DCGM_ERROR_UNKNOWN, DCGM_FR_EC_NONE),
@@ -141,6 +143,7 @@ dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_TEST_SKIPPED, DCGM_ERROR_CONFIG, DCGM_FR_EC_SOFTWARE_CONFIG),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_SRAM_THRESHOLD, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_MEMORY),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_NVLINK),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_FALLEN_OFF_BUS, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_OTHER),
 };
 
 dcgmErrorSeverity_t dcgmErrorGetPriorityByCode(unsigned int code)

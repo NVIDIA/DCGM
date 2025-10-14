@@ -270,14 +270,6 @@ public:
                             std::vector<DcgmError> &fatalErorList,
                             std::vector<DcgmError> &ignoredErrorList);
 
-    /*
-     * Deprecated: Use CheckForClocksEvent instead.
-     */
-    int CheckForThrottling(unsigned int gpuId,
-                           timelib64_t startTime,
-                           std::vector<DcgmError> &fatalErrorList,
-                           std::vector<DcgmError> &ignoredErrorList);
-
     int CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &fatalErrorList);
 
     /*

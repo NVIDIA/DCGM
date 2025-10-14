@@ -21,9 +21,13 @@
 Common helper functions and classes relating to DCGM Multi Node GPU Diagnostics
 */
 
+#include "dcgm_mndiag_structs.hpp"
 #include <dcgm_structs.h>
+#include <expected>
+#include <filesystem>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -45,3 +49,11 @@ dcgmReturn_t dcgm_mn_diag_common_populate_run_mndiag(dcgmRunMnDiag_v1 &mndrd,
                                                      std::string_view runValue);
 
 /*****************************************************************************/
+dcgmReturn_t infer_mnubergemm_default_path(std::string &mnubergemm_path, int cudaVersion);
+
+/*****************************************************************************/
+std::expected<std::filesystem::path, std::system_error> get_executable_path();
+
+/*****************************************************************************/
+std::expected<std::string, std::system_error> get_mnubergemm_binary_path(int cudaVersion,
+                                                                         auto const &supportedCudaVersions);

@@ -71,6 +71,7 @@ typedef enum
     DcgmCoreReqIdChildProcessGetDataChannelHandle = 59, // ChildProcessManager::GetDataChannelHandle()
     DcgmCoreReqIdGetDriverVersion                 = 60, // DcgmCacheManager::GetDriverVersion()
     DcgmCoreReqIdChildProcessManagerReset         = 61, // ChildProcessManager::Reset()
+    DcgmCoreReqIdGetCudaVersion                   = 62, // DcgmCoreProxy::GetCudaVersion()
     DcgmCoreReqIdCount                                  // Always keep this one last
 } dcgmCoreReqCmd_t;
 
@@ -938,3 +939,12 @@ typedef struct
 #define dcgmCoreChildProcessManagerReset_version1 MAKE_DCGM_VERSION(dcgmCoreChildProcessManagerReset_v1, 1)
 #define dcgmCoreChildProcessManagerReset_version  dcgmCoreChildProcessManagerReset_version1
 typedef dcgmCoreChildProcessManagerReset_v1 dcgmCoreChildProcessManagerReset_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    int cudaVersion;
+    dcgmCoreBasicResponse_t response;
+} dcgmCoreGetCudaVersion_v1;
+
+#define dcgmCoreGetCudaVersion_version1 MAKE_DCGM_VERSION(dcgmCoreGetCudaVersion_v1, 1)

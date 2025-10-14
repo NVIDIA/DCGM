@@ -25,27 +25,23 @@ run_in_dcgmbuild "$@"
 
 function generalize() {
     local package_name=$1
-    local package_version=$2
-    local software_version
-    software_version=${package_version%%~*}
-    software_version=${software_version##*:}
-
-    local major_version=${software_version%%.*}
-
     local package_name_regex=$(echo $package_name | sed -E 's/(.)/[\1]/g')
+    local package_version=${2##*:}
+    local package_version_regex=$(echo $package_version | sed -E 's/(.)/[\1]/g')
+    local base_package_version=${package_version%%-*}
+    local base_package_version_regex=$(echo $base_package_version | sed -E 's/(.)/[\1]/g')
+    local software_version=${base_package_version%%~*}
     local software_version_regex=$(echo $software_version | sed -E 's/(.)/[\1]/g')
-    local package_version_regex=$(
-        echo $package_version | \
-        sed -E "s/$software_version_regex/<SOFTWAREVERSION>/;s/(.)/[\1]/g")
-
+    local major_version=${software_version%%.*}
     local substitution=$(echo $package_name | sed "s/$major_version/<MAJORVERSION>/")
 
     sed -E "
-        s/$software_version_regex/<SOFTWAREVERSION>/g;
         s/$package_version_regex/<PACKAGEVERSION>/g;
+        s/$base_package_version_regex/<BASEPACKAGEVERSION>/g;
+        s/$software_version_regex/<SOFTWAREVERSION>/g;
         s/$package_name_regex/$substitution/;
         s/[.]$major_version$/.<MAJORVERSION>/;
-        s/datacenter-gpu-manager-4/datacenter-gpu-manager-<MAJORVERSION>/g" $3
+        s/datacenter-gpu-manager-$major_version/datacenter-gpu-manager-<MAJORVERSION>/g" $3
 }
 
 function write_template_deb() {
@@ -62,7 +58,7 @@ function write_template_rpm() {
     local path="$1"
     local filename=$(basename "$path")
     local package=$(rpm --query --queryformat '%{NAME}' "$path")
-    local version=$(rpm --query --queryformat '%{VERSION}' "$path")
+    local version=$(rpm --query --queryformat '%{EPOCH}:%{VERSION}-%{RELEASE}' "$path")
 
     generalize $package $version <(rpm --query --list --package "$path" | sed -E '/.*\/[.]build-id.*/d' | sort) \
     > "$SCRIPTDIR/$(template_rpm $filename)"

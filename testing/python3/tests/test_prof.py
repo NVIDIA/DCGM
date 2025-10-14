@@ -122,6 +122,21 @@ def helper_get_single_pass_field_ids(dcgmGroup):
 
     return fieldIds
 
+def get_used_cuda_major_version(handle, gpuId):
+    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuId)
+    chipArchitecture = dcgm_agent.dcgmGetGpuChipArchitecture(handle, gpuId)
+    # CUDA 13.0 drops support for everything that is < 7.5 SM Cuda Compatibility. These older SKUs need to run
+    # a 12.9-linked application.
+    # Note: We only check one GPU because we are protected by the `for_all_same_sku_gpus`.
+    if (chipArchitecture == dcgm_structs.DCGM_CHIP_ARCH_MAXWELL or\
+        chipArchitecture == dcgm_structs.DCGM_CHIP_ARCH_PASCAL or\
+        chipArchitecture == dcgm_structs.DCGM_CHIP_ARCH_VOLTA) and\
+        int(cudaDriverVersion[0]) == 13 and int(cudaDriverVersion[1]) == 0:
+        return 12
+    else:
+        return int(cudaDriverVersion[0])
+
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
@@ -134,13 +149,12 @@ def test_dcgm_prof_get_supported_metric_groups_sanity(handle, gpuIds):
 
     helper_check_profiling_environment(dcgmGroup)
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.exclude_confidential_compute_gpus()
-@test_utils.run_only_if_gpus_available()
-@test_utils.for_all_same_sku_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_prof_watch_fields_sanity(handle, gpuIds):
+def helper_setup_watch_fields_test(handle, gpuIds):
+    '''
+    Common setup for profiling tests that need to watch fields.
+
+    Returns: (dcgmGroup, fieldGroup)
+    '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
@@ -153,6 +167,17 @@ def test_dcgm_prof_watch_fields_sanity(handle, gpuIds):
     logger.info("Single pass field IDs: " + str(fieldIds))
 
     fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group", fieldIds)
+    
+    return dcgmGroup, fieldGroup
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
+@test_utils.run_only_if_gpus_available()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_as_root()
+def test_dcgm_prof_watch_fields_sanity(handle, gpuIds):
+    dcgmGroup, fieldGroup = helper_setup_watch_fields_test(handle, gpuIds)
 
     dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
 
@@ -162,6 +187,39 @@ def test_dcgm_prof_watch_fields_sanity(handle, gpuIds):
     #Cleanup
     dcgmGroup.samples.UnwatchFields(fieldGroup)
     dcgmGroup.Delete()
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus()
+@test_utils.run_only_if_gpus_available()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_as_non_root()
+@test_utils.with_gpu_filter(test_utils.non_gpm_gpus)
+def test_dcgm_prof_requires_root_privileges(handle, gpuIds):
+    '''
+    This test verifies that attempting to watch profiling fields as a non-root user
+    results in a DCGM_ST_REQUIRES_ROOT error, ensuring proper privilege checking.
+    This test does not apply to GPM-enabled GPUs. These GPUs do not utilize profiling
+    modules, and they can function without requiring root access. Consequently, they do
+    not produce the DCGM_ST_REQUIRES_ROOT error, even when monitoring fields as a non-root user.
+    '''
+    dcgmGroup, fieldGroup = helper_setup_watch_fields_test(handle, gpuIds)
+
+    # Attempt to watch profiling fields as non-root user. This should fail with DCGM_ST_REQUIRES_ROOT.
+    try:
+        dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
+        dcgmGroup.samples.UnwatchFields(fieldGroup)
+        # If we get here, the test should fail because we expected a privilege error
+        assert False, "Expected DCGM_ST_REQUIRES_ROOT error when watching profiling fields as non-root user."
+    except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_REQUIRES_ROOT) as e:
+        # This is the expected behavior - profiling requires root privileges
+        logger.info("Correctly received DCGM_ST_REQUIRES_ROOT error as expected")
+    except Exception as e:
+        # Any other exception should cause the test to fail
+        assert False, f"Unexpected exception when watching profiling fields as non-root: {e}"
+    finally:
+        fieldGroup.Delete()
+        dcgmGroup.Delete()
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -555,7 +613,7 @@ def helper_test_dpt_sync_count(handle, gpuIds, fieldIdsStr, extraArgs = None):
 
     helper_check_profiling_environment(dcgmGroup)
 
-    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+    cudaDriverVersion = get_used_cuda_major_version(handle, gpuIds[0])
 
     supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
 
@@ -587,7 +645,7 @@ def helper_test_dpt_sync_count(handle, gpuIds, fieldIdsStr, extraArgs = None):
     if extraArgs is not None:
         args.extend(extraArgs)
 
-    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion, gpuIds=useGpuIds, args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
 
@@ -601,7 +659,7 @@ def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, fast = False, extraAr
 
     helper_check_profiling_environment(dcgmGroup)
 
-    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+    cudaDriverVersion = get_used_cuda_major_version(handle, gpuIds[0])
 
     supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
 
@@ -636,7 +694,7 @@ def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, fast = False, extraAr
     if extraArgs is not None:
         args.extend(extraArgs)
 
-    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion, gpuIds=useGpuIds, args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
 
@@ -656,7 +714,7 @@ def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, fast = False, extraAr
 
     helper_check_profiling_environment(dcgmGroup)
 
-    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+    cudaDriverVersion = get_used_cuda_major_version(handle, gpuIds[0])
 
     supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
 
@@ -692,7 +750,7 @@ def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, fast = False, extraAr
     if extraArgs is not None:
         args.extend(extraArgs)
 
-    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion, gpuIds=useGpuIds, args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
 
@@ -706,7 +764,7 @@ def helper_test_dpt_h(handle, gpuIds):
 
     helper_check_profiling_environment(dcgmGroup)
 
-    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+    cudaDriverVersion = get_used_cuda_major_version(handle, gpuIds[0])
 
     supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
 
@@ -714,7 +772,7 @@ def helper_test_dpt_h(handle, gpuIds):
     useGpuIds = [gpuIds[0], ]
 
     args = ["-h"]
-    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion, gpuIds=useGpuIds, args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
 
@@ -728,7 +786,7 @@ def helper_test_dpt_help(handle, gpuIds):
 
     helper_check_profiling_environment(dcgmGroup)
 
-    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+    cudaDriverVersion = get_used_cuda_major_version(handle, gpuIds[0])
 
     supportedFieldIds = helper_get_supported_field_ids(dcgmGroup)
 
@@ -736,7 +794,7 @@ def helper_test_dpt_help(handle, gpuIds):
     useGpuIds = [gpuIds[0], ]
 
     args = ["--help"]
-    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], gpuIds=useGpuIds, args=args)
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion, gpuIds=useGpuIds, args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
 
@@ -928,7 +986,7 @@ def test_dcgmproftester_parallel_gpus(handle, gpuIds):
 
     helper_check_profiling_environment(dcgmGroup)
 
-    cudaDriverVersion = test_utils.get_cuda_driver_version(handle, gpuIds[0])
+    cudaDriverVersion = get_used_cuda_major_version(handle, gpuIds[0])
 
     #FP16 works for every GPU that supports DCP. It also works reliably even under heavy concurrecy
     fieldIds = "1008"
@@ -959,7 +1017,7 @@ def test_dcgmproftester_parallel_gpus(handle, gpuIds):
     if not foundGpu:
         test_utils.skip_test(g_noMigSlicesErrorStr)
 
-    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion[0], args=args)
+    app = apps.DcgmProfTesterApp(cudaDriverMajorVersion=cudaDriverVersion, args=args)
     app.start(timeout=120.0 * len(gpuIds)) #Account for slow systems but still add an upper bound
     app.wait()
     app.validate() #Validate here so that errors are printed when they occur instead of at the end of the test
@@ -971,18 +1029,17 @@ def test_dcgmproftester_parallel_gpus(handle, gpuIds):
 @test_utils.run_only_if_gpus_available()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
+@test_utils.with_gpu_filter(test_utils.non_gpm_gpus)
 def test_dcgm_prof_global_pause_resume_values(handle, gpuIds):
     """
-    Test that we get valid values when DCGM is resumed and BLANK values when DCGM is paused
+    Test that we get valid values when DCGM is resumed and BLANK values when DCGM is paused.
+    This test is not valid for GPM-enabled GPUs. GPM-enabled GPUs would get DCP metrics from
+    the NVML instead of the paused profiling module and will return valid values when DCGM is
+    paused until we implement full driver detach/reattach on pause/resume.
     """
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
-
-    # GPM-enabled GPUs would get DCP metrics from the NVML instead of the paused profiling module and will return
-    # valid values when DCGM is paused until we implement full driver detach/reattach on pause/resume.
-    if test_utils.gpu_supports_gpm(handle, gpuIds[0]):
-        test_utils.skip_test("Skipping test for GPM-enabled GPUs")
 
     helper_check_profiling_environment(dcgmGroup)
 

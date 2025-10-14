@@ -31,6 +31,84 @@ using namespace std::chrono_literals;
 TestHealthMonitor::TestHealthMonitor()
 {
     m_gpuGroup = 0;
+
+    // Initialize devastating XIDs
+    m_devastatingXids = {
+        { 48, "Double Bit ECC Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR },
+        { 74,
+          DCGM_FR_NVLINK_ERROR_CRITICAL_MSG,
+          DCGM_HEALTH_RESULT_FAIL,
+          DCGM_HEALTH_WATCH_NVLINK,
+          DCGM_FR_NVLINK_ERROR_CRITICAL },
+        { 79, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_FALLEN_OFF_BUS },
+        { 94, "Contained Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR },
+        { 95, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_UNCONTAINED_ERROR },
+        { 119, "GSP RPC Timeout", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
+        { 120, "GSP Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
+        { 140, "ECC unrecovered error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR }
+    };
+
+    // Initialize subsystem XIDs
+    m_subsystemXids = {
+        // Memory subsystem XIDs
+        { 31, "MMU Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR },
+        { 32, "PBDMA Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR },
+        { 43, "Reset Channel Verif Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR },
+        { 63,
+          DCGM_FR_PENDING_PAGE_RETIREMENTS_MSG,
+          DCGM_HEALTH_RESULT_WARN,
+          DCGM_HEALTH_WATCH_MEM,
+          DCGM_FR_PENDING_PAGE_RETIREMENTS },
+        { 64,
+          DCGM_FR_ROW_REMAP_FAILURE_MSG,
+          DCGM_HEALTH_RESULT_WARN,
+          DCGM_HEALTH_WATCH_MEM,
+          DCGM_FR_ROW_REMAP_FAILURE },
+
+        // PCIe subsystem XIDs
+        { 38, "PCIe Bus Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, DCGM_FR_XID_ERROR },
+        { 39, "PCIe Fabric Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, DCGM_FR_XID_ERROR },
+        { 42, DCGM_FR_PCI_REPLAY_RATE_MSG, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, DCGM_FR_PCI_REPLAY_RATE },
+
+        // Thermal subsystem XIDs
+        { 60,
+          DCGM_FR_CLOCKS_EVENT_THERMAL_MSG,
+          DCGM_HEALTH_RESULT_WARN,
+          DCGM_HEALTH_WATCH_THERMAL,
+          DCGM_FR_CLOCKS_EVENT_THERMAL },
+        { 61, "EDPP Power Brake Thermal limit", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_THERMAL, DCGM_FR_XID_ERROR },
+        { 62,
+          DCGM_FR_THERMAL_VIOLATIONS_MSG,
+          DCGM_HEALTH_RESULT_WARN,
+          DCGM_HEALTH_WATCH_THERMAL,
+          DCGM_FR_THERMAL_VIOLATIONS },
+        { 63, "Thermal diode detects short", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_THERMAL, DCGM_FR_XID_ERROR },
+
+        // Power subsystem XIDs
+        { 54, "Power state change", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, DCGM_FR_XID_ERROR },
+        { 56, "Clock change", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, DCGM_FR_XID_ERROR },
+        { 57,
+          DCGM_FR_CLOCKS_EVENT_POWER_MSG,
+          DCGM_HEALTH_RESULT_WARN,
+          DCGM_HEALTH_WATCH_POWER,
+          DCGM_FR_CLOCKS_EVENT_POWER },
+        { 58, "Clock change due to thermal", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, DCGM_FR_XID_ERROR },
+        { 78, "Power state forced change", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, DCGM_FR_XID_ERROR },
+
+        // NVLink subsystem XIDs
+        { 67,
+          DCGM_FR_NVLINK_ERROR_THRESHOLD_MSG,
+          DCGM_HEALTH_RESULT_WARN,
+          DCGM_HEALTH_WATCH_NVLINK,
+          DCGM_FR_NVLINK_ERROR_THRESHOLD },
+        { 73, "NVLink Flow Control Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
+        { 74, "NVLink Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
+        { 121, "C2C Link corrected error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
+        { 137, "NVLink FLA privilege error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
+
+        // InfoROM subsystem XIDs
+        { 93, DCGM_FR_CORRUPT_INFOROM_MSG, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_INFOROM, DCGM_FR_CORRUPT_INFOROM }
+    };
 }
 
 TestHealthMonitor::~TestHealthMonitor()
@@ -77,6 +155,7 @@ int TestHealthMonitor::Run()
         { "Test HM check (Thermal)", &TestHealthMonitor::TestHMCheckThermal },
         { "Test HM check (Power)", &TestHealthMonitor::TestHMCheckPower },
         { "Test HM check (NVLink)", &TestHealthMonitor::TestHMCheckNVLink },
+        { "Test HM check (XIDs)", &TestHealthMonitor::TestHMCheckXids },
     };
 
     for (auto const &test : testCases)
@@ -740,4 +819,276 @@ int TestHealthMonitor::TestHMCheckNVLink()
     std::cout << response->incidents[0].error.msg << std::endl;
 
     return result;
+}
+
+int TestHealthMonitor::TestHMCheckXids()
+{
+    // Test all devastating XIDs
+    TestDevastatingXids();
+
+    // Test subsystem-specific XIDs
+    TestSubsystemXids();
+
+    // Test XID severity levels
+    TestXidSeverityLevels();
+
+    return 0;
+}
+
+dcgmReturn_t TestHealthMonitor::TestSingleXid(unsigned int const gpuId,
+                                              int const xid,
+                                              char const *const xidDesc,
+                                              dcgmHealthWatchResults_t const expectedStatus,
+                                              dcgmError_t const expectedError,
+                                              auto const timestamp,
+                                              std::unique_ptr<dcgmHealthResponse_t> &response) const
+{
+    dcgmInjectFieldValue_t fv {};
+    fv.version   = dcgmInjectFieldValue_version;
+    fv.fieldId   = DCGM_FI_DEV_XID_ERRORS;
+    fv.fieldType = DCGM_FT_INT64;
+    fv.status    = 0;
+    fv.value.i64 = xid;
+    fv.ts        = ToLegacyTimestamp(timestamp);
+
+    dcgmReturn_t result = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(
+            stderr, "dcgmInjectFieldValue failed with %d for XID %d (%s)\n", static_cast<int>(result), xid, xidDesc);
+        return result;
+    }
+
+    result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
+    if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
+    {
+        fprintf(stderr, "dcgmHealthCheck failed with %d for XID %d (%s)\n", static_cast<int>(result), xid, xidDesc);
+        return result;
+    }
+
+    if (response->overallHealth != expectedStatus)
+    {
+        fprintf(stderr,
+                "XID %d (%s) did not trigger expected health status %d\n",
+                xid,
+                xidDesc,
+                static_cast<int>(expectedStatus));
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Verify the error code matches what we expect
+    if (response->incidents[0].error.code != expectedError)
+    {
+        fprintf(stderr,
+                "XID %d (%s) triggered error code %d but expected %d\n",
+                xid,
+                xidDesc,
+                response->incidents[0].error.code,
+                expectedError);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    return DCGM_ST_OK;
+}
+
+int TestHealthMonitor::TestDevastatingXids()
+{
+    dcgmReturn_t result                            = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo     = std::make_unique<dcgmGroupInfo_t>();
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
+
+    // Enable all health monitoring since devastating XIDs are critical hardware errors
+    dcgmHealthSystems_t newSystems
+        = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM | DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_ALL);
+    response->version = dcgmHealthResponse_version;
+
+    auto now = Now();
+
+    memset(groupInfo.get(), 0, sizeof(*groupInfo));
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, groupInfo.get());
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmGroupGetInfo failed with %d\n", (int)result);
+        return result;
+    }
+
+    if (groupInfo->count < 1)
+    {
+        printf("Skipping TestDevastatingXids due to no GPUs being present");
+        return DCGM_ST_OK;
+    }
+
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmHealthSet failed with %d\n", (int)result);
+        return result;
+    }
+
+    for (size_t i = 0; i < m_devastatingXids.size(); i++)
+    {
+        result = TestSingleXid(groupInfo->entityList[0].entityId,
+                               m_devastatingXids[i].xid,
+                               m_devastatingXids[i].desc,
+                               m_devastatingXids[i].expectedStatus,
+                               m_devastatingXids[i].expectedError,
+                               now + std::chrono::seconds(i),
+                               response);
+        if (result != DCGM_ST_OK)
+        {
+            return result;
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+int TestHealthMonitor::TestSubsystemXids()
+{
+    dcgmReturn_t result                            = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo     = std::make_unique<dcgmGroupInfo_t>();
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
+
+    // Enable all subsystems for testing
+    dcgmHealthSystems_t newSystems
+        = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM | DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_THERMAL
+                              | DCGM_HEALTH_WATCH_POWER | DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_INFOROM);
+    response->version = dcgmHealthResponse_version;
+
+    auto now = Now();
+
+    memset(groupInfo.get(), 0, sizeof(*groupInfo));
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, groupInfo.get());
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmGroupGetInfo failed with %d\n", (int)result);
+        return result;
+    }
+
+    if (groupInfo->count < 1)
+    {
+        printf("Skipping TestSubsystemXids due to no GPUs being present");
+        return DCGM_ST_OK;
+    }
+
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmHealthSet failed with %d\n", (int)result);
+        return result;
+    }
+
+    for (size_t i = 0; i < m_subsystemXids.size(); i++)
+    {
+        result = TestSingleXid(groupInfo->entityList[0].entityId,
+                               m_subsystemXids[i].xid,
+                               m_subsystemXids[i].desc,
+                               m_subsystemXids[i].expectedStatus,
+                               m_subsystemXids[i].expectedError,
+                               now + std::chrono::seconds(i),
+                               response);
+        if (result != DCGM_ST_OK)
+        {
+            return result;
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+int TestHealthMonitor::TestXidSeverityLevels()
+{
+    dcgmReturn_t result                            = DCGM_ST_OK;
+    std::unique_ptr<dcgmGroupInfo_t> groupInfo     = std::make_unique<dcgmGroupInfo_t>();
+    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
+    memset(response.get(), 0, sizeof(*response));
+
+    // Enable all subsystems for testing
+    dcgmHealthSystems_t newSystems
+        = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM | DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_THERMAL
+                              | DCGM_HEALTH_WATCH_POWER | DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_INFOROM);
+    response->version = dcgmHealthResponse_version;
+
+    auto now = Now();
+
+    memset(groupInfo.get(), 0, sizeof(*groupInfo));
+    groupInfo->version = dcgmGroupInfo_version;
+    result             = dcgmGroupGetInfo(m_dcgmHandle, m_gpuGroup, groupInfo.get());
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmGroupGetInfo failed with %d\n", (int)result);
+        return result;
+    }
+
+    if (groupInfo->count < 1)
+    {
+        printf("Skipping TestXidSeverityLevels due to no GPUs being present");
+        return DCGM_ST_OK;
+    }
+
+    result = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "dcgmHealthSet failed with %d\n", (int)result);
+        return result;
+    }
+
+    // Test WARN level XID
+    result = TestSingleXid(groupInfo->entityList[0].entityId,
+                           31,
+                           "MMU Error (Memory subsystem)",
+                           DCGM_HEALTH_RESULT_WARN,
+                           DCGM_FR_XID_ERROR,
+                           now,
+                           response);
+    if (result != DCGM_ST_OK)
+    {
+        return result;
+    }
+
+    // Test FAIL level XID
+    result = TestSingleXid(groupInfo->entityList[0].entityId,
+                           48,
+                           "Double Bit ECC Error (Memory subsystem)",
+                           DCGM_HEALTH_RESULT_FAIL,
+                           DCGM_FR_XID_ERROR,
+                           now + 1s,
+                           response);
+    if (result != DCGM_ST_OK)
+    {
+        return result;
+    }
+
+    // Test multiple XIDs of different severities
+    // First inject a WARN level XID
+    result = TestSingleXid(groupInfo->entityList[0].entityId,
+                           31,
+                           "MMU Error (Memory subsystem)",
+                           DCGM_HEALTH_RESULT_WARN,
+                           DCGM_FR_XID_ERROR,
+                           now + 2s,
+                           response);
+    if (result != DCGM_ST_OK)
+    {
+        return result;
+    }
+
+    // Then inject a FAIL level XID - should override the WARN status
+    result = TestSingleXid(groupInfo->entityList[0].entityId,
+                           48,
+                           "Double Bit ECC Error (Memory subsystem)",
+                           DCGM_HEALTH_RESULT_FAIL,
+                           DCGM_FR_XID_ERROR,
+                           now + 3s,
+                           response);
+    if (result != DCGM_ST_OK)
+    {
+        return result;
+    }
+
+    return DCGM_ST_OK;
 }

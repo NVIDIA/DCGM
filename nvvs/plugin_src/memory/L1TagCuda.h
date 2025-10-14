@@ -37,9 +37,9 @@ public:
         , m_cuMod(NULL)
         , m_dcgmRecorder(memGlobals->m_dcgmRecorder)
         , m_hostErrorLog(NULL)
-        , m_l1Data((CUdeviceptr)NULL)
-        , m_devMiscompareCount((CUdeviceptr)NULL)
-        , m_devErrorLog((CUdeviceptr)NULL)
+        , m_l1Data((CUdeviceptr_v2)NULL)
+        , m_devMiscompareCount((CUdeviceptr_v2)NULL)
+        , m_devErrorLog((CUdeviceptr_v2)NULL)
         , m_runtimeMs(0)
         , m_testLoops(0)
         , m_innerIterations(0)
@@ -56,7 +56,7 @@ private:
     void Cleanup(void);
     nvvsPluginResult_t RunTest(void);
 
-    int AllocDeviceMem(int size, CUdeviceptr *ptr);
+    int AllocDeviceMem(int size, CUdeviceptr_v2 *ptr);
     int AllocHostMem(int size, void **ptr);
     nvvsPluginResult_t GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes);
     int GetCuDevice(CUdevice *cuDevice, std::stringstream &error);
@@ -76,9 +76,9 @@ private:
     DcgmRecorder *m_dcgmRecorder; // not owned here
 
     L1TagError *m_hostErrorLog;
-    CUdeviceptr m_l1Data;
-    CUdeviceptr m_devMiscompareCount;
-    CUdeviceptr m_devErrorLog;
+    CUdeviceptr_v2 m_l1Data;
+    CUdeviceptr_v2 m_devMiscompareCount;
+    CUdeviceptr_v2 m_devErrorLog;
 
     // Test parameters
     uint32_t m_runtimeMs;

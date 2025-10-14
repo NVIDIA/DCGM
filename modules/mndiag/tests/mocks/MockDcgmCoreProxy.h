@@ -122,6 +122,11 @@ public:
         m_mockDriverVersionResult = result;
     }
 
+    void SetMockCudaVersion(int version)
+    {
+        m_mockCudaVersion = version;
+    }
+
     dcgmReturn_t GetGpuIds(int, std::vector<unsigned int> &gpuIds) override
     {
         gpuIds = m_mockGpuIds;
@@ -150,6 +155,12 @@ public:
         return DCGM_ST_OK;
     }
 
+    dcgmReturn_t GetCudaVersion(int &cudaVersion) override
+    {
+        cudaVersion = m_mockCudaVersion;
+        return DCGM_ST_OK;
+    }
+
 private:
     DcgmChildProcessManager m_childProcessManager;
     DcgmCoreProxy m_dummyProxy { dcgmCoreCallbacks_t {} };
@@ -158,4 +169,5 @@ private:
     bool m_AreAllGpuIdsSameSku;
     std::string m_mockDriverVersion;
     dcgmReturn_t m_mockDriverVersionResult = DCGM_ST_OK;
+    int m_mockCudaVersion                  = 12000; // Default to CUDA 12.0
 };

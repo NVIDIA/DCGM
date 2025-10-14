@@ -23,6 +23,7 @@
 #include "DcgmVgpu.hpp"
 #include "MurmurHash3.h"
 #include "dcgm_fields.h"
+#include "dcgm_prm_structs.h"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include "nvml.h"
@@ -30,6 +31,7 @@
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
 #include <TimeLib.hpp>
+#include <cstdint>
 #include <dcgm_agent.h>
 #include <dcgm_nvswitch_structs.h>
 
@@ -38,6 +40,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <list>
 #include <map>
@@ -1548,6 +1551,7 @@ dcgmReturn_t DcgmCacheManager::HelperGetLiveChipArch(nvmlDevice_t nvmlDevice, dc
             break;
 
         case 10:
+        case 12:
             arch = DCGM_CHIP_ARCH_BLACKWELL;
             break;
 
@@ -1685,12 +1689,7 @@ bool DcgmCacheManager::GetIsValidEntityId(dcgm_field_entity_group_t entityGroupI
 
         case DCGM_FE_LINK:
         {
-            // DCGM-4140 the use of parsed and raw below is undefined behaviour
-            dcgm_link_t link {};
-
-            link.parsed.gpuId = 0;
-
-            link.raw = entityId;
+            dcgm_link_t link { .raw = entityId };
 
             switch (link.parsed.type)
             {
@@ -1828,8 +1827,7 @@ dcgm_field_eid_t DcgmCacheManager::AddFakeComputeInstance(dcgm_field_eid_t paren
                 if (m_gpus[gpuIndex].maxGpcs < 1)
                 {
                     DCGM_LOG_ERROR << "Unable to add compute instances to gpuId " << gpuIndex
-                                   << " that does not have maxGpcs > 0. "
-                                   << "Use an injected GPU or a MIG-enabled GPU";
+                                   << " that does not have maxGpcs > 0. " << "Use an injected GPU or a MIG-enabled GPU";
                     return DCGM_ENTITY_ID_BAD;
                 }
 
@@ -4694,16 +4692,141 @@ dcgmReturn_t DcgmCacheManager::GetMultipleLatestSamples(std::vector<dcgmGroupEnt
             /* Buffer each sample. Errors are written as statuses for each fv in fvBuffer */
             dcgmReturn_t ret
                 = GetLatestSample((*entityIt).entityGroupId, (*entityIt).entityId, (*fieldIdIt), 0, fvBuffer);
-            if (DCGM_ST_OK != ret)
+            if (ret == DCGM_ST_OK)
             {
-                DCGM_LOG_ERROR << "GetLatestSample returned " << errorString(ret) << " for entityId "
-                               << entityIt->entityId << " groupId " << entityIt->entityGroupId << " fieldId "
-                               << *fieldIdIt;
+                continue;
+            }
+            if (ret == DCGM_ST_NO_DATA)
+            {
+                log_debug("GetLatestSample returned {} for entityId {} groupId {} fieldId {}",
+                          errorString(ret),
+                          entityIt->entityId,
+                          entityIt->entityGroupId,
+                          *fieldIdIt);
+            }
+            else
+            {
+                log_error("GetLatestSample returned {} for entityId {} groupId {} fieldId {}",
+                          errorString(ret),
+                          entityIt->entityId,
+                          entityIt->entityGroupId,
+                          *fieldIdIt);
             }
         }
     }
 
     dcgm_mutex_unlock(m_mutex);
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmCacheManager::SetWorkloadPowerProfile(nvmlDevice_t nvmlDevice, dcgmcm_sample_t const &value)
+{
+    nvmlReturn_t nvmlReturn;
+    // Try the new NVML API first
+    nvmlWorkloadPowerProfileUpdateProfiles_v1_t updateProfiles {};
+
+    if (static_cast<size_t>(value.val2.ptrSize) < sizeof(dcgmcmWorkloadPowerProfile_t))
+    {
+        log_error("Workload power profile blob too small: {} bytes", value.val2.ptrSize);
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmcmWorkloadPowerProfile_t *workloadPowerProfile = (dcgmcmWorkloadPowerProfile_t *)value.val.blob;
+    switch (workloadPowerProfile->action)
+    {
+        case DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_NONE:
+            log_debug("No action specified for workload power profile");
+            return DCGM_ST_OK;
+        case DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_CLEAR:
+            updateProfiles.operation = NVML_POWER_PROFILE_OPERATION_CLEAR;
+            break;
+        case DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET:
+            updateProfiles.operation = NVML_POWER_PROFILE_OPERATION_SET;
+            break;
+        case DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET_AND_OVERWRITE:
+            updateProfiles.operation = NVML_POWER_PROFILE_OPERATION_SET_AND_OVERWRITE;
+            break;
+        default:
+            log_error("Invalid workload power profile action: {}", workloadPowerProfile->action);
+            return DCGM_ST_BADPARAM;
+    }
+
+    static_assert(sizeof(workloadPowerProfile->profileMask) == sizeof(updateProfiles.updateProfilesMask.mask),
+                  "Size of profileMask and NVML updateProfilesMask.mask are different");
+
+    memcpy(updateProfiles.updateProfilesMask.mask,
+           workloadPowerProfile->profileMask,
+           sizeof(updateProfiles.updateProfilesMask.mask));
+
+    nvmlReturn = nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1(nvmlDevice, &updateProfiles);
+
+    if (nvmlReturn == NVML_SUCCESS)
+    {
+        log_debug("Successfully updated workload power profile with action {} and mask {}",
+                  updateProfiles.operation,
+                  DcgmNs::Utils::HelperDisplayPowerBitmask(updateProfiles.updateProfilesMask.mask));
+        return DCGM_ST_OK;
+    }
+
+    if (nvmlReturn != NVML_ERROR_NOT_SUPPORTED && nvmlReturn != NVML_ERROR_FUNCTION_NOT_FOUND)
+    {
+        log_error("Failed to update workload power profile for GPU {}. Error: {}", nvmlDevice, nvmlReturn);
+        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+    }
+
+    log_debug(
+        "NVML API nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1 not supported, trying older deprecated NVML API");
+
+    nvmlWorkloadPowerProfileRequestedProfiles_t nvmlProfile = {};
+
+    nvmlProfile.version = nvmlWorkloadPowerProfileRequestedProfiles_v1;
+    switch (workloadPowerProfile->action)
+    {
+        case DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_NONE:
+            break;
+        case DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_CLEAR:
+            memcpy(nvmlProfile.requestedProfilesMask.mask,
+                   workloadPowerProfile->profileMask,
+                   sizeof(nvmlProfile.requestedProfilesMask.mask));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+            nvmlReturn = nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice, &nvmlProfile);
+            break;
+        case DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET:
+            memcpy(nvmlProfile.requestedProfilesMask.mask,
+                   workloadPowerProfile->profileMask,
+                   sizeof(nvmlProfile.requestedProfilesMask.mask));
+            nvmlReturn = nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice, &nvmlProfile);
+            break;
+        case DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET_AND_OVERWRITE:
+            memset(nvmlProfile.requestedProfilesMask.mask, 0xff, sizeof(nvmlProfile.requestedProfilesMask.mask));
+            nvmlReturn = nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice, &nvmlProfile);
+            if (nvmlReturn != NVML_SUCCESS)
+            {
+                log_error("Failed to clear requested workload power profile during overwrite");
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+            }
+
+            memcpy(nvmlProfile.requestedProfilesMask.mask,
+                   workloadPowerProfile->profileMask,
+                   sizeof(nvmlProfile.requestedProfilesMask.mask));
+            nvmlReturn = nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice, &nvmlProfile);
+#pragma GCC diagnostic pop
+            break;
+        default:
+            return DCGM_ST_BADPARAM;
+    }
+
+    if (nvmlReturn != NVML_SUCCESS)
+    {
+        log_error("Failed to update workload power profile with action {} for GPU {}. Error: {}",
+                  workloadPowerProfile->action,
+                  nvmlDevice,
+                  nvmlReturn);
+        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+    }
 
     return DCGM_ST_OK;
 }
@@ -4980,49 +5103,11 @@ dcgmReturn_t DcgmCacheManager::SetValue(int gpuId, unsigned short dcgmFieldId, d
 
         case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
         {
-            bool isBlank = true; // User didn't specify any requested profile
-            bool isEmpty = true; // User specified requested profiles should be blank
-
-            nvmlWorkloadPowerProfileRequestedProfiles_t nvmlProfile = {};
-
-            nvmlProfile.version = nvmlWorkloadPowerProfileRequestedProfiles_v1;
-            memcpy(nvmlProfile.requestedProfilesMask.mask,
-                   value->val.blob,
-                   sizeof(nvmlProfile.requestedProfilesMask.mask));
-
-            for (int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+            dcgmReturn_t ret = SetWorkloadPowerProfile(nvmlDevice, *value);
+            if (ret != DCGM_ST_OK)
             {
-                if (!DCGM_INT32_IS_BLANK(nvmlProfile.requestedProfilesMask.mask[i]))
-                {
-                    isBlank = false;
-                }
-
-                if (nvmlProfile.requestedProfilesMask.mask[i] != 0)
-                {
-                    isEmpty = false;
-                }
+                return ret;
             }
-
-            if (isBlank == true)
-            {
-                /* nothing specified, do nothing */
-                break;
-            }
-            else if (isEmpty == true)
-            {
-                memset(nvmlProfile.requestedProfilesMask.mask, 0xff, sizeof(nvmlProfile.requestedProfilesMask.mask));
-                nvmlReturn = nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice, &nvmlProfile);
-            }
-            else
-            {
-                nvmlReturn = nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice, &nvmlProfile);
-            }
-
-            if (NVML_SUCCESS != nvmlReturn)
-            {
-                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
-            }
-
             break;
         }
 
@@ -5568,6 +5653,15 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateAllFields(dcgmcm_update_thread_t &t
 
             BufferOrCacheLatestGpuValue(threadCtx, fieldMeta);
         }
+        else if (watchInfo->practicalEntityGroupId == DCGM_FE_LINK)
+        {
+            /* Handle NvLink PRM fields */
+            dcgmReturn_t ret = ReadAndCacheNvLinkPrm(threadCtx, fieldMeta);
+            if (ret != DCGM_ST_OK)
+            {
+                log_error("ReadAndCacheNvLinkPrm failed for fieldId {} with error {}", fieldMeta->fieldId, ret);
+            }
+        }
         else if (watchInfo->practicalEntityGroupId == DCGM_FE_VGPU)
         {
             if (m_skipDriverCalls)
@@ -5633,7 +5727,7 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateAllFields(dcgmcm_update_thread_t &t
 static bool FieldSupportsLiveUpdates(dcgm_field_entity_group_t entityGroupId, unsigned short fieldId)
 {
     if (entityGroupId != DCGM_FE_NONE && entityGroupId != DCGM_FE_GPU && entityGroupId != DCGM_FE_GPU_I
-        && entityGroupId != DCGM_FE_GPU_CI)
+        && entityGroupId != DCGM_FE_GPU_CI && entityGroupId != DCGM_FE_LINK)
     {
         return false;
     }
@@ -5731,7 +5825,7 @@ dcgmReturn_t DcgmCacheManager::GetMultipleLatestLiveSamples(std::vector<dcgmGrou
                 }
 
                 /* Is this a mapped field? Set aside the info for the field and handle it below */
-                if (fieldMeta->nvmlFieldId > 0)
+                if (DcgmFieldIsMappedToNvmlField(fieldMeta, m_driverIsR520OrNewer))
                 {
                     threadCtx.fieldValueFields[entityId][threadCtx.numFieldValues[entityId]] = fieldMeta;
                     threadCtx.fieldValueWatchInfo[entityId][threadCtx.numFieldValues[entityId]]
@@ -5740,6 +5834,16 @@ dcgmReturn_t DcgmCacheManager::GetMultipleLatestLiveSamples(std::vector<dcgmGrou
                 }
                 else
                     BufferOrCacheLatestGpuValue(threadCtx, fieldMeta);
+            }
+            else if (entityGroupId == DCGM_FE_LINK)
+            {
+                /* Handle NvLink PRM fields */
+                dcgmReturn_t ret = ReadAndCacheNvLinkPrm(threadCtx, fieldMeta);
+                if (ret != DCGM_ST_OK)
+                {
+                    log_error("ReadAndCacheNvLinkPrm failed for fieldId {} with error {}", fieldMeta->fieldId, ret);
+                    fvBuffer->AddInt64Value(entityGroupId, entityId, fieldId, 0, 0, ret);
+                }
             }
             else
             {
@@ -7512,8 +7616,21 @@ dcgmReturn_t DcgmCacheManager::CreateNvlinkP2PStatusBitmap(nvmlDevice_t nvmlDevi
 
         if (nvmlReturn != NVML_SUCCESS)
         {
-            log_error("nvmlDeviceGetP2PStatus returned {}", nvmlReturn);
-
+            auto index = std::find_if(m_gpus.begin(), m_gpus.end(), [nvmlDevice](dcgmcm_gpu_info_t const &gpu) {
+                return gpu.nvmlDevice == nvmlDevice;
+            });
+            if (index == m_gpus.end())
+            {
+                log_error("nvmlDeviceGetP2PStatus returned {} with unknown source and target GPU {}", nvmlReturn, i);
+            }
+            else
+            {
+                auto sourceGpu = index - m_gpus.begin();
+                log_error("nvmlDeviceGetP2PStatus returned {} when source GPU {} and target GPU {}",
+                          nvmlReturn,
+                          sourceGpu,
+                          i);
+            }
             return (DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn));
         }
         else if (p2pStatus == NVML_P2P_STATUS_OK)
@@ -7639,6 +7756,7 @@ dcgmReturn_t DcgmCacheManager::ReadPlatformInfoFields(dcgmcm_update_thread_t &th
                                                       timelib64_t now,
                                                       timelib64_t expireTime)
 {
+    static unsigned int const SHORT_HEX_STRING_LEN = 32;
     nvmlPlatformInfo_v2_t platformInfo {};
     platformInfo.version = nvmlPlatformInfo_v2;
 
@@ -7656,10 +7774,11 @@ dcgmReturn_t DcgmCacheManager::ReadPlatformInfoFields(dcgmcm_update_thread_t &th
         {
             case DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID:
             {
-                std::array<unsigned char, 16> guid;
-                std::copy(std::begin(platformInfo.ibGuid), std::end(platformInfo.ibGuid), std::begin(guid));
-                std::string guidStr = getGuidString(guid);
-                AppendEntityString(threadCtx, guidStr.c_str(), now, expireTime);
+                char guidbuf[SHORT_HEX_STRING_LEN];
+                // Copy the way NVML formats the GUID
+                snprintf(
+                    guidbuf, sizeof(guidbuf), "0x%016llx", (unsigned long long)((uint64_t *)platformInfo.ibGuid)[0]);
+                AppendEntityString(threadCtx, guidbuf, now, expireTime);
                 break;
             }
             case DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER:
@@ -7829,6 +7948,772 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkBer(dcgmcm_update_thread_t &thr
         DcgmLockGuard lg(m_mutex);
         AppendEntityDouble(threadCtx, ber, 0, timelib_usecSince1970(), expireTime);
     }
+    return DCGM_ST_OK;
+}
+
+/*
+ * NOTE: these UPHY fields will become field IDs starting in CUDA 13.1. At that point, we can delete all of this
+ *       code and retrieve this information using NVML field IDs.
+ */
+
+
+/**
+ * Create an Operation TLV for register access
+ *
+ * @deprecated This function is expected to be removed in the near future.
+ */
+static OpTLV createOpTLV(unsigned regID, bool isRead)
+{
+    OpTLV opTLV = {};
+
+    // Set base TLV fields
+    opTLV.base.u.fields.length = OP_TLV_LEN_DWORDS;
+    opTLV.base.u.fields.type   = TLV_TYPE_OP;
+
+    // Set operation fields
+    opTLV.u.fields.emadClass  = OP_TLV_CLASS_REG;
+    opTLV.u.fields.method     = isRead ? OP_TLV_METHOD_QUERY : OP_TLV_METHOD_WRITE;
+    opTLV.u.fields.r          = OP_TLV_REQUEST;
+    opTLV.u.fields.registerID = regID;
+
+    return opTLV;
+}
+
+/**
+ * Create a Register TLV for data payload
+ *
+ * @deprecated This function is expected to be removed in the near future.
+ */
+static RegTLV createRegTLV(unsigned sizeInBytes)
+{
+    RegTLV regTLV = {};
+
+    regTLV.base.u.fields.length = sizeInBytes / sizeof(uint32_t) + REG_TLV_HEADER_LEN_DWORDS;
+    regTLV.base.u.fields.type   = TLV_TYPE_REG;
+
+    return regTLV;
+}
+
+/**
+ * Pack TLV header into buffer with network byte order conversion
+ *
+ * @deprecated This function is expected to be removed in the near future.
+ */
+static size_t packTLVHeader_i(uint8_t *buffer, TLVBase const *base, unsigned headerLenDWords)
+{
+    uint32_t *dst       = (uint32_t *)buffer;
+    uint32_t const *src = (uint32_t const *)base;
+
+    for (unsigned i = 0; i < headerLenDWords; ++i)
+    {
+        *dst++ = htonl(*src++);
+    }
+
+    return headerLenDWords * sizeof(uint32_t);
+}
+
+/**
+ * Pack PPCNT register data with network byte order conversion
+ *
+ * @deprecated This function is expected to be removed in the near future.
+ */
+static void ppcntPackFunc_i(uint8_t *buffer, unsigned localPort, unsigned grp)
+{
+    nvmlPpcnt_t ppcnt = {};
+
+    // Only interested in local_port and grp
+    ppcnt.local_port = localPort;
+    ppcnt.grp        = grp;
+
+    // Convert to network byte order
+    uint32_t const *src = (uint32_t *)&ppcnt;
+    uint32_t *dst       = (uint32_t *)buffer;
+
+    for (unsigned i = 0; i < sizeof(nvmlPpcnt_t); i += sizeof(uint32_t), ++dst, ++src)
+    {
+        *dst = htonl(*src);
+    }
+}
+
+/**
+ * Pack PPRM register data with network byte order conversion
+ *
+ * @deprecated This function is expected to be removed in the near future.
+ */
+static void pprmPackFunc_i(uint8_t *buffer, unsigned localPort)
+{
+    nvmlPprm_t pprm = {};
+
+    // Only interested in local_port
+    pprm.local_port = localPort;
+
+    // Convert to network byte order
+    uint32_t const *src = (uint32_t *)&pprm;
+    uint32_t *dst       = (uint32_t *)buffer;
+
+    for (unsigned i = 0; i < sizeof(nvmlPprm_t) / sizeof(uint32_t); ++i)
+    {
+        *dst++ = htonl(*src++);
+    }
+}
+
+/**
+ * Creates and concatenates OpTLV and RegTLV into an output buffer for PPCNT register access.
+ *
+ * The request can be configured to read different PPCNT counter groups including:
+ * - Group 0x12: Physical Layer Counters (FEC errors, symbol errors, etc.)
+ * - Group 0x1A: Physical Layer Recovery Counters (recovery events, timeouts)
+ * - Group 0x22: PLR counters
+ *
+ * @deprecated This function is expected to be removed in the near future.
+ *
+ * @param[in] regId Register ID (typically 0x5008 for PPCNT)
+ * @param[in] grp Counter group ID (0x12, 0x1A, or 0x22)
+ * @param[in] localPort Local port number for multi-port hardware
+ * @param[in] sizeBytes Size of the register data structure in bytes
+ * @param[out] outputBuffer Buffer to receive the packed TLV data (must be large enough)
+ * @return Size in bytes of the packed TLV data
+ */
+static size_t packPpcntTlv(unsigned const regId,
+                           unsigned const grp,
+                           unsigned const localPort,
+                           unsigned const sizeBytes,
+                           uint8_t *outputBuffer)
+{
+    // Create TLVs
+    OpTLV opTLV   = createOpTLV(regId, true /*is read*/);
+    RegTLV regTLV = createRegTLV(sizeBytes);
+
+    // Copy TLVs to output buffer
+    size_t packedSize = 0;
+
+    // Pack OpTLV
+    // coverity[overrun]: We are passing an OpTLV, not a TLV base
+    packedSize += packTLVHeader_i(&outputBuffer[packedSize], &opTLV.base, OP_TLV_LEN_DWORDS);
+
+    // Pack RegTLV header
+    // coverity[overrun]: We are passing a RegTLV, not a TLV base
+    packedSize += packTLVHeader_i(&outputBuffer[packedSize], &regTLV.base, REG_TLV_HEADER_LEN_DWORDS);
+
+    // Pack RegTLV data
+    ppcntPackFunc_i(&outputBuffer[packedSize], localPort, grp);
+    packedSize += sizeBytes;
+
+    // EndTLV packing omitted (optional)
+
+    return packedSize;
+}
+
+/**
+ * Helper function to unpack TLV header from network byte order
+ * @deprecated This function is expected to be removed in the near future.
+ */
+static size_t unpackTLVHeader_i(TLVBase *tlvHeader, uint8_t const *inputBuffer, unsigned lengthDWords)
+{
+    uint32_t const *src = (uint32_t const *)inputBuffer;
+    uint32_t *dst       = (uint32_t *)tlvHeader;
+
+    for (unsigned i = 0; i < lengthDWords; ++i)
+    {
+        *dst++ = ntohl(*src++);
+    }
+
+    return lengthDWords * sizeof(uint32_t);
+}
+
+/**
+ * Helper function to extract operation status from OpTLV
+ *
+ * The reserved field contains a packed structure:
+ * - bits 0-7: status field
+ * - bits 8-15: other fields
+ */
+static unsigned getOpStatus(TLVBase const *opTLV)
+{
+    uint32_t reserved = opTLV->u.fields.reserved;
+    return (reserved >> 8) & 0x7F;
+}
+
+/**
+ * Unpack and validate TLV response for PPRM register data
+ *
+ * @param[in] inputBuffer Binary buffer containing TLV response from GPU
+ * @param[out] pprm Extracted PPRM register data
+ * @return DCGM_ST_OK on successful parsing, DCGM_ST_GENERIC_ERROR on validation failure
+ */
+static dcgmReturn_t unpackPprmTlv(uint8_t const *inputBuffer, nvmlPprm_t *pprm)
+{
+    if (!inputBuffer || !pprm)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    size_t unpackedSize = 0;
+    OpTLV opTLV         = {};
+    RegTLV regTLV       = {};
+
+    // Unpack and validate OpTLV
+    unpackedSize += unpackTLVHeader_i((TLVBase *)&opTLV, &inputBuffer[unpackedSize], OP_TLV_LEN_DWORDS);
+    if (opTLV.base.u.fields.type != TLV_TYPE_OP || getOpStatus((TLVBase *)&opTLV) != OP_TLV_STATUS_OK)
+    {
+        log_warning("OpTLV validation failed: status=0x{:X}", getOpStatus((TLVBase *)&opTLV));
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Unpack and validate RegTLV header
+    unpackedSize += unpackTLVHeader_i((TLVBase *)&regTLV, &inputBuffer[unpackedSize], REG_TLV_HEADER_LEN_DWORDS);
+    if (regTLV.base.u.fields.type != TLV_TYPE_REG)
+    {
+        uint32_t const regType = regTLV.base.u.fields.type;
+        log_warning("RegTLV validation failed: type=0x{:X}", regType);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Parse PPRM register data
+    uint32_t const *src = (uint32_t const *)&inputBuffer[unpackedSize];
+    uint32_t *dst       = (uint32_t *)pprm;
+
+    // Convert from network byte order
+    for (unsigned i = 0; i < sizeof(nvmlPprm_t) / sizeof(uint32_t); ++i)
+    {
+        *dst++ = ntohl(*src++);
+    }
+
+    return DCGM_ST_OK;
+}
+
+/**
+ * Unpack and validate TLV response for PPCNT register data
+ *
+ * @param[in] inputBuffer Binary buffer containing TLV response from GPU
+ * @param[out] recovery Extracted recovery counter data
+ * @return DCGM_ST_OK on successful parsing, DCGM_ST_GENERIC_ERROR on validation failure
+ */
+static dcgmReturn_t unpackPpcntTlvWithRecoveryData(uint8_t const *inputBuffer,
+                                                   nvmlPhysicalLayerRecoveryCounters_t *recovery)
+{
+    if (!inputBuffer || !recovery)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    size_t unpackedSize = 0;
+    OpTLV opTLV         = {};
+    RegTLV regTLV       = {};
+
+    // Unpack and validate OpTLV
+    unpackedSize += unpackTLVHeader_i((TLVBase *)&opTLV, &inputBuffer[unpackedSize], OP_TLV_LEN_DWORDS);
+    if (opTLV.base.u.fields.type != TLV_TYPE_OP || getOpStatus((TLVBase *)&opTLV) != OP_TLV_STATUS_OK)
+    {
+        log_warning("OpTLV validation failed: status=0x{:X}", getOpStatus((TLVBase *)&opTLV));
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Unpack and validate RegTLV header
+    unpackedSize += unpackTLVHeader_i((TLVBase *)&regTLV, &inputBuffer[unpackedSize], REG_TLV_HEADER_LEN_DWORDS);
+    if (regTLV.base.u.fields.type != TLV_TYPE_REG)
+    {
+        uint32_t const regType = regTLV.base.u.fields.type;
+        log_warning("RegTLV validation failed: type=0x{:X}", regType);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Parse PPCNT header to validate group
+    nvmlPpcnt_t ppcnt   = {};
+    uint32_t const *src = (uint32_t const *)&inputBuffer[unpackedSize];
+    uint32_t *dst       = (uint32_t *)&ppcnt;
+
+    // Convert PPCNT header from network byte order
+    for (unsigned i = 0; i < 2; ++i) // Header is 2 DWords
+    {
+        *dst++ = ntohl(*src++);
+    }
+
+    if (ppcnt.grp != PPCNT_GRP_RECOVERY)
+    {
+        auto const grp = ppcnt.grp;
+        log_warning("Expected recovery group 0x{:X}, got 0x{:X}", PPCNT_GRP_RECOVERY, grp);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Extract recovery counter data from counter_set array
+    uint32_t *recoveryDst = (uint32_t *)recovery;
+    for (unsigned i = 0; i < sizeof(nvmlPhysicalLayerRecoveryCounters_t) / sizeof(uint32_t); ++i)
+    {
+        *recoveryDst++ = ntohl(*src++);
+    }
+
+    return DCGM_ST_OK;
+}
+
+/**
+ * Unpack and validate TLV response for PPCNT register data with physical layer
+ *
+ * @param[in] inputBuffer Binary buffer containing TLV response from GPU
+ * @param[out] physical Extracted physical layer counter data
+ * @return DCGM_ST_OK on successful parsing, DCGM_ST_GENERIC_ERROR on validation failure
+ */
+static dcgmReturn_t unpackPpcntTlvWithPhysicalData(uint8_t const *inputBuffer, nvmlPhysicalLayerCounters_t *physical)
+{
+    if (!inputBuffer || !physical)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    size_t unpackedSize = 0;
+    OpTLV opTLV         = {};
+    RegTLV regTLV       = {};
+
+    // Unpack and validate OpTLV
+    unpackedSize += unpackTLVHeader_i((TLVBase *)&opTLV, &inputBuffer[unpackedSize], OP_TLV_LEN_DWORDS);
+    if (opTLV.base.u.fields.type != TLV_TYPE_OP || getOpStatus((TLVBase *)&opTLV) != OP_TLV_STATUS_OK)
+    {
+        log_warning("OpTLV validation failed: status=0x{:X}", getOpStatus((TLVBase *)&opTLV));
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Unpack and validate RegTLV header
+    unpackedSize += unpackTLVHeader_i((TLVBase *)&regTLV, &inputBuffer[unpackedSize], REG_TLV_HEADER_LEN_DWORDS);
+    if (regTLV.base.u.fields.type != TLV_TYPE_REG)
+    {
+        auto const type = regTLV.base.u.fields.type;
+        log_warning("RegTLV validation failed: type=0x{:X}", type);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Parse PPCNT header to validate group
+    nvmlPpcnt_t ppcnt   = {};
+    uint32_t const *src = (uint32_t const *)&inputBuffer[unpackedSize];
+    uint32_t *dst       = (uint32_t *)&ppcnt;
+
+    // Convert PPCNT header from network byte order
+    for (unsigned i = 0; i < 2; ++i) // Header is 2 DWords
+    {
+        *dst++ = ntohl(*src++);
+    }
+
+    if (ppcnt.grp != PPCNT_GRP_PHYSICAL_LAYER_CTRS)
+    {
+        auto const grp = ppcnt.grp;
+        log_warning("Expected physical layer group 0x{:X}, got 0x{:X}", PPCNT_GRP_PHYSICAL_LAYER_CTRS, grp);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Extract physical layer counter data from counter_set array
+    uint32_t *physicalDst = (uint32_t *)physical;
+    for (unsigned i = 0; i < sizeof(nvmlPhysicalLayerCounters_t) / sizeof(uint32_t); ++i)
+    {
+        *physicalDst++ = ntohl(*src++);
+    }
+
+    return DCGM_ST_OK;
+}
+
+/**
+ * Unpack and validate TLV response for PPCNT register data with PLR
+ *
+ * @param[in] inputBuffer Binary buffer containing TLV response from GPU
+ * @param[out] plrCounters Extracted PLR counter data in structured format
+ * @return DCGM_ST_OK on successful parsing, DCGM_ST_GENERIC_ERROR on validation failure
+ */
+static dcgmReturn_t unpackPpcntTlvWithPlrData(uint8_t const *inputBuffer, nvmlPlrCounters_t *plrCounters)
+{
+    if (!inputBuffer || !plrCounters)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    size_t unpackedSize = 0;
+    OpTLV opTLV         = {};
+    RegTLV regTLV       = {};
+
+    // Unpack and validate OpTLV
+    unpackedSize += unpackTLVHeader_i((TLVBase *)&opTLV, &inputBuffer[unpackedSize], OP_TLV_LEN_DWORDS);
+    if (opTLV.base.u.fields.type != TLV_TYPE_OP || getOpStatus((TLVBase *)&opTLV) != OP_TLV_STATUS_OK)
+    {
+        log_warning("OpTLV validation failed: status=0x{:X}", getOpStatus((TLVBase *)&opTLV));
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Unpack and validate RegTLV header
+    unpackedSize += unpackTLVHeader_i((TLVBase *)&regTLV, &inputBuffer[unpackedSize], REG_TLV_HEADER_LEN_DWORDS);
+    if (regTLV.base.u.fields.type != TLV_TYPE_REG)
+    {
+        auto const regType = regTLV.base.u.fields.type;
+        log_warning("RegTLV validation failed: type=0x{:X}", regType);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Unpack PPCNT header to validate the group (first 2 DWords only)
+    nvmlPpcnt_t ppcntHeader = {};
+    uint32_t const *src     = (uint32_t const *)&inputBuffer[unpackedSize];
+    uint32_t *headerDst     = (uint32_t *)&ppcntHeader;
+
+    // Convert header from network byte order (first 2 DWords)
+    for (unsigned i = 0; i < 2; ++i)
+    {
+        *headerDst++ = ntohl(*src++);
+    }
+
+    // Validate that this is PLR group data
+    if (ppcntHeader.grp != PPCNT_GRP_PLR)
+    {
+        uint32_t const grp = ppcntHeader.grp;
+        log_warning("Expected PLR group 0x{:X}, got 0x{:X}", PPCNT_GRP_PLR, grp);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    // Direct cast and convert PLR counter data from counter_set area
+    // src now points to the counter_set data (after the 2-DWord header)
+    uint32_t *plrDst = (uint32_t *)plrCounters;
+    for (unsigned i = 0; i < sizeof(nvmlPlrCounters_t) / sizeof(uint32_t); ++i)
+    {
+        *plrDst++ = ntohl(*src++);
+    }
+
+    return DCGM_ST_OK;
+}
+
+/**
+ * Pack PPRM TLV for register 0x5059 access
+ *
+ * @deprecated This function is expected to be removed in the near future.
+ */
+static size_t packPprmTlv(unsigned const localPort, uint8_t *outputBuffer)
+{
+    // Create TLVs
+    OpTLV opTLV   = createOpTLV(PRM_REG_PPRM, true /*is read*/);
+    RegTLV regTLV = createRegTLV(sizeof(nvmlPprm_t));
+
+    // Copy TLVs to output buffer
+    size_t packedSize = 0;
+
+    // Pack OpTLV
+    // coverity[overrun]: We are passing an OpTLV, not a TLV base
+    packedSize += packTLVHeader_i(&outputBuffer[packedSize], &opTLV.base, OP_TLV_LEN_DWORDS);
+
+    // Pack RegTLV header
+    // coverity[overrun]: We are passing a RegTLV, not a TLV base
+    packedSize += packTLVHeader_i(&outputBuffer[packedSize], &regTLV.base, REG_TLV_HEADER_LEN_DWORDS);
+
+    // Pack RegTLV data
+    pprmPackFunc_i(&outputBuffer[packedSize], localPort);
+    packedSize += sizeof(nvmlPprm_t);
+
+    // EndTLV packing omitted (optional)
+
+    return packedSize;
+}
+
+// PRM Register Group Metadata
+namespace
+{
+
+// Field definition within a register group
+struct PrmFieldDef
+{
+    unsigned short fieldId;
+    std::function<uint64_t(void const *)> getValue;
+};
+
+// Register group structure containing field definitions
+struct PrmRegisterGroup
+{
+    uint32_t registerId;
+    uint32_t groupId;
+    size_t structSize;
+    std::function<dcgmReturn_t(uint8_t const *, void *)> unpackFunc;
+    std::vector<PrmFieldDef> fields;
+};
+
+// Single data structure defining all PRM register groups and their fields
+static std::vector<PrmRegisterGroup> const prmRegisterGroups = {
+    // PPRM register group
+    { PRM_REG_PPRM,
+      0,
+      sizeof(nvmlPprm_t),
+      [](uint8_t const *data, void *out) { return unpackPprmTlv(data, (nvmlPprm_t *)out); },
+      { { DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
+          [](void const *data) {
+              return static_cast<uint64_t>(((nvmlPprm_t const *)data)->oper_recovery);
+          } } } },
+
+    // PPCNT Recovery counter group
+    { PRM_REG_PPCNT,
+      PPCNT_GRP_RECOVERY,
+      sizeof(nvmlPhysicalLayerRecoveryCounters_t),
+      [](uint8_t const *data, void *out) {
+          return unpackPpcntTlvWithRecoveryData(data, (nvmlPhysicalLayerRecoveryCounters_t *)out);
+      },
+      { { DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+          [](void const *data) {
+              return static_cast<uint64_t>(
+                  ((nvmlPhysicalLayerRecoveryCounters_t const *)data)->time_since_last_recovery);
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO,
+          [](void const *data) {
+              return static_cast<uint64_t>(
+                  ((nvmlPhysicalLayerRecoveryCounters_t const *)data)->time_between_last_2_recoveries);
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TOTAL_SUCCESSFUL_EVENTS,
+          [](void const *data) {
+              return static_cast<uint64_t>(
+                  ((nvmlPhysicalLayerRecoveryCounters_t const *)data)->total_successful_recovery_events);
+          } } } },
+
+    // PPCNT Physical layer counter group
+    { PRM_REG_PPCNT,
+      PPCNT_GRP_PHYSICAL_LAYER_CTRS,
+      sizeof(nvmlPhysicalLayerCounters_t),
+      [](uint8_t const *data, void *out) {
+          return unpackPpcntTlvWithPhysicalData(data, (nvmlPhysicalLayerCounters_t *)out);
+      },
+      { { DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_SUCCESSFUL_RECOVERY_EVENTS,
+          [](void const *data) {
+              return static_cast<uint64_t>(((nvmlPhysicalLayerCounters_t const *)data)->successful_recovery_events);
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_COUNTER,
+          [](void const *data) {
+              return static_cast<uint64_t>(((nvmlPhysicalLayerCounters_t const *)data)->link_down_events);
+          } } } },
+
+    // PPCNT PLR counter group
+    { PRM_REG_PPCNT,
+      PPCNT_GRP_PLR,
+      sizeof(nvmlPlrCounters_t),
+      [](uint8_t const *data, void *out) { return unpackPpcntTlvWithPlrData(data, (nvmlPlrCounters_t *)out); },
+      { { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODES,
+          [](void const *data) {
+              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              return (static_cast<uint64_t>(plr->plr_rcv_codes_high) << 32) | plr->plr_rcv_codes_low;
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODE_ERR,
+          [](void const *data) {
+              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              return (static_cast<uint64_t>(plr->plr_rcv_code_err_high) << 32) | plr->plr_rcv_code_err_low;
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_UNCORRECTABLE_CODE,
+          [](void const *data) {
+              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              return (static_cast<uint64_t>(plr->plr_rcv_uncorrectable_code_high) << 32)
+                     | plr->plr_rcv_uncorrectable_code_low;
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES,
+          [](void const *data) {
+              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              return (static_cast<uint64_t>(plr->plr_xmit_codes_high) << 32) | plr->plr_xmit_codes_low;
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES,
+          [](void const *data) {
+              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              return (static_cast<uint64_t>(plr->plr_xmit_retry_codes_high) << 32) | plr->plr_xmit_retry_codes_low;
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS,
+          [](void const *data) {
+              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              return (static_cast<uint64_t>(plr->plr_xmit_retry_events_high) << 32) | plr->plr_xmit_retry_events_low;
+          } },
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS,
+          [](void const *data) {
+              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              return (static_cast<uint64_t>(plr->plr_sync_events_high) << 32) | plr->plr_sync_events_low;
+          } } } }
+};
+
+/**
+ * Fast lookup map: fieldId -> register group pointer
+ * Built once at startup for O(1) field lookups
+ */
+static std::map<unsigned short, PrmRegisterGroup const *> buildprmFieldToGroupMap()
+{
+    std::map<unsigned short, PrmRegisterGroup const *> fieldMap;
+    for (auto const &group : prmRegisterGroups)
+    {
+        for (auto const &field : group.fields)
+        {
+            fieldMap[field.fieldId] = &group;
+        }
+    }
+    return fieldMap;
+}
+
+static std::map<unsigned short, PrmRegisterGroup const *> const fieldToGroupMap = buildprmFieldToGroupMap();
+
+} // anonymous namespace
+
+/**
+ * Helper function to cache a single PRM field value if it's actively watched
+ *
+ * This function checks if the specified field is actively watched and caches
+ * the value only if a watch exists. For live data requests, it adds the
+ * requested field value to the fvBuffer.
+ *
+ * @param[in] threadCtx Thread context containing fvBuffer for live data requests
+ * @param[in] linkEntityId Link entity ID for the field
+ * @param[in] fieldId DCGM field ID to potentially cache
+ * @param[in] requestedFieldId Originally requested field ID (to avoid duplication)
+ * @param[in] value Field value to cache
+ * @param[in] now Current timestamp
+ */
+void DcgmCacheManager::CachePrmField(dcgmcm_update_thread_t const &threadCtx,
+                                     dcgm_field_eid_t linkEntityId,
+                                     unsigned short fieldId,
+                                     unsigned short requestedFieldId,
+                                     uint64_t value,
+                                     timelib64_t now)
+{
+    // If this is the originally requested field and we're in live data mode, add to fvBuffer
+    if (fieldId == requestedFieldId && threadCtx.fvBuffer)
+    {
+        threadCtx.fvBuffer->AddInt64Value(
+            DCGM_FE_LINK, linkEntityId, fieldId, static_cast<long long>(value), now, DCGM_ST_OK);
+
+        log_debug("Added requested PRM field {} value {} to fvBuffer for link {}", fieldId, value, linkEntityId);
+        return;
+    }
+
+    // Skip if this is the originally requested field but not in live data mode (already cached)
+    if (fieldId == requestedFieldId)
+    {
+        return;
+    }
+
+    // Check if this field is actively watched (uses recursive locking safely)
+    dcgmcm_watch_info_p fieldWatchInfo = GetEntityWatchInfo(DCGM_FE_LINK, linkEntityId, fieldId, 0);
+
+    if (fieldWatchInfo)
+    {
+        // Field is watched - create temporary context and cache it
+        dcgmcm_update_thread_t tempCtx  = {};
+        tempCtx.watchInfo               = fieldWatchInfo;
+        tempCtx.entityKey.entityGroupId = DCGM_FE_LINK;
+        tempCtx.entityKey.entityId      = linkEntityId;
+        tempCtx.entityKey.fieldId       = fieldId;
+
+        timelib64_t fieldExpireTime = 0;
+        if (fieldWatchInfo->maxAgeUsec)
+        {
+            fieldExpireTime = now - fieldWatchInfo->maxAgeUsec;
+        }
+
+        // Cache the value (uses recursive locking safely)
+        AppendEntityInt64(tempCtx, static_cast<long long>(value), 0, now, fieldExpireTime);
+
+        log_debug("Cached related PRM field {} for link {} with value {}", fieldId, linkEntityId, value);
+    }
+}
+
+
+/**
+ * Read and cache NvLink PRM data for a specific link
+ *
+ * This function reads PRM data for NvLink using NVML's nvmlDeviceReadWritePRM_v1 API.
+ *
+ * @param[in] threadCtx Thread context
+ * @param[in] fieldMeta Field metadata containing field ID and entity information
+ * @return DCGM_ST_OK on success, error code on failure
+ */
+dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta)
+{
+    if (!fieldMeta)
+    {
+        log_error("fieldMeta is null");
+        return DCGM_ST_BADPARAM;
+    }
+
+    // Fast O(1) lookup using pre-built field-to-group map
+    auto groupIt = fieldToGroupMap.find(fieldMeta->fieldId);
+    if (groupIt == fieldToGroupMap.end())
+    {
+        log_error("Unsupported PRM field ID {}", fieldMeta->fieldId);
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    PrmRegisterGroup const &group = *(groupIt->second);
+
+    // Setup timing
+    timelib64_t now = timelib_usecSince1970();
+
+    // Get entity info
+    dcgm_field_eid_t linkEntityId
+        = threadCtx.watchInfo ? threadCtx.watchInfo->watchKey.entityId : threadCtx.entityKey.entityId;
+
+    // Validate and decode link
+    dcgm_link_t link { .raw = linkEntityId };
+
+    if (link.parsed.type != DCGM_FE_GPU)
+    {
+        log_warning(
+            "Invalid link type {} for PRM field {}", static_cast<uint8_t>(link.parsed.type & 0xFF), fieldMeta->fieldId);
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    // Get NVML device - extract bit-fields to avoid reference issues
+    unsigned int gpuId     = link.parsed.gpuId;
+    unsigned int portIndex = link.parsed.index;
+
+    if (!GetIsValidEntityId(DCGM_FE_GPU, gpuId))
+    {
+        log_error("Invalid GPU ID {}", gpuId);
+        return DCGM_ST_BADPARAM;
+    }
+
+    /* A valid FE_LINK port may not be a valid PRM port */
+    if (portIndex < PRM_LOCAL_PORT_MIN || portIndex > PRM_LOCAL_PORT_MAX)
+    {
+        log_error(
+            "port {} outside valid range for local_port {}..{}", portIndex, PRM_LOCAL_PORT_MIN, PRM_LOCAL_PORT_MAX);
+        AppendEntityInt64(threadCtx, DCGM_INT64_NOT_SUPPORTED, 0, now, 0);
+        return DCGM_ST_BADPARAM;
+    }
+
+    nvmlDevice_t nvmlDevice = m_gpus[gpuId].nvmlDevice;
+
+    log_debug(
+        "fieldId {} with entityId {} decodes to gpuId {} port {}", fieldMeta->fieldId, linkEntityId, gpuId, portIndex);
+
+    // Prepare and execute hardware read
+    nvmlPRMTLV_v1_t tlvBuffer = {};
+    if (group.registerId == PRM_REG_PPRM)
+    {
+        tlvBuffer.dataSize = packPprmTlv(portIndex, tlvBuffer.inData);
+    }
+    else
+    {
+        tlvBuffer.dataSize
+            = packPpcntTlv(group.registerId, group.groupId, portIndex, group.structSize, tlvBuffer.inData);
+    }
+
+    nvmlReturn_t nvmlResult = nvmlDeviceReadWritePRM_v1(nvmlDevice, &tlvBuffer);
+    if (nvmlResult != NVML_SUCCESS)
+    {
+        log_error("nvmlDeviceReadWritePRM_v1 failed for GPU {} port {} : {}", gpuId, portIndex, nvmlResult);
+        return DCGM_ST_NVML_ERROR;
+    }
+
+    // Unpack data using aligned buffer
+    alignas(8) std::byte dataBuffer[256] {}; // Max size of any PRM struct with proper alignment
+    dcgmReturn_t ret = group.unpackFunc(tlvBuffer.outData, dataBuffer);
+    if (ret != DCGM_ST_OK)
+    {
+        log_warning("Failed to unpack PRM data for GPU {} port {}", gpuId, portIndex);
+        return ret;
+    }
+
+    // Cache all fields in this register group
+    {
+        DcgmLockGuard lg(m_mutex);
+        for (auto const &field : group.fields)
+        {
+            uint64_t value = field.getValue(dataBuffer);
+            CachePrmField(threadCtx, linkEntityId, field.fieldId, fieldMeta->fieldId, value, now);
+        }
+    }
+
+    log_debug("Successfully read and cached PRM group data for GPU {} port {} (triggered by field {})",
+              gpuId,
+              portIndex,
+              fieldMeta->fieldId);
     return DCGM_ST_OK;
 }
 
@@ -11289,6 +12174,9 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
             if (nvmlReturn != NVML_SUCCESS)
             {
+                log_debug("Failed to get current power profile mask for GPU {}. Error: {}. Setting mask to blank.",
+                          nvmlDevice,
+                          nvmlReturn);
                 for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
                 {
                     mask[i] = DCGM_INT32_BLANK;
@@ -12134,13 +13022,17 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_PROF_C2C_TX_DATA_BYTES:
         case DCGM_FI_PROF_C2C_RX_ALL_BYTES:
         case DCGM_FI_PROF_C2C_RX_DATA_BYTES:
+        case DCGM_FI_PROF_HOSTMEM_CACHE_HIT:
+        case DCGM_FI_PROF_HOSTMEM_CACHE_MISS:
+        case DCGM_FI_PROF_PEERMEM_CACHE_HIT:
+        case DCGM_FI_PROF_PEERMEM_CACHE_MISS:
         {
             bool entityKeySupportsGpm = EntityKeySupportsGpm(watchInfo->watchKey);
 
             DcgmLockGuard dlg(m_mutex);
 
             /* Need to add new prof fields to this case */
-            static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_C2C_RX_DATA_BYTES);
+            static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_PEERMEM_CACHE_MISS);
 
             /* Set lastQueriedUsec unconditionally so we don't wake up instantly again */
             if (watchInfo == nullptr)
@@ -12945,7 +13837,7 @@ dcgmReturn_t DcgmCacheManager::AppendDeviceSupportedClocks(dcgmcm_update_thread_
         {
             if (supClocks.count >= DCGM_MAX_CLOCKS)
             {
-                log_error("Got more than DCGM_MAX_CLOCKS supported clocks.");
+                log_info("Got more than DCGM_MAX_CLOCKS supported clocks.");
                 break;
             }
 
@@ -14280,6 +15172,20 @@ dcgmReturn_t DcgmCacheManager::InjectNvmlFieldValue(dcgm_field_eid_t gpuId,
     nvmlDevice_t nvmlDevice = GetNvmlDeviceFromEntityId(gpuId);
     return m_nvmlInjectionManager.InjectFieldValue(nvmlDevice, value, fieldMeta);
 }
+
+dcgmReturn_t DcgmCacheManager::GetCudaVersion(int &cudaVersion)
+{
+    nvmlReturn_t nvmlReturn = nvmlSystemGetCudaDriverVersion_v2(&cudaVersion);
+    if (nvmlReturn != NVML_SUCCESS)
+    {
+        log_error("Failed to get CUDA driver version: {}", nvmlErrorString(nvmlReturn));
+        return DCGM_ST_NVML_ERROR;
+    }
+
+    log_debug("CUDA driver version: {}", cudaVersion);
+    return DCGM_ST_OK;
+}
+
 
 /*****************************************************************************/
 /*****************************************************************************/

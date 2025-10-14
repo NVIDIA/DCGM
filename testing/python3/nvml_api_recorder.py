@@ -903,6 +903,11 @@ class NVMLApiRecorder(object):
         NVMLSimpleFunc("nvmlDeviceGetTopologyCommonAncestor", basic_type_value_parser),
     ]
 
+    # which has two devices input along with an extra key, framework will iterate all possible combination for produing results
+    _nvml_device_two_devices_input_and_extra_key_funcs = [
+        NVMLExtraKeyFunc("nvmlDeviceGetP2PStatus", range(NVML_P2P_CAPS_INDEX_UNKNOWN), basic_type_value_parser),
+    ]
+
     # which takes one vGPU type and produces one result
     _nvml_vgpu_type_simple_funcs = [
         NVMLSimpleFunc("nvmlVgpuTypeGetClass", basic_type_value_parser),
@@ -1080,7 +1085,6 @@ class NVMLApiRecorder(object):
         "nvmlDeviceGetNvLinkUtilizationControl",
         "nvmlSystemGetHicVersion",
         "nvmlSystemGetTopologyGpuSet",
-        "nvmlDeviceGetP2PStatus",
         "nvmlGetVgpuCompatibility",
         "nvmlDeviceGetPgpuMetadataString",
         "nvmlDeviceGetGspFirmwareVersion",
@@ -1470,6 +1474,19 @@ class NVMLApiRecorder(object):
                 if func_ret == NVML_SUCCESS:
                     device_attr[suffix_key][device_uuid_j][RETURN_VAL] = two_devices_input_func._value_parser(ret_val)
 
+            for two_devices_input_and_extra_key_func in self._nvml_device_two_devices_input_and_extra_key_funcs:
+                suffix_key = nvml_func_key_suffix_extract(two_devices_input_and_extra_key_func._func_str)
+                for input in two_devices_input_and_extra_key_func._possible_inputs:
+                    func_ret, ret_val = run_nvml_func_str(two_devices_input_and_extra_key_func._func_str, nvml_device, nvml_device_j, input)
+                    if suffix_key not in device_attr:
+                        device_attr[suffix_key] = {}
+                    if device_uuid_j not in device_attr[suffix_key]:
+                        device_attr[suffix_key][device_uuid_j] = {}
+                    device_attr[suffix_key][device_uuid_j][input] = {}
+                    device_attr[suffix_key][device_uuid_j][input][FUNC_RETURN] = func_ret
+                    if func_ret == NVML_SUCCESS:
+                        device_attr[suffix_key][device_uuid_j][input][RETURN_VAL] = two_devices_input_and_extra_key_func._value_parser(ret_val)
+
         for func_str in self._nvml_device_no_output_funcs:
             suffix_key = nvml_func_key_suffix_extract(func_str)
             func_ret = run_nvml_no_output_func_str(func_str, nvml_device)
@@ -1717,6 +1734,8 @@ class NVMLApiRecorder(object):
         for func in self._nvml_device_array_size_as_input_extra_key_funcs:
             funcs.append(func._func_str)
         for func in self._nvml_device_two_devices_input_funcs:
+            funcs.append(func._func_str)
+        for func in self._nvml_device_two_devices_input_and_extra_key_funcs:
             funcs.append(func._func_str)
         for func in self._nvml_vgpu_type_simple_funcs:
             funcs.append(func._func_str)

@@ -32,6 +32,8 @@
 #include "InjectionArgument.h"
 #include "NvmlFuncReturn.h"
 
+#include <FileSystemOperator.h>
+
 typedef struct
 {
     std::string pciBusId;
@@ -85,6 +87,8 @@ public:
     bool IsGetter(const std::string &funcname) const;
 
     /*****************************************************************************/
+    bool IsEventApi(const std::string &funcname) const;
+    /*****************************************************************************/
     bool IsSetter(const std::string &funcname) const;
 
     /*****************************************************************************/
@@ -92,6 +96,12 @@ public:
                             const std::string &key,
                             std::vector<InjectionArgument> &args,
                             std::vector<InjectionArgument> &values);
+
+    /*****************************************************************************/
+    nvmlReturn_t EventApiWrapper(const std::string &funcname,
+                                 const std::string &key,
+                                 std::vector<InjectionArgument> &args,
+                                 std::vector<InjectionArgument> &values);
 
     /*****************************************************************************/
     nvmlReturn_t DeviceSetWrapper(const std::string &funcname,
@@ -199,6 +209,12 @@ public:
     nvmlReturn_t RemoveGpu(std::string const &uuid);
     nvmlReturn_t RestoreGpu(std::string const &uuid);
 
+    void SetFileSystemOp(std::unique_ptr<FileSystemOperator> fsOp);
+
+    void HandleBindUnbindEvent();
+
+    void SetAllowAttach(bool allowAttach);
+    bool AllowAttach() const;
 
 private:
     static InjectedNvml *m_injectedNvmlInstance;
@@ -246,6 +262,14 @@ private:
 
     funcCallMap_t m_nvmlFuncCallCounts;
 
+    std::vector<std::string> m_bindGpus;
+    std::vector<std::string> m_unbindGpus;
+
+    bool m_allowAttach                        = true;
+    unsigned long long m_registeredEventTypes = 0;
+
+    std::unique_ptr<FileSystemOperator> m_fileSystemOp;
+
     nvmlDevice_t GenNextNvmlDevice() const;
 
     /*****************************************************************************/
@@ -277,6 +301,7 @@ private:
     bool ComputeInstancesParser(const std::string &key, const YAML::Node &node, AttributeHolder<nvmlGpuInstance_t> &ah);
     bool GpuInstanceInfoParser(const std::string &key, const YAML::Node &node, AttributeHolder<nvmlGpuInstance_t> &ah);
     bool OnSameBoardParser(const std::string &key, const YAML::Node &node, AttributeHolder<nvmlDevice_t> &ah);
+    bool P2PStatusParser(std::string const &key, YAML::Node const &node, AttributeHolder<nvmlDevice_t> &ah);
     bool FieldValuesParser(const std::string &key, const YAML::Node &node, AttributeHolder<nvmlDevice_t> &ah);
     bool ComputeInstanceInfoParser(const std::string &key,
                                    const YAML::Node &node,
@@ -304,4 +329,6 @@ private:
                                  const NvmlFuncReturn &nvmlFunRet);
     InjectionArgument ObjectlessGetNoLock(const std::string &key);
     void ObjectlessSetNoLock(const std::string &key, const InjectionArgument &value);
+
+    nvmlReturn_t nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequest_t *request);
 };

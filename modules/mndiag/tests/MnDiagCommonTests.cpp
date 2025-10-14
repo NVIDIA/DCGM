@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#define DCGMI_TESTS
-
 #include "MnDiagCommon.h"
 #include <catch2/catch_all.hpp>
 #include <dcgm_structs.h>
+#include <filesystem>
 #include <string>
 #include <tclap/ArgException.h>
+#include <unordered_set>
 #include <vector>
 
 TEST_CASE("dcgm_mn_diag_common_populate_run_mndiag")
@@ -138,5 +138,107 @@ TEST_CASE("dcgm_mn_diag_common_populate_run_mndiag")
         // Execute & Verify
         REQUIRE_THROWS_AS(dcgm_mn_diag_common_populate_run_mndiag(mndrd, hostList, parameters, runValue),
                           TCLAP::CmdLineParseException);
+    }
+}
+
+
+TEST_CASE("get_mnubergemm_binary_path")
+{
+    SECTION("System version > max supported")
+    {
+        int cudaVersion                          = 15000;
+        std::array<int, 2> supportedCudaVersions = { 13, 12 };
+
+        auto result = get_mnubergemm_binary_path(cudaVersion, supportedCudaVersions);
+        REQUIRE(result.value().find("cuda13") != std::string::npos);
+    }
+
+    SECTION("System version < min supported")
+    {
+        int cudaVersion                          = 10000;
+        std::array<int, 2> supportedCudaVersions = { 13, 12 };
+
+        auto result = get_mnubergemm_binary_path(cudaVersion, supportedCudaVersions);
+
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().code().value() == ENOENT);
+        REQUIRE(std::string(result.error().what()).find("System CUDA version is less than minimum supported version")
+                != std::string::npos);
+    }
+
+    SECTION("System version in between - selects highest <= system version")
+    {
+        int cudaVersion                          = 12500;
+        std::array<int, 2> supportedCudaVersions = { 13, 12 };
+
+        auto result = get_mnubergemm_binary_path(cudaVersion, supportedCudaVersions);
+
+        std::string path = result.value();
+        REQUIRE(path.find("cuda12") != std::string::npos);
+    }
+
+    SECTION("System version in between - with gaps")
+    {
+        int cudaVersion                          = 12500;
+        std::array<int, 2> supportedCudaVersions = { 13, 11 };
+
+        auto result = get_mnubergemm_binary_path(cudaVersion, supportedCudaVersions);
+
+        std::string path = result.value();
+        REQUIRE(path.find("cuda11") != std::string::npos);
+    }
+
+    SECTION("Exact match")
+    {
+        int cudaVersion                          = 12000;
+        std::array<int, 2> supportedCudaVersions = { 13, 12 };
+
+        auto result = get_mnubergemm_binary_path(cudaVersion, supportedCudaVersions);
+
+        std::string path = result.value();
+        REQUIRE(path.find("cuda12") != std::string::npos);
+
+        cudaVersion = 13000;
+        result      = get_mnubergemm_binary_path(cudaVersion, supportedCudaVersions);
+
+        path = result.value();
+        REQUIRE(path.find("cuda13") != std::string::npos);
+    }
+
+    SECTION("Invalid CUDA version - negative")
+    {
+        int cudaVersion                          = -1000;
+        std::array<int, 2> supportedCudaVersions = { 13, 12 };
+        auto result                              = get_mnubergemm_binary_path(cudaVersion, supportedCudaVersions);
+
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error().code().value() == ENOENT);
+    }
+}
+
+TEST_CASE("infer_mnubergemm_default_path")
+{
+    SECTION("Valid CUDA version")
+    {
+        std::string mnubergemm_path;
+        int cudaVersion = 12000;
+
+        dcgmReturn_t result = infer_mnubergemm_default_path(mnubergemm_path, cudaVersion);
+
+        REQUIRE_FALSE(mnubergemm_path.empty());
+        REQUIRE(mnubergemm_path.find("cuda12") != std::string::npos);
+        REQUIRE(mnubergemm_path.find("mnubergemm") != std::string::npos);
+        REQUIRE(result == DCGM_ST_OK);
+    }
+
+    SECTION("Invalid CUDA version")
+    {
+        std::string mnubergemm_path;
+        int cudaVersion = 0;
+
+        dcgmReturn_t result = infer_mnubergemm_default_path(mnubergemm_path, cudaVersion);
+
+        REQUIRE(result == DCGM_ST_NO_DATA);
+        REQUIRE(mnubergemm_path.empty());
     }
 }

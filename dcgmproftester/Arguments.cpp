@@ -526,4 +526,9 @@ dcgmReturn_t ArgumentSet_t::Process(std::function<dcgmReturn_t(std::shared_ptr<A
     return retVal;
 }
 
+std::string ArgumentSet_t::GetGpuIdsString(void)
+{
+    return m_gpuIdString.Value();
+}
+
 } // namespace DcgmNs::ProfTester

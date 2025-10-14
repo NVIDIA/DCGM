@@ -82,10 +82,22 @@ def test_dcgm_embedded_metadata_cpuutil_get_hostengine_sane(handle):
     # the metadata is gathered, establishing a baseline for subsequent calls to retrieve CPU utilization.
     cpuUtil = system.introspect.cpuUtil.GetForHostengine()
     logger.debug('DCGM CPU Util before watching fields: %f' % (cpuUtil.total * cpu_count()))
+    idleStartCpuUtil = get_current_process_cpu_util()
     sleepTimeInSec = 1
     time.sleep(sleepTimeInSec)
+    idleStopCpuUtil = get_current_process_cpu_util()
 
-    # Monitor multiple fields and record CPU utilization before and after a sleep period.
+    idleDiffTotal = idleStopCpuUtil[2] - idleStartCpuUtil[2]
+    idleCpuUtilProc = idleDiffTotal / sleepTimeInSec
+    # Test 1: Verify hostengine has low CPU usage when idle (no workload)
+    logger.debug('Testing idle CPU usage...')
+    assert idleCpuUtilProc < 0.05, \
+        'Hostengine idle CPU usage too high: /proc/stat reported %.2f%% (limit: 5.0%%)' \
+        % (idleCpuUtilProc * 100)
+
+    logger.debug('Idle CPU test passed - /proc/stat: %.2f%%' % (idleCpuUtilProc * 100))
+
+    # Test 2: Monitor multiple fields and record CPU utilization before and after a sleep period.
     # With an update frequency of 0.1 seconds, sleeping for one second will monitor each field 10 times.
     # CPU utilization for this activity should remain within acceptable limits.
     # Additionally, measure CPU utilization outside of the host-engine and verify that it falls within the expected range.

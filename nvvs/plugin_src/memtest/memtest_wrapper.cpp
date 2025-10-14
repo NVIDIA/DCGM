@@ -17,7 +17,6 @@
 #include "Memtest.h"
 #include "PluginStrings.h"
 #include "dcgm_fields.h"
-#include "memtest_plugin.h"
 
 /*****************************************************************************/
 MemtestPlugin::MemtestPlugin(dcgmHandle_t handle)
@@ -44,6 +43,7 @@ MemtestPlugin::MemtestPlugin(dcgmHandle_t handle)
     tp->AddString(MEMTEST_STR_TEST8, "False");
     tp->AddString(MEMTEST_STR_TEST9, "False");
     tp->AddString(MEMTEST_STR_TEST10, "True");
+    tp->AddString(MEMTEST_STR_NUM_CHUNKS, "1");
     tp->AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = tp;
 }
@@ -78,8 +78,6 @@ void MemtestPlugin::Go(std::string const &testName,
         return;
     }
 
-    Memtest *memtest = 0;
-
     TestParameters testParameters(*(m_infoStruct.defaultTestParameters));
     if (testParameters.SetFromStruct(numParameters, tpStruct) != TP_ST_OK)
     {
@@ -108,7 +106,7 @@ void MemtestPlugin::Go(std::string const &testName,
 
     if (numGpus)
     {
-        memtest = new Memtest(&testParameters, this);
+        auto memtest = std::make_unique<Memtest>(&testParameters, this);
 
         st = memtest->Run(GetHandle(), *entityInfo);
         if (main_should_stop)
@@ -131,8 +129,6 @@ void MemtestPlugin::Go(std::string const &testName,
         AddError(testName, d);
         SetResult(testName, NVVS_RESULT_FAIL);
     }
-
-    delete memtest;
 }
 
 /*****************************************************************************/
