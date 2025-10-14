@@ -30,6 +30,7 @@
 #include <TestFramework.h>
 
 #include <DcgmBuildInfo.hpp>
+#include <array>
 #include <atomic>
 #include <cerrno>
 #include <cstdio>
@@ -38,7 +39,6 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <filesystem>
-#include <iostream>
 #include <list>
 #include <memory>
 #include <ranges>
@@ -106,9 +106,9 @@ TestFramework::TestFramework()
     , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
-    , m_validGpuId(0)
     , m_completedTests(0)
     , m_numTestsToRun(0)
+    , m_monitor(nullptr)
     , m_skipLibraryList()
 {
     InitSkippedLibraries();
@@ -123,9 +123,9 @@ TestFramework::TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySets
     , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
+    , m_monitor(nullptr)
     , m_plugins()
 {
-    std::vector<unsigned int> gpuIndices;
     for (auto const &entitySet : entitySets)
     {
         if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
@@ -135,22 +135,12 @@ TestFramework::TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySets
 
         GpuSet *gpuSet                    = ToGpuSet(entitySet.get());
         std::vector<Gpu *> const &gpuList = gpuSet->GetGpuObjs();
-        for (auto &&gpu : gpuList)
+        for (auto const &gpu : gpuList)
         {
-            gpuIndices.push_back(gpu->GetGpuId());
+            m_validGpuId = gpu->GetGpuId();
+            break;
         }
     }
-
-    if (!gpuIndices.empty())
-    {
-        m_validGpuId = gpuIndices[0];
-    }
-    else
-    {
-        // This should never happen
-        m_validGpuId = 0;
-    }
-
     InitSkippedLibraries();
 }
 
@@ -259,23 +249,25 @@ std::optional<std::string> TestFramework::GetPluginCudaDirExtension() const
         return std::nullopt;
     }
 
-    log_debug("The following Cuda version will be used for plugins: {}.{}", cudaMajorVersion, cudaMinorVersion);
-
+    static const std::string CUDA_13_EXTENSION("/cuda13/");
     static const std::string CUDA_12_EXTENSION("/cuda12/");
     static const std::string CUDA_11_EXTENSION("/cuda11/");
-    static const std::string CUDA_10_EXTENSION("/cuda10/");
+
+    if (m_validGpuId.has_value())
+    {
+        cudaMajorVersion = GetCompatibleCudaMajorVersion(*m_validGpuId, cudaMajorVersion, cudaMinorVersion);
+    }
+
+    log_debug("The following Cuda version will be used for plugins: {}.{}", cudaMajorVersion, cudaMinorVersion);
 
     switch (cudaMajorVersion)
     {
-        case 10:
-            return CUDA_10_EXTENSION;
         case 11:
             return CUDA_11_EXTENSION;
         case 12:
             return CUDA_12_EXTENSION;
         case 13:
-            // FIXME: Update to CUDA 13 directory once CUDA 13 support is added
-            return CUDA_12_EXTENSION;
+            return CUDA_13_EXTENSION;
         default:
             log_error("Detected unsupported Cuda version: {}.{}", cudaMajorVersion, cudaMinorVersion);
             throw std::runtime_error("Detected unsupported Cuda version");
@@ -283,6 +275,42 @@ std::optional<std::string> TestFramework::GetPluginCudaDirExtension() const
 
     // NOT-REACHED
     return std::nullopt;
+}
+
+/*****************************************************************************/
+unsigned int TestFramework::GetCompatibleCudaMajorVersion(unsigned int gpuId,
+                                                          unsigned int cudaDriverMajorVersion,
+                                                          unsigned int cudaDriverMinorVersion)
+{
+    if (cudaDriverMajorVersion == 0)
+    {
+        log_warning("User provided CUDA version is 0. Using default.");
+        return cudaDriverMajorVersion;
+    }
+
+    auto chipArchitecture = dcgmSystem.GetGpuChipArchitecture(gpuId);
+    if (chipArchitecture.is_error())
+    {
+        log_warning(
+            "Unable to get GPU chip architecture for GPU {}, error: {}. Using provided cudaDriverMajorVersion: {}",
+            gpuId,
+            chipArchitecture.error(),
+            cudaDriverMajorVersion);
+        return cudaDriverMajorVersion;
+    }
+
+    // CUDA 13.0 drops support for everything that is < 7.5 SM Cuda Compatibility. These older SKUs need to run
+    // a 12.9-linked application.
+    // Note: We only check one GPU because NVVS can only run on homogenous GPUs.
+    if ((*chipArchitecture == DCGM_CHIP_ARCH_MAXWELL || *chipArchitecture == DCGM_CHIP_ARCH_PASCAL
+         || *chipArchitecture == DCGM_CHIP_ARCH_VOLTA)
+        && cudaDriverMajorVersion == 13 && cudaDriverMinorVersion == 0)
+    {
+        log_info("Using CUDA 12 for GPU {} because it is Maxwell, Pascal, or Volta and CUDA 13.0 is detected", gpuId);
+        return 12;
+    }
+
+    return cudaDriverMajorVersion;
 }
 
 void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName)
@@ -316,6 +344,10 @@ void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName
     else
     {
         auto pl = std::make_unique<PluginLib>();
+        if (m_monitor != nullptr)
+        {
+            pl->SetHangDetectMonitor(m_monitor);
+        }
 
         dcgmReturn_t ret = pl->LoadPlugin(libraryPath, libraryName);
         if (ret == DCGM_ST_OK)
@@ -521,8 +553,9 @@ std::string TestFramework::GetPluginCudalessDir()
 }
 
 /*****************************************************************************/
-void TestFramework::loadPlugins()
+void TestFramework::loadPlugins(HangDetectMonitor *monitor)
 {
+    m_monitor                                       = monitor;
     std::string cudalessPluginDir                   = GetPluginCudalessDir();
     std::string pluginCommonPath                    = cudalessPluginDir + "/libpluginCommon.so.4";
     std::optional<std::string> usingDriverPluginDir = GetPluginUsingDriverDir();
@@ -640,33 +673,21 @@ void TestFramework::Go(std::vector<std::unique_ptr<EntitySet>> &entitySets)
     // run software External plugin
     runSoftwarePlugin(entitySets, &pluginAttr);
 
+    std::array constexpr testClasses = { std::make_tuple(Test::NVVS_CLASS_HARDWARE, HARDWARE_TEST_OBJS),
+                                         std::make_tuple(Test::NVVS_CLASS_INTEGRATION, INTEGRATION_TEST_OBJS),
+                                         std::make_tuple(Test::NVVS_CLASS_PERFORMANCE, PERFORMANCE_TEST_OBJS),
+                                         std::make_tuple(Test::NVVS_CLASS_CUSTOM, CUSTOM_TEST_OBJS) };
+
     // iterate through all entity sets
     for (auto &entitySet : entitySets)
     {
-        std::optional<std::vector<Test *>> testList;
-
-        testList = entitySet->GetTestObjList(HARDWARE_TEST_OBJS);
-        if (testList && testList->size() > 0)
+        for (auto const &[classNum, testObjList] : testClasses)
         {
-            GoList(Test::NVVS_CLASS_HARDWARE, *testList, entitySet.get(), pulseTestWillExecute);
-        }
-
-        testList = entitySet->GetTestObjList(INTEGRATION_TEST_OBJS);
-        if (testList && testList->size() > 0)
-        {
-            GoList(Test::NVVS_CLASS_INTEGRATION, *testList, entitySet.get(), pulseTestWillExecute);
-        }
-
-        testList = entitySet->GetTestObjList(PERFORMANCE_TEST_OBJS);
-        if (testList && testList->size() > 0)
-        {
-            GoList(Test::NVVS_CLASS_PERFORMANCE, *testList, entitySet.get(), pulseTestWillExecute);
-        }
-
-        testList = entitySet->GetTestObjList(CUSTOM_TEST_OBJS);
-        if (testList && testList->size() > 0)
-        {
-            GoList(Test::NVVS_CLASS_CUSTOM, *testList, entitySet.get(), pulseTestWillExecute);
+            std::optional<std::vector<Test *>> testList = entitySet->GetTestObjList(testObjList);
+            if (testList && testList->size() > 0)
+            {
+                GoList(classNum, *testList, entitySet.get(), pulseTestWillExecute);
+            }
         }
     }
 
@@ -924,6 +945,7 @@ std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> TestFramework:
         p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_LOGFILE_TYPE, DcgmPluginParamFloat });
         p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_RUN_IF_GOM_ENABLED, DcgmPluginParamBool });
         p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_IGNORE_ERROR_CODES, DcgmPluginParamString });
+        p.emplace_back(dcgmDiagPluginParameterInfo_t { PS_USE_GENERIC_MODE, DcgmPluginParamBool });
     };
 
     for (unsigned int i = 0; i < m_plugins.size(); i++)

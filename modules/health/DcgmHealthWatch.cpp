@@ -84,6 +84,7 @@ DcgmHealthWatch::DcgmHealthWatch(dcgmCoreCallbacks_t &dcc)
     mGroupWatchState.clear();
 
     BuildFieldLists();
+    BuildXidMappings();
 }
 
 /*****************************************************************************/
@@ -1167,6 +1168,13 @@ dcgmReturn_t DcgmHealthWatch::MonitorPcie(dcgm_field_entity_group_t entityGroupI
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, d, response);
     }
 
+    // Add XID monitoring for PCIe subsystem
+    dcgmReturn_t localReturn = MonitorSubsystemXids(entityGroupId, entityId, DCGM_HEALTH_WATCH_PCIE, response);
+    if (localReturn != DCGM_ST_OK)
+    {
+        return localReturn;
+    }
+
     return DCGM_ST_OK;
 }
 
@@ -1423,33 +1431,6 @@ dcgmReturn_t DcgmHealthWatch::MonitorMemRowRemapFailures(dcgm_field_entity_group
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmHealthWatch::MonitorUncontainedErrors(dcgm_field_entity_group_t entityGroupId,
-                                                       dcgm_field_eid_t entityId,
-                                                       long long /* startTime */,
-                                                       long long /* endTime */,
-                                                       DcgmHealthResponse &response)
-{
-    if (entityGroupId != DCGM_FE_GPU)
-    {
-        return DCGM_ST_OK;
-    }
-
-    DcgmLockGuard dlg(m_mutex);
-    if (m_gpuHadUncontainedErrorXid.find(entityId) == m_gpuHadUncontainedErrorXid.end())
-    {
-        DCGM_LOG_DEBUG << "gpuId " << entityId << " hasn't had any uncontained errors";
-        return DCGM_ST_OK;
-    }
-
-    DCGM_LOG_ERROR << "gpuId " << entityId << " has had an uncontained error";
-
-    DcgmError d { entityId };
-    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNCONTAINED_ERROR, d);
-    SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, d, response);
-    return DCGM_ST_OK;
-}
-
-/*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::MonitorMem(dcgm_field_entity_group_t entityGroupId,
                                          dcgm_field_eid_t entityId,
                                          long long startTime,
@@ -1493,7 +1474,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorMem(dcgm_field_entity_group_t entityGroupId
         ret = localReturn;
     }
 
-    localReturn = MonitorUncontainedErrors(entityGroupId, entityId, startTime, endTime, response);
+    localReturn = MonitorSubsystemXids(entityGroupId, entityId, DCGM_HEALTH_WATCH_MEM, response);
     if (localReturn != DCGM_ST_OK)
     {
         ret = localReturn;
@@ -1610,6 +1591,13 @@ dcgmReturn_t DcgmHealthWatch::MonitorThermal(dcgm_field_entity_group_t entityGro
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_THERMAL, d, response);
     }
 
+    // Add XID monitoring for Thermal subsystem
+    dcgmReturn_t localReturn = MonitorSubsystemXids(entityGroupId, entityId, DCGM_HEALTH_WATCH_THERMAL, response);
+    if (localReturn != DCGM_ST_OK)
+    {
+        return localReturn;
+    }
+
     return DCGM_ST_OK;
 }
 
@@ -1686,6 +1674,13 @@ dcgmReturn_t DcgmHealthWatch::MonitorPower(dcgm_field_entity_group_t entityGroup
         DcgmError d { entityId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CLOCKS_EVENT_POWER, d, entityId);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, d, response);
+    }
+
+    // Add XID monitoring for Power subsystem
+    dcgmReturn_t localReturn = MonitorSubsystemXids(entityGroupId, entityId, DCGM_HEALTH_WATCH_POWER, response);
+    if (localReturn != DCGM_ST_OK)
+    {
+        return localReturn;
     }
 
     return DCGM_ST_OK;
@@ -2070,6 +2065,14 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLinkStatus(dcgm_field_entity_group_t enti
             SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
         }
     }
+
+    // Add XID monitoring for NVLink subsystem
+    dcgmReturn_t localReturn = MonitorSubsystemXids(entityGroupId, entityId, DCGM_HEALTH_WATCH_NVLINK, response);
+    if (localReturn != DCGM_ST_OK)
+    {
+        return localReturn;
+    }
+
     return DCGM_ST_OK;
 }
 
@@ -2200,19 +2203,55 @@ void DcgmHealthWatch::OnGroupRemove(unsigned int groupId)
 /*****************************************************************************/
 void DcgmHealthWatch::ProcessXidFv(dcgmBufferedFv_t *fv)
 {
-    switch (fv->value.i64)
+    uint32_t xid   = static_cast<uint32_t>(fv->value.i64);
+    bool isHandled = false;
+
+    log_debug("Processing XID {} for gpuId {}", xid, fv->entityId);
+
+    DcgmLockGuard dlg(m_mutex);
+
+    // Check if devastating XID is hit
+    auto devastatingXid = m_devastatingXids.find(xid);
+    if (devastatingXid != m_devastatingXids.end())
     {
-        case 95: /* Uncontained error */
+        // Record it for this gpu
+        m_gpuXidHistory[xid].insert(fv->entityId);
+
+        log_error("Devastating XID {} detected on gpuId {}", xid, fv->entityId);
+        isHandled = true;
+    }
+
+    // Check if subsystem level XID is hit
+    for (auto const &[subsystem, xidMap] : m_subsystemXids)
+    {
+        bool subsystemEnabled = false;
+        for (const auto &[groupId, systems] : mGroupWatchState)
         {
-            DCGM_LOG_ERROR << "gpuId " << fv->entityId << " hit fatal XID " << fv->value.i64;
-            DcgmLockGuard dlg(m_mutex);
-            m_gpuHadUncontainedErrorXid.insert(fv->entityId);
-            break;
+            if (systems & subsystem)
+            {
+                subsystemEnabled = true;
+                break;
+            }
         }
 
-        default:
-            DCGM_LOG_DEBUG << "Ignored XID " << fv->value.i64 << " for gpuId " << fv->entityId;
-            break;
+        if (subsystemEnabled)
+        {
+            auto xidIt = xidMap.find(xid);
+            if (xidIt != xidMap.end())
+            {
+                // Record it for this gpu
+                m_gpuXidHistory[xid].insert(fv->entityId);
+
+                log_error(
+                    "gpuId {} hit XID {} for subsystem {}", fv->entityId, xid, GetHealthSystemAsString(subsystem));
+                isHandled = true;
+            }
+        }
+    }
+
+    if (!isHandled)
+    {
+        log_debug("Ignored XID {} for gpuId {}", xid, fv->entityId);
     }
 }
 
@@ -2253,3 +2292,168 @@ void DcgmHealthWatch::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
 }
 
 /*****************************************************************************/
+void DcgmHealthWatch::BuildXidMappings()
+{
+    // Define always-monitored "devastating" XIDs - these are critical hardware errors that should
+    // always be monitored regardless of which health subsystems are enabled
+    m_devastatingXids
+        = { { 48,
+              { DCGM_HEALTH_RESULT_FAIL,
+                DCGM_HEALTH_WATCH_MEM,
+                DCGM_FR_VOLATILE_DBE_DETECTED_MSG,
+                DCGM_FR_VOLATILE_DBE_DETECTED } },
+            { 74,
+              { DCGM_HEALTH_RESULT_FAIL,
+                DCGM_HEALTH_WATCH_NVLINK,
+                DCGM_FR_NVLINK_ERROR_CRITICAL_MSG,
+                DCGM_FR_NVLINK_ERROR_CRITICAL } },
+            { 79,
+              { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_FR_FALLEN_OFF_BUS } },
+            { 94, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, "Contained Error", DCGM_FR_XID_ERROR } },
+            { 95,
+              { DCGM_HEALTH_RESULT_FAIL,
+                DCGM_HEALTH_WATCH_MEM,
+                DCGM_FR_UNCONTAINED_ERROR_MSG,
+                DCGM_FR_UNCONTAINED_ERROR } },
+            { 119, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, "GSP RPC Timeout", DCGM_FR_XID_ERROR } },
+            { 120, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, "GSP Error", DCGM_FR_XID_ERROR } },
+            { 140, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, "ECC unrecovered error", DCGM_FR_XID_ERROR } } };
+
+    // Define subsystem-specific XIDs
+    // Memory subsystem
+    m_subsystemXids[DCGM_HEALTH_WATCH_MEM] = {
+        // ECC errors
+        { 31, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, "MMU Error", DCGM_FR_XID_ERROR } },
+        { 32, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, "PBDMA Error", DCGM_FR_XID_ERROR } },
+        { 43, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, "Reset Channel Verif Error", DCGM_FR_XID_ERROR } },
+        { 63,
+          { DCGM_HEALTH_RESULT_WARN,
+            DCGM_HEALTH_WATCH_MEM,
+            DCGM_FR_PENDING_PAGE_RETIREMENTS_MSG,
+            DCGM_FR_PENDING_PAGE_RETIREMENTS } },
+        { 64,
+          { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, DCGM_FR_ROW_REMAP_FAILURE_MSG, DCGM_FR_ROW_REMAP_FAILURE } }
+    };
+
+    // PCIe subsystem
+    m_subsystemXids[DCGM_HEALTH_WATCH_PCIE] = {
+        { 38, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, "PCIe Bus Error", DCGM_FR_XID_ERROR } },
+        { 39, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, "PCIe Fabric Error", DCGM_FR_XID_ERROR } },
+        { 42,
+          { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, DCGM_FR_PCI_REPLAY_RATE_MSG, DCGM_FR_PCI_REPLAY_RATE } },
+        { 74, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_PCIE, "PCIe BDF Reset", DCGM_FR_XID_ERROR } }
+    };
+
+    // Thermal subsystem
+    m_subsystemXids[DCGM_HEALTH_WATCH_THERMAL] = {
+        { 60,
+          { DCGM_HEALTH_RESULT_WARN,
+            DCGM_HEALTH_WATCH_THERMAL,
+            DCGM_FR_CLOCKS_EVENT_THERMAL_MSG,
+            DCGM_FR_CLOCKS_EVENT_THERMAL } },
+        { 61,
+          { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_THERMAL, "EDPP Power Brake Thermal limit", DCGM_FR_XID_ERROR } },
+        { 62,
+          { DCGM_HEALTH_RESULT_WARN,
+            DCGM_HEALTH_WATCH_THERMAL,
+            DCGM_FR_THERMAL_VIOLATIONS_MSG,
+            DCGM_FR_THERMAL_VIOLATIONS } },
+        { 63, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_THERMAL, "Thermal diode detects short", DCGM_FR_XID_ERROR } }
+    };
+
+    // Power subsystem
+    m_subsystemXids[DCGM_HEALTH_WATCH_POWER] = {
+        { 54, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, "Power state change", DCGM_FR_XID_ERROR } },
+        { 56, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, "Clock change", DCGM_FR_XID_ERROR } },
+        { 57,
+          { DCGM_HEALTH_RESULT_WARN,
+            DCGM_HEALTH_WATCH_POWER,
+            "Clock change due to power",
+            DCGM_FR_CLOCKS_EVENT_POWER } },
+        { 58, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, "Clock change due to thermal", DCGM_FR_XID_ERROR } },
+        { 78, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_POWER, "Power state forced change", DCGM_FR_XID_ERROR } }
+    };
+
+    // NVLink subsystem
+    m_subsystemXids[DCGM_HEALTH_WATCH_NVLINK] = {
+        { 67,
+          { DCGM_HEALTH_RESULT_WARN,
+            DCGM_HEALTH_WATCH_NVLINK,
+            DCGM_FR_NVLINK_ERROR_THRESHOLD_MSG,
+            DCGM_FR_NVLINK_ERROR_THRESHOLD } },
+        { 73, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, "NVLink Flow Control Error", DCGM_FR_XID_ERROR } },
+        { 74, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, "NVLink Error", DCGM_FR_XID_ERROR } },
+        { 121, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, "C2C Link corrected error", DCGM_FR_XID_ERROR } },
+        { 137, { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, "NVLink FLA privilege error", DCGM_FR_XID_ERROR } }
+    };
+
+    // InfoROM subsystem
+    m_subsystemXids[DCGM_HEALTH_WATCH_INFOROM] = {
+        { 93,
+          { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_INFOROM, DCGM_FR_CORRUPT_INFOROM_MSG, DCGM_FR_CORRUPT_INFOROM } }
+    };
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorSubsystemXids(dcgm_field_entity_group_t entityGroupId,
+                                                   dcgm_field_eid_t entityId,
+                                                   dcgmHealthSystems_t system,
+                                                   DcgmHealthResponse &response)
+{
+    DcgmLockGuard dlg(m_mutex);
+
+    log_debug("Monitoring XIDs for {} {}, system {}",
+              EntityToString(entityGroupId),
+              entityId,
+              GetHealthSystemAsString(system));
+
+    // Check devastating XIDs always
+    for (const auto &[xid, xidInfo] : m_devastatingXids)
+    {
+        if (m_gpuXidHistory.count(xid) && m_gpuXidHistory[xid].count(entityId))
+        {
+            log_error("Found devastating XID {} ({}) for {} {}",
+                      xid,
+                      xidInfo.errorMessage,
+                      EntityToString(entityGroupId),
+                      entityId);
+
+            DcgmError d { entityId };
+            DCGM_ERROR_FORMAT_MESSAGE(
+                xidInfo.errorCode, d, "Devastating XID " + std::to_string(xid) + ": " + xidInfo.errorMessage);
+            SetResponse(entityGroupId, entityId, xidInfo.severity, xidInfo.healthSystem, d, response);
+        }
+    }
+
+    // Check subsystem-specific XIDs
+    auto subsystemIt = m_subsystemXids.find(system);
+    if (subsystemIt != m_subsystemXids.end())
+    {
+        log_debug(
+            "Found {} XIDs to check for subsystem {}", subsystemIt->second.size(), GetHealthSystemAsString(system));
+
+        for (const auto &[xid, xidInfo] : subsystemIt->second)
+        {
+            if (m_gpuXidHistory.count(xid) && m_gpuXidHistory[xid].count(entityId))
+            {
+                log_error("Found subsystem XID {} ({}) for {} {} in system {}",
+                          xid,
+                          xidInfo.errorMessage,
+                          EntityToString(entityGroupId),
+                          entityId,
+                          GetHealthSystemAsString(system));
+
+                DcgmError d { entityId };
+                DCGM_ERROR_FORMAT_MESSAGE(
+                    xidInfo.errorCode, d, "XID " + std::to_string(xid) + ": " + xidInfo.errorMessage);
+                SetResponse(entityGroupId, entityId, xidInfo.severity, system, d, response);
+            }
+        }
+    }
+    else
+    {
+        log_debug("No XIDs found for subsystem {}", GetHealthSystemAsString(system));
+    }
+
+    return DCGM_ST_OK;
+}

@@ -289,3 +289,20 @@ unsigned int DcgmSystem::GetCudaMinorVersion()
 
     return m_cudaMinorVersion;
 }
+
+DcgmResult<dcgmChipArchitecture_t> DcgmSystem::GetGpuChipArchitecture(unsigned int gpuId)
+{
+    if (m_handle == 0)
+    {
+        log_error("Cannot get gpu chip architecture without a valid handle to DCGM");
+        return std::unexpected(DCGM_ST_BADPARAM);
+    }
+
+    dcgmChipArchitecture_t chipArchitecture;
+    dcgmReturn_t ret = dcgmGetGpuChipArchitecture(m_handle, gpuId, &chipArchitecture);
+    if (ret != DCGM_ST_OK)
+    {
+        return std::unexpected(ret);
+    }
+    return chipArchitecture;
+}

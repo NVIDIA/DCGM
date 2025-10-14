@@ -1432,8 +1432,7 @@ dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCud
 
     if ((retval = worker->ReadLn()) < 0)
     {
-        error_reporter << "ProcessFinishedResponse failed to read from a "
-                       << "worker." << error_reporter.new_line;
+        error_reporter << "ProcessFinishedResponse failed to read from a " << "worker." << error_reporter.new_line;
         // Something wen't wrong.
         // NukeChildren(true);
 

@@ -53,6 +53,9 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
                                      TP_STR_MAX_MATRIX_DIM,
                                      TP_STR_IS_ALLOWED,
                                      TP_STR_SBE_ERROR_THRESHOLD,
+                                     TP_STR_ENABLE_FP16_GEMM,
+                                     TP_STR_FP64_GEMM_RATIO,
+                                     TP_STR_FP16_GEMM_RATIO,
                                      nullptr };
     char const *description      = "This plugin will keep the list of GPUs at a constant power level.";
     const dcgmPluginValue_t paramTypes[]
@@ -61,7 +64,8 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
             DcgmPluginParamInt,   DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamInt,
             DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamFloat,
             DcgmPluginParamFloat, DcgmPluginParamInt,   DcgmPluginParamInt,   DcgmPluginParamInt,
-            DcgmPluginParamBool,  DcgmPluginParamInt,   DcgmPluginParamNone };
+            DcgmPluginParamBool,  DcgmPluginParamInt,   DcgmPluginParamBool,  DcgmPluginParamFloat,
+            DcgmPluginParamFloat, DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 
@@ -91,12 +95,14 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
-                              dcgmDiagPluginAttr_v1 const *pluginAttr)
+                              dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              HangDetectMonitor *monitor)
 {
     ConstantPower *cp = new ConstantPower(handle);
     *userData         = cp;
 
     cp->SetPluginAttr(pluginAttr);
+    cp->SetHangDetectMonitor(monitor);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, cp->GetDisplayName());
     return DCGM_ST_OK;
 }

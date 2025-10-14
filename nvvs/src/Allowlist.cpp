@@ -167,10 +167,7 @@ void Allowlist::PostProcessAllowlist(std::vector<Gpu *> &gpus)
 static bool IsBoolParam(std::string const &param)
 {
     static std::unordered_set<std::string> const boolParams = {
-        "use_dgemv",
-        "use_dgemm",
-        "use_doubles",
-        "l1_is_allowed",
+        "use_dgemv", "use_dgemm", "use_doubles", "l1_is_allowed", "enable_fp16_gemm", "enable_gpu_data_exchange",
     };
     return boolParams.find(param) != boolParams.end();
 }

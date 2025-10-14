@@ -70,12 +70,12 @@ private:
         explicit WaitersGuard(std::atomic_uint &val) noexcept
             : m_val(val)
         {
-            ++m_val;
+            m_val.fetch_add(1, std::memory_order_release);
         }
 
         ~WaitersGuard() noexcept
         {
-            --m_val;
+            m_val.fetch_sub(1, std::memory_order_release);
         }
 
         WaitersGuard(WaitersGuard const &) = delete;
@@ -145,11 +145,11 @@ public:
 
         if (m_debugLog.load(std::memory_order_relaxed))
         {
-            DCGM_LOG_DEBUG << "Destroying a semaphore with " << m_numOfWaiters.load(std::memory_order_relaxed)
+            DCGM_LOG_DEBUG << "Destroying a semaphore with " << m_numOfWaiters.load(std::memory_order_acquire)
                            << " waiters";
         }
 
-        while (m_numOfWaiters != 0)
+        while (m_numOfWaiters.load(std::memory_order_acquire) != 0)
         {
             std::this_thread::yield();
         }
@@ -169,13 +169,13 @@ public:
      */
     void Destroy() noexcept(false)
     {
-        m_markForDestroy = true;
+        m_markForDestroy.store(true, std::memory_order_release);
 
         //
         // Timed waiters may wait for a significant amount of time and we want to wake them up forcely to handle
         // the destruction in a timely manner.
         //
-        [[maybe_unused]] auto discard = Release(m_numOfWaiters * 2, true);
+        [[maybe_unused]] auto discard = Release(m_numOfWaiters.load(std::memory_order_acquire) * 2, true);
     }
 
     /**
@@ -192,7 +192,7 @@ public:
     {
         for (std::uint32_t i = 0; i < number; ++i)
         {
-            if (m_markForDestroy.load(std::memory_order_relaxed) && (!isCalledInDestroy))
+            if (m_markForDestroy.load(std::memory_order_acquire) && (!isCalledInDestroy))
             {
                 if (m_debugLog.load(std::memory_order_relaxed))
                 {
@@ -226,7 +226,7 @@ public:
     AsyncWaitResult TryWait() noexcept(false)
     {
         WaitersGuard grd(m_numOfWaiters);
-        if (m_markForDestroy)
+        if (m_markForDestroy.load(std::memory_order_acquire))
         {
             if (m_debugLog.load(std::memory_order_relaxed))
             {
@@ -241,7 +241,8 @@ public:
             auto res = sem_trywait(&m_systemSemaphore);
             if (res == 0)
             {
-                return m_markForDestroy ? AsyncWaitResult::Destroyed : AsyncWaitResult::Ok;
+                return m_markForDestroy.load(std::memory_order_acquire) ? AsyncWaitResult::Destroyed
+                                                                        : AsyncWaitResult::Ok;
             }
 
             auto err = errno;
@@ -280,7 +281,8 @@ public:
         using std::chrono::seconds;
         using std::chrono::time_point_cast;
 
-        if (m_markForDestroy.load(std::memory_order_relaxed))
+        WaitersGuard grd(m_numOfWaiters);
+        if (m_markForDestroy.load(std::memory_order_acquire))
         {
             if (m_debugLog.load(std::memory_order_relaxed))
             {
@@ -289,8 +291,6 @@ public:
 
             return TimedWaitResult::Destroyed;
         }
-
-        WaitersGuard grd(m_numOfWaiters);
 
         auto secs  = time_point_cast<seconds>(waitUntil);
         auto nsecs = time_point_cast<nanoseconds>(waitUntil) - time_point_cast<nanoseconds>(secs);
@@ -301,7 +301,8 @@ public:
             int res = sem_timedwait(&m_systemSemaphore, &ts);
             if (res == 0)
             {
-                return m_markForDestroy ? TimedWaitResult::Destroyed : TimedWaitResult::Ok;
+                return m_markForDestroy.load(std::memory_order_acquire) ? TimedWaitResult::Destroyed
+                                                                        : TimedWaitResult::Ok;
             }
 
             auto err = errno;
@@ -319,7 +320,7 @@ public:
             break;
         }
 
-        if (m_markForDestroy)
+        if (m_markForDestroy.load(std::memory_order_acquire))
         {
             return TimedWaitResult::Destroyed;
         }

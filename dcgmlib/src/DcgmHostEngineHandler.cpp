@@ -4155,29 +4155,72 @@ void DcgmHostEngineHandler::Cleanup()
 }
 
 /*****************************************************************************/
+DcgmEntityStatus_t DcgmHostEngineHandler::GetNvSwitchEntityStatus(dcgm_field_entity_group_t entityGroupId,
+                                                                  dcgm_field_eid_t entityId)
+{
+    // Route to NvSwitch module with proper switch ID
+    dcgm_nvswitch_msg_get_entity_status_t nvsMsg {};
+    nvsMsg.header.length     = sizeof(nvsMsg);
+    nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
+    nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_ENTITY_STATUS;
+    nvsMsg.header.version    = dcgm_nvswitch_msg_get_entity_status_version;
+    nvsMsg.entityId          = entityId;
+    nvsMsg.entityGroupId     = entityGroupId;
+
+    if (dcgmReturn_t dcgmReturn = ProcessModuleCommand(&nvsMsg.header); dcgmReturn == DCGM_ST_OK)
+    {
+        log_verbose("Switch link validation successful, eg {} entityId {}, status={}",
+                    entityGroupId,
+                    entityId,
+                    nvsMsg.entityStatus);
+        return nvsMsg.entityStatus;
+    }
+    else
+    {
+        log_error("Got {} from DCGM_NVSWITCH_SR_GET_ENTITY_STATUS of entityId {}", errorString(dcgmReturn), entityId);
+        return DcgmEntityStatusUnknown;
+    }
+}
+
+/*****************************************************************************/
 DcgmEntityStatus_t DcgmHostEngineHandler::GetEntityStatus(dcgm_field_entity_group_t entityGroupId,
                                                           dcgm_field_eid_t entityId)
 {
-    if ((entityGroupId == DCGM_FE_SWITCH) || (entityGroupId == DCGM_FE_LINK) || (entityGroupId == DCGM_FE_CONNECTX))
+    if (entityGroupId == DCGM_FE_LINK)
     {
-        dcgm_nvswitch_msg_get_entity_status_t nvsMsg {};
-        nvsMsg.header.length     = sizeof(nvsMsg);
-        nvsMsg.header.moduleId   = DcgmModuleIdNvSwitch;
-        nvsMsg.header.subCommand = DCGM_NVSWITCH_SR_GET_ENTITY_STATUS;
-        nvsMsg.header.version    = dcgm_nvswitch_msg_get_entity_status_version;
-        nvsMsg.entityId          = entityId;
-        nvsMsg.entityGroupId     = entityGroupId;
-        dcgmReturn_t dcgmReturn  = ProcessModuleCommand(&nvsMsg.header);
-        if (dcgmReturn == DCGM_ST_OK)
+        // Decode the link entity to determine type
+        dcgm_link_t link {};
+        link.raw = entityId;
+
+        log_debug("DCGM_FE_LINK entityId {} -> type {} gpuId {} index {} ",
+                  entityId,
+                  static_cast<uint8_t>(link.parsed.type),
+                  static_cast<uint8_t>(link.parsed.gpuId),
+                  static_cast<uint16_t>(link.parsed.index));
+
+        switch (link.parsed.type)
         {
-            return nvsMsg.entityStatus;
+            case DCGM_FE_GPU:
+            {
+                // Validate GPU exists using CacheManager
+                if (!mpCacheManager->GetIsValidEntityId(DCGM_FE_GPU, link.parsed.gpuId))
+                {
+                    log_warning("GPU {} is invalid", static_cast<uint8_t>(link.parsed.gpuId));
+                    return DcgmEntityStatusUnknown;
+                }
+
+                log_verbose("Valid GPU link");
+                return DcgmEntityStatusOk;
+            }
+
+            /* Other link types currently handled by the NvSwitch module */
+            default:
+                return GetNvSwitchEntityStatus(entityGroupId, entityId);
         }
-        else
-        {
-            DCGM_LOG_ERROR << "Got " << errorString(dcgmReturn)
-                           << " from DCGM_NVSWITCH_SR_GET_ENTITY_STATUS of entityId " << entityId;
-            return DcgmEntityStatusUnknown;
-        }
+    }
+    else if ((entityGroupId == DCGM_FE_SWITCH) || (entityGroupId == DCGM_FE_CONNECTX))
+    {
+        return GetNvSwitchEntityStatus(entityGroupId, entityId);
     }
     if ((entityGroupId == DCGM_FE_CPU) || (entityGroupId == DCGM_FE_CPU_CORE))
     {

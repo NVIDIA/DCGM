@@ -72,7 +72,8 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
-                              dcgmDiagPluginAttr_v1 const *pluginAttr)
+                              dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              HangDetectMonitor *monitor)
 {
     // auto nbp  = new NVBandwidthPlugin(handle, entityInfo);
     // *userData = nbp;
@@ -96,6 +97,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
         // Use unique_ptr and release in the last step to prevent the object from leaking when an exception occurs.
         auto tmpObj = std::make_unique<NVBandwidthPlugin>(handle);
         tmpObj->SetPluginAttr(pluginAttr);
+        tmpObj->SetHangDetectMonitor(monitor);
         *userData = tmpObj.release();
         return DCGM_ST_OK;
     }

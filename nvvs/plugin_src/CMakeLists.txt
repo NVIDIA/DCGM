@@ -13,6 +13,7 @@
 # limitations under the License.
 
 target_include_directories(nvvs_plugins_interface INTERFACE include)
+target_link_libraries(nvvs_plugins_interface INTERFACE jsoncpp_static)
 
 macro(declare_nvvs_plugin plugin_name dirpath)
     target_include_directories(nvvs_plugins_${plugin_name}_interface INTERFACE ${dirpath})
@@ -45,7 +46,8 @@ macro(define_plugin PLUGIN_NAME CUDA_VER)
     nvvs_plugin_srcs(${PLUGIN_NAME}_${CUDA_VER})
 
     target_include_directories(${PLUGIN_NAME}_${CUDA_VER} PRIVATE
-        "${CUDA${CUDA_VER}_INCLUDE_DIR}")
+        "${CUDA${CUDA_VER}_INCLUDE_DIR}"
+        "${JSON_CPP_INCLUDE_PATH}")
 
     target_link_libraries(${PLUGIN_NAME}_${CUDA_VER}
         PRIVATE
@@ -71,7 +73,7 @@ macro(define_plugin PLUGIN_NAME CUDA_VER)
     target_link_libraries(nvvs_plugins INTERFACE "${PLUGIN_NAME}_${CUDA_VER}")
 endmacro()
 
-set(SUPPORTED_CUDA_VERSIONS 11 12)
+set(SUPPORTED_CUDA_VERSIONS 11 12 13)
 
 add_subdirectory(common)
 add_subdirectory(contextcreate)

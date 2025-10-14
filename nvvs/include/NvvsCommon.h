@@ -122,10 +122,14 @@ public:
     unsigned int watchFrequency;        // The watch frequency for fields being watched
     std::string ignoreErrorCodesString; // String of error codes to be ignored on different entities
     std::map<dcgmGroupEntityPair_t, std::unordered_set<unsigned int>>
-        parsedIgnoreErrorCodes; // String of error codes to be ignored on different entities
+        parsedIgnoreErrorCodes;       // String of error codes to be ignored on different entities
+    bool hangDetectDisable;           // Flag indicating if hang detect is disabled
+    unsigned int hangDetectExpirySec; // The hang detect expiry in seconds
+    bool genericMode;                 // true if the user has requested generic mode
 
 private:
     static unsigned int constexpr DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS { 5000000 };
+    static unsigned int constexpr DEFAULT_HANG_DETECT_EXPIRY_SEC { 600 };
 };
 
 extern NvvsCommon nvvsCommon;

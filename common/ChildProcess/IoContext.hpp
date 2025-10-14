@@ -18,12 +18,14 @@
 
 #include <boost/asio/io_context.hpp>
 
+#include <functional>
 #include <memory>
+#include <mutex>
 
 class IoContext
 {
 public:
-    IoContext();
+    IoContext(bool enableWorkGuard = true);
     ~IoContext();
     IoContext(IoContext const &)            = delete;
     IoContext &operator=(IoContext const &) = delete;

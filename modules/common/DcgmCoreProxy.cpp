@@ -1358,3 +1358,18 @@ dcgmReturn_t DcgmCoreProxy::ChildProcessManagerReset()
 
     return ret;
 }
+
+dcgmReturn_t DcgmCoreProxy::GetCudaVersion(int &cudaVersion)
+{
+    dcgmCoreGetCudaVersion_v1 gcv = {};
+    initializeCoreHeader(gcv.header, DcgmCoreReqIdGetCudaVersion, dcgmCoreGetCudaVersion_version1, sizeof(gcv));
+
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&gcv.header, m_coreCallbacks.poster);
+
+    if (ret == DCGM_ST_OK)
+    {
+        cudaVersion = gcv.cudaVersion;
+        ret         = gcv.response.ret;
+    }
+    return ret;
+}

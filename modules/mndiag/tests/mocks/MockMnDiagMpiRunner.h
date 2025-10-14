@@ -244,6 +244,20 @@ public:
     void SetMnubergemmPath(std::string const &mnubergemmPath) override
     {
         m_mockMnubergemmPath = mnubergemmPath;
+
+        // Call the callback if one is set
+        if (m_pathCallback)
+        {
+            m_pathCallback(mnubergemmPath);
+        }
+    }
+
+    // Callback to capture mnubergemm path
+    std::function<void(std::string const &)> m_pathCallback;
+
+    void SetPathCallback(std::function<void(std::string const &)> callback)
+    {
+        m_pathCallback = std::move(callback);
     }
 
     dcgmReturn_t PopulateResponse(void *responseStruct, nodeInfoMap_t const &nodeInfo) override
@@ -309,14 +323,34 @@ public:
     // ID of last created runner
     size_t m_lastRunnerId { 0 };
 
+    // Callback to capture mnubergemm path
+    std::function<void(std::string const &)> m_mnubergemmPathCallback;
+
     std::unique_ptr<MnDiagMpiRunnerBase> CreateMpiRunner(DcgmCoreProxyBase & /* coreProxy */) override
     {
         m_createMpiRunnerCount++;
         auto runner = std::make_unique<MockMnDiagMpiRunner>();
         // Reset the runner's stats which are tracked in a singleton registry
         runner->Reset();
+
+        // If we have a callback set, set it on the runner
+        if (m_mnubergemmPathCallback)
+        {
+            runner->SetPathCallback(m_mnubergemmPathCallback);
+        }
+
         m_lastRunnerId = static_cast<MockMnDiagMpiRunner *>(runner.get())->GetRunnerId();
         return runner;
+    }
+
+    /**
+     * @brief Set callback for capturing mnubergemm path
+     *
+     * @param callback Function to call when SetMnubergemmPath is called on the runner
+     */
+    void SetMnubergemmPathCallback(std::function<void(std::string const &)> callback)
+    {
+        m_mnubergemmPathCallback = std::move(callback);
     }
 
     /**

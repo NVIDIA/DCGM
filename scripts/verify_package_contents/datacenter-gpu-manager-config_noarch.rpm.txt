@@ -1,4 +1,4 @@
 /usr/share/datacenter-gpu-manager-<MAJORVERSION>
 /usr/share/datacenter-gpu-manager-<MAJORVERSION>/diag-skus.yaml
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-config-<PACKAGEVERSION>
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-config-<PACKAGEVERSION>/LICENSE
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-config-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-config-<BASEPACKAGEVERSION>/LICENSE

@@ -152,6 +152,7 @@ DCGM_FI_GPU_TOPOLOGY_PCI        = 60  #Topology of all GPUs on the system via PC
 DCGM_FI_GPU_TOPOLOGY_NVLINK     = 61  #Topology of all GPUs on the system via NVLINK (static)
 DCGM_FI_GPU_TOPOLOGY_AFFINITY   = 62  #Affinity of all GPUs on the system (static)
 DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY = 63 #Cuda compute capability for the device
+DCGM_FI_DEV_P2P_NVLINK_STATUS   = 64  #A bitmap of the P2P NVLINK status from this GPU to others on this host.
 DCGM_FI_DEV_COMPUTE_MODE        = 65  #Compute mode for the device
 DCGM_FI_DEV_PERSISTENCE_MODE    = 66  #Persistence mode for the device
 DCGM_FI_DEV_MIG_MODE            = 67  #MIG mode for the device
@@ -469,6 +470,21 @@ DCGM_FI_DEV_PLATFORM_HOST_ID               = 575  #Index of the node within the 
 DCGM_FI_DEV_PLATFORM_PEER_TYPE             = 576  #Platform indicated NVLink-peer type (e.g. switch present or not)
 DCGM_FI_DEV_PLATFORM_MODULE_ID             = 577  #ID of the GPU within the node
 
+# Link-based PRM metrics for NvLink (use dcgm_link_t to specify GPU ID + port number)
+DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY                     = 580  #PPRM recovery operation status
+DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST         = 581  #Time in seconds since last PRM recovery
+DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO   = 582  #Time in milliseconds between last two recoveries
+DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TOTAL_SUCCESSFUL_EVENTS = 583  #Total successful recovery events counter
+DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_SUCCESSFUL_RECOVERY_EVENTS = 584  #Physical layer successful recovery events
+DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_COUNTER       = 585  #Physical layer link down counter
+DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODES                    = 586  #PLR received codewords counter
+DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODE_ERR                 = 587  #PLR received code error counter
+DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_UNCORRECTABLE_CODE       = 588  #PLR received uncorrectable codes counter
+DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES                   = 589  #PLR transmitted codewords counter
+DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES             = 590  #PLR transmitted retry codes counter
+DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS            = 591  #PLR transmitted retry events counter
+DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS                  = 592  #PLR sync events counter
+
 #Internal fields reserve the range 600..699
 #below fields related to NVSwitch
 DCGM_FI_FIRST_NVSWITCH_FIELD_ID                  = 700 #Starting field ID of the NVSwitch instance
@@ -681,6 +697,14 @@ DCGM_FI_PROF_C2C_TX_DATA_BYTES = 1077
 DCGM_FI_PROF_C2C_RX_ALL_BYTES  = 1078
 DCGM_FI_PROF_C2C_RX_DATA_BYTES = 1079
 
+# GPU Host Memory Utilization
+DCGM_FI_PROF_HOSTMEM_CACHE_HIT  = 1080
+DCGM_FI_PROF_HOSTMEM_CACHE_MISS = 1081
+
+# GPU Peer Memory Utilization
+DCGM_FI_PROF_PEERMEM_CACHE_HIT  = 1082
+DCGM_FI_PROF_PEERMEM_CACHE_MISS = 1083
+
 DCGM_FI_DEV_CPU_UTIL_TOTAL            = 1100 # CPU Utilization, total
 DCGM_FI_DEV_CPU_UTIL_USER             = 1101 # CPU Utilization, user
 DCGM_FI_DEV_CPU_UTIL_NICE             = 1102 # CPU Utilization, nice
@@ -822,8 +846,27 @@ DCGM_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN_NS = 1422
 DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_THERM_SLOWDOWN_NS = 1423
 DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN_NS = 1424
 
+DCGM_FI_DEV_PWR_SMOOTHING_ENABLED = 1425
+DCGM_FI_DEV_PWR_SMOOTHING_PRIV_LVL = 1426
+DCGM_FI_DEV_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED = 1427
+DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL = 1428
+DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR = 1429
+DCGM_FI_DEV_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING = 1430
+DCGM_FI_DEV_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING = 1431
+DCGM_FI_DEV_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING = 1432
+DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES = 1433
+DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR = 1434
+DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE = 1435
+DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE = 1436
+DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL = 1437
+DCGM_FI_DEV_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE = 1438
+DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR = 1439
+DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE = 1440
+DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE = 1441
+DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL = 1442
+
 # 1 greater than maximum fields above. This value can increase in the future
-DCGM_FI_MAX_FIELDS = 1425
+DCGM_FI_MAX_FIELDS = 1443
 
 class struct_c_dcgm_field_meta_t(dcgm_structs._DcgmStructure):
     # struct_c_dcgm_field_meta_t structure

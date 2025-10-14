@@ -94,8 +94,17 @@ TEST_CASE("FramedChannel: Read & Write at the same time")
     std::atomic_bool processed = false;
 
     auto shortCircuit = std::jthread([&processed] {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        if (!processed.load(std::memory_order::acquire))
+        bool pass = false;
+        for (int i = 0; i < 100; ++i)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            if (processed.load(std::memory_order::acquire))
+            {
+                pass = true;
+                break;
+            }
+        }
+        if (!pass)
         {
             fprintf(stderr, "Deadlock detected\n");
             fflush(stderr);

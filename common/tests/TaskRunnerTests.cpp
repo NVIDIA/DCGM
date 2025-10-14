@@ -97,7 +97,7 @@ auto HelperTestFunction(TaskRunner &tr)
 {
     using namespace std::literals::chrono_literals;
     return tr.Enqueue(make_task([] {
-        std::this_thread::sleep_for(1s);
+        std::this_thread::sleep_for(100ms);
         return 10;
     }));
 }
@@ -224,7 +224,14 @@ TEST_CASE("TaskRunner: Multiple runners", "[!mayfail]")
         }));
     }
     using namespace std::literals::chrono_literals;
-    std::this_thread::sleep_for(2s);
+    for (unsigned int i = 0; i < 20; ++i)
+    {
+        std::this_thread::sleep_for(100ms);
+        if (testedValue.load(std::memory_order_seq_cst) == expectedNum)
+        {
+            break;
+        }
+    }
     REQUIRE(testedValue.load(std::memory_order_seq_cst) == expectedNum);
     tr.Stop();
     stop.store(true, std::memory_order_relaxed);
@@ -311,4 +318,24 @@ TEST_CASE("TaskRunner: Task with attempts")
     REQUIRE(fut.has_value());
     REQUIRE_THROWS_AS((*fut).get(), std::future_error);
     tr.Stop();
+}
+
+TEST_CASE("TaskRunner Periodic Tasks")
+{
+    TestTaskRunner runner;
+    std::atomic<int> counter = 0;
+
+    // Create and enqueue a task that increments the counter
+    auto fut = runner.Enqueue(make_task([&counter]() { counter++; }));
+    REQUIRE(fut.has_value());
+
+    // Run for a short period
+    for (int i = 0; i < 5; i++)
+    {
+        REQUIRE(runner.Run() == TaskRunner::RunResult::Ok);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    // Counter should have increased
+    REQUIRE(counter > 0);
 }

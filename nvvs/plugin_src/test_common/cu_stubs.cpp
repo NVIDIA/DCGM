@@ -28,27 +28,27 @@ CUresult cuMemGetInfo_v2(size_t * /* free */, size_t * /* total */)
     return CUDA_SUCCESS;
 }
 
-CUresult cuMemAlloc_v2(CUdeviceptr * /* dptr */, size_t /* size */)
+CUresult cuMemAlloc_v2(CUdeviceptr_v2 * /* dptr */, size_t /* size */)
 {
     return CUDA_SUCCESS;
 }
 
-CUresult cuMemFree_v2(CUdeviceptr /* dptr */)
+CUresult cuMemFree_v2(CUdeviceptr_v2 /* dptr */)
 {
     return CUDA_SUCCESS;
 }
 
-CUresult cuMemcpyHtoD(CUdeviceptr /* dst */, const void * /* srcHost */, size_t /* size */)
+CUresult cuMemcpyHtoD_v2(CUdeviceptr_v2 /* dst */, const void * /* srcHost */, size_t /* size */)
 {
     return CUDA_SUCCESS;
 }
 
-CUresult cuMemcpyDtoH(void * /* dstHost */, CUdeviceptr /* srcDevice */, size_t /* size */)
+CUresult cuMemcpyDtoH_v2(void * /* dstHost */, CUdeviceptr_v2 /* srcDevice */, size_t /* size */)
 {
     return CUDA_SUCCESS;
 }
 
-CUresult cuMemsetD32(CUdeviceptr /* dstDevice */, unsigned int /* val */, size_t /* size */)
+CUresult cuMemsetD32_v2(CUdeviceptr_v2 /* dstDevice */, unsigned int /* val */, size_t /* size */)
 {
     return CUDA_SUCCESS;
 }
@@ -58,7 +58,7 @@ CUresult cuDevicePrimaryCtxReset(CUdevice /* dev */)
     return CUDA_SUCCESS;
 }
 
-CUresult cuCtxCreate(CUcontext * /* pctx */, unsigned int /* flags */, CUdevice /* dev */)
+CUresult cuCtxCreate_v2(CUcontext * /* pctx */, unsigned int /* flags */, CUdevice /* dev */)
 {
     return CUDA_SUCCESS;
 }
@@ -123,7 +123,10 @@ CUresult cuCtxSynchronize()
     return CUDA_SUCCESS;
 }
 
-CUresult cuModuleGetGlobal(CUdeviceptr * /* dptr */, size_t * /* bytes */, CUmodule /* hmod */, const char * /* name */)
+CUresult cuModuleGetGlobal_v2(CUdeviceptr_v2 * /* dptr */,
+                              size_t * /* bytes */,
+                              CUmodule /* hmod */,
+                              const char * /* name */)
 {
     return CUDA_SUCCESS;
 }
@@ -160,18 +163,18 @@ CUresult cuEventDestroy(CUevent /* hEvent */)
 }
 
 
-CUresult cuMemcpyHtoDAsync(CUdeviceptr /* dstDevice */,
-                           const void * /* srcHost */,
-                           size_t /* byteCount */,
-                           CUstream /* hStream */)
+CUresult cuMemcpyHtoDAsync_v2(CUdeviceptr_v2 /* dstDevice */,
+                              const void * /* srcHost */,
+                              size_t /* byteCount */,
+                              CUstream /* hStream */)
 {
     return CUDA_SUCCESS;
 }
 
-CUresult cuMemcpyDtoHAsync(void * /* dstHost */,
-                           CUdeviceptr /* srcDevice */,
-                           size_t /* byteCount */,
-                           CUstream /* hStream */)
+CUresult cuMemcpyDtoHAsync_v2(void * /* dstHost */,
+                              CUdeviceptr_v2 /* srcDevice */,
+                              size_t /* byteCount */,
+                              CUstream /* hStream */)
 {
     return CUDA_SUCCESS;
 }

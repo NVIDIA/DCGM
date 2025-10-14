@@ -21,6 +21,7 @@
 
 #include "DcgmLogging.h"
 #include <chrono>
+#include <expected>
 #include <filesystem>
 #include <fmt/format.h>
 #include <functional>
@@ -134,6 +135,37 @@ std::optional<UserCredentials> ChangeUser(ChangeUserPolicy policy,
  */
 std::optional<UserCredentials> GetUserCredentials(const char *userName) noexcept(false);
 
+template <typename T>
+struct DcgmResult : public std::expected<T, dcgmReturn_t>
+{
+    using std::expected<T, dcgmReturn_t>::expected;
+
+    bool is_ok() const noexcept
+    {
+        return this->has_value();
+    }
+
+    bool is_error() const noexcept
+    {
+        return !this->has_value();
+    }
+};
+
+/**
+ * @brief A compile-time static range.
+ * @param[in] Start  The start of the range.
+ * @param[in] End    The end of the range.
+ * @param[in] Max    The maximum number of elements in the range.
+ */
+template <unsigned int Start, unsigned int End, unsigned int Max>
+struct DcgmStaticRange
+{
+    static_assert(End >= Start, "End must be >= Start.");
+    static_assert(End - Start + 1 <= Max, "Range exceeds maximum limit.");
+
+    static constexpr unsigned int start = Start;
+    static constexpr unsigned int end   = End;
+};
 
 namespace DcgmNs::Utils
 {
@@ -188,8 +220,8 @@ auto EraseAndNotifyIf(Container &container, Pred pred, Callback callback) -> typ
  * @param[in] maxKeepSamples    Max number of samples to keep.
  * @param[in] slackMultiplier   Multiplier to calculate slack as a product of max age
  * @return  How long a record to should be kept. In milliseconds.
- * @note This function returns smallest non-zero value from \c maxAge and <tt>monitorFrequency*maxKeepSamples</tt> but
- *       not smaller than 1000ms
+ * @note This function returns smallest non-zero value from \c maxAge and <tt>monitorFrequency*maxKeepSamples</tt>
+ * but not smaller than 1000ms
  */
 std::chrono::milliseconds GetMaxAge(std::chrono::milliseconds monitorFrequency,
                                     std::chrono::milliseconds maxAge,
@@ -230,8 +262,8 @@ namespace Hash
      * @param tail      The rest objects compute hash. All objects should be hashable with std::hash<Type> algo.
      * @return  Hash combined from all passed objects.
      *
-     * @note Result of this function is equivalent to \code{cpp} Combine(StdHash(a), Combine(StdHash(b), StdHash(c)))
-     * \endcode if the \c `CompoundHash` was called with \c (a,b,c) arguments.
+     * @note Result of this function is equivalent to \code{cpp} Combine(StdHash(a), Combine(StdHash(b),
+     * StdHash(c))) \endcode if the \c `CompoundHash` was called with \c (a,b,c) arguments.
      */
     template <class TFirst, class... TArgs>
     constexpr inline std::size_t CompoundHash(TFirst &&first, TArgs &&...tail)
@@ -308,8 +340,8 @@ public:
 
     /**
      * @brief Acquires ownership of the \a fd file descriptor
-     * @param[in] fd    A valid file descriptor. External caller must no call \c close() on this descriptor once it's
-     *                  transferred to the \c FileHandle
+     * @param[in] fd    A valid file descriptor. External caller must no call \c close() on this descriptor once
+     * it's transferred to the \c FileHandle
      */
     explicit FileHandle(int fd) noexcept;
 
@@ -323,26 +355,26 @@ public:
 
     explicit operator int() const;
     /**
-     * @brief Returns underlying system file descriptor. Caller must not call \c close() on the descriptor returned from
-     *          this function.
+     * @brief Returns underlying system file descriptor. Caller must not call \c close() on the descriptor returned
+     * from this function.
      * @return \c int  File descriptor.
      */
     [[nodiscard]] int Get() const &;
     /**
-     * @brief Returns the underlying system file descriptor and abandons ownership so that it's caller responsibility to
-     *          call \c close() on the result descriptor
+     * @brief Returns the underlying system file descriptor and abandons ownership so that it's caller
+     * responsibility to call \c close() on the result descriptor
      * @return \c int  File descriptor. Caller must call \c close() on the value later.
      */
     [[nodiscard]] int Release();
 
     /**
-     * @brief Reads data from the file descriptor until it reaches the end of the file or the specified size is read.
-     * This function will try its best effort to continue reading the data even if the read is interrupted by a signal.
+     * @brief Reads data from the file descriptor until it reaches the end of the file or the specified size is
+     * read. This function will try its best effort to continue reading the data even if the read is interrupted by
+     * a signal.
      * @param[in] buffer  The buffer to read the data into
      * @param[in] size    The number of bytes to read
-     * @return The number of bytes read, -1 if an error occurred. 0 if the end of the file is reached. Details of the
-     * error can be retrieved by GetErrno().
-     * When 0 or -1 returned, the buffer may be partially filled.
+     * @return The number of bytes read, -1 if an error occurred. 0 if the end of the file is reached. Details of
+     * the error can be retrieved by GetErrno(). When 0 or -1 returned, the buffer may be partially filled.
      */
     [[nodiscard]] virtual ssize_t ReadExact(std::byte *buffer, size_t size);
 
@@ -461,8 +493,8 @@ void *LoadFunction(void *libHandle, const std::string &funcName, const std::stri
 /*
  * Creates a child process and executes the command given by args where args is an argv style array of strings.
  *
- * @param args: (IN) argv style args given as a vector of strings. The program to execute is the first element of the
- * vector.
+ * @param args: (IN) argv style args given as a vector of strings. The program to execute is the first element of
+ * the vector.
  * @param infp: (OUT) pointer to a file descriptor for the child process's STDIN. Pass in NULL to ignore STDIN.
  * @param outfp: (OUT) pointer to a file descriptor for the child process's STDOUT. Cannot be NULL.
  * @param errfp: (OUT) pointer to a file descriptor for the child process's STDERR. Pass in NULL to ignore STDERR.

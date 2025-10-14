@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <dcgm_structs.h>
 #include <memory>
+#include <nvml.h>
 #include <ranges>
 
 #include "mocks/MockDcgmApi.h"
@@ -189,9 +190,14 @@ public:
         return m_manager.GetSupportedSkus();
     }
 
-    std::string GetMnubergemmPathHeadNode()
+    dcgmReturn_t GetMnubergemmPathHeadNode(std::string &path)
     {
-        return m_manager.GetMnubergemmPathHeadNode();
+        return m_manager.GetMnubergemmPathHeadNode(path);
+    }
+
+    int GetCudaVersion()
+    {
+        return m_manager.GetCudaVersion();
     }
 
     /**
@@ -382,6 +388,30 @@ public:
         return m_manager.RunHeadNode(params, effectiveUid, response);
     }
 
+    void SetMockCudaVersion(int mockCudaVersion = 12000)
+    {
+        m_mockCudaVersion   = mockCudaVersion;
+        m_systemCudaVersion = NVML_CUDA_DRIVER_VERSION_MAJOR(mockCudaVersion);
+        m_mockPath          = fmt::format("cuda{}/mnubergemm", m_systemCudaVersion);
+    }
+
+    void InitMockCuda()
+    {
+        auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
+        SetCoreProxy(std::move(mockCoreProxy));
+        GetDcgmCoreProxy()->SetMockCudaVersion(m_mockCudaVersion);
+    }
+
+    std::string GetMockPath()
+    {
+        return m_mockPath;
+    }
+
+    void SetMockPath(std::string const &path)
+    {
+        m_mockPath = path;
+    }
+
 private:
     /**
      * @brief Get the callback structure for initializing the manager
@@ -397,6 +427,10 @@ private:
         callbacks.loggerfunc          = nullptr;
         return callbacks;
     }
+
+    int m_mockCudaVersion   = 0;
+    int m_systemCudaVersion = 0;
+    std::string m_mockPath {};
 };
 
 // Helper to save and restore environment variable
@@ -2111,6 +2145,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
     std::vector<unsigned int> fakeGpuIds;
     std::vector<dcgmcm_gpu_info_cached_t> fakeGpuInfos;
     auto skus = GetSupportedSkus();
+    SetMockCudaVersion(12000);
 
     for (auto const &[idx, sku] : std::ranges::views::enumerate(skus))
     {
@@ -2139,11 +2174,15 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
 
-        // Add path capture for validation
-        std::string capturedPath;
+        // Add path capture for validation from both StateMachine and MPI Runner
+        std::string capturedStateMachinePath;
+        std::string capturedMpiRunnerPath;
         auto mockStateMachine
             = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
-        mockStateMachine->SetMnubergemmPathCallback([&capturedPath](std::string const &path) { capturedPath = path; });
+        mockStateMachine->SetMnubergemmPathCallback(
+            [&capturedStateMachinePath](std::string const &path) { capturedStateMachinePath = path; });
+        mockMpiRunnerFactory->SetMnubergemmPathCallback(
+            [&capturedMpiRunnerPath](std::string const &path) { capturedMpiRunnerPath = path; });
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
 
@@ -2188,6 +2227,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIds(fakeGpuIds);
         GetDcgmCoreProxy()->SetMockGpuInfo(fakeGpuInfos);
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
+        GetDcgmCoreProxy()->SetMockCudaVersion(12000);
 
         // Call method under test
         dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
@@ -2208,24 +2248,29 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().waitCount == 1);
 
         // Add new verification for mnubergemm path
-        REQUIRE(capturedPath == MnDiagConstants::DEFAULT_MNUBERGEMM_PATH);
+        std::string mockPath = GetMockPath();
+        REQUIRE(capturedStateMachinePath.find(mockPath) != std::string::npos);
+        REQUIRE(capturedMpiRunnerPath.find(mockPath) != std::string::npos);
     }
 
     SECTION("Successful execution of RunHeadNode with custom mnubergemm path")
     {
         auto savedMnubergemmPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
 
-
         // Create mock objects
         auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
 
-        // Add path capture for validation
-        std::string capturedPath;
+        // Add path capture for validation from both StateMachine and MPI Runner
+        std::string capturedStateMachinePath;
+        std::string capturedMpiRunnerPath;
         auto mockStateMachine
             = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
-        mockStateMachine->SetMnubergemmPathCallback([&capturedPath](std::string const &path) { capturedPath = path; });
+        mockStateMachine->SetMnubergemmPathCallback(
+            [&capturedStateMachinePath](std::string const &path) { capturedStateMachinePath = path; });
+        mockMpiRunnerFactory->SetMnubergemmPathCallback(
+            [&capturedMpiRunnerPath](std::string const &path) { capturedMpiRunnerPath = path; });
 
         // Set env to custom path
         std::string customPath = "/bin/true";
@@ -2274,6 +2319,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIds(fakeGpuIds);
         GetDcgmCoreProxy()->SetMockGpuInfo(fakeGpuInfos);
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
+        GetDcgmCoreProxy()->SetMockCudaVersion(12000);
 
         // Call method under test
         dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
@@ -2293,8 +2339,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().launchMpiProcessCount == 1);
         REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().waitCount == 1);
 
-        // Add new verification for mnubergemm path
-        REQUIRE(capturedPath == customPath);
+        // Verify both StateMachine and MPI Runner received the same custom path
+        REQUIRE(capturedStateMachinePath == customPath);
+        REQUIRE(capturedMpiRunnerPath == customPath);
 
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedMnubergemmPath);
     }
@@ -2554,6 +2601,68 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // Verify MPI runner methods were not called
         REQUIRE(GetMpiRunnerFactory()->m_createMpiRunnerCount == 0);
     }
+
+    SECTION("RunHeadNode fails when GetMnubergemmPathHeadNode returns error")
+    {
+        // Create mock objects
+        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
+        auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
+        auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
+        auto mockStateMachine
+            = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
+        auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
+
+        // Configure StateMachine behavior using Config struct
+        MockMnDiagStateMachine::Config config;
+        config.shouldReserveReturn         = true;
+        config.detectedProcessInfo         = { { 12345, "mnubergemm" } };
+        config.notifyProcessDetectedReturn = true;
+        mockStateMachine->SetConfig(config);
+
+        // Configure tunnel manager behavior
+        mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
+        mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
+
+        // Configure DCGM API behavior
+        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
+        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
+        mockDcgmApi->SetReserveResourcesResponse(MnDiagStatus::RESERVED);
+        mockDcgmApi->SetDetectProcessResponse(MnDiagStatus::RUNNING);
+
+        // Configure CoreProxy to return error for CUDA version
+        mockCoreProxy->SetMockCudaVersion(0);
+
+        // Install mock objects
+        SetDcgmApi(std::move(mockDcgmApi));
+        SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
+        SetMpiRunnerFactory(std::move(mockMpiRunnerFactory));
+        SetStateMachine(std::move(mockStateMachine));
+        SetCoreProxy(std::move(mockCoreProxy));
+
+        // Create test input parameters
+        dcgmRunMnDiag_t params {};
+        params.version = dcgmRunMnDiag_version;
+        SafeCopyTo(params.hostList[0], "localhost");
+        SafeCopyTo(params.hostList[1], "test-node-1:5555");
+
+        // Create response structure to be populated
+        dcgmMnDiagResponse_t response {};
+        response.version = dcgmMnDiagResponse_version;
+
+        // Set the mock GPU IDs and GPU Info
+        GetDcgmCoreProxy()->SetMockGpuIds(fakeGpuIds);
+        GetDcgmCoreProxy()->SetMockGpuInfo(fakeGpuInfos);
+        GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
+
+        // Call method under test
+        dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
+
+        // Verify results - should fail because GetMnubergemmPathHeadNode returns DCGM_ST_NO_DATA
+        REQUIRE(result == DCGM_ST_NO_DATA);
+
+        // Verify that MPI runner was not created since the path resolution failed early
+        REQUIRE(GetMpiRunnerFactory()->m_createMpiRunnerCount == 0);
+    }
 }
 
 TEST_CASE_METHOD(MnDiagManagerTests, "AreDevicesSupported [mndiag]")
@@ -2703,8 +2812,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AreDevicesSupported [mndiag]")
         setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "1240", 1);
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
-        REQUIRE(skus.size() == 2);
+        REQUIRE(skus.size() == 3);
         REQUIRE(skus.contains("2941"));
+        REQUIRE(skus.contains("31c2"));
         REQUIRE(skus.contains("1240"));
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
@@ -2730,8 +2840,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AreDevicesSupported [mndiag]")
         setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "1240", 1);
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
-        REQUIRE(skus.size() == 2);
+        REQUIRE(skus.size() == 3);
         REQUIRE(skus.contains("2941"));
+        REQUIRE(skus.contains("31c2"));
         REQUIRE(skus.contains("1240"));
 
         // Setup mock for both SKUs
@@ -2756,8 +2867,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "AreDevicesSupported [mndiag]")
         setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "1240", 1);
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
-        REQUIRE(skus.size() == 2);
+        REQUIRE(skus.size() == 3);
         REQUIRE(skus.contains("2941"));
+        REQUIRE(skus.contains("31c2"));
         REQUIRE(skus.contains("1240"));
 
         // Setup mock for both SKUs
@@ -2785,8 +2897,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "LoadSupportedSkusFromEnv [mndiag]")
         unsetenv("DCGM_MNDIAG_SUPPORTED_SKUS");
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
-        REQUIRE(skus.size() == 1);
+        REQUIRE(skus.size() == 2);
         REQUIRE(skus.contains("2941"));
+        REQUIRE(skus.contains("31c2"));
     }
 
     SECTION("Multiple SKUs in env")
@@ -2794,8 +2907,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "LoadSupportedSkusFromEnv [mndiag]")
         setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "abcd, 1234, 5678 ", 1);
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
-        REQUIRE(skus.size() == 4);
+        REQUIRE(skus.size() == 5);
         REQUIRE(skus.contains("2941"));
+        REQUIRE(skus.contains("31c2"));
         REQUIRE(skus.contains("abcd"));
         REQUIRE(skus.contains("1234"));
         REQUIRE(skus.contains("5678"));
@@ -2807,8 +2921,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "LoadSupportedSkusFromEnv [mndiag]")
         setenv("DCGM_MNDIAG_SUPPORTED_SKUS", "24B9,1h34,xY5Z", 1);
         LoadSupportedSkusFromEnv();
         auto skus = GetSupportedSkus();
-        REQUIRE(skus.size() == 4);
+        REQUIRE(skus.size() == 5);
         REQUIRE(skus.contains("2941"));
+        REQUIRE(skus.contains("31c2"));
         REQUIRE(skus.contains("24b9"));
         REQUIRE(skus.contains("1h34"));
         REQUIRE(skus.contains("xy5z"));
@@ -2992,6 +3107,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
 
 TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndiag]")
 {
+    SetMockCudaVersion(12000);
+    InitMockCuda();
+
     SECTION("Successful broadcast to multiple remote nodes")
     {
         // Setup mock DCGM API
@@ -3221,16 +3339,19 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(std::string(capturedRequest.requestData.runParams.runMnDiag.hostList[0]) == "node1");
 
         // Verify default mnubergemm path is used
-        REQUIRE(std::string(capturedRequest.requestData.runParams.mnubergemmPath)
-                == MnDiagConstants::DEFAULT_MNUBERGEMM_PATH);
+        std::string mockPath = GetMockPath();
+        REQUIRE(std::string(capturedRequest.requestData.runParams.mnubergemmPath).find(mockPath) != std::string::npos);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 }
 
-TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests [mndiag]")
+TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests")
 {
+    SetMockCudaVersion(12000);
+    InitMockCuda();
+
     SECTION("Should use default path when no environment variable is set")
     {
         // Save current environment state
@@ -3238,8 +3359,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests [mndiag]")
         unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
 
         // Call the method and verify path
-        std::string path = GetMnubergemmPathHeadNode();
-        REQUIRE(path == MnDiagConstants::DEFAULT_MNUBERGEMM_PATH);
+        std::string path;
+        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
+        CHECK(result == DCGM_ST_OK);
+        std::string mockPath = GetMockPath();
+        CHECK(path.find(mockPath) != std::string::npos);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
@@ -3255,8 +3379,10 @@ TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests [mndiag]")
         setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), customPath.c_str(), 1);
 
         // Call the method and verify path
-        std::string path = GetMnubergemmPathHeadNode();
-        REQUIRE(path == customPath);
+        std::string path;
+        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
+        CHECK(result == DCGM_ST_OK);
+        CHECK(path == customPath);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
@@ -3270,8 +3396,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests [mndiag]")
         setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), "", 1);
 
         // Call the method and verify path
-        std::string path = GetMnubergemmPathHeadNode();
-        REQUIRE(path == MnDiagConstants::DEFAULT_MNUBERGEMM_PATH);
+        std::string path;
+        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
+        CHECK(result == DCGM_ST_OK);
+        std::string mockPath = GetMockPath();
+        CHECK(path.find(mockPath) != std::string::npos);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
@@ -3286,8 +3415,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests [mndiag]")
         setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), nonExistentPath.c_str(), 1);
 
         // Call the method and verify path
-        std::string path = GetMnubergemmPathHeadNode();
-        REQUIRE(path == MnDiagConstants::DEFAULT_MNUBERGEMM_PATH);
+        std::string path;
+        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
+        CHECK(result == DCGM_ST_OK);
+        std::string mockPath = GetMockPath();
+        CHECK(path.find(mockPath) != std::string::npos);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
@@ -3302,8 +3434,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests [mndiag]")
         setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), nonExecutablePath.c_str(), 1);
 
         // Call the method and verify path
-        std::string path = GetMnubergemmPathHeadNode();
-        REQUIRE(path == MnDiagConstants::DEFAULT_MNUBERGEMM_PATH);
+        std::string path;
+        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
+        CHECK(result == DCGM_ST_OK);
+        std::string mockPath = GetMockPath();
+        CHECK(path.find(mockPath) != std::string::npos);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
@@ -3318,60 +3453,50 @@ TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests [mndiag]")
         setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), directoryPath.c_str(), 1);
 
         // Call the method and verify path
-        std::string path = GetMnubergemmPathHeadNode();
-        REQUIRE(path == MnDiagConstants::DEFAULT_MNUBERGEMM_PATH);
+        std::string path;
+        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
+        CHECK(result == DCGM_ST_OK);
+        std::string mockPath = GetMockPath();
+        CHECK(path.find(mockPath) != std::string::npos);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
-}
 
-TEST_CASE_METHOD(MnDiagManagerTests, "PopulateMpiFailureResponseStruct [mndiag]")
-{
-    // Prepare a mock MPI runner
-    auto mockRunner                = std::make_unique<MockMnDiagMpiRunner>();
-    dcgmMnDiagResponse_v1 response = {};
-    response.version               = dcgmMnDiagResponse_version1;
-    response.numTests              = 1;
-
-    // Prepare log paths
-    DcgmNs::Utils::LogPaths logPaths;
-    logPaths.stdoutFileName = "/tmp/stdout.log";
-    logPaths.stderrFileName = "/tmp/stderr.log";
-
-    SECTION("Sets failure info when exit code is non-zero")
+    SECTION("Cuda version is zero, default path should throw error")
     {
-        mockRunner->m_mockPopulateResponseResult = DCGM_ST_OK;
-        mockRunner->m_mockExitCode               = 42;
+        GetDcgmCoreProxy()->SetMockCudaVersion(0);
 
-        PopulateMpiFailureResponseStruct(mockRunner.get(), response, 1234, logPaths);
+        // Save current environment state
+        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
+        unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
 
-        REQUIRE(response.tests[0].result == DCGM_DIAG_RESULT_FAIL);
-        REQUIRE(std::string(response.tests[0].auxData.data).find("MPI exited with code: 42") != std::string::npos);
-        REQUIRE(std::string(response.tests[0].auxData.data).find("/tmp/stdout.log") != std::string::npos);
-        REQUIRE(std::string(response.tests[0].auxData.data).find("/tmp/stderr.log") != std::string::npos);
-        REQUIRE(response.tests[0].auxData.version == dcgmMnDiagTestAuxData_version1);
+        // Call the method and verify path
+        std::string path;
+        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
+        CHECK(result == DCGM_ST_NO_DATA);
+        CHECK(path.empty());
+
+        // Restore environment
+        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
-    SECTION("Does not set failure info when exit code is zero")
+    SECTION("Should throw error when env mnubergemm path is too long")
     {
-        mockRunner->m_mockPopulateResponseResult = DCGM_ST_OK;
-        mockRunner->m_mockExitCode               = 0;
+        // Save current environment state
+        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
 
-        PopulateMpiFailureResponseStruct(mockRunner.get(), response, 1234, logPaths);
+        // Create a string longer than DCGM_MAX_STR_LENGTH
+        std::string longPath(DCGM_MAX_STR_LENGTH + 10, 'a');
+        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), longPath.c_str(), 1);
 
-        REQUIRE(response.tests[0].result != DCGM_DIAG_RESULT_FAIL);
-        REQUIRE(std::string(response.tests[0].auxData.data).empty());
-    }
+        // Call the method and verify path
+        std::string path;
+        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
+        CHECK(result == DCGM_ST_BADPARAM);
+        CHECK(path.empty());
 
-    SECTION("Handles missing exit code gracefully")
-    {
-        mockRunner->m_mockPopulateResponseResult = DCGM_ST_OK;
-        mockRunner->m_mockExitCode.reset();
-
-        PopulateMpiFailureResponseStruct(mockRunner.get(), response, 1234, logPaths);
-
-        REQUIRE(response.tests[0].result != DCGM_DIAG_RESULT_FAIL);
-        REQUIRE(std::string(response.tests[0].auxData.data).empty());
+        // Restore environment
+        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 }

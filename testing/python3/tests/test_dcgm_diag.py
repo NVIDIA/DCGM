@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import ctypes
 import pydcgm
 import dcgm_structs
 import dcgm_agent_internal
@@ -768,7 +769,10 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
                     logger.info(line)
                 for line in diagApp.stderr_lines:
                     logger.error(line)
-        assert retCode != 0, "Expected a non-zero exit code, but got 0"
+        # The operating system treats the return code as unsigned,
+        # so we need to convert it to a signed value for comparison with the DCGM_ST_* constants.
+        retCode = ctypes.c_byte(retCode).value
+        assert retCode == dcgm_structs.DCGM_ST_NVVS_KILLED, f"Expected DCGM_ST_NVVS_KILLED, but got {retCode}"
         assert diagApp.retvalue() != AppRunner.RETVALUE_TIMEOUT, "The process should not be killed by timeout."
         logger.info(f"{end_time - start_time:.2f} seconds spent on handling signal.")
         # Since the app returns a non zero exit code, we call the validate method to prevent false
@@ -850,7 +854,11 @@ def test_dcgm_diag_stop_on_interrupt_signals_dcgmi_embedded_itself():
                     logger.info(line)
                 for line in diagApp.stderr_lines:
                     logger.error(line)
-        assert retCode != 0, "Expected a non-zero exit code, but got 0"
+
+        # The operating system treats the return code as unsigned,
+        # so we need to convert it to a signed value for comparison with the DCGM_ST_* constants.
+        retCode = ctypes.c_byte(retCode).value
+        assert retCode == dcgm_structs.DCGM_ST_NVVS_KILLED, f"Expected DCGM_ST_NVVS_KILLED, but got {retCode}"
         assert diagApp.retvalue() != AppRunner.RETVALUE_TIMEOUT, "The process should not be killed by timeout."
         logger.info(f"{end_time - start_time:.2f} seconds spent on handling signal.")
         # Since the app returns a non zero exit code, we call the validate method to prevent false

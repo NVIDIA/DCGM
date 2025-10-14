@@ -265,6 +265,18 @@ public:
         m_runner.SetMnubergemmPath(mnubergemmPath);
     }
 
+    void SetMockCudaVersion(int version)
+    {
+        m_mockCoreProxy->SetMockCudaVersion(version);
+    }
+
+    int GetMockCudaVersion() const
+    {
+        int cudaVersion = 0;
+        m_mockCoreProxy->GetCudaVersion(cudaVersion);
+        return cudaVersion;
+    }
+
 private:
     std::unique_ptr<MockDcgmCoreProxy> m_mockCoreProxy;
     MnDiagMpiRunner m_runner;
@@ -385,10 +397,39 @@ TEST_CASE("MnDiagMpiRunner binary paths")
         unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
     }
 
-    SECTION("Default mnubergemm path is used when environment variable is not set")
+    SECTION(
+        "Default mnubergemm path is used when environment variable is not set and mpi class mnubergemm is set to custom string")
     {
         MnDiagMpiRunnerTests mpiRunner;
         auto diagStruct = CreateTestDiagStruct();
+
+        std::string customPath = "custom/path/to/mnubergemm";
+        mpiRunner.SetMnubergemmPath(customPath);
+
+        // Construct the command
+        mpiRunner.ConstructMpiCommand(&diagStruct);
+
+        // Get the command as a string
+        std::string commandStr = mpiRunner.GetLastCommand();
+
+        // The mnubergemm path should be in the command
+        REQUIRE(commandStr.find(customPath) != std::string::npos);
+    }
+
+    SECTION("Default mnubergemm path is used when environment variable is not set and mpi class mnubergemm is set")
+    {
+        MnDiagMpiRunnerTests mpiRunner;
+        auto diagStruct = CreateTestDiagStruct();
+
+        // Set the mock cuda version
+        mpiRunner.SetMockCudaVersion(12000);
+
+        // Set the mnubergemm path
+        std::string path;
+        dcgmReturn_t result = infer_mnubergemm_default_path(path, mpiRunner.GetMockCudaVersion());
+        REQUIRE(result == DCGM_ST_OK);
+
+        mpiRunner.SetMnubergemmPath(path);
 
         // Construct the command
         mpiRunner.ConstructMpiCommand(&diagStruct);
@@ -397,7 +438,7 @@ TEST_CASE("MnDiagMpiRunner binary paths")
         std::string commandStr = mpiRunner.GetLastCommand();
 
         // The default mnubergemm path should be in the command
-        REQUIRE(commandStr.find(MnDiagConstants::DEFAULT_MNUBERGEMM_PATH) != std::string::npos);
+        REQUIRE(commandStr.find(path) != std::string::npos);
     }
 }
 

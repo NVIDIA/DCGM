@@ -15,8 +15,8 @@
 /usr/share/cmake/DCGM/DCGMConfig-relwithdebinfo.cmake
 /usr/share/cmake/DCGM/DCGMConfig.cmake
 /usr/share/cmake/DCGM/DCGMConfigVersion.cmake
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-devel-<PACKAGEVERSION>
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-devel-<PACKAGEVERSION>/LICENSE
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-devel-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-devel-<BASEPACKAGEVERSION>/LICENSE
 /usr/src/datacenter-gpu-manager-<MAJORVERSION>
 /usr/src/datacenter-gpu-manager-<MAJORVERSION>/sdk_samples
 /usr/src/datacenter-gpu-manager-<MAJORVERSION>/sdk_samples/c_src

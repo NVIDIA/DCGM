@@ -28,6 +28,7 @@ target_link_libraries(nvswitch_interface
 
 target_link_libraries(nvswitch_objects
     PRIVATE
+        dcgm_logging
         nvswitch_interface
         ${YAML_STATIC_LIBS}
 )

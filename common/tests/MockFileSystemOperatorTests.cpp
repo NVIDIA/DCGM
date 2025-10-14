@@ -16,6 +16,8 @@
 
 #include "MockFileSystemOperator.h"
 #include <catch2/catch_all.hpp>
+#include <thread>
+#include <vector>
 
 TEST_CASE("MockFileSystemOperator Read")
 {
@@ -59,6 +61,80 @@ TEST_CASE("MockFileSystemOperator Glob")
     {
         std::string pattern = "/mock/path/*.unknown";
         auto result         = mockFs.Glob(pattern);
+        REQUIRE(!result.has_value());
+    }
+}
+
+TEST_CASE("MockFileSystemOperator Concurrent Access")
+{
+    MockFileSystemOperator mockFs;
+    std::string path    = "/mock/path/file.txt";
+    std::string content = "Mock file content";
+    mockFs.MockFileContent(path, content);
+
+    constexpr int NUM_THREADS = 10;
+    std::vector<std::jthread> threads;
+    std::atomic<int> successCount = 0;
+
+    for (int i = 0; i < NUM_THREADS; ++i)
+    {
+        threads.emplace_back([&]() {
+            auto result = mockFs.Read(path);
+            if (result.has_value() && result.value() == content)
+            {
+                successCount++;
+            }
+        });
+    }
+
+    for (auto &t : threads)
+    {
+        t.join();
+    }
+
+    REQUIRE(successCount == NUM_THREADS);
+}
+
+TEST_CASE("MockFileSystemOperator Edge Cases")
+{
+    MockFileSystemOperator mockFs;
+
+    SECTION("Empty path")
+    {
+        auto result = mockFs.Read("");
+        REQUIRE(!result.has_value());
+    }
+
+    SECTION("Very long path")
+    {
+        std::string longPath(1000, 'a');
+        auto result = mockFs.Read(longPath);
+        REQUIRE(!result.has_value());
+    }
+
+    SECTION("Special characters in path")
+    {
+        std::string specialPath = "/mock/path/!@#$%^&*()_+.txt";
+        auto result             = mockFs.Read(specialPath);
+        REQUIRE(!result.has_value());
+    }
+}
+
+TEST_CASE("MockFileSystemOperator Invalid Inputs")
+{
+    MockFileSystemOperator mockFs;
+
+    SECTION("Invalid path")
+    {
+        std::string invalidPath = "\0";
+        auto result             = mockFs.Read(invalidPath);
+        REQUIRE(!result.has_value());
+    }
+
+    SECTION("Invalid pattern")
+    {
+        std::string invalidPattern = "\0";
+        auto result                = mockFs.Glob(invalidPattern);
         REQUIRE(!result.has_value());
     }
 }

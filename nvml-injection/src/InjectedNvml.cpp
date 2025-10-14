@@ -24,6 +24,7 @@
 #include <TimestampedData.h>
 
 #include <cstring>
+#include <thread>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -35,7 +36,7 @@ namespace
 bool IsDeviceFunc(const std::string &funcname, const std::vector<InjectionArgument> &args)
 {
     return (funcname.starts_with("nvmlDeviceGet") || funcname.starts_with("nvmlGpmQueryDevice")
-            || funcname == "nvmlDeviceValidateInforom")
+            || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceWorkloadPowerProfile"))
            && args.size() >= 1 && args[0].GetType() == INJECTION_DEVICE;
 }
 
@@ -318,6 +319,7 @@ InjectedNvml *InjectedNvml::GetInstance()
 InjectedNvml::InjectedNvml()
 {
     m_injectedNvmlInstance = this;
+    m_fileSystemOp         = std::make_unique<FileSystemOperator>();
 }
 
 InjectedNvml::~InjectedNvml()
@@ -355,6 +357,16 @@ InjectedNvml::~InjectedNvml()
 void InjectedNvml::Reset()
 {
     m_injectedNvmlInstance = nullptr;
+}
+
+void InjectedNvml::SetAllowAttach(bool allowAttach)
+{
+    m_allowAttach = allowAttach;
+}
+
+bool InjectedNvml::AllowAttach() const
+{
+    return m_allowAttach;
 }
 
 bool InjectedNvml::DeviceOrderParser(const YAML::Node &node)
@@ -555,6 +567,40 @@ bool InjectedNvml::OnSameBoardParser(const std::string &key, const YAML::Node &n
     return true;
 }
 
+bool InjectedNvml::P2PStatusParser(std::string const &key, YAML::Node const &node, AttributeHolder<nvmlDevice_t> &ah)
+{
+    if (!node)
+    {
+        return true;
+    }
+    for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)
+    {
+        auto device2UUID     = it->first.as<std::string>();
+        nvmlDevice_t device2 = m_uuidToDevice[device2UUID]->GetIdentifier();
+        auto value           = it->second;
+        for (YAML::const_iterator p2pIt = value.begin(); p2pIt != value.end(); ++p2pIt)
+        {
+            auto p2pCapsIndex  = static_cast<nvmlGpuP2PCapsIndex_t>(p2pIt->first.as<int>());
+            auto recordedValue = p2pIt->second;
+
+            if (!recordedValue[FunctionReturn])
+            {
+                NVML_LOG_ERR("Expected node 'FunctionReturn'");
+                return false;
+            }
+            auto nvmlRet = static_cast<nvmlReturn_t>(recordedValue[FunctionReturn].as<int>());
+            if (nvmlRet != NVML_SUCCESS)
+            {
+                ah.SetAttribute(key, device2, p2pCapsIndex, NvmlFuncReturn(nvmlRet));
+                continue;
+            }
+            nvmlGpuP2PStatus_t p2pStatus = static_cast<nvmlGpuP2PStatus_t>(recordedValue[ReturnValue].as<int>());
+            ah.SetAttribute(key, device2, p2pCapsIndex, NvmlFuncReturn(nvmlRet, p2pStatus));
+        }
+    }
+    return true;
+}
+
 bool InjectedNvml::TopologyNearestGpuParser(const std::string &key,
                                             const YAML::Node &node,
                                             AttributeHolder<nvmlDevice_t> &ah)
@@ -697,6 +743,12 @@ bool InjectedNvml::ParseOneDevice(const YAML::Node &device, AttributeHolder<nvml
                         std::placeholders::_1,
                         std::placeholders::_2,
                         std::placeholders::_3) },
+            { INJECTION_P2PSTATUS_KEY,
+              std::bind(&InjectedNvml::P2PStatusParser,
+                        this,
+                        std::placeholders::_1,
+                        std::placeholders::_2,
+                        std::placeholders::_3) },
             { INJECTION_FIELDVALUES_KEY,
               std::bind(&InjectedNvml::FieldValuesParser,
                         this,
@@ -708,14 +760,6 @@ bool InjectedNvml::ParseOneDevice(const YAML::Node &device, AttributeHolder<nvml
             { INJECTION_PROCESSUTILIZATION_KEY, ProcessUtilizationParser },
             { INJECTION_VGPUPROCESSUTILIZATION_KEY, VgpuProcessUtilizationParser },
             { INJECTION_VGPUUTILIZATION_KEY, VgpuInstanceUtilizationParser },
-        };
-
-    // key -> [key2 parser, value parser]
-    std::unordered_map<std::string,
-                       std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>,
-                                  std::function<std::optional<NvmlFuncReturn>(const YAML::Node &, nvmlReturn_t)>>>
-        extraKeyHandlers {
-
         };
 
     if (!device)
@@ -1308,13 +1352,21 @@ bool InjectedNvml::LoadFromYamlNode(const YAML::Node &root)
 bool InjectedNvml::IsGetter(const std::string &funcname) const
 {
     if (funcname.starts_with("nvmlDeviceGet") || funcname.starts_with("nvmlGpuInstanceGet")
-        || funcname == "nvmlEventSetWait_v2" || funcname.starts_with("nvmlComputeInstanceGet")
-        || funcname.starts_with("nvmlVgpuInstanceGet") || funcname.starts_with("nvmlVgpuTypeGet")
-        || funcname.starts_with("nvmlDeviceWorkloadPowerProfileGet") || funcname == "nvmlDeviceValidateInforom")
+        || funcname.starts_with("nvmlComputeInstanceGet") || funcname.starts_with("nvmlVgpuInstanceGet")
+        || funcname.starts_with("nvmlVgpuTypeGet") || funcname.starts_with("nvmlDeviceWorkloadPowerProfile")
+        || funcname == "nvmlDeviceValidateInforom")
     {
         return true;
     }
     return false;
+}
+
+/*****************************************************************************/
+bool InjectedNvml::IsEventApi(const std::string &funcname) const
+{
+    return funcname.starts_with("nvmlSystemEvent") || funcname == "nvmlSystemRegisterEvents"
+           || funcname == "nvmlEventSetCreate" || funcname == "nvmlEventSetFree"
+           || funcname == "nvmlDeviceRegisterEvents" || funcname == "nvmlEventSetWait_v2";
 }
 
 /*****************************************************************************/
@@ -1381,10 +1433,6 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
     if (it != queryArraySizeFuncs.end())
     {
         return queryArraySizeHandler(it->second);
-    }
-    if (funcname == "nvmlEventSetWait_v2")
-    {
-        return NVML_ERROR_TIMEOUT;
     }
     if (funcname == "nvmlGpuInstanceGetComputeInstances")
     {
@@ -1742,6 +1790,54 @@ nvmlReturn_t InjectedNvml::GetWrapper(const std::string &funcname,
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t InjectedNvml::EventApiWrapper(const std::string &funcname,
+                                           const std::string & /* key */,
+                                           std::vector<InjectionArgument> &args,
+                                           std::vector<InjectionArgument> &values)
+{
+    // let event related flow control success to prevent failing on starting process.
+    // we will return NVML_ERROR_TIMEOUT for nvmlEventSetWait_v2.
+    if (funcname == "nvmlEventSetCreate" || funcname == "nvmlEventSetFree" || funcname == "nvmlDeviceRegisterEvents"
+        || funcname == "nvmlSystemEventSetCreate" || funcname == "nvmlSystemEventSetFree")
+    {
+        return NVML_SUCCESS;
+    }
+    if (funcname == "nvmlEventSetWait_v2")
+    {
+        return NVML_ERROR_TIMEOUT;
+    }
+    if (funcname == "nvmlSystemRegisterEvents")
+    {
+        if (args.size() != 1 || args[0].GetType() != INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        auto *request = args[0].AsSystemRegisterEventRequestPtr();
+        if (!request || request->version != nvmlSystemRegisterEventRequest_v1)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        m_registeredEventTypes = request->eventTypes;
+        return NVML_SUCCESS;
+    }
+    if (funcname == "nvmlSystemEventSetWait")
+    {
+        if (values.size() != 1 || values[0].GetType() != INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        auto *request = values[0].AsSystemEventSetWaitRequestPtr();
+        auto ret      = nvmlSystemEventSetWaitImpl(request);
+        if (ret != NVML_SUCCESS)
+        {
+            return ret;
+        }
+        values[0].SetValueFrom(request);
+        return NVML_SUCCESS;
+    }
+    return NVML_SUCCESS;
+}
+
 /*****************************************************************************/
 nvmlReturn_t InjectedNvml::DeviceSetWrapper(const std::string &funcname,
                                             const std::string &key,
@@ -1786,12 +1882,6 @@ nvmlReturn_t InjectedNvml::SetWrapper(const std::string &funcname,
                                       std::vector<InjectionArgument> & /* args */,
                                       std::vector<InjectionArgument> & /* values */)
 {
-    // let event related flow control success to prevent failing on starting process.
-    // we will return NVML_ERROR_TIMEOUT for nvmlEventSetWait_v2.
-    if (funcname == "nvmlEventSetCreate" || funcname == "nvmlEventSetFree" || funcname == "nvmlDeviceRegisterEvents")
-    {
-        return NVML_SUCCESS;
-    }
     NVML_LOG_ERR("Calling function [%s] not injected.", funcname.c_str());
     return NVML_ERROR_NOT_SUPPORTED;
 }
@@ -2130,6 +2220,15 @@ void InjectedNvml::InitializeGpuDefaults(nvmlDevice_t device, unsigned int index
     InjectionArgument devName(name);
     DeviceSetNoLock(device, INJECTION_NAME_KEY, {}, NvmlFuncReturn(NVML_SUCCESS, devName));
 
+    auto *pciInfo = reinterpret_cast<nvmlPciInfo_t *>(malloc(sizeof(nvmlPciInfo_t)));
+    if (pciInfo)
+    {
+        memset(pciInfo, 0, sizeof(*pciInfo));
+        snprintf(pciInfo->busId, sizeof(pciInfo->busId), "00000000:%02d:00.0", 3 * index + 1);
+        InjectionArgument pciInfoArg(pciInfo);
+        DeviceSetNoLock(device, INJECTION_PCIINFO_KEY, {}, NvmlFuncReturn(NVML_SUCCESS, pciInfoArg));
+    }
+
     int major = 7;
     int minor = 6;
     std::vector<InjectionArgument> values;
@@ -2360,5 +2459,145 @@ nvmlReturn_t InjectedNvml::RestoreGpu(std::string const &uuid)
 
     m_removedGpus.erase(uuid);
     IncrementDeviceCount();
+    return NVML_SUCCESS;
+}
+
+void InjectedNvml::SetFileSystemOp(std::unique_ptr<FileSystemOperator> fsOp)
+{
+    m_fileSystemOp = std::move(fsOp);
+}
+
+void InjectedNvml::HandleBindUnbindEvent()
+{
+    for (auto const &uuid : m_bindGpus)
+    {
+        RestoreGpu(uuid);
+    }
+    for (auto const &uuid : m_unbindGpus)
+    {
+        RemoveGpu(uuid);
+    }
+    m_bindGpus.clear();
+    m_unbindGpus.clear();
+}
+
+nvmlReturn_t InjectedNvml::nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequest_t *request)
+{
+    if (!request || request->version != nvmlSystemEventSetWaitRequest_v1)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (m_registeredEventTypes == 0)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(request->timeoutms));
+        return NVML_ERROR_TIMEOUT;
+    }
+
+    std::string const flagFilePath = "/run/nvml-injection/sys-event.yaml";
+    auto flagFileContentOpt        = m_fileSystemOp->Read(flagFilePath);
+    if (!flagFileContentOpt)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(request->timeoutms));
+        return NVML_ERROR_TIMEOUT;
+    }
+
+    /*
+    File cotent example:
+    ```
+    bind:
+      - GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5
+      - GPU-1ae4048a-9b19-f6c5-a7ed-1160943cdd18
+      - GPU-e0e72b86-70f7-3d26-5a3f-f836ee6163c1
+      - GPU-3e635e09-4cdc-f86d-7ef5-14a5db271778
+    unbind:
+      - GPU-7c8e65a1-5685-a4b6-2846-b23f0807183e
+      - GPU-7abaca14-e9f5-a2e5-2814-97a4bc44d716
+      - GPU-8c52e150-ab3b-77f7-34c0-107fb2163182
+      - GPU-36c8c920-ef08-c7ea-4b12-0660e1cb3ed0
+    ```
+    */
+    std::string const &flagFileContent = flagFileContentOpt.value();
+    YAML::Node root;
+    try
+    {
+        root = YAML::Load(flagFileContent);
+    }
+    catch (const std::exception &e)
+    {
+        NVML_LOG_ERR("failed to YAML load [%s], reason [%s]", flagFilePath.c_str(), e.what());
+        std::this_thread::sleep_for(std::chrono::milliseconds(request->timeoutms));
+        return NVML_ERROR_TIMEOUT;
+    }
+
+    bool insufficientSize = false;
+    request->numEvent     = 0;
+
+    std::lock_guard<std::mutex> guard(m_mutex);
+    if ((m_registeredEventTypes & nvmlSystemEventTypeGpuDriverBind) && root["bind"])
+    {
+        for (auto const &uuid : root["bind"])
+        {
+            auto const &uuidStr = uuid.as<std::string>();
+            // we can only bind back the gpu that was unbound before
+            if (!m_removedGpus.contains(uuidStr))
+            {
+                continue;
+            }
+
+            if (request->dataSize == request->numEvent)
+            {
+                insufficientSize = true;
+                continue;
+            }
+            request->data[request->numEvent].eventType = nvmlSystemEventTypeGpuDriverBind;
+            // this gpu was unbound before, so we don't know its index
+            request->data[request->numEvent].gpuId = UINT32_MAX;
+            request->numEvent += 1;
+            m_bindGpus.push_back(uuidStr);
+        }
+    }
+
+    if ((m_registeredEventTypes & nvmlSystemEventTypeGpuDriverUnbind) && root["unbind"])
+    {
+        for (auto const &uuid : root["unbind"])
+        {
+            auto const &uuidStr = uuid.as<std::string>();
+            AttributeHolder<nvmlDevice_t> *attrHolder;
+            // the gpu must exist in the system
+            auto deviceIt = m_uuidToDevice.find(uuidStr);
+            if (deviceIt == m_uuidToDevice.end())
+            {
+                continue;
+            }
+            attrHolder = &*deviceIt->second;
+            if (request->dataSize == request->numEvent)
+            {
+                insufficientSize = true;
+                continue;
+            }
+            request->data[request->numEvent].eventType = nvmlSystemEventTypeGpuDriverUnbind;
+            unsigned int const index
+                = attrHolder->GetAttribute(INJECTION_INDEX_KEY).GetCompoundValue().AsInjectionArgument().AsUInt();
+            request->data[request->numEvent].gpuId = index;
+            request->numEvent += 1;
+            m_unbindGpus.push_back(uuidStr);
+        }
+    }
+
+    if (request->numEvent == 0)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(request->timeoutms));
+        return NVML_ERROR_TIMEOUT;
+    }
+
+    // prevent future nvmlInit_v2 calls
+    SetAllowAttach(false);
+    if (insufficientSize)
+    {
+        return NVML_ERROR_INSUFFICIENT_SIZE;
+    }
+    // to prevent keeping sending events, we delete the flag file
+    m_fileSystemOp->Unlink(flagFilePath);
     return NVML_SUCCESS;
 }

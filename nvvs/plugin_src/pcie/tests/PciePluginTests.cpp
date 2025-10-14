@@ -17,10 +17,9 @@
 #include <PcieMain.h>
 
 #include "dcgm_fields.h"
+#include <PluginStrings.h>
 #include <UniquePtrUtil.h>
 #include <catch2/catch_all.hpp>
-#include <sstream>
-#include <string_view>
 #include <tuple>
 #include <vector>
 

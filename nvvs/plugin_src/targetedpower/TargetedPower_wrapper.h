@@ -17,6 +17,7 @@
 #define _NVVS_NVVS_TargetedPower_H_
 
 #include <iostream>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -31,6 +32,7 @@
 #include <NvvsStructs.h>
 #include <cublas_proxy.hpp>
 #include <cuda.h>
+#include <cuda_fp16.h>
 
 #define TP_MAX_DIMENSION 8192 /* Maximum single dimension */
 #define TP_MAX_DEVICES   16   /* Maximum number of devices to run this on concurrently */
@@ -54,6 +56,10 @@ public:
     int NcudaStreams;                                   /* Number of cudaStream[] entries that are valid */
     cudaStream_t cudaStream[TP_MAX_STREAMS_PER_DEVICE]; /* Cuda streams */
 
+    /* Mixed workload stream management */
+    std::vector<cudaStream_t> fp64GemmStreams;
+    std::vector<cudaStream_t> fp16GemmStreams;
+
     int allocatedCublasHandle;   /* Have we allocated cublasHandle yet? */
     cublasHandle_t cublasHandle; /* Handle to cuBlas */
 
@@ -66,12 +72,20 @@ public:
      */
     int onlySmallAdjustments;
 
-    /* Device pointers */
+    /* Device pointers for FP64/FP32 operations */
     void *deviceA;
     void *deviceB;
     void *deviceC[TP_MAX_OUTPUT_MATRICES];
 
+    /* Device pointers for FP16 operations */
+    void *deviceA_fp16 = nullptr;
+    void *deviceB_fp16 = nullptr;
+    void *deviceC_fp16[TP_MAX_OUTPUT_MATRICES];
+
     int NdeviceC; /* Number of entries in deviceC that are valid */
+
+    /* Matrix dimension for power adjustment */
+    int currentMatrixDim = 1;
 
     bool m_lowPowerLimit;
 
@@ -90,6 +104,7 @@ public:
     {
         memset(cudaStream, 0, sizeof(cudaStream));
         memset(deviceC, 0, sizeof(deviceC));
+        memset(deviceC_fp16, 0, sizeof(deviceC_fp16));
     }
 
     CPDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
@@ -107,6 +122,7 @@ public:
     {
         memset(cudaStream, 0, sizeof(cudaStream));
         memset(deviceC, 0, sizeof(deviceC));
+        memset(deviceC_fp16, 0, sizeof(deviceC_fp16));
     }
 
     ~CPDevice()
@@ -147,6 +163,26 @@ public:
             {
                 cudaFree(deviceC[i]);
                 deviceC[i] = 0;
+            }
+        }
+
+        if (deviceA_fp16)
+        {
+            cudaFree(deviceA_fp16);
+            deviceA_fp16 = 0;
+        }
+        if (deviceB_fp16)
+        {
+            cudaFree(deviceB_fp16);
+            deviceB_fp16 = 0;
+        }
+
+        for (int i = 0; i < NdeviceC; i++)
+        {
+            if (deviceC_fp16[i])
+            {
+                cudaFree(deviceC_fp16[i]);
+                deviceC_fp16[i] = 0;
             }
         }
     }
@@ -193,6 +229,11 @@ public:
     bool Init(dcgmDiagPluginEntityList_v1 const *entityInfo);
 
     std::string GetTargetedPowerTestName() const;
+
+    /*
+     * Get device by GPU ID
+     */
+    CPDevice *GetDeviceByGpuId(unsigned int gpuId);
 
 private:
     typedef void *(*mallocFunc)(size_t);
@@ -271,6 +312,12 @@ private:
     void *m_hostA;
     void *m_hostB;
     void *m_hostC;
+
+    /* Host arrays for FP16 operations */
+    void *m_hostA_fp16 = nullptr;
+    void *m_hostB_fp16 = nullptr;
+    void *m_hostC_fp16 = nullptr;
+
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
     std::unique_ptr<DcgmRecorderBase, std::function<void(DcgmRecorderBase *)>> m_dcgmRecorderPtr;
     friend class ConstantPowerTest;

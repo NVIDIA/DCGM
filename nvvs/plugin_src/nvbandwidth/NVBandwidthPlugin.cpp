@@ -18,6 +18,9 @@
 #include "NvvsCommon.h"
 
 #include <DcgmStringHelpers.h>
+#include <HangDetectMonitor.h>
+#include <PluginCommon.h>
+#include <TestFramework.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <filesystem>
@@ -28,56 +31,6 @@
 
 namespace
 {
-/*************************************************************************/
-/*
- * Get the current module location
- */
-std::string GetCurrentModuleLocation()
-{
-    // TODO(DCGM-5109): tobe refactored into PluginCommon.h/.cpp
-    Dl_info info;
-    if (0 == dladdr((void *)GetCurrentModuleLocation, &info))
-    {
-        return "."; // Just fallback to current working directory
-    }
-    return std::filesystem::path { info.dli_fname }.parent_path().string();
-}
-
-/*************************************************************************/
-/*
- * Get the NVVS bin check path
- */
-std::string GetNvvsBinCheckPath(unsigned int cudaDriverMajorVersion)
-{
-    // TODO(DCGM-5109): tobe refactored into PluginCommon.h/.cpp
-    char const *nvvsBinPath = getenv("NVVS_BIN_PATH");
-    if (nvvsBinPath != nullptr)
-    {
-        return fmt::format("{}/plugins/cuda{}", nvvsBinPath, cudaDriverMajorVersion);
-    }
-    return "";
-}
-
-/*************************************************************************/
-/*
- * Get the executable in path
- */
-std::optional<std::string> GetExecutableInPath(std::string_view path, std::string_view executableName)
-{
-    // TODO(DCGM-5109): tobe refactored into PluginCommon.h/.cpp
-    std::string filename = fmt::format("{}/{}", path, executableName);
-    struct stat fileStat = {};
-    if (stat(filename.c_str(), &fileStat) == 0)
-    {
-        // Make sure the file is also a regular file
-        if (S_ISREG(fileStat.st_mode) != 0)
-        {
-            return filename;
-        }
-    }
-    return std::nullopt;
-}
-
 /*************************************************************************/
 /*
  * Sanitize the output from the nvbandwidth binary
@@ -152,6 +105,7 @@ constexpr int DEFAULT_CUDA_DRIVER_MAJOR_VERSION = 12;
 NVBandwidthPlugin::NVBandwidthPlugin(dcgmHandle_t handle)
     : m_dcgmRecorder(handle)
     , m_handle(handle)
+    , m_cudaDriverMajorVersion(DEFAULT_CUDA_DRIVER_MAJOR_VERSION)
     , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
     m_infoStruct.testIndex      = DCGM_NVBANDWIDTH_INDEX;
@@ -225,73 +179,6 @@ dcgmReturn_t NVBandwidthPlugin::GetResults(std::string const &testName, dcgmDiag
         return res;
     }
     return DCGM_ST_OK;
-}
-
-std::optional<std::string> NVBandwidthPlugin::FindExecutable()
-{
-    // TODO(DCGM-5109): tobe refactored into PluginCommon.h/.cpp
-    //        needs change the declaration into
-    //         std::optional<std::string> FindExecutable(std::string const &executableName /* "nvbandwidth" */,
-    //                                                   std::vector<std::string> const &searchPaths = {},
-    //                                                   std::string const &cudaDriverMajorVersion = {})
-    m_cudaDriverMajorVersion = 12;
-    std::vector<std::string> const search_paths
-        = { GetCurrentModuleLocation(),
-            fmt::format("./apps/nvvs/plugins/cuda{}", m_cudaDriverMajorVersion),
-            fmt::format("/usr/libexec/datacenter-gpu-manager-4/plugins/cuda{}", m_cudaDriverMajorVersion),
-            GetNvvsBinCheckPath(m_cudaDriverMajorVersion) };
-    std::stringstream path_buf;
-
-    for (auto const &path : search_paths)
-    {
-        auto filename = GetExecutableInPath(path, "nvbandwidth");
-        if (filename.has_value())
-        {
-            log_debug("Found nvbandwidth in the path '{}'.", path);
-            m_nvbandwidthDir = path;
-            return filename;
-        }
-        log_debug("Nvbandwidth was not present in the path '{}'.", path);
-        if (path_buf.str().empty())
-        {
-            path_buf << path;
-        }
-        else
-        {
-            path_buf << ":" << path;
-        }
-    }
-
-    log_error("Couldn't find the nvbandwidth binary in the predefined search paths ({})", path_buf.str());
-
-    DcgmError d { DcgmError::GpuIdTag::Unknown };
-    const std::string err = "Couldn't find the nvbandwidth executable which is required; the install may have failed.";
-    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-    AddError(GetNvBandwidthTestName(), d);
-
-    return std::nullopt;
-}
-
-void NVBandwidthPlugin::SetCudaDriverMajorVersion()
-{
-    // TODO(DCGM-5109): tobe refactored into Plugin.h/.cpp
-    const unsigned int flags = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
-    dcgmFieldValue_v2 cudaDriverValue {};
-    auto const &gpuList = m_tests.at(GetNvBandwidthTestName()).GetGpuList();
-
-    const dcgmReturn_t ret
-        = m_dcgmRecorder.GetCurrentFieldValue(gpuList[0], DCGM_FI_CUDA_DRIVER_VERSION, cudaDriverValue, flags);
-
-    if (ret != DCGM_ST_OK)
-    {
-        log_info("Cannot read CUDA version from DCGM ({}). Assuming major version {}.",
-                 errorString(ret),
-                 DEFAULT_CUDA_DRIVER_MAJOR_VERSION);
-    }
-    else
-    {
-        m_cudaDriverMajorVersion = cudaDriverValue.value.i64 / 1000;
-    }
 }
 
 void NVBandwidthPlugin::appendExtraArgv(std::vector<std::string> &execArgv) const
@@ -382,8 +269,20 @@ void NVBandwidthPlugin::Go(std::string const &testName,
         }
     }
 
-    SetCudaDriverMajorVersion();
+    auto const &gpuList = m_tests.at(GetNvBandwidthTestName()).GetGpuList();
+    SetCudaDriverVersions(m_dcgmRecorder,
+                          gpuList[0],
+                          DEFAULT_CUDA_DRIVER_MAJOR_VERSION,
+                          0,
+                          m_cudaDriverMajorVersion,
+                          m_cudaDriverMinorVersion);
 
+    // Determine compatible CUDA version based on GPU architecture
+    if (!gpuList.empty())
+    {
+        m_cudaDriverMajorVersion = TestFramework::GetCompatibleCudaMajorVersion(
+            gpuList[0], m_cudaDriverMajorVersion, m_cudaDriverMinorVersion);
+    }
     std::ostringstream visibleDevices;
     for (unsigned int entityIdx = 0; entityIdx < entityInfo->numEntities; entityIdx++)
     {
@@ -421,9 +320,17 @@ void NVBandwidthPlugin::Go(std::string const &testName,
                     errbuf);
     }
 
-    auto nvBandwidthExecutable = FindExecutable();
+    auto nvBandwidthExecutable
+        = FindExecutable("nvbandwidth", GetDefaultSearchPaths(m_cudaDriverMajorVersion, false), m_nvbandwidthDir);
     if (!nvBandwidthExecutable.has_value())
     {
+        DcgmError d { DcgmError::GpuIdTag::Unknown };
+        DCGM_ERROR_FORMAT_MESSAGE(
+            DCGM_FR_INTERNAL,
+            d,
+            "Couldn't find the nvbandwidth executable which is required; the install may have failed.");
+        AddError(testName, d);
+
         SetResult(testName, NVVS_RESULT_FAIL);
         return;
     }
@@ -463,6 +370,17 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
     }
 
     log_info("Launched the nvbandwidth ({}) with pid {}", execArgv[0], childPid);
+
+    if (auto const ret = HangDetectRegisterProcess(childPid); ret != DCGM_ST_OK)
+    {
+        log_warning("Failed to register child process with pid {} for hang detection: {}", childPid, ret);
+        // We'll keep going, but NVVS's monitor won't detect any hangs in this process
+    }
+
+    /* Unregister from hang detection before blocking on ReadProcessOutput and waitpid() to avoid
+     * false positives. Detection is re-enabled after waitpid() completes.
+     */
+    HangDetectUnregisterTask(getpid(), getpid());
 
     fmt::memory_buffer stdoutStream;
 
@@ -515,6 +433,8 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
         return true;
     }
 
+    HangDetectUnregisterProcess(childPid);
+
     // Check exit status
     if (WIFEXITED(childStatus))
     {
@@ -548,6 +468,13 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
         d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
         AddError(testName, d);
         return true;
+    }
+
+    // Restore hang detection for this thread, in case we hang while reading the output.
+    if (auto const ret = HangDetectRegisterTask(getpid(), getpid()); ret != DCGM_ST_OK)
+    {
+        log_warning("Failed to re-register this thread with pid {} for hang detection: {}", getpid(), ret);
+        // We'll keep going, but NVVS's monitor won't detect any hangs in this thread
     }
 
     // Parse the json output from NVBandwidth executable

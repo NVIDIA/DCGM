@@ -29,9 +29,6 @@
 
 VersionInfo::VersionInfo(std::string hostname)
 {
-    static DcgmNs::DcgmBuildInfo buildInfo;
-    std::cout << buildInfo;
-
     m_hostName = std::move(hostname);
 
     /* suppress connection errors */
@@ -41,6 +38,11 @@ VersionInfo::VersionInfo(std::string hostname)
 
 dcgmReturn_t VersionInfo::DoExecuteConnected()
 {
+    // Local build info
+    static DcgmNs::DcgmBuildInfo buildInfo;
+    std::cout << "\nLocal build info:\n";
+    std::cout << buildInfo;
+
     dcgmVersionInfo_t versionInfo = {};
 
     versionInfo.version = dcgmVersionInfo_version;
@@ -51,6 +53,7 @@ dcgmReturn_t VersionInfo::DoExecuteConnected()
         return DCGM_ST_CONNECTION_NOT_VALID;
     }
 
+    // Hostengine build info
     DcgmNs::DcgmBuildInfo serverBuildInfo = DcgmNs::DcgmBuildInfo(versionInfo.rawBuildInfoString);
     std::cout << "\nHostengine build info:\n";
     std::cout << serverBuildInfo;

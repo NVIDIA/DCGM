@@ -16,18 +16,13 @@
 #ifndef _NVVS_NVVS_MEMTEST_H_
 #define _NVVS_NVVS_MEMTEST_H_
 
-#include <iostream>
-#include <string>
-#include <vector>
-
-#include "CudaCommon.h"
 #include "Plugin.h"
-#include "PluginCommon.h"
-#include "TestParameters.h"
 
 #include <NvvsStructs.h>
 #include <PluginInterface.h>
 #include <dcgm_structs.h>
+
+#include <string>
 
 class MemtestPlugin : public Plugin
 {

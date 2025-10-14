@@ -268,30 +268,96 @@ dcgmReturn_t DcgmConfigManager::HelperSetComputeMode(unsigned int gpuId, dcgmCon
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmConfigManager::HelperSetWorkloadPowerProfiles(unsigned int gpuId,
-                                                               dcgmConfig_t *config,
-                                                               dcgmConfig_t const *currentConfig)
+template <size_t N>
+dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles(dcgmConfig_t const &targetConfig,
+                                                               dcgmConfig_t const &currentConfig,
+                                                               dcgmConfig_t const &newConfig,
+                                                               unsigned int (&mergedWorkloadPowerProfiles)[N],
+                                                               bool &needsMerge,
+                                                               dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles)
 {
-    bool match = true;
+    bool isEmpty = true; // User specified profiles are all 0s
+    bool isBlank = true; // User didn't specify anything, NO-OP
+    bool match   = true; // New config matches current config
+    needsMerge   = true; // Target workload power profiles are different and needs to be merged with new config
+
+    for (unsigned int i = 0; i < N; i++)
+    {
+        if (!DCGM_INT32_IS_BLANK(newConfig.workloadPowerProfiles[i]))
+        {
+            isBlank = false;
+            if (currentConfig.workloadPowerProfiles[i] != newConfig.workloadPowerProfiles[i])
+            {
+                match = false;
+            }
+        }
+
+        if (newConfig.workloadPowerProfiles[i] != 0)
+        {
+            isEmpty = false;
+        }
+    }
+
+    if (isBlank)
+    {
+        log_debug("Workload power profile was blank for gpuId {}", currentConfig.gpuId);
+        newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_NONE;
+        needsMerge                        = false;
+    }
+    else if (isEmpty)
+    {
+        // All workload power profiles need to be cleared if all 0s are specified
+        log_debug("New workload power profile is empty for gpuId {}", currentConfig.gpuId);
+        newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_CLEAR;
+        memset(newCmWorkloadPowerProfiles.profileMask, 0xff, sizeof(newCmWorkloadPowerProfiles.profileMask));
+        memset(mergedWorkloadPowerProfiles, 0, sizeof(mergedWorkloadPowerProfiles));
+    }
+    else
+    {
+        if (match)
+        {
+            log_debug("New workload power profile matches current workload power profile for gpuId {}",
+                      currentConfig.gpuId);
+            newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_NONE;
+        }
+        else
+        {
+            newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET;
+        }
+        memcpy(newCmWorkloadPowerProfiles.profileMask,
+               newConfig.workloadPowerProfiles,
+               sizeof(newCmWorkloadPowerProfiles.profileMask));
+        memcpy(mergedWorkloadPowerProfiles, targetConfig.workloadPowerProfiles, sizeof(mergedWorkloadPowerProfiles));
+        for (unsigned int i = 0; i < N; i++)
+        {
+            if (DCGM_INT32_IS_BLANK(mergedWorkloadPowerProfiles[i]))
+            {
+                /* erase BLANK target before merging */
+                mergedWorkloadPowerProfiles[i] = 0;
+            }
+            mergedWorkloadPowerProfiles[i] |= newConfig.workloadPowerProfiles[i];
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmConfigManager::HelperSetWorkloadPowerProfiles(
+    unsigned int gpuId,
+    dcgmcmWorkloadPowerProfile_t const &newCmWorkloadPowerProfiles)
+{
     dcgmReturn_t dcgmRet;
 
-    dcgmcm_sample_t value;
-    memset(&value, 0, sizeof(value));
+    dcgmcm_sample_t value {};
 
-    value.val.blob = config->workloadPowerProfiles;
+    value.val.blob     = (void *)&newCmWorkloadPowerProfiles;
+    value.val2.ptrSize = sizeof(newCmWorkloadPowerProfiles);
 
-    for (unsigned int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
-    {
-        if (currentConfig->workloadPowerProfiles[i] != config->workloadPowerProfiles[i])
-            match = false;
-    }
-
-    if (match == true)
-    {
-        /* NO-OP if configs already match */
-        return DCGM_ST_OK;
-    }
-
+    log_debug("Setting requested workload power profile for GPU ID: {} with action {} and mask {}",
+              gpuId,
+              newCmWorkloadPowerProfiles.action,
+              DcgmNs::Utils::HelperDisplayPowerBitmask(newCmWorkloadPowerProfiles.profileMask));
     dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &value);
     if (DCGM_ST_OK != dcgmRet)
     {
@@ -402,45 +468,10 @@ void DcgmConfigManager::HelperMergeTargetConfiguration(unsigned int gpuId,
 
         case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
         {
-            bool isEmpty = true; // User specified profiles should be blank
-            bool isBlank = true; // User didn't specify anything, NO-OP
-
-            for (int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
-            {
-                if (!DCGM_INT32_IS_BLANK(setConfig->workloadPowerProfiles[i]))
-                {
-                    isBlank = false;
-                }
-
-                if (setConfig->workloadPowerProfiles[i] != 0)
-                {
-                    isEmpty = false;
-                }
-            }
-
-            if (isBlank == true)
-            {
-                /* nothing specified, nothing to merge */
-            }
-            else if (isEmpty)
-            {
-                /* user specified blank, new target is blank */
-                memset(targetConfig->workloadPowerProfiles, 0, sizeof(targetConfig->workloadPowerProfiles));
-            }
-            else
-            {
-                /* merge set and target */
-                for (int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
-                {
-                    if (DCGM_INT32_IS_BLANK(targetConfig->workloadPowerProfiles[i]))
-                    {
-                        /* erase BLANK target before merging */
-                        targetConfig->workloadPowerProfiles[i] = 0;
-                    }
-                    targetConfig->workloadPowerProfiles[i] |= setConfig->workloadPowerProfiles[i];
-                }
-            }
-
+            // SetConfig already has the target workload power profiles set
+            memcpy(targetConfig->workloadPowerProfiles,
+                   setConfig->workloadPowerProfiles,
+                   sizeof(targetConfig->workloadPowerProfiles));
             break;
         }
 
@@ -560,18 +591,36 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
     }
 
     /* Set Workload Power Profiles */
-    dcgmRet = HelperSetWorkloadPowerProfiles(gpuId, setConfig, &currentConfig);
+    dcgmcmWorkloadPowerProfile_t newCmWorkloadPowerProfiles {};
+    bool needsMerge            = true;
+    dcgmConfig_t *targetConfig = HelperGetTargetConfig(gpuId);
+    dcgmConfig_t mergeConfig   = *setConfig;
+    HelperGetWorkloadPowerProfiles(*targetConfig,
+                                   currentConfig,
+                                   *setConfig,
+                                   mergeConfig.workloadPowerProfiles,
+                                   needsMerge,
+                                   newCmWorkloadPowerProfiles);
+    dcgmRet = HelperSetWorkloadPowerProfiles(gpuId, newCmWorkloadPowerProfiles);
     if (DCGM_ST_OK != dcgmRet)
     {
         multiPropertyRetCode++;
         statusList->AddStatus(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, dcgmRet);
 
         if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
-            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, setConfig);
+        {
+            if (needsMerge)
+            {
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &mergeConfig);
+            }
+        }
     }
     else
     {
-        HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, setConfig);
+        if (needsMerge)
+        {
+            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &mergeConfig);
+        }
     }
 
     /* If any of the operation failed. Return it as specific error if all errors are the same */
@@ -859,7 +908,16 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     }
 
     /* Set Workload Power Profiles */
-    dcgmReturn = HelperSetWorkloadPowerProfiles(gpuId, activeConfig, &currentConfig);
+    unsigned int targetWorkloadPowerProfiles[DCGM_POWER_PROFILE_ARRAY_SIZE];
+    dcgmcmWorkloadPowerProfile_t newCmWorkloadPowerProfiles;
+    bool needsMerge; // this is irrelevant for this invocation because we're enforcing the target config
+    HelperGetWorkloadPowerProfiles(*activeConfig,
+                                   currentConfig,
+                                   *activeConfig,
+                                   targetWorkloadPowerProfiles,
+                                   needsMerge,
+                                   newCmWorkloadPowerProfiles);
+    dcgmReturn = HelperSetWorkloadPowerProfiles(gpuId, newCmWorkloadPowerProfiles);
     if (DCGM_ST_OK != dcgmReturn)
     {
         multiPropertyRetCode++;
@@ -902,6 +960,169 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGpu(unsigned int gpuId, DcgmConfigM
     {
         log_error("Failed to enforce configuration for the GPU Id: {}. Error: {}", gpuId, dcgmRet);
         return dcgmRet;
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+template <size_t N>
+dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles(
+    dcgmConfig_t const &targetConfig,
+    dcgmWorkloadPowerProfile_t const &newWorkloadPowerProfile,
+    unsigned int (&mergedWorkloadPowerProfiles)[N],
+    dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles)
+{
+    // Initialize the merged workload power profiles to the target config
+    memcpy(mergedWorkloadPowerProfiles, targetConfig.workloadPowerProfiles, sizeof(mergedWorkloadPowerProfiles));
+
+    switch (newWorkloadPowerProfile.action)
+    {
+        case DCGM_WORKLOAD_PROFILE_ACTION_SET:
+        {
+            newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET;
+            for (unsigned int i = 0; i < N; i++)
+            {
+                if (DCGM_INT32_IS_BLANK(mergedWorkloadPowerProfiles[i]))
+                {
+                    /* erase BLANK target before merging */
+                    mergedWorkloadPowerProfiles[i] = 0;
+                }
+                mergedWorkloadPowerProfiles[i] |= newWorkloadPowerProfile.profileMask[i];
+            }
+            break;
+        }
+        case DCGM_WORKLOAD_PROFILE_ACTION_CLEAR:
+        {
+            newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_CLEAR;
+            for (unsigned int i = 0; i < N; i++)
+            {
+                if (DCGM_INT32_IS_BLANK(mergedWorkloadPowerProfiles[i]))
+                {
+                    /* erase BLANK target before merging */
+                    mergedWorkloadPowerProfiles[i] = 0;
+                }
+                // Clear the workload power profile according to the mask
+                mergedWorkloadPowerProfiles[i] &= ~newWorkloadPowerProfile.profileMask[i];
+            }
+            break;
+        }
+        case DCGM_WORKLOAD_PROFILE_ACTION_SET_AND_OVERWRITE:
+        {
+            newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET_AND_OVERWRITE;
+            memcpy(
+                mergedWorkloadPowerProfiles, newWorkloadPowerProfile.profileMask, sizeof(mergedWorkloadPowerProfiles));
+            break;
+        }
+        default:
+        {
+            log_error("Invalid workload power profile action used. Action: {}", newWorkloadPowerProfile.action);
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
+    memcpy(newCmWorkloadPowerProfiles.profileMask,
+           newWorkloadPowerProfile.profileMask,
+           sizeof(newCmWorkloadPowerProfiles.profileMask));
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmConfigManager::HelperSetWorkloadPowerProfileGpu(unsigned int gpuId,
+                                                                 dcgmWorkloadPowerProfile_t *workloadPowerProfile)
+{
+    dcgmReturn_t dcgmRet = DCGM_ST_OK;
+    dcgmcmWorkloadPowerProfile_t newCmWorkloadPowerProfiles {};
+    dcgmConfig_t newConfig {};
+    unsigned int targetWorkloadPowerProfiles[DCGM_POWER_PROFILE_ARRAY_SIZE];
+
+    dcgmConfig_t *targetConfig = HelperGetTargetConfig(gpuId);
+
+    dcgmRet = HelperGetWorkloadPowerProfiles(
+        *targetConfig, *workloadPowerProfile, targetWorkloadPowerProfiles, newCmWorkloadPowerProfiles);
+    if (DCGM_ST_OK != dcgmRet)
+    {
+        return dcgmRet;
+    }
+
+    dcgmRet = HelperSetWorkloadPowerProfiles(gpuId, newCmWorkloadPowerProfiles);
+    if (DCGM_ST_OK != dcgmRet)
+    {
+        if ((dcgmRet == DCGM_ST_BADPARAM) || (dcgmRet == DCGM_ST_NOT_SUPPORTED))
+        {
+            return dcgmRet;
+        }
+    }
+
+    dcmBlankConfig(&newConfig, gpuId);
+    memcpy(newConfig.workloadPowerProfiles, targetWorkloadPowerProfiles, sizeof(newConfig.workloadPowerProfiles));
+
+    // Merge the current config with the new config
+    HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &newConfig);
+
+    return dcgmRet;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmConfigManager::SetWorkloadPowerProfile(dcgmWorkloadPowerProfile_t *workloadPowerProfile)
+{
+    dcgmReturn_t dcgmReturn;
+    std::vector<dcgmGroupEntityPair_t> entities;
+    std::vector<unsigned int> gpuIds;
+    unsigned int index;
+
+    if (!DcgmNs::Utils::IsRunningAsRoot())
+    {
+        log_debug("SetConfig not supported for non-root");
+        return DCGM_ST_REQUIRES_ROOT;
+    }
+
+    /* GroupId was already validated by the caller */
+    dcgmReturn = mpCoreProxy.GetGroupEntities(workloadPowerProfile->groupId, entities);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        log_debug("GetGroupEntities returned {} for groupId {}", dcgmReturn, workloadPowerProfile->groupId);
+        return dcgmReturn;
+    }
+
+    for (index = 0; index < entities.size(); index++)
+    {
+        if (entities[index].entityGroupId != DCGM_FE_GPU)
+            continue;
+
+        gpuIds.push_back(entities[index].entityId);
+    }
+
+    /* Get number of gpus from the group */
+    if (!gpuIds.size())
+    {
+        /* Implies group is not configured */
+        log_error("No gpus configured for the group id : {}", workloadPowerProfile->groupId);
+        return DCGM_ST_NOT_CONFIGURED;
+    }
+
+    /* Acquire the lock for the remainder of the function */
+    DcgmLockGuard lockGuard(m_mutex);
+
+    /* Loop through the group to set configuration for each GPU */
+    unsigned int errorCount   = 0;
+    unsigned int maxNumErrors = static_cast<unsigned int>(gpuIds.size());
+    std::unique_ptr<dcgm_config_status_t[]> statuses(new dcgm_config_status_t[maxNumErrors]);
+
+    DcgmConfigManagerStatusList statusList(maxNumErrors, &errorCount, statuses.get());
+    for (auto gpuId : gpuIds)
+    {
+        dcgmReturn = HelperSetWorkloadPowerProfileGpu(gpuId, workloadPowerProfile);
+        if (DCGM_ST_OK != dcgmReturn)
+        {
+            log_error("SetWorkloadPowerProfile failed with {} for gpuId {}", dcgmReturn, gpuId);
+            statusList.AddStatus(gpuId, DCGM_FI_UNKNOWN, dcgmReturn);
+        }
+    }
+    if (errorCount > 0)
+    {
+        return GetConsistentErrorCode(&statusList);
     }
 
     return DCGM_ST_OK;
@@ -1065,5 +1286,20 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGroup(unsigned int groupId, DcgmCon
     else
         return DCGM_ST_GENERIC_ERROR;
 }
+
+// Explicit template instantiations for DCGM_POWER_PROFILE_ARRAY_SIZE
+template dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles<DCGM_POWER_PROFILE_ARRAY_SIZE>(
+    dcgmConfig_t const &targetConfig,
+    dcgmConfig_t const &currentConfig,
+    dcgmConfig_t const &newConfig,
+    unsigned int (&mergedWorkloadPowerProfiles)[DCGM_POWER_PROFILE_ARRAY_SIZE],
+    bool &needsMerge,
+    dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles);
+
+template dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles<DCGM_POWER_PROFILE_ARRAY_SIZE>(
+    dcgmConfig_t const &targetConfig,
+    dcgmWorkloadPowerProfile_t const &workloadPowerProfile,
+    unsigned int (&mergedWorkloadPowerProfiles)[DCGM_POWER_PROFILE_ARRAY_SIZE],
+    dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles);
 
 /*****************************************************************************/

@@ -15,9 +15,12 @@
  */
 #include "DcgmStringHelpers.h"
 
+#include <cctype>
 #include <cstring>
+#include <ranges>
 #include <set>
 #include <string>
+#include <string_view>
 
 /*****************************************************************************/
 void dcgmTokenizeString(const std::string &src, const std::string &delimiter, std::vector<std::string> &tokens)
@@ -251,6 +254,23 @@ int strictStrToInt(std::string const &str)
         throw std::invalid_argument("extra characters after number");
     }
     return result;
+}
+
+std::string Trim(std::string_view str)
+{
+    if (str.empty())
+    {
+        return {};
+    }
+    auto first = std::ranges::find_if_not(str, [](char c) { return std::isspace(static_cast<unsigned char>(c)); });
+    if (first == str.end())
+    {
+        return {};
+    }
+    auto last = std::ranges::find_if_not(str | std::views::reverse, [](char c) {
+                    return std::isspace(static_cast<unsigned char>(c));
+                }).base();
+    return std::string(first, last);
 }
 
 } // namespace DcgmNs

@@ -33,11 +33,6 @@ public:
         return machine.IsRunning();
     }
 
-    static std::string GetMnDiagBinPath()
-    {
-        return MnDiagStateMachine::GetMnDiagBinPath();
-    }
-
     static void SetProcessInfoForTesting(MnDiagStateMachine &machine, pid_t pid, std::string const &processName)
     {
         machine.m_processInfo.clear();

@@ -99,6 +99,7 @@ nvmlUnitInfo_t *nvmlUnitInfo_tDeserializer(const YAML::Node &node);
 nvmlPSUInfo_t *nvmlPSUInfo_tDeserializer(const YAML::Node &node);
 nvmlUnitFanInfo_t *nvmlUnitFanInfo_tDeserializer(const YAML::Node &node);
 nvmlUnitFanSpeeds_t *nvmlUnitFanSpeeds_tDeserializer(const YAML::Node &node);
+nvmlSystemEventData_v1_t *nvmlSystemEventData_v1_tDeserializer(const YAML::Node &node);
 nvmlAccountingStats_t *nvmlAccountingStats_tDeserializer(const YAML::Node &node);
 nvmlEncoderSessionInfo_t *nvmlEncoderSessionInfo_tDeserializer(const YAML::Node &node);
 nvmlFBCStats_t *nvmlFBCStats_tDeserializer(const YAML::Node &node);
@@ -135,6 +136,7 @@ nvmlWorkloadPowerProfileInfo_t *nvmlWorkloadPowerProfileInfo_tDeserializer(const
 nvmlWorkloadPowerProfileProfilesInfo_t *nvmlWorkloadPowerProfileProfilesInfo_tDeserializer(const YAML::Node &node);
 nvmlWorkloadPowerProfileCurrentProfiles_t *nvmlWorkloadPowerProfileCurrentProfiles_tDeserializer(const YAML::Node &node);
 nvmlWorkloadPowerProfileRequestedProfiles_t *nvmlWorkloadPowerProfileRequestedProfiles_tDeserializer(const YAML::Node &node);
+nvmlWorkloadPowerProfileUpdateProfiles_v1_t *nvmlWorkloadPowerProfileUpdateProfiles_v1_tDeserializer(const YAML::Node &node);
 
 // The following snippet is generated from write_deserializer_definition
 nvmlPciInfoExt_t *nvmlPciInfoExt_tDeserializer(const YAML::Node &node)
@@ -3320,6 +3322,36 @@ nvmlUnitFanSpeeds_t *nvmlUnitFanSpeeds_tDeserializer(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_deserializer_definition
+nvmlSystemEventData_v1_t *nvmlSystemEventData_v1_tDeserializer(const YAML::Node &node)
+{
+    auto *systemEventData_v1 = reinterpret_cast<nvmlSystemEventData_v1_t *>(malloc(sizeof(nvmlSystemEventData_v1_t)));
+    if (systemEventData_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(systemEventData_v1, 0, sizeof(*systemEventData_v1));
+    if (node["eventType"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        systemEventData_v1->eventType = node["eventType"].as<unsigned long long>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing eventType for struct nvmlSystemEventData_v1_t");
+    }
+    if (node["gpuId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        systemEventData_v1->gpuId = node["gpuId"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing gpuId for struct nvmlSystemEventData_v1_t");
+    }
+    return systemEventData_v1;
+}
+
+// The following snippet is generated from write_deserializer_definition
 nvmlAccountingStats_t *nvmlAccountingStats_tDeserializer(const YAML::Node &node)
 {
     auto *accountingStats = reinterpret_cast<nvmlAccountingStats_t *>(malloc(sizeof(nvmlAccountingStats_t)));
@@ -5476,6 +5508,43 @@ nvmlWorkloadPowerProfileRequestedProfiles_t *nvmlWorkloadPowerProfileRequestedPr
     return workloadPowerProfileRequestedProfiles;
 }
 
+// The following snippet is generated from write_deserializer_definition
+nvmlWorkloadPowerProfileUpdateProfiles_v1_t *nvmlWorkloadPowerProfileUpdateProfiles_v1_tDeserializer(const YAML::Node &node)
+{
+    auto *workloadPowerProfileUpdateProfiles_v1 = reinterpret_cast<nvmlWorkloadPowerProfileUpdateProfiles_v1_t *>(malloc(sizeof(nvmlWorkloadPowerProfileUpdateProfiles_v1_t)));
+    if (workloadPowerProfileUpdateProfiles_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(workloadPowerProfileUpdateProfiles_v1, 0, sizeof(*workloadPowerProfileUpdateProfiles_v1));
+    if (node["operation"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        workloadPowerProfileUpdateProfiles_v1->operation = static_cast<nvmlPowerProfileOperation_t>(node["operation"].as<int>());
+    }
+    else
+    {
+        NVML_LOG_ERR("missing operation for struct nvmlWorkloadPowerProfileUpdateProfiles_v1_t");
+    }
+    if (node["updateProfilesMask"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        auto *tmp0 = nvmlMask255_tDeserializer(node["updateProfilesMask"]);
+        if (!tmp0)
+        {
+            free(workloadPowerProfileUpdateProfiles_v1);
+            return nullptr;
+        }
+        std::memcpy(&workloadPowerProfileUpdateProfiles_v1->updateProfilesMask, tmp0, sizeof(nvmlMask255_t));
+        free(tmp0);
+    }
+    else
+    {
+        NVML_LOG_ERR("missing updateProfilesMask for struct nvmlWorkloadPowerProfileUpdateProfiles_v1_t");
+    }
+    return workloadPowerProfileUpdateProfiles_v1;
+}
+
 // The following snippet is generated from write_basic_type_parser
 template <typename underlyType, typename resultType>
 std::optional<NvmlFuncReturn> BasicTypeParser(const YAML::Node &node)
@@ -6576,6 +6645,26 @@ std::optional<NvmlFuncReturn> UnitFanSpeedsParser(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> SystemEventData_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *systemEventData_v1 = nvmlSystemEventData_v1_tDeserializer(node["ReturnValue"]);
+    if (systemEventData_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {systemEventData_v1, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
 std::optional<NvmlFuncReturn> AccountingStatsParser(const YAML::Node &node)
 {
     if (!node || !node["FunctionReturn"])
@@ -7193,6 +7282,26 @@ std::optional<NvmlFuncReturn> WorkloadPowerProfileRequestedProfilesParser(const 
         return std::nullopt;
     }
     return NvmlFuncReturn(ret, {workloadPowerProfileRequestedProfiles, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> WorkloadPowerProfileUpdateProfiles_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *workloadPowerProfileUpdateProfiles_v1 = nvmlWorkloadPowerProfileUpdateProfiles_v1_tDeserializer(node["ReturnValue"]);
+    if (workloadPowerProfileUpdateProfiles_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {workloadPowerProfileUpdateProfiles_v1, true});
 }
 
 // The following snippet is generated from write_array_funcs_parser
@@ -8083,6 +8192,8 @@ NvmlReturnDeserializer::NvmlReturnDeserializer()
         {"WorkloadPowerProfileSetRequestedProfiles", WorkloadPowerProfileRequestedProfilesParser},
         // The following snippet is generated from try_to_write_device_handler
         {"WorkloadPowerProfileClearRequestedProfiles", WorkloadPowerProfileRequestedProfilesParser},
+        // The following snippet is generated from try_to_write_device_handler
+        {"WorkloadPowerProfileUpdateProfiles", WorkloadPowerProfileUpdateProfiles_v1Parser},
     };
     // The following snippet is generated from nvml_return_deserializer_cpp_writer
     m_deviceExtraKeyHandlers = {

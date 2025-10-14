@@ -16,13 +16,8 @@
 #ifndef PCIEMAIN_H
 #define PCIEMAIN_H
 
-#include "DcgmRecorder.h"
-#include "NvvsDeviceList.h"
 #include "Pcie.h"
-#include "Plugin.h"
-#include "PluginStrings.h"
-#include "TestParameters.h"
-#include "cuda_runtime.h"
+
 #include <PluginDevice.h>
 
 #define PCIE_MAX_GPUS 16

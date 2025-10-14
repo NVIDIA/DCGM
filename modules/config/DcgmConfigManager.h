@@ -120,6 +120,33 @@ public:
     dcgmReturn_t EnforceConfigGroup(unsigned int groupId, DcgmConfigManagerStatusList *statusList);
     dcgmReturn_t EnforceConfigGpu(unsigned int gpuId, DcgmConfigManagerStatusList *statusList);
 
+    /*****************************************************************************
+     * This method is used to set workload power profile for a GPU group
+     *****************************************************************************/
+    dcgmReturn_t SetWorkloadPowerProfile(dcgmWorkloadPowerProfile_t *workloadPowerProfile);
+
+protected:
+    /*****************************************************************************
+     * Helper method to get target workload power profiles
+     *****************************************************************************/
+    template <size_t N>
+    dcgmReturn_t HelperGetWorkloadPowerProfiles(dcgmConfig_t const &targetConfig,
+                                                dcgmConfig_t const &currentConfig,
+                                                dcgmConfig_t const &newConfig,
+                                                unsigned int (&mergedWorkloadPowerProfiles)[N],
+                                                bool &needsMerge,
+                                                dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles);
+
+    /*****************************************************************************
+     * Helper method to get target workload power profiles
+     *****************************************************************************/
+    template <size_t N>
+    dcgmReturn_t HelperGetWorkloadPowerProfiles(dcgmConfig_t const &targetConfig,
+                                                dcgmWorkloadPowerProfile_t const &workloadPowerProfile,
+                                                unsigned int (&mergedWorkloadPowerProfiles)[N],
+                                                dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles);
+
+
 private:
     /*****************************************************************************
      * Helper method to get target configuration for a GPU ID
@@ -161,8 +188,12 @@ private:
      * Helper method to set requested workload power profiles
      *****************************************************************************/
     dcgmReturn_t HelperSetWorkloadPowerProfiles(unsigned int gpuId,
-                                                dcgmConfig_t *setConfig,
-                                                dcgmConfig_t const *curConfig);
+                                                dcgmcmWorkloadPowerProfile_t const &newCmWorkloadPowerProfiles);
+
+    /*****************************************************************************
+     * Helper method to set workload power profile for a GPU ID
+     *****************************************************************************/
+    dcgmReturn_t HelperSetWorkloadPowerProfileGpu(unsigned int gpuId, dcgmWorkloadPowerProfile_t *workloadPowerProfile);
 
     /*****************************************************************************
      * This method is used to set sync boost on a group of GPUs

@@ -56,6 +56,9 @@ NvvsCommon::NvvsCommon()
     , diagResponseVersion(dcgmDiagResponse_version12)
     , rerunAsRoot(false)
     , watchFrequency(DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS)
+    , hangDetectDisable(false)
+    , hangDetectExpirySec(DEFAULT_HANG_DETECT_EXPIRY_SEC)
+    , genericMode(false)
 {}
 
 NvvsCommon::NvvsCommon(const NvvsCommon &other)
@@ -90,6 +93,9 @@ NvvsCommon::NvvsCommon(const NvvsCommon &other)
     , watchFrequency(other.watchFrequency)
     , ignoreErrorCodesString(other.ignoreErrorCodesString)
     , parsedIgnoreErrorCodes(other.parsedIgnoreErrorCodes)
+    , hangDetectDisable(other.hangDetectDisable)
+    , hangDetectExpirySec(other.hangDetectExpirySec)
+    , genericMode(other.genericMode)
 {}
 
 NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
@@ -125,6 +131,9 @@ NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
     watchFrequency         = other.watchFrequency;
     ignoreErrorCodesString = other.ignoreErrorCodesString;
     parsedIgnoreErrorCodes = other.parsedIgnoreErrorCodes;
+    hangDetectDisable      = other.hangDetectDisable;
+    hangDetectExpirySec    = other.hangDetectExpirySec;
+    genericMode            = other.genericMode;
 
     return *this;
 }
@@ -160,6 +169,9 @@ void NvvsCommon::Init()
     watchFrequency         = DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS;
     ignoreErrorCodesString = "";
     parsedIgnoreErrorCodes.clear();
+    hangDetectDisable   = false;
+    hangDetectExpirySec = DEFAULT_HANG_DETECT_EXPIRY_SEC;
+    genericMode         = false;
 }
 
 void NvvsCommon::SetStatsPath(const std::string &statsPath)

@@ -49,7 +49,18 @@
 	"test_dcgm_mndiag_basic_success",
 	"test_dcgm_mndiag_basic_failure",
 	"test_dcgm_mndiag_mixed_pass_fail_1",
-	"test_dcgm_mndiag_mixed_pass_fail_2"
+	"test_dcgm_mndiag_mixed_pass_fail_2",
+	"test_dcgm_config_set_workload_power_profiles_with_old_nvml_api",
+	"test_dcgm_config_set_workload_power_profiles_with_new_nvml_api",
+	"test_dcgm_set_workload_power_profiles_api_with_new_nvml_api",
+	"test_dcgm_set_workload_power_profiles_api_with_old_nvml_api",
+	"test_dcgm_config_set_workload_power_profiles_error_with_old_nvml_api",
+	"test_dcgm_set_workload_power_profiles_error_with_old_nvml_api",
+	"test_dcgm_config_set_workload_power_profiles_error_with_new_nvml_api",
+	"test_dcgm_set_workload_power_profiles_error_with_new_nvml_api",
+	"test_dcgm_set_workload_power_profiles_with_new_nvml_api_invalid_group_id",
+	"test_dcgm_set_config_verify_profile_merged_with_target_config",
+	"test_dcgm_set_workload_power_profile_verify_profile_merged_with_target_config"
     ],
     "modules_to_run_independent": [
     ]

@@ -13,18 +13,50 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch_all.hpp>
 
-#include <stdlib.h>
-
-#include "DcgmStringHelpers.h"
+#include "HangDetectMonitor.h"
 #include "PluginInterface.h"
 #include "dcgm_fields.h"
 #include <DcgmError.h>
-#include <UniquePtrUtil.h>
-#define DCGM_PLUGIN_TEST
 #include <Plugin.h>
+#include <UniquePtrUtil.h>
 #include <dcgm_structs.h>
+
+#include <catch2/catch_all.hpp>
+
+#include <cstdlib>
+#include <optional>
+#include <vector>
+
+namespace
+{
+class StubHangDetectMonitor : public HangDetectMonitorApi
+{
+public:
+    struct Call
+    {
+        enum class Type
+        {
+            AddMonitoredTask,
+            RemoveMonitoredTask
+        };
+        Type type;
+        pid_t pid;
+        std::optional<pid_t> tid;
+    };
+    std::vector<Call> calls;
+    dcgmReturn_t AddMonitoredTask(pid_t pid, std::optional<pid_t> tid = std::nullopt) override
+    {
+        calls.push_back({ Call::Type::AddMonitoredTask, pid, tid });
+        return DCGM_ST_OK;
+    }
+    dcgmReturn_t RemoveMonitoredTask(pid_t pid, std::optional<pid_t> tid = std::nullopt) override
+    {
+        calls.push_back({ Call::Type::RemoveMonitoredTask, pid, tid });
+        return DCGM_ST_OK;
+    }
+};
+} //namespace
 
 class UnitTestPlugin : public Plugin
 {
@@ -367,4 +399,42 @@ TEST_CASE("Plugin operates on non-existing test")
     CHECK_THROWS(p.SetGroupedStat(nonExistingTestName, "0", "key", 0.0));
     CHECK_THROWS(p.SetGroupedStat(nonExistingTestName, "0", "key", 0LL));
     CHECK_THROWS(p.GetCustomGpuStat(nonExistingTestName, 0, "key"));
+}
+TEST_CASE("Plugin HangDetectRegisterTask")
+{
+    UnitTestPlugin p;
+    StubHangDetectMonitor stubMonitor;
+
+    SECTION("Register task")
+    {
+        // Set the stub as the monitor
+        p.SetHangDetectMonitor(&stubMonitor);
+
+        pid_t const testPid = 1234;
+        pid_t const testTid = 5678;
+        auto result         = p.HangDetectRegisterTask(testPid, testTid);
+        CHECK(result == DCGM_ST_OK);
+        REQUIRE(stubMonitor.calls.size() == 1);
+        REQUIRE(stubMonitor.calls[0].type == StubHangDetectMonitor::Call::Type::AddMonitoredTask);
+        REQUIRE(stubMonitor.calls[0].pid == testPid);
+        CHECK(stubMonitor.calls[0].tid.has_value());
+        CHECK(stubMonitor.calls[0].tid.value() == testTid);
+    }
+
+    SECTION("Unregister task")
+    {
+        // Set the stub as the monitor
+        p.SetHangDetectMonitor(&stubMonitor);
+
+        pid_t const testPid = 1234;
+        pid_t const testTid = 5678;
+
+        auto result = p.HangDetectUnregisterTask(testPid, testTid);
+        CHECK(result == DCGM_ST_OK);
+        CHECK(stubMonitor.calls.size() == 1);
+        CHECK(stubMonitor.calls[0].type == StubHangDetectMonitor::Call::Type::RemoveMonitoredTask);
+        CHECK(stubMonitor.calls[0].pid == testPid);
+        CHECK(stubMonitor.calls[0].tid.has_value());
+        CHECK(stubMonitor.calls[0].tid.value() == testTid);
+    }
 }

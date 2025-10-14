@@ -158,7 +158,8 @@ typedef enum dcgmError_enum
     DCGM_FR_TEST_SKIPPED                   = 117, //!< 117 Indicates that the test was skipped
     DCGM_FR_SRAM_THRESHOLD                 = 118, //!< 118 indicates SRAM Threshold Count exceeded
     DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD = 119, //!< 119 indicates effective BER threshold exceeded
-    DCGM_FR_ERROR_SENTINEL                 = 120, //!< 120 MUST BE THE LAST ERROR CODE
+    DCGM_FR_FALLEN_OFF_BUS                 = 120, //!< 120 GPU has fallen off the bus
+    DCGM_FR_ERROR_SENTINEL                 = 121, //!< 120 MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -480,6 +481,7 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_NAN_VALUE_MSG                       "Found %lld NaN-value memory elements on GPU %u"
 #define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_MSG   "Fabric Manager (Cluster UUID: %s, Clique ID: %ld): %s."
 #define DCGM_FR_TEST_SKIPPED_MSG                    "Test %s was skipped."
+#define DCGM_FR_FALLEN_OFF_BUS_MSG                  "GPU %d has fallen off the bus"
 #define DCGM_FR_ERROR_SENTINEL_MSG                  "" /* See message inplace */
 
 /*
@@ -654,7 +656,9 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_NEXT  DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT
 #define DCGM_FR_TEST_SKIPPED_NEXT                   ""
 #define DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD_NEXT TRIAGE_RUN_FIELD_DIAG_MSG
-#define DCGM_FR_ERROR_SENTINEL_NEXT                 "" /* See message inplace */
+#define DCGM_FR_FALLEN_OFF_BUS_NEXT \
+    "Please re-seat the GPU, check for thermal and power issues, and verify that there is no outstanding bug against your driver or BIOS versions. If the issue persists, please run a field diagnostic on the GPU."
+#define DCGM_FR_ERROR_SENTINEL_NEXT "" /* See message inplace */
 
 #ifdef __cplusplus
 extern "C" {

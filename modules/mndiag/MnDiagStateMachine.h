@@ -222,16 +222,6 @@ private:
      */
     static std::string to_string(State state);
 
-    /**
-     * Get the binary path for mnubergemm
-     *
-     * This method checks the environment variable and falls back to default path if needed.
-     * It validates the path exists and is executable.
-     *
-     * @return The path to the mnubergemm binary
-     */
-    static std::string GetMnDiagBinPath();
-
     // Callbacks
     std::function<bool(pid_t)> m_isProcessRunningCallback;
     std::function<dcgmReturn_t(pid_t)> m_stopProcessCallback;

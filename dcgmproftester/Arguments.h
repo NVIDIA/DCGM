@@ -645,6 +645,8 @@ public:
     dcgmReturn_t Parse(int argc, char *argv[]);
 
     dcgmReturn_t Process(std::function<dcgmReturn_t(std::shared_ptr<Arguments_t> arguments)>);
+
+    std::string GetGpuIdsString(void);
 };
 
 } // namespace DcgmNs::ProfTester

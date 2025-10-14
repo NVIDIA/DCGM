@@ -1,6 +1,7 @@
 {
     global:
         nvmlInit_v2;
+        nvmlInitWithFlags;
         nvmlErrorString;
         nvmlShutdown;
         nvmlCreateDevice;
@@ -313,7 +314,12 @@
         nvmlDeviceWorkloadPowerProfileGetCurrentProfiles;
         nvmlDeviceWorkloadPowerProfileSetRequestedProfiles;
         nvmlDeviceWorkloadPowerProfileClearRequestedProfiles;
+        nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1;
         nvmlDeviceGetPlatformInfo;
+        nvmlSystemEventSetCreate;
+        nvmlSystemEventSetFree;
+        nvmlSystemRegisterEvents;
+        nvmlSystemEventSetWait;
         extern "C++" {
             _ZTI*;
             _ZTS*;

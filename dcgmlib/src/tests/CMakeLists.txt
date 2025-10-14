@@ -27,6 +27,7 @@ target_sources(dcgmlibtests
         DcgmKmsgReaderTests.cpp
         DcgmClientHandlerTests.cpp
         DcgmResourceManagerTests.cpp
+        DcgmTopologyTests.cpp
 )
 
 target_link_libraries(dcgmlibtests PRIVATE

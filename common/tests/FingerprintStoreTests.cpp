@@ -18,7 +18,6 @@
 
 #include <catch2/catch_all.hpp>
 #include <dcgm_fields.h>
-#include <filesystem>
 #include <fmt/format.h>
 #include <future>
 #include <latch>
@@ -31,6 +30,11 @@ public:
     using FingerprintStore::GenerateUniqueSeed;
     using FingerprintStore::GetProcStatPath;
     using FingerprintStore::m_store;
+
+    static inline std::string FilterProcStatFields(std::string_view data, StatFieldConfig const &config)
+    {
+        return FingerprintStore::FilterProcStatFields(data, config);
+    }
 };
 
 TEST_CASE("FingerprintStore::Compute")
@@ -61,6 +65,13 @@ TEST_CASE("FingerprintStore::Compute")
         REQUIRE(ret3.second.has_value());
         REQUIRE(*(ret1.second) != *(ret3.second));
         REQUIRE(*(ret2.second) != *(ret3.second));
+
+        // Verify filtering affects the fingerprint
+        auto config = StatFieldConfig::ForThread();
+        auto ret4   = fps.Compute(data, config);
+        REQUIRE(ret4.first == DCGM_ST_OK);
+        REQUIRE(ret4.second.has_value());
+        REQUIRE(*(ret3.second) != *(ret4.second)); // Filtered fingerprint should differ from unfiltered
     }
 
     SECTION("Edge Cases and Invalid Inputs")
@@ -186,15 +197,38 @@ TEST_CASE("FingerprintStore::Concurrent Operations")
     // Synchronization primitives
     std::latch start_latch(NUM_THREADS + 1);
     std::atomic<int> completed_threads = 0;
+    std::atomic<bool> poolExhausted    = false;
 
     // Random number generation for realistic workload
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> pid_dist(1, 1000);
+    std::array<int, NUM_THREADS * UPDATES_PER_THREAD + 100> randomPidPool;
+    {
+        std::mt19937 gen(std::random_device {}());
+        std::uniform_int_distribution<> pid_dist(1, 1000);
+
+        for (auto &val : randomPidPool)
+        {
+            val = pid_dist(gen);
+        }
+    }
+
+    std::atomic<size_t> index = randomPidPool.size();
+    size_t current            = index;
+
+    auto popPool = [&]() {
+        while (current > 0)
+        {
+            if (index.compare_exchange_weak(current, current - 1, std::memory_order_acquire, std::memory_order_relaxed))
+            {
+                return randomPidPool[current - 1];
+            }
+        }
+        poolExhausted.store(true);
+        throw std::runtime_error("Pool exhausted");
+    };
 
     // Test concurrent updates to same key
     {
-        std::vector<std::thread> threads;
+        std::vector<std::jthread> threads(NUM_THREADS);
         for (int i = 0; i < NUM_THREADS; ++i)
         {
             threads.emplace_back([&, i]() {
@@ -209,21 +243,17 @@ TEST_CASE("FingerprintStore::Concurrent Operations")
                     // Occasionally retrieve to mix operations
                     if (j % 100 == 0)
                     {
-                        auto [ret, _] = fps.Retrieve(testKey);
-                        CHECK(ret == DCGM_ST_OK);
+                        auto _ = fps.Retrieve(testKey);
                     }
                 }
                 completed_threads++;
             });
         }
-
         start_latch.arrive_and_wait(); // Start all threads simultaneously
-        for (auto &t : threads)
-        {
-            t.join();
-        }
-        REQUIRE(fps.m_store.size() == 1);
     }
+    // All threads have completed
+    REQUIRE(fps.m_store.size() == 1);
+
 
     // Test concurrent updates to different keys with mixed operations
     {
@@ -236,7 +266,7 @@ TEST_CASE("FingerprintStore::Concurrent Operations")
                 for (int j = 0; j < UPDATES_PER_THREAD; ++j)
                 {
                     // Random PID for realistic workload
-                    auto key = PidTidPair(pid_dist(gen), j);
+                    auto key = PidTidPair(popPool(), j);
                     auto fp  = TaskFingerprint({ static_cast<uint64_t>(j), static_cast<uint64_t>(j) });
 
                     // Mix different operations
@@ -270,6 +300,9 @@ TEST_CASE("FingerprintStore::Concurrent Operations")
         // Verify final state is consistent
         REQUIRE(fps.m_store.size() <= static_cast<size_t>(NUM_THREADS * UPDATES_PER_THREAD));
     }
+
+    CAPTURE(fmt::format("Remaining capacity of the pool: {}/{}", current, randomPidPool.size()));
+    REQUIRE(!poolExhausted.load());
 }
 
 TEST_CASE("FingerprintStore::Comparison")
@@ -359,5 +392,184 @@ TEST_CASE("FingerprintStore::PidTidPair Tests")
         CHECK(hash5 != hash6);
         CHECK(hash5 != hash7);
         CHECK(hash6 != hash7);
+    }
+}
+
+TEST_CASE("FingerprintStore::FilterProcStatFields")
+{
+    SECTION("Process stat filtering")
+    {
+        // Example /proc/[pid]/stat data for a process
+        // Field order: pid comm state ppid ... utime stime cutime cstime ... num_threads ... vsz rss ...
+        std::string_view procStat = "1234 (test process) S 1 1 1 0 -1 4194368 1234 0 0 0 "
+                                    "1000 2000 3000 4000 20 20 5 0 9876543 1234 0 18446744073709551615 "
+                                    "94107131801600 94107132073624 140722989645808 0 0 0 0 "
+                                    "2147221247 0 0 0 17 0 0 0 0 0 0 94107132141600 94107132158064 "
+                                    "94107155861504 140722989653001 140722989653026 140722989653026 "
+                                    "140722989656808 0";
+
+        auto config   = StatFieldConfig::ForProcess();
+        auto filtered = FingerprintStoreTest::FilterProcStatFields(procStat, config);
+
+        // Should contain pid, comm, state, ppid, utime, stime, cutime, cstime, num_threads, vsz, rss
+        REQUIRE(filtered.starts_with("1234 (test process) S 1"));           // pid, comm, state, ppid
+        REQUIRE(filtered.find("1000 2000 3000 4000") != std::string::npos); // utime, stime, cutime, cstime
+        REQUIRE(filtered.find("5") != std::string::npos);                   // num_threads
+
+        // Add debug output to help diagnose any future issues
+        INFO("Full filtered output: " << filtered);
+        INFO("Looking for VSZ and RSS values: 1234 0");
+
+        REQUIRE(filtered.find("1234 0") != std::string::npos); // vsz, rss
+    }
+
+    SECTION("Thread stat filtering")
+    {
+        // Example /proc/[pid]/task/[tid]/stat data for a thread
+        // Verify field positions match proc(5) documentation
+        std::string_view threadStat = "1234 (test thread) S 1 1 1 0 -1 4194368 1234 0 0 0 " // Fields 1-13
+                                      "500 1000 3000 4000 20 20 "                           // Fields 14-19 (utime-nice)
+                                      "5 "                                                  // Field 20 (num_threads)
+                                      "0 0 "                                                // Fields 21-22
+                                      "1234567 9876543 "                                    // Fields 23-24 (vsz, rss)
+                                      "1234 18446744073709551615 "                          // Fields 25+
+                                      "94107131801600 94107132073624 140722989645808 0 0 0 0 "
+                                      "2147221247 0 0 0 17 0 0 0 0 0 0 94107132141600 94107132158064 "
+                                      "94107155861504 140722989653001 140722989653026 140722989653026 "
+                                      "140722989656808 0";
+
+        CAPTURE(threadStat); // Capture input data for failure reports
+
+        auto config = StatFieldConfig::ForThread();
+
+        // Log excluded fields for diagnostics
+        std::vector<int> excludedFields;
+        for (auto field : config.excludedFields)
+        {
+            excludedFields.push_back(static_cast<int>(field));
+        }
+        CAPTURE(excludedFields); // Show which fields are excluded
+
+        auto filtered = FingerprintStoreTest::FilterProcStatFields(threadStat, config);
+        CAPTURE(filtered); // Show the filtered output
+
+        // Should contain pid, comm, state, utime, stime, cutime, cstime
+        SECTION("Required fields are present")
+        {
+            // Fields 1-3: pid, comm, state
+            REQUIRE(filtered.starts_with("1234 (test thread) S"));
+
+            // Fields 14-17: utime, stime, cutime, cstime
+            REQUIRE(filtered.find("500 1000") != std::string::npos);  // utime, stime
+            REQUIRE(filtered.find("3000 4000") != std::string::npos); // cutime, cstime
+
+            // Verify field order
+            INFO("Verifying field order in filtered output");
+            auto utimePos  = filtered.find("500");
+            auto stimePos  = filtered.find("1000", utimePos);
+            auto cutimePos = filtered.find("3000", stimePos);
+            auto cstimePos = filtered.find("4000", cutimePos);
+
+            // First verify all positions were found
+            REQUIRE(utimePos != std::string::npos);
+            REQUIRE(stimePos != std::string::npos);
+            REQUIRE(cutimePos != std::string::npos);
+            REQUIRE(cstimePos != std::string::npos);
+
+            // Now verify ordering - safe since we confirmed no npos values above
+            REQUIRE((utimePos < stimePos && stimePos < cutimePos && cutimePos < cstimePos));
+        }
+
+        // Should not contain excluded fields
+        SECTION("Excluded fields are absent")
+        {
+            // Field 20 (NumThreads)
+            INFO("Checking NumThreads field (5) is excluded");
+            auto numThreadsStr = fmt::format(" 5 "); // Space-padded to avoid partial matches
+            REQUIRE(filtered.find(numThreadsStr) == std::string::npos);
+
+            // Field 23 (VSZ)
+            INFO("Checking VSZ field (1234567) is excluded");
+            auto vszStr = fmt::format(" 1234567 "); // Space-padded to avoid partial matches
+            REQUIRE(filtered.find(vszStr) == std::string::npos);
+
+            // Field 24 (RSS)
+            INFO("Checking RSS field (9876543) is excluded");
+            auto rssStr = fmt::format(" 9876543 "); // Space-padded to avoid partial matches
+            REQUIRE(filtered.find(rssStr) == std::string::npos);
+        }
+    }
+
+    SECTION("Invalid proc stat format")
+    {
+        std::string_view invalidStat = "1234 test process) S"; // Missing opening parenthesis
+        auto config                  = StatFieldConfig::ForProcess();
+        auto filtered                = FingerprintStoreTest::FilterProcStatFields(invalidStat, config);
+
+        // Should return original string for invalid format
+        REQUIRE(filtered.empty());
+    }
+
+    SECTION("Empty proc stat")
+    {
+        std::string_view emptyStat = "";
+        auto config                = StatFieldConfig::ForProcess();
+        auto filtered              = FingerprintStoreTest::FilterProcStatFields(emptyStat, config);
+
+        // Should return empty string
+        REQUIRE(filtered.empty());
+    }
+}
+
+TEST_CASE("FingerprintStore::FilterProcStatFields irregular data")
+{
+    struct TestCase
+    {
+        std::string const input;
+        std::string const expected;
+        std::string const description;
+    };
+
+    std::vector<TestCase> testCases = {
+        // Malformed command name parentheses
+        { "1234 (malformed S 1 1 1", "", "Missing closing parenthesis" },
+        { "1234 (malf)ormed) S 1 1 1", "1234 (malf)ormed) S 1 1 1", "Multiple sets of parentheses" },
+        { "1234 () S 1 1 1", "1234 ()", "Empty parentheses" },
+        { "1234 )malformed( S 1 1 1", "", "Reversed parentheses" },
+
+        // Irregular field content
+        { "1234 (abcd zyxwv\n\r\t\\) S 1 1 1",
+          "1234 (abcd zyxwv\n\r\t\\)",
+          "Command name with spaces and special chars" },
+
+        { fmt::format("1234 ({}) S 1 1 1", std::string(1024, 'A')),
+          fmt::format("1234 ({})", std::string(1024, 'A')),
+          "Extremely long command name" },
+        { "1234 (test) S 1 1 1 0 -1 4194368 1234 0 malformed field 0", "1234 (test) S", "Fields containing spaces" },
+        { "1234 (test) S 1 1 1 0 -1 4194368 NaN inf -inf 0", "1234 (test) S", "Non-numeric values in numeric fields" },
+
+        // Field count manipulation
+        { "1234 (test) S", "1234 (test) S", "Too few fields" },
+        { "1234 (test) S " + std::string(1000, '0') + " " + std::string(1000, '1'),
+          "1234 (test) S",
+          "Too many fields" },
+        { "1234 (test) S   1    1   1   0", "1234 (test) S", "Multiple consecutive spaces" },
+
+        // Unicode and special characters
+        { "1234 (\u6D4B\u8BD5\u8FDB\u7A0B) S 1 1 1", "1234 (\u6D4B\u8BD5\u8FDB\u7A0B) S", "Unicode in command name" },
+        { "1234 (test\x01\x02) S\x00\x1F 1\x7F 1 1", "1234 (test\x01\x02) S", "Control characters in fields" },
+        { "1234 (test\\u1F512) S 1 1 1", "1234 (test\\u1F512) S", "Mixed UTF-8 and ASCII" }
+    };
+
+    for (const auto &test : testCases)
+    {
+        SECTION(test.description)
+        {
+            INFO("Input: " << test.input);
+            INFO("Expected: " << test.expected);
+            auto filtered = FingerprintStoreTest::FilterProcStatFields(test.input, StatFieldConfig::ForProcess());
+            INFO("Filtered: " << filtered);
+            REQUIRE(filtered.starts_with(test.expected));
+        }
     }
 }

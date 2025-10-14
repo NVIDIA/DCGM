@@ -40,28 +40,28 @@ void L1TagCuda::Cleanup(void)
 
     if (m_l1Data)
     {
-        cuRes = cuMemFree(m_l1Data);
+        cuRes = cuMemFree_v2(m_l1Data);
         if (CUDA_SUCCESS != cuRes)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMemoryTestName(), "cuMemFree", cuRes, m_gpuIndex);
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMemoryTestName(), "cuMemFree_v2", cuRes, m_gpuIndex);
         }
     }
 
     if (m_devMiscompareCount)
     {
-        cuRes = cuMemFree(m_devMiscompareCount);
+        cuRes = cuMemFree_v2(m_devMiscompareCount);
         if (CUDA_SUCCESS != cuRes)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMemoryTestName(), "cuMemFree", cuRes, m_gpuIndex);
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMemoryTestName(), "cuMemFree_v2", cuRes, m_gpuIndex);
         }
     }
 
     if (m_devErrorLog)
     {
-        cuRes = cuMemFree(m_devErrorLog);
+        cuRes = cuMemFree_v2(m_devErrorLog);
         if (CUDA_SUCCESS != cuRes)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMemoryTestName(), "cuMemFree", cuRes, m_gpuIndex);
+            LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMemoryTestName(), "cuMemFree_v2", cuRes, m_gpuIndex);
         }
     }
 
@@ -72,9 +72,9 @@ void L1TagCuda::Cleanup(void)
     }
 }
 
-int L1TagCuda::AllocDeviceMem(int size, CUdeviceptr *ptr)
+int L1TagCuda::AllocDeviceMem(int size, CUdeviceptr_v2 *ptr)
 {
-    if (CUDA_SUCCESS != cuMemAlloc(ptr, size))
+    if (CUDA_SUCCESS != cuMemAlloc_v2(ptr, size))
     {
         DcgmError d { m_gpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, size, m_gpuIndex);
@@ -326,7 +326,7 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
     {
         // Clear error counter
         uint64_t zeroVal = 0;
-        cuRes            = cuMemcpyHtoDAsync(m_devMiscompareCount, &zeroVal, sizeof(uint64_t), stream);
+        cuRes            = cuMemcpyHtoDAsync_v2(m_devMiscompareCount, &zeroVal, sizeof(uint64_t), stream);
         if (CUDA_SUCCESS != cuRes)
         {
             retVal = LogCudaFail("Failed to clear m_devMiscompareCount", "cuMemsetD32Async", cuRes);
@@ -389,10 +389,10 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
         }
 
         // Get error count
-        cuRes = cuMemcpyDtoHAsync(&hostMiscompareCount, m_devMiscompareCount, sizeof(uint64_t), stream);
+        cuRes = cuMemcpyDtoHAsync_v2(&hostMiscompareCount, m_devMiscompareCount, sizeof(uint64_t), stream);
         if (CUDA_SUCCESS != cuRes)
         {
-            retVal = LogCudaFail("Failed to schedule miscompareCount copy", "cuMemcpyDtoHAsync", cuRes);
+            retVal = LogCudaFail("Failed to schedule miscompareCount copy", "cuMemcpyDtoHAsync_v2", cuRes);
             goto CLEANUP;
         }
 
@@ -419,10 +419,10 @@ nvvsPluginResult_t L1TagCuda::RunTest(void)
         {
             log_error("CudaL1Tag found {} miscompare(s) on loop {}", hostMiscompareCount, loop);
 
-            cuRes = cuMemcpyDtoH(m_hostErrorLog, m_devErrorLog, sizeof(L1TagError) * m_errorLogLen);
+            cuRes = cuMemcpyDtoH_v2(m_hostErrorLog, m_devErrorLog, sizeof(L1TagError) * m_errorLogLen);
             if (CUDA_SUCCESS != cuRes)
             {
-                retVal = LogCudaFail("Failed to copy error log to host", "cuMemcpyDtoH", cuRes);
+                retVal = LogCudaFail("Failed to copy error log to host", "cuMemcpyDtoH_v2", cuRes);
                 goto CLEANUP;
             }
 

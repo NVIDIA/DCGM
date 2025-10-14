@@ -516,6 +516,32 @@ cleanup_local:
 }
 
 /*****************************************************************************/
+dcgmReturn_t Config::RunSetConfigWorkloadPowerProfile(dcgmHandle_t pNvcmHandle)
+{
+    dcgmReturn_t result = DCGM_ST_OK;
+
+    result = dcgmConfigSetWorkloadPowerProfile(pNvcmHandle, &mWorkloadPowerProfile);
+    if (DCGM_ST_OK != result)
+    {
+        std::cout << "Error: Unable to set workload power profile. Return:" << errorString(result) << std::endl;
+    }
+
+    return result;
+}
+
+/*****************************************************************************/
+int Config::SetWorkloadPowerProfileArg(dcgmWorkloadPowerProfile_t *pWorkloadPowerProfile)
+{
+    if (!pWorkloadPowerProfile)
+    {
+        std::cout << "Error: Workload power profile is NULL" << std::endl;
+        return DCGM_ST_BADPARAM;
+    }
+    mWorkloadPowerProfile = *pWorkloadPowerProfile;
+    return 0;
+}
+
+/*****************************************************************************/
 template <typename TMember>
 bool Config::HelperCheckIfAllTheSameMode(dcgmConfig_t *configs, TMember member, unsigned int numGpus)
 {
@@ -804,4 +830,25 @@ EnforceConfig::EnforceConfig(std::string hostname, Config obj)
 dcgmReturn_t EnforceConfig::DoExecuteConnected()
 {
     return configObj.RunEnforceConfig(m_dcgmHandle);
+}
+
+/*****************************************************************************
+ *****************************************************************************
+ * Set Workload Power Profile Invoker
+ *****************************************************************************
+ *****************************************************************************/
+
+SetConfigWorkloadPowerProfile::SetConfigWorkloadPowerProfile(std::string hostname, Config obj)
+    : Command()
+    , configObj(std::move(obj))
+{
+    m_hostName = std::move(hostname);
+
+    /* We want group actions to persist once this DCGMI instance exits */
+    SetPersistAfterDisconnect(1);
+}
+
+dcgmReturn_t SetConfigWorkloadPowerProfile::DoExecuteConnected()
+{
+    return configObj.RunSetConfigWorkloadPowerProfile(m_dcgmHandle);
 }

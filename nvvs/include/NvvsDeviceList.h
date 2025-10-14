@@ -80,6 +80,16 @@ public:
      */
     unsigned int GetGpuId() override;
 
+    /*************************************************************************/
+    /*
+     * Get the plugin associated with this device for error reporting
+     *
+     */
+    Plugin *GetPlugin() const
+    {
+        return m_plugin;
+    }
+
     /*
      * Try to set the CPU affinity of this device
      *

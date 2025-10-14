@@ -14,93 +14,159 @@
 # limitations under the License.
 #
 
-include(utils)
+set(_Cuda_VERSIONS 11.8 12.9 13.0)
 
-set(Cuda11_prefix usr/local/cuda-11.8)
-set(Cuda12_prefix usr/local/cuda-12.8)
-
-macro (load_cuda cuda_version)
-    foreach (prefix ${Cuda${cuda_version}_prefix})
-        list(APPEND Cuda${cuda_version}_INCLUDE_PATHS "${CMAKE_FIND_ROOT_PATH}/${prefix}/include")
-        list(APPEND Cuda${cuda_version}_LIB_PATHS "${CMAKE_FIND_ROOT_PATH}/${prefix}/lib" "${CMAKE_FIND_ROOT_PATH}/${prefix}/lib64")
-    endforeach ()
-
-    find_path(CUDA${cuda_version}_INCLUDE_DIR cuda.h PATHS ${Cuda${cuda_version}_INCLUDE_PATHS} NO_DEFAULT_PATH)
-    if (CUDA${cuda_version}_INCLUDE_DIR)
-        # Dereference symbolic links
-        get_absolute_path(${CUDA${cuda_version}_INCLUDE_DIR} CUDA${cuda_version}_INCLUDE_DIR)
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    set(_Cuda_TARGET_DIR "targets/x86_64-linux")
+elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    set(_Cuda_TARGET_DIR "targets/sbsa-linux")
+else()
+    if (NOT Cuda_FIND_QUIETLY)
+        message(WARNING
+            "CMAKE_SYSTEM_PROCESSOR (${CMAKE_SYSTEM_PROCESSOR}) not supported by FindCuda module")
     endif()
-    find_library(libcudart${cuda_version} libcudart_static.a PATHS ${Cuda${cuda_version}_LIB_PATHS} NO_DEFAULT_PATH)
-    find_library(libculibos${cuda_version} libculibos.a PATHS ${Cuda${cuda_version}_LIB_PATHS} NO_DEFAULT_PATH)
-    find_library(libcuda${cuda_version} libcuda.so PATHS ${Cuda${cuda_version}_LIB_PATHS} PATH_SUFFIXES stubs NO_DEFAULT_PATH)
-
-    find_library(libcublas${cuda_version} libcublas_static.a PATHS ${Cuda${cuda_version}_LIB_PATHS} NO_DEFAULT_PATH)
-    find_library(libcublaslt${cuda_version} libcublasLt_static.a PATHS ${Cuda${cuda_version}_LIB_PATHS} NO_DEFAULT_PATH)
-
-    if (CUDA${cuda_version}_INCLUDE_DIR 
-        AND libcublas${cuda_version}
-        AND libcudart${cuda_version}
-        AND libculibos${cuda_version}
-        AND libcuda${cuda_version})
-        set(Cuda${cuda_version}_FOUND TRUE)
-
-        set(CUDA${cuda_version}_STATIC_LIBS
-            ${libcudart${cuda_version}}
-            ${libculibos${cuda_version}}
-            CACHE STRING "Cuda${cuda_version} static libs")
-        set(CUDA${cuda_version}_LIBS ${libcuda${cuda_version}} CACHE STRING "Cuda${cuda_version} shared libs")
-        set(CUDA${cuda_version}_STATIC_CUBLAS_LIBS ${libcublas${cuda_version}} CACHE STRING "Cuda${cuda_version} static libs")
-    else ()
-        set(Cuda${cuda_version}_FOUND FALSE)
-    endif ()
-
-    if (libcublaslt${cuda_version})
-        set(CUDA${cuda_version}_STATIC_CUBLAS_LIBS
-            ${CUDA${cuda_version}_STATIC_CUBLAS_LIBS}
-            ${libcublaslt${cuda_version}}
-            CACHE STRING "Cuda${cuda_version} static libs"
-            FORCE)
-    endif ()
-
-    if (Cuda${cuda_version}_FOUND)
-        if (NOT Cuda_FIND_QUETLY)
-            message(STATUS "Found CUDA ${cuda_version}. CUDA${cuda_version}_INCLUDE_DIR=${CUDA${cuda_version}_INCLUDE_DIR}")
-            message(${libcublas${cuda_version}})
-            message(${libcudart${cuda_version}})
-            message(${libculibos${cuda_version}})
-            message(${libcublaslt${cuda_version}})
-            message(${libcuda${cuda_version}})
-        endif ()
-    else ()
-        if (Cuda_FIND_REQUIRED)
-            message(${CUDA${cuda_version}_INCLUDE_DIR})
-            message(${libcublas${cuda_version}})
-            message(${libcudart${cuda_version}})
-            message(${libculibos${cuda_version}})
-            message(${libcublaslt${cuda_version}})
-            message(${libcuda${cuda_version}})
-            message(FATAL_ERROR "Could NOT find Cuda ${cuda_version}")
-        endif ()
-        message(STATUS "Cuda ${cuda_version} NOT found")
-    endif ()
-
-    unset(libcublas${cuda_version})
-    unset(libcublaslt${cuda_version})
-    unset(libcudart${cuda_version})
-    unset(libculibos${cuda_version})
-    unset(libcuda${cuda_version})
-
-    mark_as_advanced(CUDA${cuda_version}_INCLUDE_DIR CUDA${cuda_version}_STATIC_LIBS CUDA${cuda_version}_LIBS CUDA${cuda_version}_STATIC_CUBLAS_LIBS)
-
-endmacro()
-
-if (NOT DEFINED CUDA11_INCLUDE_DIR)
-    load_cuda(11)
+    set(_Cuda_TARGET_DIR "targets/deadbeef-linux")
 endif()
 
-if (NOT DEFINED CUDA12_INCLUDE_DIR)
-    load_cuda(12)
+set(_Cuda_PATHS)
+foreach (_Cuda_ROOT IN LISTS CMAKE_FIND_ROOT_PATH CMAKE_SYSROOT CMAKE_STAGING_PREFIX)
+    list(APPEND _Cuda_PATHS "${_Cuda_ROOT}/usr/local")
+endforeach()
+
+unset(_Cuda_ROOT)
+
+foreach (_Cuda_PATH IN ITEMS Cuda_ROOT CUDA_ROOT)
+    if (DEFINED ${_Cuda_PATH})
+        list(APPEND _Cuda_PATHS "${${_Cuda_PATH}}")
+    endif()
+
+    if (DEFINED ENV{${_Cuda_PATH}})
+        list(APPEND _Cuda_PATHS "$ENV{${_Cuda_PATH}}")
+    endif()
+endforeach()
+
+unset(_Cuda_PATH)
+
+list(SORT _Cuda_PATHS)
+list(REMOVE_DUPLICATES _Cuda_PATHS)
+
+foreach(_Cuda_VERSION IN LISTS _Cuda_VERSIONS)
+    set(_Cuda_FOUND TRUE)
+
+    string(REGEX MATCH "^[^.]+" _Cuda_MAJOR_VERSION "${_Cuda_VERSION}")
+
+    list(APPEND _Cuda_REQUIRED_VARS
+        "CUDA${_Cuda_MAJOR_VERSION}_INCLUDE_DIR"
+        "CUDA${_Cuda_MAJOR_VERSION}_STATIC_LIBS"
+        "CUDA${_Cuda_MAJOR_VERSION}_LIBS"
+        "CUDA${_Cuda_MAJOR_VERSION}_STATIC_CUBLAS_LIBS")
+
+    list(TRANSFORM _Cuda_PATHS
+        APPEND "/cuda-${_Cuda_VERSION}/${_Cuda_TARGET_DIR}/include"
+        OUTPUT_VARIABLE _Cuda_INSTALL_ROOT_CANDIDATES)
+
+    find_path(Cuda_${_Cuda_MAJOR_VERSION}_INCLUDE_DIR cuda.h
+        PATHS ${_Cuda_INSTALL_ROOT_CANDIDATES}
+        NO_SYSTEM_ENVIRONMENT_PATH)
+
+    mark_as_advanced(Cuda_${_Cuda_MAJOR_VERSION}_INCLUDE_DIR)
+    unset(_Cuda_INSTALL_ROOT_CANDIDATES)
+
+    if (NOT Cuda_${_Cuda_MAJOR_VERSION}_INCLUDE_DIR)
+      continue()
+    endif ()
+
+    cmake_path(GET Cuda_${_Cuda_MAJOR_VERSION}_INCLUDE_DIR
+        PARENT_PATH _Cuda_INSTALL_ROOT)
+
+    find_library(
+        Cuda_${_Cuda_MAJOR_VERSION}_cuda_LIBRARY
+        cuda
+        HINTS "${_Cuda_INSTALL_ROOT}/lib"
+        PATH_SUFFIXES stubs
+        NO_PACKAGE_ROOT_PATH
+        NO_CMAKE_PATH
+        NO_CMAKE_ENVIRONMENT_PATH
+        NO_SYSTEM_ENVIRONMENT_PATH
+        NO_CMAKE_INSTALL_PREFIX
+        NO_CMAKE_FIND_ROOT_PATH)
+
+    mark_as_advanced(Cuda_${_Cuda_MAJOR_VERSION}_cuda_LIBRARY)
+
+    if (NOT Cuda_${_Cuda_MAJOR_VERSION}_cuda_LIBRARY)
+        set(_Cuda_FOUND FALSE)
+    endif()
+
+    find_library(
+      Cuda_${_Cuda_MAJOR_VERSION}_culibos_LIBRARY
+      culibos
+      HINTS "${_Cuda_INSTALL_ROOT}/lib"
+      NO_PACKAGE_ROOT_PATH
+      NO_CMAKE_PATH
+      NO_CMAKE_ENVIRONMENT_PATH
+      NO_SYSTEM_ENVIRONMENT_PATH
+      NO_CMAKE_INSTALL_PREFIX
+      NO_CMAKE_FIND_ROOT_PATH)
+
+    mark_as_advanced(Cuda_${_Cuda_MAJOR_VERSION}_culibos_LIBRARY)
+
+    if (NOT Cuda_${_Cuda_MAJOR_VERSION}_culibos_LIBRARY)
+        set(_Cuda_FOUND FALSE)
+    endif()
+
+    foreach(_Cuda_LIBRARY IN ITEMS cudart cublas cublasLt)
+        find_library(
+            Cuda_${_Cuda_MAJOR_VERSION}_${_Cuda_LIBRARY}_LIBRARY
+            ${_Cuda_LIBRARY}_static
+            HINTS "${_Cuda_INSTALL_ROOT}/lib"
+            NO_PACKAGE_ROOT_PATH
+            NO_CMAKE_PATH
+            NO_CMAKE_ENVIRONMENT_PATH
+            NO_SYSTEM_ENVIRONMENT_PATH
+            NO_CMAKE_INSTALL_PREFIX
+            NO_CMAKE_FIND_ROOT_PATH)
+
+        mark_as_advanced(Cuda_${_Cuda_MAJOR_VERSION}_${_Cuda_LIBRARY}_LIBRARY)
+
+        if (NOT Cuda_${_Cuda_MAJOR_VERSION}_${_Cuda_LIBRARY}_LIBRARY)
+            set(_Cuda_FOUND FALSE)
+        endif()
+    endforeach()
+
+    if (NOT _Cuda_FOUND)
+        continue()
+    endif()
+
+    # TODO: Update Find module variables to conform to conventions.
+    # https://cmake.org/cmake/help/latest/manual/cmake-developer.7.html#standard-variable-names
+    set(CUDA${_Cuda_MAJOR_VERSION}_INCLUDE_DIR
+        "${Cuda_${_Cuda_MAJOR_VERSION}_INCLUDE_DIR}")
+
+    set(CUDA${_Cuda_MAJOR_VERSION}_STATIC_LIBS
+        "${Cuda_${_Cuda_MAJOR_VERSION}_cudart_LIBRARY}"
+        "${Cuda_${_Cuda_MAJOR_VERSION}_culibos_LIBRARY}")
+
+    set(CUDA${_Cuda_MAJOR_VERSION}_LIBS "${Cuda_${_Cuda_MAJOR_VERSION}_cuda_LIBRARY}")
+    set(CUDA${_Cuda_MAJOR_VERSION}_STATIC_CUBLAS_LIBS
+        "${Cuda_${_Cuda_MAJOR_VERSION}_cublas_LIBRARY}"
+        "${Cuda_${_Cuda_MAJOR_VERSION}_cublasLt_LIBRARY}")
+endforeach()
+
+unset(_Cuda_LIBRARY)
+unset(_Cuda_FOUND)
+unset(_Cuda_VERSION)
+unset(_Cuda_VERSIONS)
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(Cuda REQUIRED_VARS ${_Cuda_REQUIRED_VARS})
+
+if (NOT Cuda_FOUND)
+    foreach(_Cuda_REQUIRED_VAR IN LISTS _Cuda_REQUIRED_VARS)
+        unset(${_Cuda_REQUIRED_VAR})
+    endforeach()
+    unset(_Cuda_REQUIRED_VAR)
 endif()
 
-unset(Cuda11_prefix)
-unset(Cuda12_prefix)
+unset(_Cuda_REQUIRED_VARS)
+
+# TODO: Define imported targets. Port call sites from module variables.

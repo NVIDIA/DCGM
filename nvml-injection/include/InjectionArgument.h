@@ -1229,6 +1229,16 @@ private:
                 }
                 break;
             }
+            case INJECTION_POWERPROFILEOPERATION_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PowerProfileOperationPtr = static_cast<nvmlPowerProfileOperation_t *>(malloc(allocateNum * sizeof(*other.m_value.PowerProfileOperationPtr)));
+                if (m_value.PowerProfileOperationPtr != nullptr)
+                {
+                    std::memcpy(m_value.PowerProfileOperationPtr, other.m_value.PowerProfileOperationPtr, allocateNum * sizeof(*other.m_value.PowerProfileOperationPtr));
+                }
+                break;
+            }
             case INJECTION_POWERPROFILETYPE_PTR:
             {
                 unsigned int allocateNum = m_isArray ? m_arrLen : 1;
@@ -1416,6 +1426,56 @@ private:
                 if (m_value.SystemDriverBranchInfoPtr != nullptr)
                 {
                     std::memcpy(m_value.SystemDriverBranchInfoPtr, other.m_value.SystemDriverBranchInfoPtr, allocateNum * sizeof(*other.m_value.SystemDriverBranchInfoPtr));
+                }
+                break;
+            }
+            case INJECTION_SYSTEMEVENTDATA_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SystemEventData_v1Ptr = static_cast<nvmlSystemEventData_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.SystemEventData_v1Ptr)));
+                if (m_value.SystemEventData_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.SystemEventData_v1Ptr, other.m_value.SystemEventData_v1Ptr, allocateNum * sizeof(*other.m_value.SystemEventData_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_SYSTEMEVENTSETCREATEREQUEST_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SystemEventSetCreateRequestPtr = static_cast<nvmlSystemEventSetCreateRequest_t *>(malloc(allocateNum * sizeof(*other.m_value.SystemEventSetCreateRequestPtr)));
+                if (m_value.SystemEventSetCreateRequestPtr != nullptr)
+                {
+                    std::memcpy(m_value.SystemEventSetCreateRequestPtr, other.m_value.SystemEventSetCreateRequestPtr, allocateNum * sizeof(*other.m_value.SystemEventSetCreateRequestPtr));
+                }
+                break;
+            }
+            case INJECTION_SYSTEMEVENTSETFREEREQUEST_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SystemEventSetFreeRequestPtr = static_cast<nvmlSystemEventSetFreeRequest_t *>(malloc(allocateNum * sizeof(*other.m_value.SystemEventSetFreeRequestPtr)));
+                if (m_value.SystemEventSetFreeRequestPtr != nullptr)
+                {
+                    std::memcpy(m_value.SystemEventSetFreeRequestPtr, other.m_value.SystemEventSetFreeRequestPtr, allocateNum * sizeof(*other.m_value.SystemEventSetFreeRequestPtr));
+                }
+                break;
+            }
+            case INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SystemEventSetWaitRequestPtr = static_cast<nvmlSystemEventSetWaitRequest_t *>(malloc(allocateNum * sizeof(*other.m_value.SystemEventSetWaitRequestPtr)));
+                if (m_value.SystemEventSetWaitRequestPtr != nullptr)
+                {
+                    std::memcpy(m_value.SystemEventSetWaitRequestPtr, other.m_value.SystemEventSetWaitRequestPtr, allocateNum * sizeof(*other.m_value.SystemEventSetWaitRequestPtr));
+                }
+                break;
+            }
+            case INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.SystemRegisterEventRequestPtr = static_cast<nvmlSystemRegisterEventRequest_t *>(malloc(allocateNum * sizeof(*other.m_value.SystemRegisterEventRequestPtr)));
+                if (m_value.SystemRegisterEventRequestPtr != nullptr)
+                {
+                    std::memcpy(m_value.SystemRegisterEventRequestPtr, other.m_value.SystemRegisterEventRequestPtr, allocateNum * sizeof(*other.m_value.SystemRegisterEventRequestPtr));
                 }
                 break;
             }
@@ -1886,6 +1946,16 @@ private:
                 if (m_value.WorkloadPowerProfileRequestedProfilesPtr != nullptr)
                 {
                     std::memcpy(m_value.WorkloadPowerProfileRequestedProfilesPtr, other.m_value.WorkloadPowerProfileRequestedProfilesPtr, allocateNum * sizeof(*other.m_value.WorkloadPowerProfileRequestedProfilesPtr));
+                }
+                break;
+            }
+            case INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr = static_cast<nvmlWorkloadPowerProfileUpdateProfiles_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr)));
+                if (m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, allocateNum * sizeof(*other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr));
                 }
                 break;
             }
@@ -5417,6 +5487,36 @@ public:
     }
 
     // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPowerProfileOperation_t *PowerProfileOperationPtr, bool inHeap = false)
+        : m_type(INJECTION_POWERPROFILEOPERATION_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerProfileOperationPtr = PowerProfileOperationPtr;
+    }
+    InjectionArgument(nvmlPowerProfileOperation_t PowerProfileOperation)
+        : m_type(INJECTION_POWERPROFILEOPERATION)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerProfileOperation = PowerProfileOperation;
+    }
+    InjectionArgument(nvmlPowerProfileOperation_t *PowerProfileOperationPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_POWERPROFILEOPERATION_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PowerProfileOperationPtr = PowerProfileOperationPtr;
+    }
+
+    nvmlPowerProfileOperation_t *AsPowerProfileOperationPtr() const
+    {
+        return m_value.PowerProfileOperationPtr;
+    }
+
+    nvmlPowerProfileOperation_t const &AsPowerProfileOperation() const
+    {
+        return m_value.PowerProfileOperation;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
     InjectionArgument(nvmlPowerProfileType_t *PowerProfileTypePtr, bool inHeap = false)
         : m_type(INJECTION_POWERPROFILETYPE_PTR), m_inHeap(inHeap)
     {
@@ -5944,6 +6044,156 @@ public:
     nvmlSystemDriverBranchInfo_t const &AsSystemDriverBranchInfo() const
     {
         return m_value.SystemDriverBranchInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlSystemEventData_v1_t *SystemEventData_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMEVENTDATA_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventData_v1Ptr = SystemEventData_v1Ptr;
+    }
+    InjectionArgument(nvmlSystemEventData_v1_t SystemEventData_v1)
+        : m_type(INJECTION_SYSTEMEVENTDATA_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventData_v1 = SystemEventData_v1;
+    }
+    InjectionArgument(nvmlSystemEventData_v1_t *SystemEventData_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMEVENTDATA_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventData_v1Ptr = SystemEventData_v1Ptr;
+    }
+
+    nvmlSystemEventData_v1_t *AsSystemEventData_v1Ptr() const
+    {
+        return m_value.SystemEventData_v1Ptr;
+    }
+
+    nvmlSystemEventData_v1_t const &AsSystemEventData_v1() const
+    {
+        return m_value.SystemEventData_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlSystemEventSetCreateRequest_t *SystemEventSetCreateRequestPtr, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMEVENTSETCREATEREQUEST_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetCreateRequestPtr = SystemEventSetCreateRequestPtr;
+    }
+    InjectionArgument(nvmlSystemEventSetCreateRequest_t SystemEventSetCreateRequest)
+        : m_type(INJECTION_SYSTEMEVENTSETCREATEREQUEST)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetCreateRequest = SystemEventSetCreateRequest;
+    }
+    InjectionArgument(nvmlSystemEventSetCreateRequest_t *SystemEventSetCreateRequestPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMEVENTSETCREATEREQUEST_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetCreateRequestPtr = SystemEventSetCreateRequestPtr;
+    }
+
+    nvmlSystemEventSetCreateRequest_t *AsSystemEventSetCreateRequestPtr() const
+    {
+        return m_value.SystemEventSetCreateRequestPtr;
+    }
+
+    nvmlSystemEventSetCreateRequest_t const &AsSystemEventSetCreateRequest() const
+    {
+        return m_value.SystemEventSetCreateRequest;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlSystemEventSetFreeRequest_t *SystemEventSetFreeRequestPtr, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMEVENTSETFREEREQUEST_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetFreeRequestPtr = SystemEventSetFreeRequestPtr;
+    }
+    InjectionArgument(nvmlSystemEventSetFreeRequest_t SystemEventSetFreeRequest)
+        : m_type(INJECTION_SYSTEMEVENTSETFREEREQUEST)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetFreeRequest = SystemEventSetFreeRequest;
+    }
+    InjectionArgument(nvmlSystemEventSetFreeRequest_t *SystemEventSetFreeRequestPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMEVENTSETFREEREQUEST_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetFreeRequestPtr = SystemEventSetFreeRequestPtr;
+    }
+
+    nvmlSystemEventSetFreeRequest_t *AsSystemEventSetFreeRequestPtr() const
+    {
+        return m_value.SystemEventSetFreeRequestPtr;
+    }
+
+    nvmlSystemEventSetFreeRequest_t const &AsSystemEventSetFreeRequest() const
+    {
+        return m_value.SystemEventSetFreeRequest;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlSystemEventSetWaitRequest_t *SystemEventSetWaitRequestPtr, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetWaitRequestPtr = SystemEventSetWaitRequestPtr;
+    }
+    InjectionArgument(nvmlSystemEventSetWaitRequest_t SystemEventSetWaitRequest)
+        : m_type(INJECTION_SYSTEMEVENTSETWAITREQUEST)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetWaitRequest = SystemEventSetWaitRequest;
+    }
+    InjectionArgument(nvmlSystemEventSetWaitRequest_t *SystemEventSetWaitRequestPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemEventSetWaitRequestPtr = SystemEventSetWaitRequestPtr;
+    }
+
+    nvmlSystemEventSetWaitRequest_t *AsSystemEventSetWaitRequestPtr() const
+    {
+        return m_value.SystemEventSetWaitRequestPtr;
+    }
+
+    nvmlSystemEventSetWaitRequest_t const &AsSystemEventSetWaitRequest() const
+    {
+        return m_value.SystemEventSetWaitRequest;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlSystemRegisterEventRequest_t *SystemRegisterEventRequestPtr, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemRegisterEventRequestPtr = SystemRegisterEventRequestPtr;
+    }
+    InjectionArgument(nvmlSystemRegisterEventRequest_t SystemRegisterEventRequest)
+        : m_type(INJECTION_SYSTEMREGISTEREVENTREQUEST)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemRegisterEventRequest = SystemRegisterEventRequest;
+    }
+    InjectionArgument(nvmlSystemRegisterEventRequest_t *SystemRegisterEventRequestPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.SystemRegisterEventRequestPtr = SystemRegisterEventRequestPtr;
+    }
+
+    nvmlSystemRegisterEventRequest_t *AsSystemRegisterEventRequestPtr() const
+    {
+        return m_value.SystemRegisterEventRequestPtr;
+    }
+
+    nvmlSystemRegisterEventRequest_t const &AsSystemRegisterEventRequest() const
+    {
+        return m_value.SystemRegisterEventRequest;
     }
 
     // The following snippet is generated from write_injection_argument_header
@@ -7314,6 +7564,36 @@ public:
     nvmlWorkloadPowerProfileRequestedProfiles_t const &AsWorkloadPowerProfileRequestedProfiles() const
     {
         return m_value.WorkloadPowerProfileRequestedProfiles;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlWorkloadPowerProfileUpdateProfiles_v1_t *WorkloadPowerProfileUpdateProfiles_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr = WorkloadPowerProfileUpdateProfiles_v1Ptr;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileUpdateProfiles_v1_t WorkloadPowerProfileUpdateProfiles_v1)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileUpdateProfiles_v1 = WorkloadPowerProfileUpdateProfiles_v1;
+    }
+    InjectionArgument(nvmlWorkloadPowerProfileUpdateProfiles_v1_t *WorkloadPowerProfileUpdateProfiles_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr = WorkloadPowerProfileUpdateProfiles_v1Ptr;
+    }
+
+    nvmlWorkloadPowerProfileUpdateProfiles_v1_t *AsWorkloadPowerProfileUpdateProfiles_v1Ptr() const
+    {
+        return m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr;
+    }
+
+    nvmlWorkloadPowerProfileUpdateProfiles_v1_t const &AsWorkloadPowerProfileUpdateProfiles_v1() const
+    {
+        return m_value.WorkloadPowerProfileUpdateProfiles_v1;
     }
 
     // The following snippet is generated from write_injection_argument_header

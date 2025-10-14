@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(tests)
+
 declare_nvvs_plugin(common .)
 nvvs_plugin_srcs(pluginCommon)
 

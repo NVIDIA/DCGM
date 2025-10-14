@@ -23,6 +23,7 @@ target_include_directories(testing_cuda_stubs
 target_link_libraries(testing_cuda_stubs
     PUBLIC
         nvvs_interface
+        jsoncpp_static
     PRIVATE
         nvvs_plugins_common_interface)
 

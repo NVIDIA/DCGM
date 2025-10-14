@@ -5179,6 +5179,50 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_HOSTMEM_CACHE_HIT,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "hostmem_cache_hit",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "HMCACHEHT",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_HOSTMEM_CACHE_MISS,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "hostmem_cache_miss",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "HMCACHEMS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_PEERMEM_CACHE_HIT,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "peermem_cache_hit",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "PMCACHEHT",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_PROF_PEERMEM_CACHE_MISS,
+                                             DCGM_FT_INT64,
+                                             0,
+                                             "peermem_cache_miss",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "PMCACHEMS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID,
                                              DCGM_FT_STRING,
                                              0,
@@ -5254,6 +5298,150 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "MODULEID",
                                              "",
                                              DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    // Link-based PRM metrics using dcgm_link_t entities
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_pprm_oper_recovery",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPRMOPREC",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_recovery_time_since_last",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLRECLAST",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_recovery_time_between_last_two",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLRECBTWN",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TOTAL_SUCCESSFUL_EVENTS,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_recovery_total_successful_events",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLRECOVER",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_SUCCESSFUL_RECOVERY_EVENTS,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_physical_successful_recovery_events",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPHYREC",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_COUNTER,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_physical_link_down_counter",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLLNKDOWN",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_plr_rcv_codes",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPLRRXC",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODE_ERR,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_plr_rcv_code_err",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPLRRXCE",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_UNCORRECTABLE_CODE,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_plr_rcv_uncorrectable_code",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPLRRXCU",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_plr_xmit_codes",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPLRTXC",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_plr_xmit_retry_codes",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPLRTXRC",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_plr_xmit_retry_events",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPLRTXRE",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_plr_sync_events",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLPLRSYNC",
+                                             "",
+                                             DCGM_FE_LINK,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
 
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_C2C_LINK_ERROR_INTR,
@@ -5482,7 +5670,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "clocks_event_power_cap_ns",
                                              DCGM_FS_DEVICE,
                                              NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_POWER_CAP,
-                                             "CLKPWRCAPNS",
+                                             "CLKPCNS",
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
@@ -5493,7 +5681,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "clocks_event_boost_ns",
                                              DCGM_FS_DEVICE,
                                              NVML_FI_DEV_CLOCKS_EVENT_REASON_SYNC_BOOST,
-                                             "CLKSYNCBSTNS",
+                                             "CLKBSTNS",
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
@@ -5526,7 +5714,205 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "clocks_event_power_brake_slowdown_ns",
                                              DCGM_FS_DEVICE,
                                              NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN,
-                                             "CLKPWRBRKNS",
+                                             "CLKEPBSNS",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_ENABLED,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "power_smoothing_enabled",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_ENABLED,
+                                             "PWRSMEN",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_PRIV_LVL,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "power_smoothing_priv_level",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_PRIV_LVL,
+                                             "PWRSMPRLV",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "power_smoothing_imm_ramp_down_enabled",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED,
+                                             "PWRSMIRD",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_applied_tmp_ceil",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_APPLIED_TMP_CEIL,
+                                             "PWRSMCL",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_applied_tmp_floor",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_APPLIED_TMP_FLOOR,
+                                             "PWRSMTFL",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_max_percent_tmp_floor_setting",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING,
+                                             "PSMMINFLR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_min_percent_tmp_floor_setting",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING,
+                                             "PSMMINFLR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_hw_circuitry_percent_lifetime_remaining",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING,
+                                             "PSMHCPLR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "power_smoothing_max_num_preset_profiles",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES,
+                                             "PSMMAXNP",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_profile_percent_tmp_floor",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR,
+                                             "PSMPTFLR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_profile_ramp_up_rate",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE,
+                                             "PSMRURAT",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_profile_ramp_down_rate",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE,
+                                             "PSMRDRAT",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "power_smoothing_profile_ramp_down_hyst_val",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL,
+                                             "PSMRDHV",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "power_smoothing_active_preset_profile",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE,
+                                             "PSMAPRPR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_admin_override_percent_tmp_floor",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR,
+                                             "PSMAOFLR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_admin_override_ramp_up_rate",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE,
+                                             "PSMAORUR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE,
+                                             DCGM_FT_DOUBLE,
+                                             8,
+                                             "power_smoothing_admin_override_ramp_down_rate",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE,
+                                             "PSMAORDR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "power_smoothing_admin_override_ramp_down_hyst_val",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL,
+                                             "PSMAORDH",
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
@@ -5728,7 +6114,7 @@ extern "C" DCGM_PUBLIC_API const char *DcgmFieldsGetEntityGroupString(dcgm_field
 /*****************************************************************************/
 unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercentageField)
 {
-    static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_C2C_RX_DATA_BYTES);
+    static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_PEERMEM_CACHE_MISS);
 
     isPercentageField = false;
 
@@ -5985,6 +6371,18 @@ unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercenta
 
         case DCGM_FI_PROF_C2C_RX_DATA_BYTES:
             return NVML_GPM_METRIC_C2C_DATA_RX_PER_SEC;
+
+        case DCGM_FI_PROF_HOSTMEM_CACHE_HIT:
+            return NVML_GPM_METRIC_HOSTMEM_CACHE_HIT;
+
+        case DCGM_FI_PROF_HOSTMEM_CACHE_MISS:
+            return NVML_GPM_METRIC_HOSTMEM_CACHE_MISS;
+
+        case DCGM_FI_PROF_PEERMEM_CACHE_HIT:
+            return NVML_GPM_METRIC_PEERMEM_CACHE_HIT;
+
+        case DCGM_FI_PROF_PEERMEM_CACHE_MISS:
+            return NVML_GPM_METRIC_PEERMEM_CACHE_MISS;
 
         default:
             DCGM_LOG_ERROR << "Unknown profiling fieldId " << fieldId;

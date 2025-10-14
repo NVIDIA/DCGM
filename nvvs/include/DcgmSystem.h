@@ -16,12 +16,14 @@
 #ifndef DCGM_SYSTEM_H
 #define DCGM_SYSTEM_H
 
+#include <expected>
 #include <vector>
 
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include "dcgm_test_apis.h"
+#include <DcgmUtilities.h>
 
 class DcgmSystem
 {
@@ -125,6 +127,16 @@ public:
      * identified.
      */
     unsigned int GetCudaMinorVersion();
+
+    /*
+     * Populates chipArchitecture with the chip architecture retrieved from DCGM
+     *
+     * @return:
+     *
+     * dcgmChipArchitecture_t       : success
+     * std::unexpected<dcgmReturn_t> : if the handle hasn't been initialized or if returned from calls to DCGM
+     */
+    DcgmResult<dcgmChipArchitecture_t> GetGpuChipArchitecture(unsigned int gpuId);
 
 private:
     dcgmHandle_t m_handle; // We use this handle but we do not own it.

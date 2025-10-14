@@ -1,2 +1,2 @@
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda-all-<PACKAGEVERSION>
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda-all-<PACKAGEVERSION>/LICENSE
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda-all-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda-all-<BASEPACKAGEVERSION>/LICENSE

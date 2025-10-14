@@ -54,7 +54,7 @@ __forceinline__ __device__ static void reduceThenAtomicAdd(int *faultyElems, int
 }
 
 
-extern "C" __global__ void compareFP32(float *C, int *faultyElems, int *nanElems, size_t iters, size_t nElemsPerIter)
+extern "C" __global__ void compareFP32(float **C, int *faultyElems, int *nanElems, size_t iters, size_t nElemsPerIter)
 {
     size_t stride = blockDim.x * blockDim.y * gridDim.x * gridDim.y;
 	size_t tid = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
@@ -65,12 +65,12 @@ extern "C" __global__ void compareFP32(float *C, int *faultyElems, int *nanElems
     int myNan    = 0;
     for (size_t myIndex = tid; myIndex < nElemsPerIter; myIndex += stride)
     {
-        float C_ref = C[myIndex];
+        float C_ref = C[0][myIndex];
         if (__isnanf(C_ref))
             myNan++;
         for (size_t i = 1; i < iters; ++i)
         {
-            float C_val = C[myIndex + i * nElemsPerIter];
+            float C_val = C[i][myIndex];
             if (__isnanf(C_val))
                 myNan++;
             if (fabsf(C_ref - C_val) > EPSILON)
@@ -81,7 +81,7 @@ extern "C" __global__ void compareFP32(float *C, int *faultyElems, int *nanElems
 }
 
 
-extern "C" __global__ void compareFP64(double *C, int *faultyElems, int *nanElems, size_t iters, size_t nElemsPerIter)
+extern "C" __global__ void compareFP64(double **C, int *faultyElems, int *nanElems, size_t iters, size_t nElemsPerIter)
 {
     size_t stride = blockDim.x * blockDim.y * gridDim.x * gridDim.y;
 	size_t tid = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
@@ -93,12 +93,12 @@ extern "C" __global__ void compareFP64(double *C, int *faultyElems, int *nanElem
     int myNan    = 0;
     for (size_t myIndex = tid; myIndex < nElemsPerIter; myIndex += stride)
     {
-        double C_ref = C[myIndex];
+        double C_ref = C[0][myIndex];
         if (__isnan(C_ref))
             myNan++;
         for (size_t i = 1; i < iters; ++i)
         {
-            double C_val = C[myIndex + i * nElemsPerIter];
+            double C_val = C[i][myIndex];
             if (__isnan(C_val))
                 myNan++;
             if (fabs(C_ref - C_val) > EPSILOND)
@@ -109,7 +109,7 @@ extern "C" __global__ void compareFP64(double *C, int *faultyElems, int *nanElem
 }
 
 ////@brief Process two __half at a time for better memory coalescing
-extern "C" __global__ void compareFP16(__half *C, int *faultyElems, int *nanElems, size_t iters, size_t nElemsPerIter)
+extern "C" __global__ void compareFP16(__half **C, int *faultyElems, int *nanElems, size_t iters, size_t nElemsPerIter)
 {
     size_t stride = blockDim.x*blockDim.y*gridDim.x*gridDim.y;
 	size_t tid = (blockIdx.y*blockDim.y + threadIdx.y)* // Y
@@ -120,12 +120,12 @@ extern "C" __global__ void compareFP16(__half *C, int *faultyElems, int *nanElem
     int myNan    = 0;
     for (size_t myIndex = tid; myIndex < nElemsPerIter; myIndex += stride)
     {
-        __half C_ref = C[myIndex];
+        __half C_ref = C[0][myIndex];
         if (__isnanf(__half2float(C_ref)))
             myNan++;
         for (size_t i = 1; i < iters; ++i)
         {
-            __half C_val = C[myIndex + i * nElemsPerIter];
+            __half C_val = C[i][myIndex];
             if (__isnanf(__half2float(C_val)))
                 myNan++;
             if (fabsf(__half2float(C_ref) - __half2float(C_val)) > EPSILON)

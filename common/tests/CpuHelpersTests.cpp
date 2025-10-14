@@ -41,26 +41,14 @@ private:
     std::optional<std::vector<std::string>> m_mockedCpuSerials;
 };
 
-class WrapperCpuHelper : public CpuHelpers
-{
-public:
-    WrapperCpuHelper() = default;
-    explicit WrapperCpuHelper(std::unique_ptr<FileSystemOperator> fileSystemOp, std::unique_ptr<LsHw> lshw)
-        : CpuHelpers(std::move(fileSystemOp), std::move(lshw))
-    {}
-    [[nodiscard]] unsigned int WrapperGetPhysicalCpusNum() const
-    {
-        return GetPhysicalCpusNum();
-    }
-};
-
 TEST_CASE("CPU Vendor & Model")
 {
     SECTION("Nvidia Grace CPU")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:036b:0241");
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
 
         CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
@@ -72,7 +60,8 @@ TEST_CASE("CPU Vendor & Model")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:046b:0211");
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:046b:0211\n");
 
         CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
@@ -84,7 +73,8 @@ TEST_CASE("CPU Vendor & Model")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "capoo");
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "capoo");
 
         CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
@@ -96,7 +86,8 @@ TEST_CASE("CPU Vendor & Model")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "5566:5566");
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "5566:5566");
 
         CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
@@ -113,44 +104,19 @@ TEST_CASE("CPU Vendor & Model")
         REQUIRE(cpuHelpers.GetVendor() != cpuHelpers.GetNvidiaVendorName());
         REQUIRE(cpuHelpers.GetModel() != cpuHelpers.GetGraceModelName());
     }
-}
 
-void MockOneGraceCoreSlibings(std::unique_ptr<MockFileSystemOperator> &mockFileOp)
-{
-    constexpr unsigned int graceCoreNum = 72;
-    std::vector<std::string> graceCoreSlibings;
-
-    for (unsigned int i = 0; i < graceCoreNum; ++i)
+    SECTION("Multiple Mixed SoC Entries in SysFS")
     {
-        graceCoreSlibings.push_back(fmt::format("/sys/devices/system/cpu/cpu{}/topology/core_siblings", i));
-    }
-    mockFileOp->MockGlob(CPU_CORE_SLIBLINGS_GLOB_PATTERN, graceCoreSlibings);
+        auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-    for (auto const &path : graceCoreSlibings)
-    {
-        mockFileOp->MockFileContent(path, "ff,ffffffff,ffffffff");
-    }
-}
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id", "/sys/devices/soc1/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "36\n");
+        mockFileOp->MockFileContent("/sys/devices/soc1/soc_id", "jep106:036b:0241\n");
 
-void MockTwoGraceCoreSlibings(std::unique_ptr<MockFileSystemOperator> &mockFileOp)
-{
-    constexpr unsigned int graceCoreNum = 72;
-    std::vector<std::string> graceCoreSlibings;
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
-    for (unsigned int i = 0; i < 2 * graceCoreNum; ++i)
-    {
-        graceCoreSlibings.push_back(fmt::format("/sys/devices/system/cpu/cpu{}/topology/core_siblings", i));
-    }
-    mockFileOp->MockGlob(CPU_CORE_SLIBLINGS_GLOB_PATTERN, graceCoreSlibings);
-
-    for (unsigned int i = 0; i < graceCoreNum; ++i)
-    {
-        mockFileOp->MockFileContent(graceCoreSlibings[i], "0000,00000000,000000ff,ffffffff,ffffffff");
-    }
-
-    for (unsigned int i = graceCoreNum; i < 2 * graceCoreNum; ++i)
-    {
-        mockFileOp->MockFileContent(graceCoreSlibings[i], "ffff,ffffffff,ffffff00,00000000,00000000");
+        REQUIRE(cpuHelpers.GetVendor() == cpuHelpers.GetNvidiaVendorName());
+        REQUIRE(cpuHelpers.GetModel() == cpuHelpers.GetGraceModelName());
     }
 }
 
@@ -160,8 +126,9 @@ TEST_CASE("CPU IDs")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:036b:0241");
-        MockOneGraceCoreSlibings(mockFileOp);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "0");
 
         CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
@@ -173,8 +140,9 @@ TEST_CASE("CPU IDs")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:036b:0241");
-        MockTwoGraceCoreSlibings(mockFileOp);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "0-1");
 
         CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
@@ -189,8 +157,9 @@ TEST_CASE("CPU IDs")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "capoo");
-        MockOneGraceCoreSlibings(mockFileOp);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "capoo");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "0");
 
         CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
@@ -201,40 +170,53 @@ TEST_CASE("CPU IDs")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:036b:0241");
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
 
         CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
 
         REQUIRE(cpuHelpers.GetCpuIds().empty());
     }
-}
 
-TEST_CASE("GetPhysicalCpusNum")
-{
-    SECTION("One Grace CPU")
+    SECTION("Not Expected Range Format")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
-        MockOneGraceCoreSlibings(mockFileOp);
 
-        WrapperCpuHelper cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
-        REQUIRE(cpuHelpers.WrapperGetPhysicalCpusNum() == 1);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "capoo-dogdog");
+
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
+
+        REQUIRE(cpuHelpers.GetCpuIds().empty());
     }
 
-    SECTION("Two Grace CPUs")
+    SECTION("Not Expected Single Node Format")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
-        MockTwoGraceCoreSlibings(mockFileOp);
 
-        WrapperCpuHelper cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
-        REQUIRE(cpuHelpers.WrapperGetPhysicalCpusNum() == 2);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "capoo");
+
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
+
+        REQUIRE(cpuHelpers.GetCpuIds().empty());
     }
 
-    SECTION("Fail to read file")
+    SECTION("Multiple Mixed SoC Entries in SysFS")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
 
-        WrapperCpuHelper cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
-        REQUIRE(cpuHelpers.WrapperGetPhysicalCpusNum() == 0);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id", "/sys/devices/soc1/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "36\n");
+        mockFileOp->MockFileContent("/sys/devices/soc1/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "0");
+
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
+
+        REQUIRE(cpuHelpers.GetCpuIds().size() == 1);
+        REQUIRE(cpuHelpers.GetCpuIds()[0] == 0);
     }
 }
 
@@ -243,13 +225,14 @@ TEST_CASE("CpuHelpers::GetCpuSerials")
     SECTION("One Grace CPU")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:036b:0241");
-        MockOneGraceCoreSlibings(mockFileOp);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "0");
         auto mockLsHw = std::make_unique<MockLsHw>();
         std::vector<std::string> serials { "capoo" };
         mockLsHw->MockCpuSerials(serials);
 
-        WrapperCpuHelper cpuHelpers(std::move(mockFileOp), std::move(mockLsHw));
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::move(mockLsHw));
         auto retrievedCpuSerials = cpuHelpers.GetCpuSerials();
         REQUIRE(retrievedCpuSerials.has_value());
         REQUIRE(retrievedCpuSerials->size() == 1);
@@ -259,13 +242,14 @@ TEST_CASE("CpuHelpers::GetCpuSerials")
     SECTION("Two Grace CPU")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:036b:0241");
-        MockTwoGraceCoreSlibings(mockFileOp);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "0-1");
         auto mockLsHw = std::make_unique<MockLsHw>();
         std::vector<std::string> serials { "capoo", "dogdog" };
         mockLsHw->MockCpuSerials(serials);
 
-        WrapperCpuHelper cpuHelpers(std::move(mockFileOp), std::move(mockLsHw));
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::move(mockLsHw));
         auto retrievedCpuSerials = cpuHelpers.GetCpuSerials();
         REQUIRE(retrievedCpuSerials.has_value());
         REQUIRE(retrievedCpuSerials->size() == 2);
@@ -276,12 +260,13 @@ TEST_CASE("CpuHelpers::GetCpuSerials")
     SECTION("Failed on LsHw")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:036b:0241");
-        MockTwoGraceCoreSlibings(mockFileOp);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "0");
         auto mockLsHw = std::make_unique<MockLsHw>();
         mockLsHw->MockCpuSerials(std::nullopt);
 
-        WrapperCpuHelper cpuHelpers(std::move(mockFileOp), std::move(mockLsHw));
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::move(mockLsHw));
         auto retrievedCpuSerials = cpuHelpers.GetCpuSerials();
         REQUIRE(!retrievedCpuSerials.has_value());
     }
@@ -289,13 +274,14 @@ TEST_CASE("CpuHelpers::GetCpuSerials")
     SECTION("Mismatch: Number of Serials vs. Number of CPUs")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();
-        mockFileOp->MockFileContent(CPU_VENDOR_MODEL_PATH, "jep106:036b:0241");
-        MockTwoGraceCoreSlibings(mockFileOp);
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0241\n");
+        mockFileOp->MockFileContent(CPU_NODE_RANGE_PATH, "0-1");
         auto mockLsHw = std::make_unique<MockLsHw>();
         std::vector<std::string> serials { "capoo" };
         mockLsHw->MockCpuSerials(serials);
 
-        WrapperCpuHelper cpuHelpers(std::move(mockFileOp), std::move(mockLsHw));
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::move(mockLsHw));
         auto retrievedCpuSerials = cpuHelpers.GetCpuSerials();
         REQUIRE(!retrievedCpuSerials.has_value());
     }

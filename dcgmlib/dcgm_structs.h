@@ -1756,6 +1756,26 @@ typedef dcgmConfig_v2 dcgmConfig_t;
  */
 #define dcgmConfig_version dcgmConfig_version2
 
+typedef enum
+{
+    DCGM_WORKLOAD_PROFILE_ACTION_SET               = 0,
+    DCGM_WORKLOAD_PROFILE_ACTION_SET_AND_OVERWRITE = 1,
+    DCGM_WORKLOAD_PROFILE_ACTION_CLEAR             = 2,
+} dcgmWorkloadProfileAction_t;
+
+typedef struct
+{
+    unsigned int version;                                    //!< Version number (dcgmWorkloadPowerProfile_version)
+    dcgmGpuGrp_t groupId;                                    //!< Group ID
+    dcgmWorkloadProfileAction_t action;                      //!< Action to perform
+    unsigned int profileMask[DCGM_POWER_PROFILE_ARRAY_SIZE]; //!< Bitmask of workload power profiles to update
+} dcgmWorkloadPowerProfile_v1;
+
+typedef dcgmWorkloadPowerProfile_v1 dcgmWorkloadPowerProfile_t;
+
+#define dcgmWorkloadPowerProfile_version1 MAKE_DCGM_VERSION(dcgmWorkloadPowerProfile_v1, 1)
+#define dcgmWorkloadPowerProfile_version  dcgmWorkloadPowerProfile_version1
+
 /*Remove from doxygen documentation
  *
  * Define the structure that contains specific policy information

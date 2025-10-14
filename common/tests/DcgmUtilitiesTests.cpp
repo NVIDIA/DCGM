@@ -19,12 +19,13 @@
 
 #include <DcgmException.hpp>
 #include <chrono>
+#include <fstream>
 #include <map>
 #include <set>
+#include <string>
 #include <unordered_set>
 
 #include <catch2/catch_all.hpp>
-
 
 TEST_CASE("Utils: GetMaxAge")
 {
@@ -145,8 +146,43 @@ TEST_CASE("Dcgmi Config: Bitmask helper")
     }
 }
 
+namespace
+{
+/* Some systems are configured to use non-local sources for passwd. The queries are probably
+ * undesirible in those cases, and can also result in test failure.
+ */
+bool PasswdIsFilesOnly()
+{
+    std::ifstream nsswitch("/etc/nsswitch.conf");
+    if (!nsswitch)
+        return true; // If we can't read it, assume local only
+    std::string line;
+    while (std::getline(nsswitch, line))
+    {
+        auto hash = line.find('#');
+        if (hash != std::string::npos)
+            line = line.substr(0, hash);
+        auto pos = line.find("passwd:");
+        if (pos != std::string::npos)
+        {
+            std::string rest = line.substr(pos + 7);
+            // Remove leading/trailing whitespace
+            rest.erase(0, rest.find_first_not_of(" \t"));
+            rest.erase(rest.find_last_not_of(" \t") + 1);
+            return rest == "files";
+        }
+    }
+    return true; // Assume local only if not found
+}
+} // namespace
+
 TEST_CASE("GetUserCredentials")
 {
+    if (!PasswdIsFilesOnly())
+    {
+        SKIP("Skipping test: /etc/nsswitch.conf passwd is not 'files' only");
+    }
+
     SECTION("nullptr username handling")
     {
         auto result = GetUserCredentials(nullptr);

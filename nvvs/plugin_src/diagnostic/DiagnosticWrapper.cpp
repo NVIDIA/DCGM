@@ -74,12 +74,14 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
-                              dcgmDiagPluginAttr_v1 const *pluginAttr)
+                              dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              HangDetectMonitor *monitor)
 {
     GpuBurnPlugin *gbp = new GpuBurnPlugin(handle);
     *userData          = gbp;
 
     gbp->SetPluginAttr(pluginAttr);
+    gbp->SetHangDetectMonitor(monitor);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, gbp->GetDisplayName());
     return DCGM_ST_OK;
 }

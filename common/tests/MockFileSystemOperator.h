@@ -61,6 +61,22 @@ public:
     }
 
     /**
+     * Mock unlink
+     *
+     * @param path Path to the file
+     * @return true for success, false for failure
+     */
+    bool Unlink(std::string_view path) override
+    {
+        auto it = m_mockUnlink.find(std::string(path));
+        if (it != m_mockUnlink.end())
+        {
+            return it->second;
+        }
+        return true;
+    }
+
+    /**
      * Set mock content for a file path
      *
      * @param path The file path
@@ -82,7 +98,19 @@ public:
         m_mockGlobs[pattern] = paths;
     }
 
+    /**
+     * Set mock unlink result for a path
+     *
+     * @param path The path
+     * @param result The result to return when unlinking the path
+     */
+    void MockUnlink(std::string const &path, bool result)
+    {
+        m_mockUnlink[path] = result;
+    }
+
 private:
     std::unordered_map<std::string, std::string> m_mockContent;
     std::unordered_map<std::string, std::vector<std::string>> m_mockGlobs;
+    std::unordered_map<std::string, bool> m_mockUnlink;
 };

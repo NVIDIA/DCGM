@@ -239,8 +239,8 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    std::cout << std::left << std::setw(12) << "Module ID" << std::left << std::setw(16) << "Module name"
-              << "Status" << std::endl;
+    std::cout << std::left << std::setw(12) << "Module ID" << std::left << std::setw(16) << "Module name" << "Status"
+              << std::endl;
 
     for (unsigned int i = 0; i < getStatuses.numStatuses; i++)
     {

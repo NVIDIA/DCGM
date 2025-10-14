@@ -42,13 +42,14 @@ target_sources(dcgm_logging PRIVATE
 target_link_libraries(dcgm_logging PUBLIC
     common_interface
     fmt::fmt
-    nvmli_interface)
+    nvmli_interface
+    plog::plog)
 
 target_sources(dcgm_mutex PRIVATE
     DcgmMutex.cpp
     DcgmMutex.h)
 
-target_link_libraries(dcgm_mutex PUBLIC common_interface)
+target_link_libraries(dcgm_mutex PUBLIC common_interface dcgm_logging)
 
 add_subdirectory(ChildProcess)
 add_subdirectory(RemoteConn)
@@ -86,6 +87,9 @@ target_sources(dcgm_common PRIVATE
     FastPimpl.hpp
     FileSystemOperator.cpp
     FingerprintStore.cpp
+    HangDetect.cpp
+    HangDetectHandler.cpp
+    HangDetectMonitor.cpp
     LsHw.cpp
     LsHw.h
     MigIdParser.cpp
@@ -101,10 +105,11 @@ target_sources(dcgm_common PRIVATE
     DcgmChildProcessManager.cpp)
 
 target_link_libraries(dcgm_common PUBLIC
-    ${JSONCPP_STATIC_LIBS}
+    jsoncpp_static
     childprocess
     buildinfo_objects
     common_interface
+    dcgm_logging
     dl
     fmt::fmt
     sdk_nvml_essentials_objects
@@ -117,4 +122,4 @@ target_sources(common_watch_objects PRIVATE
     DcgmWatchTable.cpp
     DcgmWatchTable.h)
 
-target_link_libraries(common_watch_objects PUBLIC common_interface)
+target_link_libraries(common_watch_objects PUBLIC common_interface dcgm_logging)

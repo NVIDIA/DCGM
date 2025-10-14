@@ -64,7 +64,7 @@ typedef struct
 class DcgmHostEngineHandler
 {
 private:
-    static const int DCGM_HE_NUM_WORKERS = 2; /* How many worker threads to use for processing
+    static const int DCGM_HE_NUM_WORKERS = 3; /* How many worker threads to use for processing
                                                  user data */
 
 public:
@@ -565,6 +565,16 @@ private:
     dcgmReturn_t GetCachedOrLiveValueForEntity(dcgmGroupEntityPair_t entity,
                                                unsigned short fieldId,
                                                DcgmFvBuffer &fvBuffer);
+
+    /*****************************************************************************/
+    /**
+     * Get the status of an NVSwitch entity
+     *
+     * @param entityGroupId The group ID of the entity (FE_SWITCH, FE_CONNECTX, or FE_LINK)
+     * @param entityId The ID of the entity
+     * @return The status of the entity
+     */
+    DcgmEntityStatus_t GetNvSwitchEntityStatus(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId);
 
     /*****************************************************************************/
     /* Set of connectionId as to if this connection's watches should persist after disconnect.

@@ -19,6 +19,7 @@
 #include "DistributedCudaContext.h"
 #include <cuda.h>
 #include <dcgm_structs.h>
+#include <expected>
 #include <functional>
 #include <map>
 #include <memory>
@@ -116,6 +117,7 @@ public:
     dcgmReturn_t InitializeGpuInstances(void);
     dcgmReturn_t ShutdownGpuInstances(void);
 
+    std::expected<std::vector<dcgm_field_eid_t>, std::string> GetMaxwellPascalVoltaArchGpus();
 
     /*************************************************************************/
 

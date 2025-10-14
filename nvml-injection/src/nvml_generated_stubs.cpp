@@ -67,6 +67,10 @@ nvmlReturn_t nvmlDeviceGetClockInfo(nvmlDevice_t device, nvmlClockType_t type, u
         {
             return injectedNvml->GetWrapper(__func__, "ClockInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ClockInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ClockInfo", args, preparedValues);
@@ -107,6 +111,10 @@ nvmlReturn_t nvmlDeviceGetMaxClockInfo(nvmlDevice_t device, nvmlClockType_t type
         {
             return injectedNvml->GetWrapper(__func__, "MaxClockInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MaxClockInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MaxClockInfo", args, preparedValues);
@@ -145,6 +153,10 @@ nvmlReturn_t nvmlDeviceGetComputeMode(nvmlDevice_t device, nvmlComputeMode_t *mo
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "ComputeMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeMode", args, preparedValues);
         }
         else
         {
@@ -214,6 +226,10 @@ nvmlReturn_t nvmlDeviceGetCudaComputeCapability(nvmlDevice_t device, int *major,
         {
             return injectedNvml->GetWrapper(__func__, "CudaComputeCapability", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CudaComputeCapability", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "CudaComputeCapability", args, preparedValues);
@@ -254,6 +270,10 @@ nvmlReturn_t nvmlDeviceSetDriverModel(nvmlDevice_t device, nvmlDriverModel_t dri
         {
             return injectedNvml->GetWrapper(__func__, "DriverModel", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DriverModel", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "DriverModel", args, preparedValues);
@@ -293,6 +313,10 @@ nvmlReturn_t nvmlDeviceGetDriverModel(nvmlDevice_t device, nvmlDriverModel_t *cu
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "DriverModel", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DriverModel", args, preparedValues);
         }
         else
         {
@@ -578,6 +602,10 @@ nvmlReturn_t nvmlDeviceGetDisplayMode(nvmlDevice_t device, nvmlEnableState_t *mo
         {
             return injectedNvml->GetWrapper(__func__, "DisplayMode", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DisplayMode", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "DisplayMode", args, preparedValues);
@@ -618,6 +646,10 @@ nvmlReturn_t nvmlDeviceGetEccMode(nvmlDevice_t device, nvmlEnableState_t *curren
         {
             return injectedNvml->GetWrapper(__func__, "EccMode", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EccMode", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "EccMode", args, preparedValues);
@@ -656,6 +688,10 @@ nvmlReturn_t nvmlDeviceGetDefaultEccMode(nvmlDevice_t device, nvmlEnableState_t 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "DefaultEccMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DefaultEccMode", args, preparedValues);
         }
         else
         {
@@ -696,6 +732,10 @@ nvmlReturn_t nvmlDeviceGetBoardId(nvmlDevice_t device, unsigned int *boardId)
         {
             return injectedNvml->GetWrapper(__func__, "BoardId", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "BoardId", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "BoardId", args, preparedValues);
@@ -734,6 +774,10 @@ nvmlReturn_t nvmlDeviceGetMultiGpuBoard(nvmlDevice_t device, unsigned int *multi
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MultiGpuBoard", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MultiGpuBoard", args, preparedValues);
         }
         else
         {
@@ -779,6 +823,10 @@ nvmlReturn_t nvmlDeviceGetDetailedEccErrors(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "DetailedEccErrors", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DetailedEccErrors", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "DetailedEccErrors", args, preparedValues);
@@ -822,6 +870,10 @@ nvmlReturn_t nvmlDeviceGetTotalEccErrors(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "TotalEccErrors", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "TotalEccErrors", args, preparedValues);
         }
         else
         {
@@ -889,6 +941,10 @@ nvmlReturn_t nvmlDeviceClearEccErrorCounts(nvmlDevice_t device, nvmlEccCounterTy
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "EccErrorCounts", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EccErrorCounts", args, preparedValues);
         }
         else
         {
@@ -962,6 +1018,10 @@ nvmlReturn_t nvmlDeviceGetBrand(nvmlDevice_t device, nvmlBrandType_t *type)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Brand", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Brand", args, preparedValues);
         }
         else
         {
@@ -1074,6 +1134,10 @@ nvmlReturn_t nvmlDeviceGetMemoryAffinity(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "MemoryAffinity", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MemoryAffinity", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MemoryAffinity", args, preparedValues);
@@ -1117,6 +1181,10 @@ nvmlReturn_t nvmlDeviceGetCpuAffinityWithinScope(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "CpuAffinityWithinScope", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CpuAffinityWithinScope", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "CpuAffinityWithinScope", args, preparedValues);
@@ -1156,6 +1224,10 @@ nvmlReturn_t nvmlDeviceGetCpuAffinity(nvmlDevice_t device, unsigned int cpuSetSi
         {
             return injectedNvml->GetWrapper(__func__, "CpuAffinity", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CpuAffinity", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "CpuAffinity", args, preparedValues);
@@ -1194,6 +1266,10 @@ nvmlReturn_t nvmlDeviceSetCpuAffinity(nvmlDevice_t device)
         {
             return injectedNvml->GetWrapper(__func__, "CpuAffinity", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CpuAffinity", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "CpuAffinity", args, preparedValues);
@@ -1231,6 +1307,10 @@ nvmlReturn_t nvmlDeviceClearCpuAffinity(nvmlDevice_t device)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "CpuAffinity", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CpuAffinity", args, preparedValues);
         }
         else
         {
@@ -1305,6 +1385,10 @@ nvmlReturn_t nvmlDeviceGetMemoryInfo(nvmlDevice_t device, nvmlMemory_t *memory)
         {
             return injectedNvml->GetWrapper(__func__, "MemoryInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MemoryInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MemoryInfo", args, preparedValues);
@@ -1343,6 +1427,10 @@ nvmlReturn_t nvmlDeviceGetMemoryInfo_v2(nvmlDevice_t device, nvmlMemory_v2_t *me
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MemoryInfo", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MemoryInfo", args, preparedValues);
         }
         else
         {
@@ -1383,6 +1471,10 @@ nvmlReturn_t nvmlDeviceGetPciInfo(nvmlDevice_t device, nvmlPciInfo_t *pci)
         {
             return injectedNvml->GetWrapper(__func__, "PciInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PciInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PciInfo", args, preparedValues);
@@ -1421,6 +1513,10 @@ nvmlReturn_t nvmlDeviceGetPciInfo_v2(nvmlDevice_t device, nvmlPciInfo_t *pci)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PciInfo", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PciInfo", args, preparedValues);
         }
         else
         {
@@ -1461,6 +1557,10 @@ nvmlReturn_t nvmlDeviceGetPciInfo_v3(nvmlDevice_t device, nvmlPciInfo_t *pci)
         {
             return injectedNvml->GetWrapper(__func__, "PciInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PciInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PciInfo", args, preparedValues);
@@ -1499,6 +1599,10 @@ nvmlReturn_t nvmlDeviceGetPersistenceMode(nvmlDevice_t device, nvmlEnableState_t
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PersistenceMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PersistenceMode", args, preparedValues);
         }
         else
         {
@@ -1567,6 +1671,10 @@ nvmlReturn_t nvmlDeviceGetBAR1MemoryInfo(nvmlDevice_t device, nvmlBAR1Memory_t *
         {
             return injectedNvml->GetWrapper(__func__, "BAR1MemoryInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "BAR1MemoryInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "BAR1MemoryInfo", args, preparedValues);
@@ -1609,6 +1717,10 @@ nvmlReturn_t nvmlDeviceGetViolationStatus(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "ViolationStatus", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ViolationStatus", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ViolationStatus", args, preparedValues);
@@ -1647,6 +1759,10 @@ nvmlReturn_t nvmlDeviceGetPowerState(nvmlDevice_t device, nvmlPstates_t *pState)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PowerState", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PowerState", args, preparedValues);
         }
         else
         {
@@ -1687,6 +1803,10 @@ nvmlReturn_t nvmlDeviceGetPerformanceState(nvmlDevice_t device, nvmlPstates_t *p
         {
             return injectedNvml->GetWrapper(__func__, "PerformanceState", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PerformanceState", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PerformanceState", args, preparedValues);
@@ -1725,6 +1845,10 @@ nvmlReturn_t nvmlDeviceGetPowerUsage(nvmlDevice_t device, unsigned int *power)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PowerUsage", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PowerUsage", args, preparedValues);
         }
         else
         {
@@ -1765,6 +1889,10 @@ nvmlReturn_t nvmlDeviceGetPowerMode(nvmlDevice_t device, unsigned int *powerMode
         {
             return injectedNvml->GetWrapper(__func__, "PowerMode", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PowerMode", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PowerMode", args, preparedValues);
@@ -1803,6 +1931,10 @@ nvmlReturn_t nvmlDeviceGetSupportedPowerModes(nvmlDevice_t device, unsigned int 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "SupportedPowerModes", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SupportedPowerModes", args, preparedValues);
         }
         else
         {
@@ -1871,6 +2003,10 @@ nvmlReturn_t nvmlDeviceGetTotalEnergyConsumption(nvmlDevice_t device, unsigned l
         {
             return injectedNvml->GetWrapper(__func__, "TotalEnergyConsumption", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "TotalEnergyConsumption", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "TotalEnergyConsumption", args, preparedValues);
@@ -1909,6 +2045,10 @@ nvmlReturn_t nvmlDeviceGetPowerManagementMode(nvmlDevice_t device, nvmlEnableSta
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PowerManagementMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PowerManagementMode", args, preparedValues);
         }
         else
         {
@@ -1949,6 +2089,10 @@ nvmlReturn_t nvmlDeviceGetPowerManagementLimit(nvmlDevice_t device, unsigned int
         {
             return injectedNvml->GetWrapper(__func__, "PowerManagementLimit", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PowerManagementLimit", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PowerManagementLimit", args, preparedValues);
@@ -1988,6 +2132,10 @@ nvmlReturn_t nvmlDeviceGetTemperature(nvmlDevice_t device, nvmlTemperatureSensor
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Temperature", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Temperature", args, preparedValues);
         }
         else
         {
@@ -2030,6 +2178,10 @@ nvmlReturn_t nvmlDeviceGetTemperatureThreshold(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "TemperatureThreshold", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "TemperatureThreshold", args, preparedValues);
         }
         else
         {
@@ -2101,6 +2253,10 @@ nvmlReturn_t nvmlDeviceGetMarginTemperature(nvmlDevice_t device, nvmlMarginTempe
         {
             return injectedNvml->GetWrapper(__func__, "MarginTemperature", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MarginTemperature", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MarginTemperature", args, preparedValues);
@@ -2139,6 +2295,10 @@ nvmlReturn_t nvmlDeviceGetFanSpeed(nvmlDevice_t device, unsigned int *speed)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "FanSpeed", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FanSpeed", args, preparedValues);
         }
         else
         {
@@ -2180,6 +2340,10 @@ nvmlReturn_t nvmlDeviceGetFanSpeed_v2(nvmlDevice_t device, unsigned int fan, uns
         {
             return injectedNvml->GetWrapper(__func__, "FanSpeed", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FanSpeed", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "FanSpeed", args, preparedValues);
@@ -2220,6 +2384,10 @@ nvmlReturn_t nvmlDeviceGetTargetFanSpeed(nvmlDevice_t device, unsigned int fan, 
         {
             return injectedNvml->GetWrapper(__func__, "TargetFanSpeed", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "TargetFanSpeed", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "TargetFanSpeed", args, preparedValues);
@@ -2259,6 +2427,10 @@ nvmlReturn_t nvmlDeviceGetNumFans(nvmlDevice_t device, unsigned int *numFans)
         {
             return injectedNvml->GetWrapper(__func__, "NumFans", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NumFans", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NumFans", args, preparedValues);
@@ -2297,6 +2469,10 @@ nvmlReturn_t nvmlDeviceGetUtilizationRates(nvmlDevice_t device, nvmlUtilization_
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "UtilizationRates", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "UtilizationRates", args, preparedValues);
         }
         else
         {
@@ -2340,6 +2516,10 @@ nvmlReturn_t nvmlDeviceGetEncoderUtilization(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "EncoderUtilization", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EncoderUtilization", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "EncoderUtilization", args, preparedValues);
@@ -2382,6 +2562,10 @@ nvmlReturn_t nvmlDeviceGetDecoderUtilization(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "DecoderUtilization", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DecoderUtilization", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "DecoderUtilization", args, preparedValues);
@@ -2420,6 +2604,10 @@ nvmlReturn_t nvmlDeviceGetMaxPcieLinkGeneration(nvmlDevice_t device, unsigned in
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MaxPcieLinkGeneration", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MaxPcieLinkGeneration", args, preparedValues);
         }
         else
         {
@@ -2460,6 +2648,10 @@ nvmlReturn_t nvmlDeviceGetMaxPcieLinkWidth(nvmlDevice_t device, unsigned int *ma
         {
             return injectedNvml->GetWrapper(__func__, "MaxPcieLinkWidth", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MaxPcieLinkWidth", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MaxPcieLinkWidth", args, preparedValues);
@@ -2499,6 +2691,10 @@ nvmlReturn_t nvmlDeviceGetCurrPcieLinkGeneration(nvmlDevice_t device, unsigned i
         {
             return injectedNvml->GetWrapper(__func__, "CurrPcieLinkGeneration", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CurrPcieLinkGeneration", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "CurrPcieLinkGeneration", args, preparedValues);
@@ -2537,6 +2733,10 @@ nvmlReturn_t nvmlDeviceGetCurrPcieLinkWidth(nvmlDevice_t device, unsigned int *c
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "CurrPcieLinkWidth", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CurrPcieLinkWidth", args, preparedValues);
         }
         else
         {
@@ -2722,6 +2922,10 @@ nvmlReturn_t nvmlUnitGetFanSpeedInfo(nvmlUnit_t unit, nvmlUnitFanSpeeds_t *fanSp
         {
             return injectedNvml->GetWrapper(__func__, "FanSpeedInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FanSpeedInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "FanSpeedInfo", args, preparedValues);
@@ -2760,6 +2964,10 @@ nvmlReturn_t nvmlUnitGetHandleByIndex(unsigned int index, nvmlUnit_t *unit)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "HandleByIndex", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "HandleByIndex", args, preparedValues);
         }
         else
         {
@@ -2800,6 +3008,10 @@ nvmlReturn_t nvmlUnitGetLedState(nvmlUnit_t unit, nvmlLedState_t *state)
         {
             return injectedNvml->GetWrapper(__func__, "LedState", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "LedState", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "LedState", args, preparedValues);
@@ -2839,6 +3051,10 @@ nvmlReturn_t nvmlUnitSetLedState(nvmlUnit_t unit, nvmlLedColor_t color)
         {
             return injectedNvml->GetWrapper(__func__, "LedState", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "LedState", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "LedState", args, preparedValues);
@@ -2877,6 +3093,10 @@ nvmlReturn_t nvmlUnitGetPsuInfo(nvmlUnit_t unit, nvmlPSUInfo_t *psu)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PsuInfo", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PsuInfo", args, preparedValues);
         }
         else
         {
@@ -2918,6 +3138,10 @@ nvmlReturn_t nvmlUnitGetTemperature(nvmlUnit_t unit, unsigned int type, unsigned
         {
             return injectedNvml->GetWrapper(__func__, "Temperature", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Temperature", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Temperature", args, preparedValues);
@@ -2956,6 +3180,10 @@ nvmlReturn_t nvmlUnitGetUnitInfo(nvmlUnit_t unit, nvmlUnitInfo_t *info)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "UnitInfo", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "UnitInfo", args, preparedValues);
         }
         else
         {
@@ -2996,6 +3224,10 @@ nvmlReturn_t nvmlUnitGetDevices(nvmlUnit_t unit, unsigned int *deviceCount, nvml
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Devices", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Devices", args, preparedValues);
         }
         else
         {
@@ -3070,6 +3302,10 @@ nvmlReturn_t nvmlDeviceGetBridgeChipInfo(nvmlDevice_t device, nvmlBridgeChipHier
         {
             return injectedNvml->GetWrapper(__func__, "BridgeChipInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "BridgeChipInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "BridgeChipInfo", args, preparedValues);
@@ -3109,6 +3345,10 @@ nvmlReturn_t nvmlSystemGetHicVersion(unsigned int *hwbcCount, nvmlHwbcEntry_t *h
         {
             return injectedNvml->GetWrapper(__func__, "HicVersion", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "HicVersion", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "HicVersion", args, preparedValues);
@@ -3146,6 +3386,10 @@ nvmlReturn_t nvmlEventSetCreate(nvmlEventSet_t *set)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
         }
         else
         {
@@ -3187,6 +3431,10 @@ nvmlReturn_t nvmlDeviceRegisterEvents(nvmlDevice_t device, unsigned long long ev
         {
             return injectedNvml->GetWrapper(__func__, "RegisterEvents", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "RegisterEvents", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "RegisterEvents", args, preparedValues);
@@ -3225,6 +3473,10 @@ nvmlReturn_t nvmlDeviceGetSupportedEventTypes(nvmlDevice_t device, unsigned long
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "SupportedEventTypes", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SupportedEventTypes", args, preparedValues);
         }
         else
         {
@@ -3266,6 +3518,10 @@ nvmlReturn_t nvmlEventSetWait(nvmlEventSet_t set, nvmlEventData_t *data, unsigne
         {
             return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
@@ -3306,6 +3562,10 @@ nvmlReturn_t nvmlEventSetWait_v2(nvmlEventSet_t set, nvmlEventData_t *data, unsi
         {
             return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
@@ -3343,6 +3603,10 @@ nvmlReturn_t nvmlEventSetFree(nvmlEventSet_t set)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
         }
         else
         {
@@ -3386,6 +3650,10 @@ nvmlReturn_t nvmlDeviceGetComputeRunningProcesses(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "ComputeRunningProcesses", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeRunningProcesses", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ComputeRunningProcesses", args, preparedValues);
@@ -3427,6 +3695,10 @@ nvmlReturn_t nvmlDeviceGetComputeRunningProcesses_v2(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "ComputeRunningProcesses", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeRunningProcesses", args, preparedValues);
         }
         else
         {
@@ -3470,6 +3742,10 @@ nvmlReturn_t nvmlDeviceGetComputeRunningProcesses_v3(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "ComputeRunningProcesses", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeRunningProcesses", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ComputeRunningProcesses", args, preparedValues);
@@ -3511,6 +3787,10 @@ nvmlReturn_t nvmlDeviceGetGraphicsRunningProcesses(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GraphicsRunningProcesses", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GraphicsRunningProcesses", args, preparedValues);
         }
         else
         {
@@ -3554,6 +3834,10 @@ nvmlReturn_t nvmlDeviceGetGraphicsRunningProcesses_v2(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GraphicsRunningProcesses", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GraphicsRunningProcesses", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GraphicsRunningProcesses", args, preparedValues);
@@ -3595,6 +3879,10 @@ nvmlReturn_t nvmlDeviceGetGraphicsRunningProcesses_v3(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GraphicsRunningProcesses", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GraphicsRunningProcesses", args, preparedValues);
         }
         else
         {
@@ -3638,6 +3926,10 @@ nvmlReturn_t nvmlDeviceGetMPSComputeRunningProcesses(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "MPSComputeRunningProcesses", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MPSComputeRunningProcesses", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MPSComputeRunningProcesses", args, preparedValues);
@@ -3680,6 +3972,10 @@ nvmlReturn_t nvmlDeviceGetMPSComputeRunningProcesses_v2(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "MPSComputeRunningProcesses", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MPSComputeRunningProcesses", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MPSComputeRunningProcesses", args, preparedValues);
@@ -3721,6 +4017,10 @@ nvmlReturn_t nvmlDeviceGetMPSComputeRunningProcesses_v3(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MPSComputeRunningProcesses", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MPSComputeRunningProcesses", args, preparedValues);
         }
         else
         {
@@ -3796,6 +4096,10 @@ nvmlReturn_t nvmlDeviceOnSameBoard(nvmlDevice_t dev1, nvmlDevice_t dev2, int *on
         {
             return injectedNvml->GetWrapper(__func__, "OnSameBoard", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "OnSameBoard", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "OnSameBoard", args, preparedValues);
@@ -3835,6 +4139,10 @@ nvmlReturn_t nvmlDeviceGetInforomConfigurationChecksum(nvmlDevice_t device, unsi
         {
             return injectedNvml->GetWrapper(__func__, "InforomConfigurationChecksum", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "InforomConfigurationChecksum", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "InforomConfigurationChecksum", args, preparedValues);
@@ -3872,6 +4180,10 @@ nvmlReturn_t nvmlDeviceValidateInforom(nvmlDevice_t device)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "ValidateInforom", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ValidateInforom", args, preparedValues);
         }
         else
         {
@@ -3914,6 +4226,10 @@ nvmlReturn_t nvmlDeviceGetGpuOperationMode(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GpuOperationMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuOperationMode", args, preparedValues);
         }
         else
         {
@@ -3982,6 +4298,10 @@ nvmlReturn_t nvmlDeviceGetDisplayActive(nvmlDevice_t device, nvmlEnableState_t *
         {
             return injectedNvml->GetWrapper(__func__, "DisplayActive", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DisplayActive", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "DisplayActive", args, preparedValues);
@@ -4028,6 +4348,10 @@ nvmlReturn_t nvmlDeviceGetMemoryErrorCounter(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "MemoryErrorCounter", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MemoryErrorCounter", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MemoryErrorCounter", args, preparedValues);
@@ -4066,6 +4390,10 @@ nvmlReturn_t nvmlDeviceGetSramEccErrorStatus(nvmlDevice_t device, nvmlEccSramErr
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "SramEccErrorStatus", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SramEccErrorStatus", args, preparedValues);
         }
         else
         {
@@ -4135,6 +4463,10 @@ nvmlReturn_t nvmlDeviceResetGpuLockedClocks(nvmlDevice_t device)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GpuLockedClocks", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuLockedClocks", args, preparedValues);
         }
         else
         {
@@ -4206,6 +4538,10 @@ nvmlReturn_t nvmlDeviceResetMemoryLockedClocks(nvmlDevice_t device)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MemoryLockedClocks", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MemoryLockedClocks", args, preparedValues);
         }
         else
         {
@@ -4280,6 +4616,10 @@ nvmlReturn_t nvmlDeviceGetApplicationsClock(nvmlDevice_t device, nvmlClockType_t
         {
             return injectedNvml->GetWrapper(__func__, "ApplicationsClock", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ApplicationsClock", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ApplicationsClock", args, preparedValues);
@@ -4319,6 +4659,10 @@ nvmlReturn_t nvmlDeviceGetMaxCustomerBoostClock(nvmlDevice_t device, nvmlClockTy
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MaxCustomerBoostClock", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MaxCustomerBoostClock", args, preparedValues);
         }
         else
         {
@@ -4364,6 +4708,10 @@ nvmlReturn_t nvmlDeviceGetClock(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "Clock", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Clock", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Clock", args, preparedValues);
@@ -4406,6 +4754,10 @@ nvmlReturn_t nvmlDeviceGetDefaultApplicationsClock(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "DefaultApplicationsClock", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DefaultApplicationsClock", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "DefaultApplicationsClock", args, preparedValues);
@@ -4443,6 +4795,10 @@ nvmlReturn_t nvmlDeviceResetApplicationsClocks(nvmlDevice_t device)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "ApplicationsClocks", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ApplicationsClocks", args, preparedValues);
         }
         else
         {
@@ -4483,6 +4839,10 @@ nvmlReturn_t nvmlDeviceGetSupportedMemoryClocks(nvmlDevice_t device, unsigned in
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "SupportedMemoryClocks", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SupportedMemoryClocks", args, preparedValues);
         }
         else
         {
@@ -4528,6 +4888,10 @@ nvmlReturn_t nvmlDeviceGetSupportedGraphicsClocks(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "SupportedGraphicsClocks", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SupportedGraphicsClocks", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "SupportedGraphicsClocks", args, preparedValues);
@@ -4569,6 +4933,10 @@ nvmlReturn_t nvmlDeviceGetAutoBoostedClocksEnabled(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "AutoBoostedClocksEnabled", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AutoBoostedClocksEnabled", args, preparedValues);
         }
         else
         {
@@ -4673,6 +5041,10 @@ nvmlReturn_t nvmlDeviceGetPowerManagementLimitConstraints(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "PowerManagementLimitConstraints", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PowerManagementLimitConstraints", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PowerManagementLimitConstraints", args, preparedValues);
@@ -4711,6 +5083,10 @@ nvmlReturn_t nvmlDeviceGetPowerManagementDefaultLimit(nvmlDevice_t device, unsig
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PowerManagementDefaultLimit", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PowerManagementDefaultLimit", args, preparedValues);
         }
         else
         {
@@ -4779,6 +5155,10 @@ nvmlReturn_t nvmlDeviceGetCurrentClocksEventReasons(nvmlDevice_t device, unsigne
         {
             return injectedNvml->GetWrapper(__func__, "CurrentClocksEventReasons", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CurrentClocksEventReasons", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "CurrentClocksEventReasons", args, preparedValues);
@@ -4817,6 +5197,10 @@ nvmlReturn_t nvmlDeviceGetCurrentClocksThrottleReasons(nvmlDevice_t device, unsi
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "CurrentClocksThrottleReasons", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CurrentClocksThrottleReasons", args, preparedValues);
         }
         else
         {
@@ -4858,6 +5242,10 @@ nvmlReturn_t nvmlDeviceGetSupportedClocksEventReasons(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "SupportedClocksEventReasons", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SupportedClocksEventReasons", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "SupportedClocksEventReasons", args, preparedValues);
@@ -4898,6 +5286,10 @@ nvmlReturn_t nvmlDeviceGetSupportedClocksThrottleReasons(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "SupportedClocksThrottleReasons", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SupportedClocksThrottleReasons", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "SupportedClocksThrottleReasons", args, preparedValues);
@@ -4937,6 +5329,10 @@ nvmlReturn_t nvmlDeviceGetIndex(nvmlDevice_t device, unsigned int *index)
         {
             return injectedNvml->GetWrapper(__func__, "Index", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Index", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Index", args, preparedValues);
@@ -4975,6 +5371,10 @@ nvmlReturn_t nvmlDeviceGetAccountingMode(nvmlDevice_t device, nvmlEnableState_t 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "AccountingMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AccountingMode", args, preparedValues);
         }
         else
         {
@@ -5042,6 +5442,10 @@ nvmlReturn_t nvmlDeviceClearAccountingPids(nvmlDevice_t device)
         {
             return injectedNvml->GetWrapper(__func__, "AccountingPids", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AccountingPids", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "AccountingPids", args, preparedValues);
@@ -5081,6 +5485,10 @@ nvmlReturn_t nvmlDeviceGetAccountingStats(nvmlDevice_t device, unsigned int pid,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "AccountingStats", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AccountingStats", args, preparedValues);
         }
         else
         {
@@ -5122,6 +5530,10 @@ nvmlReturn_t nvmlDeviceGetAccountingPids(nvmlDevice_t device, unsigned int *coun
         {
             return injectedNvml->GetWrapper(__func__, "AccountingPids", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AccountingPids", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "AccountingPids", args, preparedValues);
@@ -5160,6 +5572,10 @@ nvmlReturn_t nvmlDeviceGetAccountingBufferSize(nvmlDevice_t device, unsigned int
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "AccountingBufferSize", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AccountingBufferSize", args, preparedValues);
         }
         else
         {
@@ -5204,6 +5620,10 @@ nvmlReturn_t nvmlDeviceGetRetiredPages(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "RetiredPages", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "RetiredPages", args, preparedValues);
         }
         else
         {
@@ -5251,6 +5671,10 @@ nvmlReturn_t nvmlDeviceGetRetiredPages_v2(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "RetiredPages", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "RetiredPages", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "RetiredPages", args, preparedValues);
@@ -5289,6 +5713,10 @@ nvmlReturn_t nvmlDeviceGetRetiredPagesPendingStatus(nvmlDevice_t device, nvmlEna
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "RetiredPagesPendingStatus", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "RetiredPagesPendingStatus", args, preparedValues);
         }
         else
         {
@@ -5365,6 +5793,10 @@ nvmlReturn_t nvmlDeviceGetAPIRestriction(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "APIRestriction", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "APIRestriction", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "APIRestriction", args, preparedValues);
@@ -5404,6 +5836,10 @@ nvmlReturn_t nvmlDeviceGetMinorNumber(nvmlDevice_t device, unsigned int *minorNu
         {
             return injectedNvml->GetWrapper(__func__, "MinorNumber", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MinorNumber", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MinorNumber", args, preparedValues);
@@ -5442,6 +5878,10 @@ nvmlReturn_t nvmlDeviceGetEnforcedPowerLimit(nvmlDevice_t device, unsigned int *
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "EnforcedPowerLimit", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EnforcedPowerLimit", args, preparedValues);
         }
         else
         {
@@ -5491,6 +5931,10 @@ nvmlReturn_t nvmlDeviceGetSamples(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "Samples", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Samples", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Samples", args, preparedValues);
@@ -5531,6 +5975,10 @@ nvmlReturn_t nvmlDeviceGetPcieThroughput(nvmlDevice_t device, nvmlPcieUtilCounte
         {
             return injectedNvml->GetWrapper(__func__, "PcieThroughput", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PcieThroughput", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PcieThroughput", args, preparedValues);
@@ -5569,6 +6017,10 @@ nvmlReturn_t nvmlDeviceGetPcieReplayCounter(nvmlDevice_t device, unsigned int *v
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PcieReplayCounter", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PcieReplayCounter", args, preparedValues);
         }
         else
         {
@@ -5611,6 +6063,10 @@ nvmlReturn_t nvmlDeviceGetTopologyCommonAncestor(nvmlDevice_t device1,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "TopologyCommonAncestor", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "TopologyCommonAncestor", args, preparedValues);
         }
         else
         {
@@ -5656,6 +6112,10 @@ nvmlReturn_t nvmlDeviceGetTopologyNearestGpus(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "TopologyNearestGpus", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "TopologyNearestGpus", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "TopologyNearestGpus", args, preparedValues);
@@ -5696,6 +6156,10 @@ nvmlReturn_t nvmlSystemGetTopologyGpuSet(unsigned int cpuNumber, unsigned int *c
         {
             return injectedNvml->GetWrapper(__func__, "TopologyGpuSet", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "TopologyGpuSet", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "TopologyGpuSet", args, preparedValues);
@@ -5735,6 +6199,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkState(nvmlDevice_t device, unsigned int link, nv
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkState", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkState", args, preparedValues);
         }
         else
         {
@@ -5780,6 +6248,10 @@ nvmlReturn_t nvmlDeviceGetP2PStatus(nvmlDevice_t device1,
         {
             return injectedNvml->GetWrapper(__func__, "P2PStatus", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "P2PStatus", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "P2PStatus", args, preparedValues);
@@ -5819,6 +6291,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkVersion(nvmlDevice_t device, unsigned int link, 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkVersion", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkVersion", args, preparedValues);
         }
         else
         {
@@ -5860,6 +6336,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkRemotePciInfo(nvmlDevice_t device, unsigned int 
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkRemotePciInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkRemotePciInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NvLinkRemotePciInfo", args, preparedValues);
@@ -5899,6 +6379,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkRemotePciInfo_v2(nvmlDevice_t device, unsigned i
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkRemotePciInfo", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkRemotePciInfo", args, preparedValues);
         }
         else
         {
@@ -5941,6 +6425,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkRemoteDeviceType(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkRemoteDeviceType", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkRemoteDeviceType", args, preparedValues);
         }
         else
         {
@@ -5986,6 +6474,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkCapability(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkCapability", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkCapability", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NvLinkCapability", args, preparedValues);
@@ -6030,6 +6522,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkErrorCounter(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkErrorCounter", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkErrorCounter", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NvLinkErrorCounter", args, preparedValues);
@@ -6068,6 +6564,10 @@ nvmlReturn_t nvmlDeviceResetNvLinkErrorCounters(nvmlDevice_t device, unsigned in
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkErrorCounters", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkErrorCounters", args, preparedValues);
         }
         else
         {
@@ -6115,6 +6615,10 @@ nvmlReturn_t nvmlDeviceSetNvLinkUtilizationControl(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkUtilizationControl", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkUtilizationControl", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NvLinkUtilizationControl", args, preparedValues);
@@ -6158,6 +6662,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkUtilizationControl(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkUtilizationControl", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkUtilizationControl", args, preparedValues);
         }
         else
         {
@@ -6205,6 +6713,10 @@ nvmlReturn_t nvmlDeviceGetNvLinkUtilizationCounter(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
@@ -6249,6 +6761,10 @@ nvmlReturn_t nvmlDeviceFreezeNvLinkUtilizationCounter(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
@@ -6289,6 +6805,10 @@ nvmlReturn_t nvmlDeviceResetNvLinkUtilizationCounter(nvmlDevice_t device, unsign
         {
             return injectedNvml->GetWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NvLinkUtilizationCounter", args, preparedValues);
@@ -6327,6 +6847,10 @@ nvmlReturn_t nvmlDeviceGetVirtualizationMode(nvmlDevice_t device, nvmlGpuVirtual
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "VirtualizationMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "VirtualizationMode", args, preparedValues);
         }
         else
         {
@@ -6396,6 +6920,10 @@ nvmlReturn_t nvmlDeviceGetSupportedVgpus(nvmlDevice_t device, unsigned int *vgpu
         {
             return injectedNvml->GetWrapper(__func__, "SupportedVgpus", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SupportedVgpus", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "SupportedVgpus", args, preparedValues);
@@ -6435,6 +6963,10 @@ nvmlReturn_t nvmlDeviceGetCreatableVgpus(nvmlDevice_t device, unsigned int *vgpu
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "CreatableVgpus", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "CreatableVgpus", args, preparedValues);
         }
         else
         {
@@ -6543,6 +7075,10 @@ nvmlReturn_t nvmlVgpuTypeGetGpuInstanceProfileId(nvmlVgpuTypeId_t vgpuTypeId, un
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstanceProfileId", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstanceProfileId", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuInstanceProfileId", args, preparedValues);
@@ -6585,6 +7121,10 @@ nvmlReturn_t nvmlVgpuTypeGetDeviceID(nvmlVgpuTypeId_t vgpuTypeId,
         {
             return injectedNvml->GetWrapper(__func__, "DeviceID", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DeviceID", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "DeviceID", args, preparedValues);
@@ -6624,6 +7164,10 @@ nvmlReturn_t nvmlVgpuTypeGetFramebufferSize(nvmlVgpuTypeId_t vgpuTypeId, unsigne
         {
             return injectedNvml->GetWrapper(__func__, "FramebufferSize", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FramebufferSize", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "FramebufferSize", args, preparedValues);
@@ -6662,6 +7206,10 @@ nvmlReturn_t nvmlVgpuTypeGetNumDisplayHeads(nvmlVgpuTypeId_t vgpuTypeId, unsigne
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "NumDisplayHeads", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NumDisplayHeads", args, preparedValues);
         }
         else
         {
@@ -6706,6 +7254,10 @@ nvmlReturn_t nvmlVgpuTypeGetResolution(nvmlVgpuTypeId_t vgpuTypeId,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Resolution", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Resolution", args, preparedValues);
         }
         else
         {
@@ -6780,6 +7332,10 @@ nvmlReturn_t nvmlVgpuTypeGetFrameRateLimit(nvmlVgpuTypeId_t vgpuTypeId, unsigned
         {
             return injectedNvml->GetWrapper(__func__, "FrameRateLimit", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FrameRateLimit", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "FrameRateLimit", args, preparedValues);
@@ -6822,6 +7378,10 @@ nvmlReturn_t nvmlVgpuTypeGetMaxInstances(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "MaxInstances", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MaxInstances", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MaxInstances", args, preparedValues);
@@ -6860,6 +7420,10 @@ nvmlReturn_t nvmlVgpuTypeGetMaxInstancesPerVm(nvmlVgpuTypeId_t vgpuTypeId, unsig
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MaxInstancesPerVm", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MaxInstancesPerVm", args, preparedValues);
         }
         else
         {
@@ -6900,6 +7464,10 @@ nvmlReturn_t nvmlDeviceGetActiveVgpus(nvmlDevice_t device, unsigned int *vgpuCou
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "ActiveVgpus", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ActiveVgpus", args, preparedValues);
         }
         else
         {
@@ -6944,6 +7512,10 @@ nvmlReturn_t nvmlVgpuInstanceGetVmID(nvmlVgpuInstance_t vgpuInstance,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "VmID", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "VmID", args, preparedValues);
         }
         else
         {
@@ -7086,6 +7658,10 @@ nvmlReturn_t nvmlVgpuInstanceGetFbUsage(nvmlVgpuInstance_t vgpuInstance, unsigne
         {
             return injectedNvml->GetWrapper(__func__, "FbUsage", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FbUsage", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "FbUsage", args, preparedValues);
@@ -7124,6 +7700,10 @@ nvmlReturn_t nvmlVgpuInstanceGetLicenseStatus(nvmlVgpuInstance_t vgpuInstance, u
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "LicenseStatus", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "LicenseStatus", args, preparedValues);
         }
         else
         {
@@ -7164,6 +7744,10 @@ nvmlReturn_t nvmlVgpuInstanceGetLicenseInfo(nvmlVgpuInstance_t vgpuInstance, nvm
         {
             return injectedNvml->GetWrapper(__func__, "LicenseInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "LicenseInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "LicenseInfo", args, preparedValues);
@@ -7202,6 +7786,10 @@ nvmlReturn_t nvmlVgpuInstanceGetLicenseInfo_v2(nvmlVgpuInstance_t vgpuInstance, 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "LicenseInfo", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "LicenseInfo", args, preparedValues);
         }
         else
         {
@@ -7242,6 +7830,10 @@ nvmlReturn_t nvmlVgpuInstanceGetType(nvmlVgpuInstance_t vgpuInstance, unsigned i
         {
             return injectedNvml->GetWrapper(__func__, "Type", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Type", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Type", args, preparedValues);
@@ -7280,6 +7872,10 @@ nvmlReturn_t nvmlVgpuInstanceGetFrameRateLimit(nvmlVgpuInstance_t vgpuInstance, 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "FrameRateLimit", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FrameRateLimit", args, preparedValues);
         }
         else
         {
@@ -7320,6 +7916,10 @@ nvmlReturn_t nvmlVgpuInstanceGetEccMode(nvmlVgpuInstance_t vgpuInstance, nvmlEna
         {
             return injectedNvml->GetWrapper(__func__, "EccMode", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EccMode", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "EccMode", args, preparedValues);
@@ -7359,6 +7959,10 @@ nvmlReturn_t nvmlVgpuInstanceGetEncoderCapacity(nvmlVgpuInstance_t vgpuInstance,
         {
             return injectedNvml->GetWrapper(__func__, "EncoderCapacity", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EncoderCapacity", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "EncoderCapacity", args, preparedValues);
@@ -7397,6 +8001,10 @@ nvmlReturn_t nvmlVgpuInstanceSetEncoderCapacity(nvmlVgpuInstance_t vgpuInstance,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "EncoderCapacity", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EncoderCapacity", args, preparedValues);
         }
         else
         {
@@ -7444,6 +8052,10 @@ nvmlReturn_t nvmlDeviceGetVgpuUtilization(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "VgpuUtilization", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "VgpuUtilization", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "VgpuUtilization", args, preparedValues);
@@ -7485,6 +8097,10 @@ nvmlReturn_t nvmlVgpuInstanceGetMetadata(nvmlVgpuInstance_t vgpuInstance,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Metadata", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Metadata", args, preparedValues);
         }
         else
         {
@@ -7562,6 +8178,10 @@ nvmlReturn_t nvmlVgpuTypeGetCapabilities(nvmlVgpuTypeId_t vgpuTypeId,
         {
             return injectedNvml->GetWrapper(__func__, "Capabilities", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Capabilities", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Capabilities", args, preparedValues);
@@ -7600,6 +8220,10 @@ nvmlReturn_t nvmlDeviceGetGspFirmwareVersion(nvmlDevice_t device, char *version)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GspFirmwareVersion", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GspFirmwareVersion", args, preparedValues);
         }
         else
         {
@@ -7641,6 +8265,10 @@ nvmlReturn_t nvmlDeviceGetGspFirmwareMode(nvmlDevice_t device, unsigned int *isE
         {
             return injectedNvml->GetWrapper(__func__, "GspFirmwareMode", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GspFirmwareMode", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GspFirmwareMode", args, preparedValues);
@@ -7679,6 +8307,10 @@ nvmlReturn_t nvmlVgpuInstanceGetGpuInstanceId(nvmlVgpuInstance_t vgpuInstance, u
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstanceId", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstanceId", args, preparedValues);
         }
         else
         {
@@ -7722,6 +8354,10 @@ nvmlReturn_t nvmlDeviceGetVgpuMetadata(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "VgpuMetadata", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "VgpuMetadata", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "VgpuMetadata", args, preparedValues);
@@ -7763,6 +8399,10 @@ nvmlReturn_t nvmlGetVgpuCompatibility(nvmlVgpuMetadata_t *vgpuMetadata,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "VgpuCompatibility", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "VgpuCompatibility", args, preparedValues);
         }
         else
         {
@@ -7838,6 +8478,10 @@ nvmlReturn_t nvmlDeviceGetGridLicensableFeatures(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
@@ -7877,6 +8521,10 @@ nvmlReturn_t nvmlDeviceGetGridLicensableFeatures_v2(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
         }
         else
         {
@@ -7918,6 +8566,10 @@ nvmlReturn_t nvmlDeviceGetGridLicensableFeatures_v3(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
@@ -7957,6 +8609,10 @@ nvmlReturn_t nvmlDeviceGetGridLicensableFeatures_v4(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GridLicensableFeatures", args, preparedValues);
         }
         else
         {
@@ -7999,6 +8655,10 @@ nvmlReturn_t nvmlDeviceGetEncoderCapacity(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "EncoderCapacity", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EncoderCapacity", args, preparedValues);
         }
         else
         {
@@ -8044,6 +8704,10 @@ nvmlReturn_t nvmlDeviceGetEncoderStats(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "EncoderStats", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EncoderStats", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "EncoderStats", args, preparedValues);
@@ -8086,6 +8750,10 @@ nvmlReturn_t nvmlDeviceGetEncoderSessions(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "EncoderSessions", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EncoderSessions", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "EncoderSessions", args, preparedValues);
@@ -8124,6 +8792,10 @@ nvmlReturn_t nvmlDeviceGetFBCStats(nvmlDevice_t device, nvmlFBCStats_t *fbcStats
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "FBCStats", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FBCStats", args, preparedValues);
         }
         else
         {
@@ -8167,6 +8839,10 @@ nvmlReturn_t nvmlDeviceGetFBCSessions(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "FBCSessions", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FBCSessions", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "FBCSessions", args, preparedValues);
@@ -8205,6 +8881,10 @@ nvmlReturn_t nvmlDeviceModifyDrainState(nvmlPciInfo_t *pciInfo, nvmlEnableState_
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "DrainState", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DrainState", args, preparedValues);
         }
         else
         {
@@ -8245,6 +8925,10 @@ nvmlReturn_t nvmlDeviceQueryDrainState(nvmlPciInfo_t *pciInfo, nvmlEnableState_t
         {
             return injectedNvml->GetWrapper(__func__, "DrainState", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DrainState", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "DrainState", args, preparedValues);
@@ -8282,6 +8966,10 @@ nvmlReturn_t nvmlDeviceRemoveGpu(nvmlPciInfo_t *pciInfo)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "RemoveGpu", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "RemoveGpu", args, preparedValues);
         }
         else
         {
@@ -8325,6 +9013,10 @@ nvmlReturn_t nvmlDeviceRemoveGpu_v2(nvmlPciInfo_t *pciInfo,
         {
             return injectedNvml->GetWrapper(__func__, "RemoveGpu", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "RemoveGpu", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "RemoveGpu", args, preparedValues);
@@ -8362,6 +9054,10 @@ nvmlReturn_t nvmlDeviceDiscoverGpus(nvmlPciInfo_t *pciInfo)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "DiscoverGpus", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DiscoverGpus", args, preparedValues);
         }
         else
         {
@@ -8440,6 +9136,10 @@ nvmlReturn_t nvmlDeviceGetVgpuProcessUtilization(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "VgpuProcessUtilization", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "VgpuProcessUtilization", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "VgpuProcessUtilization", args, preparedValues);
@@ -8484,6 +9184,10 @@ nvmlReturn_t nvmlVgpuInstanceGetEncoderStats(nvmlVgpuInstance_t vgpuInstance,
         {
             return injectedNvml->GetWrapper(__func__, "EncoderStats", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EncoderStats", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "EncoderStats", args, preparedValues);
@@ -8526,6 +9230,10 @@ nvmlReturn_t nvmlVgpuInstanceGetEncoderSessions(nvmlVgpuInstance_t vgpuInstance,
         {
             return injectedNvml->GetWrapper(__func__, "EncoderSessions", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "EncoderSessions", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "EncoderSessions", args, preparedValues);
@@ -8564,6 +9272,10 @@ nvmlReturn_t nvmlVgpuInstanceGetFBCStats(nvmlVgpuInstance_t vgpuInstance, nvmlFB
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "FBCStats", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FBCStats", args, preparedValues);
         }
         else
         {
@@ -8606,6 +9318,10 @@ nvmlReturn_t nvmlVgpuInstanceGetFBCSessions(nvmlVgpuInstance_t vgpuInstance,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "FBCSessions", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "FBCSessions", args, preparedValues);
         }
         else
         {
@@ -8651,6 +9367,10 @@ nvmlReturn_t nvmlDeviceGetProcessUtilization(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "ProcessUtilization", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ProcessUtilization", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ProcessUtilization", args, preparedValues);
@@ -8689,6 +9409,10 @@ nvmlReturn_t nvmlVgpuInstanceGetAccountingMode(nvmlVgpuInstance_t vgpuInstance, 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "AccountingMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AccountingMode", args, preparedValues);
         }
         else
         {
@@ -8729,6 +9453,10 @@ nvmlReturn_t nvmlVgpuInstanceGetAccountingPids(nvmlVgpuInstance_t vgpuInstance, 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "AccountingPids", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AccountingPids", args, preparedValues);
         }
         else
         {
@@ -8772,6 +9500,10 @@ nvmlReturn_t nvmlVgpuInstanceGetAccountingStats(nvmlVgpuInstance_t vgpuInstance,
         {
             return injectedNvml->GetWrapper(__func__, "AccountingStats", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AccountingStats", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "AccountingStats", args, preparedValues);
@@ -8809,6 +9541,10 @@ nvmlReturn_t nvmlVgpuInstanceClearAccountingPids(nvmlVgpuInstance_t vgpuInstance
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
         }
         else
         {
@@ -8878,6 +9614,10 @@ nvmlReturn_t nvmlGetExcludedDeviceInfoByIndex(unsigned int index, nvmlExcludedDe
         {
             return injectedNvml->GetWrapper(__func__, "ExcludedDeviceInfoByIndex", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ExcludedDeviceInfoByIndex", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ExcludedDeviceInfoByIndex", args, preparedValues);
@@ -8917,6 +9657,10 @@ nvmlReturn_t nvmlGetVgpuVersion(nvmlVgpuVersion_t *supported, nvmlVgpuVersion_t 
         {
             return injectedNvml->GetWrapper(__func__, "VgpuVersion", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "VgpuVersion", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "VgpuVersion", args, preparedValues);
@@ -8954,6 +9698,10 @@ nvmlReturn_t nvmlSetVgpuVersion(nvmlVgpuVersion_t *vgpuVersion)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "VgpuVersion", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "VgpuVersion", args, preparedValues);
         }
         else
         {
@@ -8993,6 +9741,10 @@ nvmlReturn_t nvmlDeviceGetHostVgpuMode(nvmlDevice_t device, nvmlHostVgpuMode_t *
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "HostVgpuMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "HostVgpuMode", args, preparedValues);
         }
         else
         {
@@ -9034,6 +9786,10 @@ nvmlReturn_t nvmlDeviceSetMigMode(nvmlDevice_t device, unsigned int mode, nvmlRe
         {
             return injectedNvml->GetWrapper(__func__, "MigMode", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MigMode", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MigMode", args, preparedValues);
@@ -9073,6 +9829,10 @@ nvmlReturn_t nvmlDeviceGetMigMode(nvmlDevice_t device, unsigned int *currentMode
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MigMode", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MigMode", args, preparedValues);
         }
         else
         {
@@ -9116,6 +9876,10 @@ nvmlReturn_t nvmlDeviceGetGpuInstanceProfileInfo(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstanceProfileInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstanceProfileInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuInstanceProfileInfo", args, preparedValues);
@@ -9158,6 +9922,10 @@ nvmlReturn_t nvmlDeviceGetGpuInstanceProfileInfoV(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstanceProfileInfoV", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstanceProfileInfoV", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuInstanceProfileInfoV", args, preparedValues);
@@ -9197,6 +9965,10 @@ nvmlReturn_t nvmlDeviceGetGpuInstanceRemainingCapacity(nvmlDevice_t device, unsi
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstanceRemainingCapacity", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstanceRemainingCapacity", args, preparedValues);
         }
         else
         {
@@ -9242,6 +10014,10 @@ nvmlReturn_t nvmlDeviceGetGpuInstancePossiblePlacements(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstancePossiblePlacements", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstancePossiblePlacements", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuInstancePossiblePlacements", args, preparedValues);
@@ -9286,6 +10062,10 @@ nvmlReturn_t nvmlDeviceGetGpuInstancePossiblePlacements_v2(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstancePossiblePlacements", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstancePossiblePlacements", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuInstancePossiblePlacements", args, preparedValues);
@@ -9325,6 +10105,10 @@ nvmlReturn_t nvmlDeviceCreateGpuInstance(nvmlDevice_t device, unsigned int profi
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstance", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstance", args, preparedValues);
         }
         else
         {
@@ -9370,6 +10154,10 @@ nvmlReturn_t nvmlDeviceCreateGpuInstanceWithPlacement(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstanceWithPlacement", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstanceWithPlacement", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuInstanceWithPlacement", args, preparedValues);
@@ -9407,6 +10195,10 @@ nvmlReturn_t nvmlGpuInstanceDestroy(nvmlGpuInstance_t gpuInstance)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
         }
         else
         {
@@ -9452,6 +10244,10 @@ nvmlReturn_t nvmlDeviceGetGpuInstances(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstances", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstances", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuInstances", args, preparedValues);
@@ -9490,6 +10286,10 @@ nvmlReturn_t nvmlGpuInstanceGetInfo(nvmlGpuInstance_t gpuInstance, nvmlGpuInstan
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Info", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Info", args, preparedValues);
         }
         else
         {
@@ -9530,6 +10330,10 @@ nvmlReturn_t nvmlDeviceGetGpuInstanceById(nvmlDevice_t device, unsigned int id, 
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstanceById", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstanceById", args, preparedValues);
         }
         else
         {
@@ -9575,6 +10379,10 @@ nvmlReturn_t nvmlGpuInstanceGetComputeInstanceProfileInfo(nvmlGpuInstance_t gpuI
         {
             return injectedNvml->GetWrapper(__func__, "ComputeInstanceProfileInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeInstanceProfileInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ComputeInstanceProfileInfo", args, preparedValues);
@@ -9619,6 +10427,10 @@ nvmlReturn_t nvmlGpuInstanceGetComputeInstanceProfileInfoV(nvmlGpuInstance_t gpu
         {
             return injectedNvml->GetWrapper(__func__, "ComputeInstanceProfileInfoV", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeInstanceProfileInfoV", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ComputeInstanceProfileInfoV", args, preparedValues);
@@ -9660,6 +10472,10 @@ nvmlReturn_t nvmlGpuInstanceGetComputeInstanceRemainingCapacity(nvmlGpuInstance_
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "ComputeInstanceRemainingCapacity", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeInstanceRemainingCapacity", args, preparedValues);
         }
         else
         {
@@ -9703,6 +10519,10 @@ nvmlReturn_t nvmlGpuInstanceCreateComputeInstance(nvmlGpuInstance_t gpuInstance,
         {
             return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
@@ -9740,6 +10560,10 @@ nvmlReturn_t nvmlComputeInstanceDestroy(nvmlComputeInstance_t computeInstance)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
         }
         else
         {
@@ -9785,6 +10609,10 @@ nvmlReturn_t nvmlGpuInstanceGetComputeInstances(nvmlGpuInstance_t gpuInstance,
         {
             return injectedNvml->GetWrapper(__func__, "ComputeInstances", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeInstances", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ComputeInstances", args, preparedValues);
@@ -9827,6 +10655,10 @@ nvmlReturn_t nvmlGpuInstanceGetComputeInstanceById(nvmlGpuInstance_t gpuInstance
         {
             return injectedNvml->GetWrapper(__func__, "ComputeInstanceById", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeInstanceById", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ComputeInstanceById", args, preparedValues);
@@ -9865,6 +10697,10 @@ nvmlReturn_t nvmlComputeInstanceGetInfo(nvmlComputeInstance_t computeInstance, n
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Info", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Info", args, preparedValues);
         }
         else
         {
@@ -9905,6 +10741,10 @@ nvmlReturn_t nvmlComputeInstanceGetInfo_v2(nvmlComputeInstance_t computeInstance
         {
             return injectedNvml->GetWrapper(__func__, "Info", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Info", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Info", args, preparedValues);
@@ -9943,6 +10783,10 @@ nvmlReturn_t nvmlDeviceIsMigDeviceHandle(nvmlDevice_t device, unsigned int *isMi
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MigDeviceHandle", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MigDeviceHandle", args, preparedValues);
         }
         else
         {
@@ -9983,6 +10827,10 @@ nvmlReturn_t nvmlDeviceGetGpuInstanceId(nvmlDevice_t device, unsigned int *id)
         {
             return injectedNvml->GetWrapper(__func__, "GpuInstanceId", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuInstanceId", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuInstanceId", args, preparedValues);
@@ -10021,6 +10869,10 @@ nvmlReturn_t nvmlDeviceGetComputeInstanceId(nvmlDevice_t device, unsigned int *i
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "ComputeInstanceId", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ComputeInstanceId", args, preparedValues);
         }
         else
         {
@@ -10061,6 +10913,10 @@ nvmlReturn_t nvmlDeviceGetMaxMigDeviceCount(nvmlDevice_t device, unsigned int *m
         {
             return injectedNvml->GetWrapper(__func__, "MaxMigDeviceCount", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MaxMigDeviceCount", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MaxMigDeviceCount", args, preparedValues);
@@ -10100,6 +10956,10 @@ nvmlReturn_t nvmlDeviceGetMigDeviceHandleByIndex(nvmlDevice_t device, unsigned i
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MigDeviceHandleByIndex", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MigDeviceHandleByIndex", args, preparedValues);
         }
         else
         {
@@ -10198,6 +11058,10 @@ nvmlReturn_t nvmlDeviceGetAttributes(nvmlDevice_t device, nvmlDeviceAttributes_t
         {
             return injectedNvml->GetWrapper(__func__, "Attributes", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Attributes", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Attributes", args, preparedValues);
@@ -10236,6 +11100,10 @@ nvmlReturn_t nvmlDeviceGetAttributes_v2(nvmlDevice_t device, nvmlDeviceAttribute
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Attributes", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Attributes", args, preparedValues);
         }
         else
         {
@@ -10283,6 +11151,10 @@ nvmlReturn_t nvmlDeviceGetRemappedRows(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "RemappedRows", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "RemappedRows", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "RemappedRows", args, preparedValues);
@@ -10321,6 +11193,10 @@ nvmlReturn_t nvmlDeviceGetRowRemapperHistogram(nvmlDevice_t device, nvmlRowRemap
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "RowRemapperHistogram", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "RowRemapperHistogram", args, preparedValues);
         }
         else
         {
@@ -10361,6 +11237,10 @@ nvmlReturn_t nvmlDeviceGetBusType(nvmlDevice_t device, nvmlBusType_t *type)
         {
             return injectedNvml->GetWrapper(__func__, "BusType", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "BusType", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "BusType", args, preparedValues);
@@ -10399,6 +11279,10 @@ nvmlReturn_t nvmlDeviceGetIrqNum(nvmlDevice_t device, unsigned int *irqNum)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "IrqNum", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "IrqNum", args, preparedValues);
         }
         else
         {
@@ -10439,6 +11323,10 @@ nvmlReturn_t nvmlDeviceGetNumGpuCores(nvmlDevice_t device, unsigned int *numCore
         {
             return injectedNvml->GetWrapper(__func__, "NumGpuCores", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "NumGpuCores", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "NumGpuCores", args, preparedValues);
@@ -10477,6 +11365,10 @@ nvmlReturn_t nvmlDeviceGetPowerSource(nvmlDevice_t device, nvmlPowerSource_t *po
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PowerSource", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PowerSource", args, preparedValues);
         }
         else
         {
@@ -10517,6 +11409,10 @@ nvmlReturn_t nvmlDeviceGetMemoryBusWidth(nvmlDevice_t device, unsigned int *busW
         {
             return injectedNvml->GetWrapper(__func__, "MemoryBusWidth", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MemoryBusWidth", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MemoryBusWidth", args, preparedValues);
@@ -10555,6 +11451,10 @@ nvmlReturn_t nvmlDeviceGetPcieLinkMaxSpeed(nvmlDevice_t device, unsigned int *ma
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "PcieLinkMaxSpeed", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PcieLinkMaxSpeed", args, preparedValues);
         }
         else
         {
@@ -10595,6 +11495,10 @@ nvmlReturn_t nvmlDeviceGetAdaptiveClockInfoStatus(nvmlDevice_t device, unsigned 
         {
             return injectedNvml->GetWrapper(__func__, "AdaptiveClockInfoStatus", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "AdaptiveClockInfoStatus", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "AdaptiveClockInfoStatus", args, preparedValues);
@@ -10634,6 +11538,10 @@ nvmlReturn_t nvmlDeviceGetPcieSpeed(nvmlDevice_t device, unsigned int *pcieSpeed
         {
             return injectedNvml->GetWrapper(__func__, "PcieSpeed", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PcieSpeed", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PcieSpeed", args, preparedValues);
@@ -10672,6 +11580,10 @@ nvmlReturn_t nvmlDeviceGetDynamicPstatesInfo(nvmlDevice_t device, nvmlGpuDynamic
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "DynamicPstatesInfo", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "DynamicPstatesInfo", args, preparedValues);
         }
         else
         {
@@ -10772,6 +11684,10 @@ nvmlReturn_t nvmlDeviceGetThermalSettings(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "ThermalSettings", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ThermalSettings", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "ThermalSettings", args, preparedValues);
@@ -10818,6 +11734,10 @@ nvmlReturn_t nvmlDeviceGetMinMaxClockOfPState(nvmlDevice_t device,
         {
             return injectedNvml->GetWrapper(__func__, "MinMaxClockOfPState", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MinMaxClockOfPState", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MinMaxClockOfPState", args, preparedValues);
@@ -10858,6 +11778,10 @@ nvmlReturn_t nvmlDeviceGetSupportedPerformanceStates(nvmlDevice_t device, nvmlPs
         {
             return injectedNvml->GetWrapper(__func__, "SupportedPerformanceStates", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SupportedPerformanceStates", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "SupportedPerformanceStates", args, preparedValues);
@@ -10896,6 +11820,10 @@ nvmlReturn_t nvmlDeviceGetGpcClkVfOffset(nvmlDevice_t device, int *offset)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GpcClkVfOffset", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpcClkVfOffset", args, preparedValues);
         }
         else
         {
@@ -10963,6 +11891,10 @@ nvmlReturn_t nvmlDeviceGetMemClkVfOffset(nvmlDevice_t device, int *offset)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MemClkVfOffset", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MemClkVfOffset", args, preparedValues);
         }
         else
         {
@@ -11032,6 +11964,10 @@ nvmlReturn_t nvmlDeviceGetMinMaxFanSpeed(nvmlDevice_t device, unsigned int *min,
         {
             return injectedNvml->GetWrapper(__func__, "MinMaxFanSpeed", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MinMaxFanSpeed", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MinMaxFanSpeed", args, preparedValues);
@@ -11072,6 +12008,10 @@ nvmlReturn_t nvmlDeviceGetGpcClkMinMaxVfOffset(nvmlDevice_t device, int *minOffs
         {
             return injectedNvml->GetWrapper(__func__, "GpcClkMinMaxVfOffset", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpcClkMinMaxVfOffset", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpcClkMinMaxVfOffset", args, preparedValues);
@@ -11111,6 +12051,10 @@ nvmlReturn_t nvmlDeviceGetMemClkMinMaxVfOffset(nvmlDevice_t device, int *minOffs
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "MemClkMinMaxVfOffset", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MemClkMinMaxVfOffset", args, preparedValues);
         }
         else
         {
@@ -11179,6 +12123,10 @@ nvmlReturn_t nvmlGpmSampleAlloc(nvmlGpmSample_t *gpmSample)
         {
             return injectedNvml->GetWrapper(__func__, "SampleAlloc", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SampleAlloc", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "SampleAlloc", args, preparedValues);
@@ -11216,6 +12164,10 @@ nvmlReturn_t nvmlGpmSampleFree(nvmlGpmSample_t gpmSample)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "SampleFree", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "SampleFree", args, preparedValues);
         }
         else
         {
@@ -11255,6 +12207,10 @@ nvmlReturn_t nvmlGpmSampleGet(nvmlDevice_t device, nvmlGpmSample_t gpmSample)
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "Sample", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Sample", args, preparedValues);
         }
         else
         {
@@ -11296,6 +12252,10 @@ nvmlReturn_t nvmlGpmMigSampleGet(nvmlDevice_t device, unsigned int gpuInstanceId
         {
             return injectedNvml->GetWrapper(__func__, "MigSample", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "MigSample", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "MigSample", args, preparedValues);
@@ -11334,6 +12294,10 @@ nvmlReturn_t nvmlGpmQueryDeviceSupport(nvmlDevice_t device, nvmlGpmSupport_t *gp
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "QueryDeviceSupport", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "QueryDeviceSupport", args, preparedValues);
         }
         else
         {
@@ -11374,6 +12338,10 @@ nvmlReturn_t nvmlDeviceGetGpuFabricInfo(nvmlDevice_t device, nvmlGpuFabricInfo_t
         {
             return injectedNvml->GetWrapper(__func__, "GpuFabricInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuFabricInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "GpuFabricInfo", args, preparedValues);
@@ -11412,6 +12380,10 @@ nvmlReturn_t nvmlDeviceGetGpuFabricInfoV(nvmlDevice_t device, nvmlGpuFabricInfoV
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "GpuFabricInfoV", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "GpuFabricInfoV", args, preparedValues);
         }
         else
         {
@@ -11510,6 +12482,10 @@ nvmlReturn_t nvmlDeviceGetArchitecture(nvmlDevice_t device, nvmlDeviceArchitectu
         {
             return injectedNvml->GetWrapper(__func__, "Architecture", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "Architecture", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "Architecture", args, preparedValues);
@@ -11549,6 +12525,10 @@ nvmlReturn_t nvmlDeviceWorkloadPowerProfileGetProfilesInfo(nvmlDevice_t device,
         if (injectedNvml->IsGetter(__func__))
         {
             return injectedNvml->GetWrapper(__func__, "WorkloadPowerProfileGetProfilesInfo", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "WorkloadPowerProfileGetProfilesInfo", args, preparedValues);
         }
         else
         {
@@ -11590,6 +12570,10 @@ nvmlReturn_t nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(nvmlDevice_t devic
         {
             return injectedNvml->GetWrapper(__func__, "WorkloadPowerProfileGetCurrentProfiles", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "WorkloadPowerProfileGetCurrentProfiles", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "WorkloadPowerProfileGetCurrentProfiles", args, preparedValues);
@@ -11620,9 +12604,24 @@ nvmlReturn_t nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice_t dev
             return NVML_ERROR_UNINITIALIZED;
         }
         injectedNvml->AddFuncCallCount("nvmlDeviceWorkloadPowerProfileSetRequestedProfiles");
-        // The following snippet is generated from generate_setter_functions
-        InjectionArgument value(requestedProfiles);
-        return injectedNvml->DeviceSet(device, "WorkloadPowerProfileSetRequestedProfiles", {}, NvmlFuncReturn(NVML_SUCCESS, value));
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(requestedProfiles));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "WorkloadPowerProfileSetRequestedProfiles", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "WorkloadPowerProfileSetRequestedProfiles", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "WorkloadPowerProfileSetRequestedProfiles", args, preparedValues);
+        }
     }
     return NVML_SUCCESS;
 }
@@ -11659,9 +12658,57 @@ nvmlReturn_t nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice_t d
         {
             return injectedNvml->GetWrapper(__func__, "WorkloadPowerProfileClearRequestedProfiles", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "WorkloadPowerProfileClearRequestedProfiles", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "WorkloadPowerProfileClearRequestedProfiles", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1(nvmlDevice_t device,
+                                                             nvmlWorkloadPowerProfileUpdateProfiles_v1_t *updateProfiles)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(updateProfiles));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "WorkloadPowerProfileUpdateProfiles", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "WorkloadPowerProfileUpdateProfiles", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "WorkloadPowerProfileUpdateProfiles", args, preparedValues);
         }
     }
     return NVML_SUCCESS;
@@ -11698,9 +12745,145 @@ nvmlReturn_t nvmlDeviceGetPlatformInfo(nvmlDevice_t device, nvmlPlatformInfo_t *
         {
             return injectedNvml->GetWrapper(__func__, "PlatformInfo", args, preparedValues);
         }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "PlatformInfo", args, preparedValues);
+        }
         else
         {
             return injectedNvml->SetWrapper(__func__, "PlatformInfo", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlSystemEventSetCreate(nvmlSystemEventSetCreateRequest_t *request)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlSystemEventSetCreate");
+        // The following snippet is generated from generate_event_api_functions
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(request));
+        return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlSystemEventSetFree(nvmlSystemEventSetFreeRequest_t *request)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlSystemEventSetFree");
+        // The following snippet is generated from generate_event_api_functions
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(request));
+        return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlSystemRegisterEvents(nvmlSystemRegisterEventRequest_t *request)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlSystemRegisterEvents");
+        // The following snippet is generated from generate_event_api_functions
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(request));
+        return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+    }
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlSystemEventSetWait(nvmlSystemEventSetWaitRequest_t *request)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlSystemEventSetWait");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        preparedValues.push_back(InjectionArgument(request));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "None", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "None", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "None", args, preparedValues);
         }
     }
     return NVML_SUCCESS;

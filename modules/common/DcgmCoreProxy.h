@@ -472,6 +472,13 @@ public:
      */
     dcgmReturn_t ChildProcessManagerReset();
 
+    /**
+     * Get the installed CUDA version
+     * @param cudaVersion Output CUDA version
+     * @return DCGM_ST_OK on success
+     */
+    dcgmReturn_t GetCudaVersion(int &cudaVersion);
+
 private:
     dcgmCoreCallbacks_t m_coreCallbacks;
 

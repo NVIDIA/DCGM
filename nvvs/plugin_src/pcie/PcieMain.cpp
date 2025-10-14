@@ -15,25 +15,29 @@
  */
 
 #include "PcieMain.h"
+
 #include "Brokenp2p.h"
 #include "CudaCommon.h"
-#include "cuda.h"
-#include "cuda_runtime.h"
-#include "dcgm_fields.h"
+#include "HangDetectMonitor.h"
 
 #include <DcgmGroup.h>
 #include <DcgmUtilities.h>
 #include <PluginCommon.h>
-#include <barrier>
+#include <PluginStrings.h>
 #include <bw_checker/BwCheckerMain.h>
+#include <cuda_runtime.h>
+#include <dcgm_fields.h>
 #include <timelib.h>
 
 #include <algorithm>
+#include <barrier>
 #include <cstdio>
 #include <errno.h>
+#include <latch>
 #include <sstream>
+#include <sys/syscall.h>
+#include <sys/types.h>
 #include <sys/wait.h>
-#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -191,14 +195,11 @@ void addLatencyInfo(BusGrind *bg, unsigned int gpu, std::string key, double late
     ss.precision(3);
 
     if (key == "bidir")
-        ss << "bidirectional latency:"
-           << "\t\t";
+        ss << "bidirectional latency:" << "\t\t";
     else if (key == "d2h")
-        ss << "GPU to Host latency:"
-           << "\t\t";
+        ss << "GPU to Host latency:" << "\t\t";
     else if (key == "h2d")
-        ss << "Host to GPU latency:"
-           << "\t\t";
+        ss << "Host to GPU latency:" << "\t\t";
     ss << latency << " us";
 
     bg->AddInfoVerboseForGpu(bg->GetPcieTestName(), gpu, ss.str());
@@ -214,20 +215,24 @@ void addBandwidthInfo(BusGrind &bg, unsigned int gpu, const std::string &key, do
     ss.precision(2);
 
     if (key == "bidir")
-        ss << "bidirectional bandwidth:"
-           << "\t";
+        ss << "bidirectional bandwidth:" << "\t";
     else if (key == "d2h")
-        ss << "GPU to Host bandwidth:"
-           << "\t\t";
+        ss << "GPU to Host bandwidth:" << "\t\t";
     else if (key == "h2d")
-        ss << "Host to GPU bandwidth:"
-           << "\t\t";
+        ss << "Host to GPU bandwidth:" << "\t\t";
     ss << bandwidth << " GB/s";
 
     bg.AddInfoVerboseForGpu(bg.GetPcieTestName(), gpu, ss.str());
 }
 
 /*****************************************************************************/
+/*
+ * Checks the PCIe links for width and generation
+ *
+ * @param bg      (M) - the BusGrind class
+ * @param subTest (I) - the name of the subtest
+ * @return the number of tests failed
+ */
 int bg_check_pci_link(BusGrind &bg, std::string subTest)
 {
     int minPcieLinkGen             = (int)bg.m_testParameters->GetSubTestDouble(subTest, PCIE_STR_MIN_PCI_GEN);
@@ -238,9 +243,10 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
     dcgmFieldValue_v2 widthValue   = {};
     unsigned int flags             = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
 
-    if (!bg.test_links)
+    if (!bg.m_test_links)
     {
-        return 1;
+        log_debug("Skipping testing PCIe links due to configuration.");
+        return 0;
     }
 
     for (size_t gpuIdx = 0; gpuIdx < bg.gpu.size(); gpuIdx++)
@@ -616,12 +622,17 @@ dcgmReturn_t HarvestChildren(BusGrind &bg, std::vector<dcgmChildInfo_t> &childre
         else
         {
             DcgmError d { DcgmError::GpuIdTag::Unknown };
-            std::string err
-                = fmt::format("A child process ({}) is being traced or otherwise can't exit", childInfo.pid);
+            std::string err = fmt::format("A child pid ({}) is being traced or otherwise can't exit", childInfo.pid);
             ;
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
             bg.AddError(bg.GetPcieTestName(), d);
             errorCondition = true;
+        }
+
+        /* Unregister child process for hang detection */
+        if (auto ret = bg.HangDetectUnregisterProcess(childInfo.pid); ret != DCGM_ST_OK)
+        {
+            log_debug("Failed to unregister child pid {} for hang detection: {}", childInfo.pid, ret);
         }
     }
 
@@ -882,6 +893,52 @@ dcgmReturn_t BwChildPopulateArgv(BusGrind &bg,
     return DCGM_ST_OK;
 }
 
+/**
+ * This class is used to temporarily remove a task from hang detection.
+ * It is used to avoid false positives when waiting on long-lived blocking operations.
+ */
+class ScopedHangDetectDisable
+{
+public:
+    ScopedHangDetectDisable(BusGrind &bg, pid_t pid)
+        : m_bg(bg)
+        , m_pid(pid)
+    {
+        if (auto ret = m_bg.HangDetectUnregisterTask(m_pid, m_pid); ret != DCGM_ST_OK)
+        {
+            log_debug("Failed to unregister this thread with pid {} for hang detection: {}", m_pid, ret);
+            // We'll keep going, but NVVS's monitor may report false positives
+            m_pid = 0;
+        }
+    }
+
+    ~ScopedHangDetectDisable()
+    {
+        if (m_pid == 0)
+        {
+            log_verbose("Skipping re-registration, unregistration previously failed");
+            return;
+        }
+
+        if (auto ret = m_bg.HangDetectRegisterTask(m_pid, m_pid); ret != DCGM_ST_OK)
+        {
+            log_warning("Failed to re-register this thread with pid {} for hang detection: {}", m_pid, ret);
+            // We'll keep going, but NVVS's monitor won't detect any hangs in this thread
+        }
+    }
+
+    ScopedHangDetectDisable()                                           = delete;
+    ScopedHangDetectDisable(const ScopedHangDetectDisable &)            = delete;
+    ScopedHangDetectDisable(ScopedHangDetectDisable &&)                 = delete;
+    ScopedHangDetectDisable &operator=(const ScopedHangDetectDisable &) = delete;
+    ScopedHangDetectDisable &operator=(ScopedHangDetectDisable &&)      = delete;
+
+private:
+    BusGrind &m_bg;
+    pid_t m_pid = 0;
+};
+
+
 int ForkAndLaunchBandwidthTests(BusGrind &bg,
                                 bool pinned,
                                 MemoryToGpuMap_t &memoryNodeToGpuList,
@@ -889,7 +946,6 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
 {
     int failedTests = 0;
     std::vector<dcgmChildInfo_t> childrenInfo;
-    std::vector<std::thread> readerThreads;
     DcgmNs::Utils::FileHandle outputFds[DCGM_MAX_NUM_DEVICES];
     unsigned int fdsIndex = 0;
 
@@ -948,16 +1004,29 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
         ci.pid           = childPid;
         ci.outputFdIndex = fdsIndex;
         childrenInfo.push_back(std::move(ci));
+
+        if (auto ret = bg.HangDetectRegisterProcess(childPid); ret != DCGM_ST_OK)
+        {
+            log_debug("Failed to register child pid {} for hang detection: {}", childPid, ret);
+            // We'll keep going, but NVVS's monitor won't detect any hangs in this child process
+        }
         fdsIndex++;
     }
 
-    // Read the stdout from each child
-    for (unsigned int i = 0; i < fdsIndex; i++)
     {
-        ReadChildOutput(childrenInfo[i], std::move(outputFds[childrenInfo[i].outputFdIndex]));
-    }
+        /* Temporarily unregister from hang detection before blocking on ReadProcessOutput and waitpid() to avoid
+         * false positives.
+         */
+        ScopedHangDetectDisable guard(bg, getpid());
 
-    GatherAndProcessChildrenOutputs(childrenInfo, bg, groupName);
+        // Read the stdout from each child
+        for (unsigned int i = 0; i < fdsIndex; i++)
+        {
+            ReadChildOutput(childrenInfo[i], std::move(outputFds[childrenInfo[i].outputFdIndex]));
+        }
+
+        GatherAndProcessChildrenOutputs(childrenInfo, bg, groupName);
+    }
 
     return failedTests;
 }
@@ -1045,15 +1114,21 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
     int numElems = (int)bg->m_testParameters->GetSubTestDouble(groupName, PCIE_STR_INTS_PER_COPY);
     int repeat   = (int)bg->m_testParameters->GetSubTestDouble(groupName, PCIE_STR_ITERATIONS);
 
+    ProtectedVector<unsigned int> tids;
+    std::latch tidsPosted { static_cast<std::ptrdiff_t>(bg->gpu.size()) };
+
     // one thread per GPU
     /* Lambda run for each gpuGlobals->gpu[d] */
-    auto worker = [&myBarrier, bg, pinned, numElems, repeat, &bandwidthMatrix](int d) {
+    auto worker = [&tids, &tidsPosted, &myBarrier, bg, pinned, numElems, repeat, &bandwidthMatrix](int d) {
         int *buffer { nullptr };
         int *d_buffer { nullptr };
         cudaEvent_t start;
         cudaEvent_t stop;
         cudaStream_t stream1 { 0 };
         cudaStream_t stream2 { 0 };
+
+        tids.PushBack(syscall(SYS_gettid));
+        tidsPosted.count_down();
 
         cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
@@ -1139,13 +1214,53 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
         cudaCheckErrorOmp(cudaStreamDestroy, (stream2), PCIE_ERR_CUDA_STREAM_FAIL, d);
     }; // end lambda
 
-    /* Use a block so all jthreads are auto-joined */
     {
-        std::vector<std::jthread> threads;
-        threads.reserve(bg->gpu.size());
-        for (int i = 0; i < static_cast<int>(bg->gpu.size()); ++i)
+        // Temporarily remove this thread from hang detection to avoid false positives
+        ScopedHangDetectDisable guard(*bg, getpid());
+
+        /* Use a block so all jthreads are auto-joined */
         {
-            threads.emplace_back(worker, i);
+            std::vector<std::jthread> threads;
+
+            threads.reserve(bg->gpu.size());
+            for (int i = 0; i < static_cast<int>(bg->gpu.size()); ++i)
+            {
+                threads.emplace_back(worker, i);
+            }
+
+            tidsPosted.wait();
+            {
+                std::vector<std::pair<pid_t, dcgmReturn_t>> regFailures; // for deferred logging
+                tids.ForEach([&](pid_t tid) {
+                    if (auto ret = bg->HangDetectRegisterTask(getpid(), tid); ret != DCGM_ST_OK)
+                    {
+                        regFailures.push_back(std::make_pair(tid, ret));
+                    }
+                });
+
+                for (auto const &regFailure : regFailures)
+                {
+                    log_debug(
+                        "Failed to register worker tid {} for hang detection: {}", regFailure.first, regFailure.second);
+                }
+            }
+        }
+    }
+
+    // Unregister threads from HangDetect
+    {
+        std::vector<std::pair<pid_t, dcgmReturn_t>> unregFailures; // for deferred logging
+        tids.ForEach([&](pid_t tid) {
+            if (auto ret = bg->HangDetectUnregisterTask(getpid(), tid); ret != DCGM_ST_OK)
+            {
+                unregFailures.push_back(std::make_pair(tid, ret));
+            }
+        });
+
+        for (auto const &unregFailure : unregFailures)
+        {
+            log_debug(
+                "Failed to unregister worker tids {} for hang detection: {}", unregFailure.first, unregFailure.second);
         }
     }
 
@@ -1568,10 +1683,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 {
     // only run this test if p2p tests are enabled
     int numGPUs = bg->gpu.size() / 2 * 2; // round to the neared even number of GPUs
-    if (p2p)
-    {
-        enableP2P(bg);
-    }
+
     std::vector<int *> buffers(numGPUs);
     std::vector<cudaEvent_t> start(numGPUs);
     std::vector<cudaEvent_t> stop(numGPUs);
@@ -1589,15 +1701,16 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
             bg->m_printedConcurrentGpuErrorMessage = true;
         }
 
-        if (p2p)
-        {
-            disableP2P(bg);
-        }
-
+        log_debug("Subtest skipped, numGPUs={}", numGPUs);
         return 0;
     }
 
     log_debug("Subtest start, p2p = {}", p2p);
+
+    if (p2p)
+    {
+        enableP2P(bg);
+    }
 
     /* Initialize buffers to make valgrind happy */
     for (int i = 0; i < numGPUs; i++)
@@ -1618,126 +1731,173 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
     int repeat   = (int)bg->m_testParameters->GetSubTestDouble(groupName, PCIE_STR_ITERATIONS);
 
     std::barrier myBarrier(numGPUs);
+    ProtectedVector<unsigned int> tids;
+    std::latch tidsPosted { numGPUs };
 
-    auto worker = [&myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, &start, &stop, numGPUs](int d) {
-        cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
+    auto worker
+        = [&tids, &tidsPosted, &myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, &start, &stop, numGPUs](
+              int d) {
+              tids.PushBack(syscall(SYS_gettid));
+              tidsPosted.count_down();
 
-        cudaStream_t stream { 0 };
+              cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
-        cudaCheckErrorOmp(cudaMalloc, (&buffers[d], numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
-        cudaCheckErrorOmp(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
-        cudaCheckErrorOmp(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
-        cudaCheckErrorOmp(cudaStreamCreate, (&stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
+              cudaStream_t stream { 0 };
 
-        cudaDeviceSynchronize();
-        myBarrier.arrive_and_wait();
+              cudaCheckErrorOmp(cudaMalloc, (&buffers[d], numElems * sizeof(int)), PCIE_ERR_CUDA_ALLOC_FAIL, d);
+              cudaCheckErrorOmp(cudaEventCreate, (&start[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
+              cudaCheckErrorOmp(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
+              cudaCheckErrorOmp(cudaStreamCreate, (&stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
 
-        cudaEventRecord(start[d], stream);
-        // right to left tests
-        if (d % 2 == 0)
-        {
-            for (int r = 0; r < repeat; r++)
-            {
-                cudaMemcpyPeerAsync(buffers[d + 1],
-                                    bg->gpu[d + 1]->cudaDeviceIdx,
-                                    buffers[d],
-                                    bg->gpu[d]->cudaDeviceIdx,
-                                    sizeof(int) * numElems,
-                                    stream);
-            }
-            cudaEventRecord(stop[d], stream);
-            cudaDeviceSynchronize();
+              cudaDeviceSynchronize();
+              myBarrier.arrive_and_wait();
 
-            float time_ms;
-            cudaEventElapsedTime(&time_ms, start[d], stop[d]);
-            double time_s = time_ms / 1e3;
-            double gb     = numElems * sizeof(int) * repeat / (double)1e9;
+              cudaEventRecord(start[d], stream);
+              // right to left tests
+              if (d % 2 == 0)
+              {
+                  for (int r = 0; r < repeat; r++)
+                  {
+                      cudaMemcpyPeerAsync(buffers[d + 1],
+                                          bg->gpu[d + 1]->cudaDeviceIdx,
+                                          buffers[d],
+                                          bg->gpu[d]->cudaDeviceIdx,
+                                          sizeof(int) * numElems,
+                                          stream);
+                  }
+                  cudaEventRecord(stop[d], stream);
+                  cudaDeviceSynchronize();
 
-            bandwidthMatrix[0 * numGPUs / 2 + d / 2] = gb / time_s;
-        }
+                  float time_ms;
+                  cudaEventElapsedTime(&time_ms, start[d], stop[d]);
+                  double time_s = time_ms / 1e3;
+                  double gb     = numElems * sizeof(int) * repeat / (double)1e9;
 
-        cudaDeviceSynchronize();
-        myBarrier.arrive_and_wait();
+                  bandwidthMatrix[0 * numGPUs / 2 + d / 2] = gb / time_s;
+              }
 
-        cudaEventRecord(start[d], stream);
-        // left to right tests
-        if (d % 2 == 1)
-        {
-            for (int r = 0; r < repeat; r++)
-            {
-                cudaMemcpyPeerAsync(buffers[d - 1],
-                                    bg->gpu[d - 1]->cudaDeviceIdx,
-                                    buffers[d],
-                                    bg->gpu[d]->cudaDeviceIdx,
-                                    sizeof(int) * numElems,
-                                    stream);
-            }
-            cudaEventRecord(stop[d], stream);
-            cudaDeviceSynchronize();
+              cudaDeviceSynchronize();
+              myBarrier.arrive_and_wait();
 
-            float time_ms;
-            cudaEventElapsedTime(&time_ms, start[d], stop[d]);
-            double time_s = time_ms / 1e3;
-            double gb     = numElems * sizeof(int) * repeat / (double)1e9;
+              cudaEventRecord(start[d], stream);
+              // left to right tests
+              if (d % 2 == 1)
+              {
+                  for (int r = 0; r < repeat; r++)
+                  {
+                      cudaMemcpyPeerAsync(buffers[d - 1],
+                                          bg->gpu[d - 1]->cudaDeviceIdx,
+                                          buffers[d],
+                                          bg->gpu[d]->cudaDeviceIdx,
+                                          sizeof(int) * numElems,
+                                          stream);
+                  }
+                  cudaEventRecord(stop[d], stream);
+                  cudaDeviceSynchronize();
 
-            bandwidthMatrix[1 * numGPUs / 2 + d / 2] = gb / time_s;
-        }
+                  float time_ms;
+                  cudaEventElapsedTime(&time_ms, start[d], stop[d]);
+                  double time_s = time_ms / 1e3;
+                  double gb     = numElems * sizeof(int) * repeat / (double)1e9;
 
-        cudaDeviceSynchronize();
-        myBarrier.arrive_and_wait();
+                  bandwidthMatrix[1 * numGPUs / 2 + d / 2] = gb / time_s;
+              }
 
-        cudaEventRecord(start[d], stream);
-        // Bidirectional tests
-        if (d % 2 == 0)
-        {
-            for (int r = 0; r < repeat; r++)
-            {
-                cudaMemcpyPeerAsync(buffers[d + 1],
-                                    bg->gpu[d + 1]->cudaDeviceIdx,
-                                    buffers[d],
-                                    bg->gpu[d]->cudaDeviceIdx,
-                                    sizeof(int) * numElems,
-                                    stream);
-            }
-        }
-        else
-        {
-            for (int r = 0; r < repeat; r++)
-            {
-                cudaMemcpyPeerAsync(buffers[d - 1],
-                                    bg->gpu[d - 1]->cudaDeviceIdx,
-                                    buffers[d],
-                                    bg->gpu[d]->cudaDeviceIdx,
-                                    sizeof(int) * numElems,
-                                    stream);
-            }
-        }
+              cudaDeviceSynchronize();
+              myBarrier.arrive_and_wait();
 
-        cudaEventRecord(stop[d], stream);
-        cudaDeviceSynchronize();
-        myBarrier.arrive_and_wait();
+              cudaEventRecord(start[d], stream);
+              // Bidirectional tests
+              if (d % 2 == 0)
+              {
+                  for (int r = 0; r < repeat; r++)
+                  {
+                      cudaMemcpyPeerAsync(buffers[d + 1],
+                                          bg->gpu[d + 1]->cudaDeviceIdx,
+                                          buffers[d],
+                                          bg->gpu[d]->cudaDeviceIdx,
+                                          sizeof(int) * numElems,
+                                          stream);
+                  }
+              }
+              else
+              {
+                  for (int r = 0; r < repeat; r++)
+                  {
+                      cudaMemcpyPeerAsync(buffers[d - 1],
+                                          bg->gpu[d - 1]->cudaDeviceIdx,
+                                          buffers[d],
+                                          bg->gpu[d]->cudaDeviceIdx,
+                                          sizeof(int) * numElems,
+                                          stream);
+                  }
+              }
 
-        if (d % 2 == 0)
-        {
-            float time_ms1, time_ms2;
-            cudaEventElapsedTime(&time_ms1, start[d], stop[d]);
-            cudaEventElapsedTime(&time_ms2, start[d + 1], stop[d + 1]);
-            double time_s = std::max(time_ms1, time_ms2) / 1e3;
-            double gb     = 2.0 * numElems * sizeof(int) * repeat / (double)1e9;
+              cudaEventRecord(stop[d], stream);
+              cudaDeviceSynchronize();
+              myBarrier.arrive_and_wait();
 
-            bandwidthMatrix[2 * numGPUs / 2 + d / 2] = gb / time_s;
-        }
+              if (d % 2 == 0)
+              {
+                  float time_ms1, time_ms2;
+                  cudaEventElapsedTime(&time_ms1, start[d], stop[d]);
+                  cudaEventElapsedTime(&time_ms2, start[d + 1], stop[d + 1]);
+                  double time_s = std::max(time_ms1, time_ms2) / 1e3;
+                  double gb     = 2.0 * numElems * sizeof(int) * repeat / (double)1e9;
 
-        cudaCheckErrorOmp(cudaStreamDestroy, (stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
-    }; // end lambda
+                  bandwidthMatrix[2 * numGPUs / 2 + d / 2] = gb / time_s;
+              }
 
-    /* Use a block so all jthreads are auto-joined */
+              cudaCheckErrorOmp(cudaStreamDestroy, (stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
+          }; // end lambda
+
+
     {
-        std::vector<std::jthread> threads;
-        threads.reserve(numGPUs);
-        for (int i = 0; i < numGPUs; i++)
+        // Temporarily unregister hang detection before joining on threads
+        ScopedHangDetectDisable guard(*bg, getpid());
+
+        /* Use a block so all jthreads are auto-joined */
         {
-            threads.emplace_back(worker, i);
+            std::vector<std::jthread> threads;
+            threads.reserve(numGPUs);
+            for (int i = 0; i < numGPUs; i++)
+            {
+                threads.emplace_back(worker, i);
+            }
+
+            tidsPosted.wait();
+            {
+                std::vector<std::pair<pid_t, dcgmReturn_t>> regFailures; // for deferred logging
+                tids.ForEach([&](pid_t tid) {
+                    if (auto ret = bg->HangDetectRegisterTask(getpid(), tid); ret != DCGM_ST_OK)
+                    {
+                        regFailures.push_back(std::make_pair(tid, ret));
+                    }
+                });
+
+                for (auto const &regFailure : regFailures)
+                {
+                    log_debug(
+                        "Failed to register worker tid {} for hang detection: {}", regFailure.first, regFailure.second);
+                }
+            }
+        }
+    }
+
+    // Unregister from HangDetect
+    {
+        std::vector<std::pair<pid_t, dcgmReturn_t>> unregFailures; // for deferred logging
+        tids.ForEach([&](pid_t tid) {
+            if (auto ret = bg->HangDetectUnregisterTask(getpid(), tid); ret != DCGM_ST_OK)
+            {
+                unregFailures.push_back(std::make_pair(tid, ret));
+            }
+        });
+
+        for (auto const &unregFailure : unregFailures)
+        {
+            log_debug(
+                "Failed to unregister worker tid {} for hang detection: {}", unregFailure.first, unregFailure.second);
         }
     }
 
@@ -1810,6 +1970,8 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
             bg->AddInfo(bg->GetPcieTestName(), d.GetMessage());
             bg->m_printedConcurrentGpuErrorMessage = true;
         }
+
+        log_debug("Subtest skipped, numGPUs={}", numGPUs);
         return 0;
     }
 
@@ -1820,7 +1982,6 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
     {
         buffers[i] = nullptr;
     }
-
 
     if (p2p)
     {
@@ -1840,8 +2001,14 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
     }
 
     std::barrier myBarrier(numGPUs);
+    std::latch tidsPosted { numGPUs };
+    ProtectedVector<unsigned int> tids;
 
-    auto worker = [&myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, numGPUs](int d) {
+    auto worker = [&tids, &tidsPosted, &myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, numGPUs](int d) {
+        unsigned int tid = syscall(SYS_gettid);
+        tids.PushBack(tid);
+        tidsPosted.count_down();
+
         cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
         cudaEvent_t start;
@@ -1915,13 +2082,52 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
         cudaCheckErrorOmp(cudaStreamDestroy, (stream1), PCIE_ERR_CUDA_STREAM_FAIL, d);
     }; // end lambda
 
-    /* Use a block so all jthreads are auto-joined */
     {
-        std::vector<std::jthread> threads;
-        threads.reserve(numGPUs);
-        for (int i = 0; i < numGPUs; i++)
+        // Temporarily unregister hang detection before joining on threads
+        ScopedHangDetectDisable guard(*bg, getpid());
+
+        /* Use a block so all jthreads are auto-joined */
         {
-            threads.emplace_back(worker, i);
+            std::vector<std::jthread> threads;
+            threads.reserve(numGPUs);
+            for (int i = 0; i < numGPUs; i++)
+            {
+                threads.emplace_back(worker, i);
+            }
+
+            tidsPosted.wait();
+            {
+                std::vector<std::pair<pid_t, dcgmReturn_t>> regFailures; // for deferred logging
+                tids.ForEach([&](pid_t tid) {
+                    if (auto ret = bg->HangDetectRegisterTask(getpid(), tid); ret != DCGM_ST_OK)
+                    {
+                        regFailures.push_back(std::make_pair(tid, ret));
+                    }
+                });
+
+                for (auto const &regFailure : regFailures)
+                {
+                    log_debug(
+                        "Failed to register worker tid {} for hang detection: {}", regFailure.first, regFailure.second);
+                }
+            }
+        }
+    }
+
+    // Unregister threads from HangDetect
+    {
+        std::vector<std::pair<pid_t, dcgmReturn_t>> unregFailures; // for deferred logging
+        tids.ForEach([&](pid_t tid) {
+            if (auto ret = bg->HangDetectUnregisterTask(getpid(), tid); ret != DCGM_ST_OK)
+            {
+                unregFailures.push_back(std::make_pair(tid, ret));
+            }
+        });
+
+        for (auto const &unregFailure : unregFailures)
+        {
+            log_debug(
+                "Failed to unregister worker tid {} for hang detection: {}", unregFailure.first, unregFailure.second);
         }
     }
 
@@ -2120,7 +2326,6 @@ int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
         bg.test_nvlink_status = true;
     }
 
-    bg.test_links   = true;
     bg.check_errors = true;
 
     /* Is binary logging enabled for this stat collection? */

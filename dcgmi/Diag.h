@@ -60,6 +60,8 @@ public:
     void HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v12 const &response);
     void InitializeDiagResponse(dcgmDiagResponse_v12 &response);
 
+    void SetEmbeddedHostEngine(bool embeddedHostEngine);
+
 #ifndef DCGMI_TESTS
 private:
 #endif
@@ -123,6 +125,8 @@ private:
     std::string m_hostname;
     // This is only used if we're running iteratively
     Json::Value m_jsonTmpValue;
+
+    bool m_embeddedHostEngine = false;
 };
 
 /*****************************************************************************
@@ -163,8 +167,7 @@ public:
               const std::string &configPath,
               bool jsonOutput,
               dcgmRunDiag_v10 &drd,
-              unsigned int iterations,
-              const std::string &pathToDcgmExecutable);
+              unsigned int iterations);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

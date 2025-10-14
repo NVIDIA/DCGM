@@ -75,7 +75,8 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
-                              dcgmDiagPluginAttr_v1 const *pluginAttr)
+                              dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              HangDetectMonitor * /* monitor */)
 {
     Memory *mem = new Memory(handle);
     *userData   = mem;

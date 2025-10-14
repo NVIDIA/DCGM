@@ -33,6 +33,8 @@
 
 #define PS_RUN_IF_GOM_ENABLED "run_if_gom_enabled" /* Should this plugin run if GOM mode is enabled */
 
+#define PS_USE_GENERIC_MODE "generic_mode" /* true/false - enables generic-mode execution */
+
 /*****************************************************************************/
 /* Categories */
 
@@ -195,6 +197,12 @@
 #define TP_STR_SBE_ERROR_THRESHOLD "max_sbe_errors" /* Threshold beyond which sbe's are treated as errors */
 #define TP_STR_USE_DGEMV           "use_dgemv"      /* Use cuBLAS level-2 DGEMV instead of level-3 DEMM */
 #define TP_STR_MAX_MATRIX_DIM      "max_matrix_dim" /* Maximum single dimension */
+
+/* Enhanced workload parameters */
+#define TP_STR_ENABLE_FP16_GEMM "enable_fp16_gemm" /* Enable FP16 GEMM operations */
+#define TP_STR_FP64_GEMM_RATIO  "fp64_gemm_ratio"  /* Ratio of streams for FP64 GEMMs (0.0-1.0) */
+#define TP_STR_FP16_GEMM_RATIO  "fp16_gemm_ratio"  /* Ratio of streams for FP16 GEMMs (0.0-1.0) */
+
 /******************************************************************************
  * TARGETED STRESS PLUGIN
  *****************************************************************************/
@@ -267,6 +275,7 @@
 #define MEMTEST_STR_TEST8          "test8"          /* whether to enable test8 */
 #define MEMTEST_STR_TEST9          "test9"          /* whether to enable test9 */
 #define MEMTEST_STR_TEST10         "test10"         /* whether to enable test10 */
+#define MEMTEST_STR_NUM_CHUNKS     "num_chunks"     /* number of memory chunks to use */
 
 /******************************************************************************
  * HARDWARE PLUGIN

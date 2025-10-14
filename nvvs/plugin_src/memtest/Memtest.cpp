@@ -39,18 +39,25 @@
  */
 
 #include "Memtest.h"
-#include "CudaCommon.h"
-#include "DcgmUtilities.h"
-#include "PluginStrings.h"
-#include "dcgm_fields.h"
-#include "inc/tests.h"
+#include "memtest_wrapper.h"
+
+#include <CudaCommon.h>
+#include <DcgmUtilities.h>
 #include <PluginCommon.h>
-#include <chrono>
+#include <PluginStrings.h>
+#include <dcgm_fields.h>
+#include <inc/tests.h>
+
+#include <cuda_runtime.h>
 #include <fmt/ostream.h>
+
+#include <chrono>
 #include <random>
 #include <span>
 
-const unsigned int NUM_ITERATIONS = 1000;
+unsigned int const NUM_ITERATIONS = 1000;
+unsigned int const MIN_CHUNKS     = 1;
+unsigned int const MAX_CHUNKS     = 256;
 
 static __thread unsigned long *err_addr;
 static __thread unsigned long *err_expect;
@@ -85,19 +92,19 @@ unsigned int gpu_errors[DCGM_MAX_NUM_DEVICES];
     } while (0)
 
 
-int test0(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test1(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test2(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test3(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test4(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test5(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test6(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test7(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test8(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test9(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
-int test10(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks);
+int test0(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test1(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test2(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test3(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test4(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test5(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test6(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test7(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test8(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test9(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
+int test10(memtest_device_p gpu, MemoryChunkManager const &memoryManager);
 
-typedef int (*test_func_t)(memtest_device_p, char *, unsigned int);
+typedef int (*test_func_t)(memtest_device_p, MemoryChunkManager const &);
 
 typedef struct cuda_memtest_s
 {
@@ -453,9 +460,9 @@ int Memtest::CudaInit()
             return -1;
         }
         {
-            if (auto cuSt = cuCtxCreate(&gpu.cuContext, 0, gpu.cuDevice); cuSt != CUDA_SUCCESS)
+            if (auto cuSt = cuCtxCreate_v2(&gpu.cuContext, 0, gpu.cuDevice); cuSt != CUDA_SUCCESS)
             {
-                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMmeTestTestName(), "cuCtxCreate", cuSt, gpu.gpuId);
+                LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMmeTestTestName(), "cuCtxCreate_v2", cuSt, gpu.gpuId);
                 return -1;
             }
 
@@ -549,6 +556,16 @@ int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginEntityList_v1 &entityL
             workerThreads.emplace_back(
                 std::make_unique<MemtestWorker>(&device, *this, m_testParameters, *m_dcgmRecorder));
             workerThreads.back()->Start();
+            auto const tid = workerThreads.back()->GetCachedTid();
+            if (tid == 0)
+            {
+                log_error("Failed to get thread id for worker thread {}", workerThreads.size() - 1);
+                continue;
+            }
+            if (auto const ret = m_plugin->HangDetectRegisterTask(getpid(), tid); ret != DCGM_ST_OK)
+            {
+                log_error("Failed to register worker thread {} for hang detection: {}", tid, ret);
+            }
         }
 
         /* Wait for all workers to finish */
@@ -570,6 +587,15 @@ int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginEntityList_v1 &entityL
             {
                 continue;
             }
+
+            if (auto const tid = workerThread->GetCachedTid(); tid != 0)
+            {
+                if (auto const ret = m_plugin->HangDetectUnregisterTask(getpid(), tid); ret != DCGM_ST_OK)
+                {
+                    log_error("Failed to unregister worker thread {} for hang detection: {}", tid, ret);
+                }
+            }
+
             if (workerThread->StopAndWait(3000) != 0)
             {
                 workerThread->Kill();
@@ -663,6 +689,19 @@ MemtestWorker::MemtestWorker(memtest_device_p device, Memtest &plugin, TestParam
 {
     m_testDuration    = tp->GetDouble(MEMTEST_STR_TEST_DURATION);
     m_useMappedMemory = tp->GetBoolFromString(MEMTEST_STR_USE_MAPPED_MEM);
+    m_numChunks       = tp->GetDouble(MEMTEST_STR_NUM_CHUNKS);
+
+    // Validate chunk count - ensure it's at least MIN_CHUNKS and at most MAX_CHUNKS
+    if (m_numChunks < MIN_CHUNKS)
+    {
+        log_warning("Number of chunks ({}) is too small, using minimum of {}", m_numChunks, MIN_CHUNKS);
+        m_numChunks = MIN_CHUNKS;
+    }
+    else if (m_numChunks > MAX_CHUNKS)
+    {
+        log_warning("Number of chunks ({}) is too large, using maximum of {}", m_numChunks, MAX_CHUNKS);
+        m_numChunks = MAX_CHUNKS;
+    }
 
     const char *failGpu = getenv("__DCGM_DIAG_MEMTEST_FAIL_GPU");
     if (failGpu != nullptr && isdigit(failGpu[0]) && atoi(failGpu) == static_cast<int>(m_device->gpuId))
@@ -672,7 +711,7 @@ MemtestWorker::MemtestWorker(memtest_device_p device, Memtest &plugin, TestParam
     }
 }
 
-int MemtestWorker::RunTests(char *ptr, unsigned int tot_num_blocks)
+int MemtestWorker::RunTests(MemoryChunkManager const &memoryManager)
 {
     unsigned int i;
     unsigned int err = 0;
@@ -688,7 +727,7 @@ int MemtestWorker::RunTests(char *ptr, unsigned int tot_num_blocks)
             {
                 DCGM_LOG_INFO << cuda_memtests[i].desc;
                 auto start = std::chrono::steady_clock::now();
-                err += cuda_memtests[i].func(m_device, ptr, tot_num_blocks);
+                err += cuda_memtests[i].func(m_device, memoryManager);
                 end = std::chrono::steady_clock::now();
                 DCGM_LOG_INFO << "Test" << i << " finished in "
                               << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << " seconds";
@@ -803,38 +842,27 @@ void MemtestWorker::run()
         return;
     }
 
-    char *ptr = NULL;
-
     tot_num_blocks = std::min(tot_num_blocks, (size_t)(freeMem / BLOCKSIZE - 16));
+    cudaError_t st = cudaSuccess;
     do
     {
         tot_num_blocks -= 16; // magic number 16 MB
-        DCGM_LOG_DEBUG << "Trying to allocate " << tot_num_blocks << "MB";
+        DCGM_LOG_DEBUG << "Trying to allocate " << tot_num_blocks << "MB" << " for gpu " << m_device->gpuId;
         if (tot_num_blocks <= 0)
         {
-            DCGM_LOG_ERROR << "cannot allocate any memory from GPU";
-            if (ptr)
-            {
-                cudaFree(ptr);
-            }
+            DCGM_LOG_ERROR << "cannot allocate any memory from GPU " << m_device->gpuId;
             return;
         }
-        if (m_useMappedMemory)
+        if (st = m_memoryManager.Initialize(tot_num_blocks, m_numChunks, m_useMappedMemory); st != cudaSuccess)
         {
-            void *mappedHostPtr = NULL;
-            // create cuda mapped memory
-            cudaHostAlloc((void **)&mappedHostPtr, tot_num_blocks * BLOCKSIZE, cudaHostAllocMapped);
-            cudaHostGetDevicePointer(&ptr, mappedHostPtr, 0);
+            log_error("MemoryChunkManager::Initialize failed for gpu {}", m_device->gpuId);
         }
-        else
-        {
-            cudaMalloc((void **)&ptr, tot_num_blocks * BLOCKSIZE);
-        }
-    } while (cudaGetLastError() != cudaSuccess);
+    } while (st != cudaSuccess);
 
-    DCGM_LOG_INFO << "Allocated " << tot_num_blocks << " MB";
+    DCGM_LOG_INFO << "Allocated " << tot_num_blocks << " MB in " << m_memoryManager.GetNumChunks() << " chunks for gpu "
+                  << m_device->gpuId;
 
-    gpu_errors[m_device->gpuId] = RunTests(ptr, tot_num_blocks);
+    gpu_errors[m_device->gpuId] = RunTests(m_memoryManager);
 }
 
 
@@ -908,7 +936,7 @@ unsigned int error_checking(const char * /*msg*/, unsigned int blockidx)
  * the address wires.
  *****************************************************************************/
 
-int test0(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test0(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     CUresult cuRes;
 
@@ -920,13 +948,7 @@ int test0(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     unsigned int i;
     unsigned int err = 0;
     char *loc;
-    char *end_ptr = ptr + tot_num_blocks * BLOCKSIZE;
 
-    paramsGlobalWrite[0] = &ptr;
-    paramsGlobalWrite[1] = &end_ptr;
-
-    paramsGlobalRead[0] = &ptr;
-    paramsGlobalRead[1] = &end_ptr;
     paramsGlobalRead[2] = &err_count;
     paramsGlobalRead[3] = &err_addr;
     paramsGlobalRead[4] = &err_expect;
@@ -934,63 +956,109 @@ int test0(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     paramsGlobalRead[6] = &err_second_read;
 
     paramsWrite[0] = &loc;
-    paramsWrite[1] = &end_ptr;
 
     paramsRead[0] = &loc;
-    paramsRead[1] = &end_ptr;
     paramsRead[2] = &err_count;
     paramsRead[3] = &err_addr;
     paramsRead[4] = &err_expect;
     paramsRead[5] = &err_current;
     paramsRead[6] = &err_second_read;
 
-    // test global address
-    cuRes = cuLaunchKernel(gpu->cuFuncTest0GlobalWrite, 1, 1, 1, 1, 1, 1, 0, 0, paramsGlobalWrite, 0);
-    if (CUDA_SUCCESS != cuRes)
+    // Global address test: Phase 1 - Write for ALL chunks first
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        DCGM_LOG_ERROR << "Could not launch kernel " << test0_global_write_func_name << ": " << cuRes;
-        goto cleanup;
+        char *chunkPtr = memoryManager.GetChunkStart(chunkIndex);
+        char *chunkEnd = memoryManager.GetChunkEnd(chunkIndex);
+
+        // Update parameters for this chunk
+        paramsGlobalWrite[0] = &chunkPtr;
+        paramsGlobalWrite[1] = &chunkEnd;
+
+        cuRes = cuLaunchKernel(gpu->cuFuncTest0GlobalWrite, 1, 1, 1, 1, 1, 1, 0, 0, paramsGlobalWrite, 0);
+        if (cuRes != CUDA_SUCCESS)
+        {
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), test0_global_write_func_name, cuRes, gpu->gpuId);
+            goto cleanup;
+        }
     }
 
-    cuRes = cuLaunchKernel(gpu->cuFuncTest0GlobalRead, 1, 1, 1, 1, 1, 1, 0, 0, paramsGlobalRead, 0);
-    if (CUDA_SUCCESS != cuRes)
+    // Global address test: Phase 2 - Read for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        DCGM_LOG_ERROR << "Could not launch kernel " << test0_global_read_func_name << ": " << cuRes;
-        goto cleanup;
+        char *chunkPtr = memoryManager.GetChunkStart(chunkIndex);
+        char *chunkEnd = memoryManager.GetChunkEnd(chunkIndex);
+
+        // Update parameters for this chunk
+        paramsGlobalRead[0] = &chunkPtr;
+        paramsGlobalRead[1] = &chunkEnd;
+
+        cuRes = cuLaunchKernel(gpu->cuFuncTest0GlobalRead, 1, 1, 1, 1, 1, 1, 0, 0, paramsGlobalRead, 0);
+        if (cuRes != CUDA_SUCCESS)
+        {
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), test0_global_read_func_name, cuRes, gpu->gpuId);
+            goto cleanup;
+        }
+
+        err += error_checking("test0 on global address", chunkIndex);
     }
 
-    err += error_checking("test0 on global address", 0);
-
+    // Phase-based iteration structure
     for (unsigned int ite = 0; ite < NUM_ITERATIONS; ite++)
     {
-        for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
+        // Phase 1: Write phase for ALL chunks
+        for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
         {
-            dim3 grid;
-            grid.x = GRIDSIZE;
-            loc    = ptr + i * BLOCKSIZE;
+            char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+            char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+            unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-            cuRes = cuLaunchKernel(gpu->cuFuncTest0Write, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
-            if (CUDA_SUCCESS != cuRes)
+            paramsWrite[1] = &end_ptr;
+
+            for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
             {
-                DCGM_LOG_ERROR << "Could not launch kernel " << test0_write_func_name << ": " << cuRes;
-                goto cleanup;
+                dim3 grid;
+                grid.x = GRIDSIZE;
+                loc    = ptr + i * BLOCKSIZE;
+
+                cuRes = cuLaunchKernel(gpu->cuFuncTest0Write, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
+                if (cuRes != CUDA_SUCCESS)
+                {
+                    auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                    LOG_CUDA_ERROR_FOR_PLUGIN(
+                        memtestPlugin, memtestPlugin->GetMmeTestTestName(), test0_write_func_name, cuRes, gpu->gpuId);
+                    goto cleanup;
+                }
             }
         }
 
-        for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
+        // Phase 2: Read phase for ALL chunks
+        for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
         {
-            dim3 grid;
-            grid.x = GRIDSIZE;
-            loc    = ptr + i * BLOCKSIZE;
+            char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+            char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+            unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-            cuRes = cuLaunchKernel(gpu->cuFuncTest0Read, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsRead, 0);
-            if (CUDA_SUCCESS != cuRes)
+            paramsRead[1] = &end_ptr;
+
+            for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
             {
-                DCGM_LOG_ERROR << "Could not launch kernel " << test0_read_func_name << ": " << cuRes;
-                goto cleanup;
-            }
+                dim3 grid;
+                grid.x = GRIDSIZE;
+                loc    = ptr + i * BLOCKSIZE;
 
-            err += error_checking(__FUNCTION__, i);
+                cuRes = cuLaunchKernel(gpu->cuFuncTest0Read, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsRead, 0);
+                if (CUDA_SUCCESS != cuRes)
+                {
+                    DCGM_LOG_ERROR << "Could not launch kernel " << test0_read_func_name << ": " << cuRes;
+                    goto cleanup;
+                }
+
+                err += error_checking(__FUNCTION__, i + chunkIndex * memoryManager.GetNominalChunkSizeInBlocks());
+            }
         }
     }
 
@@ -1004,7 +1072,7 @@ cleanup:
  * if the value in each memory location still agrees with the address.
  ******************************************************************************/
 
-int test1(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test1(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     CUresult cuRes;
 
@@ -1014,48 +1082,71 @@ int test1(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     unsigned int err = 0;
     unsigned int i;
     char *loc;
-    char *end_ptr = ptr + tot_num_blocks * BLOCKSIZE;
 
     paramsWrite[0] = &loc;
-    paramsWrite[1] = &end_ptr;
     paramsWrite[2] = &err_count;
 
     paramsRead[0] = &loc;
-    paramsRead[1] = &end_ptr;
     paramsRead[2] = &err_count;
     paramsRead[3] = &err_addr;
     paramsRead[4] = &err_expect;
     paramsRead[5] = &err_current;
     paramsRead[6] = &err_second_read;
 
-    for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
+    // Phase 1: Write phase for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        dim3 grid;
-        grid.x = GRIDSIZE;
-        loc    = ptr + i * BLOCKSIZE;
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-        cuRes = cuLaunchKernel(gpu->cuFuncTest1Write, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
-        if (CUDA_SUCCESS != cuRes)
+        // Update parameters for this chunk
+        paramsWrite[1] = &end_ptr;
+
+        for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel " << test1_write_func_name << ": " << cuRes;
-            goto cleanup;
+            dim3 grid;
+            grid.x = GRIDSIZE;
+            loc    = ptr + i * BLOCKSIZE;
+
+            cuRes = cuLaunchKernel(gpu->cuFuncTest1Write, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test1_write_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
         }
     }
 
-    for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
+    // Phase 2: Read phase for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        dim3 grid;
-        grid.x = GRIDSIZE;
-        loc    = ptr + i * BLOCKSIZE;
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-        cuRes = cuLaunchKernel(gpu->cuFuncTest1Read, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsRead, 0);
-        if (CUDA_SUCCESS != cuRes)
+        // Update parameters for this chunk
+        paramsRead[1] = &end_ptr;
+
+        for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel " << test1_read_func_name << ": " << cuRes;
-            goto cleanup;
-        }
+            dim3 grid;
+            grid.x = GRIDSIZE;
+            loc    = ptr + i * BLOCKSIZE;
 
-        err += error_checking("test1 on reading", i);
+            cuRes = cuLaunchKernel(gpu->cuFuncTest1Read, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsRead, 0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test1_read_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
+
+            err += error_checking("test1 on reading", i + chunkIndex * memoryManager.GetNominalChunkSizeInBlocks());
+        }
     }
 
 cleanup:
@@ -1109,9 +1200,11 @@ unsigned int move_inv_test(memtest_device_p gpu,
         loc    = ptr + i * BLOCKSIZE;
 
         cuRes = cuLaunchKernel(gpu->cuFuncMoveInvWrite, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel move_inv_write: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), move_inv_write_func_name, cuRes, gpu->gpuId);
             goto cleanup;
         }
     }
@@ -1129,9 +1222,11 @@ unsigned int move_inv_test(memtest_device_p gpu,
         loc    = ptr + i * BLOCKSIZE;
 
         cuRes = cuLaunchKernel(gpu->cuFuncMoveInvReadWrite, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsReadWrite, 0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel move_inv_readwrite: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), move_inv_readwrite_func_name, cuRes, gpu->gpuId);
             goto cleanup;
         }
         err += error_checking("move_inv_readwrite", i);
@@ -1150,9 +1245,11 @@ unsigned int move_inv_test(memtest_device_p gpu,
         loc    = ptr + i * BLOCKSIZE;
 
         cuRes = cuLaunchKernel(gpu->cuFuncMoveInvRead, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsRead, 0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel move_inv_read: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), move_inv_read_func_name, cuRes, gpu->gpuId);
             goto cleanup;
         }
         err += error_checking("move_inv_read", i);
@@ -1168,16 +1265,31 @@ cleanup:
  * zeros.
  ******************************************************************************/
 
-int test2(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test2(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     unsigned int err = 0;
     unsigned int p1  = 0;
     unsigned int p2  = ~p1;
 
+    // First pass: Moving inversions test with pattern p1 and p2 for ALL chunks
     DCGM_LOG_DEBUG << "Test2: Moving inversions test, with pattern " << p1 << " and " << p2;
-    err += move_inv_test(gpu, ptr, tot_num_blocks, p1, p2, 0);
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+        err += move_inv_test(gpu, ptr, tot_num_blocks, p1, p2, 0);
+    }
+
+    // Second pass: Moving inversions test with pattern p2 and p1 for ALL chunks
     DCGM_LOG_DEBUG << "Test2: Moving inversions test, with pattern " << p2 << " and " << p1;
-    err += move_inv_test(gpu, ptr, tot_num_blocks, p2, p1, 0);
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+        err += move_inv_test(gpu, ptr, tot_num_blocks, p2, p1, 0);
+    }
 
     return err;
 }
@@ -1188,17 +1300,32 @@ int test2(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
  * and zeros. This test will better detect subtle errors in "wide" memory chips.
  ******************************************************************************/
 
-int test3(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test3(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     unsigned int err = 0;
     unsigned int p0  = 0x80;
     unsigned int p1  = p0 | (p0 << 8) | (p0 << 16) | (p0 << 24);
     unsigned int p2  = ~p1;
 
+    // First pass: Moving inversions test with pattern p1 and p2 for ALL chunks
     DCGM_LOG_DEBUG << "Test3: Moving inversions test, with pattern " << p1 << " and " << p2;
-    err += move_inv_test(gpu, ptr, tot_num_blocks, p1, p2, 0);
-    DCGM_LOG_DEBUG << "Test3: Moving inversions test, with pattern " << p1 << " and " << p2;
-    err += move_inv_test(gpu, ptr, tot_num_blocks, p2, p1, 0);
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+        err += move_inv_test(gpu, ptr, tot_num_blocks, p1, p2, 0);
+    }
+
+    // Second pass: Moving inversions test with pattern p2 and p1 for ALL chunks
+    DCGM_LOG_DEBUG << "Test3: Moving inversions test, with pattern " << p2 << " and " << p1;
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+        err += move_inv_test(gpu, ptr, tot_num_blocks, p2, p1, 0);
+    }
 
     return err;
 }
@@ -1212,7 +1339,7 @@ int test3(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
  * increase effectiveness.
  ******************************************************************************/
 
-int test4(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test4(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     unsigned int p1, p2;
     unsigned int err = 0;
@@ -1223,9 +1350,16 @@ int test4(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     p1 = mt();
     p2 = ~p1;
 
-    DCGM_LOG_DEBUG << "Test4: Moving inversions test, with random pattern " << p1 << " and " << p2;
+    // Process each chunk
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-    err += move_inv_test(gpu, ptr, tot_num_blocks, p1, p2, 0);
+        DCGM_LOG_DEBUG << "Test4: Moving inversions test, with random pattern " << p1 << " and " << p2;
+
+        err += move_inv_test(gpu, ptr, tot_num_blocks, p1, p2, 0);
+    }
 
     return err;
 }
@@ -1240,7 +1374,7 @@ int test4(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
  * reported are only for where the bad pattern was found.
  ******************************************************************************/
 
-int test5(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test5(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     CUresult cuRes;
     unsigned int err = 0;
@@ -1249,61 +1383,97 @@ int test5(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     void *paramsInit[2]  = { 0 };
     void *paramsCheck[7] = { 0 };
 
-    char *end_ptr = ptr + tot_num_blocks * BLOCKSIZE;
     char *loc;
 
     paramsInit[0] = &loc;
-    paramsInit[1] = &end_ptr;
 
     paramsCheck[0] = &loc;
-    paramsCheck[1] = &end_ptr;
     paramsCheck[2] = &err_count;
     paramsCheck[3] = &err_addr;
     paramsCheck[4] = &err_expect;
     paramsCheck[5] = &err_current;
     paramsCheck[6] = &err_second_read;
 
-    for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
+    // Phase 1: Initialize patterns for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        dim3 grid;
-        grid.x = GRIDSIZE;
-        loc    = ptr + i * BLOCKSIZE;
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-        cuRes = cuLaunchKernel(gpu->cuFuncTest5Init, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsInit, 0);
-        if (CUDA_SUCCESS != cuRes)
+        // Update parameters for this chunk
+        paramsInit[1] = &end_ptr;
+
+        for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel " << test5_init_func_name << ": " << cuRes;
-            goto cleanup;
+            dim3 grid;
+            grid.x = GRIDSIZE;
+            loc    = ptr + i * BLOCKSIZE;
+
+            cuRes = cuLaunchKernel(gpu->cuFuncTest5Init, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsInit, 0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test5_init_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
         }
     }
 
-    for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
+    // Phase 2: Move memory blocks for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        dim3 grid;
-        grid.x = GRIDSIZE;
-        loc    = ptr + i * BLOCKSIZE;
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-        cuRes = cuLaunchKernel(gpu->cuFuncTest5Move, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsInit, 0);
-        if (CUDA_SUCCESS != cuRes)
+        // Update parameters for this chunk
+        paramsInit[1] = &end_ptr;
+
+        for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel " << test5_move_func_name << ": " << cuRes;
-            goto cleanup;
+            dim3 grid;
+            grid.x = GRIDSIZE;
+            loc    = ptr + i * BLOCKSIZE;
+
+            cuRes = cuLaunchKernel(gpu->cuFuncTest5Move, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsInit, 0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test5_move_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
         }
     }
 
-    for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
+    // Phase 3: Check patterns for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        dim3 grid;
-        grid.x = GRIDSIZE;
-        loc    = ptr + i * BLOCKSIZE;
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-        cuRes = cuLaunchKernel(gpu->cuFuncTest5Check, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsCheck, 0);
-        if (CUDA_SUCCESS != cuRes)
+        // Update parameters for this chunk
+        paramsCheck[1] = &end_ptr;
+
+        for (i = 0; i < tot_num_blocks; i += GRIDSIZE)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel " << test5_check_func_name << ": " << cuRes;
-            goto cleanup;
+            dim3 grid;
+            grid.x = GRIDSIZE;
+            loc    = ptr + i * BLOCKSIZE;
+
+            cuRes = cuLaunchKernel(gpu->cuFuncTest5Check, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsCheck, 0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test5_check_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
+            err += error_checking("test5[check]", i + chunkIndex * memoryManager.GetNominalChunkSizeInBlocks());
         }
-        err += error_checking("test5[check]", i);
     }
 
 cleanup:
@@ -1355,9 +1525,11 @@ unsigned int movinv32(memtest_device_p gpu,
         loc    = ptr + i * BLOCKSIZE;
 
         cuRes = cuLaunchKernel(gpu->cuFuncMoveInv32Write, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel moveinv32_write: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), movinv32_write_func_name, cuRes, gpu->gpuId);
             goto cleanup;
         }
     }
@@ -1369,9 +1541,11 @@ unsigned int movinv32(memtest_device_p gpu,
         loc    = ptr + i * BLOCKSIZE;
 
         cuRes = cuLaunchKernel(gpu->cuFuncMoveInv32ReadWrite, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsRead, 0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel moveinv32_readwrite: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), movinv32_readwrite_func_name, cuRes, gpu->gpuId);
             goto cleanup;
         }
 
@@ -1385,9 +1559,11 @@ unsigned int movinv32(memtest_device_p gpu,
         loc    = ptr + i * BLOCKSIZE;
 
         cuRes = cuLaunchKernel(gpu->cuFuncMoveInv32Read, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsRead, 0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel moveinv32_read: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), movinv32_read_func_name, cuRes, gpu->gpuId);
             goto cleanup;
         }
 
@@ -1407,7 +1583,7 @@ cleanup:
  * errors but the execution time is long.
  ******************************************************************************/
 
-int test6(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test6(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     unsigned int i;
     unsigned int pattern;
@@ -1416,9 +1592,26 @@ int test6(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     for (i = 0, pattern = 1; i < 32; pattern = pattern << 1, i++)
     {
         DCGM_LOG_DEBUG << "Test6[move inversion 32 bits test]: pattern =" << pattern << ", offset=" << i;
-        err += movinv32(gpu, ptr, tot_num_blocks, pattern, 1, 0, i);
+
+        // Process each chunk for this pattern
+        for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+        {
+            char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+            unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+            err += movinv32(gpu, ptr, tot_num_blocks, pattern, 1, 0, i);
+        }
+
         DCGM_LOG_DEBUG << "Test6[move inversion 32 bits test]: pattern =" << ~pattern << ", offset=" << i;
-        err += movinv32(gpu, ptr, tot_num_blocks, ~pattern, 0xfffffffe, 1, i);
+
+        // Process each chunk for the complement pattern
+        for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+        {
+            char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+            unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+            err += movinv32(gpu, ptr, tot_num_blocks, ~pattern, 0xfffffffe, 1, i);
+        }
     }
 
     return err;
@@ -1431,7 +1624,7 @@ int test6(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
  * complements are used in moving inversions test with rest of memory.
  ******************************************************************************/
 
-int test7(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test7(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     CUresult cuRes;
     unsigned int *host_buf;
@@ -1447,70 +1640,116 @@ int test7(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
         host_buf[i] = mt();
     }
 
-    cudaMemcpy(ptr, host_buf, BLOCKSIZE, cudaMemcpyHostToDevice);
-
-    char *loc;
-    void *paramsWrite[4]     = { 0 };
-    void *paramsReadWrite[8] = { 0 };
-    char *end_ptr            = ptr + tot_num_blocks * BLOCKSIZE;
-
-    paramsWrite[0] = &loc;
-    paramsWrite[1] = &end_ptr;
-    paramsWrite[2] = &ptr;
-    paramsWrite[3] = &err_count;
-
-    paramsReadWrite[0] = &loc;
-    paramsReadWrite[1] = &end_ptr;
-    paramsReadWrite[2] = &ptr;
-    paramsReadWrite[3] = &err_count;
-    paramsReadWrite[4] = &err_addr;
-    paramsReadWrite[5] = &err_expect;
-    paramsReadWrite[6] = &err_current;
-    paramsReadWrite[7] = &err_second_read;
-
-    for (i = 1; i < tot_num_blocks; i += GRIDSIZE)
+    // Initialize first block of each chunk with the same random pattern
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        dim3 grid;
-        grid.x = GRIDSIZE;
-        loc    = ptr + i * BLOCKSIZE;
+        char *ptr = memoryManager.GetChunkStart(chunkIndex);
+        cudaMemcpy(ptr, host_buf, BLOCKSIZE, cudaMemcpyHostToDevice);
+    }
 
-        cuRes = cuLaunchKernel(gpu->cuFuncTest7Write, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
-        if (CUDA_SUCCESS != cuRes)
+    // Phase 1: Write phase for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+        char *loc;
+        void *paramsWrite[4] = { 0 };
+        paramsWrite[0]       = &loc;
+        paramsWrite[1]       = &end_ptr;
+        paramsWrite[2]       = &ptr;
+        paramsWrite[3]       = &err_count;
+
+        for (i = 1; i < tot_num_blocks; i += GRIDSIZE)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel test7func_write: " << cuRes;
-            goto cleanup;
+            dim3 grid;
+            grid.x = GRIDSIZE;
+            loc    = ptr + i * BLOCKSIZE;
+
+            cuRes = cuLaunchKernel(gpu->cuFuncTest7Write, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test7_write_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
         }
     }
 
-    for (i = 1; i < tot_num_blocks; i += GRIDSIZE)
+    // Phase 2: ReadWrite phase for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        dim3 grid;
-        grid.x = GRIDSIZE;
-        loc    = ptr + i * BLOCKSIZE;
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-        cuRes = cuLaunchKernel(gpu->cuFuncTest7ReadWrite, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsReadWrite, 0);
-        if (CUDA_SUCCESS != cuRes)
+        char *loc;
+        void *paramsReadWrite[8] = { 0 };
+        paramsReadWrite[0]       = &loc;
+        paramsReadWrite[1]       = &end_ptr;
+        paramsReadWrite[2]       = &ptr;
+        paramsReadWrite[3]       = &err_count;
+        paramsReadWrite[4]       = &err_addr;
+        paramsReadWrite[5]       = &err_expect;
+        paramsReadWrite[6]       = &err_current;
+        paramsReadWrite[7]       = &err_second_read;
+
+        for (i = 1; i < tot_num_blocks; i += GRIDSIZE)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel test7func_readwrite: " << cuRes;
-            goto cleanup;
+            dim3 grid;
+            grid.x = GRIDSIZE;
+            loc    = ptr + i * BLOCKSIZE;
+
+            cuRes
+                = cuLaunchKernel(gpu->cuFuncTest7ReadWrite, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsReadWrite, 0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test7_readwrite_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
+            err += error_checking("test7_readwrite", i);
         }
-        err += error_checking("test7_readwrite", i);
     }
 
-    for (i = 1; i < tot_num_blocks; i += GRIDSIZE)
+    // Phase 3: Read phase for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        dim3 grid;
-        grid.x = GRIDSIZE;
-        loc    = ptr + i * BLOCKSIZE;
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        char *end_ptr               = memoryManager.GetChunkEnd(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
 
-        cuRes = cuLaunchKernel(gpu->cuFuncTest7Read, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsReadWrite, 0);
-        if (CUDA_SUCCESS != cuRes)
+        char *loc;
+        void *paramsReadWrite[8] = { 0 };
+        paramsReadWrite[0]       = &loc;
+        paramsReadWrite[1]       = &end_ptr;
+        paramsReadWrite[2]       = &ptr;
+        paramsReadWrite[3]       = &err_count;
+        paramsReadWrite[4]       = &err_addr;
+        paramsReadWrite[5]       = &err_expect;
+        paramsReadWrite[6]       = &err_current;
+        paramsReadWrite[7]       = &err_second_read;
+
+        for (i = 1; i < tot_num_blocks; i += GRIDSIZE)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel test7func_read: " << cuRes;
-            goto cleanup;
-        }
+            dim3 grid;
+            grid.x = GRIDSIZE;
+            loc    = ptr + i * BLOCKSIZE;
 
-        err += error_checking("test7_read", i);
+            cuRes = cuLaunchKernel(gpu->cuFuncTest7Read, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsReadWrite, 0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test7_read_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
+
+            err += error_checking("test7_read", i);
+        }
     }
 
 cleanup:
@@ -1560,9 +1799,11 @@ unsigned int modtest(memtest_device_p gpu,
         loc    = ptr + i * BLOCKSIZE;
 
         cuRes = cuLaunchKernel(gpu->cuFuncModTestWrite, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsWrite, 0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel modtest_write: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), modtest_write_func_name, cuRes, gpu->gpuId);
             goto cleanup;
         }
     }
@@ -1574,9 +1815,11 @@ unsigned int modtest(memtest_device_p gpu,
         loc    = ptr + i * BLOCKSIZE;
 
         cuRes = cuLaunchKernel(gpu->cuFuncModTestRead, grid.x, grid.y, grid.z, 1, 1, 1, 0, 0, paramsRead, 0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel modtest_read: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), modtest_read_func_name, cuRes, gpu->gpuId);
             goto cleanup;
         }
 
@@ -1595,7 +1838,7 @@ cleanup:
  * set the pattern is shifted right.
  ******************************************************************************/
 
-int test8(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test8(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     unsigned int i;
     unsigned int err = 0;
@@ -1610,7 +1853,14 @@ int test8(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     DCGM_LOG_INFO << "test8[mod test]: p1=" << p1 << ", p2=" << p2;
     for (i = 0; i < MOD_SZ; i++)
     {
-        err += modtest(gpu, ptr, tot_num_blocks, i, p1, p2);
+        // Process each chunk for this offset
+        for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+        {
+            char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+            unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+            err += modtest(gpu, ptr, tot_num_blocks, i, p1, p2);
+        }
     }
 
     return err;
@@ -1624,16 +1874,31 @@ int test8(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
  * 3 hours to complete.  The Bit Fade test is disabled by default
  ******************************************************************************/
 
-int test9(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test9(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     unsigned int err = 0;
     unsigned int p1  = 0;
     unsigned int p2  = ~p1;
 
+    // First pass: Moving inversions test with pattern p1 and p2 for ALL chunks
     DCGM_LOG_DEBUG << "Test9: Moving inversions test, with pattern " << p1 << " and " << p2;
-    err += move_inv_test(gpu, ptr, tot_num_blocks, p1, p2, 60);
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+        err += move_inv_test(gpu, ptr, tot_num_blocks, p1, p2, 60);
+    }
+
+    // Second pass: Moving inversions test with pattern p2 and p1 for ALL chunks
     DCGM_LOG_DEBUG << "Test9: Moving inversions test, with pattern " << p2 << " and " << p1;
-    err += move_inv_test(gpu, ptr, tot_num_blocks, p2, p1, 60);
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+
+        err += move_inv_test(gpu, ptr, tot_num_blocks, p2, p1, 60);
+    }
 
     return err;
 }
@@ -1652,12 +1917,11 @@ int test9(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
 
 #define STRESS_BLOCKSIZE 64
 #define STRESS_GRIDSIZE  (1024 * 32)
-int test10(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
+int test10(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     unsigned int err = 0;
     unsigned long p1, p2;
     float elapsedtime;
-    unsigned long long size = tot_num_blocks * BLOCKSIZE;
 
     cudaStream_t stream;
     cudaEvent_t start, stop;
@@ -1705,39 +1969,19 @@ int test10(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
     }
 
     DCGM_LOG_INFO << "Test10 with pattern=0x" << p1;
-    paramsWrite[0] = &ptr;
-    paramsWrite[1] = &size;
-    paramsWrite[2] = &p1;
 
-    cuRes = cuLaunchKernel(gpu->cuFuncTest10Write,
-                           gridDim.x,
-                           gridDim.y,
-                           gridDim.z,
-                           blockDim.x,
-                           blockDim.y,
-                           blockDim.z,
-                           0,
-                           0,
-                           paramsWrite,
-                           0);
-    if (CUDA_SUCCESS != cuRes)
+    // Phase 1: Initial write phase for ALL chunks
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
-        DCGM_LOG_ERROR << "Could not launch kernel test10func_write: " << cuRes;
-        goto cleanup;
-    }
+        char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+        unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+        unsigned long long size     = tot_num_blocks * BLOCKSIZE;
 
-    paramsReadWrite[0] = &ptr;
-    paramsReadWrite[1] = &size;
-    paramsReadWrite[2] = &p1;
-    paramsReadWrite[3] = &p2;
-    paramsReadWrite[4] = &err_count;
-    paramsReadWrite[5] = &err_addr;
-    paramsReadWrite[6] = &err_expect;
-    paramsReadWrite[7] = &err_current;
-    paramsReadWrite[8] = &err_second_read;
-    for (unsigned int i = 0; i < NUM_ITERATIONS; i++)
-    {
-        cuRes = cuLaunchKernel(gpu->cuFuncTest10ReadWrite,
+        paramsWrite[0] = &ptr;
+        paramsWrite[1] = &size;
+        paramsWrite[2] = &p1;
+
+        cuRes = cuLaunchKernel(gpu->cuFuncTest10Write,
                                gridDim.x,
                                gridDim.y,
                                gridDim.z,
@@ -1746,12 +1990,54 @@ int test10(memtest_device_p gpu, char *ptr, unsigned int tot_num_blocks)
                                blockDim.z,
                                0,
                                0,
-                               paramsReadWrite,
+                               paramsWrite,
                                0);
-        if (CUDA_SUCCESS != cuRes)
+        if (cuRes != CUDA_SUCCESS)
         {
-            DCGM_LOG_ERROR << "Could not launch kernel test10func_read_write: " << cuRes;
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), test10_write_func_name, cuRes, gpu->gpuId);
             goto cleanup;
+        }
+    }
+
+    // Phase 2: Iterative readwrite phases for ALL chunks
+    for (unsigned int i = 0; i < NUM_ITERATIONS; i++)
+    {
+        for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+        {
+            char *ptr                   = memoryManager.GetChunkStart(chunkIndex);
+            unsigned int tot_num_blocks = memoryManager.GetChunkBlockCount(chunkIndex);
+            unsigned long long size     = tot_num_blocks * BLOCKSIZE;
+
+            paramsReadWrite[0] = &ptr;
+            paramsReadWrite[1] = &size;
+            paramsReadWrite[2] = &p1;
+            paramsReadWrite[3] = &p2;
+            paramsReadWrite[4] = &err_count;
+            paramsReadWrite[5] = &err_addr;
+            paramsReadWrite[6] = &err_expect;
+            paramsReadWrite[7] = &err_current;
+            paramsReadWrite[8] = &err_second_read;
+
+            cuRes = cuLaunchKernel(gpu->cuFuncTest10ReadWrite,
+                                   gridDim.x,
+                                   gridDim.y,
+                                   gridDim.z,
+                                   blockDim.x,
+                                   blockDim.y,
+                                   blockDim.z,
+                                   0,
+                                   0,
+                                   paramsReadWrite,
+                                   0);
+            if (cuRes != CUDA_SUCCESS)
+            {
+                auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+                LOG_CUDA_ERROR_FOR_PLUGIN(
+                    memtestPlugin, memtestPlugin->GetMmeTestTestName(), test10_readwrite_func_name, cuRes, gpu->gpuId);
+                goto cleanup;
+            }
         }
 
         p1 = ~p1;
@@ -1767,8 +2053,16 @@ cleanup:
     cuEventSynchronize(stop);
     err = error_checking("test10[Memory stress test]", 0);
     cuEventElapsedTime(&elapsedtime, start, stop);
+
+    // Calculate total blocks across all chunks for bandwidth calculation
+    unsigned int total_blocks = 0;
+    for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
+    {
+        total_blocks += memoryManager.GetChunkBlockCount(chunkIndex);
+    }
+
     DCGM_LOG_DEBUG << "test10: elapsedtime=" << elapsedtime
-                   << ", bandwidth=" << ((2 * NUM_ITERATIONS + 1) * tot_num_blocks / elapsedtime) << "GB/s";
+                   << ", bandwidth=" << ((2 * NUM_ITERATIONS + 1) * total_blocks / elapsedtime) << "GB/s";
 
     cuEventDestroy(start);
     cuEventDestroy(stop);

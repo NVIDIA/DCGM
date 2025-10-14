@@ -121,8 +121,11 @@ DcgmDiagManager::~DcgmDiagManager()
 
 dcgmReturn_t DcgmDiagManager::KillActiveNvvs(unsigned int maxRetries)
 {
-    static const std::chrono::seconds SIGTERM_RETRY_DELAY = std::chrono::seconds(4);
-    static const unsigned int MAX_SIGTERM_ATTEMPTS        = 4;
+    // maxRetries * 4 seconds for each retry = 40 seconds.
+    // EUD will take at most 20 seconds to stop.
+    // Add some buffer to account for any other overhead.
+    static std::chrono::seconds constexpr SIGTERM_RETRY_DELAY = std::chrono::seconds(4);
+    static unsigned int constexpr MAX_SIGTERM_ATTEMPTS        = 10;
 
     pid_t childPid                   = m_nvvsPID;
     unsigned int kill_count          = 0;
@@ -165,6 +168,7 @@ dcgmReturn_t DcgmDiagManager::KillActiveNvvs(unsigned int maxRetries)
             ret = m_coreProxy.ChildProcessStop(childHandle, false); // false = use SIGTERM
             dcgm_mutex_lock(&m_mutex);
 
+            log_debug("Sending SIGTERM to process {}: {}", childPid, errorString(ret));
             if (ret != DCGM_ST_OK)
             {
                 log_error("Failed to send SIGTERM to process {}: {}", childPid, errorString(ret));
@@ -470,6 +474,12 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v10 *drd, std::vector<st
     return DCGM_ST_OK;
 }
 
+namespace
+{
+static constexpr char const *NVVS_HANGDETECT_DISABLE    = "NVVS_HANGDETECT_DISABLE";
+static constexpr char const *NVVS_HANGDETECT_EXPIRY_SEC = "NVVS_HANGDETECT_EXPIRY_SEC";
+} // namespace
+
 /*****************************************************************************/
 void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdArgs,
                                                   dcgmRunDiag_v10 *drd,
@@ -564,6 +574,28 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
     {
         cmdArgs.push_back("--ignoreErrorCodes");
         cmdArgs.push_back(fmt::format("{}", drd->ignoreErrorCodes));
+    }
+
+    if (getenv(NVVS_HANGDETECT_DISABLE) != nullptr)
+    {
+        cmdArgs.push_back("--noHangDetect");
+    }
+    else if (auto const hangDetectExpirySec = std::getenv(NVVS_HANGDETECT_EXPIRY_SEC); hangDetectExpirySec != nullptr)
+    {
+        unsigned int expirySec {};
+        auto const [_, ec]
+            = std::from_chars(hangDetectExpirySec, hangDetectExpirySec + std::strlen(hangDetectExpirySec), expirySec);
+        if (ec != std::errc())
+        {
+            log_warning("Invalid {} value '{}'. Must be a non-negative number.",
+                        NVVS_HANGDETECT_EXPIRY_SEC,
+                        hangDetectExpirySec);
+        }
+        else
+        {
+            cmdArgs.push_back("--hangDetectExpirySec");
+            cmdArgs.push_back(fmt::format("{}", expirySec));
+        }
     }
 }
 
@@ -1027,7 +1059,11 @@ dcgmReturn_t DcgmDiagManager::StopRunningDiag()
     }
     // Stop the running diagnostic
     DCGM_LOG_DEBUG << "Stopping diagnostic with PID " << m_nvvsPID;
-    return KillActiveNvvs(5);
+    auto constexpr maxRetries = 10;
+    // maxRetries * 4 seconds for each retry = 40 seconds.
+    // EUD will take at most 20 seconds to stop.
+    // Add some buffer to account for any other overhead.
+    return KillActiveNvvs(maxRetries);
     /* Do not wait for child - let the thread that originally launched the diagnostic manage the child and reset
        pid. We do not reset the PID here because it can result in multiple nvvs processes running (e.g. previous
        nvvs process has not stopped yet, and a new one is launched because we've reset the pid).

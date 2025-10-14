@@ -85,6 +85,7 @@ private:
     dcgmReturn_t ProcessGetSamples(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGpuIdToNvmlIndex(dcgm_module_command_header_t *header);
     dcgmReturn_t ProcessGetDriverVersion(dcgm_module_command_header_t *header);
+    dcgmReturn_t ProcessGetCudaVersion(dcgm_module_command_header_t *header);
 
     /*
      * If the response buffer isn't large enough to copy all of the samples into, then we copy by pieces and set

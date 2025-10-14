@@ -23,7 +23,9 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
+#include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 #ifdef __cplusplus
 extern "C" {
@@ -80,20 +82,32 @@ static nvmlReturn_t injectionNvmlInit()
 }
 
 static std::mutex g_mutexNvmlCounter;
-static unsigned int g_nvmlCounter = 0;
+static unsigned int g_nvmlInitCounter         = 0;
+static unsigned int g_nvmlInitNoAttachCounter = 0;
+static std::unordered_set<std::thread::id> g_initThreadIds;
+static std::unordered_set<std::thread::id> g_initNoAttachThreadIds;
 
-nvmlReturn_t nvmlInit_v2()
+nvmlReturn_t nvmlInitImpl(unsigned int flags, std::string const &funcName)
 {
-    auto increaseCallCount = []() {
+    auto increaseCallCount = [&funcName]() {
         auto *injectedNvml = InjectedNvml::GetInstance();
-        injectedNvml->AddFuncCallCount("nvmlInit_v2");
+        injectedNvml->AddFuncCallCount(funcName);
     };
+    auto *counter = (flags & NVML_INIT_FLAG_NO_ATTACH) ? &g_nvmlInitNoAttachCounter : &g_nvmlInitCounter;
     std::unique_lock<std::mutex> lock(g_mutexNvmlCounter);
-    if (g_nvmlCounter != 0)
+    if (g_nvmlInitCounter != 0 || g_nvmlInitNoAttachCounter != 0)
     {
-        g_nvmlCounter += 1;
+        if (!InjectedNvml::GetInstance()->AllowAttach())
+        {
+            return NVML_ERROR_NOT_READY;
+        }
+        *counter += 1;
         lock.unlock();
         increaseCallCount();
+        if (!(flags & NVML_INIT_FLAG_NO_ATTACH))
+        {
+            InjectedNvml::GetInstance()->HandleBindUnbindEvent();
+        }
         return NVML_SUCCESS;
     }
 
@@ -101,17 +115,71 @@ nvmlReturn_t nvmlInit_v2()
     {
         return ret;
     }
-    g_nvmlCounter += 1;
+    *counter += 1;
     lock.unlock();
     increaseCallCount();
+    if (!(flags & NVML_INIT_FLAG_NO_ATTACH))
+    {
+        InjectedNvml::GetInstance()->HandleBindUnbindEvent();
+    }
     return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlInit_v2()
+{
+    auto ret = nvmlInitImpl(0, "nvmlInit_v2");
+    if (ret != NVML_SUCCESS)
+    {
+        return ret;
+    }
+    std::lock_guard<std::mutex> lock(g_mutexNvmlCounter);
+    g_initThreadIds.insert(std::this_thread::get_id());
+    return ret;
+}
+
+nvmlReturn_t nvmlInitWithFlags(unsigned int flags)
+{
+    auto ret = nvmlInitImpl(flags, "nvmlInitWithFlags");
+    if (ret != NVML_SUCCESS)
+    {
+        return ret;
+    }
+    std::lock_guard<std::mutex> lock(g_mutexNvmlCounter);
+    if (flags & NVML_INIT_FLAG_NO_ATTACH)
+    {
+        g_initNoAttachThreadIds.insert(std::this_thread::get_id());
+    }
+    else
+    {
+        g_initThreadIds.insert(std::this_thread::get_id());
+    }
+    return ret;
 }
 
 nvmlReturn_t nvmlShutdown()
 {
     std::lock_guard<std::mutex> lg(g_mutexNvmlCounter);
-    g_nvmlCounter -= 1;
-    if (g_nvmlCounter != 0)
+    if (!InjectedNvml::GetInstance())
+    {
+        return NVML_ERROR_UNINITIALIZED;
+    }
+
+    auto const threadId = std::this_thread::get_id();
+    if (g_initThreadIds.contains(threadId))
+    {
+        g_nvmlInitCounter -= 1;
+        g_initThreadIds.erase(threadId);
+    }
+    else if (g_initNoAttachThreadIds.contains(threadId))
+    {
+        g_nvmlInitNoAttachCounter -= 1;
+        g_initNoAttachThreadIds.erase(threadId);
+    }
+    if (g_nvmlInitCounter <= 0)
+    {
+        InjectedNvml::GetInstance()->SetAllowAttach(true);
+    }
+    if (g_nvmlInitCounter != 0 || g_nvmlInitNoAttachCounter != 0)
     {
         return NVML_SUCCESS;
     }
@@ -139,7 +207,27 @@ nvmlReturn_t nvmlDeviceInject(nvmlDevice_t nvmlDevice,
     std::vector<InjectionArgument> extraKeyArg;
     for (unsigned int i = 0; i < extraKeyCount; ++i)
     {
-        extraKeyArg.emplace_back(extraKeys[i]);
+        /*
+         * Since the device handle cannot be indicated from the Python injection code,
+         * in Python we design to pass the GPU ID and translate it to device handle here.
+         */
+        if (extraKeys[i].type == INJECTION_DEVICE)
+        {
+            injectNvmlVal_t val = extraKeys[i];
+            uint64_t idx        = reinterpret_cast<uint64_t>(val.value.Device);
+            nvmlDevice_t device;
+            auto ret = nvmlDeviceGetHandleByIndex(idx, &device);
+            if (ret != NVML_SUCCESS)
+            {
+                return ret;
+            }
+            val.value.Device = device;
+            extraKeyArg.emplace_back(val);
+        }
+        else
+        {
+            extraKeyArg.emplace_back(extraKeys[i]);
+        }
     }
 
     if (injectNvmlRet->nvmlRet != NVML_SUCCESS)

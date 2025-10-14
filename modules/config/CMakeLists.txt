@@ -33,3 +33,5 @@ target_sources(
     DcgmModuleConfig.h
     DcgmConfigManager.cpp
 )
+
+add_subdirectory(tests)

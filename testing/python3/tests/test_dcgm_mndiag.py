@@ -271,11 +271,124 @@ def helper_setup_multinode_config(config):
         test_utils.skip_test(f"Test config file {test_config_path} is unreadable or does not exist")
 
     for node in test_config["test_nodes"]:
-        if len(node["ip"]) == 0 or len(node["sku"]) == 0 or len(node["hostname"]) == 0 or len(node["hostengine_path"]) == 0:
+        if len(node["ip"]) == 0 or len(node["sku"]) == 0 or len(node["username"]) == 0 or len(node["hostengine_path"]) == 0:
             test_utils.skip_test("Test node config is missing required fields")
 
     # Setup test node
     config["test_nodes"] = test_config["test_nodes"]
+
+# ------------------------------------------------------
+def helper_extract_mnubergemm_path_from_logs(log_path, hostname=None, ip=None, is_remote=False):
+    """
+    Helper method to extract mnubergemm path from log files.
+    """
+    custom_path_log_pattern = "Inferred custom mnubergemm path:"
+    default_path_log_pattern = "Inferred default mnubergemm path:"
+    grep_pattern_remote = "Setting mnubergemm path to:"
+    
+    def extract_path_from_line(line):
+        """Extract path from a log line that contains mnubergemm path"""
+        if custom_path_log_pattern in line:
+            start_idx = line.find(custom_path_log_pattern) + len(custom_path_log_pattern)
+        elif default_path_log_pattern in line:
+            start_idx = line.find(default_path_log_pattern) + len(default_path_log_pattern)
+        elif grep_pattern_remote in line:
+            start_idx = line.find(grep_pattern_remote) + len(grep_pattern_remote)
+        else:
+            return None
+        
+        # For remote node logs, prioritize "on node:" over square bracket
+        if grep_pattern_remote in line:
+            # Look for " on node:" first
+            end_idx = line.find(" on node:", start_idx)
+            if end_idx == -1:
+                # If no " on node:" found, look for square bracket
+                end_idx = line.find('[', start_idx)
+        else:
+            # For head node logs, look for square bracket first
+            end_idx = line.find('[', start_idx)
+            if end_idx == -1:
+                # If no square bracket found, look for " on node:" (fallback)
+                end_idx = line.find(" on node:", start_idx)
+        
+        if end_idx == -1:
+            # If no end marker found, take the rest of the line
+            path = line[start_idx:].strip()
+        else:
+            path = line[start_idx:end_idx].strip()
+        
+        return path
+    
+    if is_remote:
+        ssh_cmd = f"ssh {hostname}@{ip}"
+        grep_cmd = f"{ssh_cmd} 'grep -E \"{grep_pattern_remote}\" {log_path} | tail -1'"
+        
+        try:
+            result = os.popen(grep_cmd).read().strip()
+            if result:
+                return extract_path_from_line(result)
+            else:
+                logger.warning(f"Could not get mnubergemm path from remote node {hostname}@{ip}")
+                return None
+        except Exception as e:
+            logger.warning(f"Error getting mnubergemm path from remote node {hostname}@{ip}: {e}")
+            return None
+    else:
+        # For head node, read the log file directly
+        try:
+            with open(log_path, "r") as f:
+                for line in f:
+                    if custom_path_log_pattern in line or default_path_log_pattern in line:
+                        return extract_path_from_line(line)
+        except FileNotFoundError:
+            logger.warning(f"Could not find {log_path} on head node")
+        except Exception as e:
+            logger.warning(f"Error reading head node log file: {e}")
+        
+        return None
+    
+def helper_validate_mnubergemm_path(config, head_node_log_path, remote_log_path):
+    """
+    Helper to validate mnubergemm path
+    """
+    # Get the mnubergemm path from head node logs
+    head_node_path = helper_extract_mnubergemm_path_from_logs(head_node_log_path, is_remote=False)
+    if not head_node_path:
+        assert False, "Could not find mnubergemm path in head node logs"
+
+    logger.info(f"Head node mnubergemm path: {head_node_path}")
+
+    # Get mnubergemm paths from remote nodes
+    remote_paths = []
+    for test_node in config.get("test_nodes", []):
+        username = test_node.get("username")
+        ip = test_node.get("ip")
+        if not username or not ip:
+            logger.warning("Test node missing username or IP field")
+            continue
+            
+        remote_path = helper_extract_mnubergemm_path_from_logs(remote_log_path, username, ip, is_remote=True)
+        if remote_path:
+            remote_paths.append((username, ip, remote_path))
+            logger.info(f"Remote node {username}@{ip} mnubergemm path: {remote_path}")
+        else:
+            remote_paths.append((username, ip, None))
+
+    # Compare paths - all should be the same
+    all_paths_match = True
+    for username, ip, remote_path in remote_paths:
+        if remote_path is None:
+            logger.error(f"Could not retrieve path from remote node {username}@{ip}")
+            all_paths_match = False
+        elif remote_path != head_node_path:
+            logger.error(f"Path mismatch: head node has '{head_node_path}', remote node {username}@{ip} has '{remote_path}'")
+            all_paths_match = False
+
+    if all_paths_match:
+        logger.info("All mnubergemm paths match across head node and remote nodes")
+    else:
+        assert False, "Mnubergemm paths should be consistent across all nodes"
+    
 
 # ------------------------------------------------------
 @test_utils.run_only_with_gpus_present()
@@ -283,6 +396,7 @@ def helper_setup_multinode_config(config):
 @test_utils.run_with_standalone_host_engine(120,  heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_basic_success(handle, gpuIds):
     """Test basic successful mndiag execution with mock mnubergemm"""
     logger.info("Starting basic mndiag success test")
@@ -329,6 +443,7 @@ def test_dcgm_mndiag_basic_success(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120,  heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_basic_failure(handle, gpuIds):
     """Test mndiag when mock mnubergemm simulates all error messages"""
     logger.info("Starting mndiag basic failure test")
@@ -392,6 +507,7 @@ def test_dcgm_mndiag_basic_failure(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120,  heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds):
     """Test mndiag mixed pass/fail scenario 1"""
     
@@ -437,6 +553,7 @@ def test_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120,  heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds):
     """Test mndiag mixed pass/fail scenario 2"""
 
@@ -484,6 +601,7 @@ def test_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_multinode_basic_success(handle, gpuIds):
     """Test basic successful mndiag execution with mock mnubergemm on multiple nodes - pass on head node, pass on test nodes"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -540,6 +658,7 @@ def test_dcgm_mndiag_multinode_basic_success(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds):
     """Test basic failure mndiag execution with mock mnubergemm on multiple nodes, fail on head node 1 gpu, fail on test nodes 6 gpus"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -614,9 +733,10 @@ def test_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds):
 
 @test_utils.run_only_with_gpus_present()
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env()})
+@test_utils.run_with_standalone_host_engine(120, heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds):
     """Test basic failure mndiag execution with mock mnubergemm on multiple node, fail on head node 1 gpu, fail on test nodes 1 gpu, same error"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -664,6 +784,7 @@ def test_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds):
     """Test basic failure mndiag execution with mock mnubergemm on multiple node, fail on head node 2 gpus, fail on test nodes 2 gpus, same error"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -723,6 +844,7 @@ def test_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds):
     """Test basic successful headnode and failure testnodes mndiag execution with mock mnubergemm on multiple nodes, pass on head node, fail on test nodes 2 gpus, different error"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -772,6 +894,7 @@ def test_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds):
     """Test basic failure headnode and successful testnodes mndiag execution with mock mnubergemm on multiple nodes, fail on head node 2 gpus, pass on test nodes"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -822,6 +945,7 @@ def test_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds):
     """Test mixed pass/fail mndiag execution with mock mnubergemm on multiple nodes, pass on head node, pass on test nodes 1 gpu and fail on 2 gpus"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -870,3 +994,52 @@ def test_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds):
     helper_setup_testnode_message(config, messages, entities)
     helper_setup_headnode_message(config, messages, entities)
     helper_run_and_validate_mndiag(handle, config, success=False)
+
+
+@test_utils.run_only_with_gpus_present()
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_standalone_host_engine(120, heArgs=["--log-level", "debug"], heEnv={"PATH": test_utils.get_updated_env_path_variable(), "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(), "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(), "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_current_skus_env(), "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1"})
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_with_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds):
+    """Test mndiag validate mnubergemm path"""
+    logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
+
+    # Configuration variables
+    head_node_log_path = os.path.join(os.getcwd(), "_out_runLogs/dcgm_trace.log")
+    remote_log_path = "/var/log/nv-hostengine.log"
+
+    config = {}
+    entities = set()
+
+    helper_setup_multinode_config(config)
+
+    # Currently configuring all test nodes with same message
+    messages = {
+        "head_node": {
+            "gpu_required_info": {
+                0: [
+                    "INFO  hosthash=12345 B0I=56789",
+                    "OPENMPI/NCCL GEMM PULSE",
+                ]
+            },
+            "gpu_required_error": {},
+        },
+        "test_nodes": {
+            "gpu_required_info": {
+                0: [
+                    "INFO  hosthash=112233 B0I=556677",
+                    "OPENMPI/NCCL GEMM PULSE",
+                ]
+
+            },
+            "gpu_required_error": {}
+        }
+    }
+
+    helper_setup_testnode_message(config, messages, entities)
+    helper_setup_headnode_message(config, messages, entities)
+    helper_run_and_validate_mndiag(handle, config, success=True)
+    helper_validate_mnubergemm_path(config, head_node_log_path, remote_log_path)
+    

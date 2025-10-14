@@ -114,12 +114,12 @@ public:
             }
 
             // cuCtxGetCurrent doesn't return an error if there's no context, so check and attempt to create one
-            cuSt = cuCtxCreate(&cuContext, 0, cudaDeviceIdx);
+            cuSt = cuCtxCreate_v2(&cuContext, 0, cudaDeviceIdx);
 
             if (cuSt != CUDA_SUCCESS)
             {
                 DcgmError d { gpuId };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuCtxCreate");
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuCtxCreate_v2");
 
                 cuGetErrorString(cuSt, &errorString);
                 if (errorString != NULL)
@@ -265,6 +265,7 @@ private:
     std::vector<GpuBurnDevice *> m_device; /* Per-device data */
     DcgmRecorder m_dcgmRecorder;
     dcgmHandle_t m_handle;
+
     bool m_dcgmRecorderInitialized; /* Has DcgmRecorder been initialized? */
     bool m_dcgmCommErrorOccurred;   /* Has there been a communication error with DCGM? */
     bool m_explicitTests;           /* Were explicit tests requested via parameters? */
@@ -296,6 +297,23 @@ public:
                                                           double minThresh)
     {
         return gbp.GetGflopsBelowMinThreshold(gflops, minThresh);
+    }
+};
+
+/*************************************************************************/
+struct CUdeviceptrDeleter
+{
+    void operator()(CUdeviceptr_v2 *ptr) const noexcept
+    {
+        if (ptr && *ptr != 0)
+        {
+            CUresult result = cuMemFree_v2(*ptr);
+            if (result != CUDA_SUCCESS)
+            {
+                log_error("cuMemFree_v2 failed: {}", result);
+            }
+        }
+        delete ptr;
     }
 };
 
@@ -431,6 +449,12 @@ public:
     void run() override;
 
 private:
+    /*************************************************************************/
+    /*
+     * Initialize the buffers for the current precision
+     */
+    int InitBuffersForCurrentPrecision(int precisionIndex);
+
     GpuBurnDevice *m_device {};
     GpuBurnPlugin &m_plugin;
     int32_t m_precision {};
@@ -456,15 +480,27 @@ private:
 
     /* C can be (and is) reused for each datatype. it's also the remainder of DRAM on the GPU after
        As and Bs have been allocated. A and B need to be provided per-datatype */
-    CUdeviceptr m_Cdata {};
-    CUdeviceptr m_AdataFP64 {};
-    CUdeviceptr m_BdataFP64 {};
-    CUdeviceptr m_AdataFP32 {};
-    CUdeviceptr m_BdataFP32 {};
-    CUdeviceptr m_AdataFP16 {};
-    CUdeviceptr m_BdataFP16 {};
-    CUdeviceptr m_faultyElemData {};
-    CUdeviceptr m_nanElemData {};
+    using CUdeviceptrWrapper = std::unique_ptr<CUdeviceptr_v2, CUdeviceptrDeleter>;
+
+    // Optimized memory allocation: allocate once, reuse for different precisions
+    std::vector<CUdeviceptrWrapper> m_CdataVecBase;      // Owns all the actual device memory allocations
+    std::vector<CUdeviceptr_v2> m_CdataVecDouble;        // Raw device pointers for double precision
+    std::vector<CUdeviceptr_v2> m_CdataVecSingle;        // Raw device pointers for single precision
+    std::vector<CUdeviceptr_v2> m_CdataVecHalf;          // Raw device pointers for half precision
+    std::vector<CUdeviceptr_v2> *m_CdataVec { nullptr }; // Current active vector (points to one of the above)
+
+    CUdeviceptrWrapper m_devicePtrArrayDouble {};
+    CUdeviceptrWrapper m_devicePtrArraySingle {};
+    CUdeviceptrWrapper m_devicePtrArrayHalf {};
+    CUdeviceptrWrapper *m_devicePtrArray { nullptr }; // Current active device pointer array
+    CUdeviceptr_v2 m_AdataFP64 {};
+    CUdeviceptr_v2 m_BdataFP64 {};
+    CUdeviceptr_v2 m_AdataFP32 {};
+    CUdeviceptr_v2 m_BdataFP32 {};
+    CUdeviceptr_v2 m_AdataFP16 {};
+    CUdeviceptr_v2 m_BdataFP16 {};
+    CUdeviceptr_v2 m_faultyElemData {};
+    CUdeviceptr_v2 m_nanElemData {};
     std::unique_ptr<double[]> m_A_FP64;
     std::unique_ptr<double[]> m_B_FP64;
     std::unique_ptr<float[]> m_A_FP32;

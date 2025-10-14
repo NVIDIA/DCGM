@@ -43,6 +43,7 @@ DcgmThread::DcgmThread(std::string threadName)
 
 #ifdef __linux__
     m_pthread = 0;
+    m_tid     = 0;
 #else
     m_handle   = NULL;
     m_threadId = 0;
@@ -296,6 +297,7 @@ int DcgmThread::StopAndWait(int timeoutMs)
 void DcgmThread::RunInternal(void)
 {
     m_hasRun = true;
+    m_tid    = syscall(SYS_gettid);
 
     log_debug("Thread handle {} running", (unsigned int)m_pthread);
     try
@@ -328,6 +330,16 @@ unsigned long DcgmThread::GetTid()
 #endif
 
     return (unsigned long)tid;
+}
+
+/*****************************************************************************/
+pid_t DcgmThread::GetCachedTid()
+{
+    if (m_hasRun)
+    {
+        return m_tid;
+    }
+    return 0;
 }
 
 /*****************************************************************************/

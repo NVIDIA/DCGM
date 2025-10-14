@@ -153,7 +153,7 @@ public:
               typename cuCtxDestroyFunc     = decltype(&cuCtxDestroy),
               typename cuGetErrorStringFunc = decltype(&cuGetErrorString)>
     int CanCreateContext(std::vector<std::unique_ptr<ContextCreateDevice>> &theDevices,
-                         cuCtxCreateFunc cuCtxCreateImpl           = cuCtxCreate,
+                         cuCtxCreateFunc cuCtxCreateImpl           = cuCtxCreate_v2,
                          cuCtxDestroyFunc cuCtxDestroyImpl         = cuCtxDestroy,
                          cuGetErrorStringFunc cuGetErrorStringImpl = cuGetErrorString)
     {

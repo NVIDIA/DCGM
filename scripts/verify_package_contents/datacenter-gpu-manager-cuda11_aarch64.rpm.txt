@@ -19,5 +19,5 @@
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libTargetedPower.so.<SOFTWAREVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libTargetedStress.so.<MAJORVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda11/libTargetedStress.so.<SOFTWAREVERSION>
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda11-<PACKAGEVERSION>
-/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda11-<PACKAGEVERSION>/LICENSE
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda11-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda11-<BASEPACKAGEVERSION>/LICENSE

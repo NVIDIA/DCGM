@@ -1,5 +1,5 @@
 /*
- * Copyright 1993-2024 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2025 NVIDIA Corporation.  All rights reserved.
  *
  * NOTICE TO USER:
  *
@@ -90,6 +90,15 @@ extern "C" {
     #endif
 #else
     #define DECLDIR
+#endif
+
+/*
+ * Deprecation definition.
+ */
+#if defined _WINDOWS
+   #define DEPRECATED(ver) __declspec(deprecated)
+#else
+   #define DEPRECATED(ver) __attribute__((deprecated))
 #endif
 
     #define NVML_MCDM_SUPPORT
@@ -763,7 +772,6 @@ typedef enum nvmlEnableState_enum
 //! Generic flag used to force some behavior. See description of particular functions for details.
 #define nvmlFlagForce       0x01
 
-#if NVCFG_GLOBAL_FEATURE_CTK7357_DRAM_ENCRYPTION
 /**
  * DRAM Encryption Info
  */
@@ -775,8 +783,6 @@ typedef struct
 typedef nvmlDramEncryptionInfo_v1_t nvmlDramEncryptionInfo_t;
 
 #define nvmlDramEncryptionInfo_v1 NVML_STRUCT_VERSION(DramEncryptionInfo, 1)
-
-#endif // GLOBAL_FEATURE_CTK7357_DRAM_ENCRYPTION
 
 /**
  *  * The Brand of the GPU
@@ -1143,9 +1149,7 @@ typedef enum nvmlInforomObject_enum
     NVML_INFOROM_OEM            = 0,       //!< An object defined by OEM
     NVML_INFOROM_ECC            = 1,       //!< The ECC object determining the level of ECC support
     NVML_INFOROM_POWER          = 2,       //!< The power management object
-#if NVCFG_GLOBAL_FEATURE_CTK7357_DRAM_ENCRYPTION
     NVML_INFOROM_DEN            = 3,       //!< DRAM Encryption object
-#endif // GLOBAL_FEATURE_CTK7357_DRAM_ENCRYPTION
     // Keep this last
     NVML_INFOROM_COUNT                     //!< This counts the number of infoROM objects the driver knows about
 } nvmlInforomObject_t;
@@ -2369,8 +2373,31 @@ typedef enum nvmlDeviceGpuRecoveryAction_s  {
 #define NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN        251 //!< Throttling to ensure ((GPU temp < GPU Max Operating Temp) && (Memory Temp < Memory Max Operating Temp)) in ns
 #define NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_THERM_SLOWDOWN        252 //!< Throttling due to temperature being too high (reducing core clocks by a factor of 2 or more) in ns
 #define NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN  253 //!< Throttling due to external power brake assertion trigger (reducing core clocks by a factor of 2 or more) in ns
-                                                                     
-#define NVML_FI_MAX                                              254 //!< One greater than the largest field ID defined above
+
+#define NVML_FI_DEV_POWER_SYNC_BALANCING_FREQ                    254 //!< Accumulated frequency of the GPU to be used for averaging
+#define NVML_FI_DEV_POWER_SYNC_BALANCING_AF                      255 //!< Accumulated activity factor of the GPU to be used for averaging
+
+/* Power Smoothing */
+#define NVML_FI_PWR_SMOOTHING_ENABLED                                   256 //!< Enablement (0/DISABLED or 1/ENABLED)
+#define NVML_FI_PWR_SMOOTHING_PRIV_LVL                                  257 //!< Current privilege level
+#define NVML_FI_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED                     258 //!< Immediate ramp down enablement (0/DISABLED or 1/ENABLED)
+#define NVML_FI_PWR_SMOOTHING_APPLIED_TMP_CEIL                          259 //!< Applied TMP ceiling value in Watts
+#define NVML_FI_PWR_SMOOTHING_APPLIED_TMP_FLOOR                         260 //!< Applied TMP floor value in Watts
+#define NVML_FI_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING             261 //!< Max % TMP Floor value
+#define NVML_FI_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING             262 //!< Min % TMP Floor value
+#define NVML_FI_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING   263 //!< HW Circuitry % lifetime remaining
+#define NVML_FI_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES                   264 //!< Max number of preset profiles
+#define NVML_FI_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR                 265 //!< % TMP floor for a given profile
+#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE                      266 //!< Ramp up rate in mW/s for a given profile
+#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE                    267 //!< Ramp down rate in mW/s for a given profile
+#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL                268 //!< Ramp down hysteresis value in ms for a given profile
+#define NVML_FI_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE                     269 //!< Active preset profile number
+#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR          270 //!< % TMP floor for a given profile
+#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE               271 //!< Ramp up rate in mW/s for a given profile
+#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE             272 //!< Ramp down rate in mW/s for a given profile
+#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL         273 //!< Ramp down hysteresis value in ms for a given profile
+
+#define NVML_FI_MAX                                              274 //!< One greater than the largest field ID defined above
 
 /**
  * NVML_FI_DEV_NVLINK_GET_POWER_THRESHOLD_UNITS
@@ -2638,6 +2665,78 @@ typedef struct nvmlEventData_st
                                             //   compute instance, stores a valid compute instance ID. computeInstanceId is set to
                                             //   0xFFFFFFFF otherwise.
 } nvmlEventData_t;
+
+/**
+ * System Event Set
+ */
+typedef struct nvmlSystemEventSet_st* nvmlSystemEventSet_t;
+
+//! System Event for GPU Driver Unbind
+#define nvmlSystemEventTypeGpuDriverUnbind  0x0000000000000001LL //!< Bitmask value of Driver Unbind System Event
+#define nvmlSystemEventTypeGpuDriverBind    0x0000000000000002LL //!< Bitmask value of Driver Bind System Event
+
+#define nvmlSystemEventTypeCount 2
+
+/**
+ * nvmlSystemEventSetCreateRequest
+ */
+typedef struct
+{
+    unsigned int version;                   //!< the API version number
+    nvmlSystemEventSet_t set;               //!< system event set
+} nvmlSystemEventSetCreateRequest_v1_t;
+typedef nvmlSystemEventSetCreateRequest_v1_t nvmlSystemEventSetCreateRequest_t;
+#define nvmlSystemEventSetCreateRequest_v1 NVML_STRUCT_VERSION(SystemEventSetCreateRequest, 1)
+
+/**
+ * nvmlSystemEventSetFreeRequest
+ */
+typedef struct
+{
+    unsigned int version;                   //!< the API version number
+    nvmlSystemEventSet_t set;               //!< system event set
+} nvmlSystemEventSetFreeRequest_v1_t;
+typedef nvmlSystemEventSetFreeRequest_v1_t nvmlSystemEventSetFreeRequest_t;
+#define nvmlSystemEventSetFreeRequest_v1 NVML_STRUCT_VERSION(SystemEventSetFreeRequest, 1)
+
+/**
+ * nvmlSystemRegisterEventRequest
+ */
+typedef struct
+{
+    unsigned int version;                   //!< the API version number
+    unsigned long long eventTypes;          //!< Bitmask of \ref nvmlEventType to record
+                                            //!< For example eventTypes = (nvmlEventTypeBind | nvmlEventTypeUnbind)
+                                            //!< to listen to both Bind and Unbind events.
+    nvmlSystemEventSet_t set;               //!< Set to which add new event types
+} nvmlSystemRegisterEventRequest_v1_t;
+typedef nvmlSystemRegisterEventRequest_v1_t nvmlSystemRegisterEventRequest_t;
+#define nvmlSystemRegisterEventRequest_v1 NVML_STRUCT_VERSION(SystemRegisterEventRequest, 1)
+
+/**
+ * nvmlSystemEventData_v1_t
+ */
+typedef struct
+{
+    unsigned long long  eventType;           //!< Information about what specific system event occurred
+    unsigned int gpuId;                      //!< gpuId in PCI format
+} nvmlSystemEventData_v1_t;
+
+/**
+ * nvmlSystemEventSetWait
+ */
+typedef struct
+{
+    unsigned int version;                   //!< input/output: the API version number
+    unsigned int timeoutms;                 //!< input: time to sleep waiting for event.
+                                            //!< If timeoutms is zero, skip waiting for event.
+    nvmlSystemEventSet_t set;               //!< input: system event set
+    nvmlSystemEventData_v1_t *data;         //!< input/output: array of event data, owned by caller
+    unsigned int dataSize;                  //!< input: the size of data array
+    unsigned int numEvent;                  //!< output: number of event collected.
+} nvmlSystemEventSetWaitRequest_v1_t;
+typedef nvmlSystemEventSetWaitRequest_v1_t nvmlSystemEventSetWaitRequest_t;
+#define nvmlSystemEventSetWaitRequest_v1 NVML_STRUCT_VERSION(SystemEventSetWaitRequest, 1)
 
 /** @} */
 
@@ -5764,7 +5863,6 @@ nvmlReturn_t DECLDIR nvmlDeviceGetComputeMode(nvmlDevice_t device, nvmlComputeMo
  */
 nvmlReturn_t DECLDIR nvmlDeviceGetCudaComputeCapability(nvmlDevice_t device, int *major, int *minor);
 
-#if NVCFG_GLOBAL_FEATURE_CTK7357_DRAM_ENCRYPTION
 /**
  * Retrieves the current and pending DRAM Encryption modes for the device.
  *
@@ -5824,7 +5922,6 @@ nvmlReturn_t DECLDIR nvmlDeviceGetDramEncryptionMode(nvmlDevice_t device, nvmlDr
  * @see nvmlDeviceGetDramEncryptionMode()
  */
 nvmlReturn_t DECLDIR nvmlDeviceSetDramEncryptionMode(nvmlDevice_t device, const nvmlDramEncryptionInfo_t *dramEncryption);
-#endif // GLOBAL_FEATURE_CTK7357_DRAM_ENCRYPTION
 
 /**
  * Retrieves the current and pending ECC modes for the device.
@@ -8310,7 +8407,6 @@ nvmlReturn_t DECLDIR nvmlDeviceSetPowerManagementLimit_v2(nvmlDevice_t device, n
 #define NVML_NVLINK_STATE_ACTIVE   0x1
 #define NVML_NVLINK_STATE_SLEEP    0x2
 
-#if NVCFG_GLOBAL_FEATURE_CTK7221_NVML_REDUCED_BANDWIDTH_MODE
 #define NVML_NVLINK_TOTAL_SUPPORTED_BW_MODES 23
 
 typedef struct
@@ -8339,7 +8435,6 @@ typedef struct
 } nvmlNvlinkSetBwMode_v1_t;
 typedef nvmlNvlinkSetBwMode_v1_t nvmlNvlinkSetBwMode_t;
 #define nvmlNvlinkSetBwMode_v1 NVML_STRUCT_VERSION(NvlinkSetBwMode, 1)
-#endif // GLOBAL_FEATURE_CTK7221_NVML_REDUCED_BANDWIDTH_MODE
 
 /** @} */ // @defgroup NVML NVLink
 
@@ -8652,7 +8747,6 @@ nvmlReturn_t DECLDIR nvmlSystemSetNvlinkBwMode(unsigned int nvlinkBwMode);
  */
 nvmlReturn_t DECLDIR nvmlSystemGetNvlinkBwMode(unsigned int *nvlinkBwMode);
 
-#if NVCFG_GLOBAL_FEATURE_CTK7221_NVML_REDUCED_BANDWIDTH_MODE
 /**
  * Get the supported NvLink Reduced Bandwidth Modes of the device
  *
@@ -8704,7 +8798,6 @@ nvmlReturn_t DECLDIR nvmlDeviceGetNvlinkBwMode(nvmlDevice_t device,
  **/
 nvmlReturn_t DECLDIR nvmlDeviceSetNvlinkBwMode(nvmlDevice_t device,
                                                nvmlNvlinkSetBwMode_t *setBwMode);
-#endif // GLOBAL_FEATURE_CTK7221_NVML_REDUCED_BANDWIDTH_MODE
 
 /** @} */
 
@@ -8848,6 +8941,97 @@ nvmlReturn_t DECLDIR nvmlEventSetWait_v2(nvmlEventSet_t set, nvmlEventData_t * d
  */
 nvmlReturn_t DECLDIR nvmlEventSetFree(nvmlEventSet_t set);
 
+/**
+ * Create an empty set of system events.
+ * Event set should be freed by \ref nvmlSystemEventSetFree
+ *
+ * For Fermi &tm; or newer fully supported devices.
+ * @param request                              Reference to nvmlSystemEventSetCreateRequest_t
+ *
+ * @return
+ *         - \ref NVML_SUCCESS                         if the event has been set
+ *         - \ref NVML_ERROR_UNINITIALIZED             if the library has not been successfully initialized
+ *         - \ref NVML_ERROR_INVALID_ARGUMENT          if request is NULL
+ *         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH for unsupported version
+ *         - \ref NVML_ERROR_UNKNOWN                   on any unexpected error
+ *
+ * @see nvmlSystemEventSetFree
+ */
+nvmlReturn_t DECLDIR nvmlSystemEventSetCreate(nvmlSystemEventSetCreateRequest_t *request);
+
+/**
+ * Releases system event set
+ *
+ * For Fermi &tm; or newer fully supported devices.
+ *
+ * @param request                                  Reference to nvmlSystemEventSetFreeRequest_t
+ *
+ * @return
+ *         - \ref NVML_SUCCESS                         if the event has been set
+ *         - \ref NVML_ERROR_UNINITIALIZED             if the library has not been successfully initialized
+ *         - \ref NVML_ERROR_INVALID_ARGUMENT          if request is NULL
+ *         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH for unsupported version
+ *         - \ref NVML_ERROR_UNKNOWN                   on any unexpected error
+ *
+ * @see nvmlDeviceRegisterEvents
+ */
+nvmlReturn_t DECLDIR nvmlSystemEventSetFree(nvmlSystemEventSetFreeRequest_t *request);
+
+/**
+ * Starts recording of events on system and add the events to specified \ref nvmlSystemEventSet_t
+ *
+ * For Linux only.
+ *
+ * This call starts recording of events on specific device.
+ * All events that occurred before this call are not recorded.
+ * Checking if some event occurred can be done with \ref nvmlSystemEventSetWait
+ *
+ * If function reports NVML_ERROR_UNKNOWN, event set is in undefined state and should be freed.
+ * If function reports NVML_ERROR_NOT_SUPPORTED, event set can still be used. None of the requested eventTypes
+ *     are registered in that case.
+ *
+ * @param request                              Reference to the struct nvmlSystemRegisterEventRequest_t
+ *
+ * @return
+ *         - \ref NVML_SUCCESS                         if the event has been set
+ *         - \ref NVML_ERROR_UNINITIALIZED             if the library has not been successfully initialized
+ *         - \ref NVML_ERROR_INVALID_ARGUMENT          if request is NULL
+ *         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH for unsupported version
+ *         - \ref NVML_ERROR_UNKNOWN                   on any unexpected error
+ *
+ * @see nvmlSystemEventType
+ * @see nvmlSystemEventSetWait
+ * @see nvmlEventSetFree
+ */
+nvmlReturn_t DECLDIR nvmlSystemRegisterEvents(nvmlSystemRegisterEventRequest_t *request);
+
+/**
+ * Waits on system events and delivers events
+ *
+ * For Fermi &tm; or newer fully supported devices.
+ *
+ * If some events are ready to be delivered at the time of the call, function returns immediately.
+ * If there are no events ready to be delivered, function sleeps till event arrives
+ * but not longer than specified timeout. This function in certain conditions can return before
+ * specified timeout passes (e.g. when interrupt arrives)
+ *
+ * if the return request->numEvent equals to request->dataSize, there might be outstanding
+ * event, it is recommended to call nvmlSystemEventSetWait again to query all the events.
+ *
+ * @param request                              Reference in which to nvmlSystemEventSetWaitRequest_t
+ *
+ * @return
+ *         - \ref NVML_SUCCESS                         if the event has been set
+ *         - \ref NVML_ERROR_UNINITIALIZED             if the library has not been successfully initialized
+ *         - \ref NVML_ERROR_INVALID_ARGUMENT          if request is NULL
+ *         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH for unsupported version
+ *         - \ref NVML_ERROR_TIMEOUT                   if no event notification after timeoutms
+ *         - \ref NVML_ERROR_UNKNOWN                   on any unexpected error
+ *
+ * @see nvmlSystemEventType
+ * @see nvmlSystemRegisterEvents
+ */
+nvmlReturn_t DECLDIR nvmlSystemEventSetWait(nvmlSystemEventSetWaitRequest_t *request);
 /** @} */
 
 /***************************************************************************************************/
@@ -10711,6 +10895,53 @@ nvmlReturn_t DECLDIR nvmlGetExcludedDeviceInfoByIndex(unsigned int index, nvmlEx
 /** @} */
 
 /***************************************************************************************************/
+/** @defgroup nvmlGPUPRMAccess PRM Access
+ * This chapter describes NVML operations that are associated with PRM register reads
+ *  @{
+ */
+/***************************************************************************************************/
+
+#define NVML_PRM_DATA_MAX_SIZE 496
+/**
+ * Main PRM input structure
+ */
+typedef struct
+{
+    /* I/O parameters */
+    unsigned dataSize;                                  //!< Size of the input TLV data.
+    unsigned status;                                    //!< OUT: status of the PRM command
+    union {
+        /* Input data in TLV format */
+        unsigned char inData[NVML_PRM_DATA_MAX_SIZE];   //!< IN: Input data in TLV format
+        /* Output data in TLV format */
+        unsigned char outData[NVML_PRM_DATA_MAX_SIZE];  //!< OUT: Output PRM data in TLV format
+    };
+} nvmlPRMTLV_v1_t;
+
+/**
+ * Read or write a GPU PRM register. The input is assumed to be in TLV format in
+ * network byte order.
+ * 
+ * For Blackwell &tm; or newer fully supported devices.
+ *
+ * Supported on Linux only.
+ *
+ * @param device                                        Identifer of target GPU device
+ * @param buffer                                        Structure holding the input data in TLV format as well as
+ *                                                      the PRM register contents in TLV format (in the case of a successful
+ *                                                      read operation).
+ *                                                      Note: the input data and any returned data shall be in network byte order.
+ *
+ * @return
+ *        - \ref NVML_SUCCESS                           on success
+ *        - \ref NVML_ERROR_INVALID_ARGUMENT            if \p device or \p buffer are invalid
+ *        - \ref NVML_ERROR_NO_PERMISSION               if user does not have permission to perform this operation
+ *        - \ref NVML_ERROR_NOT_SUPPORTED               if this feature is not supported by the device
+ *        - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH   if the version specified in \p buffer is not supported
+ */
+nvmlReturn_t DECLDIR nvmlDeviceReadWritePRM_v1(nvmlDevice_t device, nvmlPRMTLV_v1_t *buffer);
+
+/***************************************************************************************************/
 /** @defgroup nvmlMultiInstanceGPU Multi Instance GPU Management
  * This chapter describes NVML operations that are associated with Multi Instance GPU management.
  *  @{
@@ -12074,6 +12305,18 @@ typedef enum
 } nvmlPowerProfileType_t;
 
 /**
+ * Enum for operation to perform on the requested profiles
+ */
+typedef enum
+{
+    NVML_POWER_PROFILE_OPERATION_CLEAR = 0,             //!< Remove the requested profiles from the existing list of requested profiles
+    NVML_POWER_PROFILE_OPERATION_SET = 1,               //!< Add the requested profiles to the existing list of requested profiles
+    NVML_POWER_PROFILE_OPERATION_SET_AND_OVERWRITE = 2, //!< Overwrite the existing list of requested profiles with just the requested profiles
+
+    NVML_POWER_PROFILE_OPERATION_MAX = 3,               //!< Max value above +1
+} nvmlPowerProfileOperation_t;
+
+/**
  * Profile Metadata
  */
 typedef struct
@@ -12121,6 +12364,16 @@ typedef struct
 } nvmlWorkloadPowerProfileRequestedProfiles_v1_t;
 typedef nvmlWorkloadPowerProfileRequestedProfiles_v1_t nvmlWorkloadPowerProfileRequestedProfiles_t;
 #define nvmlWorkloadPowerProfileRequestedProfiles_v1 NVML_STRUCT_VERSION(WorkloadPowerProfileRequestedProfiles, 1)
+
+/**
+ * Update Profiles
+ */
+typedef struct
+{
+    nvmlPowerProfileOperation_t operation;  //!< Operation to perform
+    nvmlMask255_t updateProfilesMask;       //!< Mask of 255 bits, each bit representing index of respective perf profile
+} nvmlWorkloadPowerProfileUpdateProfiles_v1_t;
+#define nvmlWorkloadPowerProfileUpdateProfiles_v1 NVML_STRUCT_VERSION(WorkloadPowerProfileUpdateProfiles, 1)
 
 /**
  * Get Performance Profiles Information
@@ -12174,6 +12427,7 @@ nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileGetProfilesInfo(nvmlDevice_t 
 nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(nvmlDevice_t device,
                                                                       nvmlWorkloadPowerProfileCurrentProfiles_t *currentProfiles);
 /**
+ * @deprecated Use \ref nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1 instead
  * Set Requested Performance Profiles
  *
  * For Blackwell &tm; or newer fully supported devices.
@@ -12182,6 +12436,7 @@ nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(nvmlDevice
  * \a requestedProfilesMask, where each bit set corresponds to a supported bit from
  * the \a perfProfilesMask. These profiles will be added to existing list of
  * currently requested profiles.
+ * Requires root/admin permissions.
  *
  * @param device                The identifier of the target device
  * @param requestedProfiles     Reference to struct \a nvmlWorkloadPowerProfileRequestedProfiles_v1_t
@@ -12195,9 +12450,10 @@ nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(nvmlDevice
  *         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
  *         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error
  */
-nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice_t device,
+DEPRECATED(13.1) nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice_t device,
                                                                         nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles);
 /**
+ * @deprecated Use \ref nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1 instead
  * Clear Requested Performance Profiles
  *
  * For Blackwell &tm; or newer fully supported devices.
@@ -12206,6 +12462,7 @@ nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevi
  * \a requestedProfilesMask, where each bit set corresponds to a supported bit from
  * the \a perfProfilesMask. These profiles will be removed from the existing list of
  * currently requested profiles.
+ * Requires root/admin permissions.
  *
  * @param device                The identifier of the target device
  * @param requestedProfiles     Reference to struct \a nvmlWorkloadPowerProfileRequestedProfiles_v1_t
@@ -12219,8 +12476,34 @@ nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevi
  *         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
  *         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error
  */
-nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice_t device,
+DEPRECATED(13.1) nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice_t device,
                                                                           nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles);
+
+/**
+ * Update Requested Performance Profiles
+ *
+ * For Blackwell &tm; or newer fully supported devices.
+ * See \ref nvmlWorkloadPowerProfileUpdateProfiles_v1_t for more information on the struct.
+ * Update the requested performance profiles using the input bitmask
+ * \a updateProfilesMask, where each bit set corresponds to a supported bit from
+ * the \a perfProfilesMask.
+ * The \a operation parameter specifies the operation to perform, see \ref nvmlPowerProfileOperation_t for more information.
+ * Requires root/admin permissions.
+ *
+ * @param device                The identifier of the target device
+ * @param updateProfiles        Reference to struct \a nvmlWorkloadPowerProfileUpdateProfiles_v1_t
+ *
+ * @return
+ *         - \ref NVML_SUCCESS                         If the query is successful
+ *         - \ref NVML_ERROR_UNINITIALIZED             If the library has not been successfully initialized
+ *         - \ref NVML_ERROR_INVALID_ARGUMENT          If \a device is invalid or \a pointer to struct is NULL
+ *         - \ref NVML_ERROR_NOT_SUPPORTED             If the device does not support this feature
+ *         - \ref NVML_ERROR_GPU_IS_LOST               If the target GPU has fallen off the bus or is otherwise inaccessible
+ *         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error
+ */
+nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1(nvmlDevice_t device,
+                                                                     nvmlWorkloadPowerProfileUpdateProfiles_v1_t *updateProfiles);
+
 /** @} */ // @defgroup
 
 /**

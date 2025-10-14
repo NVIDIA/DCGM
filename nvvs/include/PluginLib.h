@@ -26,6 +26,8 @@
 #include <unordered_map>
 #include <vector>
 
+class HangDetectMonitor;
+
 /**
  * For testing.
  */
@@ -140,6 +142,16 @@ public:
                                          gpuIgnoreErrorCodeMap_t &parsedIgnoreErrorCodeMap,
                                          std::vector<unsigned int> const &gpuIds);
 
+    /*
+     * Used to pass HangDetectMonitor to InitializePlugin
+     */
+    HangDetectMonitor *GetHangDetectMonitor() const;
+
+    /*
+     * Used to pass HangDetectMonitor to InitializePlugin
+     */
+    void SetHangDetectMonitor(HangDetectMonitor *monitor);
+
 private:
     void *m_pluginPtr;
     bool m_initialized;
@@ -161,4 +173,15 @@ private:
     void *LoadFunction(const char *funcname);
 
     std::string GetFullLogFileName() const;
+    dcgmReturn_t HangDetectRegisterTask(pid_t pid = getpid(), pid_t tid = getpid());
+    dcgmReturn_t HangDetectUnregisterTask(pid_t pid = getpid(), pid_t tid = getpid());
+
+    /**
+     * Determine if hang detection should be enabled for this plugin
+     *
+     * Only enable for specific plugins that have been verified safe from false positives.
+     *
+     * @return true if hang detection should be enabled for this plugin
+     */
+    bool ShouldEnableHangDetection() const;
 };

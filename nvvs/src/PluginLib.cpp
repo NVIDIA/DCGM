@@ -15,6 +15,7 @@
  */
 #include "PluginInterface.h"
 #include <DcgmLogging.h>
+#include <HangDetectMonitor.h>
 #include <NvvsCommon.h>
 #include <PluginLib.h>
 #include <PluginStrings.h>
@@ -364,8 +365,13 @@ dcgmReturn_t PluginLib::InitializePlugin(dcgmHandle_t handle, int pluginId)
     dcgmReturn_t ret;
     try
     {
-        ret = m_initializeCB(
-            handle, &statFieldIds, &m_userData, GetLoggerSeverity(BASE_LOGGER), DcgmLoggingGetCallback(), &pluginAttr);
+        ret = m_initializeCB(handle,
+                             &statFieldIds,
+                             &m_userData,
+                             GetLoggerSeverity(BASE_LOGGER),
+                             DcgmLoggingGetCallback(),
+                             &pluginAttr,
+                             m_coreFunctionality.GetHangDetectMonitor());
 
         if (ret == DCGM_ST_OK)
         {
@@ -594,6 +600,11 @@ void PluginLib::RunTest(std::string const &testName,
         }
     }
 
+    if (ShouldEnableHangDetection())
+    {
+        HangDetectRegisterTask();
+    }
+
     /********************************************************************/
     /*
      * Ends everything we started relative to the beginning of the plugin and performs cleanup
@@ -623,6 +634,11 @@ void PluginLib::RunTest(std::string const &testName,
         DCGM_LOG_ERROR << "Caught unknown exception from plugin " << GetName()
                        << " while attempting to execute the test";
         return;
+    }
+
+    if (ShouldEnableHangDetection())
+    {
+        HangDetectUnregisterTask();
     }
 
     try
@@ -812,6 +828,46 @@ std::unordered_map<std::string, PluginLibTest> const &PluginLib::GetSupportedTes
 void PluginLib::SetTestRunningState(std::string const &testName, TestRuningState state)
 {
     m_tests.at(testName).SetTestRunningState(state);
+}
+
+HangDetectMonitor *PluginLib::GetHangDetectMonitor() const
+{
+    return m_coreFunctionality.GetHangDetectMonitor();
+}
+
+void PluginLib::SetHangDetectMonitor(HangDetectMonitor *monitor)
+{
+    m_coreFunctionality.SetHangDetectMonitor(monitor);
+}
+
+/*****************************************************************************/
+/* Register the running task with HangDetectMonitor */
+dcgmReturn_t PluginLib::HangDetectRegisterTask(pid_t pid, pid_t tid)
+{
+    if (auto monitor = m_coreFunctionality.GetHangDetectMonitor(); monitor != nullptr)
+    {
+        return monitor->AddMonitoredTask(pid, tid);
+    }
+    return DCGM_ST_NOT_CONFIGURED;
+}
+/*****************************************************************************/
+/* Unregister the running task with HangDetectMonitor */
+dcgmReturn_t PluginLib::HangDetectUnregisterTask(pid_t pid, pid_t tid)
+{
+    if (auto monitor = m_coreFunctionality.GetHangDetectMonitor(); monitor != nullptr)
+    {
+        return monitor->RemoveMonitoredTask(pid, tid);
+    }
+    return DCGM_ST_NOT_CONFIGURED;
+}
+
+/*****************************************************************************/
+bool PluginLib::ShouldEnableHangDetection() const
+{
+    /* Enable hang detection except for plugins where child processes or
+     * worker thread waits could cause false positives. Children and worker
+     * threads may be separately monitored for hang detection coverage. */
+    return GetName() != EUD_PLUGIN_NAME;
 }
 
 // Explicit template instantiations

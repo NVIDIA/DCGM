@@ -41,12 +41,15 @@ TEST_CASE("CommandLineParser: ConcatenateParameters")
         REQUIRE_THROWS(CommandLineParser::ConcatenateParameters(params));
     }
 
-    SECTION("Missing '.'")
+    SECTION("Missing '.' is accepted")
     {
+        // The diagnostic binary will reject this if the parameter name isn't a global parameter
         std::vector<std::string> const params {
-            "test1:param1=arg1",
+            "genericMode=true",
+            "diagnostic.test_duration=200",
         };
-        REQUIRE_THROWS(CommandLineParser::ConcatenateParameters(params));
+        std::string out = CommandLineParser::ConcatenateParameters(params);
+        REQUIRE(out == "diagnostic.test_duration=200;genericMode=true");
     }
 
     SECTION("Unsupported multiple definitions")
@@ -85,5 +88,83 @@ TEST_CASE("CommandLineParser: ValidateParameters")
         std::string value(DCGM_MAX_TEST_PARMS_LEN_V2 - params.size(), '6');
         params += value;
         REQUIRE_THROWS(CommandLineParser::ValidateParameters(params));
+    }
+}
+
+TEST_CASE("CommandLineParser: HelperProcessWorkloadPowerProfileCommandLine Valid Index")
+{
+    auto bit = 7, groupId = 2;
+    dcgmWorkloadPowerProfile_t mWorkloadPowerProfile {};
+    SECTION("Default action - append")
+    {
+        mWorkloadPowerProfile = CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(bit, 'a', groupId);
+        REQUIRE(mWorkloadPowerProfile.action == DCGM_WORKLOAD_PROFILE_ACTION_SET);
+    }
+    SECTION("action - clear")
+    {
+        mWorkloadPowerProfile = CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(bit, 'c', groupId);
+        REQUIRE(mWorkloadPowerProfile.action == DCGM_WORKLOAD_PROFILE_ACTION_CLEAR);
+    }
+    SECTION("action - overwrite")
+    {
+        mWorkloadPowerProfile = CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(bit, 'o', groupId);
+        REQUIRE(mWorkloadPowerProfile.action == DCGM_WORKLOAD_PROFILE_ACTION_SET_AND_OVERWRITE);
+    }
+
+    REQUIRE(mWorkloadPowerProfile.version == dcgmWorkloadPowerProfile_version1);
+    REQUIRE(mWorkloadPowerProfile.groupId == static_cast<unsigned int>(groupId));
+    REQUIRE(mWorkloadPowerProfile.profileMask[bit / DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM]
+            == static_cast<unsigned int>(1 << (bit % DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM)));
+    // Verify that the other elements are 0
+    for (int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+    {
+        if (i != bit / DCGM_POWER_PROFILE_MASK_BITS_PER_ELEM)
+        {
+            REQUIRE(mWorkloadPowerProfile.profileMask[i] == 0);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: HelperProcessWorkloadPowerProfileCommandLine -1 Index")
+{
+    auto bit = -1, groupId = 2;
+    dcgmWorkloadPowerProfile_t mWorkloadPowerProfile {};
+    SECTION("Default action - append")
+    {
+        mWorkloadPowerProfile = CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(bit, 'a', groupId);
+        REQUIRE(mWorkloadPowerProfile.action == DCGM_WORKLOAD_PROFILE_ACTION_CLEAR);
+    }
+    SECTION("action - clear")
+    {
+        mWorkloadPowerProfile = CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(bit, 'c', groupId);
+        REQUIRE(mWorkloadPowerProfile.action == DCGM_WORKLOAD_PROFILE_ACTION_CLEAR);
+    }
+    SECTION("action - overwrite")
+    {
+        mWorkloadPowerProfile = CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(bit, 'o', groupId);
+        REQUIRE(mWorkloadPowerProfile.action == DCGM_WORKLOAD_PROFILE_ACTION_CLEAR);
+    }
+
+    REQUIRE(mWorkloadPowerProfile.version == dcgmWorkloadPowerProfile_version1);
+    REQUIRE(mWorkloadPowerProfile.groupId == static_cast<unsigned int>(groupId));
+    // Verify that all elements are 0xFFFFFFFF
+    for (int i = 0; i < DCGM_POWER_PROFILE_ARRAY_SIZE; i++)
+    {
+        REQUIRE(mWorkloadPowerProfile.profileMask[i] == 0xFFFFFFFF);
+    }
+}
+
+TEST_CASE("CommandLineParser: HelperProcessWorkloadPowerProfileCommandLine Invalid Options")
+{
+    auto groupId = 2;
+    SECTION("Invalid action")
+    {
+        auto bit = 7;
+        REQUIRE_THROWS(CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(bit, 'x', groupId));
+    }
+    SECTION("Invalid bit")
+    {
+        auto bit = 453;
+        REQUIRE_THROWS(CommandLineParser::HelperProcessWorkloadPowerProfileCommandLine(bit, 'a', groupId));
     }
 }

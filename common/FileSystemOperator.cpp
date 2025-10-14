@@ -59,3 +59,8 @@ std::optional<std::vector<std::string>> FileSystemOperator::Glob(std::string_vie
     globfree(&globResult);
     return paths;
 }
+
+bool FileSystemOperator::Unlink(std::string_view path)
+{
+    return unlink(std::string(path).c_str()) == 0;
+}

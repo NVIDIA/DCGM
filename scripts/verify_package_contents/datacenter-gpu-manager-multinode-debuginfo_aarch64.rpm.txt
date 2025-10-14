@@ -107,4 +107,4 @@
 /usr/lib/debug
 /usr/lib/debug/usr
 /usr/lib/debug/usr/lib64
-/usr/lib/debug/usr/lib64/libdcgmmodulemndiag.so.<SOFTWAREVERSION>-<PACKAGEVERSION>-1.aarch64.debug
+/usr/lib/debug/usr/lib64/libdcgmmodulemndiag.so.<SOFTWAREVERSION>-<PACKAGEVERSION>.aarch64.debug

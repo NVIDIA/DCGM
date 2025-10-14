@@ -91,14 +91,13 @@ std::ifstream::pos_type filesize(const std::string &filename)
 /* Variables for terminating a running diag on a SIGINT and other signals */
 // To avoid conflicting with STL reserved namespace, variables are prefixed with diag_
 static std::atomic<bool> g_signalExit = false;
-static bool diag_stopDiagOnSignal     = false; // Whether we should attempt to stop a running diag on recieving a signal
-static std::string diag_hostname      = "";    // Hostname for the remote host engine
-static std::string diag_pathToExecutable = ""; // Path to the dcgmi executable
-static bool diag_installed_sig_handlers  = false; // Whether sig handlers have been installed
-static void (*diag_oldHupHandler)(int)   = NULL;  // reference to old sig hup handler if any
-static void (*diag_oldIntHandler)(int)   = NULL;  // reference to old sig int handler if any
-static void (*diag_oldQuitHandler)(int)  = NULL;  // reference to old sig quit handler if any
-static void (*diag_oldTermHandler)(int)  = NULL;  // reference to old sig term handler if any
+static std::atomic<bool> diag_stopDiagOnSignal
+    = false; // Whether we should attempt to stop a running diag on recieving a signal
+static bool diag_installed_sig_handlers = false; // Whether sig handlers have been installed
+static void (*diag_oldHupHandler)(int)  = NULL;  // reference to old sig hup handler if any
+static void (*diag_oldIntHandler)(int)  = NULL;  // reference to old sig int handler if any
+static void (*diag_oldQuitHandler)(int) = NULL;  // reference to old sig quit handler if any
+static void (*diag_oldTermHandler)(int) = NULL;  // reference to old sig term handler if any
 
 static struct sigaction diag_actHup, diag_actInt, diag_actQuit, diag_actTerm,
     diag_actOld; // sigaction structs for the handlers
@@ -342,6 +341,11 @@ void Diag::InitializeDiagResponse(dcgmDiagResponse_v12 &response)
     response.version = dcgmDiagResponse_version12;
 }
 
+void Diag::SetEmbeddedHostEngine(bool embeddedHostEngine)
+{
+    m_embeddedHostEngine = embeddedHostEngine;
+}
+
 static std::optional<std::string> GetResponseSystemErrors(dcgmDiagResponse_v12 const &response)
 {
     std::stringstream errMsg;
@@ -528,9 +532,27 @@ dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v12
     {
         if (g_signalExit)
         {
-            AbortDiag ad(m_hostname);
-            ad.Execute();
-            rde->Stop();
+            if (m_embeddedHostEngine)
+            {
+                // We cannot use AbortDiag as it will fail to connect to the remote host engine.
+                // Since it is embedded host engine, we can use handle directly to stop the diagnostic
+                if (dcgmReturn_t ret = dcgmStopDiagnostic(handle); ret != DCGM_ST_OK)
+                {
+                    log_error("There was an error stopping the launched diagnostic. Return: {}", ret);
+                }
+            }
+            else
+            {
+                // For remote host engine, we need to use AbortDiag to connect to the remote host and stop the
+                // diagnostic
+                AbortDiag ad(m_hostname);
+                ad.Execute();
+            }
+            // After calling `dcgmStopDiagnostic`, NVVS is likely to be stopped. Typically, we shouldn't need to wait
+            // too long for `dcgmActionValidate_v2` to return from `RemoteDiagExecutor`. Just wait for 25 seconds in
+            // this case.
+            std::chrono::milliseconds constexpr stopDiagTimeout(25000);
+            rde->StopAndWait(stopDiagTimeout.count());
             result = DCGM_ST_NVVS_KILLED;
             break;
         }
@@ -1298,8 +1320,7 @@ StartDiag::StartDiag(const std::string &hostname,
                      const std::string &configPath,
                      bool jsonOutput,
                      dcgmRunDiag_v10 &drd,
-                     unsigned int iterations,
-                     const std::string &pathToDcgmExecutable)
+                     unsigned int iterations)
     : m_diagObj(iterations, hostname)
 
 {
@@ -1359,9 +1380,6 @@ StartDiag::StartDiag(const std::string &hostname,
 
     this->m_diagObj.setDcgmRunDiag(&drd);
     this->m_diagObj.setJsonOutput(jsonOutput);
-
-    // Set path to dcgm executable. This is used by the signal handler to stop the launched diagnostic if needed.
-    diag_pathToExecutable = pathToDcgmExecutable;
 }
 
 /*****************************************************************************/
@@ -1388,24 +1406,12 @@ dcgmReturn_t StartDiag::StartListenerServer()
 dcgmReturn_t StartDiag::DoExecuteConnected()
 {
     m_silent = true;
-
-    // Set global hostname so that the signal handler can terminate a launched diagnostic if necessary
-    diag_hostname = m_hostName;
-
-    dcgmReturn_t ret = m_diagObj.RunStartDiag(m_dcgmHandle);
-
-    // reset global hostname
-    diag_hostname = "";
-
-    return ret;
+    return m_diagObj.RunStartDiag(m_dcgmHandle);
 }
 
 dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus)
 {
     m_silent = true;
-
-    // Set global hostname so that the signal handler can terminate a launched diagnostic if necessary
-    diag_hostname = m_hostName;
 
     // Attempt to start an embedded host engine
     dcgmStartEmbeddedV2Params_v1 params {};
@@ -1423,14 +1429,11 @@ dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus
     }
     else
     {
+        m_diagObj.SetEmbeddedHostEngine(true);
         connectionStatus = m_diagObj.RunStartDiag(params.dcgmHandle);
 
         dcgmStopEmbedded(params.dcgmHandle);
     }
-
-    // reset global hostname
-    diag_hostname = "";
-
     return connectionStatus;
 }
 

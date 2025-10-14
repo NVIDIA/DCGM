@@ -1069,6 +1069,11 @@ NVML_ENTRY_POINT(nvmlGetExcludedDeviceInfoByIndex, tsapiGetExcludedDeviceInfoByI
         "(%d, %p)",
         index, info)
 
+NVML_ENTRY_POINT(nvmlDeviceReadWritePRM_v1, tsapiDeviceReadWritePRM_v1,
+                 (nvmlDevice_t device, nvmlPRMTLV_v1_t *buffer),
+                 "(%p, %p)",
+                 device, buffer);
+
 NVML_ENTRY_POINT(nvmlGetVgpuVersion, tsapiGetVgpuVersion,
         (nvmlVgpuVersion_t *supported, nvmlVgpuVersion_t * current),
         "(%p, %p)",
@@ -1426,8 +1431,38 @@ NVML_ENTRY_POINT(nvmlDeviceWorkloadPowerProfileClearRequestedProfiles,
                  "(%p, %p)",
                  device, requestedProfiles);
 
+NVML_ENTRY_POINT(nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1,
+                 tsapiDeviceWorkloadPowerProfileUpdateProfiles_v1,
+                 (nvmlDevice_t device, nvmlWorkloadPowerProfileUpdateProfiles_v1_t *updateProfiles),
+                 "(%p, %p)",
+                 device, updateProfiles);
+
 NVML_ENTRY_POINT(nvmlDeviceGetPlatformInfo,
                  tsapiDeviceGetPlatformInfo,
                  (nvmlDevice_t device, nvmlPlatformInfo_t *platformInfo),
                  "(%p, %p)",
                  device, platformInfo);
+
+NVML_ENTRY_POINT(nvmlSystemEventSetCreate,
+                 tsapiSystemEventSetCreate,
+                 (nvmlSystemEventSetCreateRequest_t *request),
+                 "(%p)",
+                 request);
+
+NVML_ENTRY_POINT(nvmlSystemEventSetFree,
+                 tsapiSystemEventSetFree,
+                 (nvmlSystemEventSetFreeRequest_t *request),
+                 "(%p)",
+                 request);
+
+NVML_ENTRY_POINT(nvmlSystemRegisterEvents,
+                 tsapiSystemRegisterEvents,
+                 (nvmlSystemRegisterEventRequest_t *request),
+                 "(%p)",
+                 request);
+
+NVML_ENTRY_POINT(nvmlSystemEventSetWait,
+                 tsapiSystemEventSetWait,
+                 (nvmlSystemEventSetWaitRequest_t *request),
+                 "(%p)",
+                 request);

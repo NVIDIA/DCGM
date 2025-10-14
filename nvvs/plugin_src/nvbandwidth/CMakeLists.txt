@@ -17,7 +17,17 @@ add_subdirectory(tests)
 declare_nvvs_plugin(nvbandwidth .)
 
 add_subdirectory(Cuda12)
+add_subdirectory(Cuda13)
 target_link_libraries(NVBandwidth_12 PRIVATE
+    serialize
+    fmt::fmt
+    dcgm_common
+    dcgm_logging
+    Boost::stacktrace_basic
+    dl
+    rt)
+
+target_link_libraries(NVBandwidth_13 PRIVATE
     serialize
     fmt::fmt
     dcgm_common

@@ -35,13 +35,13 @@ DcgmMutex envMutex(0);
 int SetTestEnv()
 {
     DcgmLockGuard lock(&envMutex);
-    return setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0);
+    return setenv("DCGM_SUPPORT_NON_NVIDIA_CPU", "1", 0);
 }
 
 int UnsetTestEnv()
 {
     DcgmLockGuard lock(&envMutex);
-    return unsetenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__);
+    return unsetenv("DCGM_SUPPORT_NON_NVIDIA_CPU");
 }
 } //namespace
 
@@ -75,7 +75,7 @@ TEST_CASE("Sysmon: initialize module")
     if (differentHardware)
     {
         DcgmLockGuard lock(&envMutex);
-        if (!setenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__, "value", 0))
+        if (!setenv("DCGM_SUPPORT_NON_NVIDIA_CPU", "1", 0))
         {
             try
             {
@@ -87,7 +87,7 @@ TEST_CASE("Sysmon: initialize module")
                 CHECK(false);
             }
         }
-        REQUIRE_FALSE(unsetenv(__DCGM_SYSMON_SKIP_HARDWARE_CHECK__));
+        REQUIRE_FALSE(unsetenv("DCGM_SUPPORT_NON_NVIDIA_CPU"));
     }
 }
 

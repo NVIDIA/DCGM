@@ -24,7 +24,8 @@
 #define DCGM_CONFIG_SR_SET           2
 #define DCGM_CONFIG_SR_ENFORCE_GROUP 3
 #define DCGM_CONFIG_SR_ENFORCE_GPU   4
-#define DCGM_CONFIG_SR_COUNT         4 /* Keep as last entry and 1 greater */
+#define DCGM_CONFIG_SR_SET_WORKLOAD_POWER_PROFILE 5
+#define DCGM_CONFIG_SR_COUNT                      6 /* Keep as last entry and 1 greater */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -112,4 +113,20 @@ typedef struct dcgm_config_msg_enforce_gpu_v1
 
 /*****************************************************************************/
 
+/*****************************************************************************/
+/**
+ * Subrequest DCGM_CONFIG_SR_SET_WORKLOAD_POWER_PROFILE
+ */
+typedef struct dcgm_config_msg_set_workload_power_profile_v1
+{
+    dcgm_module_command_header_t header; /* Command header */
+    dcgmWorkloadPowerProfile_t
+        workloadPowerProfile; /* IN: Workload power profile containing the group, action, and mask */
+} dcgm_config_msg_set_workload_power_profile_v1;
+
+typedef dcgm_config_msg_set_workload_power_profile_v1 dcgm_config_msg_set_workload_power_profile_t;
+
+#define dcgm_config_msg_set_workload_power_profile_version1 \
+    MAKE_DCGM_VERSION(dcgm_config_msg_set_workload_power_profile_v1, 1)
+#define dcgm_config_msg_set_workload_power_profile_version dcgm_config_msg_set_workload_power_profile_version1
 #endif // DCGM_CONFIG_STRUCTS_H

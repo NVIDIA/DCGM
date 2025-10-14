@@ -107,4 +107,4 @@
 /usr/lib/debug
 /usr/lib/debug/usr
 /usr/lib/debug/usr/lib64
-/usr/lib/debug/usr/lib64/libdcgmmodulemndiag.so.<SOFTWAREVERSION>-<PACKAGEVERSION>-1.x86_64.debug
+/usr/lib/debug/usr/lib64/libdcgmmodulemndiag.so.<SOFTWAREVERSION>-<PACKAGEVERSION>.x86_64.debug

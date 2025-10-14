@@ -16,7 +16,7 @@
 
 set -ex
 
-for CUDA in cuda11 cuda12
+for CUDA in cuda11 cuda12 cuda13
 do
     read -r _ URL SHA512SUM <<<$(grep "^$CUDA-$TARGET" $1)
 
@@ -38,6 +38,7 @@ do
                    cuda-misc-headers \
                    cuda-nvcc \
                    cuda-nvml-dev \
+                   cuda-culibos-dev \
                    libcublas-dev \
                    libcufft-dev \
                    libcurand-dev

@@ -21,6 +21,7 @@
 
 #include <catch2/catch_all.hpp>
 #include <fmt/format.h>
+#include <random>
 
 static ChildProcessFactory MockChildProcessFactory = []() {
     return std::make_unique<MockChildProcess>();
@@ -286,6 +287,7 @@ TEST_CASE("ChildProcessManager")
             CHECK(!waitTimeout.has_value());
         }
     }
+
     SECTION("Stop forwards force to child process")
     {
         SECTION("Force = false")
@@ -331,6 +333,7 @@ TEST_CASE("ChildProcessManager")
             CHECK(status.receivedSignalNumber == SIGKILL);
         }
     }
+
     SECTION("Destroy")
     {
         log_info("Destroy");
@@ -410,11 +413,13 @@ TEST_CASE("ChildProcessManager")
             CHECK(pipeFd >= 0);
 
             // Generate a buffer with 1kb of random data
+            std::minstd_rand gen(std::random_device {}());
+            std::uniform_int_distribution<char> dist(-128, 127);
             std::vector<char> writeBuffer(1024);
             std::vector<char> readBuffer;
             for (int i = 0; i < 1024; i++)
             {
-                writeBuffer[i] = static_cast<char>(rand() % 256);
+                writeBuffer[i] = dist(gen);
             }
 
             SECTION("Write data all at once")

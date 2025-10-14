@@ -30,7 +30,7 @@ TEST_CASE("ThreadSafeQueue : Lock")
     }
 
     std::thread th1([&queue] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
         auto proxy = queue.LockRW();
         proxy.Enqueue(20);
     });
@@ -40,7 +40,7 @@ TEST_CASE("ThreadSafeQueue : Lock")
         REQUIRE(proxy.Dequeue() == 10);
     }
     int attempts = 0;
-    while (attempts++ < 10)
+    while (attempts++ < 50)
     {
         if (auto proxy = queue.LockRO(); !proxy.IsEmpty())
         {
@@ -48,10 +48,10 @@ TEST_CASE("ThreadSafeQueue : Lock")
         }
         else
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
-    REQUIRE(attempts < 10);
+    REQUIRE(attempts < 50);
     auto proxy = queue.LockRW();
     REQUIRE(proxy.Dequeue() == 20);
     th1.join();

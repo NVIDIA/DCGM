@@ -77,7 +77,7 @@ int DcgmFieldGetAllFieldIds(std::vector<unsigned short> &fieldIds);
 
 /* Profiling field IDs */
 #define DCGM_FI_PROF_FIRST_ID DCGM_FI_PROF_GR_ENGINE_ACTIVE
-#define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_C2C_RX_DATA_BYTES
+#define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_PEERMEM_CACHE_MISS
 
 /* Sysmon field IDs */
 #define DCGM_FI_SYSMON_FIRST_ID DCGM_FI_DEV_CPU_UTIL_TOTAL

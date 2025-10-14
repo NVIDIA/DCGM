@@ -41,10 +41,8 @@
 #ifndef __MISC_H__
 #define __MISC_H__
 
-
 #define BLOCKSIZE            ((unsigned long)(1024 * 1024))
 #define MOD_SZ               20
 #define MAX_ERR_RECORD_COUNT 10
-
 
 #endif /* __MISC_H__ */

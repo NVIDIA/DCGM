@@ -223,9 +223,10 @@ private:
 
     /**
      * @brief Gets the path to the mnubergemm binary
-     * @return The path to the mnubergemm binary
+     * @param path The path to the mnubergemm binary
+     * @return DCGM_ST_OK if successful, DCGM_ST_BADPARAM if the path is invalid
      */
-    std::string GetMnubergemmPathHeadNode();
+    dcgmReturn_t GetMnubergemmPathHeadNode(std::string &path);
 
     /**
      * @brief Populates the response structure for a failed MPI process
@@ -238,6 +239,12 @@ private:
                                           dcgmMnDiagResponse_v1 &response,
                                           std::optional<pid_t> mpiPID,
                                           DcgmNs::Utils::LogPaths const &logPaths);
+
+    /**
+     * @brief Gets the installed CUDA version
+     * @return The installed CUDA version
+     */
+    int GetCudaVersion();
 
     // Member variables
     HostInfo m_localHostInfo;

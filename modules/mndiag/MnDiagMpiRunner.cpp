@@ -312,11 +312,6 @@ std::string MnDiagMpiRunner::GetMpiBinPath() const
     return std::string(MnDiagConstants::DEFAULT_MPIRUN_PATH);
 }
 
-std::string MnDiagMpiRunner::GetMnubergemmBinPath() const
-{
-    return m_mnubergemmPath;
-}
-
 void MnDiagMpiRunner::SetMnubergemmPath(std::string const &mnubergemmPath)
 {
     m_mnubergemmPath = mnubergemmPath;
@@ -757,7 +752,9 @@ std::expected<bool, dcgmReturn_t> MnDiagMpiRunner::HasMpiLaunchedEnoughProcesses
 {
     // From MR!2267, we experimented the latency value of seeing the string "First hosthash" in the stdout
     // It was fairly consistent around 6-7 seconds, we are giving timeout more than 2 times that value to be safe
-    constexpr std::chrono::seconds timeout = std::chrono::seconds(15);
+    // However, on GB300, we saw the latency value to be around 20 seconds, so we are increasing the timeout to 60
+    // seconds
+    constexpr std::chrono::seconds timeout = std::chrono::seconds(60);
     log_debug("Checking if MPI has launched enough processes with timeout: {}", timeout.count());
     // Choose the appropriate input stream based on whether we're using files or memory
     if (m_logFileNames.has_value())

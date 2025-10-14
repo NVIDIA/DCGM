@@ -80,12 +80,14 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
-                              dcgmDiagPluginAttr_v1 const *pluginAttr)
+                              dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              HangDetectMonitor *monitor)
 {
     ConstantPerf *cp = new ConstantPerf(handle);
     *userData        = cp;
 
     cp->SetPluginAttr(pluginAttr);
+    cp->SetHangDetectMonitor(monitor);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, cp->GetDisplayName());
     return DCGM_ST_OK;
 }

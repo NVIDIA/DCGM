@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 #include "Plugin.h"
-#include "DcgmStringHelpers.h"
+
 #include "IgnoreErrorCodesHelper.h"
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
-
-const double DUMMY_TEMPERATURE_VALUE = 30.0;
+#include <HangDetectMonitor.h>
 
 /*************************************************************************/
 Plugin::Plugin()
@@ -207,33 +206,6 @@ dcgmReturn_t Plugin::GetResults(std::string const &testName, dcgmDiagEntityResul
     return GetResultsImpl<dcgmDiagEntityResults_v1>(testName, entityResults);
 }
 
-
-long long Plugin::DetermineMaxTemp(unsigned int gpuId,
-                                   double parameterValue,
-                                   DcgmRecorder &dr,
-                                   dcgmDeviceThermals_t &thermals)
-{
-    unsigned int flags           = DCGM_FV_FLAG_LIVE_DATA;
-    dcgmFieldValue_v2 maxTempVal = {};
-    dcgmReturn_t ret             = dr.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_GPU_MAX_OP_TEMP, maxTempVal, flags);
-
-    if (parameterValue == DUMMY_TEMPERATURE_VALUE)
-    {
-        if (ret != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
-        {
-            DCGM_LOG_WARNING << "Cannot read the max operating temperature for GPU " << gpuId << ": "
-                             << errorString(ret) << ", defaulting to the slowdown temperature";
-            return thermals.slowdownTemp;
-        }
-        else
-        {
-            return maxTempVal.value.i64;
-        }
-    }
-
-    return static_cast<long long>(parameterValue);
-}
-
 void Plugin::SetGpuStat(std::string const &testName, unsigned int gpuId, std::string const &name, double value)
 {
     m_tests.at(testName).SetGpuStat(gpuId, name, value);
@@ -339,4 +311,56 @@ bool Plugin::ShouldIgnoreError(std::string const &testName,
         }
     }
     return false;
+}
+
+/*************************************************************************/
+void Plugin::SetHangDetectMonitor(HangDetectMonitorApi *monitor)
+{
+    m_hangDetectMonitor = monitor;
+}
+
+/*************************************************************************/
+dcgmReturn_t Plugin::HangDetectRegisterTask(pid_t const pid, pid_t const tid)
+{
+    if (!m_hangDetectMonitor)
+    {
+        return DCGM_ST_OK; // Hang detection disabled - not an error
+    }
+    return m_hangDetectMonitor->AddMonitoredTask(pid, tid);
+}
+
+/*************************************************************************/
+dcgmReturn_t Plugin::HangDetectRegisterProcess(pid_t const pid)
+{
+    if (!m_hangDetectMonitor)
+    {
+        return DCGM_ST_OK;
+    }
+    return m_hangDetectMonitor->AddMonitoredTask(pid);
+}
+
+/*************************************************************************/
+dcgmReturn_t Plugin::HangDetectUnregisterTask(pid_t const pid, pid_t const tid)
+{
+    if (!m_hangDetectMonitor)
+    {
+        return DCGM_ST_OK;
+    }
+    return m_hangDetectMonitor->RemoveMonitoredTask(pid, tid);
+}
+
+/*************************************************************************/
+dcgmReturn_t Plugin::HangDetectUnregisterProcess(pid_t const pid)
+{
+    if (!m_hangDetectMonitor)
+    {
+        return DCGM_ST_OK;
+    }
+    return m_hangDetectMonitor->RemoveMonitoredTask(pid);
+}
+
+void Plugin::SetHangDetectMonitor(HangDetectMonitor *monitor)
+{
+    m_hangDetectMonitor = static_cast<HangDetectMonitorApi *>(monitor);
+    log_verbose("Hang detection enabled");
 }

@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-target_include_directories(nvvs_interface INTERFACE include)
+target_include_directories(nvvs_interface INTERFACE
+    include
+    "${JSON_CPP_INCLUDE_PATH}")
+
 target_link_libraries(nvvs_interface
     INTERFACE
         common_interface

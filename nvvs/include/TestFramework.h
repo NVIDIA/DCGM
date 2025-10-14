@@ -30,6 +30,7 @@
 #include "DcgmRecorder.h"
 #include "GoldenValueCalculator.h"
 #include "GpuSet.h"
+#include "HangDetectMonitor.h"
 #include "NvvsStructs.h"
 #include "PluginLib.h"
 #include "SoftwarePluginFramework.h"
@@ -47,7 +48,8 @@ public:
 
     // methods
     void Go(std::vector<std::unique_ptr<EntitySet>> &entitySets);
-    void loadPlugins();
+
+    void loadPlugins(HangDetectMonitor *monitor);
 
     // Getters
     std::vector<Test *> getTests()
@@ -59,8 +61,6 @@ public:
     {
         return m_testCategories;
     }
-
-    void LoadPlugins();
 
     /*
      * Runs the software plugin as a seperate entity
@@ -84,7 +84,23 @@ public:
 
     dcgmReturn_t SetDiagResponseVersion(unsigned int version);
 
-protected:
+    /********************************************************************/
+    /**
+     * Determines the appropriate CUDA major version to use based on GPU architecture compatibility
+     *
+     * CUDA 13.0 drops support for Maxwell, Pascal, and Volta GPUs (compute capability < 7.5).
+     * This static method checks the GPU architecture and returns CUDA 12 for older GPUs when CUDA 13.0 is detected.
+     *
+     * @param gpuId GPU ID to check architecture for
+     * @param cudaDriverMajorVersion Current CUDA driver major version
+     * @param cudaDriverMinorVersion Current CUDA driver minor version
+     * @return unsigned int The CUDA major version to use (12 for older GPUs with CUDA 13.0, otherwise original version)
+     */
+    static unsigned int GetCompatibleCudaMajorVersion(unsigned int gpuId,
+                                                      unsigned int cudaDriverMajorVersion,
+                                                      unsigned int cudaDriverMinorVersion);
+
+private:
     std::vector<Test *> m_testList;
     std::map<std::string, std::vector<Test *>> m_testCategories;
     std::list<void *> dlList;
@@ -92,11 +108,15 @@ protected:
     mode_t m_nvvsBinaryMode;
     uid_t m_nvvsOwnerUid;
     gid_t m_nvvsOwnerGid;
-    unsigned int m_validGpuId;
+    // This is one of the GPU IDs used for the tests. If a GPU set is present, it is set to the first GPU in the entity
+    // set. Since NVVS can only run on homogenous GPUs, this is sufficient for us to determine the CUDA version, GPU
+    // Arch, etc.
+    std::optional<dcgm_field_eid_t> m_validGpuId;
     std::unique_ptr<SoftwarePluginFramework> m_softwarePluginFramework;
     DcgmNvvsResponseWrapper m_diagResponse;
     unsigned int m_completedTests;
     unsigned int m_numTestsToRun;
+    HangDetectMonitor *m_monitor;
 
     // new plugin loading
     std::vector<std::unique_ptr<PluginLib>> m_plugins;
@@ -166,6 +186,7 @@ protected:
      * Writes dcgmDiagStatus_t to the NVVS channel
      */
     void WriteDiagStatusToChannel(std::string_view pluginName, unsigned int errorCode) const;
-};
 
+    friend class WrapperTestFramework;
+};
 #endif //  _NVVS_NVVS_TestFramework_H

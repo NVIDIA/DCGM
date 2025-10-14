@@ -14,13 +14,18 @@
  * limitations under the License.
  */
 #include "nvml.h"
-#include <catch2/catch_all.hpp>
-#include <fmt/format.h>
-#include <vector>
-
 #include <InjectedNvml.h>
 #include <InjectionKeys.h>
+#include <catch2/catch_all.hpp>
+#include <condition_variable>
+#include <fmt/format.h>
+#include <future>
 #include <nvml_injection.h>
+#include <queue>
+#include <tests/MockFileSystemOperator.h>
+#include <thread>
+#include <vector>
+
 
 namespace
 {
@@ -288,7 +293,7 @@ TEST_CASE("InjectedNvml: Load From YAML File")
         auto origDevice = GetDeviceFrom(params[0].uuid, INJECTION_UUID_KEY);
 
         auto const &removedUuid = params[0].uuid;
-        nvmlReturn_t ret = injectedNvml->RemoveGpu(removedUuid);
+        nvmlReturn_t ret        = injectedNvml->RemoveGpu(removedUuid);
         CHECK(ret == NVML_SUCCESS);
         verifyDeviceHandle(1, 0U);
         verifyDeviceHandle(2, 1U);
@@ -576,6 +581,39 @@ TEST_CASE("InjectedNvml: Device Injection")
     Teardown();
 }
 
+TEST_CASE("Inject function with device handle parameter")
+{
+    auto ret = nvmlInit_v2();
+    REQUIRE(ret == NVML_SUCCESS);
+    std::vector<nvmlDevice_t> devices;
+    GetDevices(devices, 2);
+
+    injectNvmlRet_t injectedRet;
+    injectedRet.nvmlRet                      = NVML_SUCCESS;
+    injectedRet.valueCount                   = 1;
+    injectedRet.values[0].type               = INJECTION_GPUP2PSTATUS;
+    injectedRet.values[0].value.GpuP2PStatus = NVML_P2P_STATUS_OK;
+
+    std::array<injectNvmlVal_t, 2> extraKeys;
+    // Use the GPU index as the parameter for the device handle
+    // The nvmlDeviceInject function will help us translate it to the actual device handle.
+    extraKeys[0].value.Device          = reinterpret_cast<nvmlDevice_t>(1);
+    extraKeys[0].type                  = INJECTION_DEVICE;
+    extraKeys[1].value.GpuP2PCapsIndex = NVML_P2P_CAPS_INDEX_NVLINK;
+    extraKeys[1].type                  = INJECTION_GPUP2PCAPSINDEX;
+
+    ret = nvmlDeviceInject(devices[0], INJECTION_P2PSTATUS_KEY, extraKeys.data(), 2, &injectedRet);
+    REQUIRE(ret == NVML_SUCCESS);
+
+    nvmlGpuP2PStatus_t p2pStatus;
+    ret = nvmlDeviceGetP2PStatus(devices[0], devices[1], NVML_P2P_CAPS_INDEX_NVLINK, &p2pStatus);
+    REQUIRE(ret == NVML_SUCCESS);
+    REQUIRE(p2pStatus == NVML_P2P_STATUS_OK);
+
+    ret = nvmlShutdown();
+    REQUIRE(ret == NVML_SUCCESS);
+}
+
 TEST_CASE("InjectedNvml: GetString with failed NVML return")
 {
     auto *injectedNvml = InjectedNvml::Init();
@@ -693,4 +731,395 @@ TEST_CASE("nvml Error String")
     CHECK(retString == expectedErrString);
 
     nvmlShutdown();
+}
+
+nvmlReturn_t UnbindGpu(nvmlDevice_t device, unsigned int gpuId)
+{
+    InjectionArgument devArg(device);
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    auto [ret, uuid]   = injectedNvml->GetString(devArg, INJECTION_UUID_KEY);
+    if (ret != NVML_SUCCESS)
+    {
+        printf("Failed to get uuid for device\n");
+        return ret;
+    }
+
+    auto fsOp               = std::make_unique<MockFileSystemOperator>();
+    std::string yamlContent = "unbind:\n" + std::format("  - {}", uuid);
+    fsOp->MockFileContent("/run/nvml-injection/sys-event.yaml", yamlContent);
+    fsOp->MockUnlink("/run/nvml-injection/sys-event.yaml", true);
+    injectedNvml->SetFileSystemOp(std::move(fsOp));
+
+    nvmlSystemEventSetCreateRequest_t createRequest;
+    createRequest.version = nvmlSystemEventSetCreateRequest_v1;
+    ret                   = nvmlSystemEventSetCreate(&createRequest);
+    if (ret != NVML_SUCCESS)
+    {
+        printf("Failed to create system event set\n");
+        return ret;
+    }
+
+    nvmlSystemRegisterEventRequest_t registerEvent;
+    registerEvent.version    = nvmlSystemRegisterEventRequest_v1;
+    registerEvent.eventTypes = nvmlSystemEventTypeGpuDriverUnbind;
+    registerEvent.set        = createRequest.set;
+    ret                      = nvmlSystemRegisterEvents(&registerEvent);
+    if (ret != NVML_SUCCESS)
+    {
+        printf("Failed to register event\n");
+        return ret;
+    }
+
+    nvmlSystemEventSetWaitRequest_t request = {};
+    request.version                         = nvmlSystemEventSetWaitRequest_v1;
+    request.timeoutms                       = 1;
+    request.set                             = createRequest.set;
+    std::array<nvmlSystemEventData_v1_t, 2> dataArr;
+    request.dataSize = dataArr.size();
+    request.data     = dataArr.data();
+    ret              = nvmlSystemEventSetWait(&request);
+    if (ret != NVML_SUCCESS)
+    {
+        printf("Failed to wait for event\n");
+        return ret;
+    }
+    if (request.numEvent != 1)
+    {
+        printf("Expected 1 event, got %d\n", request.numEvent);
+        return NVML_ERROR_UNKNOWN;
+    }
+    if (request.data[0].eventType != nvmlSystemEventTypeGpuDriverUnbind)
+    {
+        printf("Expected event type %lld, got %lld\n", nvmlSystemEventTypeGpuDriverUnbind, request.data[0].eventType);
+        return NVML_ERROR_UNKNOWN;
+    }
+    if (request.data[0].gpuId != gpuId)
+    {
+        printf("Expected gpu id %d, got %d\n", gpuId, request.data[0].gpuId);
+        return NVML_ERROR_UNKNOWN;
+    }
+
+    nvmlSystemEventSetFreeRequest_t freeRequest;
+    freeRequest.version = nvmlSystemEventSetFreeRequest_v1;
+    freeRequest.set     = createRequest.set;
+    ret                 = nvmlSystemEventSetFree(&freeRequest);
+    if (ret != NVML_SUCCESS)
+    {
+        printf("Failed to free system event set\n");
+        return ret;
+    }
+    return NVML_SUCCESS;
+}
+
+TEST_CASE("nvml system events")
+{
+    auto ret = nvmlInitWithFlags(NVML_INIT_FLAG_NO_ATTACH);
+    REQUIRE(ret == NVML_SUCCESS);
+    std::vector<nvmlDevice_t> devices;
+    GetDevices(devices, 3);
+
+    SECTION("no registered event")
+    {
+        InjectionArgument devArg(devices[0]);
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        auto [ret, uuid]   = injectedNvml->GetString(devArg, INJECTION_UUID_KEY);
+        REQUIRE(ret == NVML_SUCCESS);
+
+        auto fsOp               = std::make_unique<MockFileSystemOperator>();
+        std::string yamlContent = std::format("unbind:\n  - {}", uuid);
+        fsOp->MockFileContent("/run/nvml-injection/sys-event.yaml", yamlContent);
+        fsOp->MockUnlink("/run/nvml-injection/sys-event.yaml", true);
+        injectedNvml->SetFileSystemOp(std::move(fsOp));
+
+        nvmlSystemEventSetCreateRequest_t createRequest;
+        createRequest.version = nvmlSystemEventSetCreateRequest_v1;
+        ret                   = nvmlSystemEventSetCreate(&createRequest);
+        REQUIRE(ret == NVML_SUCCESS);
+
+        nvmlSystemEventSetWaitRequest_t request = {};
+        request.version                         = nvmlSystemEventSetWaitRequest_v1;
+        request.timeoutms                       = 1;
+        request.set                             = createRequest.set;
+        std::array<nvmlSystemEventData_v1_t, 2> dataArr;
+        request.dataSize = dataArr.size();
+        request.data     = dataArr.data();
+        ret              = nvmlSystemEventSetWait(&request);
+        REQUIRE(ret == NVML_ERROR_TIMEOUT);
+
+        nvmlSystemEventSetFreeRequest_t freeRequest;
+        freeRequest.version = nvmlSystemEventSetFreeRequest_v1;
+        freeRequest.set     = createRequest.set;
+        ret                 = nvmlSystemEventSetFree(&freeRequest);
+        REQUIRE(ret == NVML_SUCCESS);
+    }
+
+    SECTION("unbind event")
+    {
+        auto ret = UnbindGpu(devices[1], 1);
+        REQUIRE(ret == NVML_SUCCESS);
+        nvmlShutdown();
+    }
+
+    SECTION("bind event")
+    {
+        InjectionArgument thirdDevArg(devices[2]);
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        std::string uuid;
+        tie(ret, uuid) = injectedNvml->GetString(thirdDevArg, INJECTION_UUID_KEY);
+        REQUIRE(ret == NVML_SUCCESS);
+
+        // To simulate the scenario where the device has already been unbound.
+        ret = injectedNvml->RemoveGpu(uuid);
+        REQUIRE(ret == NVML_SUCCESS);
+
+        auto fsOp               = std::make_unique<MockFileSystemOperator>();
+        std::string yamlContent = std::format("bind:\n  - {}", uuid);
+        fsOp->MockFileContent("/run/nvml-injection/sys-event.yaml", yamlContent);
+        fsOp->MockUnlink("/run/nvml-injection/sys-event.yaml", true);
+        injectedNvml->SetFileSystemOp(std::move(fsOp));
+
+        nvmlSystemEventSetCreateRequest_t createRequest;
+        createRequest.version = nvmlSystemEventSetCreateRequest_v1;
+        ret                   = nvmlSystemEventSetCreate(&createRequest);
+        REQUIRE(ret == NVML_SUCCESS);
+
+        nvmlSystemRegisterEventRequest_t registerEvent;
+        registerEvent.version    = nvmlSystemRegisterEventRequest_v1;
+        registerEvent.eventTypes = nvmlSystemEventTypeGpuDriverBind;
+        registerEvent.set        = createRequest.set;
+        ret                      = nvmlSystemRegisterEvents(&registerEvent);
+        REQUIRE(ret == NVML_SUCCESS);
+
+        nvmlSystemEventSetWaitRequest_t request = {};
+        request.version                         = nvmlSystemEventSetWaitRequest_v1;
+        request.timeoutms                       = 1;
+        request.set                             = createRequest.set;
+        std::array<nvmlSystemEventData_v1_t, 2> dataArr;
+        request.dataSize = dataArr.size();
+        request.data     = dataArr.data();
+        ret              = nvmlSystemEventSetWait(&request);
+        REQUIRE(ret == NVML_SUCCESS);
+        REQUIRE(request.numEvent == 1);
+        REQUIRE(request.data[0].eventType == nvmlSystemEventTypeGpuDriverBind);
+        REQUIRE(request.data[0].gpuId == UINT32_MAX);
+
+        nvmlSystemEventSetFreeRequest_t freeRequest;
+        freeRequest.version = nvmlSystemEventSetFreeRequest_v1;
+        freeRequest.set     = createRequest.set;
+        ret                 = nvmlSystemEventSetFree(&freeRequest);
+        REQUIRE(ret == NVML_SUCCESS);
+
+        nvmlShutdown();
+    }
+}
+
+TEST_CASE("nvml system events with existing attahed driver")
+{
+    constexpr unsigned int devCount = 3;
+    std::vector<nvmlDevice_t> devices;
+    std::atomic<bool> stopFlag = false;
+    std::mutex mtxSysEventThread;
+    std::condition_variable cvSysEventThread;
+    std::queue<std::pair<std::promise<int>, std::string>> sysEventControlQueue;
+
+    std::mutex mtxCacheMgrThreadToSysEvThread;
+    std::condition_variable cvCacheMgrThreadToSysEvThread;
+    std::queue<std::pair<std::promise<int>, std::string>> cacheMgrControlQueue;
+
+    std::atomic<bool> sysEventThreadTimeout = false;
+    std::atomic<bool> cacheMgrThreadTimeout = false;
+
+    std::jthread sysEventThread([&]() {
+        auto startTime = std::chrono::steady_clock::now();
+        auto timeout   = std::chrono::seconds(1);
+
+        std::unique_lock lock(mtxSysEventThread);
+        while (!stopFlag)
+        {
+            cvSysEventThread.wait_for(
+                lock, std::chrono::milliseconds(16), [&]() { return !sysEventControlQueue.empty() || stopFlag; });
+            if (std::chrono::steady_clock::now() - startTime > timeout)
+            {
+                sysEventThreadTimeout = true;
+                break;
+            }
+            if (sysEventControlQueue.empty() || stopFlag)
+            {
+                continue;
+            }
+            auto [promise, task] = std::move(sysEventControlQueue.front());
+            sysEventControlQueue.pop();
+            lock.unlock();
+            printf("sysEventThread task: %s\n", task.c_str());
+            if (task == "nvmlInitWithFlags")
+            {
+                auto ret = nvmlInitWithFlags(NVML_INIT_FLAG_NO_ATTACH);
+                if (ret == NVML_SUCCESS)
+                {
+                    GetDevices(devices, 3);
+                }
+                promise.set_value(ret);
+            }
+            else if (task == "unbind_1_gpu")
+            {
+                auto ret = UnbindGpu(devices[1], 1);
+                promise.set_value(ret);
+            }
+            else if (task == "nvmlShutdown")
+            {
+                auto ret = nvmlShutdown();
+                promise.set_value(ret);
+            }
+            lock.lock();
+        }
+    });
+    auto despatchSysEventTask = [&](std::string task) {
+        std::unique_lock lock(mtxSysEventThread);
+        auto promise = std::promise<int>();
+        auto future  = promise.get_future();
+        sysEventControlQueue.emplace(std::move(promise), task);
+        lock.unlock();
+        cvSysEventThread.notify_one();
+        return future;
+    };
+
+    std::jthread cacheMgrThread([&]() {
+        auto startTime = std::chrono::steady_clock::now();
+        auto timeout   = std::chrono::seconds(1);
+
+        std::unique_lock lock(mtxCacheMgrThreadToSysEvThread);
+        while (!stopFlag)
+        {
+            cvCacheMgrThreadToSysEvThread.wait_for(
+                lock, std::chrono::milliseconds(16), [&]() { return !cacheMgrControlQueue.empty() || stopFlag; });
+            if (std::chrono::steady_clock::now() - startTime > timeout)
+            {
+                cacheMgrThreadTimeout = true;
+                break;
+            }
+            if (cacheMgrControlQueue.empty() || stopFlag)
+            {
+                continue;
+            }
+            auto [promise, task] = std::move(cacheMgrControlQueue.front());
+            cacheMgrControlQueue.pop();
+            lock.unlock();
+            printf("cacheMgrThread task: %s\n", task.c_str());
+            if (task == "nvmlInit_v2")
+            {
+                auto ret = nvmlInit_v2();
+                promise.set_value(ret);
+            }
+            else if (task == "nvmlDeviceGetCount_v2")
+            {
+                unsigned int count = 0;
+                auto ret           = nvmlDeviceGetCount_v2(&count);
+                if (ret != NVML_SUCCESS)
+                {
+                    promise.set_value(-NVML_SUCCESS);
+                }
+                else
+                {
+                    promise.set_value(count);
+                }
+            }
+            else if (task == "nvmlShutdown")
+            {
+                auto ret = nvmlShutdown();
+                promise.set_value(ret);
+            }
+            lock.lock();
+        }
+    });
+    auto despatchCacheMgrTask = [&](std::string task) {
+        std::unique_lock lock(mtxCacheMgrThreadToSysEvThread);
+        auto promise = std::promise<int>();
+        auto future  = promise.get_future();
+        cacheMgrControlQueue.emplace(std::move(promise), task);
+        lock.unlock();
+        cvCacheMgrThreadToSysEvThread.notify_one();
+        return future;
+    };
+
+    auto sysEventFuture = despatchSysEventTask("nvmlInitWithFlags");
+    sysEventFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(sysEventFuture.valid());
+    REQUIRE(sysEventFuture.get() == NVML_SUCCESS);
+
+    auto cacheMgrFuture = despatchCacheMgrTask("nvmlInit_v2");
+    cacheMgrFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(cacheMgrFuture.valid());
+    REQUIRE(cacheMgrFuture.get() == NVML_SUCCESS);
+
+    auto countFuture = despatchCacheMgrTask("nvmlDeviceGetCount_v2");
+    countFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(countFuture.valid());
+    REQUIRE(countFuture.get() == devCount);
+
+    auto unbindFuture = despatchSysEventTask("unbind_1_gpu");
+    unbindFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(unbindFuture.valid());
+    REQUIRE(unbindFuture.get() == NVML_SUCCESS);
+
+    // Before re-init, the count should be the same as before unbind.
+    countFuture = despatchCacheMgrTask("nvmlDeviceGetCount_v2");
+    countFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(countFuture.valid());
+    REQUIRE(countFuture.get() == devCount);
+
+    // Before re-init, the new nvmlInit_v2 should fail.
+    cacheMgrFuture = despatchCacheMgrTask("nvmlInit_v2");
+    cacheMgrFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(cacheMgrFuture.valid());
+    REQUIRE(cacheMgrFuture.get() == NVML_ERROR_NOT_READY);
+
+    auto shutdownFuture = despatchCacheMgrTask("nvmlShutdown");
+    shutdownFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(shutdownFuture.valid());
+    REQUIRE(shutdownFuture.get() == NVML_SUCCESS);
+
+    cacheMgrFuture = despatchCacheMgrTask("nvmlInit_v2");
+    cacheMgrFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(cacheMgrFuture.valid());
+    REQUIRE(cacheMgrFuture.get() == NVML_SUCCESS);
+
+    // After re-init, the count will decrease by 1.
+    countFuture = despatchCacheMgrTask("nvmlDeviceGetCount_v2");
+    countFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(countFuture.valid());
+    REQUIRE(countFuture.get() == devCount - 1);
+
+    injectNvmlFuncCallCounts_t funcCallCounts = {};
+    REQUIRE(nvmlGetFuncCallCount(&funcCallCounts) == NVML_SUCCESS);
+    REQUIRE(funcCallCounts.numFuncs == 7);
+    std::unordered_map<std::string, uint64_t> expectedFuncs = { { "nvmlInit_v2", 2 }, // Failing is not counted.
+                                                                { "nvmlInitWithFlags", 1 },
+                                                                { "nvmlDeviceGetCount_v2", 3 },
+                                                                { "nvmlSystemEventSetCreate", 1 },
+                                                                { "nvmlSystemRegisterEvents", 1 },
+                                                                { "nvmlSystemEventSetWait", 1 },
+                                                                { "nvmlSystemEventSetFree", 1 } };
+    for (unsigned int index = 0; index < funcCallCounts.numFuncs; index++)
+    {
+        auto mapIt = expectedFuncs.find(funcCallCounts.funcCallInfo[index].funcName);
+        REQUIRE(mapIt != expectedFuncs.end());
+        REQUIRE(funcCallCounts.funcCallInfo[index].funcCallCount == mapIt->second);
+    }
+
+    shutdownFuture = despatchCacheMgrTask("nvmlShutdown");
+    shutdownFuture.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(shutdownFuture.valid());
+    REQUIRE(shutdownFuture.get() == NVML_SUCCESS);
+
+    auto shutdownFutureForSysEvent = despatchSysEventTask("nvmlShutdown");
+    shutdownFutureForSysEvent.wait_for(std::chrono::milliseconds(64));
+    REQUIRE(shutdownFutureForSysEvent.valid());
+    REQUIRE(shutdownFutureForSysEvent.get() == NVML_SUCCESS);
+
+    stopFlag = true;
+    cvCacheMgrThreadToSysEvThread.notify_all();
+    cvSysEventThread.notify_all();
+
+    REQUIRE(!cacheMgrThreadTimeout);
+    REQUIRE(!sysEventThreadTimeout);
 }

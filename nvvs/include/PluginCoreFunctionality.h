@@ -23,6 +23,8 @@
 #include <dcgm_structs.h>
 #include <timelib.h>
 
+class HangDetectMonitor;
+
 class PluginCoreFunctionality
 {
 public:
@@ -77,8 +79,21 @@ public:
      */
     void SetRecorderIgnoreErrorCodes(gpuIgnoreErrorCodeMap_t const &map);
 
+    /********************************************************************/
+    /*
+     * Gets the hang detect monitor to be forwarded to the DcgmRecorder
+     */
+    HangDetectMonitor *GetHangDetectMonitor() const;
+
+    /********************************************************************/
+    /*
+     * Sets the hang detect monitor to be forwarded to the DcgmRecorder
+     */
+    void SetHangDetectMonitor(HangDetectMonitor *monitor);
+
 private:
     DcgmRecorder m_dcgmRecorder;
+    HangDetectMonitor *m_hangDetectMonitor = nullptr;
     std::vector<dcgmDiagPluginEntityInfo_v1> m_entityInfos;
     bool m_initialized;
     std::vector<DcgmError> m_fatalErrors;

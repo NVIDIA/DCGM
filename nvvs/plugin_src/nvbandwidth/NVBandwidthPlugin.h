@@ -68,19 +68,7 @@ private:
      */
     void Cleanup();
 
-    /*************************************************************************/
-    /*
-     * Confirm the location of the NVBandwidth binary
-     */
-    std::optional<std::string> FindExecutable();
-
     bool LaunchExecutable(std::string const &testName, std::vector<std::string> const &execArgv);
-
-    /*************************************************************************/
-    /*
-     * Gets the CUDA driver version from DCGM and saves the major version in m_cudaDriverMajorVersion.
-     */
-    void SetCudaDriverMajorVersion();
 
     std::string GetNvBandwidthTestName() const;
 
@@ -93,6 +81,7 @@ private:
     dcgmHandle_t m_handle { 0 };
     bool m_dcgmRecorderInitialized { false };                  /* Has DcgmRecorder been initialized? */
     unsigned int m_cudaDriverMajorVersion;                     /* Cuda driver major version */
+    unsigned int m_cudaDriverMinorVersion { 0 };               /* Cuda driver minor version */
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo; // The information about each GPU
     std::string m_nvbandwidthDir;
     std::string m_originalCudaVisibleDevices; // Store the original CUDA_VISIBLE_DEVICES value

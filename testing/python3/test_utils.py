@@ -1351,6 +1351,7 @@ def run_with_additional_fatal_kmsg_xid(xid):
             TEST_DCGM_FATAL_XIDS = '__DCGM_FATAL_XIDS__'
             os.environ[TEST_DCGM_FATAL_XIDS] = xid
             try:
+                kwds['xid'] = xid
                 fn(*args, **kwds)
             finally:
                 del os.environ[TEST_KMSG_XID_ENV]
@@ -1360,14 +1361,13 @@ def run_with_additional_fatal_kmsg_xid(xid):
     return decorator
 
 NVML_YAML_FILE = 'NVML_YAML_FILE'
-def run_with_current_system_injection_nvml():
+def run_with_current_system_injection_nvml(skuFileName):
     """
     Have DCGM load injection NVML based on the current system's GPUs
     """
     def decorator(fn):
         @wraps(fn)
         def wrapper(*args, **kwds):
-            skuFileName = "current_system.yaml"
             skuFilePath = os.path.join(logger.default_log_dir, skuFileName)
             if not try_capture_nvml_env(skuFilePath):
                 skip_test(f"Skip test since we failed to capture nvml env.")
@@ -2425,25 +2425,6 @@ def get_device_names(gpu_ids, handle=None):
         attributes = dcgm_system.discovery.GetGpuAttributes(gpuId)
         yield (str(attributes.identifiers.deviceName).lower(), gpuId)
 
-def get_system_cpu_ids():
-    coreSiblingsSet = set()
-    coreSiblingsPaths = glob.iglob("/sys/devices/system/cpu/cpu*/topology/core_siblings")
-    for coreSiblingsPath in coreSiblingsPaths:
-        try:
-            with open(coreSiblingsPath) as f:
-                coreSiblings = f.read()
-                coreSiblingsSet.add(coreSiblings)
-        except Exception as e:
-            raise RuntimeError(f"failed to read file, err: [{e}]")
-
-    if len(coreSiblingsSet) == 0:
-        raise RuntimeError("No CPU found?")
-
-    cpuIds = []
-    for i in range(len(coreSiblingsSet)):
-        cpuIds.append(i)
-    return cpuIds
-
 def skip_denylisted_gpus(denylist=None):
     """
     This decorator gets gpuIds list and excludes GPUs which names are on the denylist
@@ -3236,7 +3217,7 @@ def with_amortized_exception_decorators(test_data_obj, ex, functions, do_unwrap,
             test_data_obj.addName(function_name)
             test_data_obj.addStartTime()
 
-            if ex == None:
+            if ex is None:
                 test_data_obj.addTestStatus('PASSED')
                 test_data_obj.addMessage(str(ex))
             elif type(ex).__name__ == "AssertionError":
@@ -3252,7 +3233,7 @@ def with_amortized_exception_decorators(test_data_obj, ex, functions, do_unwrap,
             test_data_obj.addEndTime()
             test_data_obj.saveMapToJson()
 
-            if ex != None:
+            if ex is not None:
                 raise ex
 
 
@@ -3423,3 +3404,80 @@ def get_dcgm_version():
             dcgm_version = kv.split(":", 1)[1]
             break
     return dcgm_version
+
+def with_gpu_filter(filter_func):
+    """
+    Decorator that filters GPU IDs based on a provided filter function.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            handle = kwargs.get('handle')
+            gpuIds = kwargs.get('gpuIds')
+
+            if not handle:
+                skip_test("Can't filter GPUs without a valid handle to DCGM, skipping test.")
+            if not gpuIds:
+                skip_test("Can't filter GPUs without a GPU list, skipping test.")
+
+            filtered_gpuIds = filter_func(handle, gpuIds)
+            if not filtered_gpuIds:
+                skip_test("No GPUs match the filter criteria, skipping test.")
+
+            kwargs['gpuIds'] = filtered_gpuIds
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def include_all(handle, gpuIds):
+    """
+    Filter function that returns all GPUs unchanged. Effectively a no-op filter.
+    """
+    return gpuIds
+
+def gpm_gpus(handle, gpuIds):
+    """
+    Filter function that returns only GPUs that support GPM.
+    """
+    return [gpuId for gpuId in gpuIds if gpu_supports_gpm(handle, gpuId)]
+
+def non_gpm_gpus(handle, gpuIds):
+    """
+    Filter function that returns only GPUs that do NOT support GPM.
+    """
+    return [gpuId for gpuId in gpuIds if not gpu_supports_gpm(handle, gpuId)]
+
+def run_only_with_minimum_gpu_architecture(min_architecture):
+    """
+    Run only if the GPU architecture is at least the specified minimum.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' not in kwds:
+                skip_test("Can't check GPU architecture without a valid handle to DCGM, skipping test.")
+            if 'gpuIds' not in kwds:
+                skip_test("Can't check GPU architecture without a GPU list, skipping test.")
+
+            handle = kwds['handle']
+            gpuIds = kwds['gpuIds']
+
+            # Check the first GPU's architecture
+            gpuId = gpuIds[0]
+            chip_architecture = dcgm_agent.dcgmGetGpuChipArchitecture(handle, gpuId)
+
+            if chip_architecture < min_architecture:
+                architecture_name = "unknown"
+                if min_architecture == dcgm_structs.DCGM_CHIP_ARCH_BLACKWELL:
+                    architecture_name = "Blackwell"
+                elif min_architecture == dcgm_structs.DCGM_CHIP_ARCH_HOPPER:
+                    architecture_name = "Hopper"
+                elif min_architecture == dcgm_structs.DCGM_CHIP_ARCH_ADA:
+                    architecture_name = "Ada"
+                elif min_architecture == dcgm_structs.DCGM_CHIP_ARCH_AMPERE:
+                    architecture_name = "Ampere"
+
+                skip_test(f"This test requires {architecture_name} (code: {min_architecture}) or later GPU architecture, but got {chip_architecture} (code: {chip_architecture})")
+            fn(*args, **kwds)
+        return wrapper
+    return decorator

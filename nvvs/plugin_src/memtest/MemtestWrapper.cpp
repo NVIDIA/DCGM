@@ -13,10 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "DcgmStringHelpers.h"
-#include "dcgm_fields.h"
-#include "memtest_wrapper.h"
 
+#include "memtest_wrapper.h"
+#include <DcgmStringHelpers.h>
+#include <dcgm_fields.h>
+
+#include <DcgmLogging.h>
+#include <PluginCommon.h>
 #include <PluginInterface.h>
 #include <PluginLib.h>
 #include <PluginStrings.h>
@@ -32,17 +35,29 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
 {
     // TODO: Add a version check
     // parameterNames must be null terminated
-    const char *parameterNames[]
-        = { MEMTEST_STR_IS_ALLOWED, MEMTEST_STR_TEST_DURATION, MEMTEST_STR_PATTERN, MEMTEST_STR_USE_MAPPED_MEM,
-            MEMTEST_STR_TEST0,      MEMTEST_STR_TEST1,         MEMTEST_STR_TEST2,   MEMTEST_STR_TEST3,
-            MEMTEST_STR_TEST4,      MEMTEST_STR_TEST5,         MEMTEST_STR_TEST6,   MEMTEST_STR_TEST7,
-            MEMTEST_STR_TEST8,      MEMTEST_STR_TEST9,         MEMTEST_STR_TEST10,  nullptr };
-    char const *description = "This plugin will test the memory health of a given GPU.";
+    const char *parameterNames[] = { MEMTEST_STR_IS_ALLOWED,
+                                     MEMTEST_STR_TEST_DURATION,
+                                     MEMTEST_STR_PATTERN,
+                                     MEMTEST_STR_USE_MAPPED_MEM,
+                                     MEMTEST_STR_TEST0,
+                                     MEMTEST_STR_TEST1,
+                                     MEMTEST_STR_TEST2,
+                                     MEMTEST_STR_TEST3,
+                                     MEMTEST_STR_TEST4,
+                                     MEMTEST_STR_TEST5,
+                                     MEMTEST_STR_TEST6,
+                                     MEMTEST_STR_TEST7,
+                                     MEMTEST_STR_TEST8,
+                                     MEMTEST_STR_TEST9,
+                                     MEMTEST_STR_TEST10,
+                                     MEMTEST_STR_NUM_CHUNKS,
+                                     nullptr };
+    char const *description      = "This plugin will test the memory health of a given GPU.";
     const dcgmPluginValue_t paramTypes[]
-        = { DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamString, DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,   DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,   DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,   DcgmPluginParamNone };
+        = { DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamString, DcgmPluginParamBool, DcgmPluginParamBool,
+            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,   DcgmPluginParamBool, DcgmPluginParamBool,
+            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,   DcgmPluginParamBool, DcgmPluginParamBool,
+            DcgmPluginParamInt,  DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 
@@ -72,12 +87,14 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               void **userData,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
-                              dcgmDiagPluginAttr_v1 const *pluginAttr)
+                              dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              HangDetectMonitor *monitor)
 {
     MemtestPlugin *memtestp = new MemtestPlugin(handle);
     *userData               = memtestp;
 
     memtestp->SetPluginAttr(pluginAttr);
+    memtestp->SetHangDetectMonitor(monitor);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, memtestp->GetDisplayName());
     return DCGM_ST_OK;
 }

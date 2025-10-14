@@ -25,6 +25,7 @@ import dcgm_structs
 import dcgm_agent_internal
 import option_parser
 import utils
+import subprocess
 import test_utils
 
 log_dir = None
@@ -38,6 +39,7 @@ log_archive_filename = "all_results.zip"
 dcgm_trace_log_filename = None
 nvml_trace_log_filename = None
 nvvs_trace_log_filename = None
+dmesg_log_filename = None
 _indent_lvl = 0
 _coloring_enabled = True #coloring is applied even there is no file descriptor connected to tty like device
 _message_levels = (FATAL, ERROR, INFO, WARNING, DEBUG) = list(range(5))
@@ -132,6 +134,7 @@ def setup_environment():
     global nvvs_trace_log_filename
     global have_recreated_log_dir
     global logging_level_num
+    global dmesg_log_filename
     curr_log_dir = None
 
     # Users can specify a non-default logging base path via the command line
@@ -144,6 +147,7 @@ def setup_environment():
 
     dcgm_trace_log_filename = os.path.join(log_dir, "dcgm_trace.log")
     nvml_trace_log_filename = os.path.join(log_dir, "nvml_trace.log")
+    dmesg_log_filename = os.path.join(log_dir, "dmesg.log")
 
     #We clean up the log dir from previous runs once per test run in order to prevent the constant accumulation of logs
     if not have_recreated_log_dir:
@@ -229,6 +233,39 @@ def setup_environment():
             os.remove(log_archive_filename)
         except IOError:
             pass
+
+def capture_dmesg():
+    if not utils.is_root():
+        warning("Skipping capture of dmesg output because not running as root")
+        return
+    # setup_environment() that sets the dmesg_log_filename should have been called before
+    # this function is called
+    if not dmesg_log_filename:
+        warning("Dmesg log filename not set. Skipping capture of dmesg output.")
+        return
+
+    try:
+        dmesg_proc = subprocess.run(
+            ["dmesg", "-T"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            check=True,
+            timeout=10
+        )
+    except FileNotFoundError:
+        warning("'dmesg' command not found – skipping kernel log capture")
+        return
+    except subprocess.TimeoutExpired:
+        error("Timed out while capturing dmesg output")
+        return
+    except subprocess.CalledProcessError as e:
+        error(f"Failed to capture dmesg output (rc={e.returncode}): {e.stderr}")
+        return
+
+    with open(dmesg_log_filename, "w") as f:
+        f.write(dmesg_proc.stdout)
+    info("Dmesg output captured to %s" % dmesg_log_filename)
 
 def close():
     """

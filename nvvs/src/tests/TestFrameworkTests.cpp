@@ -13,16 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "DcgmStringHelpers.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs.h"
+#include <TestFramework.h>
+
 #include <catch2/catch_all.hpp>
 #include <cstring>
 #include <sys/stat.h>
 
-#include <TestFramework.h>
-
-class WrapperTestFramework : protected TestFramework
+class WrapperTestFramework : public TestFramework
 {
 public:
     WrapperTestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySet);

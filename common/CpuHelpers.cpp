@@ -45,84 +45,124 @@ std::string_view CpuHelpers::GetGraceModelName()
 
 bool CpuHelpers::SupportNonNvidiaCpu()
 {
-    char const *envVar = "DCGM_SUPPORT_NON_NVIDIA_CPU";
-    return !!getenv(envVar);
+    // Check both env vars to support old behavior
+    char const *envVar     = "DCGM_SUPPORT_NON_NVIDIA_CPU";
+    char const *skipEnvVar = "DCGM_SKIP_SYSMON_HARDWARE_CHECK";
+    return !!getenv(envVar) || !!getenv(skipEnvVar);
 }
 
-void CpuHelpers::ReadCpuVendorAndModel(std::string_view vendorPath)
+void CpuHelpers::FillVendorAndModelIfNvidiaCpuPresent()
 {
-    /* We expect to see "jep106:036b:0241" in the file:
-     * jep106 specifies the standard
-     * 036b is the manufacturer's identification code for Nvidia
-     * 0241 signifies the chip that has Grace CPUs on it.
-     */
-    static std::string_view const sGraceChipId           = "0241";
-    static std::string_view const sNvidiaManufacturersId = "036b";
-
-    m_cpuVendor = "Unknown";
-    m_cpuModel  = "Unknown";
-
-    auto contents = m_fileSystemOp->Read(vendorPath);
-    if (!contents.has_value())
+    auto pathsOpt = m_fileSystemOp->Glob(CPU_VENDOR_MODEL_GLOB_PATH);
+    if (!pathsOpt.has_value())
     {
-        log_debug("fail to read file content of path: {}", vendorPath);
+        log_debug("failed to glob on pattern [{}].", CPU_VENDOR_MODEL_GLOB_PATH);
         return;
     }
 
-    auto tokens = DcgmNs::Split(*contents, ':');
-    if (tokens.size() == 3)
+    for (auto const &path : *pathsOpt)
     {
-        if (tokens[1] == sNvidiaManufacturersId)
+        /* We expect to see "jep106:036b:0241" in the file:
+         * jep106 specifies the standard
+         * 036b is the manufacturer's identification code for Nvidia
+         * 0241 signifies the chip that has Grace CPUs on it.
+         */
+        static std::string_view const sGraceChipId           = "0241";
+        static std::string_view const sNvidiaManufacturersId = "036b";
+
+        m_cpuVendor = "Unknown";
+        m_cpuModel  = "Unknown";
+
+        auto contents = m_fileSystemOp->Read(path);
+        if (!contents.has_value())
         {
-            m_cpuVendor = GetNvidiaVendorName();
-            if (tokens[2] == sGraceChipId)
+            log_debug("fail to read file content of path: {}", path);
+            continue;
+        }
+
+        auto tokens = DcgmNs::Split(*contents, ':');
+        if (tokens.size() == 3)
+        {
+            if (tokens[1] == sNvidiaManufacturersId)
             {
-                m_cpuModel = GetGraceModelName();
+                m_cpuVendor = GetNvidiaVendorName();
+                if (DcgmNs::Trim(std::string(tokens[2])) == sGraceChipId)
+                {
+                    m_cpuModel = GetGraceModelName();
+                }
+                else
+                {
+                    log_debug("Non-Grace chip ID '{}' found", tokens[2]);
+                }
+                break;
             }
             else
             {
-                log_debug("Non-Grace chip ID '{}' found", tokens[2]);
+                log_debug("Non-Nvidia manufacturer '{}' found", tokens[1]);
+                continue;
             }
         }
-        else
+
+        log_debug("Couldn't parse soc_id '{}'", *contents);
+        continue;
+    }
+}
+
+std::optional<std::tuple<unsigned int, unsigned int>> CpuHelpers::GetFirstLastSystemNodes() const
+{
+    auto contentOpt = m_fileSystemOp->Read(CPU_NODE_RANGE_PATH);
+    if (!contentOpt)
+    {
+        log_error("failed to read on path [{}].", CPU_NODE_RANGE_PATH);
+        return std::nullopt;
+    }
+    auto firstLastNode = DcgmNs::Split(*contentOpt, '-');
+
+    if (firstLastNode.size() == 2)
+    {
+        try
         {
-            log_debug("Non-Nvidia manufacturer '{}' found", tokens[1]);
+            unsigned int firstNode = std::stoul(std::string(firstLastNode[0]));
+            unsigned int lastNode  = std::stoul(std::string(firstLastNode[1]));
+            return std::make_tuple(firstNode, lastNode);
+        }
+        catch (std::exception &e)
+        {
+            log_error("Could not enumerate NODEs, node range: {}, with error: {}", *contentOpt, e.what());
+            return std::nullopt;
+        }
+    }
+    else if (firstLastNode.size() == 1)
+    {
+        try
+        {
+            unsigned int node = std::stoul(std::string(*contentOpt));
+            return std::make_tuple(node, node);
+        }
+        catch (std::exception &e)
+        {
+            log_error("Could not enumerate NODEs, node range: {}, with error: {}", *contentOpt, e.what());
+            return std::nullopt;
         }
     }
     else
     {
-        log_error("Couldn't parse soc_id '{}'", *contents);
+        log_error("Could not enumerate NODEs, node range: {}", *contentOpt);
+        return std::nullopt;
     }
-}
-
-unsigned int CpuHelpers::GetPhysicalCpusNum() const
-{
-    auto pathsOpt = m_fileSystemOp->Glob(CPU_CORE_SLIBLINGS_GLOB_PATTERN);
-    if (!pathsOpt.has_value())
-    {
-        log_error("failed to glob on pattern [{}].", CPU_CORE_SLIBLINGS_GLOB_PATTERN);
-        return 0;
-    }
-
-    std::unordered_set<std::string> coreSiblings;
-    for (auto const &path : *pathsOpt)
-    {
-        auto contentOpt = m_fileSystemOp->Read(path);
-        if (!contentOpt)
-        {
-            log_error("failed to read on path [{}].", path);
-            return 0;
-        }
-        coreSiblings.insert(*contentOpt);
-    }
-    return coreSiblings.size();
 }
 
 void CpuHelpers::ReadPhysicalCpuIds()
 {
-    auto physicalCpusNum = GetPhysicalCpusNum();
-    m_cpuIds.reserve(physicalCpusNum);
-    for (unsigned int i = 0; i < physicalCpusNum; ++i)
+    auto nodesRangeOpt = GetFirstLastSystemNodes();
+    if (!nodesRangeOpt)
+    {
+        log_error("failed to get nodes range.");
+        return;
+    }
+    auto [firstNode, lastNode] = *nodesRangeOpt;
+    m_cpuIds.reserve(lastNode - firstNode + 1);
+    for (unsigned int i = firstNode; i <= lastNode; ++i)
     {
         m_cpuIds.push_back(i);
     }
@@ -130,7 +170,7 @@ void CpuHelpers::ReadPhysicalCpuIds()
 
 void CpuHelpers::Init()
 {
-    ReadCpuVendorAndModel(CPU_VENDOR_MODEL_PATH);
+    FillVendorAndModelIfNvidiaCpuPresent();
     if (GetVendor() == GetNvidiaVendorName() || SupportNonNvidiaCpu())
     {
         ReadPhysicalCpuIds();

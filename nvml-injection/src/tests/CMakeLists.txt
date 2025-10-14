@@ -47,6 +47,8 @@ target_link_libraries(nvmlicoretests
         ${YAML_STATIC_LIBS}
         nvmli_interface
         sdk_nvml_interface
+        dcgm_common
+        common_interface
         rt
         dl
         sdk_nvml_essentials_objects

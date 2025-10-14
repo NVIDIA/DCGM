@@ -1842,6 +1842,41 @@ dcgmReturn_t helperVgpuConfigEnforce(dcgmHandle_t /* pDcgmHandle */,
 }
 
 /*****************************************************************************/
+static dcgmReturn_t tsapiConfigSetWorkloadPowerProfile(dcgmHandle_t pDcgmHandle,
+                                                       dcgmWorkloadPowerProfile_t *pWorkloadPowerProfile)
+{
+    if (!pWorkloadPowerProfile)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (pWorkloadPowerProfile->version != dcgmWorkloadPowerProfile_version1)
+    {
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    dcgm_config_msg_set_workload_power_profile_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdConfig;
+    msg.header.subCommand = DCGM_CONFIG_SR_SET_WORKLOAD_POWER_PROFILE;
+    msg.header.version    = dcgm_config_msg_set_workload_power_profile_version;
+
+    memcpy(&msg.workloadPowerProfile, pWorkloadPowerProfile, sizeof(msg.workloadPowerProfile));
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        log_debug("dcgmModuleSendBlockingFixedRequest returned {}", (int)ret);
+        return ret;
+    }
+
+    return ret;
+}
+
+/*****************************************************************************/
 static dcgmReturn_t tsapiInjectEntityFieldValue(dcgmHandle_t pDcgmHandle,
                                                 dcgm_field_entity_group_t entityGroupId,
                                                 dcgm_field_eid_t entityId,
@@ -6216,6 +6251,62 @@ dcgmReturn_t tsapiDcgmModuleIdToName(dcgmModuleId_t id, char const **name)
     }
 
     *name = it->second;
+    return DCGM_ST_OK;
+}
+
+#define DCGM_POWER_PROFILE_MAX_P_NAME         "POWER_PROFILE_MAX_P"
+#define DCGM_POWER_PROFILE_MAX_Q_NAME         "POWER_PROFILE_MAX_Q"
+#define DCGM_POWER_PROFILE_COMPUTE_NAME       "POWER_PROFILE_COMPUTE"
+#define DCGM_POWER_PROFILE_MEMORY_BOUND_NAME  "POWER_PROFILE_MEMORY_BOUND"
+#define DCGM_POWER_PROFILE_NETWORK_NAME       "POWER_PROFILE_NETWORK"
+#define DCGM_POWER_PROFILE_BALANCED_NAME      "POWER_PROFILE_BALANCED"
+#define DCGM_POWER_PROFILE_LLM_INFERENCE_NAME "POWER_PROFILE_LLM_INFERENCE"
+#define DCGM_POWER_PROFILE_LLM_TRAINING_NAME  "POWER_PROFILE_LLM_TRAINING"
+#define DCGM_POWER_PROFILE_RBM_NAME           "POWER_PROFILE_RBM"
+#define DCGM_POWER_PROFILE_DCPCIE_NAME        "POWER_PROFILE_DCPCIE"
+#define DCGM_POWER_PROFILE_HMMA_SPARSE_NAME   "POWER_PROFILE_HMMA_SPARSE"
+#define DCGM_POWER_PROFILE_HMMA_DENSE_NAME    "POWER_PROFILE_HMMA_DENSE"
+#define DCGM_POWER_PROFILE_SYNC_BALANCED_NAME "POWER_PROFILE_SYNC_BALANCED"
+#define DCGM_POWER_PROFILE_HPC_NAME           "POWER_PROFILE_HPC"
+#define DCGM_POWER_PROFILE_MIG_NAME           "POWER_PROFILE_MIG"
+
+dcgmReturn_t tsapiPowerProfileIdToName(dcgmPowerProfileType_t id, char const **name)
+{
+    if (name == nullptr)
+    {
+        DCGM_LOG_ERROR << "Bad parameter: null name pointer.";
+        return DCGM_ST_BADPARAM;
+    }
+
+    static const std::unordered_map<dcgmPowerProfileType_t, char const *> powerProfileNames
+        = { { DCGM_POWER_PROFILE_MAX_P, DCGM_POWER_PROFILE_MAX_P_NAME },
+            { DCGM_POWER_PROFILE_MAX_Q, DCGM_POWER_PROFILE_MAX_Q_NAME },
+            { DCGM_POWER_PROFILE_COMPUTE, DCGM_POWER_PROFILE_COMPUTE_NAME },
+            { DCGM_POWER_PROFILE_MEMORY_BOUND, DCGM_POWER_PROFILE_MEMORY_BOUND_NAME },
+            { DCGM_POWER_PROFILE_NETWORK, DCGM_POWER_PROFILE_NETWORK_NAME },
+            { DCGM_POWER_PROFILE_BALANCED, DCGM_POWER_PROFILE_BALANCED_NAME },
+            { DCGM_POWER_PROFILE_LLM_INFERENCE, DCGM_POWER_PROFILE_LLM_INFERENCE_NAME },
+            { DCGM_POWER_PROFILE_LLM_TRAINING, DCGM_POWER_PROFILE_LLM_TRAINING_NAME },
+            { DCGM_POWER_PROFILE_RBM, DCGM_POWER_PROFILE_RBM_NAME },
+            { DCGM_POWER_PROFILE_DCPCIE, DCGM_POWER_PROFILE_DCPCIE_NAME },
+            { DCGM_POWER_PROFILE_HMMA_SPARSE, DCGM_POWER_PROFILE_HMMA_SPARSE_NAME },
+            { DCGM_POWER_PROFILE_HMMA_DENSE, DCGM_POWER_PROFILE_HMMA_DENSE_NAME },
+            { DCGM_POWER_PROFILE_SYNC_BALANCED, DCGM_POWER_PROFILE_SYNC_BALANCED_NAME },
+            { DCGM_POWER_PROFILE_HPC, DCGM_POWER_PROFILE_HPC_NAME },
+            { DCGM_POWER_PROFILE_MIG, DCGM_POWER_PROFILE_MIG_NAME } };
+
+    assert(powerProfileNames.size() == DCGM_POWER_PROFILE_MAX);
+
+    auto const it = powerProfileNames.find(id);
+
+    if (it == powerProfileNames.end())
+    {
+        DCGM_LOG_ERROR << "Bad parameter: Out of range Power Profile ID.";
+        return DCGM_ST_BADPARAM;
+    }
+
+    *name = it->second;
+
     return DCGM_ST_OK;
 }
 

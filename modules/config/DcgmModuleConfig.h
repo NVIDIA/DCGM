@@ -54,6 +54,7 @@ private:
     dcgmReturn_t ProcessSetConfig(dcgm_config_msg_set_v1 *msg);
     dcgmReturn_t ProcessEnforceConfigGroup(dcgm_config_msg_enforce_group_v1 *msg);
     dcgmReturn_t ProcessEnforceConfigGpu(dcgm_config_msg_enforce_gpu_v1 *msg);
+    dcgmReturn_t ProcessSetWorkloadPowerProfile(dcgm_config_msg_set_workload_power_profile_v1 *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
 
     /*************************************************************************/

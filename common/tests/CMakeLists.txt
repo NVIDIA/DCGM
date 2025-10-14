@@ -35,6 +35,9 @@ target_sources(commontests
         CpuHelpersTests.cpp
         LsHwTests.cpp
         FingerprintStoreTests.cpp
+        HangDetectTests.cpp
+        HangDetectHandlerTests.cpp
+        HangDetectMonitorTests.cpp
         MockFileSystemOperatorTests.cpp
         mocks/MockChildProcess.cpp
         DcgmChildProcessManagerTests.cpp
@@ -59,8 +62,30 @@ target_link_libraries(commontests
         rt
 )
 
+add_executable(hangdetectworkflow_tests)
+target_sources(hangdetectworkflow_tests
+    PRIVATE
+        HangDetectWorkflowTests.cpp
+)
+
+target_link_libraries(hangdetectworkflow_tests
+    PRIVATE
+        Catch2::Catch2WithMain
+        common_interface
+        dcgm
+        dcgm_common
+        dcgm_mutex
+        dcgm_logging
+        fmt::fmt
+        ${CMAKE_THREAD_LIBS_INIT}
+        rt
+)
+
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(commontests
-        EXTRA_ARGS --colour-mode ansi
-        PROPERTIES SKIP_REGULAR_EXPRESSION "[1-9][0-9]* skipped")
+        PROPERTIES SKIP_REGULAR_EXPRESSION "[1-9][0-9]* skipped"
+        EXTRA_ARGS --colour-mode ansi)
+    catch_discover_tests(hangdetectworkflow_tests
+        PROPERTIES SKIP_REGULAR_EXPRESSION "[1-9][0-9]* skipped"
+        EXTRA_ARGS --colour-mode ansi)
 endif()

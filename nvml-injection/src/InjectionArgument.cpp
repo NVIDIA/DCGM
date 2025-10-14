@@ -98,6 +98,7 @@ int nvmlPSUInfo_tCompare(const nvmlPSUInfo_t &a, const nvmlPSUInfo_t &b);
 int nvmlUnitFanInfo_tCompare(const nvmlUnitFanInfo_t &a, const nvmlUnitFanInfo_t &b);
 int nvmlUnitFanSpeeds_tCompare(const nvmlUnitFanSpeeds_t &a, const nvmlUnitFanSpeeds_t &b);
 int nvmlEventData_tCompare(const nvmlEventData_t &a, const nvmlEventData_t &b);
+int nvmlSystemEventData_v1_tCompare(const nvmlSystemEventData_v1_t &a, const nvmlSystemEventData_v1_t &b);
 int nvmlAccountingStats_tCompare(const nvmlAccountingStats_t &a, const nvmlAccountingStats_t &b);
 int nvmlEncoderSessionInfo_tCompare(const nvmlEncoderSessionInfo_t &a, const nvmlEncoderSessionInfo_t &b);
 int nvmlFBCStats_tCompare(const nvmlFBCStats_t &a, const nvmlFBCStats_t &b);
@@ -136,6 +137,7 @@ int nvmlWorkloadPowerProfileInfo_tCompare(const nvmlWorkloadPowerProfileInfo_t &
 int nvmlWorkloadPowerProfileProfilesInfo_tCompare(const nvmlWorkloadPowerProfileProfilesInfo_t &a, const nvmlWorkloadPowerProfileProfilesInfo_t &b);
 int nvmlWorkloadPowerProfileCurrentProfiles_tCompare(const nvmlWorkloadPowerProfileCurrentProfiles_t &a, const nvmlWorkloadPowerProfileCurrentProfiles_t &b);
 int nvmlWorkloadPowerProfileRequestedProfiles_tCompare(const nvmlWorkloadPowerProfileRequestedProfiles_t &a, const nvmlWorkloadPowerProfileRequestedProfiles_t &b);
+int nvmlWorkloadPowerProfileUpdateProfiles_v1_tCompare(const nvmlWorkloadPowerProfileUpdateProfiles_v1_t &a, const nvmlWorkloadPowerProfileUpdateProfiles_v1_t &b);
 
 // The following snippet is generated from write_struct_compare_definition
 int nvmlPciInfoExt_tCompare(const nvmlPciInfoExt_t &a, const nvmlPciInfoExt_t &b)
@@ -1964,6 +1966,22 @@ int nvmlEventData_tCompare(const nvmlEventData_t &a, const nvmlEventData_t &b)
 }
 
 // The following snippet is generated from write_struct_compare_definition
+int nvmlSystemEventData_v1_tCompare(const nvmlSystemEventData_v1_t &a, const nvmlSystemEventData_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.eventType != b.eventType)
+    {
+        return a.eventType < b.eventType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.gpuId != b.gpuId)
+    {
+        return a.gpuId < b.gpuId ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
 int nvmlAccountingStats_tCompare(const nvmlAccountingStats_t &a, const nvmlAccountingStats_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
@@ -3175,6 +3193,22 @@ int nvmlWorkloadPowerProfileRequestedProfiles_tCompare(const nvmlWorkloadPowerPr
     }
     // The following snippet is generated from write_struct_compare_definition
     if (auto ret = nvmlMask255_tCompare(a.requestedProfilesMask, b.requestedProfilesMask); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlWorkloadPowerProfileUpdateProfiles_v1_tCompare(const nvmlWorkloadPowerProfileUpdateProfiles_v1_t &a, const nvmlWorkloadPowerProfileUpdateProfiles_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.operation != b.operation)
+    {
+        return a.operation < b.operation ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlMask255_tCompare(a.updateProfilesMask, b.updateProfilesMask); ret)
     {
         return ret;
     }
@@ -6844,6 +6878,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             break;
         }
         // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_POWERPROFILEOPERATION:
+        {
+            if (other.m_type == INJECTION_POWERPROFILEOPERATION)
+            {
+                memcpy(&m_value.PowerProfileOperation, &other.m_value.PowerProfileOperation, sizeof(*&m_value.PowerProfileOperation));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERPROFILEOPERATION_PTR)
+            {
+                memcpy(&m_value.PowerProfileOperation, other.m_value.PowerProfileOperationPtr, sizeof(*&m_value.PowerProfileOperation));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_POWERPROFILEOPERATION_PTR:
+        {
+            if (other.m_type == INJECTION_POWERPROFILEOPERATION_PTR)
+            {
+                memcpy(m_value.PowerProfileOperationPtr, other.m_value.PowerProfileOperationPtr, sizeof(*m_value.PowerProfileOperationPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_POWERPROFILEOPERATION)
+            {
+                memcpy(m_value.PowerProfileOperationPtr, &other.m_value.PowerProfileOperation, sizeof(*m_value.PowerProfileOperationPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_POWERPROFILETYPE:
         {
             if (other.m_type == INJECTION_POWERPROFILETYPE)
@@ -7428,6 +7493,161 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_SYSTEMDRIVERBRANCHINFO)
             {
                 memcpy(m_value.SystemDriverBranchInfoPtr, &other.m_value.SystemDriverBranchInfo, sizeof(*m_value.SystemDriverBranchInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_SYSTEMEVENTDATA_V1:
+        {
+            if (other.m_type == INJECTION_SYSTEMEVENTDATA_V1)
+            {
+                memcpy(&m_value.SystemEventData_v1, &other.m_value.SystemEventData_v1, sizeof(*&m_value.SystemEventData_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMEVENTDATA_V1_PTR)
+            {
+                memcpy(&m_value.SystemEventData_v1, other.m_value.SystemEventData_v1Ptr, sizeof(*&m_value.SystemEventData_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_SYSTEMEVENTDATA_V1_PTR:
+        {
+            if (other.m_type == INJECTION_SYSTEMEVENTDATA_V1_PTR)
+            {
+                memcpy(m_value.SystemEventData_v1Ptr, other.m_value.SystemEventData_v1Ptr, sizeof(*m_value.SystemEventData_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMEVENTDATA_V1)
+            {
+                memcpy(m_value.SystemEventData_v1Ptr, &other.m_value.SystemEventData_v1, sizeof(*m_value.SystemEventData_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_SYSTEMEVENTSETCREATEREQUEST:
+        {
+            if (other.m_type == INJECTION_SYSTEMEVENTSETCREATEREQUEST)
+            {
+                memcpy(&m_value.SystemEventSetCreateRequest, &other.m_value.SystemEventSetCreateRequest, sizeof(*&m_value.SystemEventSetCreateRequest));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMEVENTSETCREATEREQUEST_PTR)
+            {
+                memcpy(&m_value.SystemEventSetCreateRequest, other.m_value.SystemEventSetCreateRequestPtr, sizeof(*&m_value.SystemEventSetCreateRequest));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_SYSTEMEVENTSETCREATEREQUEST_PTR:
+        {
+            if (other.m_type == INJECTION_SYSTEMEVENTSETCREATEREQUEST_PTR)
+            {
+                memcpy(m_value.SystemEventSetCreateRequestPtr, other.m_value.SystemEventSetCreateRequestPtr, sizeof(*m_value.SystemEventSetCreateRequestPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMEVENTSETCREATEREQUEST)
+            {
+                memcpy(m_value.SystemEventSetCreateRequestPtr, &other.m_value.SystemEventSetCreateRequest, sizeof(*m_value.SystemEventSetCreateRequestPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_SYSTEMEVENTSETFREEREQUEST:
+        {
+            if (other.m_type == INJECTION_SYSTEMEVENTSETFREEREQUEST)
+            {
+                memcpy(&m_value.SystemEventSetFreeRequest, &other.m_value.SystemEventSetFreeRequest, sizeof(*&m_value.SystemEventSetFreeRequest));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMEVENTSETFREEREQUEST_PTR)
+            {
+                memcpy(&m_value.SystemEventSetFreeRequest, other.m_value.SystemEventSetFreeRequestPtr, sizeof(*&m_value.SystemEventSetFreeRequest));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_SYSTEMEVENTSETFREEREQUEST_PTR:
+        {
+            if (other.m_type == INJECTION_SYSTEMEVENTSETFREEREQUEST_PTR)
+            {
+                memcpy(m_value.SystemEventSetFreeRequestPtr, other.m_value.SystemEventSetFreeRequestPtr, sizeof(*m_value.SystemEventSetFreeRequestPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMEVENTSETFREEREQUEST)
+            {
+                memcpy(m_value.SystemEventSetFreeRequestPtr, &other.m_value.SystemEventSetFreeRequest, sizeof(*m_value.SystemEventSetFreeRequestPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_SYSTEMEVENTSETWAITREQUEST:
+        {
+            if (other.m_type == INJECTION_SYSTEMEVENTSETWAITREQUEST)
+            {
+                memcpy(&m_value.SystemEventSetWaitRequest, &other.m_value.SystemEventSetWaitRequest, sizeof(*&m_value.SystemEventSetWaitRequest));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR)
+            {
+                memcpy(&m_value.SystemEventSetWaitRequest, other.m_value.SystemEventSetWaitRequestPtr, sizeof(*&m_value.SystemEventSetWaitRequest));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR:
+        {
+            if (other.m_type == INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR)
+            {
+                memcpy(m_value.SystemEventSetWaitRequestPtr, other.m_value.SystemEventSetWaitRequestPtr, sizeof(*m_value.SystemEventSetWaitRequestPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMEVENTSETWAITREQUEST)
+            {
+                memcpy(m_value.SystemEventSetWaitRequestPtr, &other.m_value.SystemEventSetWaitRequest, sizeof(*m_value.SystemEventSetWaitRequestPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_SYSTEMREGISTEREVENTREQUEST:
+        {
+            if (other.m_type == INJECTION_SYSTEMREGISTEREVENTREQUEST)
+            {
+                memcpy(&m_value.SystemRegisterEventRequest, &other.m_value.SystemRegisterEventRequest, sizeof(*&m_value.SystemRegisterEventRequest));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR)
+            {
+                memcpy(&m_value.SystemRegisterEventRequest, other.m_value.SystemRegisterEventRequestPtr, sizeof(*&m_value.SystemRegisterEventRequest));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR:
+        {
+            if (other.m_type == INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR)
+            {
+                memcpy(m_value.SystemRegisterEventRequestPtr, other.m_value.SystemRegisterEventRequestPtr, sizeof(*m_value.SystemRegisterEventRequestPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_SYSTEMREGISTEREVENTREQUEST)
+            {
+                memcpy(m_value.SystemRegisterEventRequestPtr, &other.m_value.SystemRegisterEventRequest, sizeof(*m_value.SystemRegisterEventRequestPtr));
                 set = true;
             }
             break;
@@ -8885,6 +9105,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES)
             {
                 memcpy(m_value.WorkloadPowerProfileRequestedProfilesPtr, &other.m_value.WorkloadPowerProfileRequestedProfiles, sizeof(*m_value.WorkloadPowerProfileRequestedProfilesPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1)
+            {
+                memcpy(&m_value.WorkloadPowerProfileUpdateProfiles_v1, &other.m_value.WorkloadPowerProfileUpdateProfiles_v1, sizeof(*&m_value.WorkloadPowerProfileUpdateProfiles_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR)
+            {
+                memcpy(&m_value.WorkloadPowerProfileUpdateProfiles_v1, other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, sizeof(*&m_value.WorkloadPowerProfileUpdateProfiles_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR:
+        {
+            if (other.m_type == INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR)
+            {
+                memcpy(m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, sizeof(*m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1)
+            {
+                memcpy(m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, &other.m_value.WorkloadPowerProfileUpdateProfiles_v1, sizeof(*m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr));
                 set = true;
             }
             break;
@@ -12567,6 +12818,45 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return nvmlPlatformInfo_v1_tCompare(m_value.PlatformInfo_v1, other.m_value.PlatformInfo_v1);
                     break; // NOT REACHED
                 }
+                case INJECTION_POWERPROFILEOPERATION_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.PowerProfileOperationPtr == *other.m_value.PowerProfileOperationPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PowerProfileOperationPtr < *other.m_value.PowerProfileOperationPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.PowerProfileOperationPtr[i] == other.m_value.PowerProfileOperationPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.PowerProfileOperationPtr[i] < other.m_value.PowerProfileOperationPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_POWERPROFILEOPERATION:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.PowerProfileOperation < other.m_value.PowerProfileOperation)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.PowerProfileOperation > other.m_value.PowerProfileOperation)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
                 case INJECTION_POWERPROFILETYPE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -13114,6 +13404,81 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     return nvmlSystemDriverBranchInfo_tCompare(m_value.SystemDriverBranchInfo, other.m_value.SystemDriverBranchInfo);
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMEVENTDATA_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlSystemEventData_v1_tCompare(*m_value.SystemEventData_v1Ptr, *other.m_value.SystemEventData_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlSystemEventData_v1_tCompare(*m_value.SystemEventData_v1Ptr, *other.m_value.SystemEventData_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMEVENTDATA_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlSystemEventData_v1_tCompare(m_value.SystemEventData_v1, other.m_value.SystemEventData_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMEVENTSETCREATEREQUEST_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    unsigned size = m_isArray ? m_arrLen : 1;
+                    return memcmp(m_value.SystemEventSetCreateRequestPtr, other.m_value.SystemEventSetCreateRequestPtr, size * sizeof(*m_value.SystemEventSetCreateRequestPtr));
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMEVENTSETCREATEREQUEST:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return memcmp(&m_value.SystemEventSetCreateRequest, &other.m_value.SystemEventSetCreateRequest, sizeof(m_value.SystemEventSetCreateRequest));
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMEVENTSETFREEREQUEST_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    unsigned size = m_isArray ? m_arrLen : 1;
+                    return memcmp(m_value.SystemEventSetFreeRequestPtr, other.m_value.SystemEventSetFreeRequestPtr, size * sizeof(*m_value.SystemEventSetFreeRequestPtr));
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMEVENTSETFREEREQUEST:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return memcmp(&m_value.SystemEventSetFreeRequest, &other.m_value.SystemEventSetFreeRequest, sizeof(m_value.SystemEventSetFreeRequest));
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    unsigned size = m_isArray ? m_arrLen : 1;
+                    return memcmp(m_value.SystemEventSetWaitRequestPtr, other.m_value.SystemEventSetWaitRequestPtr, size * sizeof(*m_value.SystemEventSetWaitRequestPtr));
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMEVENTSETWAITREQUEST:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return memcmp(&m_value.SystemEventSetWaitRequest, &other.m_value.SystemEventSetWaitRequest, sizeof(m_value.SystemEventSetWaitRequest));
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    unsigned size = m_isArray ? m_arrLen : 1;
+                    return memcmp(m_value.SystemRegisterEventRequestPtr, other.m_value.SystemRegisterEventRequestPtr, size * sizeof(*m_value.SystemRegisterEventRequestPtr));
+                    break; // NOT REACHED
+                }
+                case INJECTION_SYSTEMREGISTEREVENTREQUEST:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return memcmp(&m_value.SystemRegisterEventRequest, &other.m_value.SystemRegisterEventRequest, sizeof(m_value.SystemRegisterEventRequest));
                     break; // NOT REACHED
                 }
                 case INJECTION_TEMPERATURESENSORS_PTR:
@@ -14395,6 +14760,29 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return nvmlWorkloadPowerProfileRequestedProfiles_tCompare(m_value.WorkloadPowerProfileRequestedProfiles, other.m_value.WorkloadPowerProfileRequestedProfiles);
                     break; // NOT REACHED
                 }
+                case INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlWorkloadPowerProfileUpdateProfiles_v1_tCompare(*m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, *other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlWorkloadPowerProfileUpdateProfiles_v1_tCompare(*m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, *other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlWorkloadPowerProfileUpdateProfiles_v1_tCompare(m_value.WorkloadPowerProfileUpdateProfiles_v1, other.m_value.WorkloadPowerProfileUpdateProfiles_v1);
+                    break; // NOT REACHED
+                }
                 case INJECTION_SHORT_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -15581,6 +15969,14 @@ InjectionArgument::~InjectionArgument()
             }
             break;
         }
+        case INJECTION_POWERPROFILEOPERATION_PTR:
+        {
+            if (m_inHeap && m_value.PowerProfileOperationPtr)
+            {
+                free(m_value.PowerProfileOperationPtr);
+            }
+            break;
+        }
         case INJECTION_POWERPROFILETYPE_PTR:
         {
             if (m_inHeap && m_value.PowerProfileTypePtr)
@@ -15730,6 +16126,46 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.SystemDriverBranchInfoPtr)
             {
                 free(m_value.SystemDriverBranchInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_SYSTEMEVENTDATA_V1_PTR:
+        {
+            if (m_inHeap && m_value.SystemEventData_v1Ptr)
+            {
+                free(m_value.SystemEventData_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_SYSTEMEVENTSETCREATEREQUEST_PTR:
+        {
+            if (m_inHeap && m_value.SystemEventSetCreateRequestPtr)
+            {
+                free(m_value.SystemEventSetCreateRequestPtr);
+            }
+            break;
+        }
+        case INJECTION_SYSTEMEVENTSETFREEREQUEST_PTR:
+        {
+            if (m_inHeap && m_value.SystemEventSetFreeRequestPtr)
+            {
+                free(m_value.SystemEventSetFreeRequestPtr);
+            }
+            break;
+        }
+        case INJECTION_SYSTEMEVENTSETWAITREQUEST_PTR:
+        {
+            if (m_inHeap && m_value.SystemEventSetWaitRequestPtr)
+            {
+                free(m_value.SystemEventSetWaitRequestPtr);
+            }
+            break;
+        }
+        case INJECTION_SYSTEMREGISTEREVENTREQUEST_PTR:
+        {
+            if (m_inHeap && m_value.SystemRegisterEventRequestPtr)
+            {
+                free(m_value.SystemRegisterEventRequestPtr);
             }
             break;
         }
@@ -16106,6 +16542,14 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.WorkloadPowerProfileRequestedProfilesPtr)
             {
                 free(m_value.WorkloadPowerProfileRequestedProfilesPtr);
+            }
+            break;
+        }
+        case INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR:
+        {
+            if (m_inHeap && m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr)
+            {
+                free(m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr);
             }
             break;
         }

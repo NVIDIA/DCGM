@@ -257,8 +257,9 @@ def mock_nvlink_error_counter(handle, gpuId, linkId, counterType, nvmlRet, value
 
 Please note that:
 
-* calling `dcgmInjectNvmlDevice` multiple times on the same API will override the injected value. We need to mock and test each field individually.
+* Calling `dcgmInjectNvmlDevice` multiple times on the same API will override the injected value. We need to mock and test each field individually.
 * The injection target should not include the Get prefix. i.e., use `NvLinkErrorCounter` rather than `GetNvLinkErrorCounter`. This enhances flexibility when calling a setter NVML API in our codebase. For example, as the target (i.e., `FanSpeed`) of `nvmlDeviceGetFanSpeed` and `nvmlDeviceSetFanSpeed` is the same, the setter can affect the getter.
+* Since the device handle cannot be indicated from the Python injection code, to mock an API with device handle parameter, we pass the GPU id. The `dcgmInjectNvmlDevice` will translate it to the device handle.
 
 ### Inject NVML Fields (`nvmlDeviceGetFieldValues`)
 

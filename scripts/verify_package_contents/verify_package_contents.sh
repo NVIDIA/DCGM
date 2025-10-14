@@ -29,15 +29,34 @@ function usage() {
 
 function specialize() {
     local filepath="$1"
-    local package_version=$2
-    local software_version
-    software_version=${package_version%%~*}
-    software_version=${software_version##*:}
-
+    local package_version=${2##*:}
+    local base_package_version=${package_version%%-*}
+    local software_version=${base_package_version%%~*}
     local major_version=${software_version%%.*}
+
+    # Let's consider four example package versions and see what the resulting
+    # values are for the variables in question.
+    #
+    # 1. 4.3.0
+    #    - package_version: 4.3.0
+    #    - base_package_version: 4.3.0
+    #    - software_version: 4.3.0
+    # 2. 4.3.0~100
+    #    - package_version: 4.3.0~100
+    #    - base_package_version: 4.3.0~100
+    #    - software_version: 4.3.0
+    # 3. 4.3.0-1
+    #    - package_version: 4.3.0-1
+    #    - base_package_version: 4.3.0
+    #    - software_version: 4.3.0
+    # 4. 4.3.0~100-1
+    #    - package_version: 4.3.0~100-1
+    #    - base_package_version: 4.3.0~100
+    #    - software_version: 4.3.0
 
     sed "
         s/<PACKAGEVERSION>/$package_version/g;
+        s/<BASEPACKAGEVERSION>/$base_package_version/g;
         s/<SOFTWAREVERSION>/$software_version/g;
         s/<MAJORVERSION>/$major_version/g;" "$filepath"
 }
@@ -50,12 +69,14 @@ function verify() {
     case $filename in
         *.deb)
             package_version=$(dpkg-deb --field "$path" Version)
+            package_version=${package_version##*:}
+
             diff \
             <(specialize "$SCRIPTDIR/$(template_deb $filename)" $package_version) \
             <(dpkg --contents "$path" | awk '{print $6}' | sort)
             ;;
         *.rpm)
-            package_version=$(rpm --query --queryformat '%{VERSION}' "$path")
+            package_version=$(rpm --query --queryformat '%{VERSION}-%{RELEASE}' "$path")
             diff \
             <(specialize "$SCRIPTDIR/$(template_rpm $filename)" $package_version) \
             <(rpm --query --list --package "$path" | sed -E '/.*\/[.]build-id.*/d' | sort)
