@@ -53,7 +53,6 @@ for ARCHITECTURE in "${ARCHITECTURES[@]}"
 do
   docker compose build dcgm-toolchain-$ARCHITECTURE
   docker compose build dcgmbuild-$ARCHITECTURE
-  docker tag ${REGISTRY:-dcgm}/dcgmbuild:$TAG-$ARCHITECTURE dcgmbuild:$TAG-$ARCHITECTURE
 done
 
 docker image rm dcgm/common-host-software:$TAG
