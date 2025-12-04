@@ -20,8 +20,8 @@
 REGISTRY ?= nvidia
 
 # Sync with latest DCGM version available in the public cuda repo
-DCGM_VERSION   := 4.1.0
-FULL_VERSION   := $(DCGM_VERSION)-1
+DCGM_VERSION   := 4.4.1
+FULL_VERSION   := $(DCGM_VERSION)-2
 OUTPUT         := type=image
 PLATFORMS      := linux/amd64,linux/arm64
 DOCKERCMD      := docker buildx build

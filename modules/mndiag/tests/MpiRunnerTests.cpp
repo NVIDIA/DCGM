@@ -50,7 +50,7 @@ public:
             std::string cmd = fmt::format("sleep {}; echo \"Output from sleep process: return code 0\"",
                                           config->sleepSeconds.count());
             m_lastCommand.push_back("-c");
-            m_lastCommand.push_back(cmd);
+            m_lastCommand.push_back(std::move(cmd));
         }
         else
         {
@@ -78,7 +78,7 @@ public:
     // Expose or wrap public methods that tests call
     void SetOutputCallback(std::function<dcgmReturn_t(std::istream &, void *, nodeInfoMap_t const &)> callback)
     {
-        m_runner.SetOutputCallback(callback);
+        m_runner.SetOutputCallback(std::move(callback));
     }
 
     void ConstructMpiCommand(void const *params)

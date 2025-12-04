@@ -40,7 +40,9 @@ target_sources(nvvscoretests
         CpuSetTests.cpp
         DcgmNvvsResponseWrapperTests.cpp
         IgnoreErrorCodesHelperTests.cpp
-        NvvsDeviceListTests.cpp)
+        NvvsDeviceListTests.cpp
+        EntitySetTests.cpp
+        )
 
 target_include_directories(nvvscoretests
     PRIVATE
@@ -59,6 +61,8 @@ target_link_libraries(nvvscoretests
         dl
         fmt::fmt
         nvvs_without_main_objects
+        mock_interface
+        nvvs_mock_interface
         rt
         sdk_nvml_loader
         serialize)
@@ -81,5 +85,7 @@ target_link_libraries(testplugin
 target_sources(testplugin PRIVATE fake_plugin.cpp)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    catch_discover_tests(nvvscoretests EXTRA_ARGS --colour-mode ansi)
+    catch_discover_tests(nvvscoretests
+        PROPERTIES SKIP_REGULAR_EXPRESSION "[1-9][0-9]* skipped"
+        EXTRA_ARGS --colour-mode ansi)
 endif()

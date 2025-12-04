@@ -117,6 +117,15 @@ __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
     } while (0)
 
 /*****************************************************************************/
+
+namespace
+{
+// Error message constants
+constexpr char const *LIBNUMA_INSTALL_ERROR_MSG
+    = "The libnuma library cannot be found. Install the libnuma1 package to resolve this issue.";
+} // anonymous namespace
+
+/*****************************************************************************/
 // enables P2P for all GPUs
 int enableP2P(BusGrind *bg)
 {
@@ -565,13 +574,21 @@ int performHostToDeviceWork(BusGrind &bg, bool pinned, const std::string &groupN
 /*
  * This is the thread for reading and storing each child's output
  */
-void ReadChildOutput(dcgmChildInfo_t &ci, DcgmNs::Utils::FileHandle outputFd)
+void ReadChildOutput(dcgmChildInfo_t &ci, DcgmNs::Utils::FileHandle outputFd, DcgmNs::Utils::FileHandle errorFd)
 {
     fmt::memory_buffer stdoutStream;
+    fmt::memory_buffer stderrStream;
 
     ci.readOutputRet = DcgmNs::Utils::ReadProcessOutput(stdoutStream, std::move(outputFd));
     ci.stdoutStr     = fmt::to_string(stdoutStream);
     log_debug("External command stdout: {}", ci.stdoutStr);
+
+    ci.readErrorRet = DcgmNs::Utils::ReadProcessOutput(stderrStream, std::move(errorFd));
+    ci.stderrStr    = fmt::to_string(stderrStream);
+    if (!ci.stderrStr.empty())
+    {
+        log_debug("External command stderr: {}", ci.stderrStr);
+    }
 }
 
 dcgmReturn_t HarvestChildren(BusGrind &bg, std::vector<dcgmChildInfo_t> &childrenInfo)
@@ -602,9 +619,19 @@ dcgmReturn_t HarvestChildren(BusGrind &bg, std::vector<dcgmChildInfo_t> &childre
             if (childStatus)
             {
                 DcgmError d { DcgmError::GpuIdTag::Unknown };
-                std::string err
-                    = fmt::format("A child process ({}) exited with non-zero status {}", childInfo.pid, childStatus);
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
+
+                // Check if this is a libnuma-related failure by examining stderr
+                if (childInfo.stderrStr.find(DCGM_LIBNUMA_LOAD_ERROR_MSG) != std::string::npos)
+                {
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, LIBNUMA_INSTALL_ERROR_MSG);
+                }
+                else
+                {
+                    std::string err = fmt::format(
+                        "A child process ({}) exited with non-zero status {}", childInfo.pid, childStatus);
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
+                }
+
                 bg.AddError(bg.GetPcieTestName(), d);
                 errorCondition = true;
             }
@@ -642,6 +669,49 @@ dcgmReturn_t HarvestChildren(BusGrind &bg, std::vector<dcgmChildInfo_t> &childre
     }
 
     return ret;
+}
+
+std::string_view ExtractJson(std::string_view output)
+{
+    if (output.empty())
+    {
+        return std::string_view();
+    }
+
+    // Look for the start delimiter
+    auto startPos = output.find(BWC_JSON_OUTPUT_START);
+    if (startPos == std::string_view::npos)
+    {
+        log_error(
+            "Missing start delimiter in child process output (length: {}, content: '{}')", output.length(), output);
+        return std::string_view();
+    }
+
+    // Move past the start delimiter
+    constexpr auto startDelimLen = std::string_view(BWC_JSON_OUTPUT_START).length();
+    startPos += startDelimLen;
+
+    // Require newline after start delimiter
+    if (startPos >= output.length() || output[startPos] != '\n')
+    {
+        log_error("Missing required newline after start delimiter in child process output (length: {}, content: '{}')",
+                  output.length(),
+                  output);
+        return std::string_view();
+    }
+    startPos++; // Move past the newline
+
+    // Look for the end delimiter
+    auto endPos = output.find(BWC_JSON_OUTPUT_END, startPos);
+    if (endPos == std::string_view::npos)
+    {
+        log_error("Found start delimiter but missing end delimiter in child process output (length: {}, content: '{}')",
+                  output.length(),
+                  output);
+        return std::string_view();
+    }
+
+    return output.substr(startPos, endPos - startPos);
 }
 
 unsigned int ProcessChildOutput(Json::Value &root, BusGrind &bg, double minimumBandwidth, pid_t pid)
@@ -734,26 +804,59 @@ unsigned int ProcessChildrenOutputs(std::vector<dcgmChildInfo_t> &childrenInfo,
         Json::Reader reader;
         Json::Value root;
 
-        bool successfulParse = reader.parse(childInfo.stdoutStr, root);
+        // Extract JSON from output
+        auto jsonContent     = ExtractJson(childInfo.stdoutStr);
+        bool successfulParse = reader.parse(jsonContent.data(), jsonContent.data() + jsonContent.size(), root);
+
         if (!successfulParse)
         {
-            if (childInfo.readOutputRet != 0)
+            if (childInfo.readOutputRet != 0 || childInfo.readErrorRet != 0)
             {
-                char errbuf[1024] = { 0 };
-                strerror_r(childInfo.readOutputRet, errbuf, sizeof(errbuf));
-                DcgmError d { DcgmError::GpuIdTag::Unknown };
-                std::string errmsg
-                    = fmt::format("Output of child process ({}) couldn't be read: '{}'", childInfo.pid, errbuf);
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
-                bg.AddError(bg.GetPcieTestName(), d);
+                if (childInfo.readOutputRet != 0)
+                {
+                    char errbuf[1024] = { 0 };
+                    strerror_r(childInfo.readOutputRet, errbuf, sizeof(errbuf));
+                    DcgmError d { DcgmError::GpuIdTag::Unknown };
+                    std::string errmsg
+                        = fmt::format("Output of child process ({}) couldn't be read: '{}'", childInfo.pid, errbuf);
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
+                    bg.AddError(bg.GetPcieTestName(), d);
+                }
+
+                if (childInfo.readErrorRet != 0)
+                {
+                    char errbuf[1024] = { 0 };
+                    strerror_r(childInfo.readErrorRet, errbuf, sizeof(errbuf));
+                    DcgmError d { DcgmError::GpuIdTag::Unknown };
+                    std::string errmsg
+                        = fmt::format("Stderr of child process ({}) couldn't be read: '{}'", childInfo.pid, errbuf);
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
+                    bg.AddError(bg.GetPcieTestName(), d);
+                }
             }
             else
             {
+                std::string errmsg;
                 DcgmError d { DcgmError::GpuIdTag::Unknown };
-                std::string errmsg = fmt::format("Output of child process ({}) couldn't be parsed: '{}'",
-                                                 childInfo.pid,
-                                                 reader.getFormattedErrorMessages());
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
+
+                // Check if this is a libnuma-related failure by examining stderr
+                if (childInfo.stderrStr.find(DCGM_LIBNUMA_LOAD_ERROR_MSG) != std::string::npos)
+                {
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, LIBNUMA_INSTALL_ERROR_MSG);
+                }
+                else if (jsonContent.empty())
+                {
+                    errmsg = fmt::format("Output of child process ({}) is empty", childInfo.pid);
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
+                }
+                else
+                {
+                    errmsg = fmt::format("Output of child process ({}) couldn't be parsed: '{}'",
+                                         childInfo.pid,
+                                         reader.getFormattedErrorMessages());
+                    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, errmsg.c_str());
+                }
+
                 bg.AddError(bg.GetPcieTestName(), d);
             }
 
@@ -947,6 +1050,7 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
     int failedTests = 0;
     std::vector<dcgmChildInfo_t> childrenInfo;
     DcgmNs::Utils::FileHandle outputFds[DCGM_MAX_NUM_DEVICES];
+    DcgmNs::Utils::FileHandle errorFds[DCGM_MAX_NUM_DEVICES];
     unsigned int fdsIndex = 0;
 
     // Reset cuda context before forking out child processes
@@ -987,7 +1091,7 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
         }
 
         pid_t childPid = DcgmNs::Utils::ForkAndExecCommand(
-            argv, nullptr, &(outputFds[fdsIndex]), nullptr, true, nullptr, &(memoryNodeMapEntry.first));
+            argv, nullptr, &(outputFds[fdsIndex]), &(errorFds[fdsIndex]), false, nullptr, &(memoryNodeMapEntry.first));
 
         if (childPid < 0)
         {
@@ -1003,6 +1107,8 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
         dcgmChildInfo_t ci {};
         ci.pid           = childPid;
         ci.outputFdIndex = fdsIndex;
+        ci.readOutputRet = 0;
+        ci.readErrorRet  = 0;
         childrenInfo.push_back(std::move(ci));
 
         if (auto ret = bg.HangDetectRegisterProcess(childPid); ret != DCGM_ST_OK)
@@ -1019,13 +1125,15 @@ int ForkAndLaunchBandwidthTests(BusGrind &bg,
          */
         ScopedHangDetectDisable guard(bg, getpid());
 
-        // Read the stdout from each child
+        // Read the stdout and stderr from each child
         for (unsigned int i = 0; i < fdsIndex; i++)
         {
-            ReadChildOutput(childrenInfo[i], std::move(outputFds[childrenInfo[i].outputFdIndex]));
+            ReadChildOutput(childrenInfo[i],
+                            std::move(outputFds[childrenInfo[i].outputFdIndex]),
+                            std::move(errorFds[childrenInfo[i].outputFdIndex]));
         }
 
-        GatherAndProcessChildrenOutputs(childrenInfo, bg, groupName);
+        failedTests += GatherAndProcessChildrenOutputs(childrenInfo, bg, groupName);
     }
 
     return failedTests;
@@ -1630,7 +1738,7 @@ int outputP2PBandwidthMatrix(BusGrind *bg, bool p2p)
             cudaEventRecord(stop[i]);
             cudaCheckError(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, i);
 
-            float time_ms;
+            float time_ms = 0;
             cudaEventElapsedTime(&time_ms, start[i], stop[i]);
             double time_s = time_ms / 1e3;
 
@@ -1839,7 +1947,8 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
 
               if (d % 2 == 0)
               {
-                  float time_ms1, time_ms2;
+                  float time_ms1 = 0;
+                  float time_ms2 = 0;
                   cudaEventElapsedTime(&time_ms1, start[d], stop[d]);
                   cudaEventElapsedTime(&time_ms2, start[d + 1], stop[d + 1]);
                   double time_s = std::max(time_ms1, time_ms2) / 1e3;
@@ -2332,6 +2441,7 @@ int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
 
     std::vector<unsigned short> fieldIds;
     fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
+    fieldIds.push_back(DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL); // Previously unchecked

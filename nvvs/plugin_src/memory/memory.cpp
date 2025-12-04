@@ -15,8 +15,7 @@
  */
 #include "L1TagCuda.h"
 #include "memory_plugin.h"
-#include "memtest_kernel.ptx.string"
-#include "timelib.h"
+#include "memtest_kernel_ptx_string.h"
 #include <CudaCommon.h>
 #include <PluginCommon.h>
 #include <assert.h>
@@ -78,33 +77,34 @@ typedef enum testResult
 
 static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
 {
-    CUdeviceptr_v2 error_h;
-    size_t totalMem, freeMem;
+    CUdeviceptr_v2 error_h = 0;
+    size_t totalMem        = 0;
+    size_t freeMem         = 0;
     size_t size;
-    CUdeviceptr_v2 alloc;
-    CUdeviceptr_v2 errors;
+    CUdeviceptr_v2 alloc  = 0;
+    CUdeviceptr_v2 errors = 0;
     CUmodule mod;
     CUfunction memsetval, memcheckval;
     CUresult cuRes;
     void *ptr;
-    static char testVals[5]     = { (char)0x00, (char)0xAA, (char)0x55, (char)0xFF, (char)0x00 };
-    float minAllocationPcnt     = memGlobals->testParameters->GetDouble(MEMORY_STR_MIN_ALLOCATION_PERCENTAGE) / 100.0;
-    bool memoryMismatchOccurred = false;
-    size_t targetAllocation     = 0;
+    static char testVals[5]      = { (char)0x00, (char)0xAA, (char)0x55, (char)0xFF, (char)0x00 };
+    double minAllocationFraction = memGlobals->testParameters->GetDouble(MEMORY_STR_MIN_ALLOCATION_PERCENTAGE) / 100.0;
+    double maxFreeMemMB          = memGlobals->testParameters->GetDouble(MEMORY_STR_MAX_FREE_MEMORY_MB);
+    bool memoryMismatchOccurred  = false;
+    size_t targetAllocation      = 0;
 
-    if (minAllocationPcnt < 0.0 || minAllocationPcnt > 1.0)
+    if (minAllocationFraction < 0.0 || minAllocationFraction > 1.0)
     {
-        static const float DEFAULT_MIN_ALLOCATION = 0.75;
         std::stringstream buf;
-        buf << "Invalid minimum allocation percentage of GPU memory '" << minAllocationPcnt * 100.0
+        buf << "Invalid minimum allocation percentage of GPU memory '" << minAllocationFraction * 100.0
             << "'. Defaulting to 75%";
         DCGM_LOG_WARNING << buf.str();
         memGlobals->memory->AddInfoVerboseForGpu(
             memGlobals->memory->GetMemoryTestName(), memGlobals->dcgmGpuIndex, buf.str());
-        minAllocationPcnt = DEFAULT_MIN_ALLOCATION;
+        minAllocationFraction = DEFAULT_MIN_ALLOCATION_PERCENTAGE / 100.0;
     }
 
-    cuRes = cuModuleLoadData(&mod, memtest_kernel);
+    cuRes = cuModuleLoadData(&mod, memtest_kernel_ptx_string);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
@@ -112,11 +112,11 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuModuleGetFunction(&memsetval, mod, "memsetval");
+    cuRes = cuModuleGetFunction(&memsetval, mod, memsetval_func_name);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuModuleGetFunction(&memcheckval, mod, "memcheckval");
+    cuRes = cuModuleGetFunction(&memcheckval, mod, memcheckval_func_name);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
@@ -124,16 +124,38 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    if (IsSmallFrameBufferModeSet())
+    if (maxFreeMemMB > 0.0)
     {
-        minAllocationPcnt = 0.0;
-        freeMem           = std::min(freeMem, (size_t)256 * 1024 * 1024);
+        minAllocationFraction = 0.0;
+
+        size_t maxFreeMemBytes;
+        if (maxFreeMemMB > std::numeric_limits<size_t>::max() / (1024 * 1024))
+        {
+            maxFreeMemBytes = std::numeric_limits<size_t>::max();
+            log_warning("max_free_memory_mb parameter would cause overflow, capping to maximum safe value: {} bytes",
+                        maxFreeMemBytes);
+        }
+        else
+        {
+            maxFreeMemBytes = static_cast<size_t>(maxFreeMemMB * 1024 * 1024);
+        }
+
+        freeMem = std::min(freeMem, maxFreeMemBytes);
+        log_debug("User specified max free memory: {:.1f} MB ({} bytes), limiting to {}",
+                  maxFreeMemMB,
+                  maxFreeMemBytes,
+                  freeMem);
+    }
+    else if (IsSmallFrameBufferModeSet())
+    {
+        minAllocationFraction = 0.0;
+        freeMem               = std::min(freeMem, MEMORY_DEFAULT_MAX_FREE_MEMORY_BYTES);
         DCGM_LOG_DEBUG << "Setting small FB mode free " << freeMem;
     }
 
     // alloc as much memory as possible
     size             = freeMem;
-    targetAllocation = totalMem * minAllocationPcnt;
+    targetAllocation = totalMem * minAllocationFraction;
     if (size < targetAllocation)
     {
         std::string msg
@@ -153,7 +175,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
         if (size < targetAllocation)
         {
             DcgmError d { memGlobals->dcgmGpuIndex };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minAllocationPcnt * 100, memGlobals->dcgmGpuIndex);
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minAllocationFraction * 100, memGlobals->dcgmGpuIndex);
             memGlobals->memory->AddError(memGlobals->memory->GetMemoryTestName(), d);
             log_error(d.GetMessage());
             goto error_no_cleanup;
@@ -441,8 +463,12 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
         return 1;
     }
 
+    // Get the CUDA device ordinal from the CUdevice handle
+    // When CUDA_VISIBLE_DEVICES is set, the ordinal may be different from the DCGM GPU index
+    int cudaDeviceOrdinal = static_cast<int>(memGlobals->cuDevice);
+
     // Clean up resources before context creation
-    cudaError_t cudaResult = cudaSetDevice(static_cast<int>(memGlobals->dcgmGpuIndex));
+    cudaError_t cudaResult = cudaSetDevice(cudaDeviceOrdinal);
     if (cudaResult != cudaSuccess)
     {
         LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
@@ -496,23 +522,25 @@ int main_entry(const dcgmDiagPluginEntityInfo_v1 &entityInfo, Memory *memory, Te
     memset(memGlobals, 0, sizeof(*memGlobals));
     memGlobals->memory         = memory;
     memGlobals->testParameters = tp;
+    memGlobals->dcgmGpuIndex   = entityInfo.entity.entityId;
 
     memGlobals->m_dcgmRecorder = new DcgmRecorder(memory->GetHandle());
     memGlobals->m_dcgmRecorder->SetIgnoreErrorCodes(
         memGlobals->memory->GetIgnoreErrorCodes(memGlobals->memory->GetMemoryTestName()));
 
-    st = mem_init(memGlobals, entityInfo);
-    if (st)
-    {
-        memGlobals->memory->SetResult(memGlobals->memory->GetMemoryTestName(), NVVS_RESULT_FAIL);
-        mem_cleanup(memGlobals);
-        return 1;
-    }
-
     // check if this card supports ECC and be good about skipping/warning etc.
     dcgmFieldValue_v2 eccCurrentVal = {};
+    // First try cached data to allow injected test values to be detected
     dcgmReturn_t ret
         = memGlobals->m_dcgmRecorder->GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ECC_CURRENT, eccCurrentVal, 0);
+
+    // If cached data is not available or not supported, try live data
+    if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED || eccCurrentVal.status == DCGM_ST_NO_DATA
+        || eccCurrentVal.status == DCGM_ST_NOT_WATCHED)
+    {
+        ret = memGlobals->m_dcgmRecorder->GetCurrentFieldValue(
+            gpuId, DCGM_FI_DEV_ECC_CURRENT, eccCurrentVal, DCGM_FV_FLAG_LIVE_DATA);
+    }
 
     if (ret != DCGM_ST_OK)
     {
@@ -542,6 +570,14 @@ int main_entry(const dcgmDiagPluginEntityInfo_v1 &entityInfo, Memory *memory, Te
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ECC_DISABLED, d, "Memory", gpuId);
         memGlobals->memory->AddInfoVerboseForGpu(memGlobals->memory->GetMemoryTestName(), gpuId, d.GetMessage());
         memGlobals->memory->SetResult(memGlobals->memory->GetMemoryTestName(), NVVS_RESULT_SKIP);
+        mem_cleanup(memGlobals);
+        return 1;
+    }
+
+    st = mem_init(memGlobals, entityInfo);
+    if (st)
+    {
+        memGlobals->memory->SetResult(memGlobals->memory->GetMemoryTestName(), NVVS_RESULT_FAIL);
         mem_cleanup(memGlobals);
         return 1;
     }

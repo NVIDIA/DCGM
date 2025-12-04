@@ -643,6 +643,12 @@ std::string EntityListWithMigAndUuidParser(dcgmHandle_t dcgmHandle,
                                            std::string const &entityList,
                                            std::vector<dcgmGroupEntityPair_t> &entityGroups)
 {
+    if (entityList.empty())
+    {
+        entityGroups.clear();
+        return "";
+    }
+
     auto [gpuEntities, rejectedIds] = DcgmNs::TryParseEntityList(dcgmHandle, entityList);
 
     // Fallback to old method
@@ -660,10 +666,16 @@ std::string EntityListWithMigAndUuidParser(dcgmHandle_t dcgmHandle,
     return "";
 }
 
-std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(dcgmMigHierarchy_v2 const &migHierarchy,
-                                                      std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
-                                                      std::string_view entityIds)
+std::vector<dcgmGroupEntityPair_t> EntityListWithMigAndUuidParser(
+    dcgmMigHierarchy_v2 const &migHierarchy,
+    std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
+    std::string_view entityIds)
 {
+    if (entityIds.empty())
+    {
+        return {};
+    }
+
     DcgmNs::EntityMap entities = DcgmNs::PopulateEntitiesMap(migHierarchy, gpuIdUuids);
 
     std::vector<dcgmGroupEntityPair_t> entityGroups;
@@ -682,6 +694,15 @@ std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(dcgmMigHierarchy_v2 const 
 
     std::move(begin(gpuEntities), end(gpuEntities), std::back_inserter(entityGroups));
     std::move(begin(oldEntityList), end(oldEntityList), std::back_inserter(entityGroups));
+    return entityGroups;
+}
+
+std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(dcgmMigHierarchy_v2 const &migHierarchy,
+                                                      std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
+                                                      std::string_view entityIds)
+{
+    std::vector<dcgmGroupEntityPair_t> entityGroups
+        = EntityListWithMigAndUuidParser(migHierarchy, gpuIdUuids, entityIds);
 
     std::vector<std::uint32_t> gpuList;
     gpuList.reserve(DCGM_MAX_NUM_DEVICES);

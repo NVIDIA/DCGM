@@ -56,7 +56,7 @@ public:
      */
     void SetOutputCallback(std::function<dcgmReturn_t(std::istream &, void *, nodeInfoMap_t const &)> callback)
     {
-        m_outputCallback = callback;
+        m_outputCallback = std::move(callback);
     }
 
     /**

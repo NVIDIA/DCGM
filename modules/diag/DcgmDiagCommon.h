@@ -44,6 +44,7 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v10 &drd,
                                                 std::string const &expectedNumEntities,
                                                 unsigned int watchFrequency,
                                                 std::string const &ignoreErrorCodes,
+                                                bool enableHeartbeat,
                                                 std::string &error);
 
 /*****************************************************************************/

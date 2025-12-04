@@ -1119,7 +1119,16 @@ double ConstantPowerWorker::ReadPower()
     dcgmReturn_t st;
     dcgmFieldValue_v2 powerUsage;
 
+    // First try cached data to allow injected test values to be detected
     st = m_dcgmRecorder.GetCurrentFieldValue(m_device->gpuId, DCGM_FI_DEV_POWER_USAGE, powerUsage, 0);
+
+    // If cached data is not available or not supported, try live data
+    if (st == DCGM_ST_NO_DATA || st == DCGM_ST_NOT_WATCHED || powerUsage.status == DCGM_ST_NO_DATA
+        || powerUsage.status == DCGM_ST_NOT_WATCHED)
+    {
+        st = m_dcgmRecorder.GetCurrentFieldValue(
+            m_device->gpuId, DCGM_FI_DEV_POWER_USAGE, powerUsage, DCGM_FV_FLAG_LIVE_DATA);
+    }
     if (st)
     {
         // We do not add a warning or stop the test because we want to allow some tolerance for when we cannot

@@ -953,27 +953,42 @@ DcgmCacheManager::DcgmCacheManager()
 /*****************************************************************************/
 DcgmCacheManager::~DcgmCacheManager()
 {
-    Shutdown();
-
-    delete m_mutex;
-    m_mutex = nullptr;
-
-    delete m_nvmlTopoMutex;
-    m_nvmlTopoMutex = nullptr;
-
-    if (m_entityWatchHashTable)
+    try
     {
-        hashtable_destroy(m_entityWatchHashTable);
-        m_entityWatchHashTable = 0;
-    }
+        Shutdown();
 
-    if (m_accountingPidsSeen)
+        delete m_mutex;
+        m_mutex = nullptr;
+
+        delete m_nvmlTopoMutex;
+        m_nvmlTopoMutex = nullptr;
+
+        if (m_entityWatchHashTable)
+        {
+            hashtable_destroy(m_entityWatchHashTable);
+            m_entityWatchHashTable = 0;
+        }
+
+        if (m_accountingPidsSeen)
+        {
+            keyedvector_destroy(m_accountingPidsSeen);
+            m_accountingPidsSeen = 0;
+        }
+
+        UninitializeNvmlEventSet();
+    }
+    catch (const std::exception &e)
     {
-        keyedvector_destroy(m_accountingPidsSeen);
-        m_accountingPidsSeen = 0;
+        // The application is hereafter in an undefined state. As above, we could throw an exception or
+        // abruptly terminate, but we'll just log an error and continue to shutdown.
+        log_error("Failed to shutdown DcgmCacheManager: {}", e.what());
     }
-
-    UninitializeNvmlEventSet();
+    catch (...)
+    {
+        // The application is hereafter in an undefined state. As above, we could throw an exception or
+        // abruptly terminate, but we'll just log an error and continue to shutdown.
+        log_error("Failed to shutdown DcgmCacheManager: unknown exception");
+    }
 }
 
 /*****************************************************************************/
@@ -1940,6 +1955,7 @@ dcgmReturn_t DcgmCacheManager::Init(int pollInLockStep, double /*maxSampleAge*/,
             log_error("m_eventThread was NULL. We're unlikely to collect any events.");
             return DCGM_ST_GENERIC_ERROR;
         }
+        m_eventThread->SetHangDetectMonitor(m_monitor);
         int st = m_eventThread->Start();
         if (st)
         {
@@ -4605,7 +4621,7 @@ dcgmReturn_t DcgmCacheManager::GetLatestSample(dcgm_field_entity_group_t entityG
     if (!fieldMeta)
     {
         if (fvBuffer)
-            fvBuffer->AddInt64Value(entityGroupId, entityId, dcgmFieldId, 0, 0, DCGM_ST_UNKNOWN_FIELD);
+            fvBuffer->AddBlankValue(entityGroupId, entityId, dcgmFieldId, DCGM_ST_UNKNOWN_FIELD);
         return DCGM_ST_UNKNOWN_FIELD;
     }
 
@@ -4631,7 +4647,9 @@ dcgmReturn_t DcgmCacheManager::GetLatestSample(dcgm_field_entity_group_t entityG
     if (st != DCGM_ST_OK)
     {
         if (fvBuffer)
-            fvBuffer->AddInt64Value(entityGroupId, entityId, dcgmFieldId, 0, 0, st);
+        {
+            fvBuffer->AddBlankValue(entityGroupId, entityId, dcgmFieldId, st);
+        }
         return st;
     }
 
@@ -4651,7 +4669,9 @@ dcgmReturn_t DcgmCacheManager::GetLatestSample(dcgm_field_entity_group_t entityG
             retSt = DCGM_ST_NO_DATA;
 
         if (fvBuffer)
-            fvBuffer->AddInt64Value(entityGroupId, entityId, dcgmFieldId, 0, 0, retSt);
+        {
+            fvBuffer->AddBlankValue(entityGroupId, entityId, dcgmFieldId, retSt);
+        }
         return retSt;
     }
 
@@ -7541,6 +7561,10 @@ dcgmReturn_t DcgmCacheManager::ReadFabricManagerStatusField(dcgmcm_update_thread
         {
             AppendEntityInt64(threadCtx, gpuFabricInfo.cliqueId, 0, now, expireTime);
         }
+        else if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_HEALTH_MASK)
+        {
+            AppendEntityInt64(threadCtx, gpuFabricInfo.healthMask, 0, now, expireTime);
+        }
         else
         {
             dcgmFabricManagerStatus_t status;
@@ -7571,20 +7595,15 @@ dcgmReturn_t DcgmCacheManager::ReadFabricManagerStatusField(dcgmcm_update_thread
     else if (nvmlReturn == NVML_ERROR_FUNCTION_NOT_FOUND)
     {
         log_debug("This version of NVML doesn't support querying the fabric manager status.");
-        if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_CLUSTER_UUID)
+        // Status field sets the value to DcgmFMStatusNvmlTooOld for NVML_ERROR_FUNCTION_NOT_FOUND error. Others set the
+        // value to blank.
+        if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_MANAGER_STATUS)
         {
-            AppendEntityString(threadCtx, DCGM_STR_BLANK, now, expireTime);
+            AppendEntityInt64(threadCtx, DcgmFMStatusNvmlTooOld, 0, now, expireTime);
         }
         else
         {
-            if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_MANAGER_STATUS)
-            {
-                AppendEntityInt64(threadCtx, DcgmFMStatusNvmlTooOld, 0, now, expireTime);
-            }
-            else
-            {
-                AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, expireTime);
-            }
+            InsertNvmlErrorValue(threadCtx, fieldMeta->fieldType, nvmlReturn, expireTime);
         }
     }
     else
@@ -7756,7 +7775,8 @@ dcgmReturn_t DcgmCacheManager::ReadPlatformInfoFields(dcgmcm_update_thread_t &th
                                                       timelib64_t now,
                                                       timelib64_t expireTime)
 {
-    static unsigned int const SHORT_HEX_STRING_LEN = 32;
+    static unsigned int const SHORT_HEX_STRING_LEN      = 32;
+    static unsigned int const CHASSIS_SERIAL_NUMBER_LEN = 16;
     nvmlPlatformInfo_v2_t platformInfo {};
     platformInfo.version = nvmlPlatformInfo_v2;
 
@@ -7783,23 +7803,25 @@ dcgmReturn_t DcgmCacheManager::ReadPlatformInfoFields(dcgmcm_update_thread_t &th
             }
             case DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER:
             {
-                // An invalid rack guid has all bytes set to 0
-                bool invalidGuid = std::all_of(std::begin(platformInfo.chassisSerialNumber),
-                                               std::end(platformInfo.chassisSerialNumber),
-                                               [](char c) { return c == 0; });
-                if (invalidGuid)
+                // Check if chassis serial number isn't empty (for unsupported GPUs it's empty)
+                if (!platformInfo.chassisSerialNumber[0])
+                {
+                    log_error("Empty chassis serial number returned from NVML.");
+                    AppendEntityString(threadCtx, DCGM_STR_BLANK, now, expireTime);
+                }
+                // An invalid chassis serial number has all bytes set to 0xff i.e. UINT8_MAX
+                else if (std::all_of(std::begin(platformInfo.chassisSerialNumber),
+                                     std::end(platformInfo.chassisSerialNumber),
+                                     [](unsigned char c) { return c == UINT8_MAX; }))
                 {
                     log_warning("Invalid chassis serial number returned from NVML.");
                     AppendEntityString(threadCtx, DCGM_STR_BLANK, now, expireTime);
                 }
                 else
                 {
-                    std::array<unsigned char, 16> guid;
-                    std::copy(std::begin(platformInfo.chassisSerialNumber),
-                              std::end(platformInfo.chassisSerialNumber),
-                              std::begin(guid));
-                    std::string guidStr = getGuidString(guid);
-                    AppendEntityString(threadCtx, guidStr.c_str(), now, expireTime);
+                    char chassisSerialNumberBuf[CHASSIS_SERIAL_NUMBER_LEN + 1] = { 0 };
+                    memcpy(chassisSerialNumberBuf, platformInfo.chassisSerialNumber, CHASSIS_SERIAL_NUMBER_LEN);
+                    AppendEntityString(threadCtx, chassisSerialNumberBuf, now, expireTime);
                 }
                 break;
             }
@@ -8894,6 +8916,20 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             }
 
             AppendEntityInt64(threadCtx, (long long)systemCudaVersion, 0, now, expireTime);
+            break;
+        }
+
+        case DCGM_FI_IMEX_DOMAIN_STATUS:
+        {
+            std::string domainStatus = m_imexManager.GetDomainStatus();
+            AppendEntityString(threadCtx, domainStatus.c_str(), now, expireTime);
+            break;
+        }
+
+        case DCGM_FI_IMEX_DAEMON_STATUS:
+        {
+            int64_t daemonStatus = m_imexManager.GetDaemonStatus();
+            AppendEntityInt64(threadCtx, daemonStatus, 0, now, expireTime);
             break;
         }
 
@@ -11504,6 +11540,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_DEV_FABRIC_MANAGER_STATUS:
         case DCGM_FI_DEV_FABRIC_MANAGER_ERROR_CODE:
         case DCGM_FI_DEV_FABRIC_CLUSTER_UUID:
+        case DCGM_FI_DEV_FABRIC_HEALTH_MASK:
             [[fallthrough]];
         case DCGM_FI_DEV_FABRIC_CLIQUE_ID:
         {
@@ -13141,6 +13178,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 return ret;
             }
             break;
+
         default:
             log_warning("Unimplemented fieldId: {}", (int)fieldMeta->fieldId);
             return DCGM_ST_GENERIC_ERROR;
@@ -15207,12 +15245,22 @@ void DcgmCacheManagerEventThread::run(void)
 {
     log_info("DcgmCacheManagerEventThread started");
 
+    pid_t const pid = getpid();
+
+    if (m_monitor && !ShouldStop())
+    {
+        m_monitor->AddMonitoredTask(pid, m_tid);
+    }
+
     while (!ShouldStop())
     {
         m_cacheManager->EventThreadMain(this);
     }
 
+    if (m_monitor)
+    {
+        m_monitor->RemoveMonitoredTask(pid, m_tid);
+    }
+
     log_info("DcgmCacheManagerEventThread ended");
 }
-
-/*****************************************************************************/

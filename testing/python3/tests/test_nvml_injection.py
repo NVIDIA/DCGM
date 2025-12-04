@@ -151,18 +151,17 @@ def helper_inject_struct_for_following_calls(handle, gpuIds):
 
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
-    dcgm_agent_internal.dcgmWatchFieldValue(dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FI_DEV_BAR1_TOTAL, 1000000, 0, 1)
-    dcgmSystem.UpdateAllFields(1)
-    values = dcgm_agent_internal.dcgmGetLatestValuesForFields(dcgmHandle.handle, gpuId, [dcgm_fields.DCGM_FI_DEV_BAR1_TOTAL, ])
-    assert (values[0].value.i64 == 12345)
-    dcgm_agent_internal.dcgmWatchFieldValue(dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FI_DEV_BAR1_USED, 1000000, 0, 1)
-    values = dcgm_agent_internal.dcgmGetLatestValuesForFields(dcgmHandle.handle, gpuId, [dcgm_fields.DCGM_FI_DEV_BAR1_USED, ])
-    dcgmSystem.UpdateAllFields(1)
-    assert (values[0].value.i64 == 0)
-    dcgm_agent_internal.dcgmWatchFieldValue(dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FI_DEV_BAR1_FREE, 1000000, 0, 1)
-    values = dcgm_agent_internal.dcgmGetLatestValuesForFields(dcgmHandle.handle, gpuId, [dcgm_fields.DCGM_FI_DEV_BAR1_FREE, ])
-    dcgmSystem.UpdateAllFields(1)
-    assert (values[0].value.i64 != 12345)
+
+    def checkField(fieldId, cmpFn):
+        dcgm_agent_internal.dcgmWatchFieldValue(dcgmHandle.handle, gpuId, fieldId, 1000000, 0, 1)
+        dcgmSystem.UpdateAllFields(1)
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(dcgmHandle.handle, gpuId, [fieldId, ])
+        actual_value = values[0].value.i64
+        assert cmpFn(actual_value), f"Comparison failed for fieldId {fieldId}: got {actual_value}"
+
+    checkField(dcgm_fields.DCGM_FI_DEV_BAR1_TOTAL, lambda x: x == 12345)
+    checkField(dcgm_fields.DCGM_FI_DEV_BAR1_USED, lambda x: x == 0)
+    checkField(dcgm_fields.DCGM_FI_DEV_BAR1_FREE, lambda x: x != 12345)
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')

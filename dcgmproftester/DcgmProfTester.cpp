@@ -37,6 +37,7 @@
 #include <tclap/ValueArg.h>
 #include <tclap/ValuesConstraint.h>
 
+#include <DcgmBuildInfo.hpp>
 #include <DcgmStringHelpers.h>
 #include <chrono>
 #include <cmath>
@@ -1221,6 +1222,11 @@ int main(int argc, char **argv)
                 std::cout << "Please use dcgmproftester12 instead." << std::endl;
                 return DCGM_ST_VER_MISMATCH;
             }
+        }
+        else if (majorCudaVersionLoaded > MAX_CUDA_MAJOR_VERSION && CUDA_VERSION_USED == MAX_CUDA_MAJOR_VERSION)
+        {
+            std::cout << "Running version " << CUDA_VERSION_USED << " binary with CUDA driver version "
+                      << majorCudaVersionLoaded << "." << std::endl;
         }
         else
         {

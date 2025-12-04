@@ -36,24 +36,28 @@ class SoftwarePluginFramework
 public:
     /*************************************************************************/
     /**
-     * default constructor
+     * constructor - sets the variables to default values, initializes testname Map, populated data about GPU, set
+     * output, load the plugin library, set the tests within the plugin
+     * @params entitySet - entity set
      */
-    SoftwarePluginFramework() = default;
+    explicit SoftwarePluginFramework(EntitySet &entitySet);
 
     /*************************************************************************/
     /**
      * constructor - sets the variables to default values, initializes testname Map, populated data about GPU, set
      * output, load the plugin library, set the tests within the plugin
      * @params gpuList - list of gpu objects on which tests will be run
+     * @params entitySet - entity set
      */
-    explicit SoftwarePluginFramework(std::vector<Gpu *> gpuList);
+    explicit SoftwarePluginFramework(std::vector<Gpu *> gpuList, EntitySet &entitySet);
 
     /*************************************************************************/
     /**
      * constructor - allocates memory for m_entityList
      * @params entityList - unique_ptr with memory allocated via new or make_unique.
+     * @params entitySet - entity set
      */
-    explicit SoftwarePluginFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList);
+    explicit SoftwarePluginFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList, EntitySet &entitySet);
 
     /*************************************************************************/
     /**
@@ -84,13 +88,13 @@ public:
      */
     std::vector<dcgmDiagError_v1> const &GetErrors() const;
 
-
 private:
     std::map<std::string, std::string> m_testNameMap;
     std::map<std::string, std::unique_ptr<TestParameters>> m_testParamMap;
     std::unique_ptr<Software> m_softwareObj;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityList;
     std::vector<dcgmDiagError_v1> m_errors;
+    EntitySet &m_entitySet;
 
 protected:
     /*************************************************************************/

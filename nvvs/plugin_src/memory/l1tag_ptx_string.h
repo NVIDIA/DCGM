@@ -15405,5 +15405,5 @@ unsigned char l1tag_ptx_string[] = {
 #endif
 
 
-const char *InitL1Data_func_name = "InitL1Data";
-const char *L1TagTest_func_name  = "L1TagTest";
+char const *InitL1Data_func_name = "InitL1Data";
+char const *L1TagTest_func_name  = "L1TagTest";

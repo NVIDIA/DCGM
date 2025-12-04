@@ -257,7 +257,7 @@ public:
 
     void SetUserInfo(std::pair<std::string, uid_t> userInfo)
     {
-        m_runner.SetUserInfo(userInfo);
+        m_runner.SetUserInfo(std::move(userInfo));
     }
 
     void SetMnubergemmPath(std::string const &mnubergemmPath)
@@ -799,7 +799,7 @@ TEST_CASE("MnDiagMpiRunner SetUserInfo")
 
         // Now set a regular user (non-root) and construct the command again
         std::pair<std::string, uid_t> userInfo = std::make_pair("testuser", 1000);
-        mpiRunner.SetUserInfo(userInfo);
+        mpiRunner.SetUserInfo(std::move(userInfo));
         mpiRunner.ConstructMpiCommand(&diagStruct);
         auto argsWithUser = mpiRunner.GetLastCommandArgs();
 
@@ -819,7 +819,7 @@ TEST_CASE("MnDiagMpiRunner SetUserInfo")
 
         // Set root user and construct the command
         std::pair<std::string, uid_t> rootUserInfo = std::make_pair("root", 0);
-        mpiRunner.SetUserInfo(rootUserInfo);
+        mpiRunner.SetUserInfo(std::move(rootUserInfo));
         mpiRunner.ConstructMpiCommand(&diagStruct);
         auto argsWithRootUser = mpiRunner.GetLastCommandArgs();
 

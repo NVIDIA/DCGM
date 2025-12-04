@@ -395,6 +395,7 @@ typedef enum dcgmReturn_enum
     DCGM_ST_CHILD_SPAWN_FAILED              = -62, //!< A child process could not be spawned
     DCGM_ST_FILE_IO_ERROR                   = -63, //!< A file operation failed
     DCGM_ST_CHILD_SIGNAL_RECEIVED           = -64, //!< A child process received a signal
+    DCGM_ST_CALLER_ALREADY_STOPPED          = -65, //!< The caller is already stopped
 } dcgmReturn_t;
 
 const char *errorString(dcgmReturn_t result);
@@ -3283,6 +3284,17 @@ typedef dcgmIntrospectCpuUtil_v1 dcgmIntrospectCpuUtil_t;
 #define DCGM_RUN_FLAGS_FAIL_EARLY 0x0010
 
 /**
+ * Enable heartbeat for the diagnostic
+ *
+ * This flag enables heartbeat mechanism for the diagnostic in cases where the host engine can stop the diagnostic if
+ * the client that triggered it has terminated.
+ *
+ * When using this flag, you have to call \ref dcgmDiagSendHeartbeat at least once every 10 minutes (from another
+ * thread) to keep the diagnostic running.
+ */
+#define DCGM_RUN_FLAGS_ENABLE_HEARTBEAT 0x0020
+
+/**
  * @}
  */
 
@@ -4143,6 +4155,24 @@ typedef enum
 
 #define dcgmVersionInfo_version dcgmVersionInfo_version2
 typedef dcgmVersionInfo_v2 dcgmVersionInfo_t;
+
+
+typedef struct
+{
+    unsigned int version;
+    char envVarName[DCGM_MAX_STR_LENGTH];
+    char envVarValue[DCGM_MAX_STR_LENGTH];
+    dcgmReturn_t ret;
+} dcgmEnvVarInfo_v1;
+
+/**
+ * Version 1 of dcgmEnvVarInfo_t
+ */
+#define dcgmEnvVarInfo_version1 MAKE_DCGM_VERSION(dcgmEnvVarInfo_v1, 1)
+
+#define dcgmEnvVarInfo_version dcgmEnvVarInfo_version1
+typedef dcgmEnvVarInfo_v1 dcgmEnvVarInfo_t;
+
 
 /** @} */
 

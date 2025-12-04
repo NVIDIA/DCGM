@@ -28,9 +28,9 @@ import logger
 import argparse
 import nvidia_smi_utils
 import DcgmiDiag
-import dcgm_structs
+import dcgm_agent
 import dcgm_fields
-import version
+import dcgm_structs
 
 from subprocess import Popen, STDOUT, PIPE, check_output
 
@@ -77,8 +77,9 @@ def setupEnvironment(cmdArgs):
     if test_utils.is_framework_compatible() is False:
         print("run_dcgm_diagnostic.py found to be a different version than DCGM. Exiting")
         sys.exit(1)
-    else:
-        print("Running against Git Commit %s" % version.GIT_COMMIT)
+
+    rawVersionInfo = dcgm_agent.dcgmVersionInfo()
+    print("Build info: %s" % rawVersionInfo.rawBuildInfoString)
 
     # Enable persistence mode or the tests will fail
     print("\nEnabling persistence mode")

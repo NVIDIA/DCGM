@@ -79,6 +79,7 @@ target_link_libraries(hangdetectworkflow_tests
         fmt::fmt
         ${CMAKE_THREAD_LIBS_INIT}
         rt
+        task_context_manager
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")

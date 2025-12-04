@@ -177,7 +177,8 @@ TEST_CASE("MockChildProcess")
             REQUIRE(proc.GetAddressFwdSessionKey().empty());
 
             std::string key = "127.0.0.1:54545:127.0.0.1:32", loopback = "127.0.0.1";
-            std::vector<std::string> args = { "-o", "ExitOnForwardFailure=yes", "-v", "-N", "-L", key, loopback };
+            std::vector<std::string> args
+                = { "-o", "ExitOnForwardFailure=yes", "-v", "-N", "-L", key, std::move(loopback) };
             proc.Create(ioContext, "", args);
             CHECK(proc.GetAddressFwdSessionKey() == key);
 

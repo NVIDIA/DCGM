@@ -30,7 +30,10 @@
 #include "DcgmRequest.h"
 #include "DcgmResourceManager.h"
 #include "DcgmWatcher.h"
-#include "dcgm_agent.h"
+#include <DcgmTaskRunner.h>
+#include <HangDetect.h>
+#include <HangDetectHandler.h>
+#include <HangDetectMonitor.h>
 #include <core/DcgmModuleCore.h>
 #include <dcgm_core_communication.h>
 #include <iostream>
@@ -60,11 +63,37 @@ typedef struct
     timelib64_t endTime;
 } jobRecord_t;
 
+class DcgmHostEngineHandler;
+class TaskContextManager;
+
+/*****************************************************************************/
+/**
+ * Respond to hang detection events. */
+class EngineHangDetectHandler : public HangDetectHandler
+{
+public:
+    EngineHangDetectHandler()
+        : HangDetectHandler()
+    {}
+
+    void SetTaskContextManager(class TaskContextManager const *taskCtxMgr);
+
+    virtual void HandleHangDetectedEvent(HangDetectedEvent const &hangEvent) override;
+
+    void SetTerminateOnHang(bool const terminateOnHang)
+    {
+        m_terminateOnHang = terminateOnHang;
+    }
+
+private:
+    bool m_terminateOnHang                       = false;
+    class TaskContextManager const *m_taskCtxMgr = nullptr; // Non-owning pointer to static TaskContextManager object.
+};
 
 class DcgmHostEngineHandler
 {
 private:
-    static const int DCGM_HE_NUM_WORKERS = 3; /* How many worker threads to use for processing
+    static constexpr int DCGM_HE_NUM_WORKERS = 3; /* How many worker threads to use for processing
                                                  user data */
 
 public:
@@ -608,13 +637,16 @@ private:
     static void StaticProcessDisconnect(dcgm_connection_id_t connectionId, void *userData);
 
     /*****************************************************************************/
+    /**
+     * Initialize hang detection
+     */
+    void InitializeHangDetection();
 
     /*****************************************************************************
      Private Constructor and Destructor to achieve Singelton design
      *****************************************************************************/
     DcgmHostEngineHandler()
-        : m_dcgmIpc(DCGM_HE_NUM_WORKERS)
-        , m_nvmlLoaded(false)
+        : m_nvmlLoaded(false)
     {}
     explicit DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params);
     virtual ~DcgmHostEngineHandler();
@@ -635,7 +667,17 @@ private:
     dcgmCoreCallbacks_t m_coreCallbacks {}; // The callback function passed to modules for core requests
     DcgmFieldGroupManager *mpFieldGroupManager {};
 
-    DcgmIpc m_dcgmIpc; /* IPC object */
+    /* HangDetect must appear before all monitored objects with managed lifetimes to ensure required
+       destruction order. */
+    bool m_hangDetectDisabled                                    = false;
+    std::unique_ptr<HangDetect> m_detector                       = nullptr;
+    std::unique_ptr<EngineHangDetectHandler> m_hangDetectHandler = nullptr;
+    std::unique_ptr<HangDetectMonitor> m_monitor                 = nullptr;
+
+    static std::chrono::seconds constexpr DEFAULT_HANG_DETECT_CHECK_INTERVAL { 60 };
+    static std::chrono::seconds constexpr DEFAULT_HANG_DETECT_EXPIRY_SEC { 600 };
+
+    std::unique_ptr<DcgmIpc> m_dcgmIpc { nullptr }; /* IPC object */
 
     /* Field Groups */
     dcgmFieldGrp_t mFieldGroup1Sec {};

@@ -34,6 +34,7 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
     // parameterNames must be null terminated
     const char *parameterNames[] = { MEMORY_STR_IS_ALLOWED,
                                      MEMORY_STR_MIN_ALLOCATION_PERCENTAGE,
+                                     MEMORY_STR_MAX_FREE_MEMORY_MB,
                                      MEMORY_L1TAG_STR_IS_ALLOWED,
                                      MEMORY_L1TAG_STR_TEST_DURATION,
                                      MEMORY_L1TAG_STR_TEST_LOOPS,
@@ -44,8 +45,9 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
                                      nullptr };
     char const *description      = "This plugin will test the memory of a given GPU.";
     const dcgmPluginValue_t paramTypes[]
-        = { DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamInt,
-            DcgmPluginParamInt,  DcgmPluginParamInt, DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamNone };
+        = { DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamFloat, DcgmPluginParamBool,
+            DcgmPluginParamInt,  DcgmPluginParamInt, DcgmPluginParamInt,   DcgmPluginParamInt,
+            DcgmPluginParamBool, DcgmPluginParamInt, DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 

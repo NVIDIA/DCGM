@@ -28,6 +28,7 @@ target_sources(dcgmlibtests
         DcgmClientHandlerTests.cpp
         DcgmResourceManagerTests.cpp
         DcgmTopologyTests.cpp
+        DcgmImexManagerTests.cpp
 )
 
 target_link_libraries(dcgmlibtests PRIVATE

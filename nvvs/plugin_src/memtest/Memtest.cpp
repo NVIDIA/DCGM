@@ -66,6 +66,7 @@ static __thread unsigned long *err_second_read;
 static __thread unsigned int *err_count;
 
 unsigned int gpu_errors[DCGM_MAX_NUM_DEVICES];
+unsigned int gpu_skipped[DCGM_MAX_NUM_DEVICES];
 
 #define GRIDSIZE      1024 /* Every GPU we support has a max dimension of 1024. Use that to maximize kernel occupancy */
 #define TDIFF(tb, ta) (tb.tv_sec - ta.tv_sec + 0.000001 * (tb.tv_usec - ta.tv_usec))
@@ -161,9 +162,10 @@ Memtest::Memtest(TestParameters *testParameters, MemtestPlugin *plugin)
     m_device.reserve(DCGM_MAX_NUM_DEVICES);
     m_testParameters = testParameters;
 
-    if (!m_testParameters)
+    if (!m_testParameters || !plugin)
     {
-        throw std::runtime_error("Null testParameters passed in");
+        throw std::runtime_error(
+            fmt::format("Null parameters [testParameters: {}, plugin: {}] passed in", !!m_testParameters, !!plugin));
     }
 
     m_plugin = plugin;
@@ -181,6 +183,7 @@ Memtest::Memtest(TestParameters *testParameters, MemtestPlugin *plugin)
     cuda_memtests[10].enabled = m_testParameters->GetBoolFromString(MEMTEST_STR_TEST10);
 
     memset(gpu_errors, 0, sizeof(gpu_errors));
+    memset(gpu_skipped, 0, sizeof(gpu_skipped));
 }
 
 /*****************************************************************************/
@@ -445,8 +448,12 @@ int Memtest::CudaInit()
     /* Do per-device initialization */
     for (auto &gpu : m_device)
     {
+        // Get the CUDA device ordinal from the CUdevice handle
+        // When CUDA_VISIBLE_DEVICES is set, the ordinal may be different from the DCGM GPU index
+        int cudaDeviceOrdinal = static_cast<int>(gpu.cuDevice);
+
         // Clean up resources before context creation
-        cudaError_t cudaResult = cudaSetDevice(gpu.gpuId);
+        cudaError_t cudaResult = cudaSetDevice(cudaDeviceOrdinal);
         if (cudaResult != cudaSuccess)
         {
             LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin, m_plugin->GetMmeTestTestName(), "cudaSetDevice", cudaResult, gpu.gpuId);
@@ -554,7 +561,7 @@ int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginEntityList_v1 &entityL
         for (auto &device : m_device)
         {
             workerThreads.emplace_back(
-                std::make_unique<MemtestWorker>(&device, *this, m_testParameters, *m_dcgmRecorder));
+                std::make_unique<MemtestWorker>(&device, m_testParameters, *m_plugin, *m_dcgmRecorder));
             workerThreads.back()->Start();
             auto const tid = workerThreads.back()->GetCachedTid();
             if (tid == 0)
@@ -623,10 +630,9 @@ int Memtest::Run(dcgmHandle_t handle, const dcgmDiagPluginEntityList_v1 &entityL
 }
 
 /*****************************************************************************/
-bool Memtest::CheckPassFailSingleGpu(memtest_device_p device, std::vector<DcgmError> &errorList)
+nvvsPluginResult_t Memtest::CheckPassFailSkipSingleGpu(memtest_device_p device, std::vector<DcgmError> &errorList)
 {
     char buf[256];
-    bool passed = true;
 
     // Verify error count from tests
     if (gpu_errors[device->gpuId] > 0)
@@ -638,10 +644,13 @@ bool Memtest::CheckPassFailSingleGpu(memtest_device_p device, std::vector<DcgmEr
         DcgmError d { device->gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_MISMATCH, d, device->gpuId);
         errorList.push_back(d);
-        passed = false;
+        return NVVS_RESULT_FAIL;
     }
-
-    return passed;
+    else if (gpu_skipped[device->gpuId] > 0)
+    {
+        return NVVS_RESULT_SKIP;
+    }
+    return NVVS_RESULT_PASS;
 }
 
 /*****************************************************************************/
@@ -653,10 +662,14 @@ bool Memtest::CheckPassFail()
     for (auto &gpu : m_device)
     {
         errorList.clear();
-        bool passed = CheckPassFailSingleGpu(&gpu, errorList);
-        if (passed)
+        auto result = CheckPassFailSkipSingleGpu(&gpu, errorList);
+        if (result == NVVS_RESULT_PASS)
         {
             m_plugin->SetResultForGpu(m_plugin->GetMmeTestTestName(), gpu.gpuId, NVVS_RESULT_PASS);
+        }
+        else if (result == NVVS_RESULT_SKIP)
+        {
+            m_plugin->SetResultForGpu(m_plugin->GetMmeTestTestName(), gpu.gpuId, NVVS_RESULT_SKIP);
         }
         else
         {
@@ -680,10 +693,10 @@ bool Memtest::CheckPassFail()
  * MemtestWorker implementation.
  */
 /****************************************************************************/
-MemtestWorker::MemtestWorker(memtest_device_p device, Memtest &plugin, TestParameters *tp, DcgmRecorder &dr)
+MemtestWorker::MemtestWorker(memtest_device_p device, TestParameters *tp, MemtestPlugin &plugin, DcgmRecorder &dr)
     : m_device(device)
-    , m_plugin(plugin)
     , m_testParameters(tp)
+    , m_plugin(plugin)
     , m_dcgmRecorder(dr)
     , m_failGpu(false)
 {
@@ -789,6 +802,7 @@ struct fmt::formatter<cudaUUID_t> : ostream_formatter
 void MemtestWorker::run()
 {
     CUresult cuSt;
+    auto constexpr minBlocks = 16;
 
     cudaDeviceProp prop {};
     if (auto cuErr = cudaGetDeviceProperties(&prop, m_device->cuDevice); cuErr != cudaSuccess)
@@ -809,8 +823,18 @@ void MemtestWorker::run()
         DCGM_LOG_DEBUG << "Setting small FB mode total size " << totmem;
     }
 
+    size_t tot_num_blocks = totmem / BLOCKSIZE;
     // need to leave a little headroom or later calls will fail
-    size_t tot_num_blocks = totmem / BLOCKSIZE - 16;
+    if (tot_num_blocks <= minBlocks)
+    {
+        log_info("Total memory is too small to run memtest on gpu {}", m_device->gpuId);
+        gpu_skipped[m_device->gpuId] = 1;
+        m_plugin.AddInfoVerboseForGpu(m_plugin.GetMmeTestTestName(),
+                                      m_device->gpuId,
+                                      fmt::format("Total memory [{}] is too small to run memtest.", totmem));
+        return;
+    }
+    tot_num_blocks -= minBlocks;
 
     cuSt = cuCtxSetCurrent(m_device->cuContext);
     if (cuSt)
@@ -827,12 +851,32 @@ void MemtestWorker::run()
               prop.pciBusID,
               prop.pciDeviceID);
 
-    size_t freeMem  = 0;
-    size_t totalMem = 0;
+    size_t freeMem               = 0;
+    size_t totalMem              = 0;
+    double minAllocationFraction = m_testParameters->GetDouble(MEMTEST_STR_MIN_ALLOCATION_PERCENTAGE) / 100.0;
+    if (minAllocationFraction <= 0.0 || minAllocationFraction > 1.0)
+    {
+        log_warning("Invalid minimum allocation percentage: {}%. Defaulting to {}%",
+                    minAllocationFraction * 100,
+                    DEFAULT_MIN_ALLOCATION_PERCENTAGE);
+        minAllocationFraction = DEFAULT_MIN_ALLOCATION_PERCENTAGE / 100.0;
+    }
+
     if (auto st = cudaMemGetInfo(&freeMem, &totalMem); st != cudaSuccess)
     {
         log_error(
             "cudaMemGetInfo failed for gpu {} with error: ({}) {}", m_device->gpuId, cuSt, cudaGetErrorString(st));
+        return;
+    }
+    log_debug("freeMem: {}, totalMem: {} for GPU {}", freeMem, totalMem, m_device->gpuId);
+
+    if (freeMem < totalMem * minAllocationFraction)
+    {
+        auto const msg = fmt::format("Free memory is less than {}% of total memory. Skipping memtest.",
+                                     minAllocationFraction * 100);
+        log_info(msg);
+        gpu_skipped[m_device->gpuId] = 1;
+        m_plugin.AddInfoVerboseForGpu(m_plugin.GetMmeTestTestName(), m_device->gpuId, msg);
         return;
     }
 
@@ -842,17 +886,32 @@ void MemtestWorker::run()
         return;
     }
 
-    tot_num_blocks = std::min(tot_num_blocks, (size_t)(freeMem / BLOCKSIZE - 16));
+    auto freeMemBlocks = freeMem / BLOCKSIZE;
+    if (freeMemBlocks <= minBlocks)
+    {
+        log_info("Not enough memory to run memtest on gpu {}", m_device->gpuId);
+        gpu_skipped[m_device->gpuId] = 1;
+        m_plugin.AddInfoVerboseForGpu(m_plugin.GetMmeTestTestName(),
+                                      m_device->gpuId,
+                                      fmt::format("Not enough memory to run memtest. Free memory: [{}]", freeMem));
+        return;
+    }
+    tot_num_blocks = std::min(tot_num_blocks, freeMemBlocks - minBlocks);
     cudaError_t st = cudaSuccess;
     do
     {
-        tot_num_blocks -= 16; // magic number 16 MB
-        DCGM_LOG_DEBUG << "Trying to allocate " << tot_num_blocks << "MB" << " for gpu " << m_device->gpuId;
-        if (tot_num_blocks <= 0)
+        if (tot_num_blocks <= minBlocks)
         {
-            DCGM_LOG_ERROR << "cannot allocate any memory from GPU " << m_device->gpuId;
+            log_error("Cannot allocate any memory from GPU {}", m_device->gpuId);
+            gpu_skipped[m_device->gpuId] = 1;
+            m_plugin.AddInfoVerboseForGpu(
+                m_plugin.GetMmeTestTestName(),
+                m_device->gpuId,
+                fmt::format("Cannot allocate memory from GPU {} for doing memtest.", m_device->gpuId));
             return;
         }
+        tot_num_blocks -= minBlocks;
+        log_debug("Trying to allocate {} MB for gpu {}", tot_num_blocks, m_device->gpuId);
         if (st = m_memoryManager.Initialize(tot_num_blocks, m_numChunks, m_useMappedMemory); st != cudaSuccess)
         {
             log_error("MemoryChunkManager::Initialize failed for gpu {}", m_device->gpuId);
@@ -1628,7 +1687,10 @@ int test7(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
 {
     CUresult cuRes;
     unsigned int *host_buf;
-    host_buf         = (unsigned int *)malloc(BLOCKSIZE);
+    if (host_buf = (unsigned int *)malloc(BLOCKSIZE); host_buf == nullptr)
+    {
+        return -1;
+    }
     unsigned int err = 0;
     unsigned int i;
 
@@ -1644,7 +1706,13 @@ int test7(memtest_device_p gpu, MemoryChunkManager const &memoryManager)
     for (size_t chunkIndex = 0; chunkIndex < memoryManager.GetNumChunks(); chunkIndex++)
     {
         char *ptr = memoryManager.GetChunkStart(chunkIndex);
-        cudaMemcpy(ptr, host_buf, BLOCKSIZE, cudaMemcpyHostToDevice);
+        if (auto res = cudaMemcpy(ptr, host_buf, BLOCKSIZE, cudaMemcpyHostToDevice); res != cudaSuccess)
+        {
+            auto *memtestPlugin = static_cast<MemtestPlugin *>(gpu->nvvsDevice->GetPlugin());
+            LOG_CUDA_ERROR_FOR_PLUGIN(
+                memtestPlugin, memtestPlugin->GetMmeTestTestName(), test7_write_func_name, res, gpu->gpuId);
+            goto cleanup;
+        }
     }
 
     // Phase 1: Write phase for ALL chunks

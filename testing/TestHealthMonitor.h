@@ -45,7 +45,7 @@ private:
     // Test data structure for XIDs
     struct XidTestInfo
     {
-        int xid;
+        uint64_t xid;
         char const *desc;
         dcgmHealthWatchResults_t expectedStatus;
         dcgmHealthSystems_t subsystem;
@@ -67,12 +67,13 @@ private:
     int TestXidSeverityLevels();
 
     dcgmReturn_t TestSingleXid(unsigned int const gpuId,
-                               int const xid,
+                               uint64_t const xid,
                                char const *const xidDesc,
                                dcgmHealthWatchResults_t const expectedStatus,
                                dcgmError_t const expectedError,
                                auto const timestamp,
-                               std::unique_ptr<dcgmHealthResponse_t> &response) const;
+                               std::unique_ptr<dcgmHealthResponse_t> &response,
+                               dcgmHealthSystems_t const currentSubsystem) const;
 
     std::vector<unsigned int> m_gpus; /* List of GPUs to run on, copied in Init() */
     dcgmGpuGrp_t m_gpuGroup;          /* Group consisting of the members of m_gpus */

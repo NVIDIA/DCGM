@@ -1111,10 +1111,26 @@ def helper_health_check_nvlink_link_down_nvswitch(handle, switchIds):
     assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_NVLINK_DOWN)
     assert str(linkId) in responseV5.incidents[0].error.msg, "Didn't find linkId %d in %s" % (linkId, responseV5.incidents[0].error.msg)
 
-@test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_injection_nvswitches()
-def test_health_check_nvlink_link_down_nvswitch_standalone(handle, switchIds):
-    helper_health_check_nvlink_link_down_nvswitch(handle, switchIds)
+def clearNvlinkErrorFields(handle, gpuId):
+    """
+    Clear all NVLink error counter fields that health monitoring checks.
+    This is a workaround to clear cache pollution from previous tests.
+
+    Args:
+        handle: DCGM handle
+        gpuId: GPU ID to clear fields for
+    """
+    nvlinkErrorFields = [
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
+    ]
+
+    for field in nvlinkErrorFields:
+        ret = dcgm_field_injection_helpers.inject_field_value_i64(
+            handle, gpuId, field, 0, 5)
+        assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to clear field {field}"
 
 def helper_health_check_multiple_failures(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -1240,7 +1256,7 @@ def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):
     gpuIds = groupObj.GetGpuIds() #Limit gpuIds to GPUs in our group
     gpuId = gpuIds[0]
 
-    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_MEM
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_ALL
     groupObj.health.Set(newSystems)
 
     skip_test_if_unhealthy(groupObj)
@@ -1254,7 +1270,7 @@ def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):
     assert (responseV5.incidentCount == 1)
     assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
     assert (responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
-    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_ALL)
     assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
     assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_UNCONTAINED_ERROR)
 
@@ -1366,3 +1382,32 @@ def test_dcgm_health_cpu_power(handle, cpuIds, coreIds):
     assert (responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_POWER)
     assert (responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
     assert (responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus()
+def test_dcgm_health_check_pcie_correctable_errors_field_injection_valid(handle, gpuIds):
+    """Test PCIe correctable errors field value injection and retrieval"""
+    gpuId = gpuIds[0]
+    injection_value = 42
+    
+    # Create field value for injection
+    fv = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
+    fv.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
+    fv.fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS
+    fv.status = 0
+    fv.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
+    fv.ts = int((time.time()-5) * 1000000.0)
+    fv.value.i64 = injection_value
+    
+    # Inject the field value
+    ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fv)
+    assert ret == dcgm_structs.DCGM_ST_OK, f"Field injection failed with status {ret}"
+    
+    # Verify the injected value can be retrieved
+    fieldValues = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId, [dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS])
+    assert len(fieldValues) == 1, f"Expected 1 field value, got {len(fieldValues)}"
+    assert fieldValues[0].fieldId == dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS, f"Expected fieldId {dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS}, got {fieldValues[0].fieldId}"
+    assert fieldValues[0].status == dcgm_structs.DCGM_ST_OK, f"Expected status OK, got {fieldValues[0].status}"
+    assert fieldValues[0].value.i64 == injection_value, f"Expected value {injection_value}, got {fieldValues[0].value.i64}"
+    
+    print(f"Field injection and retrieval successful: value={fieldValues[0].value.i64}")

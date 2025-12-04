@@ -479,10 +479,11 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_SXID_ERROR_MSG                      "Detected fatal NvSwitch SXID %u"
 #define DCGM_FR_GFLOPS_THRESHOLD_VIOLATION_MSG      "Detected %.2f %s for GPU %u which is below the threshold %.2f"
 #define DCGM_FR_NAN_VALUE_MSG                       "Found %lld NaN-value memory elements on GPU %u"
-#define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_MSG   "Fabric Manager (Cluster UUID: %s, Clique ID: %ld): %s."
-#define DCGM_FR_TEST_SKIPPED_MSG                    "Test %s was skipped."
-#define DCGM_FR_FALLEN_OFF_BUS_MSG                  "GPU %d has fallen off the bus"
-#define DCGM_FR_ERROR_SENTINEL_MSG                  "" /* See message inplace */
+#define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_MSG \
+    "Fabric Manager (Cluster UUID: %s, Clique ID: %ld, Health Mask: %#lx): %s."
+#define DCGM_FR_TEST_SKIPPED_MSG   "Test %s was skipped."
+#define DCGM_FR_FALLEN_OFF_BUS_MSG "GPU %d has fallen off the bus"
+#define DCGM_FR_ERROR_SENTINEL_MSG "" /* See message inplace */
 
 /*
  * Suggestions for next steps for the corresponding error message

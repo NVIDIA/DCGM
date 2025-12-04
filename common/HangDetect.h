@@ -101,6 +101,16 @@ public:
      */
     void StopMonitoring();
 
+    /**
+     * Get the current process state for a task
+     *
+     * @param pid Process ID
+     * @param tid Optional thread ID. If not provided, gets the main process state.
+     * @return std::optional<char> The process state character ('R', 'S', 'D', etc.) if successful,
+     *         std::nullopt if the process state cannot be determined.
+     */
+    virtual std::optional<char> GetTaskState(pid_t pid, std::optional<pid_t> tid = std::nullopt);
+
 private:
     /**
      * Get the current set of monitored tasks

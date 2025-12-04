@@ -177,14 +177,14 @@ private:
 
     /*************************************************************************/
     /*
-     * Check various statistics and device properties to determine if the plugin
-     * has failed for the given GPU/memtest_device or not.
+     * Check result for a single GPU
      *
-     * Returns: true if plugin has NOT failed
-     *          false if plugin has failed
+     * Returns: NVVS_RESULT_PASS if the GPU passed the test
+     *          NVVS_RESULT_FAIL if the GPU failed the test
+     *          NVVS_RESULT_SKIP if the GPU skipped the test
      *
      */
-    bool CheckPassFailSingleGpu(memtest_device_p device, std::vector<DcgmError> &errorList);
+    nvvsPluginResult_t CheckPassFailSkipSingleGpu(memtest_device_p device, std::vector<DcgmError> &errorList);
 
     /*************************************************************************/
     /*
@@ -232,8 +232,8 @@ class MemtestWorker : public DcgmThread
 {
 private:
     memtest_device_p m_device;          /* Which device this worker thread is running on */
-    Memtest &m_plugin;                  /* ConstantPerf plugin for logging and failure checks */
     TestParameters *m_testParameters;   /* Read-only test parameters */
+    MemtestPlugin &m_plugin;            /* Plugin for logging and failure checks */
     DcgmRecorder &m_dcgmRecorder;       /* Object for interacting with DCGM */
     bool m_useMappedMemory;             /* Use host (mapped) or device memory */
     unsigned int m_testDuration;        /* Duration to execute all iterations of tests */
@@ -246,7 +246,7 @@ private:
 
 public:
     /*************************************************************************/
-    MemtestWorker(memtest_device_p device, Memtest &plugin, TestParameters *tp, DcgmRecorder &dr);
+    MemtestWorker(memtest_device_p device, TestParameters *tp, MemtestPlugin &plugin, DcgmRecorder &dr);
 
     /*************************************************************************/
     virtual ~MemtestWorker() /* Virtual to satisfy ancient compiler */

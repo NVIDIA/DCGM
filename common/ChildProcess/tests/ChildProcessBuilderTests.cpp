@@ -230,7 +230,7 @@ TEST_CASE("ChildProcess does not throw when invalid executable is provided")
     signal(SIGPIPE, SIG_IGN);
 
     auto ioContext = IoContext();
-    auto proc      = ChildProcessBuilder {}.SetExecutable(exePath).Build(ioContext);
+    auto proc      = ChildProcessBuilder {}.SetExecutable(std::move(exePath)).Build(ioContext);
     proc.Run();
     REQUIRE(!proc.IsAlive());
 }

@@ -16,13 +16,14 @@
 #pragma once
 
 #include <DcgmThread.h>
+#include <HangDetectMonitor.h>
 #include <TaskRunner.hpp>
 
 #include <atomic>
 #include <cstddef>
-#include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <sys/syscall.h>
 #include <vector>
 
 #include <pthread.h>
@@ -32,9 +33,23 @@ namespace DcgmNs
 class ThreadPool
 {
 public:
+    ThreadPool(std::size_t numOfWorkers, HangDetectMonitor *monitor)
+        : m_shouldStop(false)
+        , m_numOfWorkers(numOfWorkers)
+        , m_monitor(monitor)
+    {
+        Init(numOfWorkers);
+    }
+
     explicit ThreadPool(std::size_t numOfWorkers)
         : m_shouldStop(false)
         , m_numOfWorkers(numOfWorkers)
+        , m_monitor(nullptr)
+    {
+        Init(numOfWorkers);
+    }
+
+    void Init(std::size_t numOfWorkers)
     {
         std::stringstream ss;
         ss << "Worker of a ThreadPool at 0x" << std::hex << this;
@@ -90,6 +105,18 @@ public:
             [func = std::move(func)]() mutable -> std::invoke_result_t<Func> { return std::invoke(func); }));
     }
 
+    /**
+     * Get the hang detect monitor
+     *
+     * @return The hang detect monitor, nullptr if disabled
+     * @note The caller must ensure the monitor remains valid while the pool is running.
+     *       This method is primarily for use by WorkerThreads.
+     */
+    HangDetectMonitor *GetHangDetectMonitor() const
+    {
+        return m_monitor;
+    }
+
 private:
     class WorkingThread
     {
@@ -114,12 +141,26 @@ private:
 
         void Run()
         {
+            pid_t const pid = getpid();
+            pid_t const tid = syscall(SYS_gettid);
+
+            auto monitor = m_owner.GetHangDetectMonitor();
+            if (monitor)
+            {
+                monitor->AddMonitoredTask(pid, tid);
+            }
+
             while (!ShouldStop())
             {
                 if (m_owner.m_runner.Run() != TaskRunner::RunResult::Ok)
                 {
                     break;
                 }
+            }
+
+            if (monitor)
+            {
+                monitor->RemoveMonitoredTask(pid, tid);
             }
         }
 
@@ -155,6 +196,7 @@ private:
     std::vector<WorkingThread> m_threads;
     std::atomic_bool m_shouldStop;
     std::size_t m_numOfWorkers;
+    HangDetectMonitor *m_monitor { nullptr };
 };
 
 } // namespace DcgmNs

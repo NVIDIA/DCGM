@@ -32,7 +32,7 @@ class DcgmDiag:
     }
 
     def __init__(self, gpuIds=None, cpuIds=None, testNamesStr='', paramsStr='',
-                 ignoreErrorCodesStr='', verbose=True, version=dcgm_structs.dcgmRunDiag_version10, 
+                 ignoreErrorCodesStr='', verbose=True, version=dcgm_structs.dcgmRunDiag_version10,
                  timeout=0):
         # Make sure version is valid
         if version not in DcgmDiag._versionMap:
@@ -51,6 +51,7 @@ class DcgmDiag:
             logger.info("Unexpected runDiag version " + self.version + " using RunDiag_t")
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_t()
 
+        self.runDiagInfo.flags = 0
         self.numTests = 0
         self.numParams = 0
         self.gpuList = ""
@@ -134,6 +135,12 @@ class DcgmDiag:
             self.runDiagInfo.flags |= dcgm_structs.DCGM_RUN_FLAGS_VERBOSE
         else:
             self.runDiagInfo.flags &= ~dcgm_structs.DCGM_RUN_FLAGS_VERBOSE
+
+    def SetEnableHeartbeat(self, val):
+        if val == True:
+            self.runDiagInfo.flags |= dcgm_structs.DCGM_RUN_FLAGS_ENABLE_HEARTBEAT
+        else:
+            self.runDiagInfo.flags &= ~dcgm_structs.DCGM_RUN_FLAGS_ENABLE_HEARTBEAT
 
     def UseFakeGpus(self):
         self.runDiagInfo.fakeGpuList = self.gpuList
@@ -232,13 +239,12 @@ class DcgmDiag:
             raise ValueError("Cannot set debug level to %d. Debug Level must be a value from 0-5 inclusive.")
 
         self.runDiagInfo.debugLevel = debugLevel
-    
+
     def SetWatchFrequency(self, val):
         if val < 100000 or val > 60000000:
             err = "Cannot set debug level to {}. Watch frequency must be a value from 100000-60000000 inclusive." \
                   % (val)
             raise ValueError(err)
-        
         self.runDiagInfo.watchFrequency = val
 
 ################# General helpers #################

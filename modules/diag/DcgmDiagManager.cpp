@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -44,8 +45,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
-
 
 #define NVVS_CHANNEL_FD 3
 
@@ -84,6 +85,30 @@ std::string SanitizedString(std::string const &str)
     });
     return sanitized;
 }
+
+std::chrono::seconds GetHeartbeatTimeout()
+{
+    auto constexpr defaultTimeout = std::chrono::seconds(600);
+    if (auto value = std::getenv("DCGM_DIAG_HEARTBEAT_TIMEOUT_SEC"); value)
+    {
+        try
+        {
+            auto timeoutSec = std::stoi(value);
+            if (timeoutSec <= 0)
+            {
+                log_error("DCGM_DIAG_HEARTBEAT_TIMEOUT_SEC value must be greater than 0: {}", timeoutSec);
+                return defaultTimeout;
+            }
+            return std::chrono::seconds(timeoutSec);
+        }
+        catch (std::exception &e)
+        {
+            log_error("Invalid DCGM_DIAG_HEARTBEAT_TIMEOUT_SEC value: {}", e.what());
+        }
+    }
+    return defaultTimeout;
+}
+
 } // namespace
 
 /*****************************************************************************/
@@ -92,6 +117,7 @@ DcgmDiagManager::DcgmDiagManager(dcgmCoreCallbacks_t &dcc)
     , m_mutex(0)
     , m_nvvsPID(-1)
     , m_ticket(0)
+    , m_childProcessHandle(0)
     , m_coreProxy(dcc)
     , m_amShuttingDown(false)
 {}
@@ -650,6 +676,7 @@ dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
                                                  std::string *stderrStr,
                                                  dcgmRunDiag_v10 *drd,
                                                  DcgmDiagResponseWrapper &response,
+                                                 dcgm_connection_id_t connectionId,
                                                  std::string const &fakeGpuIds,
                                                  std::string const &entityIds,
                                                  ExecuteWithServiceAccount useServiceAccount)
@@ -662,7 +689,7 @@ dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
         return ret;
     }
 
-    return PerformExternalCommand(args, response, stdoutStr, stderrStr, useServiceAccount);
+    return PerformExternalCommand(args, response, connectionId, stdoutStr, stderrStr, useServiceAccount);
 }
 
 /*****************************************************************************/
@@ -674,7 +701,7 @@ dcgmReturn_t DcgmDiagManager::PerformDummyTestExecute(std::string *stdoutStr, st
 
     response.SetVersion(responseUptr.get());
     args.emplace_back("dummy");
-    return PerformExternalCommand(args, response, stdoutStr, stderrStr);
+    return PerformExternalCommand(args, response, 0, stdoutStr, stderrStr);
 }
 
 /****************************************************************************/
@@ -686,7 +713,9 @@ uint64_t DcgmDiagManager::GetTicket()
 }
 
 /****************************************************************************/
-void DcgmDiagManager::UpdateChildPID(pid_t value, uint64_t myTicket)
+void DcgmDiagManager::UpdateRunningNvvsState(pid_t value,
+                                             uint64_t myTicket,
+                                             std::optional<dcgm_connection_id_t> connectionId)
 {
     DcgmLockGuard lock(&m_mutex);
     // Check to see if another thread has updated the pid
@@ -695,7 +724,8 @@ void DcgmDiagManager::UpdateChildPID(pid_t value, uint64_t myTicket)
         // If another thread has updated the PID, do not update the pid
         return;
     }
-    m_nvvsPID = value;
+    m_connectionId = connectionId;
+    m_nvvsPID      = value;
 }
 
 static unsigned int GetStructVersion(std::span<std::byte> data)
@@ -759,6 +789,7 @@ void DcgmDiagManager::UpdateDiagStatus(std::span<std::byte> data) const
 /****************************************************************************/
 dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &args,
                                                      DcgmDiagResponseWrapper &response,
+                                                     dcgm_connection_id_t connectionId,
                                                      std::string *const stdoutStr,
                                                      std::string *const stderrStr,
                                                      ExecuteWithServiceAccount useServiceAccount)
@@ -794,6 +825,11 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
         if (auto const ret = CanRunNewNvvsInstance(); ret != DCGM_ST_OK)
         {
             return ret;
+        }
+        if (m_diagCallers.IsAlreadyStopped(connectionId))
+        {
+            log_debug("Caller already stopped.");
+            return DCGM_ST_CALLER_ALREADY_STOPPED;
         }
 
         auto serviceAccount
@@ -896,7 +932,7 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
         }
 
         m_childProcessHandle = handle;
-        UpdateChildPID(pid, myTicket);
+        UpdateRunningNvvsState(pid, myTicket, connectionId);
     }
 
     /* Do not return DCGM_ST_DIAG_BAD_LAUNCH for errors after this point since the child has been launched - use
@@ -971,7 +1007,7 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
     }
 
     // Reset pid so that future runs know that nvvs is no longer running
-    UpdateChildPID(-1, myTicket);
+    UpdateRunningNvvsState(-1, myTicket, std::nullopt);
 
     // Get process status
     dcgmChildProcessStatus_v1 status = {};
@@ -1114,6 +1150,7 @@ struct ExecuteAndParseNvvsResult
 auto ExecuteAndParseNvvs(DcgmDiagManager &self,
                          DcgmDiagResponseWrapper &response,
                          dcgmRunDiag_v10 *drd,
+                         dcgm_connection_id_t connectionId,
                          std::string const &fakeGpuIds,
                          std::string const &entityIds,
                          DcgmDiagManager::ExecuteWithServiceAccount useServiceAccount
@@ -1123,8 +1160,8 @@ auto ExecuteAndParseNvvs(DcgmDiagManager &self,
     std::string stdoutStr;
     std::string stderrStr;
 
-    result.ret
-        = self.PerformNVVSExecute(&stdoutStr, &stderrStr, drd, response, fakeGpuIds, entityIds, useServiceAccount);
+    result.ret = self.PerformNVVSExecute(
+        &stdoutStr, &stderrStr, drd, response, connectionId, fakeGpuIds, entityIds, useServiceAccount);
     if (result.ret != DCGM_ST_OK)
     {
         auto const msg = fmt::format("Error when executing the diagnostic: {}\n"
@@ -1232,7 +1269,8 @@ bool ExecuteEudPluginsAsRoot(DcgmDiagManager &diagManager,
                              char const *serviceAccount,
                              std::string const &fakeGpuIds,
                              std::string const &entityIds,
-                             std::vector<std::string> const &testNames)
+                             std::vector<std::string> const &testNames,
+                             dcgm_connection_id_t connectionId)
 {
     if (auto serviceAccountCredentials = GetUserCredentials(serviceAccount);
         !serviceAccountCredentials.has_value() || (*serviceAccountCredentials).gid == 0
@@ -1251,8 +1289,13 @@ bool ExecuteEudPluginsAsRoot(DcgmDiagManager &diagManager,
         SafeCopyTo(eudDrd.testNames[index++], test.c_str());
     }
 
-    if (auto ret = ExecuteAndParseNvvs(
-            diagManager, eudResponse, &eudDrd, fakeGpuIds, entityIds, DcgmDiagManager::ExecuteWithServiceAccount::No);
+    if (auto ret = ExecuteAndParseNvvs(diagManager,
+                                       eudResponse,
+                                       &eudDrd,
+                                       connectionId,
+                                       fakeGpuIds,
+                                       entityIds,
+                                       DcgmDiagManager::ExecuteWithServiceAccount::No);
         ret.ret != DCGM_ST_OK)
     {
         log_debug("failed to rerun NVVS with root, ret: [{}].", ret.ret);
@@ -1278,7 +1321,8 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
     std::string const &entityIds,
     std::unordered_set<std::string_view> const &testNames,
     dcgmReturn_t lastRunRet,
-    DcgmDiagResponseWrapper &response)
+    DcgmDiagResponseWrapper &response,
+    dcgm_connection_id_t connectionId)
 {
     std::vector<std::string> eudRerunTestNames;
     static const std::string EUD_TEST     = "eud";
@@ -1357,7 +1401,7 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
     }
 
     if (!ExecuteEudPluginsAsRoot(
-            *this, drd, eudResponse, (*serviceAccount).c_str(), fakeGpuIds, entityIds, eudRerunTestNames))
+            *this, drd, eudResponse, (*serviceAccount).c_str(), fakeGpuIds, entityIds, eudRerunTestNames, connectionId))
     {
         return { wasExecuted, DCGM_ST_OK };
     }
@@ -1385,7 +1429,9 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
     return { wasExecuted, DCGM_ST_OK };
 }
 
-dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd, DcgmDiagResponseWrapper &response)
+dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd,
+                                      DcgmDiagResponseWrapper &response,
+                                      dcgm_connection_id_t connectionId)
 {
     bool areAllSameSku = true;
     std::vector<unsigned int> gpuIds;
@@ -1472,7 +1518,13 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd, DcgmDiagResponseWrap
         return DCGM_ST_OK;
     }
 
-    auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, fakeGpuIds, entityIds);
+    if (m_diagCallers.IsAlreadyStopped(connectionId))
+    {
+        log_debug("Caller already stopped.");
+        return DCGM_ST_CALLER_ALREADY_STOPPED;
+    }
+
+    auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, connectionId, fakeGpuIds, entityIds);
     // Some tests require root access. If no tests are found to run, consider re-running them
     // with root privileges to attempt execution again. Need to check again below for NO_AVAILABLE_TEST.
     if (nvvsResults.ret != DCGM_ST_OK && nvvsResults.ret != DCGM_ST_NVVS_NO_AVAILABLE_TEST)
@@ -1504,7 +1556,14 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd, DcgmDiagResponseWrap
         }
     }
 
-    auto [eudWasRerun, eudRet] = RerunEudDiagAsRoot(drd, fakeGpuIds, entityIds, testNames, nvvsResults.ret, response);
+    if (m_diagCallers.IsAlreadyStopped(connectionId))
+    {
+        log_debug("Caller already stopped.");
+        return DCGM_ST_CALLER_ALREADY_STOPPED;
+    }
+
+    auto [eudWasRerun, eudRet]
+        = RerunEudDiagAsRoot(drd, fakeGpuIds, entityIds, testNames, nvvsResults.ret, response, connectionId);
     if (eudRet != DCGM_ST_OK)
     {
         log_error("failed to rerun eud as root, err: [{}].", eudRet);
@@ -1589,6 +1648,7 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
     dcgmReturn_t retValidation;
     dcgmReturn_t retAction;
     std::vector<dcgmGroupEntityPair_t> entities;
+    std::jthread heartbeatThread;
 
     log_debug("performing action {} on group {} with validation {}", action, drd->groupId, drd->validate);
 
@@ -1598,6 +1658,33 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
     if (resRet != DCGM_ST_OK)
     {
         return resRet;
+    }
+
+    m_diagCallers.SetConnectionId(connectionId);
+    DcgmNs::Defer defer([this, connectionId]() { m_diagCallers.ResetConnectionId(connectionId); });
+
+    if (drd->flags & DCGM_RUN_FLAGS_ENABLE_HEARTBEAT)
+    {
+        m_diagCallers.SetHeartbeatEnabled(connectionId, true);
+        heartbeatThread = std::jthread([this, connectionId](std::stop_token st) {
+            std::condition_variable_any cv;
+            std::mutex m;
+            auto const heartbeatTimeout      = GetHeartbeatTimeout();
+            auto constexpr heartbeatInterval = std::chrono::seconds(8);
+
+            while (!st.stop_requested())
+            {
+                auto const lastHeartbeatTime = m_diagCallers.GetLastHeartbeatTime(connectionId);
+                if (lastHeartbeatTime + heartbeatTimeout < std::chrono::steady_clock::now())
+                {
+                    log_error("Heartbeat timeout, connection {} is still running.", connectionId);
+                    OnConnectionRemove(connectionId);
+                    break;
+                }
+                std::unique_lock<std::mutex> lock(m);
+                cv.wait_for(lock, st, heartbeatInterval, []() { return false; });
+            }
+        });
     }
 
     if (drd->groupId != DCGM_GROUP_NULL)
@@ -1645,7 +1732,13 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
 
     if ((drd->validate != DCGM_POLICY_VALID_NONE) || (strlen(drd->testNames[0]) > 0))
     {
-        retValidation = RunDiag(drd, response);
+        if (m_diagCallers.IsAlreadyStopped(connectionId))
+        {
+            log_debug("Caller already stopped.");
+            return DCGM_ST_CALLER_ALREADY_STOPPED;
+        }
+
+        retValidation = RunDiag(drd, response, connectionId);
 
         if (retValidation != DCGM_ST_OK)
         {
@@ -1790,4 +1883,34 @@ dcgmReturn_t DcgmDiagManager::ReadDataFromFd(DcgmNs::Utils::FileHandle &dataFd, 
         log_error("Diag result struct not received from NVVS.");
     }
     return DCGM_ST_OK;
+}
+
+void DcgmDiagManager::OnConnectionRemove(dcgm_connection_id_t connectionId)
+{
+    if (!m_diagCallers.Exists(connectionId) || !m_diagCallers.IsHeartbeatEnabled(connectionId))
+    {
+        return;
+    }
+
+    DcgmLockGuard lock(&m_mutex);
+    m_diagCallers.SetAlreadyStopped(connectionId);
+    if (!m_connectionId.has_value() || m_connectionId.value() != connectionId)
+    {
+        return;
+    }
+    log_error("Stopping running diag for connection {}", connectionId);
+    if (auto ret = StopRunningDiag(); ret != DCGM_ST_OK)
+    {
+        log_debug("failed to stop running diag, err: [{}]", ret);
+    }
+}
+
+void DcgmDiagManager::ReceiveHeartbeat(dcgm_connection_id_t connectionId)
+{
+    if (!m_diagCallers.Exists(connectionId))
+    {
+        return;
+    }
+    log_verbose("Received heartbeat from connection {}", connectionId);
+    m_diagCallers.ReceiveHeartbeat(connectionId);
 }

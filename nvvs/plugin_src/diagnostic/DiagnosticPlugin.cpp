@@ -357,6 +357,12 @@ void GpuBurnPlugin::Go(std::string const &testName,
     m_matrixDim           = static_cast<unsigned int>(m_testParameters->GetDouble(DIAGNOSTIC_STR_MATRIX_DIM));
     m_gflopsTolerancePcnt = m_testParameters->GetDouble(DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT);
 
+    if (m_testDuration < 1.0)
+    {
+        log_debug("A test duration of 0 seconds was requested; overriding to 1.0 seconds.");
+        m_testDuration = 1.0;
+    }
+
     std::string useDoubles = m_testParameters->GetString(DIAGNOSTIC_STR_USE_DOUBLES);
     bool supportsDoubles   = false;
     if (useDoubles.size() > 0)

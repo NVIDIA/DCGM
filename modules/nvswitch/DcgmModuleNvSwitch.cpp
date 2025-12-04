@@ -16,6 +16,7 @@
 #include "DcgmModuleNvSwitch.h"
 
 #include <DcgmLogging.h>
+#include <TaskContextManager.hpp>
 #include <cstdlib>
 #include <dcgm_api_export.h>
 #include <dcgm_structs.h>
@@ -53,6 +54,8 @@ DcgmModuleNvSwitch::DcgmModuleNvSwitch(dcgmCoreCallbacks_t &dcc)
     , m_lastLinkStatusUpdateUsec(0)
 {
     DCGM_LOG_DEBUG << "Constructing NvSwitch Module";
+
+    InitHangDetect();
 
     /* Start our TaskRunner now that we've survived initialization
      *
@@ -540,6 +543,17 @@ std::chrono::system_clock::time_point DcgmModuleNvSwitch::TryRunOnce(bool forceR
 void DcgmModuleNvSwitch::run()
 {
     using DcgmNs::TaskRunner;
+
+    pid_t const pid = getpid();
+    if (m_monitor && !ShouldStop())
+    {
+        m_monitor->AddMonitoredTask(pid, m_tid);
+    }
+    else
+    {
+        log_debug("Not monitoring this thread: {}", (ShouldStop() ? "stop requested" : "hang detection is disabled"));
+    }
+
     TryRunOnce(true);
     while (ShouldStop() == 0)
     {
@@ -550,11 +564,93 @@ void DcgmModuleNvSwitch::run()
 
         TryRunOnce(false);
     }
+
+    if (m_monitor)
+    {
+        m_monitor->RemoveMonitoredTask(pid, m_tid);
+    }
 }
+
 dcgmReturn_t DcgmModuleNvSwitch::ProcessPauseResumeMessage(PauseResumeMessage msg)
 {
     log_debug("Got {} message", (msg->pause ? "pause" : "resume"));
     return msg->pause ? m_nvswitchMgr.Pause() : m_nvswitchMgr.Resume();
+}
+
+/*************************************************************************/
+void DcgmModuleNvSwitch::InitHangDetect()
+{
+    auto constexpr DCGM_HANGDETECT_DISABLE    = "DCGM_HANGDETECT_DISABLE";
+    auto constexpr DCGM_HANGDETECT_EXPIRY_SEC = "DCGM_HANGDETECT_EXPIRY_SEC";
+    auto constexpr DEFAULT_HANG_DETECT_CHECK_INTERVAL { 60 };
+    auto constexpr DEFAULT_HANG_DETECT_EXPIRY_SEC { 600 };
+
+    std::chrono::seconds hangCheckIntervalSec = std::chrono::seconds(DEFAULT_HANG_DETECT_CHECK_INTERVAL);
+    std::chrono::seconds hangDetectExpirySec  = std::chrono::seconds(DEFAULT_HANG_DETECT_EXPIRY_SEC);
+    bool reportUserspaceHangs                 = false;
+
+    if (getenv(DCGM_HANGDETECT_DISABLE) != nullptr)
+    {
+        log_debug("Hang detection disabled");
+        return;
+    }
+
+    if (auto const expirySecStr = std::getenv(DCGM_HANGDETECT_EXPIRY_SEC); expirySecStr != nullptr)
+    {
+        unsigned int expirySec {};
+        auto const [_, ec] = std::from_chars(expirySecStr, expirySecStr + std::strlen(expirySecStr), expirySec);
+        if (ec != std::errc())
+        {
+            log_warning(
+                "Invalid {} value '{}'. Must be a non-negative number.", DCGM_HANGDETECT_EXPIRY_SEC, expirySecStr);
+        }
+        else
+        {
+            hangDetectExpirySec = std::chrono::seconds(expirySec);
+        }
+    }
+
+    m_handler = std::make_unique<DcgmModuleNvSwitchHangDetectHandler>();
+    m_handler->SetTaskContextManager(static_cast<class TaskContextManager const *>(GetTaskContextManager()));
+
+    m_detector = std::make_unique<HangDetect>();
+    m_monitor  = std::make_unique<HangDetectMonitor>(*m_detector, hangCheckIntervalSec, hangDetectExpirySec);
+    m_monitor->SetReportUserspaceHangs(reportUserspaceHangs);
+    m_monitor->SetHangDetectedHandler(m_handler.get());
+    m_monitor->StartMonitoring();
+    DcgmThread::SetHangDetectMonitor(m_monitor.get());
+}
+
+/*************************************************************************/
+void DcgmModuleNvSwitchHangDetectHandler::HandleHangDetectedEvent(HangDetectHandler::HangDetectedEvent const &hangEvent)
+{
+    auto const [pid, tid, duration] = hangEvent;
+    auto const taskType             = tid.has_value() ? "thread" : "process";
+    auto const taskId               = tid.value_or(pid);
+    auto const idType               = tid.has_value() ? "tid" : "pid";
+
+    if (!m_taskCtxMgr)
+    {
+        log_verbose("Task context manager is not set, skipping hang detected event for {}: {}", idType, taskId);
+        return;
+    }
+
+    if (!m_taskCtxMgr->isTaskIncluded(taskId))
+    {
+        log_verbose("Task is not registered, skipping hang detected event for {}: {}", idType, taskId);
+        return;
+    }
+
+    auto const msg
+        = fmt::format("A {} ({}: {}) has been unresponsive for {} seconds. "
+                      "If the process does not exit, it may need to be killed or the system may need to be restarted. "
+                      "Collect problem report logs before restarting.",
+                      taskType,
+                      idType,
+                      taskId,
+                      duration.count());
+
+    log_error(msg);
 }
 
 extern "C" {

@@ -28,39 +28,29 @@ FingerprintStoreRet FingerprintStore::Compute(std::string_view data, std::option
     // Linux 6.8.0. See proc_pid_stat(5) for details.
 
     TaskFingerprint fp {};
+    std::optional<char> taskState;
     if (data.size() == 0)
     {
-        return std::make_pair(DCGM_ST_NO_DATA, std::nullopt);
+        return FingerprintStoreRet { DCGM_ST_NO_DATA, std::nullopt, std::nullopt };
     }
 
     // Apply filtering if config is provided
     std::string filtered;
     if (config.has_value())
     {
-        if (filtered = FilterProcStatFields(data, *config); filtered.empty())
+        auto [filteredData, newTaskState] = FilterProcStatFields(data, *config);
+        if (filteredData.empty())
         {
-            return std::make_pair(DCGM_ST_NO_DATA, std::nullopt);
+            return FingerprintStoreRet { DCGM_ST_NO_DATA, std::nullopt, std::nullopt };
         }
 
-        data = filtered;
+        filtered  = std::move(filteredData);
+        data      = filtered;
+        taskState = newTaskState;
     }
 
     MurmurHash3_x64_128(data.data(), data.size(), m_mmhSeed, fp.data());
-    return std::make_pair(DCGM_ST_OK, fp);
-}
-
-/**********************************************************************************************************************/
-
-FingerprintStoreRet FingerprintStore::ComputeForTask(pid_t pid, std::optional<pid_t> tid)
-{
-    auto path = GetProcStatPath(pid, tid);
-    if (auto data = m_fileOp->Read(path); data.has_value())
-    {
-        // Use thread config if tid is provided, otherwise process config
-        auto config = tid.has_value() ? StatFieldConfig::ForThread() : StatFieldConfig::ForProcess();
-        return Compute(data.value(), config);
-    }
-    return std::make_pair(DCGM_ST_NO_DATA, std::nullopt);
+    return FingerprintStoreRet { DCGM_ST_OK, fp, taskState };
 }
 
 /**********************************************************************************************************************/
@@ -95,14 +85,14 @@ FingerprintStoreRet FingerprintStore::Retrieve(PidTidPair const &key)
 
     if (found.has_value())
     {
-        return std::make_pair(DCGM_ST_OK, found.value());
+        return FingerprintStoreRet { DCGM_ST_OK, found.value(), std::nullopt };
     }
     else
     {
-        log_error("Unable to retrieve fingerprint for {}",
+        log_debug("Unable to retrieve fingerprint for {}",
                   key.tid.has_value() ? fmt::format("task {} of pid {}", key.tid.value(), key.pid)
                                       : fmt::format("pid {}", key.pid));
-        return std::make_pair(DCGM_ST_NO_DATA, std::nullopt);
+        return FingerprintStoreRet { DCGM_ST_NO_DATA, std::nullopt, std::nullopt };
     }
 }
 
@@ -155,7 +145,8 @@ std::string FingerprintStore::GetProcStatPath(pid_t pid, std::optional<pid_t> ti
 
 /**********************************************************************************************************************/
 
-std::string FingerprintStore::FilterProcStatFields(std::string_view data, StatFieldConfig const &config)
+std::pair<std::string, std::optional<char>> FingerprintStore::FilterProcStatFields(std::string_view data,
+                                                                                   StatFieldConfig const &config)
 {
     // First find the command name in parentheses
     auto start = data.find('(');
@@ -163,7 +154,7 @@ std::string FingerprintStore::FilterProcStatFields(std::string_view data, StatFi
     if (start == std::string_view::npos || end == std::string_view::npos || start >= end)
     {
         log_error("Invalid /proc/stat format: {}", data);
-        return std::string("");
+        return std::make_pair(std::string(""), std::nullopt);
     }
 
     // Add pid (field 1) and comm (field 2) - these are always included
@@ -178,6 +169,7 @@ std::string FingerprintStore::FilterProcStatFields(std::string_view data, StatFi
 
     // Split into fields and pair with their field numbers
     std::vector<std::pair<size_t, std::string_view>> numberedFields;
+    char processState = '\0';
 
     // First split all fields for analysis
     std::vector<std::string_view> fields;
@@ -189,6 +181,11 @@ std::string FingerprintStore::FilterProcStatFields(std::string_view data, StatFi
     size_t fieldNum = FIRST_REMAINING_FIELD;
     for (std::string_view field : fields)
     {
+        // Capture process state (field 3) during iteration
+        if (fieldNum == static_cast<size_t>(ProcStatField::State) && !field.empty())
+        {
+            processState = field[0];
+        }
         numberedFields.emplace_back(fieldNum++, field);
     }
 
@@ -214,5 +211,19 @@ std::string FingerprintStore::FilterProcStatFields(std::string_view data, StatFi
         result.append(field);
     }
 
-    return result;
+    return std::make_pair(result, processState == '\0' ? std::nullopt : std::optional<char>(processState));
+}
+
+/**********************************************************************************************************************/
+
+FingerprintStoreRet FingerprintStore::ComputeForTask(pid_t pid, std::optional<pid_t> tid)
+{
+    auto path = GetProcStatPath(pid, tid);
+    if (auto data = m_fileOp->Read(path); data.has_value())
+    {
+        // Use thread config if tid is provided, otherwise process config
+        auto config = tid.has_value() ? StatFieldConfig::ForThread() : StatFieldConfig::ForProcess();
+        return Compute(data.value(), config);
+    }
+    return FingerprintStoreRet { DCGM_ST_NO_DATA, std::nullopt, std::nullopt };
 }

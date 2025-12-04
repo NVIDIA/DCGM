@@ -25,6 +25,8 @@
 #define BWC_JSON_MAX_BIDIR_BW "maxBidirBw"
 #define BWC_JSON_ERROR        "error"
 #define BWC_JSON_ERRORS       "errors"
+#define BWC_JSON_OUTPUT_START "===BWCHECKER_JSON_START==="
+#define BWC_JSON_OUTPUT_END   "===BWCHECKER_JSON_END==="
 
 /*
  * Output is written in JSON in this format:

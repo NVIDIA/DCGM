@@ -2958,6 +2958,27 @@ static inline dcgm_module_command_header_t *helperInitDiagMsgRun(MsgType *msg,
     return &(msg->header);
 }
 
+static unsigned int GetTimeoutSeconds(dcgmRunDiag_v10 *drd)
+{
+    if (drd->version == dcgmRunDiag_version10)
+    {
+        return drd->timeoutSeconds;
+    }
+    else if (drd->version == dcgmRunDiag_version9)
+    {
+        return (reinterpret_cast<dcgmRunDiag_v9 *>(drd))->timeoutSeconds;
+    }
+    else if (drd->version == dcgmRunDiag_version8)
+    {
+        return (reinterpret_cast<dcgmRunDiag_v8 *>(drd))->timeoutSeconds;
+    }
+    else if (drd->version == dcgmRunDiag_version7)
+    {
+        return (reinterpret_cast<dcgmRunDiag_v7 *>(drd))->timeoutSeconds;
+    }
+    return 0;
+}
+
 dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
                                  dcgmRunDiag_v10 *drd,
                                  dcgmPolicyAction_t action,
@@ -3111,26 +3132,8 @@ dcgmReturn_t helperActionManager(dcgmHandle_t dcgmHandle,
     static_assert(sizeof(msg6->diagResponse) <= sizeof(msg7->diagResponse));
     static_assert(sizeof(msg5->diagResponse) <= sizeof(msg6->diagResponse));
 
-    unsigned int timeoutSeconds              = 0;
+    unsigned int const timeoutSeconds        = GetTimeoutSeconds(drd);
     constexpr unsigned int secToMsMultiplier = 1000;
-
-    if (drd->version == dcgmRunDiag_version10)
-    {
-        timeoutSeconds = drd->timeoutSeconds;
-    }
-    else if (drd->version == dcgmRunDiag_version9)
-    {
-        timeoutSeconds = (reinterpret_cast<dcgmRunDiag_v9 *>(drd))->timeoutSeconds;
-    }
-    else if (drd->version == dcgmRunDiag_version8)
-    {
-        timeoutSeconds = (reinterpret_cast<dcgmRunDiag_v8 *>(drd))->timeoutSeconds;
-    }
-    else if (drd->version == dcgmRunDiag_version7)
-    {
-        timeoutSeconds = (reinterpret_cast<dcgmRunDiag_v7 *>(drd))->timeoutSeconds;
-    }
-
     // coverity[overrun-buffer-arg]
     dcgmReturn_t dcgmReturn = dcgmModuleSendBlockingFixedRequest(
         dcgmHandle, header, sizeof(*msg12), nullptr, timeoutSeconds * secToMsMultiplier);
@@ -4331,13 +4334,13 @@ static dcgmReturn_t tsapiEngineActionValidate(dcgmHandle_t pDcgmHandle,
                                               dcgmPolicyValidation_t validate,
                                               dcgmDiagResponse_v12 *response)
 {
-    dcgmRunDiag_v10 drd10 = {};
+    dcgmRunDiag_v10 drd = {};
 
-    drd10.version  = dcgmRunDiag_version10;
-    drd10.validate = validate;
-    drd10.groupId  = groupId;
+    drd.version  = dcgmRunDiag_version10;
+    drd.validate = validate;
+    drd.groupId  = groupId;
 
-    return helperActionManager(pDcgmHandle, &drd10, DCGM_POLICY_ACTION_NONE, response);
+    return helperActionManager(pDcgmHandle, &drd, DCGM_POLICY_ACTION_NONE, response);
 }
 
 static dcgmReturn_t tsapiEngineRunDiagnostic(dcgmHandle_t pDcgmHandle,
@@ -5242,6 +5245,45 @@ dcgmReturn_t tsapiHostengineVersionInfo(dcgmHandle_t dcgmHandle, dcgmVersionInfo
     if (DCGM_ST_OK == ret)
     {
         memcpy(pVersionInfo, &msg.version, sizeof(dcgmVersionInfo_t));
+    }
+
+    return ret;
+}
+
+dcgmReturn_t tsapiHostengineEnvironmentVariableInfo(dcgmHandle_t dcgmHandle, dcgmEnvVarInfo_t *pEnvVarInfo)
+{
+    if (pEnvVarInfo == nullptr)
+    {
+        DCGM_LOG_ERROR << "Invalid pointer when getting hostengine environment variable.";
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (pEnvVarInfo->version != dcgmEnvVarInfo_version)
+    {
+        DCGM_LOG_ERROR << "dcgmEnvVarInfo version mismatch " << pEnvVarInfo->version
+                       << " != " << dcgmEnvVarInfo_version;
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    /* Still sending this here since we need coverage for the embedded case. DcgmClientHandler only
+       handles remote hostengines */
+
+    dcgm_core_msg_hostengine_env_var_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_HOSTENGINE_ENV_VAR_INFO;
+    msg.header.version    = dcgm_core_msg_hostengine_env_var_version;
+
+    memcpy(&msg.envVarInfo, pEnvVarInfo, sizeof(msg.envVarInfo));
+
+    // coverity[overrun-buffer-arg]
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK == ret)
+    {
+        memcpy(pEnvVarInfo, &msg.envVarInfo, sizeof(dcgmEnvVarInfo_t));
+        log_debug("Retrieved environment variable '{}' = '{}'", pEnvVarInfo->envVarName, pEnvVarInfo->envVarValue);
     }
 
     return ret;
@@ -6361,6 +6403,18 @@ dcgmReturn_t DCGM_PUBLIC_API tsapiNvswitchGetBackend(dcgmHandle_t pDcgmHandle,
     snprintf(backendName, backendNameLength, "%s", msg.backendName);
 
     return ret;
+}
+
+dcgmReturn_t DCGM_PUBLIC_API tsapiDiagSendHeartbeat(dcgmHandle_t pDcgmHandle)
+{
+    dcgm_core_msg_diag_send_heartbeat_t msg {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdDiag;
+    msg.header.subCommand = DCGM_DIAG_SR_SEND_HEARTBEAT;
+    msg.header.version    = dcgm_core_msg_diag_send_heartbeat_version;
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
 }
 
 /*****************************************************************************/

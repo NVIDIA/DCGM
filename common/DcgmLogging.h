@@ -256,13 +256,11 @@ inline void log_verbose(details::format_string<TArgs...> format, TArgs &&...args
     details::log<BASE_LOGGER, plog::verbose>(format, std::forward<TArgs>(args)...);
 }
 
-template <class T>
-    requires std::is_convertible_v<T, std::string_view>
-inline void log_verbose(T &&msg, std::source_location loc = std::source_location::current())
+inline void log_verbose(std::string_view msg, std::source_location loc = std::source_location::current())
 {
-    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
-    format.loc  = loc;
-    log_verbose(format, std::forward<T>(msg));
+    details::format_string<std::string_view> format("{}");
+    format.loc = loc;
+    log_verbose(format, std::move(msg));
 }
 
 template <class... TArgs>
@@ -271,13 +269,11 @@ inline void log_info(details::format_string<TArgs...> format, TArgs &&...args)
     details::log<BASE_LOGGER, plog::info>(format, std::forward<TArgs>(args)...);
 }
 
-template <class T>
-    requires std::is_convertible_v<T, std::string_view>
-inline void log_info(T &&msg, std::source_location loc = std::source_location::current())
+inline void log_info(std::string_view msg, std::source_location loc = std::source_location::current())
 {
-    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
-    format.loc  = loc;
-    log_info(format, std::forward<T>(msg));
+    details::format_string<std::string_view> format("{}");
+    format.loc = loc;
+    log_info(format, std::move(msg));
 }
 
 template <class... TArgs>
@@ -286,13 +282,11 @@ inline void log_debug(details::format_string<TArgs...> format, TArgs &&...args)
     details::log<BASE_LOGGER, plog::debug>(format, std::forward<TArgs>(args)...);
 }
 
-template <class T>
-    requires std::is_convertible_v<T, std::string_view>
-inline void log_debug(T &&msg, std::source_location loc = std::source_location::current())
+inline void log_debug(std::string_view msg, std::source_location loc = std::source_location::current())
 {
-    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
-    format.loc  = loc;
-    log_debug(format, std::forward<T>(msg));
+    details::format_string<std::string_view> format("{}");
+    format.loc = loc;
+    log_debug(format, std::move(msg));
 }
 
 template <class... TArgs>
@@ -301,13 +295,11 @@ inline void log_error(details::format_string<TArgs...> format, TArgs &&...args)
     details::log<BASE_LOGGER, plog::error>(format, std::forward<TArgs>(args)...);
 }
 
-template <class T>
-    requires std::is_convertible_v<T, std::string_view>
-inline void log_error(T &&msg, std::source_location loc = std::source_location::current())
+inline void log_error(std::string_view msg, std::source_location loc = std::source_location::current())
 {
-    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
-    format.loc  = loc;
-    log_error(format, std::forward<T>(msg));
+    details::format_string<std::string_view> format("{}");
+    format.loc = loc;
+    log_error(format, std::move(msg));
 }
 
 template <class... TArgs>
@@ -316,13 +308,11 @@ inline void log_warning(details::format_string<TArgs...> format, TArgs &&...args
     details::log<BASE_LOGGER, plog::warning>(format, std::forward<TArgs>(args)...);
 }
 
-template <class T>
-    requires std::is_convertible_v<T, std::string_view>
-inline void log_warning(T &&msg, std::source_location loc = std::source_location::current())
+inline void log_warning(std::string_view msg, std::source_location loc = std::source_location::current())
 {
-    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
-    format.loc  = loc;
-    log_warning(format, std::forward<T>(msg));
+    details::format_string<std::string_view> format("{}");
+    format.loc = loc;
+    log_warning(format, std::move(msg));
 }
 
 template <class... TArgs>
@@ -331,13 +321,11 @@ inline void log_fatal(details::format_string<TArgs...> format, TArgs &&...args)
     details::log<BASE_LOGGER, plog::fatal>(format, std::forward<TArgs>(args)...);
 }
 
-template <class T>
-    requires std::is_convertible_v<T, std::string_view>
-inline void log_fatal(T &&msg, std::source_location loc = std::source_location::current())
+inline void log_fatal(std::string_view msg, std::source_location loc = std::source_location::current())
 {
-    auto format = details::log_helper_create_format("{}", std::forward<T>(msg));
-    format.loc  = loc;
-    log_fatal(format, std::forward<T>(msg));
+    details::format_string<std::string_view> format("{}");
+    format.loc = loc;
+    log_fatal(format, std::move(msg));
 }
 } // namespace
 

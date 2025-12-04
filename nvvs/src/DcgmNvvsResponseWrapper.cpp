@@ -1044,30 +1044,38 @@ bool DcgmNvvsResponseWrapper::PopulateDefault(std::vector<std::unique_ptr<Entity
 
 std::span<char const> DcgmNvvsResponseWrapper::RawBinaryBlob() const
 {
-    switch (m_version)
+    try
     {
-        case dcgmDiagResponse_version12:
-            return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v12>()),
-                     sizeof(dcgmDiagResponse_v12) };
-        case dcgmDiagResponse_version11:
-            return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v11>()),
-                     sizeof(dcgmDiagResponse_v11) };
-        case dcgmDiagResponse_version10:
-            return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v10>()),
-                     sizeof(dcgmDiagResponse_v10) };
-        case dcgmDiagResponse_version9:
-            return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v9>()),
-                     sizeof(dcgmDiagResponse_v9) };
-        case dcgmDiagResponse_version8:
-            return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v8>()),
-                     sizeof(dcgmDiagResponse_v8) };
-        case dcgmDiagResponse_version7:
-            return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v7>()),
-                     sizeof(dcgmDiagResponse_v7) };
-        default:
-            // should not reach
-            log_error("Unknown version: [{}].", m_version);
-            return {};
+        switch (m_version)
+        {
+            case dcgmDiagResponse_version12:
+                return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v12>()),
+                         sizeof(dcgmDiagResponse_v12) };
+            case dcgmDiagResponse_version11:
+                return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v11>()),
+                         sizeof(dcgmDiagResponse_v11) };
+            case dcgmDiagResponse_version10:
+                return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v10>()),
+                         sizeof(dcgmDiagResponse_v10) };
+            case dcgmDiagResponse_version9:
+                return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v9>()),
+                         sizeof(dcgmDiagResponse_v9) };
+            case dcgmDiagResponse_version8:
+                return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v8>()),
+                         sizeof(dcgmDiagResponse_v8) };
+            case dcgmDiagResponse_version7:
+                return { reinterpret_cast<char const *>(&ConstResponse<dcgmDiagResponse_v7>()),
+                         sizeof(dcgmDiagResponse_v7) };
+            default:
+                // should not reach
+                log_error("Unknown version: [{}].", m_version);
+                return {};
+        }
+    }
+    catch (std::bad_variant_access const &e)
+    {
+        log_error("Failed to get diag response: {}", e.what());
+        return {};
     }
 }
 
@@ -1515,7 +1523,11 @@ void DcgmNvvsResponseWrapper::Print() const
         case dcgmDiagResponse_version8:
         case dcgmDiagResponse_version7:
         default:
+        {
+            auto cerrFlags = std::cerr.flags();
             std::cerr << "Non-supported diag response version " << std::hex << m_version << " for printing.\n";
+            std::cerr.flags(cerrFlags);
             return;
+        }
     }
 }

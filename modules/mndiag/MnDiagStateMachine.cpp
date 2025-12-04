@@ -153,6 +153,7 @@ dcgmReturn_t MnDiagStateMachine::TryGetDetectedMpiPid()
         log_error("No MPI process detected");
         return DCGM_ST_CHILD_SPAWN_FAILED;
     }
+
     std::string binPath = m_mnubergemmPath;
     binPath.erase(0, binPath.find_first_not_of(" \t"));
     binPath.erase(binPath.find_last_not_of(" \t") + 1);

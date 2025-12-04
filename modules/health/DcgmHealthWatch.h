@@ -278,19 +278,27 @@ private:
                                            int &expectedPcieReplayRate);
 
     void BuildXidMappings();
-    dcgmReturn_t MonitorSubsystemXids(dcgm_field_entity_group_t entityGroupId,
-                                      dcgm_field_eid_t entityId,
-                                      dcgmHealthSystems_t system,
-                                      DcgmHealthResponse &response);
+    void MonitorSubsystemXids(dcgm_field_entity_group_t entityGroupId,
+                              dcgm_field_eid_t entityId,
+                              dcgmHealthSystems_t system,
+                              DcgmHealthResponse &response);
+
+    void MonitorDevastatingXids(dcgm_field_entity_group_t entityGroupId,
+                                dcgm_field_eid_t entityId,
+                                DcgmHealthResponse &response);
+
 
     // Monitored XIDs regardless of enabled subsystems
-    std::unordered_map<uint32_t, XidHealthInfo> m_devastatingXids;
+    std::unordered_map<uint64_t, XidHealthInfo> m_devastatingXids;
 
     // XIDs monitored based on enabled subsystems
-    std::unordered_map<dcgmHealthSystems_t, std::unordered_map<uint32_t, XidHealthInfo>> m_subsystemXids;
+    std::unordered_map<dcgmHealthSystems_t, std::unordered_map<uint64_t, XidHealthInfo>> m_subsystemXids;
 
     // Track all GPUs that have had specific XIDs
-    std::unordered_map<uint32_t, std::unordered_set<dcgm_field_eid_t>> m_gpuXidHistory;
+    std::unordered_map<uint64_t, std::unordered_set<dcgm_field_eid_t>> m_gpuXidHistory;
+
+    // Friend class for testing
+    friend class DcgmHealthWatchTestHelper;
 };
 
 #endif //_DCGM_HEALTH_WATCH_H

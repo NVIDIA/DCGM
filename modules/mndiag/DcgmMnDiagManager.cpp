@@ -185,86 +185,31 @@ DcgmMnDiagManager::~DcgmMnDiagManager()
 
 dcgmReturn_t DcgmMnDiagManager::DisconnectRemoteNodes()
 {
-    DcgmMutex disconnectMutex(0);
-    std::vector<std::pair<std::string, dcgmReturn_t>> results;
-    bool anyFailure = false;
+    log_debug("Disconnecting from all remote nodes");
 
+    // First revoke all authorizations
+    dcgmReturn_t revokeResult = RevokeRemoteAuthorizations();
+    if (revokeResult != DCGM_ST_OK)
     {
-        // Process remote connections in parallel
-        for (auto const &[hostname, connInfo] : m_connections)
-        {
-            if (connInfo.isLoopback)
-            {
-                continue; // handle the head node last
-            }
-
-            auto disconnectNodeFunc = [this, hostname, connInfo, &disconnectMutex, &results, &anyFailure]() {
-                dcgmMultinodeRequest_t request {};
-                request.version                              = dcgmMultinodeRequest_version1;
-                request.testType                             = MnDiagTestType::mnubergemm;
-                request.requestType                          = MnDiagRequestType::RevokeAuthorization;
-                request.requestData.authorization.headNodeId = m_currentNodeId;
-
-                dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
-
-                if (threadResult != DCGM_ST_OK)
-                {
-                    log_error("Failed to revoke authorization for connection: {}. Return: ({}): {}",
-                              hostname,
-                              std::to_underlying(threadResult),
-                              errorString(threadResult));
-                    DcgmLockGuard lg(&disconnectMutex);
-                    results.emplace_back(hostname, threadResult);
-                    anyFailure = true;
-                }
-
-                m_dcgmApi->Disconnect(connInfo.handle);
-                // End the SSH tunnel session based on socket path or port
-                if (!connInfo.remoteSocketPath.empty())
-                {
-                    // Use UdsSSHTunnelManager for Unix socket connections
-                    log_debug(
-                        "Ending SSH tunnel with Unix socket path {} for host {}", connInfo.remoteSocketPath, hostname);
-                    m_udsSSHTunnelManager->EndSession(hostname, connInfo.remoteSocketPath, connInfo.uid);
-                }
-                else
-                {
-                    // Use TcpSSHTunnelManager for TCP connections
-                    log_debug("Ending SSH tunnel with port {} for host {}", connInfo.remotePort, hostname);
-                    m_tcpSSHTunnelManager->EndSession(hostname, connInfo.remotePort, connInfo.uid);
-                }
-            };
-            disconnectNodeFunc();
-        }
-
-        // threads will automatically join when it goes out of scope at the end of this block
+        log_error("Failed to revoke remote authorizations: {}", errorString(revokeResult));
+        // Continue with cleanup even if revocation fails
     }
 
-    // Clear all connections
-    m_connections.clear();
-    m_nodeInfo.clear();
-
-    // Handle the head node last
-    dcgmReturn_t dcgmResult = HandleRevokeAuthorization(m_currentNodeId);
-    if (dcgmResult != DCGM_ST_OK)
+    // Then clean up all connections
+    dcgmReturn_t cleanupResult = CleanupConnections();
+    if (cleanupResult != DCGM_ST_OK)
     {
-        log_error("Failed to revoke authorization for head node");
-        return dcgmResult;
+        log_error("Failed to cleanup connections: {}", errorString(cleanupResult));
+        return cleanupResult;
     }
 
-    // Check if any disconnections failed
-    if (anyFailure)
+    // Return revocation error if cleanup succeeded but revocation failed
+    if (revokeResult != DCGM_ST_OK)
     {
-        for (auto const &[hostname, result] : results)
-        {
-            if (result != DCGM_ST_OK)
-            {
-                return result;
-            }
-        }
-        return DCGM_ST_GENERIC_ERROR; // Default error if specific error code not found
+        return revokeResult;
     }
 
+    log_info("Successfully disconnected from all remote nodes");
     return DCGM_ST_OK;
 }
 
@@ -302,6 +247,15 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
     if (result != DCGM_ST_OK)
     {
         log_error("Failed to connect to remote nodes");
+        return result;
+    }
+
+    // Then authorize all connections
+    result = AuthorizeRemoteConnections();
+    if (result != DCGM_ST_OK)
+    {
+        log_error("Failed to authorize remote connections");
+        DisconnectRemoteNodes();
         return result;
     }
 
@@ -546,9 +500,6 @@ dcgmReturn_t DcgmMnDiagManager::StopHeadNode()
 
 dcgmReturn_t DcgmMnDiagManager::ConnectRemoteNodes(std::vector<std::string> const &hostList, uid_t effectiveUid)
 {
-    DcgmMutex connectionMutex(0);
-    std::vector<std::pair<std::string, dcgmReturn_t>> results;
-    bool anyFailure = false;
     // Get the username from the effective UID
     {
         std::optional<std::string> username;
@@ -559,233 +510,49 @@ dcgmReturn_t DcgmMnDiagManager::ConnectRemoteNodes(std::vector<std::string> cons
             return DCGM_ST_NO_PERMISSION;
         }
     }
-    // Handle duplicated hosts in the host list
+    // Parse all connection parameters once and validate for duplicates
+    std::vector<ConnectionParams> allConnectionParams;
+    std::unordered_set<std::string> uniqueHosts;
+
+    for (auto const &host : hostList)
     {
-        std::unordered_set<std::string> uniqueHosts;
-        for (auto const &host : hostList)
+        try
         {
-            // Parse host string to extract hostname and port
-            std::string hostname;
-            uint16_t remotePort;
-            std::string socketPath;
+            ConnectionParams params = ParseConnectionParams(host, effectiveUid);
 
-            dcgmReturn_t res = ExtractHostnameAndPort(host, hostname, remotePort, socketPath);
-            if (res != DCGM_ST_OK)
-            {
-                log_error("Failed to extract hostname and port from host: {}", host);
-                return res;
-            }
-
-            if (!uniqueHosts.insert(hostname).second)
+            if (!uniqueHosts.insert(params.hostname).second)
             {
                 log_error("Duplicate host found in input list: {}", host);
                 return DCGM_ST_BADPARAM;
             }
+
+            allConnectionParams.push_back(std::move(params));
+        }
+        catch (std::exception const &e)
+        {
+            log_error("Failed to parse connection parameters for host {}: {}", host, e.what());
+            return DCGM_ST_BADPARAM;
         }
     }
-    // First handle loopback connections
-    // Authorize itself on the head node
-    dcgmReturn_t dcgmResult = HandleAuthorizeConnection(m_currentNodeId);
-    if (dcgmResult != DCGM_ST_OK)
+    // Handle connections using pre-parsed parameters
+    for (auto const &params : allConnectionParams)
     {
-        log_error("Failed to authorize itself on the head node");
-        DisconnectRemoteNodes();
-        return dcgmResult;
-    }
-    // Now handle remote connections asynchronously
-    {
-        for (auto const &host : hostList)
+        if (IsLoopback(params.hostname))
         {
-            // Parse host string to extract hostname and port
-            std::string hostname;
-            uint16_t remotePort;
-            std::string socketPath;
-
-            dcgmReturn_t res = ExtractHostnameAndPort(host, hostname, remotePort, socketPath);
-            if (res != DCGM_ST_OK)
-            {
-                log_error("Failed to extract hostname and port from host: {}", host);
-                DisconnectRemoteNodes();
-                return res;
-            }
-
-            if (IsLoopback(hostname))
-            {
-                m_connections[hostname] = ConnectionInfo {
-                    .handle = 0, .remotePort = 0, .isLoopback = true, .uid = effectiveUid, .remoteSocketPath = ""
-                };
-                continue; // Already handled above
-            }
-            auto connectNodeFunc = [this,
-                                    hostname,
-                                    remotePort,
-                                    socketPath,
-                                    effectiveUid,
-                                    &connectionMutex,
-                                    &results,
-                                    &anyFailure]() {
-                // Create SSH tunnel to remote host
-                DcgmNs::Common::RemoteConn::detail::TunnelState tunnelState;
-                dcgmHandle_t handle;
-                if (!socketPath.empty())
-                {
-                    // Connect using Unix socket path with UdsSSHTunnelManager
-                    std::string localSocketPath;
-
-                    log_debug("Starting SSH tunnel with Unix socket path {} for host {}", socketPath, hostname);
-                    tunnelState
-                        = m_udsSSHTunnelManager->StartSession(hostname, socketPath, localSocketPath, effectiveUid);
-                    if (tunnelState != DcgmNs::Common::RemoteConn::detail::TunnelState::Active)
-                    {
-                        {
-                            DcgmLockGuard lg(&connectionMutex);
-                            results.emplace_back(hostname, DCGM_ST_REMOTE_SSH_CONNECTION_FAILED);
-                            anyFailure = true;
-                        }
-                        log_error("Failed to create SSH tunnel to {} with socket path {} (TunnelState: {})",
-                                  hostname,
-                                  socketPath,
-                                  static_cast<std::underlying_type_t<DcgmNs::Common::RemoteConn::detail::TunnelState>>(
-                                      tunnelState));
-                        return;
-                    }
-                    // Initialize V2 connection parameters
-                    dcgmConnectV2Params_v2 connectParams;
-                    memset(&connectParams, 0, sizeof(connectParams));
-                    connectParams.version             = dcgmConnectV2Params_version2;
-                    connectParams.addressIsUnixSocket = 1;
-                    dcgmReturn_t dcgmResult = m_dcgmApi->Connect_v2(localSocketPath.c_str(), &connectParams, &handle);
-                    if (dcgmResult != DCGM_ST_OK)
-                    {
-                        log_error(
-                            "Failed to connect to remote DCGM through UDS {} for host {}", localSocketPath, hostname);
-                        m_udsSSHTunnelManager->EndSession(hostname, socketPath, effectiveUid);
-                        return;
-                    }
-
-                    dcgmMultinodeRequest_t request {};
-                    request.version                              = dcgmMultinodeRequest_version1;
-                    request.testType                             = MnDiagTestType::mnubergemm;
-                    request.requestType                          = MnDiagRequestType::AuthorizeConnection;
-                    request.requestData.authorization.headNodeId = m_currentNodeId;
-
-                    dcgmResult = m_dcgmApi->MultinodeRequest(handle, &request);
-                    if (dcgmResult != DCGM_ST_OK)
-                    {
-                        {
-                            DcgmLockGuard lg(&connectionMutex);
-                            results.emplace_back(hostname, dcgmResult);
-                            anyFailure = true;
-                        }
-                        log_error("Failed to authorize connection with {}: {}", hostname, errorString(dcgmResult));
-                        m_dcgmApi->Disconnect(handle);
-                        m_udsSSHTunnelManager->EndSession(hostname, socketPath, effectiveUid);
-                        return;
-                    }
-                    // Store connection info
-                    {
-                        DcgmLockGuard lg(&connectionMutex);
-                        m_connections[hostname] = ConnectionInfo { .handle           = handle,
-                                                                   .remotePort       = 0,
-                                                                   .isLoopback       = false,
-                                                                   .uid              = effectiveUid,
-                                                                   .remoteSocketPath = socketPath };
-                        results.emplace_back(hostname, DCGM_ST_OK);
-                    }
-                }
-                else
-                {
-                    // Connect using TCP port
-                    uint16_t localPort;
-
-                    log_debug("Starting SSH tunnel with port {} for host {}", remotePort, hostname);
-                    tunnelState = m_tcpSSHTunnelManager->StartSession(hostname, remotePort, localPort, effectiveUid);
-                    if (tunnelState != DcgmNs::Common::RemoteConn::detail::TunnelState::Active)
-                    {
-                        {
-                            DcgmLockGuard lg(&connectionMutex);
-                            results.emplace_back(hostname, DCGM_ST_REMOTE_SSH_CONNECTION_FAILED);
-                            anyFailure = true;
-                        }
-
-                        log_error("Failed to create SSH tunnel to {}:{} (TunnelState: {})",
-                                  hostname,
-                                  remotePort,
-                                  static_cast<std::underlying_type_t<DcgmNs::Common::RemoteConn::detail::TunnelState>>(
-                                      tunnelState));
-                        return;
-                    }
-                    // Create connection to remote DCGM through tunnel
-                    std::string address = fmt::format("127.0.0.1:{}", localPort);
-
-                    // Initialize V2 connection parameters
-                    dcgmConnectV2Params_v2 connectParams;
-                    memset(&connectParams, 0, sizeof(connectParams));
-                    connectParams.version             = dcgmConnectV2Params_version2;
-                    connectParams.addressIsUnixSocket = 0;
-                    dcgmReturn_t dcgmResult           = m_dcgmApi->Connect_v2(address.c_str(), &connectParams, &handle);
-
-                    if (dcgmResult != DCGM_ST_OK)
-                    {
-                        {
-                            DcgmLockGuard lg(&connectionMutex);
-                            results.emplace_back(hostname, dcgmResult);
-                            anyFailure = true;
-                        }
-                        log_error("Failed to connect to remote DCGM {} from {}", address, hostname);
-                        m_tcpSSHTunnelManager->EndSession(hostname, remotePort, effectiveUid);
-                        return;
-                    }
-                    dcgmMultinodeRequest_t request {};
-                    request.version                              = dcgmMultinodeRequest_version1;
-                    request.testType                             = MnDiagTestType::mnubergemm;
-                    request.requestType                          = MnDiagRequestType::AuthorizeConnection;
-                    request.requestData.authorization.headNodeId = m_currentNodeId;
-
-                    dcgmResult = m_dcgmApi->MultinodeRequest(handle, &request);
-                    if (dcgmResult != DCGM_ST_OK)
-                    {
-                        {
-                            DcgmLockGuard lg(&connectionMutex);
-                            results.emplace_back(hostname, dcgmResult);
-                            anyFailure = true;
-                        }
-
-                        log_error("Failed to authorize connection with {}: {}", hostname, errorString(dcgmResult));
-                        m_dcgmApi->Disconnect(handle);
-                        m_tcpSSHTunnelManager->EndSession(hostname, remotePort, effectiveUid);
-                        return;
-                    }
-                    // Store connection info
-                    {
-                        DcgmLockGuard lg(&connectionMutex);
-                        m_connections[hostname] = ConnectionInfo { .handle           = handle,
-                                                                   .remotePort       = remotePort,
-                                                                   .isLoopback       = false,
-                                                                   .uid              = effectiveUid,
-                                                                   .remoteSocketPath = "" };
-                        results.emplace_back(hostname, DCGM_ST_OK);
-                    }
-                }
+            m_connections[params.hostname] = ConnectionInfo {
+                .handle = 0, .remotePort = 0, .isLoopback = true, .uid = effectiveUid, .remoteSocketPath = ""
             };
-            connectNodeFunc();
+            continue; // Loopback connection stored
         }
 
-        // threads will automatically join when it goes out of scope at the end of this block
-    }
-
-    // Check if any connections failed
-    if (anyFailure)
-    {
-        DisconnectRemoteNodes();
-        for (auto const &[hostname, result] : results)
+        // Connect to remote node directly (synchronous)
+        dcgmReturn_t result = ConnectSingleNode(params);
+        if (result != DCGM_ST_OK)
         {
-            if (result != DCGM_ST_OK)
-            {
-                return result;
-            }
+            log_error("Failed to connect to remote node {}: {}", params.hostname, errorString(result));
+            CleanupConnections();
+            return result;
         }
-        return DCGM_ST_GENERIC_ERROR; // Default error if specific error code not found
     }
 
     return DCGM_ST_OK;
@@ -1414,7 +1181,7 @@ dcgmReturn_t DcgmMnDiagManager::ExtractHostnameAndPort(std::string const &host,
     }
     else
     {
-        hostname = hostPart;
+        hostname = std::move(hostPart);
         port     = DCGM_HE_PORT_NUMBER; // Use default port
     }
 
@@ -1876,7 +1643,7 @@ dcgmReturn_t DcgmMnDiagManager::GetMnubergemmPathHeadNode(std::string &path)
     }
 
     log_debug("Inferred default mnubergemm path: {}", defaultBinPath);
-    path = defaultBinPath;
+    path = std::move(defaultBinPath);
 
     if (path.length() >= DCGM_MAX_STR_LENGTH)
     {
@@ -1895,4 +1662,316 @@ int DcgmMnDiagManager::GetCudaVersion()
     int cudaVersion = 0;
     m_coreProxy->GetCudaVersion(cudaVersion);
     return cudaVersion;
+}
+
+dcgmReturn_t DcgmMnDiagManager::AuthorizeRemoteConnections()
+{
+    log_debug("Starting authorization of remote connections");
+
+    // First authorize the head node
+    dcgmReturn_t dcgmResult = HandleAuthorizeConnection(m_currentNodeId);
+    if (dcgmResult != DCGM_ST_OK)
+    {
+        log_error("Failed to authorize head node connection");
+        return dcgmResult;
+    }
+
+    // Now authorize all remote connections (synchronous)
+    for (auto const &[hostname, connInfo] : m_connections)
+    {
+        if (connInfo.isLoopback)
+        {
+            continue; // Already handled above
+        }
+
+        // Send authorization request to remote node
+        dcgmMultinodeRequest_t request {};
+        request.version                              = dcgmMultinodeRequest_version1;
+        request.testType                             = MnDiagTestType::mnubergemm;
+        request.requestType                          = MnDiagRequestType::AuthorizeConnection;
+        request.requestData.authorization.headNodeId = m_currentNodeId;
+
+        dcgmReturn_t result = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
+        if (result != DCGM_ST_OK)
+        {
+            log_error("Failed to authorize connection with {}: {}", hostname, errorString(result));
+            return result;
+        }
+
+        log_debug("Successfully authorized connection with {}", hostname);
+    }
+
+    log_info("Successfully authorized all remote connections");
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmMnDiagManager::RevokeRemoteAuthorizations()
+{
+    log_debug("Starting revocation of remote authorizations");
+
+    // First revoke authorization on the head node
+    dcgmReturn_t dcgmResult = HandleRevokeAuthorization(m_currentNodeId);
+    if (dcgmResult != DCGM_ST_OK)
+    {
+        log_error("Failed to revoke authorization for head node");
+        return dcgmResult;
+    }
+
+    // Now revoke all remote authorizations (synchronous)
+    for (auto const &[hostname, connInfo] : m_connections)
+    {
+        if (connInfo.isLoopback)
+        {
+            continue; // Already handled above
+        }
+
+        // Send revocation request to remote node
+        dcgmMultinodeRequest_t request {};
+        request.version                              = dcgmMultinodeRequest_version1;
+        request.testType                             = MnDiagTestType::mnubergemm;
+        request.requestType                          = MnDiagRequestType::RevokeAuthorization;
+        request.requestData.authorization.headNodeId = m_currentNodeId;
+
+        dcgmReturn_t result = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
+        if (result != DCGM_ST_OK)
+        {
+            log_error("Failed to revoke authorization for connection: {}. Return: ({}): {}",
+                      hostname,
+                      std::to_underlying(result),
+                      errorString(result));
+            return result;
+        }
+
+        log_debug("Successfully revoked authorization for connection with {}", hostname);
+    }
+
+    log_info("Successfully revoked all remote authorizations");
+    return DCGM_ST_OK;
+}
+
+DcgmNs::Common::RemoteConn::detail::TunnelState DcgmMnDiagManager::StartTunnelSession(ConnectionParams &params)
+{
+    DcgmNs::Common::RemoteConn::detail::TunnelState tunnelState;
+
+    if (params.isUnixSocket)
+    {
+        std::string const &socketPath = std::get<std::string>(params.remoteAddress);
+        std::string localSocketPath;
+
+        log_debug("Starting SSH tunnel with Unix socket path {} for host {}", socketPath, params.hostname);
+        tunnelState
+            = m_udsSSHTunnelManager->StartSession(params.hostname, socketPath, localSocketPath, params.effectiveUid);
+
+        if (tunnelState == DcgmNs::Common::RemoteConn::detail::TunnelState::Active)
+        {
+            params.localAddress = localSocketPath;
+        }
+        else
+        {
+            log_error(
+                "Failed to create SSH tunnel to {} with socket path {} (TunnelState: {})",
+                params.hostname,
+                socketPath,
+                static_cast<std::underlying_type_t<DcgmNs::Common::RemoteConn::detail::TunnelState>>(tunnelState));
+        }
+    }
+    else
+    {
+        uint16_t const &remotePort = std::get<uint16_t>(params.remoteAddress);
+        uint16_t localPort;
+
+        log_debug("Starting SSH tunnel with port {} for host {}", remotePort, params.hostname);
+        tunnelState = m_tcpSSHTunnelManager->StartSession(params.hostname, remotePort, localPort, params.effectiveUid);
+
+        if (tunnelState == DcgmNs::Common::RemoteConn::detail::TunnelState::Active)
+        {
+            params.localAddress = localPort;
+        }
+        else
+        {
+            log_error(
+                "Failed to create SSH tunnel to {}:{} (TunnelState: {})",
+                params.hostname,
+                remotePort,
+                static_cast<std::underlying_type_t<DcgmNs::Common::RemoteConn::detail::TunnelState>>(tunnelState));
+        }
+    }
+
+    return tunnelState;
+}
+
+void DcgmMnDiagManager::EndTunnelSession(ConnectionParams const &params)
+{
+    if (params.isUnixSocket)
+    {
+        std::string const &socketPath = std::get<std::string>(params.remoteAddress);
+        m_udsSSHTunnelManager->EndSession(params.hostname, socketPath, params.effectiveUid);
+    }
+    else
+    {
+        uint16_t const &remotePort = std::get<uint16_t>(params.remoteAddress);
+        m_tcpSSHTunnelManager->EndSession(params.hostname, remotePort, params.effectiveUid);
+    }
+}
+
+ConnectionParams DcgmMnDiagManager::ParseConnectionParams(std::string const &host, uid_t effectiveUid)
+{
+    ConnectionParams params {};
+    params.effectiveUid = effectiveUid;
+
+    std::string socketPath;
+    uint16_t remotePort;
+
+    dcgmReturn_t res = ExtractHostnameAndPort(host, params.hostname, remotePort, socketPath);
+    if (res != DCGM_ST_OK)
+    {
+        throw std::runtime_error(fmt::format("Failed to extract hostname and port from host: {}", host));
+    }
+
+    if (!socketPath.empty())
+    {
+        params.isUnixSocket  = true;
+        params.remoteAddress = socketPath;
+        // Local address will be populated by StartTunnelSession
+        params.localAddress = std::string {};
+    }
+    else
+    {
+        params.isUnixSocket  = false;
+        params.remoteAddress = remotePort;
+        // Local address will be populated by StartTunnelSession
+        params.localAddress = uint16_t { 0 };
+    }
+
+    return params;
+}
+
+dcgmReturn_t DcgmMnDiagManager::CreateDcgmConnection(ConnectionParams const &params, dcgmHandle_t &handle)
+{
+    dcgmConnectV2Params_v2 connectParams;
+    memset(&connectParams, 0, sizeof(connectParams));
+    connectParams.version = dcgmConnectV2Params_version2;
+
+    std::string address;
+
+    if (params.isUnixSocket)
+    {
+        connectParams.addressIsUnixSocket = 1;
+        address                           = std::get<std::string>(params.localAddress);
+    }
+    else
+    {
+        connectParams.addressIsUnixSocket = 0;
+        uint16_t localPort                = std::get<uint16_t>(params.localAddress);
+        address                           = fmt::format("127.0.0.1:{}", localPort);
+    }
+
+    dcgmReturn_t dcgmResult = m_dcgmApi->Connect_v2(address.c_str(), &connectParams, &handle);
+
+    if (dcgmResult != DCGM_ST_OK)
+    {
+        if (params.isUnixSocket)
+        {
+            log_error("Failed to connect to remote DCGM through UDS {} for host {}", address, params.hostname);
+        }
+        else
+        {
+            log_error("Failed to connect to remote DCGM {} from {}", address, params.hostname);
+        }
+    }
+
+    return dcgmResult;
+}
+
+ConnectionInfo DcgmMnDiagManager::CreateConnectionInfo(ConnectionParams const &params, dcgmHandle_t handle)
+{
+    if (params.isUnixSocket)
+    {
+        std::string const &socketPath = std::get<std::string>(params.remoteAddress);
+        return ConnectionInfo { .handle           = handle,
+                                .remotePort       = 0,
+                                .isLoopback       = false,
+                                .uid              = params.effectiveUid,
+                                .remoteSocketPath = socketPath };
+    }
+    else
+    {
+        uint16_t const &remotePort = std::get<uint16_t>(params.remoteAddress);
+        return ConnectionInfo { .handle           = handle,
+                                .remotePort       = remotePort,
+                                .isLoopback       = false,
+                                .uid              = params.effectiveUid,
+                                .remoteSocketPath = "" };
+    }
+}
+
+dcgmReturn_t DcgmMnDiagManager::ConnectSingleNode(ConnectionParams params)
+{
+    // 1. Start tunnel session
+    auto tunnelState = StartTunnelSession(params);
+    if (tunnelState != DcgmNs::Common::RemoteConn::detail::TunnelState::Active)
+    {
+        return DCGM_ST_REMOTE_SSH_CONNECTION_FAILED;
+    }
+
+    // 2. Create DCGM connection
+    dcgmHandle_t handle;
+    auto dcgmResult = CreateDcgmConnection(params, handle);
+    if (dcgmResult != DCGM_ST_OK)
+    {
+        EndTunnelSession(params);
+        return dcgmResult;
+    }
+
+    // 3. Store connection info (without authorization)
+    ConnectionInfo connInfo        = CreateConnectionInfo(params, handle);
+    m_connections[params.hostname] = connInfo;
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmMnDiagManager::CleanupConnections()
+{
+    log_debug("Cleaning up connections");
+
+    // Clean up remote connections
+    for (auto const &[hostname, connInfo] : m_connections)
+    {
+        if (connInfo.isLoopback)
+        {
+            continue; // Skip loopback connections
+        }
+
+        // Disconnect DCGM connection
+        if (connInfo.handle != 0)
+        {
+            m_dcgmApi->Disconnect(connInfo.handle);
+        }
+
+        // Create ConnectionParams for tunnel cleanup
+        ConnectionParams params {};
+        params.hostname     = hostname;
+        params.effectiveUid = connInfo.uid;
+
+        if (!connInfo.remoteSocketPath.empty())
+        {
+            params.isUnixSocket  = true;
+            params.remoteAddress = connInfo.remoteSocketPath;
+        }
+        else
+        {
+            params.isUnixSocket  = false;
+            params.remoteAddress = connInfo.remotePort;
+        }
+
+        // End tunnel session
+        EndTunnelSession(params);
+    }
+
+    // Clear all connections and node info
+    m_connections.clear();
+    m_nodeInfo.clear();
+
+    log_debug("Connection cleanup completed");
+    return DCGM_ST_OK;
 }

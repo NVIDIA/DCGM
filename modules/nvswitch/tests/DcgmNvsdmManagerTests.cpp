@@ -24,6 +24,8 @@
 #include <dcgm_fields.h>
 #include <dcgm_structs.h>
 
+extern dcgmReturn_t CustomPost(dcgm_module_command_header_t *req, void *poster);
+
 using namespace DcgmNs;
 
 SCENARIO("Validating entity Id")
@@ -57,6 +59,77 @@ SCENARIO("Validating entity Id")
         THEN("entity Id of NvLink >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH is invalid")
         {
             REQUIRE(nsm.IsValidNvLinkId(DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH) == false);
+        }
+    }
+
+    GIVEN("Switch manager is initialized")
+    {
+        THEN("entity Id > number of available ports is invalid")
+        {
+            REQUIRE(nsm.IsValidNvLinkId(2) == false);
+        }
+
+        THEN("entity Id == (number of available ports - 1) is valid")
+        {
+            REQUIRE(nsm.IsValidNvLinkId(1) == true);
+        }
+
+        THEN("entity Id < number of available ports is valid")
+        {
+            REQUIRE(nsm.IsValidNvLinkId(0) == true);
+        }
+    }
+}
+
+SCENARIO("Validating entity Id for ports")
+{
+    constexpr uint32_t nvsdmSwitchVendorID = 0xc8763;
+    constexpr uint16_t nvsdmPortLID        = 5566;
+    NvsdmMockDevice dev(NVSDM_DEV_TYPE_SWITCH, 0, nvsdmSwitchVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+
+    GIVEN("No ports present")
+    {
+        std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+        mockNvsdm->InjectDevice(dev);
+        dcgmCoreCallbacks_t dcc = {};
+        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        nsm.Init();
+
+        THEN("entityId > (number of available ports - 1) is invalid")
+        {
+            REQUIRE(nsm.IsValidNvLinkId(0) == false);
+        }
+
+        THEN("Direct port access would fail")
+        {
+            REQUIRE(nsm.m_nvSwitchPorts.empty());
+            REQUIRE(nsm.m_numNvSwitchPorts == 0);
+        }
+    }
+
+    GIVEN("One port present")
+    {
+        dev.AddPort(NvsdmMockPort(0, nvsdmPortLID));
+        std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+        mockNvsdm->InjectDevice(dev);
+        dcgmCoreCallbacks_t dcc = {};
+        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        nsm.Init();
+
+        THEN("entityId > (number of available ports - 1) is invalid")
+        {
+            REQUIRE(nsm.IsValidNvLinkId(1) == false);
+        }
+
+        THEN("entityId == (number of available ports - 1) is valid")
+        {
+            REQUIRE(nsm.IsValidNvLinkId(0) == true);
+        }
+
+        THEN("Direct port access would succeed")
+        {
+            REQUIRE(nsm.m_nvSwitchPorts.size() == 1);
+            REQUIRE(nsm.m_numNvSwitchPorts == 1);
         }
     }
 }
@@ -734,6 +807,7 @@ SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable ha
     // Clean up environment variable
     unsetenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA");
 }
+
 SCENARIO("nvsdmDeviceToString", "[DcgmNvsdmManager]")
 {
     NvsdmMockDevice switch0(NVSDM_DEV_TYPE_SWITCH, 0, 0xc8763, NVSDM_DEVICE_STATE_HEALTHY);
@@ -764,5 +838,57 @@ SCENARIO("nvsdmDeviceToString", "[DcgmNvsdmManager]")
         char name[NVSDM_DEV_INFO_ARRAY_SIZE - 1];
         REQUIRE(nsm.m_nvsdm->nvsdmDeviceToString(nsm.m_nvSwitchDevices[0].device, name, sizeof(name))
                 == NVSDM_ERROR_INSUFFICIENT_SIZE);
+    }
+}
+
+TEST_CASE("UpdateFields returns blank values when paused")
+{
+    // Initialize fields for access to fields metadata
+    auto ret = DcgmFieldsInit();
+    REQUIRE(ret == DCGM_ST_OK);
+
+    // CustomPost callback helps to verify that the fields are blank when paused
+    std::set<unsigned short> fieldIdsFromCustomPost;
+    dcgmCoreCallbacks_t dcc              = { .version    = dcgmCoreCallbacks_version,
+                                             .postfunc   = CustomPost,
+                                             .poster     = &fieldIdsFromCustomPost,
+                                             .loggerfunc = [](void const *) { /* do nothing */ } };
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+    // Create a fake switch to watch
+    unsigned int fakeCount = 1;
+    unsigned int fakeSwitchIds[1];
+    ret = nsm.CreateFakeSwitches(fakeCount, fakeSwitchIds);
+    REQUIRE(ret == DCGM_ST_OK);
+
+    // Set up watch parameters on NvSwitch fields
+    constexpr int numFields            = 1;
+    unsigned short fieldIds[numFields] = { DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT };
+    constexpr timelib64_t watchIntervalUsec
+        = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(1)).count();
+    DcgmWatcher watcher;
+    nsm.WatchField(DCGM_FE_SWITCH,
+                   fakeSwitchIds[0],
+                   numFields,
+                   fieldIds,
+                   watchIntervalUsec,
+                   watcher.watcherType,
+                   watcher.connectionId,
+                   true);
+
+    // Let's pause the manager and call UpdateFields. Expectation is that the field values are blank when manager is
+    // paused. We have a custom .postfunc callback (CustomPost) to verify that the fields are blank when paused.
+    nsm.Pause();
+    timelib64_t nextUpdateTimeUsec;
+    timelib64_t now = timelib_usecSince1970();
+    nsm.DcgmNvSwitchManagerBase::UpdateFields(nextUpdateTimeUsec, now);
+
+    // Verify that all expected fields were observed at CustomPost callback.
+    // fieldIdsFromCustomPost is populated by the CustomPost callback.
+    for (int i = 0; i < numFields; i++)
+    {
+        REQUIRE(fieldIdsFromCustomPost.find(fieldIds[i]) != fieldIdsFromCustomPost.end());
     }
 }

@@ -334,7 +334,9 @@ int main(int argc, char *argv[])
         }
 
         // Write Json output to stdout
+        std::cout << BWC_JSON_OUTPUT_START << std::endl;
         std::cout << root.toStyledString() << std::endl;
+        std::cout << BWC_JSON_OUTPUT_END << std::endl;
     }
     catch (TCLAP::ArgException &e)
     {

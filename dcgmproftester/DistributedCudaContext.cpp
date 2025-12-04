@@ -73,15 +73,12 @@ dcgmReturn_t DistributedCudaContext::Init(int inFd, int outFd)
      * we set the device ID properly.
      */
 
-    st = setenv("CUDA_VISIBLE_DEVICES", m_cudaVisibleDevices.c_str(), 1);
-    if (st != 0)
+    // Handle CUDA_VISIBLE_DEVICES environment variable logic
+    dcgmReturn_t cvdResult = HandleCudaVisibleDevices();
+    if (cvdResult != DCGM_ST_OK)
     {
-        m_error << "std::setenv returned" << st << '\n';
-
-        return DCGM_ST_GENERIC_ERROR;
+        return cvdResult;
     }
-
-    m_message << "std::setenv successfully set CUDA_VISIBLE_DEVICES to " << m_cudaVisibleDevices.c_str() << '\n';
 
     if (cuSt = cuInit(0); cuSt != CUDA_SUCCESS)
     {
@@ -1685,6 +1682,51 @@ int DistributedCudaContext::Run(void)
     /* In the future, we shouldn't exit here, but that will require a more substantial
        refactor of DistributedCudaContext and our forked worker */
     exit(exitValue);
+}
+
+dcgmReturn_t DistributedCudaContext::HandleCudaVisibleDevices()
+{
+    char const *existing_cvd = getenv("CUDA_VISIBLE_DEVICES");
+    bool respectExisting     = false;
+
+    if (existing_cvd != nullptr && strlen(existing_cvd) > 0)
+    {
+        if (GetPhysicalGpu()->IsMIG())
+        {
+            // MIG always requires specific MIG UUID - cannot respect user setting
+            m_message << fmt::format("Overriding CUDA_VISIBLE_DEVICES ({}) for MIG partition: {}\n",
+                                     existing_cvd,
+                                     m_cudaVisibleDevices.c_str());
+            respectExisting = false;
+        }
+        else if (m_testFieldId == DCGM_FI_PROF_NVLINK_RX_BYTES || m_testFieldId == DCGM_FI_PROF_NVLINK_TX_BYTES)
+        {
+            // NvLink tests need all connected GPUs visible for peer-to-peer transfers
+            m_message << fmt::format("Overriding CUDA_VISIBLE_DEVICES ({}) for NvLink test: {}\n",
+                                     existing_cvd,
+                                     m_cudaVisibleDevices.c_str());
+            respectExisting = false;
+        }
+        else
+        {
+            // PCIe tests, SM tests, DRAM tests, etc. can work with user GPU selection
+            m_message << fmt::format("Respecting existing CUDA_VISIBLE_DEVICES: {}\n", existing_cvd);
+            respectExisting = true;
+        }
+    }
+
+    if (!respectExisting)
+    {
+        int st = setenv("CUDA_VISIBLE_DEVICES", m_cudaVisibleDevices.c_str(), 1);
+        if (st != 0)
+        {
+            m_error << fmt::format("std::setenv returned {}\n", st);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+        m_message << fmt::format("Set CUDA_VISIBLE_DEVICES to {}\n", m_cudaVisibleDevices.c_str());
+    }
+
+    return DCGM_ST_OK;
 }
 
 } // namespace DcgmNs::ProfTester

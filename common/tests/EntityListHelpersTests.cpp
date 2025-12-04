@@ -355,6 +355,11 @@ TEST_CASE("TryParseEntityList")
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU_CI);
         REQUIRE(rejectedId == "cpu:1");
+
+        entityId                         = "GPU-00000000-0000-0000-0000-000000000000,cpu:1";
+        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(std::move(entityMap), entityId);
+        REQUIRE(entityList.size() == 0);
+        REQUIRE(rejectedId == "GPU-00000000-0000-0000-0000-000000000000,cpu:1");
     }
 }
 
@@ -441,6 +446,132 @@ TEST_CASE("ParseEntityIdsAndFilterGpu")
         entityId = "*/*/*,cpu:1";
         gpuIds   = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, {}, entityId);
         REQUIRE(gpuIds.empty());
+    }
+}
+
+TEST_CASE("EntityListWithMigAndUuidParser")
+{
+    SECTION("Empty input")
+    {
+        auto entityList = DcgmNs::EntityListWithMigAndUuidParser({}, {}, "");
+        REQUIRE(entityList.empty());
+    }
+
+    SECTION("With GPU ID & UUID")
+    {
+        std::vector<std::pair<unsigned, std::string>> gpuIdUuids {
+            { 0, "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5" },
+            { 1, "GPU-57fba5ae-c3e2-8cfb-0905-b0cb3d279a45" },
+        };
+        std::string entityId = "gpu:0,gpu:1,cpu:0";
+        auto entityList      = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        REQUIRE(entityList.size() == 3);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[2].entityId == 0);
+        REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "GPU-57fba5ae-c3e2-8cfb-0905-b0cb3d279a45,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        REQUIRE(entityList.size() == 2);
+        REQUIRE(entityList[0].entityId == 1);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "0,1,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        REQUIRE(entityList.size() == 3);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[2].entityId == 1);
+        REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "*,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        REQUIRE(entityList.size() == 3);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[2].entityId == 1);
+        REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "*/*,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser({}, gpuIdUuids, entityId);
+        REQUIRE(entityList.size() == 1);
+        REQUIRE(entityList[0].entityId == 1);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_CPU);
+
+        entityId = "*/*/*,cpu:1";
+        REQUIRE(entityList.size() == 1);
+        REQUIRE(entityList[0].entityId == 1);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_CPU);
+    }
+
+    SECTION("With MIG hierachy")
+    {
+        std::string const gpuUuid        = "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5";
+        dcgmMigHierarchy_v2 migHierarchy = CreateFakeMigHierachy(gpuUuid);
+        std::string entityId             = "gpu:0,gpu:1,cpu:0";
+        auto entityList                  = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        REQUIRE(entityList.size() == 3);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[2].entityId == 0);
+        REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        REQUIRE(entityList.size() == 2);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "GPU-00000000-0000-0000-0000-000000000000,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        REQUIRE(entityList.size() == 0);
+
+        entityId   = "0,1,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        REQUIRE(entityList.size() == 3);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[2].entityId == 1);
+        REQUIRE(entityList[2].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "*,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        REQUIRE(entityList.size() == 2);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "*/*,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        REQUIRE(entityList.size() == 2);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU_I);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
+
+        entityId   = "*/*/*,cpu:1";
+        entityList = DcgmNs::EntityListWithMigAndUuidParser(migHierarchy, {}, entityId);
+        REQUIRE(entityList.size() == 2);
+        REQUIRE(entityList[0].entityId == 0);
+        REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU_CI);
+        REQUIRE(entityList[1].entityId == 1);
+        REQUIRE(entityList[1].entityGroupId == DCGM_FE_CPU);
     }
 }
 

@@ -12,6 +12,7 @@
 #include <dcgm_structs.h>
 #include <dlfcn.h>
 #include <cstdlib>
+#include <TaskContextManager.hpp>
 
 #include <stdio.h>
 #include <unistd.h>
@@ -67,7 +68,11 @@ struct LibHandle
         return 0;
     }
 
-    LibHandle(std::string&& name) : m_name(std::move(name)), m_handle(LibHandle::dlopen(NULL), &LibHandle::dlclose) {}
+    LibHandle(std::string&& name) 
+        : m_name(std::move(name))
+        , m_mutex()
+        , m_handle(LibHandle::dlopen(NULL), &LibHandle::dlclose)
+    {}
 
     void *getHandle()
     {
@@ -90,7 +95,11 @@ template <typename T> struct LoadFunc
     std::string m_name;
     std::mutex m_mutex;
 
-    LoadFunc(std::string&& name) : m_name(std::move(name)) {}
+    LoadFunc(std::string&& name) 
+        : m_func(nullptr)
+        , m_name(std::move(name))
+        , m_mutex()
+    {}
 
     nvsdmRet_t load()
     {
@@ -117,9 +126,27 @@ template <typename T> struct LoadFunc
     }
 };
 
+/* Define the pre_ and post_ functions for each API entry point. */
+#define DCGM_PRE_POST_DECL(name) \
+    static __always_inline void pre_##name(void) { \
+        TaskContextManager *taskCtxMgr = static_cast<TaskContextManager *>(GetTaskContextManager()); \
+        if (taskCtxMgr) { \
+            taskCtxMgr->addTask(); \
+        } \
+    } \
+    \
+    static __always_inline void post_##name(void) { \
+        TaskContextManager *taskCtxMgr = static_cast<TaskContextManager *>(GetTaskContextManager()); \
+        if (taskCtxMgr) { \
+            taskCtxMgr->removeTask(); \
+        } \
+    }
+
+/* Used to define each API entry point from the included file below. */
 #define NVSDM_FUNCTION(retType, name, argTypes, ...) \
     typedef retType (*name ## _func_t) argTypes; \
     static LoadFunc<name ## _func_t> s_loadFunc ## name(#name); \
+    DCGM_PRE_POST_DECL(name) \
     retType name argTypes { \
         if (s_loadFunc ## name.m_func == NULL) { \
             nvsdmRet_t _ret = s_loadFunc ## name.load(); \
@@ -127,9 +154,13 @@ template <typename T> struct LoadFunc
                 return _ret; \
             } \
         } \
-        return s_loadFunc ## name.m_func(__VA_ARGS__); \
+        pre_##name(); \
+        retType result = s_loadFunc ## name.m_func(__VA_ARGS__); \
+        post_##name(); \
+        return result; \
     }
 
+/* Creates functions for each defined API entry point. */
 #include "nvsdm_entry_points.h"
 
 /*

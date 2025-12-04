@@ -92,6 +92,9 @@
 #define DCGM_CORE_SR_RESOURCE_FREE                          69 /* Free resources for a module */
 #define DCGM_CORE_SR_GET_GPU_CHIP_ARCHITECTURE              70 /* Get simplified GPU chip architecture */
 #define DCGM_CORE_SR_GET_NVLINK_P2P_STATUS                  71 /* Get p2p status of nvlink */
+// 72 RESERVED
+// 73 RESERVED
+#define DCGM_CORE_SR_HOSTENGINE_ENV_VAR_INFO 74 /* Get hostengine environment variable info */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -721,6 +724,18 @@ typedef struct dcgm_core_msg_pause_resume_v1
 
 typedef dcgm_core_msg_pause_resume_v1 dcgm_core_msg_pause_resume_t;
 
+typedef struct
+{
+    dcgm_module_command_header_t header; /* Command header */
+    dcgmEnvVarInfo_t envVarInfo;
+} dcgm_core_msg_hostengine_env_var_v1;
+
+#define dcgm_core_msg_hostengine_env_var_version1 MAKE_DCGM_VERSION(dcgm_core_msg_hostengine_env_var_v1, 1)
+#define dcgm_core_msg_hostengine_env_var_version  dcgm_core_msg_hostengine_env_var_version1
+
+typedef dcgm_core_msg_hostengine_env_var_v1 dcgm_core_msg_hostengine_env_var_t;
+
+
 #ifdef INJECTION_LIBRARY_AVAILABLE
 typedef struct
 {
@@ -807,6 +822,16 @@ typedef dcgm_core_msg_nvswitch_get_backend_v1 dcgm_core_msg_nvswitch_get_backend
 
 #endif
 
+typedef struct
+{
+    dcgm_module_command_header_t header; /* Command header */
+} dcgm_core_msg_diag_send_heartbeat_v1;
+
+#define dcgm_core_msg_diag_send_heartbeat_version1 MAKE_DCGM_VERSION(dcgm_core_msg_diag_send_heartbeat_v1, 1)
+#define dcgm_core_msg_diag_send_heartbeat_version  dcgm_core_msg_diag_send_heartbeat_version1
+
+typedef dcgm_core_msg_diag_send_heartbeat_v1 dcgm_core_msg_diag_send_heartbeat_t;
+
 DCGM_CASSERT(dcgm_core_msg_client_disconnect_version1 == (long)0x100001c, 1);
 DCGM_CASSERT(dcgm_core_msg_logging_changed_version1 == (long)0x1000018, 1);
 DCGM_CASSERT(dcgm_core_msg_mig_updated_version1 == (long)0x100001c, 1);
@@ -855,6 +880,8 @@ DCGM_CASSERT(dcgm_core_msg_fieldgroup_get_all_version == (long)0x1008428, 1);
 DCGM_CASSERT(dcgm_core_msg_get_gpu_instance_hierarchy_version == (long)0x1011f24, 1);
 DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version1 == (long)0x1000578, 1);
 DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version == (long)0x1000578, 1);
+DCGM_CASSERT(dcgm_core_msg_hostengine_env_var_version1 == (long)0x1000220, 1);
+DCGM_CASSERT(dcgm_core_msg_diag_send_heartbeat_version1 == (long)0x1000018, 1);
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
 DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_version2 == (long)0x201e370, 2);

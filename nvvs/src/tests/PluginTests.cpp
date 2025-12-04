@@ -400,6 +400,7 @@ TEST_CASE("Plugin operates on non-existing test")
     CHECK_THROWS(p.SetGroupedStat(nonExistingTestName, "0", "key", 0LL));
     CHECK_THROWS(p.GetCustomGpuStat(nonExistingTestName, 0, "key"));
 }
+
 TEST_CASE("Plugin HangDetectRegisterTask")
 {
     UnitTestPlugin p;

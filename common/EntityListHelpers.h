@@ -136,10 +136,24 @@ std::string EntityListWithMigAndUuidParser(dcgmHandle_t dcgmHandle,
                                            std::string const &entityList,
                                            std::vector<dcgmGroupEntityPair_t> &entityGroups);
 
+/**
+ * Parse entity list string to entity group vector. This function will use provided migHierarchy and gpuIdUuids as
+ * the hint to parse GPU UUIDs and MIG instances.
+ *
+ * @param migHierarchy GPU instance hierachy.
+ * @param gpuIdUuids GPU ID and UUID pairs in this system.
+ * @param[in] entityIds        Entity id list
+ * @return Parsed results
+ */
+std::vector<dcgmGroupEntityPair_t> EntityListWithMigAndUuidParser(
+    dcgmMigHierarchy_v2 const &migHierarchy,
+    std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
+    std::string_view entityIds);
 
 std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(dcgmMigHierarchy_v2 const &migHierarchy,
                                                       std::vector<std::pair<unsigned, std::string>> const &gpuIdUuids,
                                                       std::string_view entityIds);
+
 
 /**
  * Parse number of entities string for the number of GPUs.

@@ -213,10 +213,11 @@ void Allowlist::FillMap()
                         for (auto subtestIt = paramOrSubtest.begin(); subtestIt != paramOrSubtest.end(); subtestIt++)
                         {
                             const std::string subtestName = subtestIt->first.Scalar();
-                            auto const subtestParam       = subtestIt->second;
-                            DCGM_LOG_VERBOSE << "Reading " << testName << "." << subtestName
-                                             << " as a double. Scalar: " << subtestParam.Scalar();
-                            tp->AddSubTestDouble(testName, subtestName, subtestParam.as<double>());
+                            log_verbose("Reading {}.{} as a double. Scalar: {}",
+                                        testName,
+                                        subtestName,
+                                        subtestIt->second.Scalar());
+                            tp->AddSubTestDouble(testName, subtestName, subtestIt->second.as<double>());
                         }
                     }
                     else
@@ -232,19 +233,19 @@ void Allowlist::FillMap()
                             DCGM_LOG_VERBOSE << "Reading " << testName
                                              << " as a bool. Scalar: " << paramOrSubtest.Scalar();
                             bool paramValue = paramOrSubtest.as<bool>();
-                            tp->AddString(testName, paramValue ? "True" : "False");
+                            tp->AddString(std::move(testName), paramValue ? "True" : "False");
                         }
                         else if (IsStringParam(testName))
                         {
                             DCGM_LOG_VERBOSE << "Reading " << testName
                                              << " as a string. String: " << paramOrSubtest.as<std::string>();
-                            tp->AddString(testName, paramOrSubtest.as<std::string>());
+                            tp->AddString(std::move(testName), paramOrSubtest.as<std::string>());
                         }
                         else
                         {
                             DCGM_LOG_VERBOSE << "Reading " << testName
                                              << " as a double. Scalar: " << paramOrSubtest.Scalar();
-                            tp->AddDouble(testName, paramOrSubtest.as<double>());
+                            tp->AddDouble(std::move(testName), paramOrSubtest.as<double>());
                         }
                     }
                 }

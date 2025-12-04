@@ -1,0 +1,6 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/mnubergemm
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-multinode-cuda12-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-multinode-cuda12-<BASEPACKAGEVERSION>/LICENSE

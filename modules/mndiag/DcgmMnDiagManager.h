@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "DcgmMutex.h"
@@ -68,6 +69,18 @@ struct HostInfo
     std::string hostname;
     std::unordered_set<std::string> ipv4Addresses; //!< All local IPv4 addresses (excluding loopback)
     std::string shortHostname;
+};
+
+/**
+ * Connection parameters for establishing connections (before they're established)
+ */
+struct ConnectionParams
+{
+    std::string hostname;                              //!< Remote hostname
+    std::variant<uint16_t, std::string> remoteAddress; //!< Remote port or socket path
+    std::variant<uint16_t, std::string> localAddress;  //!< Local port or socket path (populated during tunnel creation)
+    bool isUnixSocket;                                 //!< True for Unix socket, false for TCP
+    uid_t effectiveUid;                                //!< Effective user ID
 };
 
 class DcgmMnDiagManager
@@ -245,6 +258,68 @@ private:
      * @return The installed CUDA version
      */
     int GetCudaVersion();
+
+    /**
+     * @brief Authorizes remote connections
+     * @return DCGM_ST_OK if successful, DCGM_ST_* on failure
+     */
+    dcgmReturn_t AuthorizeRemoteConnections();
+
+    /**
+     * @brief Revokes remote authorizations
+     * @return DCGM_ST_OK if successful, DCGM_ST_* on failure
+     */
+    dcgmReturn_t RevokeRemoteAuthorizations();
+
+    /**
+     * @brief Starts a tunnel session for the given connection parameters
+     * @param params Connection parameters including hostname and address
+     * @return TunnelState indicating success or failure
+     */
+    DcgmNs::Common::RemoteConn::detail::TunnelState StartTunnelSession(ConnectionParams &params);
+
+    /**
+     * @brief Ends a tunnel session (opposite of StartTunnelSession)
+     * @param params Connection parameters
+     */
+    void EndTunnelSession(ConnectionParams const &params);
+
+    /**
+     * @brief Parses connection parameters from a host string
+     * @param host The host string to parse
+     * @param effectiveUid The effective user ID
+     * @return ConnectionParams structure with parsed information
+     */
+    ConnectionParams ParseConnectionParams(std::string const &host, uid_t effectiveUid);
+
+    /**
+     * @brief Creates a DCGM connection through the established tunnel
+     * @param params Connection parameters with local address populated
+     * @param handle Output parameter for the DCGM handle
+     * @return dcgmReturn_t indicating success or failure
+     */
+    dcgmReturn_t CreateDcgmConnection(ConnectionParams const &params, dcgmHandle_t &handle);
+
+    /**
+     * @brief Creates and stores ConnectionInfo from successful connection
+     * @param params Connection parameters used to establish the connection
+     * @param handle DCGM connection handle
+     * @return ConnectionInfo structure for storage in m_connections
+     */
+    ConnectionInfo CreateConnectionInfo(ConnectionParams const &params, dcgmHandle_t handle);
+
+    /**
+     * @brief Connects to a single remote node using the unified connection logic (without authorization)
+     * @param params Connection parameters
+     * @return dcgmReturn_t indicating success or failure
+     */
+    dcgmReturn_t ConnectSingleNode(ConnectionParams params);
+
+    /**
+     * @brief Cleans up connections
+     * @return DCGM_ST_OK if successful, DCGM_ST_* on failure
+     */
+    dcgmReturn_t CleanupConnections();
 
     // Member variables
     HostInfo m_localHostInfo;

@@ -84,7 +84,8 @@ g_publishFieldIds = [
     dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
     dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL,
     dcgm_fields.DCGM_FI_DEV_PCIE_TX_THROUGHPUT,
-    dcgm_fields.DCGM_FI_DEV_PCIE_RX_THROUGHPUT
+    dcgm_fields.DCGM_FI_DEV_PCIE_RX_THROUGHPUT,
+    dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS
     ]
 
 g_fieldIntervalMap = None

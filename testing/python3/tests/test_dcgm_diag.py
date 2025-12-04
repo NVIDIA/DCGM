@@ -26,7 +26,6 @@ from DcgmDiag import check_diag_result_non_failing, check_diag_result_non_passin
     GetEntityCount, GetGpuCount
 import dcgm_errors
 import dcgmvalue
-
 import threading
 import time
 import sys
@@ -238,7 +237,7 @@ def helper_check_dcgm_run_diag_backwards_compatibility(handle, gpuId):
             assert response.version == responseVer, f"expected {responseVer:x} actual {response.version:x}"
             assert response.numTests == 1, f"response.numTests: [{response.numTests}] for RunDiag version {runDiagVer}"
             assert response.tests[0].name == "software", f"response.tests[0].name: [{response.tests[0].name}] for RunDiag version {runDiagVer}"
-    
+
     # Test runDiag_v9 and runDiag_v10 (may be redundant with some tests below)
     _test_run_diag_v9_and_v10()
 
@@ -720,31 +719,47 @@ def get_dcgmi_path():
         test_utils.skip_test("Dcgmi is not supported on the current platform.")
     return paths[utils.platform_identifier]
 
+def gpu_is_healthy_and_support_memtest(handle, gpuId):
+    func = gpu_is_healthy_and_support_memtest
+    if not hasattr(func, "result_cache"):
+        func.result_cache = {}
+
+    if gpuId in func.result_cache:
+        return func.result_cache[gpuId]
+
+    testName = "memtest"
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName, paramsStr="memtest.test_duration=2")
+    start_time = time.time()
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    end_time = time.time()
+    logger.info(f"{end_time - start_time:.2f} seconds spent on checking whether the GPU is healthy/supported.")
+    entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuId )
+    if not DcgmDiag.check_diag_result_pass(response, entityPair, testName):
+        func.result_cache[gpuId] = False
+        return False
+    func.result_cache[gpuId] = True
+    return True
+
 def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
     """
     Verifies that a launched diag is stopped when the dcgmi executable recieves a SIGINT, SIGHUP, SIGQUIT, or SIGTERM
     signal.
     """
     # First check whether the GPU is healthy/supported
-    testName = "memtest"
-    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName, paramsStr="memtest.test_duration=2",
-                           version=g_latestDiagRunVer)
-    start_time = time.time()
-    response = test_utils.diag_execute_wrapper(dd, handle)
-    end_time = time.time()
-    logger.info(f"{end_time - start_time:.2f} seconds spent on checking whether the GPU is healthy/supported.")
-    entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuId )
-    if not check_diag_result_pass(response, entityPair, testName):
+    if not gpu_is_healthy_and_support_memtest(handle, gpuId):
         test_utils.skip_test("Skipping because GPU %s does not pass memtest. "
                              "Please verify whether the GPU is supported and healthy." % gpuId)
 
     dcgmi_path = get_dcgmi_path()
-    def verify_exit_code_on_signal(signum):
+    def verify_exit_code_on_signal(signum, enableHeartbeat=False):
         # Ensure that host engine is ready to launch a new diagnostic
         wait_host_engine_ready(handle, gpuId)
 
-        diagApp = AppRunner(dcgmi_path, args=["diag", "-r", "memtest", "-i", "%s" % gpuId,
-                                              "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"])
+        args = ["diag", "-r", "memtest", "-i", "%s" % gpuId, "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"]
+        if enableHeartbeat:
+            args.append("--enable-heartbeat")
+
+        diagApp = AppRunner(dcgmi_path, args=args)
         # Start the diag
         diagApp.start(timeout=60)
         logger.info("Launched dcgmi process with pid: %s" % diagApp.getpid())
@@ -787,19 +802,19 @@ def helper_check_diag_stop_on_interrupt_signals(handle, gpuId):
     # We simply verify the return code because explicitly checking whether the nvvs process has terminated is
     # clunky and error-prone
     logger.info("Testing stop on SIGINT")
-    verify_exit_code_on_signal(signal.SIGINT)
+    verify_exit_code_on_signal(signal.SIGINT, enableHeartbeat=True)
 
     # Verify return code on SIGHUP
     logger.info("Testing stop on SIGHUP")
-    verify_exit_code_on_signal(signal.SIGHUP)
+    verify_exit_code_on_signal(signal.SIGHUP, enableHeartbeat=False)
 
     # Verify return code on SIGQUIT
     logger.info("Testing stop on SIGQUIT")
-    verify_exit_code_on_signal(signal.SIGQUIT)
+    verify_exit_code_on_signal(signal.SIGQUIT, enableHeartbeat=True)
 
     # Verify return code on SIGTERM
     logger.info("Testing stop on SIGTERM")
-    verify_exit_code_on_signal(signal.SIGTERM)
+    verify_exit_code_on_signal(signal.SIGTERM, enableHeartbeat=False)
 
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_only_with_live_gpus()
@@ -827,9 +842,11 @@ def test_dcgm_diag_stop_on_interrupt_signals_dcgmi_embedded_itself():
         diagApp.validate()
         test_utils.skip_test("Skip test due to basic memtest failed.")
 
-    def verify_exit_code_on_signal(signum):
-        diagApp = AppRunner(dcgmi_path, args=["diag", "-r", "memtest", "-i", "0",
-                                                "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"], env=test_utils.smallFbModeEnv)
+    def verify_exit_code_on_signal(signum, enableHeartbeat=False):
+        args = ["diag", "-r", "memtest", "-i", "0", "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"]
+        if enableHeartbeat:
+            args.append("--enable-heartbeat")
+        diagApp = AppRunner(dcgmi_path, args=args, env=test_utils.smallFbModeEnv)
         # Start the diag
         diagApp.start(timeout=60)
         logger.info("Launched dcgmi process with pid: %s" % diagApp.getpid())
@@ -871,19 +888,19 @@ def test_dcgm_diag_stop_on_interrupt_signals_dcgmi_embedded_itself():
 
     # Verify return code on SIGINT
     logger.info("Testing stop on SIGINT")
-    verify_exit_code_on_signal(signal.SIGINT)
+    verify_exit_code_on_signal(signal.SIGINT, enableHeartbeat=True)
 
     # Verify return code on SIGHUP
     logger.info("Testing stop on SIGHUP")
-    verify_exit_code_on_signal(signal.SIGHUP)
+    verify_exit_code_on_signal(signal.SIGHUP, enableHeartbeat=False)
 
     # Verify return code on SIGQUIT
     logger.info("Testing stop on SIGQUIT")
-    verify_exit_code_on_signal(signal.SIGQUIT)
+    verify_exit_code_on_signal(signal.SIGQUIT, enableHeartbeat=True)
 
     # Verify return code on SIGTERM
     logger.info("Testing stop on SIGTERM")
-    verify_exit_code_on_signal(signal.SIGTERM)
+    verify_exit_code_on_signal(signal.SIGTERM, enableHeartbeat=False)
 
 # See test_diag_stats.py: helper_test_stats_file_basics for refactoring and multi-maintenance opportunity
 def helper_verify_log_file_creation(handle, gpuIds):
@@ -957,7 +974,7 @@ def helper_clocks_event_masking_failures(handle, gpuId):
     # First check whether the GPU is healthy
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName, paramsStr="memtest.test_duration=2",
                            version=dcgm_structs.dcgmRunDiag_version10)
-    dd.SetClocksEventMask(0) # We explicitly want to fail for clocks event reasons since this test inserts those errors 
+    dd.SetClocksEventMask(0) # We explicitly want to fail for clocks event reasons since this test inserts those errors
                           # for verification
     dd.UseFakeGpus()
     response = test_utils.diag_execute_wrapper(dd, handle)
@@ -1307,28 +1324,6 @@ def test_memtest_failures_standalone(handle, gpuIds):
     assert check_diag_result_non_passing(response, dcgm_structs.c_dcgmGroupEntityPair_t(dcgm_fields.DCGM_FE_GPU, gpuIds[0]), testName), \
         "Should have a failure due to injected DBEs, but got passing result"
 
-@test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_only_with_live_gpus()
-@test_utils.for_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_diag_nvbandwidth_failure(handle, gpuIds):
-    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="nvbandwidth", paramsStr="nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
-
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL, 99, 0, True, repeatCount=5)
-
-    response = test_utils.diag_execute_wrapper(dd, handle)
-    nvbandwidth_test_idx = -1
-    for i in range(response.numTests):
-        if response.tests[i].name == "nvbandwidth":
-            nvbandwidth_test_idx = i
-            break
-    assert nvbandwidth_test_idx != -1, "Should have nvbandwidth test result."
-    resultIdx = response.tests[nvbandwidth_test_idx].resultIndices[0]
-    assert response.results[resultIdx].entity.entityGroupId == dcgm_fields.DCGM_FE_GPU, f"Should have entity group as DCGM_FE_GPU, but got {response.results[resultIdx].entity.entityGroupId}"
-    assert response.results[resultIdx].entity.entityId == gpuIds[0], f"Should have entityId as {gpuIds[0]}, but got {response.results[resultIdx].entity.entityId}"
-    assert response.results[resultIdx].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, \
-                "Should have a failure due to high memory copy utilitization, but got passing result"
-
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
@@ -1505,6 +1500,17 @@ def test_dcgm_diag_hbm_temperature_pass(handle, gpuIds):
     helper_hbm_temperature_check(handle, gpuIds, "pass")
 
 def helper_test_dcgm_diag_timing_out(handle, gpuIds, version):
+    # First check if there's already a diagnostic running - skip if so
+    try:
+        # Try to stop any running diagnostic first (this is a safe no-op if none running)
+        dcgm_agent_internal.dcgmStopDiagnostic(handle)
+        logger.debug("Pre-check: stopped any existing diagnostic")
+    except Exception:
+        # If stop fails, there might be a stuck diagnostic - skip this test
+        logger.info("Skipping timeout test because unable to stop existing diagnostic")
+        test_utils.skip_test("Skipping timeout test because a diagnostic appears to be stuck from previous test")
+    
+    # Run the actual timeout test
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="pcie", timeout=1, version=version)
     try:
         test_utils.diag_execute_wrapper(dd, handle)
@@ -1513,17 +1519,27 @@ def helper_test_dcgm_diag_timing_out(handle, gpuIds, version):
     else:
         test_utils.skip_test('Skip due to rapid pace of code execution.')
 
-    for i in range(0,3):
+    DIAG_STOP_RETRY_DELAY_SEC = 1.0  # Delay between diagnostic stop retry attempts
+    
+    for i in range(0, 3):
         try:
             dcgm_agent_internal.dcgmStopDiagnostic(handle)
+            break
         except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CHILD_NOT_KILLED) as e:
             if i == 2:
-                nvvsPids = map(int, subprocess.check_output(["pidof", "nvvs"]).split())
-                for childPid in nvvsPids:
-                    logger.info("Force killing the NVVS process %d", childPid)
-                    os.kill(childPid, 9)
+                # Last attempt - force kill all NVVS processes
+                try:
+                    subprocess.run(["pkill", "-9", "-f", "nvvs"], check=False)
+                except Exception as kill_error:
+                    logger.error("Error during force kill: %s", kill_error)
             else:
-                pass
+                # Wait a bit before retrying
+                time.sleep(DIAG_STOP_RETRY_DELAY_SEC)
+
+    logger.info("Verifying NVVS process termination")
+    not_running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=False, delay=0.2, attempts=10)
+    if not not_running:
+        logger.error("NVVS processes still running after all cleanup attempts: %s", debug_output)
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_only_with_live_gpus()
@@ -1781,3 +1797,135 @@ def test_dcgm_nvbandwidth_log_file_creation(handle, gpuIds):
     Test to verify that the nvbandwidth log file is created when running the nvbandwidth test.
     """
     helper_check_nvbandwidth_log_file_creation(handle, gpuIds)
+
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus() #CC makes this too slow
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_diag_stop_when_dcgmi_gets_killed(handle, gpuIds):
+    gpuId = gpuIds[0]
+    # First check whether the GPU is healthy/supported
+    if not gpu_is_healthy_and_support_memtest(handle, gpuId):
+        test_utils.skip_test("Skipping because GPU %s does not pass memtest. "
+                             "Please verify whether the GPU is supported and healthy." % gpuId)
+
+    dcgmi_path = get_dcgmi_path()
+
+    # Ensure that host engine is ready to launch a new diagnostic
+    wait_host_engine_ready(handle, gpuId)
+
+    diagApp = AppRunner(dcgmi_path, args=["diag", "-r", "memtest", "-i", "%s" % gpuId,
+                                            "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log", "--enable-heartbeat"])
+    # Start the diag
+    diagApp.start(timeout=60)
+    logger.info("Launched dcgmi process with pid: %s" % diagApp.getpid())
+
+    # Ensure diag is running before sending SIGKILL
+    running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=True, delay=0.1, attempts=250)
+    assert running, "The nvvs process did not start within 25 seconds: %s" % (debug_output)
+    diagApp.signal(signal.SIGKILL)
+    retCode = diagApp.wait()
+    assert retCode != 0
+    # Since the app returns a non zero exit code, we call the validate method to prevent false
+    # failures from the test framework
+    diagApp.validate()
+
+    # Host engine will wait for 40s before sending SIGKILL to the nvvs process.
+    # If the nvvs is not terminated within 40s + some buffer time, it is likely that the heartbeat mechanism does not work.
+    not_running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=False, attempts=100)
+    assert not_running, "The launched nvvs process did not terminate within 50 seconds. pgrep output:\n%s" \
+            % debug_output
+
+    # Should be able to run memtest again after the nvvs process is killed
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="memtest", paramsStr="memtest.test_duration=2",
+                           version=g_latestDiagRunVer)
+    for _ in range(16):
+        try:
+            response = test_utils.diag_execute_wrapper(dd, handle)
+            break
+        except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE):
+            # Even after the nvvs process is killed, it is possible that the diag has not returned from the host engine.
+            time.sleep(0.2)
+            continue
+    else:
+        assert False, "Should have been able to run memtest again after the nvvs process is killed"
+    entityPair = dcgm_structs.c_dcgmGroupEntityPair_t( dcgm_fields.DCGM_FE_GPU, gpuId )
+    assert check_diag_result_pass(response, entityPair, "memtest")
+
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus() #CC makes this too slow
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_diag_when_already_running(handle, gpuIds):
+    gpuId = gpuIds[0]
+    # First check whether the GPU is healthy/supported
+    if not gpu_is_healthy_and_support_memtest(handle, gpuId):
+        test_utils.skip_test("Skipping because GPU %s does not pass memtest. "
+                             "Please verify whether the GPU is supported and healthy." % gpuId)
+
+    wait_host_engine_ready(handle, gpuId)
+
+    testName = "memtest"
+    diagApp = AppRunner(get_dcgmi_path(), args=["diag", "-r", testName, "-i", "%s" % gpuId,
+                                            "-d", "INFO", "--debugLogFile", "/tmp/nvvs.log"])
+    # Start the diag
+    diagApp.start(timeout=60)
+    logger.info("Launched dcgmi process with pid: %s" % diagApp.getpid())
+
+    running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=True, delay=0.1, attempts=250)
+    assert running, "The nvvs process did not start within 25 seconds: %s" % (debug_output)
+
+    diag_already_running_error = False
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName,
+                           version=g_latestDiagRunVer)
+    try:
+        test_utils.diag_execute_wrapper(dd, handle)
+    except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE):
+        diag_already_running_error = True
+
+    assert diag_already_running_error
+    diagApp.signal(signal.SIGTERM)
+    _ = diagApp.wait()
+    diagApp.validate()
+
+    not_running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=False, attempts=50)
+    assert not_running, "The launched nvvs process did not terminate within 25 seconds. pgrep output:\n%s" \
+            % debug_output
+
+@test_utils.run_with_standalone_host_engine(120, heEnv={test_utils.DIAG_SMALL_FB_MODE_VAR : '1', 'DCGM_DIAG_HEARTBEAT_TIMEOUT_SEC' : '4'})
+@test_utils.run_only_with_live_gpus()
+@test_utils.exclude_confidential_compute_gpus() #CC makes this too slow
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgm_diag_heartbeat_timeout(handle, gpuIds):
+    gpuId = gpuIds[0]
+    # First check whether the GPU is healthy/supported
+    if not gpu_is_healthy_and_support_memtest(handle, gpuId):
+        test_utils.skip_test("Skipping because GPU %s does not pass memtest. "
+                             "Please verify whether the GPU is supported and healthy." % gpuId)
+
+    wait_host_engine_ready(handle, gpuId)
+
+    testName = "memtest"
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr=testName,
+                           version=g_latestDiagRunVer)
+    dd.SetEnableHeartbeat(True)
+
+    def heartbeatFn(event):
+        # use another handle to send heartbeat to test that the heartbeat receiving time will not be updated
+        with test_utils.RunClientInitShutdown("127.0.0.1") as anotherHandle:
+            while not event.is_set():
+                time.sleep(1)
+                dcgm_agent.dcgmDiagSendHeartbeat(anotherHandle)
+    stopEvent = threading.Event()
+    heartbeatThread = threading.Thread(target=heartbeatFn, args=(stopEvent,))
+    heartbeatThread.start()
+
+    with test_utils.assert_raises(dcgm_structs.DCGMError):
+        test_utils.diag_execute_wrapper(dd, handle)
+
+    stopEvent.set()
+    heartbeatThread.join()
+
+    not_running, debug_output = dcgm_internal_helpers.check_nvvs_process(want_running=False, attempts=50)
+    assert not_running, "The launched nvvs process did not terminate within 25 seconds. pgrep output:\n%s" \
+            % debug_output

@@ -36,6 +36,7 @@ defaultFieldIds = [
     dcgm_fields.DCGM_FI_DEV_FB_FREE,
     dcgm_fields.DCGM_FI_DEV_FB_USED,
     dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
+    dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS,
     dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
     dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
     dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
@@ -118,7 +119,7 @@ class DcgmReader(object):
 
                     val = entityFv[fieldId][-1]
 
-                    if val.isBlank:
+                    if val.isBlank and self.m_ignoreBlank:
                         continue
 
                     fieldTag = self.m_fieldIdToInfo[fieldId].tag
@@ -143,7 +144,7 @@ class DcgmReader(object):
 
                 val = gpuFv[fieldId][-1]
 
-                if val.isBlank:
+                if val.isBlank and self.m_ignoreBlank:
                     continue
 
                 fieldTag = self.m_fieldIdToInfo[fieldId].tag
@@ -172,10 +173,12 @@ class DcgmReader(object):
     ignoreList      : List of the field ids we want to query but not publish.
     gpuIds          : List of GPU IDs to monitor. If not provided, DcgmReader will monitor all GPUs on the system
     fieldIntervalMap: Map of intervals to list of field numbers to monitor. Takes precedence over fieldIds and updateFrequency if not None.
+    ignoreBlank     : Filter out BLANK values. Default True, but can be set
+                      False to get data for all requested fieldId.
     '''
     def __init__(self, hostname='localhost', fieldIds=None, updateFrequency=10000000,
                  maxKeepAge=3600.0, ignoreList=None, fieldGroupName='dcgm_fieldgroupData', gpuIds=None,
-                 entities=None, fieldIntervalMap=None):
+                 entities=None, fieldIntervalMap=None, ignoreBlank=True):
         fieldIds = fieldIds or defaultFieldIds
         ignoreList = ignoreList or []
         self.m_dcgmHostName = hostname
@@ -189,6 +192,8 @@ class DcgmReader(object):
             self.m_publishFields = fieldIntervalMap
         else:
             self.m_publishFields[self.m_updateFreq] = fieldIds
+
+        self.m_ignoreBlank = ignoreBlank
             
         self.m_requestedGpuIds = gpuIds
         self.m_requestedEntities = entities
@@ -399,7 +404,7 @@ class DcgmReader(object):
 
             # Remove our field group if it exists already
             if findByNameId is not None:
-                self.LogDebug("fieldGroupId: " + findByNameId  + "\n")
+                self.LogDebug("fieldGroupId: " + str(findByNameId.value)  + "\n")
                 delFieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle=self.m_dcgmHandle, fieldGroupId=findByNameId)
                 delFieldGroup.Delete()
                 del(delFieldGroup)
@@ -489,7 +494,7 @@ class DcgmReader(object):
                     for fieldId in list(gpuFv.keys()):
                         val = gpuFv[fieldId][-1]
 
-                        if val.isBlank:
+                        if val.isBlank and self.m_ignoreBlank:
                             continue
 
                         if mapById == False:
@@ -529,7 +534,7 @@ class DcgmReader(object):
                         for fieldId in list(fvs.keys()):
                             val = fvs[fieldId][-1]
 
-                            if val.isBlank:
+                            if val.isBlank and self.m_ignoreBlank:
                                 continue
 
                             if mapById == False:
@@ -567,7 +572,7 @@ class DcgmReader(object):
 
                         for fieldId in list(gpuFv.keys()):
                             for val in gpuFv[fieldId]:
-                                if val.isBlank:
+                                if val.isBlank and self.m_ignoreBlank:
                                     continue
 
                                 if mapById == False:
@@ -618,7 +623,7 @@ class DcgmReader(object):
 
                             for fieldId in list(fvs.keys()):
                                 for val in fvs[fieldId]:
-                                    if val.isBlank:
+                                    if val.isBlank and self.m_ignoreBlank:
                                         continue
 
                                 if mapById == False:

@@ -312,6 +312,8 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
             return "A file operation failed";
         case DCGM_ST_CHILD_SIGNAL_RECEIVED:
             return "A child process received a signal";
+        case DCGM_ST_CALLER_ALREADY_STOPPED:
+            return "The caller is already stopped";
         default:
             // Wrong error codes should be handled by the caller
             return 0;

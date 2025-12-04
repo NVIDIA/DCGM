@@ -36,9 +36,13 @@ fi
 #### Versioning ####
 ####################
 
-if [[ ! -v TAG ]]
+GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null)
+if [[ $? -eq 0 ]]
 then
-  TAG=${DCGM_VERSION:-4.0.0}-gcc14-$(scripts/toolchain-sha256sum | head -c6)
+  if ! git diff-index --exit-code --quiet HEAD
+  then
+    GIT_COMMIT+='-dirty'
+  fi
 fi
 
 ###############
@@ -46,14 +50,14 @@ fi
 ###############
 
 export BASE_IMAGE=${BASE_IMAGE:-ubuntu:24.04}
-export TAG
+export GIT_COMMIT
+export TAG=${TAG:=latest}
 
 docker compose build dcgm-common-host-software
 for ARCHITECTURE in "${ARCHITECTURES[@]}"
 do
   docker compose build dcgm-toolchain-$ARCHITECTURE
   docker compose build dcgmbuild-$ARCHITECTURE
-  docker tag ${REGISTRY:-dcgm}/dcgmbuild:$TAG-$ARCHITECTURE dcgmbuild:$TAG-$ARCHITECTURE
 done
 
 docker image rm dcgm/common-host-software:$TAG

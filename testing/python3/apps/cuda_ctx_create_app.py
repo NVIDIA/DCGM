@@ -62,7 +62,7 @@ class CudaCtxCreateAdvancedApp(app_runner.AppRunner):
             "Windows_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit.exe"
             }
     def __init__(self, args, env=None):
-        path = os.path.join(utils.script_dir, CudaCtxCreateApp.paths[utils.platform_identifier])
+        path = os.path.join(utils.script_dir, CudaCtxCreateAdvancedApp.paths[utils.platform_identifier])
         super(CudaCtxCreateAdvancedApp, self).__init__(path, args, cwd=os.path.dirname(path), env=env)
 
     def __str__(self):

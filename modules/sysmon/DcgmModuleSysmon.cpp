@@ -58,13 +58,6 @@ DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc)
     PopulateCpusIfNeeded();
     m_sysmon.Init();
 
-    int st = Start();
-    if (st)
-    {
-        DCGM_LOG_ERROR << "Got error " << st << " when trying to start the task runner";
-        throw std::runtime_error("Unable to start a DcgmTaskRunner");
-    }
-
     if (!CpuHelpers::SupportNonNvidiaCpu())
     {
         if (m_sysmon.AreNvidiaCpusPresent() == false)
@@ -75,9 +68,20 @@ DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc)
         }
     }
 
+    InitHangDetect();
+
     m_paused = false;
 
     PopulateTemperatureFileMap();
+
+    /* If Start() is called prior to initializtion completion, on partial construction due to an exception,
+       the thread may attempt to access uninitialized or destroyed members, leading to undefined behavior. */
+    int st = Start();
+    if (st)
+    {
+        DCGM_LOG_ERROR << "Got error " << st << " when trying to start the task runner";
+        throw std::runtime_error("Unable to start a DcgmTaskRunner");
+    }
 }
 
 DcgmModuleSysmon::~DcgmModuleSysmon()
@@ -1403,6 +1407,17 @@ void DcgmModuleSysmon::run()
     m_sysmonThreadId = std::this_thread::get_id();
     ASSERT_IS_SYSMON_THREAD;
 
+    pid_t const pid = getpid();
+
+    if (m_monitor && !ShouldStop())
+    {
+        m_monitor->AddMonitoredTask(pid, m_tid);
+    }
+    else
+    {
+        log_debug("Not monitoring this thread: {}", (ShouldStop() ? "stop requested" : "hang detection is disabled"));
+    }
+
     ProcessTryRunOnce(true);
     while (ShouldStop() == 0)
     {
@@ -1412,6 +1427,11 @@ void DcgmModuleSysmon::run()
         }
 
         ProcessTryRunOnce(false);
+    }
+
+    if (m_monitor)
+    {
+        m_monitor->RemoveMonitoredTask(pid, m_tid);
     }
 }
 
@@ -1529,6 +1549,72 @@ dcgmReturn_t DcgmModuleSysmon::AddUtilizationSample(SysmonUtilizationSample &ite
     (*task).get();
     return DCGM_ST_OK;
 }
+
+/*****************************************************************************/
+void DcgmModuleSysmon::InitHangDetect()
+{
+    auto constexpr DCGM_HANGDETECT_DISABLE = "DCGM_HANGDETECT_DISABLE";
+
+    if (std::getenv(DCGM_HANGDETECT_DISABLE) != nullptr)
+    {
+        m_hangDetectDisabled = true;
+        log_info("Hang detection disabled");
+        return;
+    }
+
+    auto constexpr reportUserspaceHangs               = false;
+    auto constexpr DCGM_HANGDETECT_EXPIRY_SEC         = "DCGM_HANGDETECT_EXPIRY_SEC";
+    auto constexpr DEFAULT_HANG_DETECT_EXPIRY_SEC     = std::chrono::seconds(600);
+    auto constexpr DEFAULT_HANG_DETECT_CHECK_INTERVAL = std::chrono::seconds(60);
+
+    auto expirySec        = DEFAULT_HANG_DETECT_EXPIRY_SEC;
+    auto checkIntervalSec = DEFAULT_HANG_DETECT_CHECK_INTERVAL;
+
+    if (auto const expirySecStr = std::getenv(DCGM_HANGDETECT_EXPIRY_SEC); expirySecStr != nullptr)
+    {
+        unsigned int parsedExpirySec {};
+        auto const [_, ec] = std::from_chars(expirySecStr, expirySecStr + std::strlen(expirySecStr), parsedExpirySec);
+        if (ec != std::errc())
+        {
+            log_warning(
+                "Invalid {} value '{}'. Must be a non-negative number.", DCGM_HANGDETECT_EXPIRY_SEC, expirySecStr);
+        }
+        else
+        {
+            expirySec = std::chrono::seconds(parsedExpirySec);
+        }
+    }
+
+    m_handler = std::make_unique<DcgmModuleSysmonHangDetectHandler>();
+
+    m_detector = std::make_unique<HangDetect>();
+    m_monitor  = std::make_unique<HangDetectMonitor>(*m_detector, checkIntervalSec, expirySec);
+    m_monitor->SetReportUserspaceHangs(reportUserspaceHangs);
+    m_monitor->SetHangDetectedHandler(m_handler.get());
+    m_monitor->StartMonitoring();
+    DcgmThread::SetHangDetectMonitor(m_monitor.get());
+}
+
+/*****************************************************************************/
+void DcgmModuleSysmonHangDetectHandler::HandleHangDetectedEvent(HangDetectedEvent const &hangEvent)
+{
+    auto const [pid, tid, duration] = hangEvent;
+    auto const entityType           = tid.has_value() ? "thread" : "process";
+    auto const entityId             = tid.value_or(pid);
+    auto const idType               = tid.has_value() ? "tid" : "pid";
+
+    auto const msg
+        = fmt::format("A {} ({}: {}) has been unresponsive for {} seconds. "
+                      "If the process does not exit, it may need to be killed or the system may need to be restarted. "
+                      "Collect problem report logs before restarting.",
+                      entityType,
+                      idType,
+                      entityId,
+                      duration.count());
+
+    log_error(msg);
+}
+
 
 extern "C" {
 /*************************************************************************/

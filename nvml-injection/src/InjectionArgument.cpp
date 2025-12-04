@@ -53,6 +53,7 @@ int nvmlBridgeChipHierarchy_tCompare(const nvmlBridgeChipHierarchy_t &a, const n
 int nvmlSample_tCompare(const nvmlSample_t &a, const nvmlSample_t &b);
 int nvmlViolationTime_tCompare(const nvmlViolationTime_t &a, const nvmlViolationTime_t &b);
 int nvmlCoolerInfo_tCompare(const nvmlCoolerInfo_t &a, const nvmlCoolerInfo_t &b);
+int nvmlDramEncryptionInfo_tCompare(const nvmlDramEncryptionInfo_t &a, const nvmlDramEncryptionInfo_t &b);
 int nvmlMarginTemperature_tCompare(const nvmlMarginTemperature_t &a, const nvmlMarginTemperature_t &b);
 int nvmlClkMonFaultInfo_tCompare(const nvmlClkMonFaultInfo_t &a, const nvmlClkMonFaultInfo_t &b);
 int nvmlClkMonStatus_tCompare(const nvmlClkMonStatus_t &a, const nvmlClkMonStatus_t &b);
@@ -115,11 +116,15 @@ int nvmlGpuFabricInfo_tCompare(const nvmlGpuFabricInfo_t &a, const nvmlGpuFabric
 int nvmlGpuFabricInfoV_tCompare(const nvmlGpuFabricInfoV_t &a, const nvmlGpuFabricInfoV_t &b);
 int nvmlSystemDriverBranchInfo_tCompare(const nvmlSystemDriverBranchInfo_t &a, const nvmlSystemDriverBranchInfo_t &b);
 int nvmlTemperature_tCompare(const nvmlTemperature_t &a, const nvmlTemperature_t &b);
+int nvmlNvlinkSupportedBwModes_tCompare(const nvmlNvlinkSupportedBwModes_t &a, const nvmlNvlinkSupportedBwModes_t &b);
+int nvmlNvlinkGetBwMode_tCompare(const nvmlNvlinkGetBwMode_t &a, const nvmlNvlinkGetBwMode_t &b);
+int nvmlNvlinkSetBwMode_tCompare(const nvmlNvlinkSetBwMode_t &a, const nvmlNvlinkSetBwMode_t &b);
 int nvmlVgpuVersion_tCompare(const nvmlVgpuVersion_t &a, const nvmlVgpuVersion_t &b);
 int nvmlVgpuMetadata_tCompare(const nvmlVgpuMetadata_t &a, const nvmlVgpuMetadata_t &b);
 int nvmlVgpuPgpuMetadata_tCompare(const nvmlVgpuPgpuMetadata_t &a, const nvmlVgpuPgpuMetadata_t &b);
 int nvmlVgpuPgpuCompatibility_tCompare(const nvmlVgpuPgpuCompatibility_t &a, const nvmlVgpuPgpuCompatibility_t &b);
 int nvmlExcludedDeviceInfo_tCompare(const nvmlExcludedDeviceInfo_t &a, const nvmlExcludedDeviceInfo_t &b);
+int nvmlPRMTLV_v1_tCompare(const nvmlPRMTLV_v1_t &a, const nvmlPRMTLV_v1_t &b);
 int nvmlGpuInstancePlacement_tCompare(const nvmlGpuInstancePlacement_t &a, const nvmlGpuInstancePlacement_t &b);
 int nvmlGpuInstanceProfileInfo_tCompare(const nvmlGpuInstanceProfileInfo_t &a, const nvmlGpuInstanceProfileInfo_t &b);
 int nvmlGpuInstanceProfileInfo_v2_tCompare(const nvmlGpuInstanceProfileInfo_v2_t &a, const nvmlGpuInstanceProfileInfo_v2_t &b);
@@ -643,6 +648,22 @@ int nvmlCoolerInfo_tCompare(const nvmlCoolerInfo_t &a, const nvmlCoolerInfo_t &b
     if (a.target != b.target)
     {
         return a.target < b.target ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlDramEncryptionInfo_tCompare(const nvmlDramEncryptionInfo_t &a, const nvmlDramEncryptionInfo_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.encryptionState != b.encryptionState)
+    {
+        return a.encryptionState < b.encryptionState ? -1 : 1;
     }
     return 0;
 }
@@ -2436,6 +2457,69 @@ int nvmlTemperature_tCompare(const nvmlTemperature_t &a, const nvmlTemperature_t
 }
 
 // The following snippet is generated from write_struct_compare_definition
+int nvmlNvlinkSupportedBwModes_tCompare(const nvmlNvlinkSupportedBwModes_t &a, const nvmlNvlinkSupportedBwModes_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(a.bwModes, b.bwModes, sizeof(a.bwModes)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.totalBwModes != b.totalBwModes)
+    {
+        return a.totalBwModes < b.totalBwModes ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlNvlinkGetBwMode_tCompare(const nvmlNvlinkGetBwMode_t &a, const nvmlNvlinkGetBwMode_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.bIsBest != b.bIsBest)
+    {
+        return a.bIsBest < b.bIsBest ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.bwMode != b.bwMode)
+    {
+        return a.bwMode < b.bwMode ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlNvlinkSetBwMode_tCompare(const nvmlNvlinkSetBwMode_t &a, const nvmlNvlinkSetBwMode_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.bSetBest != b.bSetBest)
+    {
+        return a.bSetBest < b.bSetBest ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.bwMode != b.bwMode)
+    {
+        return a.bwMode < b.bwMode ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
 int nvmlVgpuVersion_tCompare(const nvmlVgpuVersion_t &a, const nvmlVgpuVersion_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
@@ -2587,6 +2671,27 @@ int nvmlExcludedDeviceInfo_tCompare(const nvmlExcludedDeviceInfo_t &a, const nvm
     if (auto ret = strcmp(a.uuid, b.uuid); ret)
     {
         return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPRMTLV_v1_tCompare(const nvmlPRMTLV_v1_t &a, const nvmlPRMTLV_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.dataSize != b.dataSize)
+    {
+        return a.dataSize < b.dataSize ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.status != b.status)
+    {
+        return a.status < b.status ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto cmpRet = memcmp(a.inData, b.inData, sizeof(a.inData)); cmpRet != 0)
+    {
+        return cmpRet;
     }
     return 0;
 }
@@ -4677,6 +4782,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             break;
         }
         // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_DRAMENCRYPTIONINFO:
+        {
+            if (other.m_type == INJECTION_DRAMENCRYPTIONINFO)
+            {
+                memcpy(&m_value.DramEncryptionInfo, &other.m_value.DramEncryptionInfo, sizeof(*&m_value.DramEncryptionInfo));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DRAMENCRYPTIONINFO_PTR)
+            {
+                memcpy(&m_value.DramEncryptionInfo, other.m_value.DramEncryptionInfoPtr, sizeof(*&m_value.DramEncryptionInfo));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_DRAMENCRYPTIONINFO_PTR:
+        {
+            if (other.m_type == INJECTION_DRAMENCRYPTIONINFO_PTR)
+            {
+                memcpy(m_value.DramEncryptionInfoPtr, other.m_value.DramEncryptionInfoPtr, sizeof(*m_value.DramEncryptionInfoPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_DRAMENCRYPTIONINFO)
+            {
+                memcpy(m_value.DramEncryptionInfoPtr, &other.m_value.DramEncryptionInfo, sizeof(*m_value.DramEncryptionInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_DRIVERMODEL:
         {
             if (other.m_type == INJECTION_DRIVERMODEL)
@@ -6568,6 +6704,99 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             break;
         }
         // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_NVLINKGETBWMODE:
+        {
+            if (other.m_type == INJECTION_NVLINKGETBWMODE)
+            {
+                memcpy(&m_value.NvlinkGetBwMode, &other.m_value.NvlinkGetBwMode, sizeof(*&m_value.NvlinkGetBwMode));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKGETBWMODE_PTR)
+            {
+                memcpy(&m_value.NvlinkGetBwMode, other.m_value.NvlinkGetBwModePtr, sizeof(*&m_value.NvlinkGetBwMode));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_NVLINKGETBWMODE_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKGETBWMODE_PTR)
+            {
+                memcpy(m_value.NvlinkGetBwModePtr, other.m_value.NvlinkGetBwModePtr, sizeof(*m_value.NvlinkGetBwModePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKGETBWMODE)
+            {
+                memcpy(m_value.NvlinkGetBwModePtr, &other.m_value.NvlinkGetBwMode, sizeof(*m_value.NvlinkGetBwModePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_NVLINKSETBWMODE:
+        {
+            if (other.m_type == INJECTION_NVLINKSETBWMODE)
+            {
+                memcpy(&m_value.NvlinkSetBwMode, &other.m_value.NvlinkSetBwMode, sizeof(*&m_value.NvlinkSetBwMode));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKSETBWMODE_PTR)
+            {
+                memcpy(&m_value.NvlinkSetBwMode, other.m_value.NvlinkSetBwModePtr, sizeof(*&m_value.NvlinkSetBwMode));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_NVLINKSETBWMODE_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKSETBWMODE_PTR)
+            {
+                memcpy(m_value.NvlinkSetBwModePtr, other.m_value.NvlinkSetBwModePtr, sizeof(*m_value.NvlinkSetBwModePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKSETBWMODE)
+            {
+                memcpy(m_value.NvlinkSetBwModePtr, &other.m_value.NvlinkSetBwMode, sizeof(*m_value.NvlinkSetBwModePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_NVLINKSUPPORTEDBWMODES:
+        {
+            if (other.m_type == INJECTION_NVLINKSUPPORTEDBWMODES)
+            {
+                memcpy(&m_value.NvlinkSupportedBwModes, &other.m_value.NvlinkSupportedBwModes, sizeof(*&m_value.NvlinkSupportedBwModes));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKSUPPORTEDBWMODES_PTR)
+            {
+                memcpy(&m_value.NvlinkSupportedBwModes, other.m_value.NvlinkSupportedBwModesPtr, sizeof(*&m_value.NvlinkSupportedBwModes));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_NVLINKSUPPORTEDBWMODES_PTR:
+        {
+            if (other.m_type == INJECTION_NVLINKSUPPORTEDBWMODES_PTR)
+            {
+                memcpy(m_value.NvlinkSupportedBwModesPtr, other.m_value.NvlinkSupportedBwModesPtr, sizeof(*m_value.NvlinkSupportedBwModesPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_NVLINKSUPPORTEDBWMODES)
+            {
+                memcpy(m_value.NvlinkSupportedBwModesPtr, &other.m_value.NvlinkSupportedBwModes, sizeof(*m_value.NvlinkSupportedBwModesPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_NVLINKVERSION:
         {
             if (other.m_type == INJECTION_NVLINKVERSION)
@@ -6594,6 +6823,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_NVLINKVERSION)
             {
                 memcpy(m_value.NvlinkVersionPtr, &other.m_value.NvlinkVersion, sizeof(*m_value.NvlinkVersionPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PRMTLV_V1:
+        {
+            if (other.m_type == INJECTION_PRMTLV_V1)
+            {
+                memcpy(&m_value.PRMTLV_v1, &other.m_value.PRMTLV_v1, sizeof(*&m_value.PRMTLV_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMTLV_V1_PTR)
+            {
+                memcpy(&m_value.PRMTLV_v1, other.m_value.PRMTLV_v1Ptr, sizeof(*&m_value.PRMTLV_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PRMTLV_V1_PTR:
+        {
+            if (other.m_type == INJECTION_PRMTLV_V1_PTR)
+            {
+                memcpy(m_value.PRMTLV_v1Ptr, other.m_value.PRMTLV_v1Ptr, sizeof(*m_value.PRMTLV_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMTLV_V1)
+            {
+                memcpy(m_value.PRMTLV_v1Ptr, &other.m_value.PRMTLV_v1, sizeof(*m_value.PRMTLV_v1Ptr));
                 set = true;
             }
             break;
@@ -10759,6 +11019,29 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
+                case INJECTION_DRAMENCRYPTIONINFO_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlDramEncryptionInfo_tCompare(*m_value.DramEncryptionInfoPtr, *other.m_value.DramEncryptionInfoPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlDramEncryptionInfo_tCompare(*m_value.DramEncryptionInfoPtr, *other.m_value.DramEncryptionInfoPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_DRAMENCRYPTIONINFO:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlDramEncryptionInfo_tCompare(m_value.DramEncryptionInfo, other.m_value.DramEncryptionInfo);
+                    break; // NOT REACHED
+                }
                 case INJECTION_DRIVERMODEL_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -12508,6 +12791,75 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
+                case INJECTION_NVLINKGETBWMODE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlNvlinkGetBwMode_tCompare(*m_value.NvlinkGetBwModePtr, *other.m_value.NvlinkGetBwModePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlNvlinkGetBwMode_tCompare(*m_value.NvlinkGetBwModePtr, *other.m_value.NvlinkGetBwModePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKGETBWMODE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlNvlinkGetBwMode_tCompare(m_value.NvlinkGetBwMode, other.m_value.NvlinkGetBwMode);
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKSETBWMODE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlNvlinkSetBwMode_tCompare(*m_value.NvlinkSetBwModePtr, *other.m_value.NvlinkSetBwModePtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlNvlinkSetBwMode_tCompare(*m_value.NvlinkSetBwModePtr, *other.m_value.NvlinkSetBwModePtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKSETBWMODE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlNvlinkSetBwMode_tCompare(m_value.NvlinkSetBwMode, other.m_value.NvlinkSetBwMode);
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKSUPPORTEDBWMODES_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlNvlinkSupportedBwModes_tCompare(*m_value.NvlinkSupportedBwModesPtr, *other.m_value.NvlinkSupportedBwModesPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlNvlinkSupportedBwModes_tCompare(*m_value.NvlinkSupportedBwModesPtr, *other.m_value.NvlinkSupportedBwModesPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_NVLINKSUPPORTEDBWMODES:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlNvlinkSupportedBwModes_tCompare(m_value.NvlinkSupportedBwModes, other.m_value.NvlinkSupportedBwModes);
+                    break; // NOT REACHED
+                }
                 case INJECTION_NVLINKVERSION_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -12545,6 +12897,29 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     {
                         return 0;
                     }
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMTLV_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPRMTLV_v1_tCompare(*m_value.PRMTLV_v1Ptr, *other.m_value.PRMTLV_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPRMTLV_v1_tCompare(*m_value.PRMTLV_v1Ptr, *other.m_value.PRMTLV_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMTLV_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPRMTLV_v1_tCompare(m_value.PRMTLV_v1, other.m_value.PRMTLV_v1);
                     break; // NOT REACHED
                 }
                 case INJECTION_PSUINFO_PTR:
@@ -15401,6 +15776,14 @@ InjectionArgument::~InjectionArgument()
             }
             break;
         }
+        case INJECTION_DRAMENCRYPTIONINFO_PTR:
+        {
+            if (m_inHeap && m_value.DramEncryptionInfoPtr)
+            {
+                free(m_value.DramEncryptionInfoPtr);
+            }
+            break;
+        }
         case INJECTION_DRIVERMODEL_PTR:
         {
             if (m_inHeap && m_value.DriverModelPtr)
@@ -15889,11 +16272,43 @@ InjectionArgument::~InjectionArgument()
             }
             break;
         }
+        case INJECTION_NVLINKGETBWMODE_PTR:
+        {
+            if (m_inHeap && m_value.NvlinkGetBwModePtr)
+            {
+                free(m_value.NvlinkGetBwModePtr);
+            }
+            break;
+        }
+        case INJECTION_NVLINKSETBWMODE_PTR:
+        {
+            if (m_inHeap && m_value.NvlinkSetBwModePtr)
+            {
+                free(m_value.NvlinkSetBwModePtr);
+            }
+            break;
+        }
+        case INJECTION_NVLINKSUPPORTEDBWMODES_PTR:
+        {
+            if (m_inHeap && m_value.NvlinkSupportedBwModesPtr)
+            {
+                free(m_value.NvlinkSupportedBwModesPtr);
+            }
+            break;
+        }
         case INJECTION_NVLINKVERSION_PTR:
         {
             if (m_inHeap && m_value.NvlinkVersionPtr)
             {
                 free(m_value.NvlinkVersionPtr);
+            }
+            break;
+        }
+        case INJECTION_PRMTLV_V1_PTR:
+        {
+            if (m_inHeap && m_value.PRMTLV_v1Ptr)
+            {
+                free(m_value.PRMTLV_v1Ptr);
             }
             break;
         }

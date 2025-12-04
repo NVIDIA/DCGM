@@ -2096,6 +2096,38 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmRunMnDiagnostic(dcgmHandle_t pDcgmHandle,
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmStopMnDiagnostic(dcgmHandle_t pDcgmHandle);
 
+/**
+ * Send a diagnostic heartbeat to the DCGM.
+ *
+ * When DCGM_RUN_FLAGS_ENABLE_HEARTBEAT is used, the DCGM host engine will check the heartbeat from the DCGM client
+ * during the diagnostic. If the heartbeat is not received within the timeout period (10 minutes), the
+ * diagnostic will be terminated. This API should be called periodically during the diagnostic if
+ * DCGM_RUN_FLAGS_ENABLE_HEARTBEAT is used.
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmDiagSendHeartbeat(dcgmHandle_t pDcgmHandle);
+
+/**
+ * This method is used to retrieve the value of an environment variable from the hostengine.
+ * Note: only CUDA_VISIBLE_DEVICES env is supported
+ * @param pDcgmHandle  IN:  DCGM Handle that came from dcgmConnect
+ * @param pEnvVarInfo IN/OUT: Pointer to a dcgmEnvVarInfo_t structure.
+ *                            - envVarName must be set to the name of the environment variable to query (input).
+ *                            - envVarValue will be filled with the value of the environment variable (output).
+ *
+ * @return
+ *          - \ref DCGM_ST_OK           if the environment variable was successfully obtained
+ *          - \ref DCGM_ST_BADPARAM     if pEnvVarInfo is null or envVarName is not set
+ *          - \ref DCGM_ST_VER_MISMATCH if the expected and provided versions of dcgmEnvVarInfo_t do not match
+ *          - \ref DCGM_ST_NOT_FOUND    if the environment variable is not set on the hostengine
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmHostengineEnvironmentVariableInfo(dcgmHandle_t pDcgmHandle,
+                                                                   dcgmEnvVarInfo_t *pEnvVarInfo);
+
 #ifdef __cplusplus
 }
 #endif

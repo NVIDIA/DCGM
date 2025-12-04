@@ -41,7 +41,6 @@ import logger
 import json
 from datetime import date, timedelta
 from subprocess import Popen, PIPE, STDOUT, check_output, check_call, CalledProcessError
-import version
 
 # Initializing logger
 logger.log_dir = os.path.join(os.getcwd(), "_out_runLogs")
@@ -159,8 +158,9 @@ def setupEnvironment():
     if test_utils.is_framework_compatible() == False:
         print("burn_in_stress.py found to be a different version than DCGM. Exiting")
         sys.exit(1)
-    else:
-        print(("Running against Git Commit %s" % version.GIT_COMMIT))
+
+    rawVersionInfo = dcgm_agent.dcgmVersionInfo()
+    print("Build info: %s" % rawVersionInfo.rawBuildInfoString)
 
     test_utils.set_nvvs_bin_path()
 

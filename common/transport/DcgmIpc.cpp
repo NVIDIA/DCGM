@@ -17,6 +17,8 @@
 
 #include "DcgmIpc.h"
 #include <DcgmLogging.h>
+#include <DcgmVariantHelper.hpp>
+#include <HangDetectMonitor.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <optional>
@@ -29,9 +31,24 @@
 #define ASSERT_IS_IPC_THREAD assert(pthread_equal(pthread_self(), m_ipcThreadId))
 
 /*****************************************************************************/
+DcgmIpc::DcgmIpc(int numWorkerThreads, HangDetectMonitor *monitor)
+    : DcgmThread("dcgm_ipc")
+    , m_workersPool(numWorkerThreads, monitor)
+{
+    SetDefaults();
+    SetHangDetectMonitor(monitor);
+}
+
+/*****************************************************************************/
 DcgmIpc::DcgmIpc(int numWorkerThreads)
     : DcgmThread("dcgm_ipc")
     , m_workersPool(numWorkerThreads)
+{
+    SetDefaults();
+}
+
+/*****************************************************************************/
+void DcgmIpc::SetDefaults()
 {
     m_tcpParameters         = std::nullopt;
     m_domainParameters      = std::nullopt;
@@ -210,6 +227,17 @@ void DcgmIpc::run()
     m_state = DCGM_IPC_STATE_RUNNING;
     m_initPromise.set_value(DCGM_ST_OK);
 
+    pid_t const pid = getpid();
+
+    if (m_monitor && !ShouldStop())
+    {
+        m_monitor->AddMonitoredTask(pid, m_tid);
+    }
+    else
+    {
+        log_verbose("Not monitoring this thread: hang detection is disabled");
+    }
+
     DCGM_LOG_DEBUG << "starting event_base_loop()";
 
     /* Run until we're told to stop */
@@ -222,6 +250,11 @@ void DcgmIpc::run()
     m_connections.clear();
 
     m_state = DCGM_IPC_STATE_STOPPED;
+
+    if (m_monitor)
+    {
+        m_monitor->RemoveMonitoredTask(pid, m_tid);
+    }
 
     DCGM_LOG_DEBUG << "dcgmipc thread exiting.";
 }

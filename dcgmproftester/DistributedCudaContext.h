@@ -116,6 +116,7 @@ namespace DcgmNs::ProfTester
 {
 class PhysicalGpu;
 struct Entity;
+class DistributedCudaContextTests; // Forward declaration for friend class
 
 class DistributedCudaContext
 {
@@ -540,8 +541,20 @@ public:
 
     /**@}**/
 
-
 private:
+    // Friend class for unit testing
+    friend class DistributedCudaContextTests;
+
+    /**
+     * Handle CUDA_VISIBLE_DEVICES environment variable logic
+     *
+     * Determines whether to respect existing CUDA_VISIBLE_DEVICES or override it
+     * based on the test type and GPU configuration (MIG vs non-MIG).
+     *
+     * @return DCGM_ST_OK on success, error code on failure
+     */
+    dcgmReturn_t HandleCudaVisibleDevices();
+
     /** @name ExceptionClass
      * Exception class.
      * @{

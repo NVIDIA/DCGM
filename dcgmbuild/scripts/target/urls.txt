@@ -14,3 +14,7 @@ plog https://github.com/SergiusTheBest/plog/archive/1.1.10.tar.gz b1d55baadbd16b
 tclap git://git.code.sf.net/p/tclap/code 82abdc943e23b2f91678fb86c436962182ca9a29
 yaml-cpp https://github.com/jbeder/yaml-cpp/archive/refs/tags/0.8.0.tar.gz aae9d618f906117d620d63173e95572c738db518f4ff1901a06de2117d8deeb8045f554102ca0ba4735ac0c4d060153a938ef78da3e0da3406d27b8298e5f38e
 zlib https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz 580677aad97093829090d4b605ac81c50327e74a6c2de0b85dd2e8525553f3ddde17556ea46f8f007f89e435493c9a20bc997d1ef1c1c2c23274528e3c46b94f
+rustc https://static.rust-lang.org/dist/rust-1.88.0-x86_64-unknown-linux-gnu.tar.xz ce97eb4697415bdb1fc33438ad62d9c410b00bfdb7c78c8c80e5887e6a23d3299302694918cbe259851c85b971f0ae3198ab6a89e26c94836a82bbf9e77cd80d
+rust-std-aarch64-linux-gnu https://static.rust-lang.org/dist/rust-std-1.88.0-aarch64-unknown-linux-gnu.tar.xz 45bf62ffe3218c2cfed4a5bf8bd01879ca9678e0ef2a0a357df3d75df641a577036b8156e6d2eb77f869a4911abd8b580c6852cf7af4dfe6007a8c426e31df80
+rust-src https://static.rust-lang.org/dist/2025-06-26/rust-src-1.88.0.tar.xz 6dfe1fc3565927a9ac2ff9821ef3222cca170ff538833e1969ebe662af2cad5257c1ab3d82f5ca10aeaab40f54916a25dd96fd16449cd59e4d104b631911931b
+corrosion https://github.com/corrosion-rs/corrosion/archive/refs/tags/v0.5.2.tar.gz 2510d4d0484fc12a6b429244b283515fda650b52ea74fbfdcc141298b452b20e2bef800b8f8a573a2bf509f4147ecb2d68e795cbd86cc8edd092f57ccff8b86b

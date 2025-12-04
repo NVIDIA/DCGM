@@ -19,6 +19,7 @@
 #include "Pcie.h"
 
 #include <PluginDevice.h>
+#include <string_view>
 
 #define PCIE_MAX_GPUS 16
 
@@ -38,7 +39,9 @@ typedef struct
 {
     pid_t pid;
     std::string stdoutStr;
+    std::string stderrStr;
     int readOutputRet;
+    int readErrorRet;
     unsigned int outputFdIndex;
 } dcgmChildInfo_t;
 
@@ -51,4 +54,6 @@ unsigned int ProcessChildrenOutputs(std::vector<dcgmChildInfo_t> &childrenInfo,
 std::unique_ptr<DcgmGroup> StartDcgmGroupWatch(BusGrind *bg,
                                                std::vector<unsigned short> const &fieldIds,
                                                std::vector<unsigned int> const &gpuIds);
+
+std::string_view ExtractJson(std::string_view output);
 #endif // PCIEMAIN_H

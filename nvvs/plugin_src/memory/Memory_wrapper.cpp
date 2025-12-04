@@ -31,7 +31,8 @@ Memory::Memory(dcgmHandle_t handle)
     TestParameters *tp = new TestParameters();
     tp->AddString(PS_RUN_IF_GOM_ENABLED, "True");
     tp->AddString(MEMORY_STR_IS_ALLOWED, "False");
-    tp->AddString(MEMORY_STR_MIN_ALLOCATION_PERCENTAGE, "75.0");
+    tp->AddString(MEMORY_STR_MIN_ALLOCATION_PERCENTAGE, std::to_string(DEFAULT_MIN_ALLOCATION_PERCENTAGE));
+    tp->AddDouble(MEMORY_STR_MAX_FREE_MEMORY_MB, 0.0);
     tp->AddString(MEMORY_L1TAG_STR_IS_ALLOWED, "False");
     tp->AddDouble(MEMORY_L1TAG_STR_TEST_DURATION, 1.0);
     tp->AddDouble(MEMORY_L1TAG_STR_TEST_LOOPS, 0);

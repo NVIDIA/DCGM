@@ -414,7 +414,7 @@ def test_dcgm_prof_with_dcgmreader(handle, gpuIds):
     updateFrequencyUsec = 200000 # 200ms
     sleepTime = updateFrequencyUsec / 1000000 * 2 # Convert to seconds and sleep twice as long; ensures fresh sample
 
-    dr = DcgmReader.DcgmReader(fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, gpuIds=gpuIds)
+    dr = DcgmReader.DcgmReader(fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, gpuIds=gpuIds, ignoreBlank=False)
     dr.SetHandle(handle)
 
     for i in range(5):

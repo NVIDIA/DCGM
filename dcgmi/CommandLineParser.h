@@ -89,6 +89,8 @@ private:
     static dcgmWorkloadPowerProfile_t HelperProcessWorkloadPowerProfileCommandLine(int workloadPowerProfile,
                                                                                    char workloadPowerProfileAction,
                                                                                    int groupId);
+    // Helper method to valid the environment variable value from the hostengine
+    static void ValidateEnvironmentInfo(int argc, char const *const *argv, std::string const &envVarName);
 };
 
 #endif // DCGMI_CLI_PARSER_H

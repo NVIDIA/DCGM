@@ -30,6 +30,8 @@
 #include <DcgmModulePolicy.h>
 #include <DcgmSettings.h>
 #include <DcgmStatus.h>
+#include <Defer.hpp>
+#include <TaskContextManager.hpp>
 #include <dcgm_health_structs.h>
 #include <dcgm_helpers.h>
 #include <dcgm_nvswitch_structs.h>
@@ -44,6 +46,8 @@
 #include <algorithm>
 #include <dlfcn.h> //dlopen, dlsym..etc
 #include <iostream>
+#include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 
@@ -53,6 +57,12 @@
 #include <ranges>
 #endif
 
+namespace
+{
+auto const DCGM_HANGDETECT_DISABLE    = "DCGM_HANGDETECT_DISABLE";
+auto const DCGM_HANGDETECT_TERMINATE  = "DCGM_HANGDETECT_TERMINATE";
+auto const DCGM_HANGDETECT_EXPIRY_SEC = "DCGM_HANGDETECT_EXPIRY_SEC";
+} // namespace
 
 DcgmHostEngineHandler *DcgmHostEngineHandler::mpHostEngineHandlerInstance = nullptr;
 DcgmModuleCore DcgmHostEngineHandler::mModuleCoreObj;
@@ -328,11 +338,11 @@ dcgmReturn_t DcgmHostEngineHandler::GetAllEntitiesOfEntityGroup(int activeOnly,
             for (unsigned int cpu = 0; cpu < sysmonMsg.cpuCount; cpu++)
             {
                 const auto &cpuObject = sysmonMsg.cpus[cpu];
-                for (unsigned int cpu = 0; cpu < DCGM_MAX_NUM_CPUS; cpu++)
+                for (unsigned int core = 0; core < DCGM_MAX_NUM_CPU_CORES; core++)
                 {
-                    if (dcgmCpuHierarchyCpuOwnsCore(cpu, &cpuObject.ownedCores))
+                    if (dcgmCpuHierarchyCpuOwnsCore(core, &cpuObject.ownedCores))
                     {
-                        entityPair.entityId = cpu;
+                        entityPair.entityId = core;
                         entities.push_back(entityPair);
                     }
                 }
@@ -1045,7 +1055,7 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToClient(dcgm_connection_id_t 
     msgBytes->resize(msgLength);
     memcpy(msgBytes->data(), msgData, msgLength);
 
-    dcgmReturn_t retSt = m_dcgmIpc.SendMessage(connectionId, std::move(dcgmMessage), false);
+    dcgmReturn_t retSt = m_dcgmIpc->SendMessage(connectionId, std::move(dcgmMessage), false);
 
     DCGM_LOG_DEBUG << "Sent raw message length " << msgLength << ", requestId " << requestId << ", msgType 0x"
                    << std::hex << msgType << " to connectionId " << std::dec << connectionId << " retSt " << (int)retSt;
@@ -1226,7 +1236,7 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommandMsg(dcgm_connection_id_t
 
     message->UpdateMsgHdr(DCGM_MSG_MODULE_COMMAND, moduleCommand->requestId, requestStatus, moduleCommand->length);
 
-    m_dcgmIpc.SendMessage(connectionId, std::move(message), false);
+    m_dcgmIpc->SendMessage(connectionId, std::move(message), false);
     return retSt;
 }
 
@@ -1330,6 +1340,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     fieldIds.push_back(DCGM_FI_DEV_PCIE_TX_THROUGHPUT);
     fieldIds.push_back(DCGM_FI_DEV_PCIE_RX_THROUGHPUT);
     fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
+    fieldIds.push_back(DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS);
     fieldIds.push_back(DCGM_FI_DEV_GPU_UTIL);
     fieldIds.push_back(DCGM_FI_DEV_MEM_COPY_UTIL);
     fieldIds.push_back(DCGM_FI_DEV_ECC_DBE_VOL_TOTAL);
@@ -1359,6 +1370,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL);
     /* Add Watch for NVLINK Recovery Error Counter for all the lanes*/
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
+
 
     // reliability violation time
     // board violation time
@@ -1553,18 +1565,65 @@ void DcgmHostEngineHandler::LoadNvml()
     }
 }
 
+/*****************************************************************************/
+
+void EngineHangDetectHandler::SetTaskContextManager(class TaskContextManager const *taskCtxMgr)
+{
+    m_taskCtxMgr = taskCtxMgr;
+}
+
+void EngineHangDetectHandler::HandleHangDetectedEvent(HangDetectHandler::HangDetectedEvent const &hangEvent)
+{
+    auto const [pid, tid, duration] = hangEvent;
+    auto const taskType             = tid.has_value() ? "thread" : "process";
+    auto const taskId               = tid.value_or(pid);
+    auto const idType               = tid.has_value() ? "tid" : "pid";
+
+    if (!m_taskCtxMgr)
+    {
+        log_verbose("Task context manager is not set, skipping hang detected event for {}: {}", idType, taskId);
+        return;
+    }
+
+    // Only check for task context membership when checking a thread.
+    if (tid.has_value() && !m_taskCtxMgr->isTaskIncluded(taskId))
+    {
+        log_verbose("Task is not registered, skipping hang detected event for {}: {}", idType, taskId);
+        return;
+    }
+
+    auto const msg
+        = fmt::format("A {} ({}: {}) has been unresponsive for {} seconds. "
+                      "If the process does not exit, it may need to be killed or the system may need to be restarted. "
+                      "Collect problem report logs before restarting.",
+                      taskType,
+                      idType,
+                      taskId,
+                      duration.count());
+
+    log_error(msg);
+
+    if (m_terminateOnHang)
+    {
+        throw std::runtime_error(msg);
+    }
+}
+
 /*****************************************************************************
  Constructor for DCGM Host Engine Handler
  *****************************************************************************/
 DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params)
     : m_communicator()
-    , m_dcgmIpc(DCGM_HE_NUM_WORKERS)
     , m_hostengineHealth(0)
     , m_usingInjectionNvml(false)
     , m_nvmlLoaded(false)
 {
     int ret;
     dcgmReturn_t dcgmRet;
+
+    InitializeHangDetection();
+
+    m_dcgmIpc = std::make_unique<DcgmIpc>(DCGM_HE_NUM_WORKERS, m_monitor.get());
 
     mpCacheManager = nullptr;
 
@@ -1645,7 +1704,9 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     mpCacheManager = new DcgmCacheManager();
     mModuleCoreObj.Initialize(mpCacheManager);
 
-    /* Don't do anything before you call mpCacheManager->Init() */
+    mpCacheManager->SetHangDetectMonitor(m_monitor.get());
+
+    /* Don't do anything before you call mpCacheManager->Init(). Note: the specified maxSampleAge is ignored. */
 
     if (params.opMode == DCGM_OPERATION_MODE_AUTO)
     {
@@ -1696,6 +1757,8 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     mModuleCoreObj.SetGroupManager(mpGroupManager);
 
     mpFieldGroupManager = new DcgmFieldGroupManager();
+
+    m_childProcessManager.SetHangDetectMonitor(m_monitor.get());
 
     m_communicator.Init(mpCacheManager, mpGroupManager);
     m_coreCallbacks.postfunc   = PostRequestToCore;
@@ -1749,7 +1812,7 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
      * Always keep this first */
     try
     {
-        m_dcgmIpc.StopAndWait(60000);
+        m_dcgmIpc->StopAndWait(60000);
     }
     catch (std::exception const &ex)
     {
@@ -4114,28 +4177,28 @@ dcgmReturn_t DcgmHostEngineHandler::RunServer(unsigned short portNumber,
         DcgmIpcTcpServerParams_t tcpParams {};
         tcpParams.bindIPAddress = socketPath;
         tcpParams.port          = portNumber;
-        dcgmReturn              = m_dcgmIpc.Init(tcpParams,
-                                    std::nullopt,
-                                    DcgmHostEngineHandler::StaticProcessMessage,
-                                    this,
-                                    DcgmHostEngineHandler::StaticProcessDisconnect,
-                                    this);
+        dcgmReturn              = m_dcgmIpc->Init(tcpParams,
+                                     std::nullopt,
+                                     DcgmHostEngineHandler::StaticProcessMessage,
+                                     this,
+                                     DcgmHostEngineHandler::StaticProcessDisconnect,
+                                     this);
     }
     else
     {
         DcgmIpcDomainServerParams_t domainParams {};
         domainParams.domainSocketPath = socketPath;
-        dcgmReturn                    = m_dcgmIpc.Init(std::nullopt,
-                                    domainParams,
-                                    DcgmHostEngineHandler::StaticProcessMessage,
-                                    this,
-                                    DcgmHostEngineHandler::StaticProcessDisconnect,
-                                    this);
+        dcgmReturn                    = m_dcgmIpc->Init(std::nullopt,
+                                     domainParams,
+                                     DcgmHostEngineHandler::StaticProcessMessage,
+                                     this,
+                                     DcgmHostEngineHandler::StaticProcessDisconnect,
+                                     this);
     }
 
     if (dcgmReturn != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << "Got error " << errorString(dcgmReturn) << " from m_dcgmIpc.Init";
+        log_error("Got error {} from m_dcgmIpc->Init", errorString(dcgmReturn));
         return DCGM_ST_INIT_ERROR;
     }
 
@@ -4484,4 +4547,51 @@ dcgmReturn_t DcgmHostEngineHandler::ChildProcessGetDataChannelHandle(ChildProces
 dcgmReturn_t DcgmHostEngineHandler::ChildProcessManagerReset()
 {
     return m_childProcessManager.Reset();
+}
+
+void DcgmHostEngineHandler::InitializeHangDetection()
+{
+    if (std::getenv(DCGM_HANGDETECT_DISABLE) != nullptr)
+    {
+        m_hangDetectDisabled = true;
+        log_info("Hang detection disabled");
+        return;
+    }
+
+    bool terminateOnHang                      = false;
+    bool constexpr reportUserspaceHangs       = false;
+    std::chrono::seconds hangDetectExpirySec  = std::chrono::seconds(DEFAULT_HANG_DETECT_EXPIRY_SEC);
+    std::chrono::seconds hangCheckIntervalSec = std::chrono::seconds(DEFAULT_HANG_DETECT_CHECK_INTERVAL);
+
+    if (std::getenv(DCGM_HANGDETECT_TERMINATE) != nullptr)
+    {
+        terminateOnHang = true;
+    }
+
+    if (auto const expirySecStr = std::getenv(DCGM_HANGDETECT_EXPIRY_SEC); expirySecStr != nullptr)
+    {
+        unsigned int expirySec {};
+        auto const [_, ec] = std::from_chars(expirySecStr, expirySecStr + std::strlen(expirySecStr), expirySec);
+        if (ec != std::errc())
+        {
+            log_warning(
+                "Invalid {} value '{}'. Must be a non-negative number.", DCGM_HANGDETECT_EXPIRY_SEC, expirySecStr);
+        }
+        else
+        {
+            hangDetectExpirySec = std::chrono::seconds(expirySec);
+        }
+    }
+
+    m_hangDetectHandler = std::make_unique<EngineHangDetectHandler>();
+    m_hangDetectHandler->SetTaskContextManager(static_cast<class TaskContextManager const *>(GetTaskContextManager()));
+    m_hangDetectHandler->SetTerminateOnHang(terminateOnHang);
+
+    m_detector = std::make_unique<HangDetect>();
+
+    m_monitor = std::make_unique<HangDetectMonitor>(*m_detector, hangCheckIntervalSec, hangDetectExpirySec);
+    m_monitor->SetReportUserspaceHangs(reportUserspaceHangs);
+    m_monitor->SetHangDetectedHandler(m_hangDetectHandler.get());
+    m_monitor->StartMonitoring();
+    log_debug("Hang detection enabled");
 }

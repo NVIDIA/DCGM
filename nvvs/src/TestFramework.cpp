@@ -65,16 +65,24 @@ std::map<std::string, maker_t *, std::less<std::string>> factory;
 namespace
 {
 
-void FillGpuEntityAuxData(EntitySet *entitySet, std::vector<dcgmDiagPluginEntityInfo_v1> &entityInfos)
+void FillGpuEntityAuxData(EntitySet &entitySet, std::vector<dcgmDiagPluginEntityInfo_v1> &entityInfos)
 {
-    assert(entitySet->GetEntityGroup() == DCGM_FE_GPU);
-    GpuSet *gpuSet = ToGpuSet(entitySet);
+    assert(entitySet.GetEntityGroup() == DCGM_FE_GPU);
+    GpuSet *gpuSet = ToGpuSet(&entitySet);
     assert(gpuSet);
-    assert(gpuSet->GetGpuObjs().size() == entityInfos.size());
+    auto const &gpuObjs = gpuSet->GetGpuObjs();
     for (unsigned idx = 0; idx < entityInfos.size(); ++idx)
     {
-        entityInfos[idx].auxField.gpu.attributes = gpuSet->GetGpuObjs()[idx]->GetAttributes();
-        entityInfos[idx].auxField.gpu.status     = gpuSet->GetGpuObjs()[idx]->GetDeviceEntityStatus();
+        for (auto const &gpuObj : gpuObjs)
+        {
+            if (gpuObj->GetGpuId() == entityInfos[idx].entity.entityId
+                && entityInfos[idx].entity.entityGroupId == DCGM_FE_GPU)
+            {
+                entityInfos[idx].auxField.gpu.attributes = gpuObj->GetAttributes();
+                entityInfos[idx].auxField.gpu.status     = gpuObj->GetDeviceEntityStatus();
+                break;
+            }
+        }
     }
 }
 
@@ -92,6 +100,38 @@ std::unordered_set<unsigned int> GetGpuIds(EntitySet *entitySet)
     }
 
     return res;
+}
+
+void AppendSkippedEntityInfos(std::unordered_map<dcgm_field_eid_t, std::string> const &skippedEntities,
+                              dcgm_field_entity_group_t entityGroupId,
+                              dcgmDiagEntityResults_v2 &entityResults)
+{
+    for (auto const &[entityId, reason] : skippedEntities)
+    {
+        if (entityResults.numInfo < DCGM_DIAG_RESPONSE_INFO_MAX_V2)
+        {
+            entityResults.info[entityResults.numInfo].entity.entityId      = entityId;
+            entityResults.info[entityResults.numInfo].entity.entityGroupId = entityGroupId;
+            SafeCopyTo(entityResults.info[entityResults.numInfo].msg, reason.c_str());
+            entityResults.numInfo++;
+        }
+        else
+        {
+            log_error("Too many info messages. Skipping entity {} in group {}.", entityId, entityGroupId);
+        }
+
+        if (entityResults.numResults < DCGM_DIAG_TEST_RUN_RESULTS_MAX)
+        {
+            entityResults.results[entityResults.numResults].entity.entityId      = entityId;
+            entityResults.results[entityResults.numResults].entity.entityGroupId = entityGroupId;
+            entityResults.results[entityResults.numResults].result               = DCGM_DIAG_RESULT_SKIP;
+            entityResults.numResults++;
+        }
+        else
+        {
+            log_error("Too many results. Skipping entity {} in group {}.", entityId, entityGroupId);
+        }
+    }
 }
 
 } //namespace
@@ -123,6 +163,8 @@ TestFramework::TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySets
     , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
+    , m_completedTests(0)
+    , m_numTestsToRun(0)
     , m_monitor(nullptr)
     , m_plugins()
 {
@@ -135,10 +177,9 @@ TestFramework::TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySets
 
         GpuSet *gpuSet                    = ToGpuSet(entitySet.get());
         std::vector<Gpu *> const &gpuList = gpuSet->GetGpuObjs();
-        for (auto const &gpu : gpuList)
+        if (!gpuList.empty())
         {
-            m_validGpuId = gpu->GetGpuId();
-            break;
+            m_validGpuId = gpuList[0]->GetGpuId();
         }
     }
     InitSkippedLibraries();
@@ -269,6 +310,13 @@ std::optional<std::string> TestFramework::GetPluginCudaDirExtension() const
         case 13:
             return CUDA_13_EXTENSION;
         default:
+            if (cudaMajorVersion > MAX_CUDA_MAJOR_VERSION)
+            {
+                log_debug(
+                    "Detected unsupported CUDA version {}; defaulting to {}", cudaMajorVersion, MAX_CUDA_MAJOR_VERSION);
+                return CUDA_13_EXTENSION;
+            }
+
             log_error("Detected unsupported Cuda version: {}.{}", cudaMajorVersion, cudaMinorVersion);
             throw std::runtime_error("Detected unsupported Cuda version");
     }
@@ -705,24 +753,14 @@ void TestFramework::Go(std::vector<std::unique_ptr<EntitySet>> &entitySets)
 }
 
 /*****************************************************************************/
-std::vector<dcgmDiagPluginEntityInfo_v1> TestFramework::PopulateEntityInfoForPlugins(EntitySet *entitySet)
+std::vector<dcgmDiagPluginEntityInfo_v1> TestFramework::PopulateEntityInfoForPlugins(EntitySet &entitySet)
 {
-    std::vector<dcgmDiagPluginEntityInfo_v1> entityInfo;
-    auto const &entityIds = entitySet->GetEntityIds();
+    std::vector<dcgmDiagPluginEntityInfo_v1> entityInfo = entitySet.PopulateEntityInfo();
 
-    for (size_t i = 0; i < entityIds.size(); i++)
-    {
-        dcgmDiagPluginEntityInfo_v1 ei = {};
-        ei.entity.entityId             = entityIds[i];
-        ei.entity.entityGroupId        = entitySet->GetEntityGroup();
-        entityInfo.push_back(ei);
-    }
-
-    if (entitySet->GetEntityGroup() == DCGM_FE_GPU)
+    if (entitySet.GetEntityGroup() == DCGM_FE_GPU)
     {
         FillGpuEntityAuxData(entitySet, entityInfo);
     }
-
     return entityInfo;
 }
 
@@ -884,23 +922,28 @@ void TestFramework::GoList(Test::testClasses_enum classNum,
 
             if (!skipRest && !main_should_stop)
             {
-                dcgmDiagEntityResults_v2 const &entityResults
-                    = m_plugins[pluginIndex]->GetEntityResults<dcgmDiagEntityResults_v2>(testName);
                 DcgmRecorder dcgmRecorder(dcgmHandle.GetHandle());
-                std::vector<dcgmDiagPluginEntityInfo_v1> entityInfos = PopulateEntityInfoForPlugins(entitySet);
+                std::vector<dcgmDiagPluginEntityInfo_v1> entityInfos = PopulateEntityInfoForPlugins(*entitySet);
 
                 log_debug("Test {} start", testName);
 
                 m_plugins[pluginIndex]->SetTestRunningState(testName, TestRuningState::Running);
-                m_plugins[pluginIndex]->RunTest(testName, entityInfos, 600, tp);
+                if (!entityInfos.empty())
+                {
+                    m_plugins[pluginIndex]->RunTest(testName, entityInfos, 600, tp);
+                }
                 m_plugins[pluginIndex]->SetTestRunningState(testName, TestRuningState::Done);
 
+                dcgmDiagEntityResults_v2 entityResults
+                    = m_plugins[pluginIndex]->GetEntityResults<dcgmDiagEntityResults_v2>(testName);
+                AppendSkippedEntityInfos(entitySet->GetSkippedEntities(), entitySet->GetEntityGroup(), entityResults);
                 if (auto ret = m_diagResponse.SetTestResult(
                         pluginName, testName, entityResults, m_plugins[pluginIndex]->GetAuxData(testName));
                     ret != DCGM_ST_OK)
                 {
                     log_error("failed to set test result to test [{}], ret: [{}].", testName, ret);
                 }
+                entitySet->UpdateSkippedEntities(entityResults);
             }
             else
             {
@@ -981,7 +1024,7 @@ void TestFramework::runSoftwarePlugin(std::vector<std::unique_ptr<EntitySet>> co
 
         GpuSet *gpuSet = ToGpuSet(entitySet.get());
         // init SoftwarePlugin
-        m_softwarePluginFramework = std::make_unique<SoftwarePluginFramework>(gpuSet->GetGpuObjs());
+        m_softwarePluginFramework = std::make_unique<SoftwarePluginFramework>(gpuSet->GetGpuObjs(), *entitySet);
 
         // run softwarePlugin
         m_softwarePluginFramework->Run(m_diagResponse, pluginAttr, nvvsCommon.parms);

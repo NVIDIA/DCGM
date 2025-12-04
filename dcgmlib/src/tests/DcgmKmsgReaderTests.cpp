@@ -18,6 +18,7 @@
 #include <DcgmLogging.h>
 #include <DcgmMutex.h>
 #include <DcgmThread.h>
+#include <DcgmUtilities.h>
 
 #include <catch2/catch_all.hpp>
 #include <fmt/format.h>
@@ -265,6 +266,7 @@ void PipeKmsgThread::run()
         log_debug("File {} could not be opened because of error: {}", m_pipeName.c_str(), strerror(errno));
         return;
     }
+    DcgmNs::Utils::FileHandle kmsgFileHandle { kmsgFd };
     /*
      * Mock /dev/kmsg by using this pipe in "packet" mode. Every read and write is done
      * one "packet" at a time. This is similar to /dev/kmsg where reads are done one record

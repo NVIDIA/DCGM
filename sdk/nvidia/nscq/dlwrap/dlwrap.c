@@ -26,6 +26,7 @@
 
 #include <stdatomic.h>
 #include <stddef.h>
+#include <TaskContextManager.hpp>
 
 int nscq_dlwrap_attach(void) {
     return nscq_dl_load();
@@ -66,8 +67,17 @@ nscq_rc_t nscq_dlwrap_api_version(uint32_t* version, const char** devel) {
     return rc;
 }
 
+#define DCGM_PRE_POST_DECL(func_name)                                                              \
+    static __always_inline void pre_##func_name(void) {                                            \
+        TaskContextManagerAddCurrentTask();                                                        \
+    }                                                                                              \
+    static __always_inline void post_##func_name(void) {                                           \
+        TaskContextManagerRemoveCurrentTask();                                                     \
+    }
+
 #define NSCQ_DLWRAP_FUNC_IMPL(func_name, return_type, params, args, result_var_type, result_var,   \
                               result_var_assign, ...)                                              \
+    DCGM_PRE_POST_DECL(func_name)                                                                  \
     return_type func_name params {                                                                 \
         static atomic_int sym_cycle;                                                               \
         static void* _Atomic sym;                                                                  \
@@ -95,7 +105,9 @@ nscq_rc_t nscq_dlwrap_api_version(uint32_t* version, const char** devel) {
              warning: ISO C forbids conversion of object pointer to function pointer type */       \
         *(void**)(&func) = sym;                                                                    \
         if (func != NULL) {                                                                        \
+            pre_##func_name();                                                                     \
             result_var_assign(*func) args;                                                         \
+            post_##func_name();                                                                    \
         }                                                                                          \
         nscq_dl_put();                                                                             \
         return result_var;                                                                         \

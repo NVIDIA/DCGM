@@ -47,7 +47,10 @@ private:
     std::condition_variable m_stopCond; /* Condition used to signal that it's time to stop */
     std::string m_threadName;           /* Textual name of this thread that will appear in gdb */
 
+protected:
     pid_t m_tid; /* Thread ID */
+    class HangDetectMonitor *m_monitor { nullptr }; /* Hang detection monitor */
+
 public:
     /*************************************************************************/
     /*
@@ -219,6 +222,14 @@ public:
      */
     virtual void OnStop(void)
     {}
+
+    /*************************************************************************/
+    /**
+     * Set the hang detection monitor for this thread
+     *
+     * @param monitor Hang detection monitor
+     */
+    void SetHangDetectMonitor(class HangDetectMonitor *monitor);
 
 private:
     void resetStatusFlags();

@@ -3481,3 +3481,26 @@ def run_only_with_minimum_gpu_architecture(min_architecture):
             fn(*args, **kwds)
         return wrapper
     return decorator
+
+
+def run_only_with_ecc():
+    """
+    Run only if ECC is supported and enabled on all GPUs.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwds):
+            if 'handle' not in kwds:
+                skip_test("Not connected to remote or embedded host engine. Use appropriate decorator")
+            if 'gpuIds' not in kwds:
+                skip_test("Can't check ECC support without a GPU list, skipping test.")
+
+            handle = kwds['handle']
+            gpuIds = kwds['gpuIds']
+
+            if all(gpu_supports_ecc(handle, gpuId) for gpuId in gpuIds):
+                fn(*args, **kwds)
+                return
+            skip_test("Not all GPUs have ECC support enabled. Skipping test.")
+        return wrapper
+    return decorator

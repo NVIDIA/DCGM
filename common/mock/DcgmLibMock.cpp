@@ -26,6 +26,7 @@ DcgmMockEntity::DcgmMockEntity(dcgmGroupEntityPair_t const &entity)
 {
     std::memset(m_cpuAffinityMask.data(), 0, m_cpuAffinityMask.size() * sizeof(m_cpuAffinityMask[0]));
     m_cpuAffinityMask[0] = 1;
+    std::memset(&m_devAttr, 0, sizeof(m_devAttr));
 }
 
 dcgmGroupEntityPair_t DcgmMockEntity::GetEntity() const

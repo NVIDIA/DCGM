@@ -27,15 +27,14 @@ import time
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_reader_default(handle, gpuIds):
     # pylint: disable=undefined-variable
-    dr = DcgmReader()
+    dr = DcgmReader(ignoreBlank=False)
     dr.SetHandle(handle)
     latest = dr.GetLatestGpuValuesAsFieldNameDict()
 
     for gpuId in latest:
-        # latest data might be less than the list, because blank values aren't included
         # Defined in DcgmReader
         # pylint: disable=undefined-variable
-        assert len(latest[gpuId]) <= len(defaultFieldIds)
+        assert len(latest[gpuId]) == len(defaultFieldIds)
 
         # Make sure we get strings
         for key in latest[gpuId]:
@@ -46,7 +45,7 @@ def test_dcgm_reader_default(handle, gpuIds):
     for gpuId in sample:
         # Defined in DcgmReader
         # pylint: disable=undefined-variable
-        assert len(sample[gpuId]) <= len(defaultFieldIds)
+        assert len(sample[gpuId]) == len(defaultFieldIds)
         
         # Make sure we get valid integer field ids
         for fieldId in sample[gpuId]:
@@ -58,12 +57,12 @@ def test_dcgm_reader_default(handle, gpuIds):
 def test_dcgm_reader_specific_fields(handle, gpuIds):
     specificFields = [dcgm_fields.DCGM_FI_DEV_POWER_USAGE, dcgm_fields.DCGM_FI_DEV_XID_ERRORS]
     # pylint: disable=undefined-variable
-    dr = DcgmReader(fieldIds=specificFields)
+    dr = DcgmReader(fieldIds=specificFields, ignoreBlank=False)
     dr.SetHandle(handle)
     latest = dr.GetLatestGpuValuesAsFieldNameDict()
 
     for gpuId in latest:
-        assert len(latest[gpuId]) <= len(specificFields)
+        assert len(latest[gpuId]) == len(specificFields)
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -96,7 +95,7 @@ def test_reading_specific_data(handle, gpuIds):
         assert (ret == dcgm_structs.DCGM_ST_OK)
     
     # pylint: disable=undefined-variable
-    dr = DcgmReader(fieldIds=specificFieldIds)
+    dr = DcgmReader(fieldIds=specificFieldIds, ignoreBlank=False)
     dr.SetHandle(handle)
     latest = dr.GetLatestGpuValuesAsFieldIdDict()
 
@@ -117,12 +116,16 @@ def test_reading_pid_fields(handle, gpuIds, cudaApp):
     """
     fieldTag = dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS
     pids = []
+    updateFrequencyUsec = 200000 # 200ms
+    sleepTime = updateFrequencyUsec / 1000000 * 2 # Convert to seconds and sleep twice as long; ensures fresh sample
+    numTries = 75
 
     # pylint: disable=undefined-variable
-    dr = DcgmReader(fieldIds=[ fieldTag ], updateFrequency=100000)
-    logger.debug("Trying for 5 seconds")
+    dr = DcgmReader(fieldIds=[ fieldTag ], updateFrequency=updateFrequencyUsec)
+    dr.SetHandle(handle)
+    logger.debug(f"Trying for {sleepTime * numTries} seconds")
     exit_loop = False
-    for _ in range(150):
+    for _ in range(numTries):
         if (exit_loop):
             break
 
@@ -136,10 +139,11 @@ def test_reading_pid_fields(handle, gpuIds, cudaApp):
                 if gpuData[fieldTag].pid == cudaApp.getpid():
                     # Found our PID. Exit the loop
                     exit_loop = True
-        time.sleep(0.2)
+        time.sleep(sleepTime)
 
-    logger.debug("PIDs: %s. cudaApp PID: %d" % (str(pids), cudaApp.getpid()))
-    assert cudaApp.getpid() in pids, "could not find cudaApp PID"
+    message = "Found PIDs: [%s]. Expected cudaApp PID: [%d]" % (str(pids), cudaApp.getpid())
+    logger.debug(message)
+    assert cudaApp.getpid() in pids, "Could not find cudaApp PID. %s" % (message)
 
 def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
     """
@@ -154,7 +158,7 @@ def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
     """
     specificFields = [dcgm_fields.DCGM_FI_DEV_POWER_USAGE, dcgm_fields.DCGM_FI_DEV_XID_ERRORS]
     # pylint: disable=undefined-variable
-    dr = DcgmReader(fieldIds=specificFields)
+    dr = DcgmReader(fieldIds=specificFields, ignoreBlank=False)
     dr.SetHandle(handle)
     latest = dr.GetAllGpuValuesAsDictSinceLastCall(flag)
 
@@ -170,10 +174,7 @@ def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
             fieldTags.append(dcgmSystem.fields.GetFieldById(fieldId).tag)
 
     for gpuId in latest:
-        # Latest data might be less than the list, because blank values aren't
-        # included. We basically try to ensure there is no crash and we don't
-        # return something absurd.
-        assert len(latest[gpuId]) <= len(specificFields)
+        assert len(latest[gpuId]) == len(specificFields)
 
         for key in latest[gpuId].keys():
             if flag == False:

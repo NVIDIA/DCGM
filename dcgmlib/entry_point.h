@@ -1009,5 +1009,13 @@ DCGM_ENTRY_POINT(dcgmConfigSetWorkloadPowerProfile,
                  pDcgmHandle,
                  workloadPowerProfile)
 
+DCGM_ENTRY_POINT(dcgmDiagSendHeartbeat, tsapiDiagSendHeartbeat, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
+
+DCGM_ENTRY_POINT(dcgmHostengineEnvironmentVariableInfo,
+                 tsapiHostengineEnvironmentVariableInfo,
+                 (dcgmHandle_t pDcgmHandle, dcgmEnvVarInfo_t *pEnvVarInfo),
+                 "({}, {})",
+                 pDcgmHandle,
+                 pEnvVarInfo)
 
 /*****************************************************************************/

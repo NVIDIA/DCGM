@@ -145,7 +145,7 @@ public:
         ConnectionInfo info;
         info.ipAddress                = ipAddress ? ipAddress : "";
         info.params                   = connectParams ? *connectParams : dcgmConnectV2Params_t {};
-        m_connectionsByHandle[handle] = info;
+        m_connectionsByHandle[handle] = std::move(info);
 
         return m_connectResult;
     }

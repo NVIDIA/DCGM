@@ -167,6 +167,21 @@ public:
         return m_manager.GetNodeInfo();
     }
 
+    dcgmReturn_t AuthorizeRemoteConnections()
+    {
+        return m_manager.AuthorizeRemoteConnections();
+    }
+
+    dcgmReturn_t RevokeRemoteAuthorizations()
+    {
+        return m_manager.RevokeRemoteAuthorizations();
+    }
+
+    dcgmReturn_t CleanupConnections()
+    {
+        return m_manager.CleanupConnections();
+    }
+
     bool AreDevicesSupported()
     {
         return m_manager.AreDevicesSupported();
@@ -356,7 +371,7 @@ public:
             connInfo.uid              = 1000;
             connInfo.remoteSocketPath = "";
 
-            m_manager.m_connections[hostname] = connInfo;
+            m_manager.m_connections[hostname] = std::move(connInfo);
         }
     }
 
@@ -372,7 +387,7 @@ public:
         connInfo.uid              = 1000;
         connInfo.remoteSocketPath = "";
 
-        m_manager.m_connections["localhost"] = connInfo;
+        m_manager.m_connections["localhost"] = std::move(connInfo);
     }
 
     /**
@@ -1679,9 +1694,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
         mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Set default behavior for DCGM API
+        // Set default behavior for DCGM API (only connection, no authorization)
         mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
 
         // Install mock objects
         SetDcgmApi(std::move(mockDcgmApi));
@@ -1695,32 +1709,23 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         REQUIRE(result == DCGM_ST_OK);
 
         // Verify TCP tunnel manager was called with correct parameters
-        auto calls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
+        auto const &calls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(calls.size() == 2);
 
-        // Since threads run in parallel, we can't guarantee call order
-        // So we need to check that both expected calls exist, regardless of order
-        bool foundNode1 = false;
-        bool foundNode2 = false;
+        // Since connections are now synchronous, we can verify the order
+        REQUIRE(std::get<0>(calls[0]) == "node1");
+        REQUIRE(std::get<1>(calls[0]) == 5555);
+        REQUIRE(std::get<2>(calls[0]).value() == 1000);
 
-        for (const auto &call : calls)
-        {
-            if (std::get<0>(call) == "node1" && std::get<1>(call) == 5555 && std::get<2>(call).value() == 1000)
-            {
-                foundNode1 = true;
-            }
-            else if (std::get<0>(call) == "node2" && std::get<1>(call) == 6666 && std::get<2>(call).value() == 1000)
-            {
-                foundNode2 = true;
-            }
-        }
+        REQUIRE(std::get<0>(calls[1]) == "node2");
+        REQUIRE(std::get<1>(calls[1]) == 6666);
+        REQUIRE(std::get<2>(calls[1]).value() == 1000);
 
-        REQUIRE(foundNode1);
-        REQUIRE(foundNode2);
-
-        // Verify DCGM API was called correctly
+        // Verify DCGM API was called correctly for connections only
         REQUIRE(GetDcgmApi()->GetConnectCallCount() == 2);
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
+
+        // Verify NO authorization calls were made (authorization is separate now)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
 
         // Verify that the connection was made using the local port returned by the tunnel manager
         // Examine connections by handle in the DCGM API
@@ -1746,9 +1751,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         mockUdsSSHTunnelManager->SetDefaultRemoteSocketPath("/tmp/local_socket");
         mockUdsSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Set default behavior for DCGM API
+        // Set default behavior for DCGM API (only connection, no authorization)
         mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
 
         // Install mock objects
         SetDcgmApi(std::move(mockDcgmApi));
@@ -1765,31 +1769,20 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         auto calls = GetUdsSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(calls.size() == 2);
 
-        // Since threads run in parallel, we can't guarantee call order
-        // So we need to check that both expected calls exist, regardless of order
-        bool foundNode1 = false;
-        bool foundNode2 = false;
+        // Since connections are now synchronous, we can verify the order
+        REQUIRE(std::get<0>(calls[0]) == "node1");
+        REQUIRE(std::get<1>(calls[0]) == "/var/run/dcgm.socket");
+        REQUIRE(std::get<2>(calls[0]).value() == 1000);
 
-        for (const auto &call : calls)
-        {
-            if (std::get<0>(call) == "node1" && std::get<1>(call) == "/var/run/dcgm.socket"
-                && std::get<2>(call).value() == 1000)
-            {
-                foundNode1 = true;
-            }
-            else if (std::get<0>(call) == "node2" && std::get<1>(call) == "/tmp/dcgm.socket"
-                     && std::get<2>(call).value() == 1000)
-            {
-                foundNode2 = true;
-            }
-        }
+        REQUIRE(std::get<0>(calls[1]) == "node2");
+        REQUIRE(std::get<1>(calls[1]) == "/tmp/dcgm.socket");
+        REQUIRE(std::get<2>(calls[1]).value() == 1000);
 
-        REQUIRE(foundNode1);
-        REQUIRE(foundNode2);
-
-        // Verify DCGM API was called correctly
+        // Verify DCGM API was called correctly for connections only
         REQUIRE(GetDcgmApi()->GetConnectCallCount() == 2);
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
+
+        // Verify NO authorization calls were made (authorization is separate now)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
 
         // Verify that the connection was made using the local socket path returned by the tunnel manager
         // Examine connections by handle in the DCGM API
@@ -1818,9 +1811,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         mockUdsSSHTunnelManager->SetDefaultRemoteSocketPath("/tmp/local_socket");
         mockUdsSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
-        // Set default behavior for DCGM API
+        // Set default behavior for DCGM API (only connection, no authorization)
         mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
 
         // Install mock objects
         SetDcgmApi(std::move(mockDcgmApi));
@@ -1835,7 +1827,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         REQUIRE(result == DCGM_ST_OK);
 
         // Verify TCP tunnel manager was called with correct parameters
-        auto tcpCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
+        auto const &tcpCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(tcpCalls.size() == 1);
 
         // Verify the TCP calls contain the expected parameters
@@ -1867,9 +1859,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         }
         REQUIRE(foundUdsNode);
 
-        // Verify DCGM API was called correctly
+        // Verify DCGM API was called correctly for connections only
         REQUIRE(GetDcgmApi()->GetConnectCallCount() == 2);
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
+
+        // Verify NO authorization calls were made (authorization is separate now)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
 
         // Verify that the connections were made using the correct local ports/paths returned by the tunnel managers
         // We need to examine each connection handle
@@ -1938,7 +1932,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         REQUIRE(result == DCGM_ST_REMOTE_SSH_CONNECTION_FAILED);
 
         // Verify tunnel manager was called
-        auto startCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
+        auto const &startCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(startCalls.size() == 1);
 
         // Verify DCGM API was not called after tunnel failure
@@ -1970,60 +1964,209 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         REQUIRE(result == DCGM_ST_CONNECTION_NOT_VALID);
 
         // Verify tunnel manager was called
-        auto startCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
+        auto const &startCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
         REQUIRE(startCalls.size() == 1);
 
         // Verify DCGM API Connect was called but failed
         REQUIRE(GetDcgmApi()->GetConnectCallCount() == 1);
 
         // Verify EndSession was called to clean up the tunnel
-        auto endCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
+        auto const &endCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
         REQUIRE(endCalls.size() == 1);
     }
+}
 
-    SECTION("ConnectRemoteNodes handles authorization failure")
+/**
+ * Tests for AuthorizeRemoteConnections method
+ */
+TEST_CASE_METHOD(MnDiagManagerTests, "AuthorizeRemoteConnections Tests [mndiag]")
+{
+    SECTION("AuthorizeRemoteConnections handles successful authorization")
     {
         // Set up mock objects
-        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
-        auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
+        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
 
-        // Set default behavior for tunnel manager
-        mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
-        mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
+        // Set behavior for DCGM API - authorization succeeds
+        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
 
-        // Set behavior for DCGM API - connect succeeds but module send fails for authorization
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
+        // Install mock objects
+        SetDcgmApi(std::move(mockDcgmApi));
+
+        // Setup mock connections first
+        SetupMockConnections(2);
+
+        // Test authorization
+        dcgmReturn_t result = AuthorizeRemoteConnections();
+
+        // Verify result
+        REQUIRE(result == DCGM_ST_OK);
+
+        // Verify authorization was called for each remote connection (2 connections)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
+    }
+
+    SECTION("AuthorizeRemoteConnections handles authorization failure")
+    {
+        // Set up mock objects
+        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
+
+        // Set behavior for DCGM API - ALL remote authorizations fail
+        // This ensures fail-fast behavior regardless of iteration order
         mockDcgmApi->SetSendRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
 
         // Install mock objects
         SetDcgmApi(std::move(mockDcgmApi));
-        SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
 
-        // Test with a host that will fail authorization
-        std::vector<std::string> hostList = { "node1:5555" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000); // uid 1000
+        // Setup mock connections first
+        SetupMockConnections(2);
+
+        // Test authorization
+        dcgmReturn_t result = AuthorizeRemoteConnections();
 
         // Verify result indicates authorization failure
         REQUIRE(result == DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
 
-        // Verify tunnel manager was called
-        auto startCalls = GetTcpSSHTunnelManager()->GetStartSessionCalls();
-        REQUIRE(startCalls.size() == 1);
-
-        // Verify DCGM API Connect was called successfully
-        REQUIRE(GetDcgmApi()->GetConnectCallCount() == 1);
-
-        // Verify DCGM API ModuleSendBlockingFixedRequest was called but failed
+        // Verify only one authorization call was made before failure (fail-fast behavior)
+        // (whichever connection gets processed first will fail and stop the iteration)
         REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 1);
+    }
+}
 
-        // Verify Disconnect was called to clean up
-        REQUIRE(GetDcgmApi()->GetDisconnectCallCount() == 1);
+/**
+ * Tests for RevokeRemoteAuthorizations method
+ */
+TEST_CASE_METHOD(MnDiagManagerTests, "RevokeRemoteAuthorizations Tests [mndiag]")
+{
+    SECTION("RevokeRemoteAuthorizations handles successful revocation")
+    {
+        // Set up mock objects
+        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
 
-        // Verify EndSession was called to clean up the tunnel
-        auto endCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
-        REQUIRE(endCalls.size() == 1);
+        // Set behavior for DCGM API - revocation succeeds
+        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
+
+        // Install mock objects
+        SetDcgmApi(std::move(mockDcgmApi));
+
+        // Setup mock connections first
+        SetupMockConnections(2);
+
+        // Authorize connections first to simulate an authorized state
+        dcgmReturn_t authResult = AuthorizeRemoteConnections();
+        REQUIRE(authResult == DCGM_ST_OK);
+
+        // Reset call counter for the revocation test
+        GetDcgmApi()->Reset();
+        GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
+
+        // Test revocation
+        dcgmReturn_t result = RevokeRemoteAuthorizations();
+
+        // Verify result
+        REQUIRE(result == DCGM_ST_OK);
+
+        // Verify revocation was called for each remote connection (2 connections)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
     }
 
+    SECTION("RevokeRemoteAuthorizations handles revocation failure")
+    {
+        // Set up mock objects
+        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
+
+        // First set up for successful authorization
+        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
+
+        // Install mock objects
+        SetDcgmApi(std::move(mockDcgmApi));
+
+        // Setup 2 mock connections to test fail-fast behavior with non-deterministic iteration
+        SetupMockConnections(2);
+
+        // Authorize connections first to simulate an authorized state
+        dcgmReturn_t authResult = AuthorizeRemoteConnections();
+        REQUIRE(authResult == DCGM_ST_OK);
+
+        // Reset and set behavior for DCGM API - ALL remote revocations fail
+        // This ensures fail-fast behavior regardless of iteration order
+        GetDcgmApi()->Reset();
+        GetDcgmApi()->SetSendRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
+
+        // Test revocation
+        dcgmReturn_t result = RevokeRemoteAuthorizations();
+
+        // Verify result indicates revocation failure
+        REQUIRE(result == DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
+
+        // Should see exactly 1 call due to fail-fast behavior
+        // (whichever connection gets processed first will fail and stop the iteration)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 1);
+    }
+}
+
+/**
+ * Tests for CleanupConnections method
+ */
+TEST_CASE_METHOD(MnDiagManagerTests, "CleanupConnections Tests [mndiag]")
+{
+    SECTION("CleanupConnections properly cleans up all connections")
+    {
+        // Set up mock objects
+        auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
+        auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
+        auto mockUdsSSHTunnelManager = std::make_unique<MockUdsSSHTunnelManager>();
+
+        // Install mock objects
+        SetDcgmApi(std::move(mockDcgmApi));
+        SetTcpSSHTunnelManager(std::move(mockTcpSSHTunnelManager));
+        SetUdsSSHTunnelManager(std::move(mockUdsSSHTunnelManager));
+
+        // First set up some connections via ConnectRemoteNodes
+        GetDcgmApi()->SetConnectResult(DCGM_ST_OK);
+        GetTcpSSHTunnelManager()->SetDefaultRemotePort(12345);
+        GetTcpSSHTunnelManager()->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
+        GetUdsSSHTunnelManager()->SetDefaultRemoteSocketPath("/tmp/local_socket");
+        GetUdsSSHTunnelManager()->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
+
+        // Connect to a mix of TCP and UDS nodes
+        std::vector<std::string> hostList = { "node1:5555", "node2:unix:///tmp/dcgm.socket" };
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000);
+        REQUIRE(result == DCGM_ST_OK);
+
+        // Reset counters for cleanup phase
+        GetDcgmApi()->Reset();
+        GetTcpSSHTunnelManager()->Reset();
+        GetUdsSSHTunnelManager()->Reset();
+
+        // Now test CleanupConnections
+        result = CleanupConnections();
+
+        // Verify result
+        REQUIRE(result == DCGM_ST_OK);
+
+        // Verify DCGM API was called to disconnect each connection (2 connections)
+        REQUIRE(GetDcgmApi()->GetDisconnectCallCount() == 2);
+
+        // Verify tunnel managers were called to end sessions
+        auto tcpEndCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
+        auto udsEndCalls = GetUdsSSHTunnelManager()->GetEndSessionCalls();
+        REQUIRE(tcpEndCalls.size() == 1);
+        REQUIRE(udsEndCalls.size() == 1);
+
+        // Verify the TCP and UDS end calls contain the expected parameters
+        REQUIRE(std::get<0>(tcpEndCalls[0]) == "node1");
+        REQUIRE(std::get<1>(tcpEndCalls[0]) == 5555);
+
+        REQUIRE(std::get<0>(udsEndCalls[0]) == "node2");
+        REQUIRE(std::get<1>(udsEndCalls[0]) == "/tmp/dcgm.socket");
+    }
+}
+
+/**
+ * Tests for DisconnectRemoteNodes method
+ */
+TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
+{
     SECTION("DisconnectRemoteNodes properly disconnects all nodes")
     {
         // Set up mock objects
@@ -2037,9 +2180,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         SetUdsSSHTunnelManager(std::move(mockUdsSSHTunnelManager));
 
         // First set up some connections via ConnectRemoteNodes
-        // We need to set up the mock behavior for connection
+        // We need to set up the mock behavior for connection (no authorization)
         GetDcgmApi()->SetConnectResult(DCGM_ST_OK);
-        GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
         GetTcpSSHTunnelManager()->SetDefaultRemotePort(12345);
         GetTcpSSHTunnelManager()->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
         GetUdsSSHTunnelManager()->SetDefaultRemoteSocketPath("/tmp/local_socket");
@@ -2049,12 +2191,20 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         std::vector<std::string> hostList = { "node1:5555", "node2:unix:///tmp/dcgm.socket" };
         dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000); // uid 1000
         REQUIRE(result == DCGM_ST_OK);
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0); // No authorization in ConnectRemoteNodes
+
+        // Authorize the connections before disconnecting them
+        GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
+        result = AuthorizeRemoteConnections();
+        REQUIRE(result == DCGM_ST_OK);
 
         // Reset the call counters for the disconnect phase
         GetDcgmApi()->Reset();
         GetTcpSSHTunnelManager()->Reset();
         GetUdsSSHTunnelManager()->Reset();
+
+        // Set up mock behavior for revocation during disconnect
+        GetDcgmApi()->SetSendRequestResult(DCGM_ST_OK);
 
         // Now test DisconnectRemoteNodes
         result = DisconnectRemoteNodes();
@@ -2062,9 +2212,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
 
-        // Verify DCGM API was called for each node (2 remote nodes)
-        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2);
-        REQUIRE(GetDcgmApi()->GetDisconnectCallCount() == 2);
+        // Verify DCGM API was called for revocation (2 remote nodes) + disconnect (2 remote nodes)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 2); // Revocation calls
+        REQUIRE(GetDcgmApi()->GetDisconnectCallCount() == 2);  // Disconnect calls
 
         // Verify tunnel managers were called to end sessions
         auto tcpEndCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
@@ -2118,6 +2268,10 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000);
         REQUIRE(result == DCGM_ST_OK);
 
+        // Authorize the connection first
+        result = AuthorizeRemoteConnections();
+        REQUIRE(result == DCGM_ST_OK);
+
         // Reset the API and set it to fail on revocation
         GetDcgmApi()->Reset();
         GetDcgmApi()->SetSendRequestResult(DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED);
@@ -2131,7 +2285,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         // Still verify that we tried to disconnect and end the tunnel session
         // Even with the revocation error
         REQUIRE(GetDcgmApi()->GetDisconnectCallCount() == 1);
-        auto endCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
+        const auto &endCalls = GetTcpSSHTunnelManager()->GetEndSessionCalls();
         REQUIRE(endCalls.size() == 1);
     }
 }

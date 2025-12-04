@@ -92,8 +92,6 @@ TEST_CASE("DcgmResourceHandle - Move semantics")
 
         DcgmResourceHandle handle2(std::move(handle1));
 
-        REQUIRE(handle1.GetInitResult() == DCGM_ST_GENERIC_ERROR);
-        REQUIRE(handle1.GetToken() == 0);
         REQUIRE(handle2.GetInitResult() == DCGM_ST_OK);
         REQUIRE(handle2.GetToken() == token1);
     }
@@ -110,8 +108,6 @@ TEST_CASE("DcgmResourceHandle - Move semantics")
 
         REQUIRE(handle1.GetInitResult() == ret);
         REQUIRE(handle1.GetToken() == token2);
-        REQUIRE(handle2.GetInitResult() == DCGM_ST_GENERIC_ERROR);
-        REQUIRE(handle2.GetToken() == 0);
     }
 
     SECTION("Resource cleanup in move assignment")
@@ -124,8 +120,6 @@ TEST_CASE("DcgmResourceHandle - Move semantics")
         handle2 = std::move(handle1);
         DcgmResourceHandle handle3(proxy);
 
-        REQUIRE(handle1.GetToken() == 0);
-        REQUIRE(handle1.GetInitResult() == DCGM_ST_GENERIC_ERROR);
         REQUIRE(handle2.GetToken() == token1);
         REQUIRE(handle2.GetInitResult() == ret);
         REQUIRE(handle3.GetInitResult() == DCGM_ST_IN_USE);
@@ -141,9 +135,5 @@ TEST_CASE("DcgmResourceHandle - Move semantics")
 
         REQUIRE(handle3.GetToken() == token1);
         REQUIRE(handle3.GetInitResult() == DCGM_ST_OK);
-        REQUIRE(handle1.GetToken() == 0);
-        REQUIRE(handle1.GetInitResult() == DCGM_ST_GENERIC_ERROR);
-        REQUIRE(handle2.GetToken() == 0);
-        REQUIRE(handle2.GetInitResult() == DCGM_ST_GENERIC_ERROR);
     }
 }

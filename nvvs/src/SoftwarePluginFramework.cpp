@@ -46,9 +46,17 @@ extern DcgmHandle dcgmHandle;
 extern DcgmSystem dcgmSystem;
 
 // Constructor, Destructor
+SoftwarePluginFramework::SoftwarePluginFramework(EntitySet &entitySet)
+    : m_entitySet(entitySet)
+{
+    // initalizing the test name map
+    initTestNameMap();
+}
+
 /*****************************************************************************/
-SoftwarePluginFramework::SoftwarePluginFramework(std::vector<Gpu *> gpuList)
+SoftwarePluginFramework::SoftwarePluginFramework(std::vector<Gpu *> gpuList, EntitySet &entitySet)
     : m_entityList(std::make_unique<dcgmDiagPluginEntityList_v1>())
+    , m_entitySet(entitySet)
 {
     // initalizing the test name map
     initTestNameMap();
@@ -58,10 +66,11 @@ SoftwarePluginFramework::SoftwarePluginFramework(std::vector<Gpu *> gpuList)
 }
 
 /*****************************************************************************/
-SoftwarePluginFramework::SoftwarePluginFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList)
-{
-    m_entityList = std::move(entityList);
-}
+SoftwarePluginFramework::SoftwarePluginFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList,
+                                                 EntitySet &entitySet)
+    : m_entityList(std::move(entityList))
+    , m_entitySet(entitySet)
+{}
 
 /*****************************************************************************/
 SoftwarePluginFramework::~SoftwarePluginFramework()
@@ -144,6 +153,7 @@ void SoftwarePluginFramework::SetResult(std::string_view const testName, DcgmNvv
     {
         log_error("failed to set result of test [{}], ret: [{}].", testName, ret);
     }
+    m_entitySet.UpdateSkippedEntities(entityResults);
 }
 // Public *****************************************************************************/
 /*****************************************************************************/

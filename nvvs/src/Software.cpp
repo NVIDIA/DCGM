@@ -97,9 +97,9 @@ const std::string SW_SUBTEST_GRAPHICS("Graphics Processes");
 const std::string SW_SUBTEST_INFOROM("Inforom");
 const std::string SW_SUBTEST_FABRIC_MANAGER("Fabric Manager");
 
-Software::Software(dcgmHandle_t handle)
+Software::Software(dcgmHandle_t handle, std::unique_ptr<DcgmSystemBase> dcgmSystem)
     : m_dcgmRecorder(handle)
-    , m_dcgmSystem()
+    , m_dcgmSystem(std::move(dcgmSystem))
     , m_handle(handle)
     , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
@@ -116,7 +116,11 @@ Software::Software(dcgmHandle_t handle)
     tp.AddString(PS_IGNORE_ERROR_CODES, "");
     m_infoStruct.defaultTestParameters = &tp;
 
-    m_dcgmSystem.Init(handle);
+    if (!m_dcgmSystem)
+    {
+        m_dcgmSystem = std::make_unique<DcgmSystem>();
+    }
+    m_dcgmSystem->Init(handle);
 }
 
 void Software::Go(std::string const &testName,
@@ -222,13 +226,13 @@ bool Software::checkPermissions(bool checkFileCreation, bool skipDeviceTest)
 
     DIR *dir;
     struct dirent *ent;
-    std::string dirName = "/dev";
+    std::string dirName = GetDeviceDirectory();
 
     setSubtestName(SW_SUBTEST_PERMS);
 
     // Count the number of GPUs
     std::vector<unsigned int> gpuIds;
-    dcgmReturn_t ret = m_dcgmSystem.GetAllDevices(gpuIds);
+    dcgmReturn_t ret = m_dcgmSystem->GetAllDevices(gpuIds);
     if (DCGM_ST_OK != ret)
     {
         return false;
@@ -698,11 +702,6 @@ int Software::checkPageRetirement()
                 addError(d);
                 SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
             }
-            /*
-             * Halt nvvs for failures related to 'pending page retirements' or 'RETIRED_DBE/SBE'. Please be aware that
-             * we will not stop for internal DCGM failures, such as issues with retrieving the current field value.
-             */
-            main_should_stop.store(1);
             continue;
         }
 
@@ -757,7 +756,6 @@ int Software::checkPageRetirement()
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_RETIRED_PAGES_LIMIT, d, DCGM_LIMIT_MAX_RETIRED_PAGES, gpuId);
             addError(d);
             SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
-            main_should_stop.store(1);
             continue;
         }
     }
@@ -820,13 +818,6 @@ int Software::checkRowRemapping()
             {
                 addError(d);
                 SetResultForGpu(GetSoftwareTestName(), gpuId, NVVS_RESULT_FAIL);
-
-                /*
-                 * Halt nvvs for failures related to 'row remap/pending' or 'uncorrectable remapped row'. Please be
-                 * aware that we will not stop for internal DCGM failures, such as issues with retrieving the current
-                 * field value.
-                 */
-                main_should_stop.store(1);
                 continue;
             }
         }
@@ -867,7 +858,6 @@ int Software::checkRowRemapping()
                 addError(d);
                 SetResultForGpu(GetSoftwareTestName(), gpuId, NVVS_RESULT_FAIL);
             }
-            main_should_stop.store(1);
         }
     }
 
@@ -1017,13 +1007,16 @@ void Software::checkFabricManager()
 
 void Software::LogAndSetFMError(unsigned int gpuId, dcgmFabricManagerStatus_t status)
 {
-    static unsigned int const INVALID_CLIQUE_ID = UINT_MAX;
+    static unsigned int const INVALID_CLIQUE_ID   = UINT_MAX;
+    static unsigned int const INVALID_HEALTH_MASK = 0;
     std::string errorMessage;
     dcgmFieldValue_v2 fmUuidVal;
     dcgmFieldValue_v2 fmCliqueIdVal;
+    dcgmFieldValue_v2 fmHealthMaskVal;
     dcgmReturn_t ret;
-    unsigned int flags    = DCGM_FV_FLAG_LIVE_DATA;
-    unsigned int cliqueId = INVALID_CLIQUE_ID;
+    unsigned int flags      = DCGM_FV_FLAG_LIVE_DATA;
+    unsigned int cliqueId   = INVALID_CLIQUE_ID;
+    unsigned int healthMask = INVALID_HEALTH_MASK;
 
     switch (status)
     {
@@ -1075,9 +1068,19 @@ void Software::LogAndSetFMError(unsigned int gpuId, dcgmFabricManagerStatus_t st
         cliqueId = fmCliqueIdVal.value.i64;
     }
 
+    ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_FABRIC_HEALTH_MASK, fmHealthMaskVal, flags);
+    if (ret != DCGM_ST_OK)
+    {
+        log_debug("Couldn't read FM health mask: {}", errorString(ret));
+    }
+    else
+    {
+        healthMask = fmHealthMaskVal.value.i64;
+    }
+
     DcgmError d { DcgmError::GpuIdTag::Unknown };
     DCGM_ERROR_FORMAT_MESSAGE(
-        DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR, d, fmUuidVal.value.str, cliqueId, errorMessage.c_str());
+        DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR, d, fmUuidVal.value.str, cliqueId, healthMask, errorMessage.c_str());
     addError(d);
     SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
 }

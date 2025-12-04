@@ -23,6 +23,8 @@ target_sources(diagtests
         ../DcgmDiagResponseWrapper.cpp
         DcgmDiagManagerTests.cpp
         ../DcgmDiagManager.cpp
+        DcgmDiagCallersTests.cpp
+        ../DcgmDiagCallers.cpp
 )
 
 target_include_directories(diagtests PRIVATE ${YAML_INCLUDE_DIR})

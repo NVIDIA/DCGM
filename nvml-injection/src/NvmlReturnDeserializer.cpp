@@ -58,6 +58,7 @@ nvmlBridgeChipInfo_t *nvmlBridgeChipInfo_tDeserializer(const YAML::Node &node);
 nvmlBridgeChipHierarchy_t *nvmlBridgeChipHierarchy_tDeserializer(const YAML::Node &node);
 nvmlViolationTime_t *nvmlViolationTime_tDeserializer(const YAML::Node &node);
 nvmlCoolerInfo_t *nvmlCoolerInfo_tDeserializer(const YAML::Node &node);
+nvmlDramEncryptionInfo_t *nvmlDramEncryptionInfo_tDeserializer(const YAML::Node &node);
 nvmlMarginTemperature_t *nvmlMarginTemperature_tDeserializer(const YAML::Node &node);
 nvmlClkMonFaultInfo_t *nvmlClkMonFaultInfo_tDeserializer(const YAML::Node &node);
 nvmlClkMonStatus_t *nvmlClkMonStatus_tDeserializer(const YAML::Node &node);
@@ -116,6 +117,9 @@ nvmlGpuFabricInfo_t *nvmlGpuFabricInfo_tDeserializer(const YAML::Node &node);
 nvmlGpuFabricInfoV_t *nvmlGpuFabricInfoV_tDeserializer(const YAML::Node &node);
 nvmlSystemDriverBranchInfo_t *nvmlSystemDriverBranchInfo_tDeserializer(const YAML::Node &node);
 nvmlTemperature_t *nvmlTemperature_tDeserializer(const YAML::Node &node);
+nvmlNvlinkSupportedBwModes_t *nvmlNvlinkSupportedBwModes_tDeserializer(const YAML::Node &node);
+nvmlNvlinkGetBwMode_t *nvmlNvlinkGetBwMode_tDeserializer(const YAML::Node &node);
+nvmlNvlinkSetBwMode_t *nvmlNvlinkSetBwMode_tDeserializer(const YAML::Node &node);
 nvmlVgpuVersion_t *nvmlVgpuVersion_tDeserializer(const YAML::Node &node);
 nvmlVgpuMetadata_t *nvmlVgpuMetadata_tDeserializer(const YAML::Node &node);
 nvmlVgpuPgpuMetadata_t *nvmlVgpuPgpuMetadata_tDeserializer(const YAML::Node &node);
@@ -223,7 +227,7 @@ nvmlPciInfoExt_t *nvmlPciInfoExt_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto busId = node["busId"].as<std::string>();
-        std::memcpy(&pciInfoExt->busId, busId.data(), sizeof(pciInfoExt->busId));
+        std::memcpy(&pciInfoExt->busId, busId.data(), std::min(busId.size(), sizeof(pciInfoExt->busId)));
     }
     else
     {
@@ -245,7 +249,7 @@ nvmlPciInfo_t *nvmlPciInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto busIdLegacy = node["busIdLegacy"].as<std::string>();
-        std::memcpy(&pciInfo->busIdLegacy, busIdLegacy.data(), sizeof(pciInfo->busIdLegacy));
+        std::memcpy(&pciInfo->busIdLegacy, busIdLegacy.data(), std::min(busIdLegacy.size(), sizeof(pciInfo->busIdLegacy)));
     }
     else
     {
@@ -300,7 +304,7 @@ nvmlPciInfo_t *nvmlPciInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto busId = node["busId"].as<std::string>();
-        std::memcpy(&pciInfo->busId, busId.data(), sizeof(pciInfo->busId));
+        std::memcpy(&pciInfo->busId, busId.data(), std::min(busId.size(), sizeof(pciInfo->busId)));
     }
     else
     {
@@ -1060,6 +1064,36 @@ nvmlCoolerInfo_t *nvmlCoolerInfo_tDeserializer(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_deserializer_definition
+nvmlDramEncryptionInfo_t *nvmlDramEncryptionInfo_tDeserializer(const YAML::Node &node)
+{
+    auto *dramEncryptionInfo = reinterpret_cast<nvmlDramEncryptionInfo_t *>(malloc(sizeof(nvmlDramEncryptionInfo_t)));
+    if (dramEncryptionInfo == nullptr)
+    {
+        return nullptr;
+    }
+    memset(dramEncryptionInfo, 0, sizeof(*dramEncryptionInfo));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        dramEncryptionInfo->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlDramEncryptionInfo_t");
+    }
+    if (node["encryptionState"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        dramEncryptionInfo->encryptionState = static_cast<nvmlEnableState_t>(node["encryptionState"].as<int>());
+    }
+    else
+    {
+        NVML_LOG_ERR("missing encryptionState for struct nvmlDramEncryptionInfo_t");
+    }
+    return dramEncryptionInfo;
+}
+
+// The following snippet is generated from write_deserializer_definition
 nvmlMarginTemperature_t *nvmlMarginTemperature_tDeserializer(const YAML::Node &node)
 {
     auto *marginTemperature = reinterpret_cast<nvmlMarginTemperature_t *>(malloc(sizeof(nvmlMarginTemperature_t)));
@@ -1301,7 +1335,7 @@ nvmlDevicePerfModes_t *nvmlDevicePerfModes_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto str = node["str"].as<std::string>();
-        std::memcpy(&devicePerfModes->str, str.data(), sizeof(devicePerfModes->str));
+        std::memcpy(&devicePerfModes->str, str.data(), std::min(str.size(), sizeof(devicePerfModes->str)));
     }
     else
     {
@@ -1332,7 +1366,7 @@ nvmlDeviceCurrentClockFreqs_t *nvmlDeviceCurrentClockFreqs_tDeserializer(const Y
     {
         // The following snippet is generated from write_deserializer_definition
         auto str = node["str"].as<std::string>();
-        std::memcpy(&deviceCurrentClockFreqs->str, str.data(), sizeof(deviceCurrentClockFreqs->str));
+        std::memcpy(&deviceCurrentClockFreqs->str, str.data(), std::min(str.size(), sizeof(deviceCurrentClockFreqs->str)));
     }
     else
     {
@@ -1697,7 +1731,7 @@ nvmlPlatformInfo_v1_t *nvmlPlatformInfo_v1_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto ibGuid = node["ibGuid"].as<std::string>();
-        std::memcpy(&platformInfo_v1->ibGuid, ibGuid.data(), sizeof(platformInfo_v1->ibGuid));
+        std::memcpy(&platformInfo_v1->ibGuid, ibGuid.data(), std::min(ibGuid.size(), sizeof(platformInfo_v1->ibGuid)));
     }
     else
     {
@@ -1707,7 +1741,7 @@ nvmlPlatformInfo_v1_t *nvmlPlatformInfo_v1_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto rackGuid = node["rackGuid"].as<std::string>();
-        std::memcpy(&platformInfo_v1->rackGuid, rackGuid.data(), sizeof(platformInfo_v1->rackGuid));
+        std::memcpy(&platformInfo_v1->rackGuid, rackGuid.data(), std::min(rackGuid.size(), sizeof(platformInfo_v1->rackGuid)));
     }
     else
     {
@@ -1783,7 +1817,7 @@ nvmlPlatformInfo_t *nvmlPlatformInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto ibGuid = node["ibGuid"].as<std::string>();
-        std::memcpy(&platformInfo->ibGuid, ibGuid.data(), sizeof(platformInfo->ibGuid));
+        std::memcpy(&platformInfo->ibGuid, ibGuid.data(), std::min(ibGuid.size(), sizeof(platformInfo->ibGuid)));
     }
     else
     {
@@ -1793,7 +1827,7 @@ nvmlPlatformInfo_t *nvmlPlatformInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto chassisSerialNumber = node["chassisSerialNumber"].as<std::string>();
-        std::memcpy(&platformInfo->chassisSerialNumber, chassisSerialNumber.data(), sizeof(platformInfo->chassisSerialNumber));
+        std::memcpy(&platformInfo->chassisSerialNumber, chassisSerialNumber.data(), std::min(chassisSerialNumber.size(), sizeof(platformInfo->chassisSerialNumber)));
     }
     else
     {
@@ -2179,7 +2213,7 @@ nvmlVgpuProcessUtilizationSample_t *nvmlVgpuProcessUtilizationSample_tDeserializ
     {
         // The following snippet is generated from write_deserializer_definition
         auto processName = node["processName"].as<std::string>();
-        std::memcpy(&vgpuProcessUtilizationSample->processName, processName.data(), sizeof(vgpuProcessUtilizationSample->processName));
+        std::memcpy(&vgpuProcessUtilizationSample->processName, processName.data(), std::min(processName.size(), sizeof(vgpuProcessUtilizationSample->processName)));
     }
     else
     {
@@ -2246,7 +2280,7 @@ nvmlVgpuProcessUtilizationInfo_v1_t *nvmlVgpuProcessUtilizationInfo_v1_tDeserial
     {
         // The following snippet is generated from write_deserializer_definition
         auto processName = node["processName"].as<std::string>();
-        std::memcpy(&vgpuProcessUtilizationInfo_v1->processName, processName.data(), sizeof(vgpuProcessUtilizationInfo_v1->processName));
+        std::memcpy(&vgpuProcessUtilizationInfo_v1->processName, processName.data(), std::min(processName.size(), sizeof(vgpuProcessUtilizationInfo_v1->processName)));
     }
     else
     {
@@ -2962,7 +2996,7 @@ nvmlGridLicensableFeature_t *nvmlGridLicensableFeature_tDeserializer(const YAML:
     {
         // The following snippet is generated from write_deserializer_definition
         auto licenseInfo = node["licenseInfo"].as<std::string>();
-        std::memcpy(&gridLicensableFeature->licenseInfo, licenseInfo.data(), sizeof(gridLicensableFeature->licenseInfo));
+        std::memcpy(&gridLicensableFeature->licenseInfo, licenseInfo.data(), std::min(licenseInfo.size(), sizeof(gridLicensableFeature->licenseInfo)));
     }
     else
     {
@@ -2972,7 +3006,7 @@ nvmlGridLicensableFeature_t *nvmlGridLicensableFeature_tDeserializer(const YAML:
     {
         // The following snippet is generated from write_deserializer_definition
         auto productName = node["productName"].as<std::string>();
-        std::memcpy(&gridLicensableFeature->productName, productName.data(), sizeof(gridLicensableFeature->productName));
+        std::memcpy(&gridLicensableFeature->productName, productName.data(), std::min(productName.size(), sizeof(gridLicensableFeature->productName)));
     }
     else
     {
@@ -3104,7 +3138,7 @@ nvmlHwbcEntry_t *nvmlHwbcEntry_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto firmwareVersion = node["firmwareVersion"].as<std::string>();
-        std::memcpy(&hwbcEntry->firmwareVersion, firmwareVersion.data(), sizeof(hwbcEntry->firmwareVersion));
+        std::memcpy(&hwbcEntry->firmwareVersion, firmwareVersion.data(), std::min(firmwareVersion.size(), sizeof(hwbcEntry->firmwareVersion)));
     }
     else
     {
@@ -3126,7 +3160,7 @@ nvmlLedState_t *nvmlLedState_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto cause = node["cause"].as<std::string>();
-        std::memcpy(&ledState->cause, cause.data(), sizeof(ledState->cause));
+        std::memcpy(&ledState->cause, cause.data(), std::min(cause.size(), sizeof(ledState->cause)));
     }
     else
     {
@@ -3157,7 +3191,7 @@ nvmlUnitInfo_t *nvmlUnitInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto name = node["name"].as<std::string>();
-        std::memcpy(&unitInfo->name, name.data(), sizeof(unitInfo->name));
+        std::memcpy(&unitInfo->name, name.data(), std::min(name.size(), sizeof(unitInfo->name)));
     }
     else
     {
@@ -3167,7 +3201,7 @@ nvmlUnitInfo_t *nvmlUnitInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto id = node["id"].as<std::string>();
-        std::memcpy(&unitInfo->id, id.data(), sizeof(unitInfo->id));
+        std::memcpy(&unitInfo->id, id.data(), std::min(id.size(), sizeof(unitInfo->id)));
     }
     else
     {
@@ -3177,7 +3211,7 @@ nvmlUnitInfo_t *nvmlUnitInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto serial = node["serial"].as<std::string>();
-        std::memcpy(&unitInfo->serial, serial.data(), sizeof(unitInfo->serial));
+        std::memcpy(&unitInfo->serial, serial.data(), std::min(serial.size(), sizeof(unitInfo->serial)));
     }
     else
     {
@@ -3187,7 +3221,7 @@ nvmlUnitInfo_t *nvmlUnitInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto firmwareVersion = node["firmwareVersion"].as<std::string>();
-        std::memcpy(&unitInfo->firmwareVersion, firmwareVersion.data(), sizeof(unitInfo->firmwareVersion));
+        std::memcpy(&unitInfo->firmwareVersion, firmwareVersion.data(), std::min(firmwareVersion.size(), sizeof(unitInfo->firmwareVersion)));
     }
     else
     {
@@ -3209,7 +3243,7 @@ nvmlPSUInfo_t *nvmlPSUInfo_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto state = node["state"].as<std::string>();
-        std::memcpy(&pSUInfo->state, state.data(), sizeof(pSUInfo->state));
+        std::memcpy(&pSUInfo->state, state.data(), std::min(state.size(), sizeof(pSUInfo->state)));
     }
     else
     {
@@ -3847,7 +3881,7 @@ nvmlConfComputeGpuCertificate_t *nvmlConfComputeGpuCertificate_tDeserializer(con
     {
         // The following snippet is generated from write_deserializer_definition
         auto certChain = node["certChain"].as<std::string>();
-        std::memcpy(&confComputeGpuCertificate->certChain, certChain.data(), sizeof(confComputeGpuCertificate->certChain));
+        std::memcpy(&confComputeGpuCertificate->certChain, certChain.data(), std::min(certChain.size(), sizeof(confComputeGpuCertificate->certChain)));
     }
     else
     {
@@ -3857,7 +3891,7 @@ nvmlConfComputeGpuCertificate_t *nvmlConfComputeGpuCertificate_tDeserializer(con
     {
         // The following snippet is generated from write_deserializer_definition
         auto attestationCertChain = node["attestationCertChain"].as<std::string>();
-        std::memcpy(&confComputeGpuCertificate->attestationCertChain, attestationCertChain.data(), sizeof(confComputeGpuCertificate->attestationCertChain));
+        std::memcpy(&confComputeGpuCertificate->attestationCertChain, attestationCertChain.data(), std::min(attestationCertChain.size(), sizeof(confComputeGpuCertificate->attestationCertChain)));
     }
     else
     {
@@ -3906,7 +3940,7 @@ nvmlConfComputeGpuAttestationReport_t *nvmlConfComputeGpuAttestationReport_tDese
     {
         // The following snippet is generated from write_deserializer_definition
         auto nonce = node["nonce"].as<std::string>();
-        std::memcpy(&confComputeGpuAttestationReport->nonce, nonce.data(), sizeof(confComputeGpuAttestationReport->nonce));
+        std::memcpy(&confComputeGpuAttestationReport->nonce, nonce.data(), std::min(nonce.size(), sizeof(confComputeGpuAttestationReport->nonce)));
     }
     else
     {
@@ -3916,7 +3950,7 @@ nvmlConfComputeGpuAttestationReport_t *nvmlConfComputeGpuAttestationReport_tDese
     {
         // The following snippet is generated from write_deserializer_definition
         auto attestationReport = node["attestationReport"].as<std::string>();
-        std::memcpy(&confComputeGpuAttestationReport->attestationReport, attestationReport.data(), sizeof(confComputeGpuAttestationReport->attestationReport));
+        std::memcpy(&confComputeGpuAttestationReport->attestationReport, attestationReport.data(), std::min(attestationReport.size(), sizeof(confComputeGpuAttestationReport->attestationReport)));
     }
     else
     {
@@ -3926,7 +3960,7 @@ nvmlConfComputeGpuAttestationReport_t *nvmlConfComputeGpuAttestationReport_tDese
     {
         // The following snippet is generated from write_deserializer_definition
         auto cecAttestationReport = node["cecAttestationReport"].as<std::string>();
-        std::memcpy(&confComputeGpuAttestationReport->cecAttestationReport, cecAttestationReport.data(), sizeof(confComputeGpuAttestationReport->cecAttestationReport));
+        std::memcpy(&confComputeGpuAttestationReport->cecAttestationReport, cecAttestationReport.data(), std::min(cecAttestationReport.size(), sizeof(confComputeGpuAttestationReport->cecAttestationReport)));
     }
     else
     {
@@ -4137,7 +4171,7 @@ nvmlSystemDriverBranchInfo_t *nvmlSystemDriverBranchInfo_tDeserializer(const YAM
     {
         // The following snippet is generated from write_deserializer_definition
         auto branch = node["branch"].as<std::string>();
-        std::memcpy(&systemDriverBranchInfo->branch, branch.data(), sizeof(systemDriverBranchInfo->branch));
+        std::memcpy(&systemDriverBranchInfo->branch, branch.data(), std::min(branch.size(), sizeof(systemDriverBranchInfo->branch)));
     }
     else
     {
@@ -4183,6 +4217,124 @@ nvmlTemperature_t *nvmlTemperature_tDeserializer(const YAML::Node &node)
         NVML_LOG_ERR("missing temperature for struct nvmlTemperature_t");
     }
     return temperature;
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlNvlinkSupportedBwModes_t *nvmlNvlinkSupportedBwModes_tDeserializer(const YAML::Node &node)
+{
+    auto *nvlinkSupportedBwModes = reinterpret_cast<nvmlNvlinkSupportedBwModes_t *>(malloc(sizeof(nvmlNvlinkSupportedBwModes_t)));
+    if (nvlinkSupportedBwModes == nullptr)
+    {
+        return nullptr;
+    }
+    memset(nvlinkSupportedBwModes, 0, sizeof(*nvlinkSupportedBwModes));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        nvlinkSupportedBwModes->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlNvlinkSupportedBwModes_t");
+    }
+    if (node["bwModes"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        auto bwModes = node["bwModes"].as<std::string>();
+        std::memcpy(&nvlinkSupportedBwModes->bwModes, bwModes.data(), std::min(bwModes.size(), sizeof(nvlinkSupportedBwModes->bwModes)));
+    }
+    else
+    {
+        NVML_LOG_ERR("missing bwModes for struct nvmlNvlinkSupportedBwModes_t");
+    }
+    if (node["totalBwModes"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        nvlinkSupportedBwModes->totalBwModes = node["totalBwModes"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing totalBwModes for struct nvmlNvlinkSupportedBwModes_t");
+    }
+    return nvlinkSupportedBwModes;
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlNvlinkGetBwMode_t *nvmlNvlinkGetBwMode_tDeserializer(const YAML::Node &node)
+{
+    auto *nvlinkGetBwMode = reinterpret_cast<nvmlNvlinkGetBwMode_t *>(malloc(sizeof(nvmlNvlinkGetBwMode_t)));
+    if (nvlinkGetBwMode == nullptr)
+    {
+        return nullptr;
+    }
+    memset(nvlinkGetBwMode, 0, sizeof(*nvlinkGetBwMode));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        nvlinkGetBwMode->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlNvlinkGetBwMode_t");
+    }
+    if (node["bIsBest"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        nvlinkGetBwMode->bIsBest = node["bIsBest"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing bIsBest for struct nvmlNvlinkGetBwMode_t");
+    }
+    if (node["bwMode"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        nvlinkGetBwMode->bwMode = node["bwMode"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing bwMode for struct nvmlNvlinkGetBwMode_t");
+    }
+    return nvlinkGetBwMode;
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlNvlinkSetBwMode_t *nvmlNvlinkSetBwMode_tDeserializer(const YAML::Node &node)
+{
+    auto *nvlinkSetBwMode = reinterpret_cast<nvmlNvlinkSetBwMode_t *>(malloc(sizeof(nvmlNvlinkSetBwMode_t)));
+    if (nvlinkSetBwMode == nullptr)
+    {
+        return nullptr;
+    }
+    memset(nvlinkSetBwMode, 0, sizeof(*nvlinkSetBwMode));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        nvlinkSetBwMode->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlNvlinkSetBwMode_t");
+    }
+    if (node["bSetBest"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        nvlinkSetBwMode->bSetBest = node["bSetBest"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing bSetBest for struct nvmlNvlinkSetBwMode_t");
+    }
+    if (node["bwMode"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        nvlinkSetBwMode->bwMode = node["bwMode"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing bwMode for struct nvmlNvlinkSetBwMode_t");
+    }
+    return nvlinkSetBwMode;
 }
 
 // The following snippet is generated from write_deserializer_definition
@@ -4255,7 +4407,7 @@ nvmlVgpuMetadata_t *nvmlVgpuMetadata_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto guestDriverVersion = node["guestDriverVersion"].as<std::string>();
-        std::memcpy(&vgpuMetadata->guestDriverVersion, guestDriverVersion.data(), sizeof(vgpuMetadata->guestDriverVersion));
+        std::memcpy(&vgpuMetadata->guestDriverVersion, guestDriverVersion.data(), std::min(guestDriverVersion.size(), sizeof(vgpuMetadata->guestDriverVersion)));
     }
     else
     {
@@ -4265,7 +4417,7 @@ nvmlVgpuMetadata_t *nvmlVgpuMetadata_tDeserializer(const YAML::Node &node)
     {
         // The following snippet is generated from write_deserializer_definition
         auto hostDriverVersion = node["hostDriverVersion"].as<std::string>();
-        std::memcpy(&vgpuMetadata->hostDriverVersion, hostDriverVersion.data(), sizeof(vgpuMetadata->hostDriverVersion));
+        std::memcpy(&vgpuMetadata->hostDriverVersion, hostDriverVersion.data(), std::min(hostDriverVersion.size(), sizeof(vgpuMetadata->hostDriverVersion)));
     }
     else
     {
@@ -4332,7 +4484,7 @@ nvmlVgpuPgpuMetadata_t *nvmlVgpuPgpuMetadata_tDeserializer(const YAML::Node &nod
     {
         // The following snippet is generated from write_deserializer_definition
         auto hostDriverVersion = node["hostDriverVersion"].as<std::string>();
-        std::memcpy(&vgpuPgpuMetadata->hostDriverVersion, hostDriverVersion.data(), sizeof(vgpuPgpuMetadata->hostDriverVersion));
+        std::memcpy(&vgpuPgpuMetadata->hostDriverVersion, hostDriverVersion.data(), std::min(hostDriverVersion.size(), sizeof(vgpuPgpuMetadata->hostDriverVersion)));
     }
     else
     {
@@ -4434,7 +4586,7 @@ nvmlExcludedDeviceInfo_t *nvmlExcludedDeviceInfo_tDeserializer(const YAML::Node 
     {
         // The following snippet is generated from write_deserializer_definition
         auto uuid = node["uuid"].as<std::string>();
-        std::memcpy(&excludedDeviceInfo->uuid, uuid.data(), sizeof(excludedDeviceInfo->uuid));
+        std::memcpy(&excludedDeviceInfo->uuid, uuid.data(), std::min(uuid.size(), sizeof(excludedDeviceInfo->uuid)));
     }
     else
     {
@@ -4705,7 +4857,7 @@ nvmlGpuInstanceProfileInfo_v2_t *nvmlGpuInstanceProfileInfo_v2_tDeserializer(con
     {
         // The following snippet is generated from write_deserializer_definition
         auto name = node["name"].as<std::string>();
-        std::memcpy(&gpuInstanceProfileInfo_v2->name, name.data(), sizeof(gpuInstanceProfileInfo_v2->name));
+        std::memcpy(&gpuInstanceProfileInfo_v2->name, name.data(), std::min(name.size(), sizeof(gpuInstanceProfileInfo_v2->name)));
     }
     else
     {
@@ -4826,7 +4978,7 @@ nvmlGpuInstanceProfileInfo_v3_t *nvmlGpuInstanceProfileInfo_v3_tDeserializer(con
     {
         // The following snippet is generated from write_deserializer_definition
         auto name = node["name"].as<std::string>();
-        std::memcpy(&gpuInstanceProfileInfo_v3->name, name.data(), sizeof(gpuInstanceProfileInfo_v3->name));
+        std::memcpy(&gpuInstanceProfileInfo_v3->name, name.data(), std::min(name.size(), sizeof(gpuInstanceProfileInfo_v3->name)));
     }
     else
     {
@@ -5070,7 +5222,7 @@ nvmlComputeInstanceProfileInfo_v2_t *nvmlComputeInstanceProfileInfo_v2_tDeserial
     {
         // The following snippet is generated from write_deserializer_definition
         auto name = node["name"].as<std::string>();
-        std::memcpy(&computeInstanceProfileInfo_v2->name, name.data(), sizeof(computeInstanceProfileInfo_v2->name));
+        std::memcpy(&computeInstanceProfileInfo_v2->name, name.data(), std::min(name.size(), sizeof(computeInstanceProfileInfo_v2->name)));
     }
     else
     {
@@ -5182,7 +5334,7 @@ nvmlComputeInstanceProfileInfo_v3_t *nvmlComputeInstanceProfileInfo_v3_tDeserial
     {
         // The following snippet is generated from write_deserializer_definition
         auto name = node["name"].as<std::string>();
-        std::memcpy(&computeInstanceProfileInfo_v3->name, name.data(), sizeof(computeInstanceProfileInfo_v3->name));
+        std::memcpy(&computeInstanceProfileInfo_v3->name, name.data(), std::min(name.size(), sizeof(computeInstanceProfileInfo_v3->name)));
     }
     else
     {
@@ -5942,6 +6094,26 @@ std::optional<NvmlFuncReturn> CoolerInfoParser(const YAML::Node &node)
         return std::nullopt;
     }
     return NvmlFuncReturn(ret, {coolerInfo, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> DramEncryptionInfoParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *dramEncryptionInfo = nvmlDramEncryptionInfo_tDeserializer(node["ReturnValue"]);
+    if (dramEncryptionInfo == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {dramEncryptionInfo, true});
 }
 
 // The following snippet is generated from write_known_struct_parser
@@ -6902,6 +7074,66 @@ std::optional<NvmlFuncReturn> TemperatureParser(const YAML::Node &node)
         return std::nullopt;
     }
     return NvmlFuncReturn(ret, {temperature, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> NvlinkSupportedBwModesParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *nvlinkSupportedBwModes = nvmlNvlinkSupportedBwModes_tDeserializer(node["ReturnValue"]);
+    if (nvlinkSupportedBwModes == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {nvlinkSupportedBwModes, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> NvlinkGetBwModeParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *nvlinkGetBwMode = nvmlNvlinkGetBwMode_tDeserializer(node["ReturnValue"]);
+    if (nvlinkGetBwMode == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {nvlinkGetBwMode, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> NvlinkSetBwModeParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *nvlinkSetBwMode = nvmlNvlinkSetBwMode_tDeserializer(node["ReturnValue"]);
+    if (nvlinkSetBwMode == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {nvlinkSetBwMode, true});
 }
 
 // The following snippet is generated from write_known_struct_parser

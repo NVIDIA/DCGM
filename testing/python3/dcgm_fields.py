@@ -213,6 +213,7 @@ DCGM_FI_DEV_FABRIC_MANAGER_STATUS     = 170 # The status of the fabric manager -
 DCGM_FI_DEV_FABRIC_MANAGER_ERROR_CODE = 171 # The failure that happened while starting the Fabric Manager, if any
 DCGM_FI_DEV_FABRIC_CLUSTER_UUID       = 172 # The uuid of the cluster to which this GPU belongs
 DCGM_FI_DEV_FABRIC_CLIQUE_ID          = 173 # The ID of the fabric clique to which this GPU belongs
+DCGM_FI_DEV_FABRIC_HEALTH_MASK        = 174 # GPU Fabric health Status Mask
 DCGM_FI_DEV_PSTATE               = 190 #Performance state (P-State) 0-15. 0=highest
 DCGM_FI_DEV_FAN_SPEED            = 191 #Fan speed for the device in percent 0-100
 #Device utilization and telemetry
@@ -864,9 +865,16 @@ DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR = 1439
 DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE = 1440
 DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE = 1441
 DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL = 1442
+#1443 to 1500 entries reserved for power smoothing fields
+
+DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS = 1501 # PCIe Correctable Errors Counter
+
+# IMEX (Infiniband Management EXtension) fields
+DCGM_FI_IMEX_DOMAIN_STATUS = 1502  # IMEX domain status (UP, DOWN, DEGRADED, NOT_INSTALLED, NOT_CONFIGURED, UNAVAILABLE)
+DCGM_FI_IMEX_DAEMON_STATUS = 1503  # IMEX daemon status (0-7: INITIALIZING through UNAVAILABLE, -1: NOT_INSTALLED, -2: NOT_CONFIGURED, -3: COMMAND_ERROR)
 
 # 1 greater than maximum fields above. This value can increase in the future
-DCGM_FI_MAX_FIELDS = 1443
+DCGM_FI_MAX_FIELDS = DCGM_FI_IMEX_DAEMON_STATUS + 1
 
 class struct_c_dcgm_field_meta_t(dcgm_structs._DcgmStructure):
     # struct_c_dcgm_field_meta_t structure

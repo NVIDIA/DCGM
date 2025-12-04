@@ -56,6 +56,8 @@ struct IbCxDevice
     dcgm_ib_cx_info_t info;
 };
 
+enum class ValidateNvLinkIdResult;
+
 class DcgmNvsdmManager : public DcgmNvSwitchManagerBase
 {
 public:
@@ -201,8 +203,38 @@ protected:
     /*************************************************************************/
     /**
      * Returns true if the specified link id is present on the host, false otherwise
+     * @note Logs the specified link id if invalid
+     * @param[in] entityId: The link entity ID to validate
+     * @returns: true if valid, false otherwise
      */
-    bool IsValidNvLinkId(dcgm_field_eid_t entityId);
+    bool IsValidNvLinkId(dcgm_field_eid_t entityId) const;
+
+    /*************************************************************************/
+    /**
+     * Returns true if the specified link id is present on the host, false otherwise
+     * @note Logs the specified switch id and link id if invalid
+     * @param[in] switchEid: The switch entity ID for logging
+     * @param[in] portEid: The port entity ID to validate
+     * @returns: true if valid, false otherwise
+     */
+    bool IsValidNvLinkId(dcgm_field_eid_t switchEid, dcgm_field_eid_t portEid) const;
+
+    /**
+     * Returns the result of validating the specified link id
+     * @param[in] entityId: The link entity ID to validate
+     * @returns: The result of validating the specified link id
+     */
+    ValidateNvLinkIdResult ValidateNvLinkId(dcgm_field_eid_t entityId) const;
+
+    /**
+     * Logs the validation error based on the specified status
+     * @param[in] status: The validation status
+     * @param[in] entityId: The link entity ID that failed validation
+     * @param[in] switchEid: Optional switch entity ID for enhanced logging context
+     */
+    void LogNvLinkValidationError(ValidateNvLinkIdResult status,
+                                  dcgm_field_eid_t entityId,
+                                  std::optional<dcgm_field_eid_t> switchEid = std::nullopt) const;
 
     /*************************************************************************/
     /**

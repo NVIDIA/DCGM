@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
-#include "DcgmChildProcessManager.hpp"
+#include "MockFileSystemOperator.h"
 #include "mocks/MockChildProcess.hpp"
+#include <DcgmChildProcessManager.hpp>
 #include <DcgmStringHelpers.h>
+#include <HangDetect.h>
+#include <HangDetectMonitor.h>
 #include <mock/FileHandleMock.h>
 
 #include <catch2/catch_all.hpp>
@@ -718,5 +721,142 @@ TEST_CASE("DcgmChildProcessManager Reset")
 
         // Third reset on empty manager again
         REQUIRE(DCGM_ST_OK == manager.Reset());
+    }
+}
+
+/**
+ * Friend class to access private members of HangDetect for testing.
+ */
+class HangDetectTest : public HangDetect
+{
+public:
+    explicit HangDetectTest(std::unique_ptr<FileSystemOperator> fsop)
+        : HangDetect(std::move(fsop))
+    {}
+
+    bool IsProcRegistered(pid_t pid)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_monitoredTasks.contains(pid);
+    }
+
+    std::unordered_map<pid_t, std::unordered_set<int>> GetMonitoredTasks() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_monitoredTasks;
+    }
+};
+
+/**
+ * Fixture for DcgmChildProcessManager hang detection tests.
+ */
+class Fixture
+{
+public:
+    Fixture()
+        : m_mfsop(std::make_unique<MockFileSystemOperator>())
+        , m_mfsopRef(*m_mfsop)
+        , m_detector(std::make_unique<HangDetectTest>(std::move(m_mfsop)))
+        , m_monitor(std::make_unique<HangDetectMonitor>(*m_detector))
+        , m_manager(MockChildProcessFactory)
+    {
+        m_manager.SetHangDetectMonitor(m_monitor.get());
+
+        m_params.version       = dcgmChildProcessParams_version1;
+        m_params.executable    = "/test/executable";
+        m_params.args          = nullptr;
+        m_params.numArgs       = 0;
+        m_params.env           = nullptr;
+        m_params.numEnv        = 0;
+        m_params.dataChannelFd = -1;
+        m_params.userName      = nullptr;
+    }
+
+    dcgmChildProcessParams_t &GetParams()
+    {
+        return m_params;
+    }
+    MockFileSystemOperator &GetMockFs()
+    {
+        return m_mfsopRef;
+    }
+    HangDetectTest &GetDetector()
+    {
+        return *m_detector;
+    }
+    HangDetectMonitor &GetMonitor()
+    {
+        return *m_monitor;
+    }
+    DcgmChildProcessManager &GetManager()
+    {
+        return m_manager;
+    }
+
+private:
+    std::unique_ptr<MockFileSystemOperator> m_mfsop;
+    MockFileSystemOperator &m_mfsopRef;
+    std::unique_ptr<HangDetectTest> m_detector;
+    std::unique_ptr<HangDetectMonitor> m_monitor;
+    DcgmChildProcessManager m_manager;
+    dcgmChildProcessParams_t m_params;
+};
+
+TEST_CASE_METHOD(Fixture, "DcgmChildProcessManager Hang Detection")
+{
+    MockChildProcess::Reset();
+
+    // Common setup for all sections
+    int expectedPid = 1234;
+    std::string const TASK_STATE
+        = "1234 (test) S 1 1 1 0 -1 4194304 123 0 0 0 0 0 0 0 20 0 1 0 123456 1234567 123 18446744073709551615 1 1 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0 0 0 0 0 0 0 0 0";
+    GetMockFs().MockFileContent("/proc/1234/stat", TASK_STATE);
+
+    MockChildProcess::SetPid(expectedPid);
+    ChildProcessHandle_t handle = INVALID_CHILD_PROCESS_HANDLE;
+    int pid                     = 0;
+
+    // Common process setup for all sections
+    auto &params   = GetParams();
+    params.numArgs = 0;
+    params.args    = nullptr;
+    REQUIRE(DCGM_ST_OK == GetManager().Spawn(params, handle, pid));
+    MockChildProcess::CloseAllPipes();
+    REQUIRE(handle != INVALID_CHILD_PROCESS_HANDLE);
+    REQUIRE(pid == expectedPid);
+    REQUIRE(GetDetector().IsProcRegistered(pid));
+
+    // Successful registration is implicitly tested in each section below.
+
+    SECTION("Process unregistration during stop")
+    {
+        // Stop the process - should unregister from hang detection
+        REQUIRE(DCGM_ST_OK == GetManager().Stop(handle, false));
+
+        // Process should be unregistered from hang detection
+        CHECK_FALSE(GetDetector().IsProcRegistered(pid));
+    }
+
+    SECTION("Process unregistration during destroy")
+    {
+        // Destroy the process - should unregister from hang detection
+        REQUIRE(DCGM_ST_OK == GetManager().Destroy(handle));
+
+        // Process should be unregistered from hang detection
+        CHECK_FALSE(GetDetector().IsProcRegistered(pid));
+    }
+
+    SECTION("Process unregistered during reset")
+    {
+        // Reset should unregister the process from hang detection
+        REQUIRE(DCGM_ST_OK == GetManager().Reset());
+
+        // Process should be unregistered from hang detection
+        CHECK_FALSE(GetDetector().IsProcRegistered(pid));
+
+        // Handle should no longer be valid
+        dcgmChildProcessStatus_t status;
+        status.version = dcgmChildProcessStatus_version;
+        CHECK(DCGM_ST_BADPARAM == GetManager().GetStatus(handle, status));
     }
 }

@@ -97,6 +97,7 @@ target_sources(dcgm_common PRIVATE
     Semaphore.hpp
     Task.hpp
     TaskRunner.hpp
+    gettid.cpp
     ThreadSafeQueue.hpp
     TimeLib.cpp
     DcgmLib.cpp
@@ -123,3 +124,10 @@ target_sources(common_watch_objects PRIVATE
     DcgmWatchTable.h)
 
 target_link_libraries(common_watch_objects PUBLIC common_interface dcgm_logging)
+
+add_library(task_context_manager STATIC)
+
+target_sources(task_context_manager PRIVATE
+    TaskContextManager.cpp)
+
+target_include_directories(task_context_manager PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

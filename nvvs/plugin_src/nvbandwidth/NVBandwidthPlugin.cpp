@@ -16,6 +16,7 @@
 #include "NVBandwidthPlugin.h"
 #include "NVBandwidthResult.h"
 #include "NvvsCommon.h"
+#include "dcgm_structs.h"
 
 #include <DcgmStringHelpers.h>
 #include <HangDetectMonitor.h>
@@ -231,8 +232,18 @@ void NVBandwidthPlugin::Go(std::string const &testName,
         {
             continue;
         }
+        // First try cached data to allow injected test values to be detected
         dcgmReturn_t ret = m_dcgmRecorder.GetCurrentFieldValue(
             entityInfo->entities[entityIdx].entity.entityId, DCGM_FI_DEV_MEM_COPY_UTIL, memCopyUtil, 0);
+        // If cached data is not available or not supported, try live data
+        if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED || memCopyUtil.status == DCGM_ST_NO_DATA
+            || memCopyUtil.status == DCGM_ST_NOT_WATCHED)
+        {
+            ret = m_dcgmRecorder.GetCurrentFieldValue(entityInfo->entities[entityIdx].entity.entityId,
+                                                      DCGM_FI_DEV_MEM_COPY_UTIL,
+                                                      memCopyUtil,
+                                                      DCGM_FV_FLAG_LIVE_DATA);
+        }
         if (ret != DCGM_ST_OK)
         {
             std::string errStr = fmt::format("Failed to get the memory copy utilitization for the GPU: {}",
@@ -248,6 +259,12 @@ void NVBandwidthPlugin::Go(std::string const &testName,
             AddError(testName, err);
             SetResult(testName, NVVS_RESULT_FAIL);
             return;
+        }
+        if (DCGM_INT64_IS_BLANK(memCopyUtil.value.i64))
+        {
+            log_info("GPU {} has no memory copy utilization data, skipping check.",
+                     entityInfo->entities[entityIdx].entity.entityId);
+            continue;
         }
         constexpr int64_t MAX_MEM_COPY_UTIL_PERCENTAGE { 10 };
         if (memCopyUtil.value.i64 > MAX_MEM_COPY_UTIL_PERCENTAGE)
@@ -320,8 +337,7 @@ void NVBandwidthPlugin::Go(std::string const &testName,
                     errbuf);
     }
 
-    auto nvBandwidthExecutable
-        = FindExecutable("nvbandwidth", GetDefaultSearchPaths(m_cudaDriverMajorVersion, false), m_nvbandwidthDir);
+    auto nvBandwidthExecutable = FindExecutable("nvbandwidth", m_cudaDriverMajorVersion, false, m_nvbandwidthDir);
     if (!nvBandwidthExecutable.has_value())
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
