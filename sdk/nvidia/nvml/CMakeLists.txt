@@ -53,6 +53,8 @@ if (${LINK_INJECTION_LIB} STREQUAL "true")
     target_link_libraries(sdk_nvml_loader PUBLIC nvmli_interface)
 endif()
 
+target_include_directories(sdk_nvml_loader PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../../common/")
+
 target_sources(
     sdk_nvml_loader
     PRIVATE

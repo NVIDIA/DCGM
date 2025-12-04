@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.21.0)
 
-project(datacenter-gpu-manager-4 VERSION 4.4.1)
+project(datacenter-gpu-manager-4 VERSION 4.4.2)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF CACHE BOOL
     "Specify whether to link the target in the build tree with the INSTALL_RPATH")
@@ -99,8 +99,7 @@ if (DCGM_BUILD_COVERAGE)
     set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} --coverage")
 endif ()
 
-# TODO: Address sign promotion errors in logging
-set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fmax-errors=1 -Werror -fno-omit-frame-pointer -Wno-error=sign-promo")
+set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fmax-errors=1 -Werror -fno-omit-frame-pointer")
 
 # Set common CXXFLAGS as a base for CFLAGS
 set(DCGM_C_FLAGS ${DCGM_CXX_FLAGS})
@@ -308,6 +307,7 @@ add_library(dcgm_thread_interface INTERFACE)
 add_library(dcgmi_interface INTERFACE)
 add_library(dcgmtest_interface INTERFACE)
 add_library(nvvs_interface INTERFACE)
+add_library(nvvs_mock_interface INTERFACE)
 add_library(nvvs_plugins INTERFACE)
 add_library(nvvs_plugins_interface INTERFACE)
 add_library(nvvs_plugins_cudaCommon_interface INTERFACE)
@@ -516,7 +516,6 @@ add_subdirectory(dcgmproftester)
 add_subdirectory(docs)
 add_subdirectory(hostengine)
 add_subdirectory(modules)
-add_subdirectory(multi-node)
 add_subdirectory(nvml-injection)
 add_subdirectory(nvvs)
 add_subdirectory(scripts)

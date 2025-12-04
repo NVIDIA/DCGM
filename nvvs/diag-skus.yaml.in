@@ -4067,7 +4067,7 @@ skus:
       # dcgmproftester -t 1005 shows 1480000. Multiply by .75 to get 1110000
       minimum_bandwidth: 1110000
     pulse_test:
-      is_allowed: false
+      is_allowed: true
     nvbandwidth:
       is_allowed: true
   - name: B200
@@ -4144,7 +4144,7 @@ skus:
     nvbandwidth:
       is_allowed: true
     pulse_test:
-      is_allowed: false
+      is_allowed: true
   - name: P2021
     id: 29bb
     targeted_power:
@@ -4247,11 +4247,11 @@ skus:
       is_allowed: true
       use_dgemm: false
       #  Copied from sm stress target
-      target_stress: 86949
+      target_stress: 48750
     sm_stress:
       is_allowed: true
-      # dcgmproftester -t 1007 measures ~49266. Multiply by .75 to get 36949
-      target_stress: 86949
+      # dcgmproftester -t 1007 measures ~65000. Multiply by .75 to get 48750
+      target_stress: 48750
       use_dgemm: false
     pcie:
       is_allowed: true
@@ -4270,6 +4270,150 @@ skus:
       is_allowed: true
       # dcgmproftester -t 1005 shows 6030GB or 6030000. Multiply by .75 to get 4522500
       minimum_bandwidth: 4522500
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+    memtest:
+      num_chunks: 8
+
+  - name: GB300 NVL Galaxy
+    id: 31C220E5
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 1299.00
+      use_dgemv: true
+      use_dgemm: false
+      ops_per_requeue: 2
+      cuda_streams_per_gpu: 24
+      enable_fp16_gemm: true
+      fp64_gemm_ratio: 0.6
+      fp16_gemm_ratio: 0.4
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 48375
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~64500. Multiply by .75 to get 48375
+      target_stress: 48375
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 6030GB or 6030000. Multiply by .75 to get 4522500
+      minimum_bandwidth: 4522500
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+    memtest:
+      num_chunks: 8
+
+  - name: H20_NVL16
+    id: 230c
+    targeted_power:
+      # This fails on multiple simultaneous GPU stresses in a chassis, likely
+      # due to thermal throttling. Specify -p targeted_power.is_allowed=true
+      # to enable it.
+      is_allowed: false
+      starting_matrix_dim: 8192
+      max_matrix_dim: 10240
+      target_power: 600.00
+      use_dgemv: true
+      use_dgemm: false
+      ops_per_requeue: 64
+      cuda_streams_per_gpu: 24
+      enable_fp16_gemm: true
+      fp64_gemm_ratio: 0.9
+      fp16_gemm_ratio: 0.1
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      # May fail to reach more than about 378W until addressed
+      target_stress: 19506
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~26008. Multiply by .75 to get 19506
+      target_stress: 19506
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 3200833. Multiply by .75 to get 2400624
+      minimum_bandwidth: 2400624
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+  - name: GB300 MaxQ
+    # Subsystem is 2274
+    id: 31a1
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 1199.00
+      use_dgemv: true
+      use_dgemm: false
+      ops_per_requeue: 2
+      cuda_streams_per_gpu: 24
+      enable_fp16_gemm: true
+      fp64_gemm_ratio: 0.6
+      fp16_gemm_ratio: 0.4
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 46631
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~62175 Multiply by .75 to get 46631
+      target_stress: 46631
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 7928GB or 7928000. Multiply by .75 to get 5946000
+      minimum_bandwidth: 5946000
     pulse_test:
       is_allowed: true
     nvbandwidth:

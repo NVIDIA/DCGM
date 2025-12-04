@@ -581,7 +581,7 @@ public:
     }
 
 private:
-    T m_identifier;
+    T m_identifier {};
     std::map<std::string, NvmlFuncReturn> m_attributes;
     std::map<std::string, std::map<InjectionArgument, NvmlFuncReturn>> m_twoKeyAttributes;
     std::map<std::string, std::map<InjectionArgument, std::map<InjectionArgument, NvmlFuncReturn>>>

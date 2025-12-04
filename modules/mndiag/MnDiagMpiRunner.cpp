@@ -91,7 +91,7 @@ bool UpdateParamsMapWithParameter(std::unordered_map<std::string, std::string> &
         std::string value = param.substr(equalsPos + 1);
 
         // Update or add the parameter
-        paramsMap[key] = value;
+        paramsMap[key] = std::move(value);
     }
     else
     {
@@ -231,12 +231,12 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
         {
             // Extract substring before the colon
             std::string hostname = fullHostEntry.substr(0, colonPos);
-            hostList.push_back(hostname);
+            hostList.push_back(std::move(hostname));
         }
         else
         {
             // No colon found, use the whole string
-            hostList.push_back(fullHostEntry);
+            hostList.push_back(std::move(fullHostEntry));
         }
     }
 
@@ -249,12 +249,6 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
                       "-mca",
                       "orte_base_help_aggregate",
                       "0",
-                      "-mca",
-                      "btl_tcp_if_include",
-                      "enP5p9s0",
-                      "-mca",
-                      "btl",
-                      "tcp,self",
                       "-np",
                       std::to_string(m_totalProcessCount),
                       "--host",
@@ -329,12 +323,7 @@ dcgmReturn_t MnDiagMpiRunner::MnDiagOutputCallback(std::istream &dataStream,
     }
     // Determine the version of the response struct
     dcgmMnDiagResponse_t *response = static_cast<dcgmMnDiagResponse_t *>(responseStruct);
-    if (!response)
-    {
-        log_error("Invalid response struct in MnDiagOutputCallback");
-        return DCGM_ST_BADPARAM;
-    }
-    int version = response->version;
+    int version                    = response->version;
 
     // Call the appropriate version-specific parser
     switch (version)

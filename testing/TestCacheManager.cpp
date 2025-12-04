@@ -2157,6 +2157,281 @@ int TestCacheManager::TestMultipleWatchersMaxAge(void)
 
 
 /*****************************************************************************/
+int TestCacheManager::TestGetLatestSampleNoData()
+{
+    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    if (nullptr == cacheManager)
+    {
+        fprintf(stderr, "Failed to create DcgmCacheManager\n");
+        return -1;
+    }
+
+    std::vector<unsigned short> const testFields { DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
+                                                   DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+                                                   DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT,
+                                                   DCGM_FI_DEV_CONNECTX_HEALTH,
+                                                   DCGM_FI_DEV_CPU_POWER_LIMIT };
+
+    for (auto const &testField : testFields)
+    {
+        int result = TestSingleFieldNoDataSample(testField, *cacheManager);
+        if (result != 0)
+        {
+            fprintf(stderr, "TestSingleFieldNoDataSample failed for field %d with error %d\n", testField, result);
+            return result;
+        }
+    }
+
+    return 0;
+}
+
+
+/*****************************************************************************/
+int TestCacheManager::TestGetLatestSampleNoDataFvBuffer()
+{
+    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    if (nullptr == cacheManager)
+    {
+        fprintf(stderr, "Failed to create DcgmCacheManager\n");
+        return -1;
+    }
+
+    std::vector<unsigned short> const testFields { DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
+                                                   DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+                                                   DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT,
+                                                   DCGM_FI_DEV_CONNECTX_HEALTH,
+                                                   DCGM_FI_DEV_CPU_POWER_LIMIT };
+
+    for (auto const &testField : testFields)
+    {
+        int result = TestSingleFieldNoDataFvBuffer(testField, *cacheManager);
+        if (result != 0)
+        {
+            fprintf(stderr, "TestSingleFieldNoDataFvBuffer failed for field %d with error %d\n", testField, result);
+            return result;
+        }
+    }
+
+    return 0;
+}
+
+/*****************************************************************************/
+int TestCacheManager::TestSingleFieldNoDataSample(unsigned short fieldId, DcgmCacheManager &cacheManager)
+{
+    int st;
+    dcgm_field_meta_p fieldMeta = 0;
+    unsigned int gpuId          = 0;
+    dcgmcm_sample_t sample;
+    DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
+    bool updateOnFirstWatch = false;
+    bool wereFirstWatcher   = false;
+
+    memset(&sample, 0, sizeof(sample));
+
+    fieldMeta = DcgmFieldGetById(fieldId);
+    if (!fieldMeta)
+    {
+        fprintf(stderr, "Unable to get fieldMeta for field %d\n", fieldId);
+        return 1;
+    }
+
+    st = cacheManager.AddFieldWatch(DCGM_FE_GPU,
+                                    gpuId,
+                                    fieldMeta->fieldId,
+                                    1000000,
+                                    86400.0,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
+    if (st != DCGM_ST_OK)
+    {
+        fprintf(stderr, "AddFieldWatch returned %d for field %d\n", st, fieldMeta->fieldId);
+        return 50;
+    }
+
+    /* Verify there are no samples yet - should return NO_DATA since field is watched but has no data */
+    st = cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldMeta->fieldId, &sample, 0);
+    if (st != DCGM_ST_NO_DATA)
+    {
+        fprintf(stderr,
+                "GetLatestSample returned unexpected st %d for field %d. "
+                "Expected no data (-1)\n",
+                st,
+                fieldMeta->fieldId);
+        return 100;
+    }
+
+    /* Verify that the sample value remains zero-initialized */
+    if (sample.val.i64 != 0)
+    {
+        fprintf(stderr,
+                "GetLatestSample returned non-zero value %lld for field %d when no data available. "
+                "Expected 0 (zero-initialized)\n",
+                (long long)sample.val.i64,
+                fieldMeta->fieldId);
+        return 101;
+    }
+
+    st = InjectSampleHelper(&cacheManager, fieldMeta, DCGM_FE_GPU, gpuId, 0);
+    if (st)
+    {
+        fprintf(stderr,
+                "InjectSampleHelper returned unexpected st %d for field %d. "
+                "Expected 0\n",
+                st,
+                fieldMeta->fieldId);
+        return 200;
+    }
+
+    /* Verify the injected sample is present */
+    memset(&sample, 0, sizeof(sample));
+    st = cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldMeta->fieldId, &sample, 0);
+    if (st != DCGM_ST_OK)
+    {
+        fprintf(stderr,
+                "GetLatestSample returned unexpected st %d for field %d. "
+                "Expected 0\n",
+                st,
+                fieldMeta->fieldId);
+        return 300;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************/
+int TestCacheManager::TestSingleFieldNoDataFvBuffer(unsigned short fieldId, DcgmCacheManager &cacheManager)
+{
+    int st;
+    dcgm_field_meta_p fieldMeta = 0;
+    unsigned int gpuId          = 0;
+    DcgmFvBuffer fvBuffer;
+    DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
+    bool updateOnFirstWatch = false;
+    bool wereFirstWatcher   = false;
+    size_t bufferSize, elementCount;
+    dcgmBufferedFv_t *fv          = nullptr;
+    dcgmBufferedFvCursor_t cursor = 0;
+
+    fieldMeta = DcgmFieldGetById(fieldId);
+    if (!fieldMeta)
+    {
+        fprintf(stderr, "Unable to get fieldMeta for field %d\n", fieldId);
+        return 1;
+    }
+
+    st = cacheManager.AddFieldWatch(DCGM_FE_GPU,
+                                    gpuId,
+                                    fieldMeta->fieldId,
+                                    1000000,
+                                    86400.0,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
+    if (st != DCGM_ST_OK)
+    {
+        fprintf(stderr, "AddFieldWatch returned %d for field %d\n", st, fieldMeta->fieldId);
+        return 50;
+    }
+
+    /* Verify there are no samples yet - should return NO_DATA since field is watched but has no data */
+    st = cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldMeta->fieldId, nullptr, &fvBuffer);
+    if (st != DCGM_ST_NO_DATA)
+    {
+        fprintf(stderr,
+                "GetLatestSample returned unexpected st %d for field %d. "
+                "Expected no data (-1)\n",
+                st,
+                fieldMeta->fieldId);
+        return 100;
+    }
+
+    /* Verify that the fvBuffer contains the BLANK value */
+    st = fvBuffer.GetSize(&bufferSize, &elementCount);
+    if (st != DCGM_ST_OK || elementCount != 1)
+    {
+        fprintf(stderr,
+                "fvBuffer should contain exactly 1 element for field %d, got %zu elements\n",
+                fieldId,
+                elementCount);
+        return 101;
+    }
+
+    cursor = 0;
+    fv     = fvBuffer.GetNextFv(&cursor);
+    if (!fv)
+    {
+        fprintf(stderr, "fvBuffer returned no value for field %d when no data available\n", fieldMeta->fieldId);
+        return 102;
+    }
+
+    // Check the appropriate blank value based on field type
+    bool isBlank = false;
+    if (fv->fieldType == DCGM_FT_INT64)
+    {
+        isBlank = DCGM_INT64_IS_BLANK(fv->value.i64);
+        if (!isBlank)
+        {
+            fprintf(stderr,
+                    "fvBuffer returned non-BLANK INT64 value %lld for field %d when no data available. "
+                    "Expected DCGM_INT64_BLANK\n",
+                    (long long)fv->value.i64,
+                    fieldMeta->fieldId);
+            return 102;
+        }
+    }
+    else if (fv->fieldType == DCGM_FT_DOUBLE)
+    {
+        isBlank = DCGM_FP64_IS_BLANK(fv->value.dbl);
+        if (!isBlank)
+        {
+            fprintf(stderr,
+                    "fvBuffer returned non-BLANK DOUBLE value %f for field %d when no data available. "
+                    "Expected DCGM_FP64_BLANK\n",
+                    fv->value.dbl,
+                    fieldMeta->fieldId);
+            return 102;
+        }
+    }
+    else
+    {
+        fprintf(
+            stderr, "fvBuffer returned unsupported field type %d for field %d\n", fv->fieldType, fieldMeta->fieldId);
+        return 103;
+    }
+
+    st = InjectSampleHelper(&cacheManager, fieldMeta, DCGM_FE_GPU, gpuId, 0);
+    if (st)
+    {
+        fprintf(stderr,
+                "InjectSampleHelper returned unexpected st %d for field %d. "
+                "Expected 0\n",
+                st,
+                fieldMeta->fieldId);
+        return 200;
+    }
+
+    /* Verify the injected sample is present */
+    fvBuffer.Clear();
+    st = cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldMeta->fieldId, nullptr, &fvBuffer);
+    if (st != DCGM_ST_OK)
+    {
+        fprintf(stderr,
+                "GetLatestSample returned unexpected st %d for field %d. "
+                "Expected 0\n",
+                st,
+                fieldMeta->fieldId);
+        return 300;
+    }
+
+    return 0;
+}
+
+/*****************************************************************************/
 void TestCacheManager::CompleteTest(std::string testName, int testReturn, int &Nfailed)
 {
     if (testReturn)
@@ -2200,6 +2475,8 @@ int TestCacheManager::Run()
         CompleteTest("TestAttachDetachWithWatches", TestAttachDetachWithWatches(), Nfailed);
         CompleteTest("TestAreAllGpuIdsSameSku", TestAreAllGpuIdsSameSku(), Nfailed);
         CompleteTest("TestMultipleWatchersMaxAge", TestMultipleWatchersMaxAge(), Nfailed);
+        CompleteTest("TestGetLatestSampleNoData", TestGetLatestSampleNoData(), Nfailed);
+        CompleteTest("TestGetLatestSampleNoDataFvBuffer", TestGetLatestSampleNoDataFvBuffer(), Nfailed);
     }
     // fatal test return ocurred
     catch (const std::runtime_error &e)

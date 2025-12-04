@@ -215,7 +215,7 @@ TEST_CASE("TargetedPower_wrapper: CudaInit(), negative test for DCGM_FR_MEMORY_A
 
     REQUIRE(ret == -1);
 
-    auto errors = cpt.GetErrors(cpt.GetTargetedPowerTestName());
+    auto const &errors = cpt.GetErrors(cpt.GetTargetedPowerTestName());
     REQUIRE(errors.size() == 1);
 
     nvvsPluginEntityErrors_t errorsPerEntity = cpt.GetEntityErrors(cpt.GetTargetedPowerTestName());

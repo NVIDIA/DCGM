@@ -29,7 +29,7 @@ void StartNcServers(ServerType serverType,
                     std::vector<std::string> const &ports,
                     std::vector<ChildProcessHandle_t> &tcpServers)
 {
-    for (auto port : ports)
+    for (auto const &port : ports)
     {
         boost::filesystem::path tcpServerPath = boost::process::search_path("nc");
         std::vector<char const *> tcpServerArgs;

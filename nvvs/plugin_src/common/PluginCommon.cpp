@@ -15,7 +15,9 @@
  */
 #include "PluginCommon.h"
 #include "DcgmError.h"
+#include <DcgmBuildInfo.hpp>
 #include <DcgmLogging.h>
+#include <DcgmUtilities.h>
 #include <NvvsCommon.h>
 #include <dcgm_fields.h>
 
@@ -25,27 +27,6 @@
 
 namespace
 {
-/*****************************************************************************/
-/**
- * @brief Get the executable in path
- *
- * @param path Path to search in
- * @param executableName Name of the executable to find
- * @return std::optional<std::string> Path to executable if found, nullopt otherwise
- */
-std::optional<std::string> GetExecutableInPath(std::string_view path, std::string_view executableName)
-{
-    auto const filePath = std::filesystem::path(path) / executableName;
-    std::error_code ec;
-
-    if (std::filesystem::is_regular_file(filePath, ec) && !ec)
-    {
-        return filePath.string();
-    }
-
-    return std::nullopt;
-}
-
 /*****************************************************************************/
 /**
  * @brief Get the location of the current shared module
@@ -203,25 +184,13 @@ dcgmReturn_t SetCudaDriverMajorVersion(DcgmRecorder &dcgmRecorder,
 
 /*****************************************************************************/
 std::expected<std::string, dcgmReturn_t> FindExecutable(std::string_view executableName,
-                                                        std::vector<std::string> const &searchPaths,
+                                                        unsigned int cudaDriverMajorVersion,
+                                                        bool useUpdatedPath,
                                                         std::string &executableDir)
 {
-    for (auto const &path : searchPaths)
-    {
-        auto filename = GetExecutableInPath(path, executableName);
-        if (filename.has_value())
-        {
-            log_debug("Found {} in the path '{}'.", executableName, path);
-            executableDir = path;
-            return filename.value();
-        }
-        log_debug("{} was not present in the path '{}'.", executableName, path);
-    }
-
-    log_error(
-        "Couldn't find the {} binary in the predefined search paths ({})", executableName, fmt::join(searchPaths, ":"));
-
-    return std::unexpected(DCGM_ST_NO_DATA);
+    cudaDriverMajorVersion = std::min(cudaDriverMajorVersion, (unsigned int)MAX_CUDA_MAJOR_VERSION);
+    return DcgmNs::Utils::FindExecutable(
+        executableName, GetDefaultSearchPaths(cudaDriverMajorVersion, useUpdatedPath), executableDir);
 }
 
 /*****************************************************************************/

@@ -24,7 +24,6 @@
 #include <DcgmUtilities.h>
 
 #include <memory>
-#include <shared_mutex>
 #include <thread>
 #include <unordered_map>
 
@@ -131,6 +130,31 @@ public:
      */
     dcgmReturn_t Reset();
 
+    /**
+     * Set the hang detection monitor.
+     *
+     * @param[in] monitor Non-owning ptr to hang detect monitor; caller must ensure monitor remains valid.
+     *                    May be nullptr if hang detection is disabled.
+     */
+    void SetHangDetectMonitor(class HangDetectMonitor *monitor);
+
+    /**
+     * Start hang detection for a process.
+     *
+     * @param[in] pid Process to monitor for hangs.
+     *
+     * @note This monitors the process as a whole: individual threads and sub-processes are not monitored.
+     *       See NVVS for an example of how individual threads and sub-processes can be monitored.
+     */
+    void StartHangDetection(pid_t const pid);
+
+    /**
+     * Stop hang detection for a process.
+     *
+     * @param[in] pid Process to stop monitoring for hangs.
+     */
+    void StopHangDetection(pid_t const pid);
+
 private:
     struct PipeInfo
     {
@@ -152,6 +176,9 @@ private:
     std::atomic<ChildProcessHandle_t> m_nextHandle = INVALID_CHILD_PROCESS_HANDLE;
     std::unordered_map<ChildProcessHandle_t, ProcessInfo> m_processes;
     std::mutex m_processesMutex;
+
+    class HangDetectMonitor *m_monitor = nullptr; // non-owning ptr to monitor; caller must ensure monitor remains
+                                                  // valid. May be nullptr if hang detection is disabled.
 
     std::optional<std::reference_wrapper<ProcessInfo>> IsValidHandle(ChildProcessHandle_t handle);
     ChildProcessHandle_t GetNextHandle();

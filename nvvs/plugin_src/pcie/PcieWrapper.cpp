@@ -24,6 +24,77 @@
 
 extern "C" {
 
+unsigned int const *GetFieldIds(size_t &fieldCount)
+{
+    static const unsigned int PCIE_PLUGIN_FIELDS[]
+        = { // PCIe replay and recovery error tracking
+            DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
+            DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL,
+            DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS,
+            DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS,
+            DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER,
+            DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
+            DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS,
+
+            // NVLink 4 and below supported counters
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16,
+            DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16,
+            DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17,
+            DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
+            DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL,
+
+            // NVLink 5+ supported fieldIds - packet level and symbol level error tracking
+            DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS,
+            DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS,
+            DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS,
+            DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS,
+            DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS,
+            DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES,
+            DCGM_FI_DEV_NVLINK_COUNT_RX_BYTES,
+            DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS,
+            DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS,
+            DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS
+          };
+
+    fieldCount = std::size(PCIE_PLUGIN_FIELDS);
+    return PCIE_PLUGIN_FIELDS;
+}
+
 unsigned int GetPluginInterfaceVersion(void)
 {
     return DCGM_DIAG_PLUGIN_INTERFACE_VERSION;
@@ -126,55 +197,11 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
 {
     if (statFieldIds != nullptr)
     {
-        int fieldCount                       = 0;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_PCIE_REPLAY_COUNTER;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL; // Previously unchecked
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL; // Previously unchecked
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER;
-        statFieldIds->fieldIds[fieldCount++] = DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS;
+        size_t fieldCount;
+        unsigned int const *fieldIds = GetFieldIds(fieldCount);
 
         statFieldIds->numFieldIds = fieldCount;
+        std::copy(fieldIds, fieldIds + fieldCount, statFieldIds->fieldIds);
     }
 
     BusGrind *bg = new BusGrind(handle);

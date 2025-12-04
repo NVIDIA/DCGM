@@ -51,13 +51,14 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
                                      MEMTEST_STR_TEST9,
                                      MEMTEST_STR_TEST10,
                                      MEMTEST_STR_NUM_CHUNKS,
+                                     MEMTEST_STR_MIN_ALLOCATION_PERCENTAGE,
                                      nullptr };
     char const *description      = "This plugin will test the memory health of a given GPU.";
     const dcgmPluginValue_t paramTypes[]
-        = { DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamString, DcgmPluginParamBool, DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,   DcgmPluginParamBool, DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,   DcgmPluginParamBool, DcgmPluginParamBool,
-            DcgmPluginParamInt,  DcgmPluginParamNone };
+        = { DcgmPluginParamBool, DcgmPluginParamInt,   DcgmPluginParamString, DcgmPluginParamBool, DcgmPluginParamBool,
+            DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,   DcgmPluginParamBool, DcgmPluginParamBool,
+            DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,   DcgmPluginParamBool, DcgmPluginParamBool,
+            DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 

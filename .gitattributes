@@ -1,0 +1,12 @@
+modules/mndiag/cuda12/aarch64/libcurand.so.10.3.10.19 filter=lfs diff=lfs merge=lfs -text
+modules/mndiag/cuda12/aarch64/mnubergemm filter=lfs diff=lfs merge=lfs -text
+modules/mndiag/cuda12/x86_64/libcurand.so.10.3.10.19 filter=lfs diff=lfs merge=lfs -text
+modules/mndiag/cuda12/x86_64/mnubergemm filter=lfs diff=lfs merge=lfs -text
+modules/mndiag/cuda13/aarch64/libcurand.so.10.4.0.35 filter=lfs diff=lfs merge=lfs -text
+modules/mndiag/cuda13/aarch64/mnubergemm filter=lfs diff=lfs merge=lfs -text
+modules/mndiag/cuda13/x86_64/libcurand.so.10.4.0.35 filter=lfs diff=lfs merge=lfs -text
+modules/mndiag/cuda13/x86_64/mnubergemm filter=lfs diff=lfs merge=lfs -text
+nvvs/plugin_src/nvbandwidth/Cuda12/bin/aarch64/nvbandwidth filter=lfs diff=lfs merge=lfs -text
+nvvs/plugin_src/nvbandwidth/Cuda12/bin/x86_64/nvbandwidth filter=lfs diff=lfs merge=lfs -text
+nvvs/plugin_src/nvbandwidth/Cuda13/bin/x86_64/nvbandwidth filter=lfs diff=lfs merge=lfs -text
+nvvs/plugin_src/nvbandwidth/Cuda13/bin/aarch64/nvbandwidth filter=lfs diff=lfs merge=lfs -text

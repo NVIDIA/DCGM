@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,9 +36,11 @@ ENV CXX=/opt/cross/bin/$TARGET-g++
 ENV LD=/opt/cross/bin/$TARGET-ld
 ENV AS=/opt/cross/bin/$TARGET-as
 
-ENV CMAKE_INSTALL_PREFIX=/tmp/$TARGET
+ENV CROSS_COMPILATION_SYSROOT=/tmp/$TARGET
+ENV CMAKE_INSTALL_PREFIX=$CROSS_COMPILATION_SYSROOT/usr/local
 ENV CMAKE_BUILD_TYPE=RelWithDebInfo
 ENV CMAKE_TOOLCHAIN_FILE=/tmp/$TARGET.cmake
+ENV RUST_INSTALL_PREFIX=/tmp/rust
 
 COPY scripts/target /tmp/scripts/target
 ARG JOBS
@@ -46,6 +49,7 @@ RUN set -ex; \
     $CC --version; \
     mkdir --parents $CMAKE_INSTALL_PREFIX; \
     export MAKEFLAGS="--jobs=${JOBS:-$(nproc)}"; \
+    export RUST_INSTALL_PREFIX=$RUST_INSTALL_PREFIX; \
     find /tmp/scripts/target -name '*.sh' | sort | while read -r SCRIPT; \
     do $SCRIPT /tmp/scripts/target/urls.txt; \
     done;
@@ -53,6 +57,29 @@ RUN set -ex; \
 ARG BASE_IMAGE
 FROM $BASE_IMAGE
 
-COPY --from=builder --chown=root:root /tmp/$TARGET /opt/cross/$TARGET
+COPY --from=builder --chown=root:root /tmp/$TARGET /opt/cross/$TARGET/sysroot
+COPY --from=builder --chown=root:root /tmp/rust/ /usr/local/
 
 ENV DCGM_BUILD_INSIDE_DOCKER=1
+
+RUN bash -c "set -ex && \
+cargo install --root=/usr/local/ --force --locked cargo-auditable@0.6.7 && \
+cargo install --root=/usr/local/ --force --locked cargo-audit@0.21.2 && \
+cargo install --root=/usr/local/ --force --locked cargo-about@0.7.1 && \
+cargo install --root=/usr/local/ --force --locked cargo-deny@0.18.3 && \
+cargo install --root=/usr/local/ --force --locked cargo-make@0.37.24 && \
+cargo install --root=/usr/local/ --force --locked cargo-vet@0.10.1 && \
+cargo install --root=/usr/local/ --force --locked bindgen-cli@0.72.0 && \
+cargo install --root=/usr/local/ --force --locked bacon && \
+rm -rf $HOME/.cargo"
+
+#ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="/opt/cross/bin/x86_64-linux-gnu-gcc"
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="/opt/cross/bin/aarch64-linux-gnu-gcc"
+RUN bash -c 'echo "export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/opt/cross/bin/aarch64-linux-gnu-gcc" >> /etc/bash.bashrc'
+RUN bash -c 'echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/opt/cross/bin/aarch64-linux-gnu-gcc" >> /etc/environment'
+RUN set -ex; \
+    echo "Debug: $TARGET"; \
+    if [ "$TARGET" = "x86_64-linux-gnu" ]; then \
+        echo "export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/opt/cross/bin/x86_64-linux-gnu-gcc" >> /etc/bash.bashrc; \
+        echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/opt/cross/bin/x86_64-linux-gnu-gcc" >> /etc/environment; \
+    fi

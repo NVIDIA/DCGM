@@ -124,6 +124,27 @@ public:
         return std::nullopt;
     }
 
+    // Test helper to set process state for testing
+    void SetProcessState(pid_t pid, std::optional<pid_t> tid, char state)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        auto key             = PidTidPair { pid, tid };
+        m_processStates[key] = state;
+    }
+
+    // Override to return the process state we set for testing
+    std::optional<char> GetTaskState(pid_t pid, std::optional<pid_t> tid = std::nullopt) override
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        auto key = PidTidPair { pid, tid };
+        auto it  = m_processStates.find(key);
+        if (it != m_processStates.end())
+        {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
 private:
     std::expected<bool, dcgmReturn_t> IsHungImpl(pid_t pid, std::optional<pid_t> tid = std::nullopt)
     {
@@ -141,7 +162,9 @@ private:
     std::unordered_map<PidTidPair, bool, PidTidPairHash> m_hungStates;
     std::unordered_map<PidTidPair, std::chrono::steady_clock::time_point, PidTidPairHash> m_hangStartTimes;
     mutable std::unordered_map<PidTidPair, int, PidTidPairHash> m_checkCounts;
+    std::unordered_map<PidTidPair, char, PidTidPairHash> m_processStates;
 };
+
 
 namespace
 {
@@ -558,6 +581,119 @@ TEST_CASE("HangDetectMonitor::Expiry Timing")
 
         // Verify the reported duration matches our expiry time
         REQUIRE(handler.GetCallbackState().GetLastDuration() < 1s);
+
+        monitor.StopMonitoring();
+    }
+}
+
+TEST_CASE("HangDetectMonitor::Userspace Hang Reporting")
+{
+    TestHangDetectHandler handler;
+    MockHangDetect detector;
+    MockHangDetectMonitor monitor(detector, 50ms, 200ms);
+    pid_t const pid = 1234;
+
+    monitor.SetHangDetectedHandler(&handler);
+    REQUIRE(detector.AddMonitoredTask(pid, std::nullopt) == DCGM_ST_OK);
+
+    SECTION("Default behavior reports all hangs (reportUserspaceHangs = true)")
+    {
+        // Default behavior should report hangs regardless of process state
+        detector.SetHungState(pid, std::nullopt, true);
+        REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
+
+        // Should get a report for any hung process (current behavior)
+        auto const reportReceived = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() == 1; }, 250ms);
+        REQUIRE(reportReceived);
+
+        monitor.StopMonitoring();
+    }
+
+    SECTION("Restricted reporting - running state should NOT report (reportUserspaceHangs = false)")
+    {
+        // Set up mock data BEFORE registering the task
+        detector.SetProcessState(pid, std::nullopt, 'R'); // Process in running state - should NOT report
+
+        // Set monitor to only report hangs when process is in uninterruptible sleep
+        monitor.SetReportUserspaceHangs(false);
+
+        REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
+
+        // Now register the task - this will use the mock data we just set up
+        REQUIRE(detector.AddMonitoredTask(pid, std::nullopt) == DCGM_ST_OK);
+
+        // Set the task as hung AFTER registration
+        detector.SetHungState(pid, std::nullopt, true);
+
+        // Should NOT get a report for process in running state when reportUserspaceHangs = false
+        auto const noReportForRunningState
+            = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() > 0; }, 500ms);
+        REQUIRE_FALSE(noReportForRunningState);
+
+        monitor.StopMonitoring();
+    }
+
+    SECTION("Restricted reporting - uninterruptible sleep should report (reportUserspaceHangs = false)")
+    {
+        // Set up mock data BEFORE registering the task
+        detector.SetProcessState(pid, std::nullopt, 'D'); // Process in uninterruptible sleep - should report
+
+        // Set monitor to only report hangs when process is in uninterruptible sleep
+        monitor.SetReportUserspaceHangs(false);
+
+        REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
+
+        // Now register the task - this will use the mock data we just set up
+        REQUIRE(detector.AddMonitoredTask(pid, std::nullopt) == DCGM_ST_OK);
+
+        // Set the task as hung AFTER registration
+        detector.SetHungState(pid, std::nullopt, true);
+
+        // Should get a report for process in uninterruptible sleep state after expiry time
+        auto const reportForUninterruptibleSleep
+            = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() == 1; }, 500ms);
+        REQUIRE(reportForUninterruptibleSleep);
+
+        monitor.StopMonitoring();
+    }
+
+    SECTION("Unreported hangs do not prevent future reports")
+    {
+        // This test verifies the fix for the bug where hasReported was incorrectly set to true
+        // even when reports were not submitted due to process state filtering
+
+        // Set up mock data BEFORE registering the task
+        detector.SetProcessState(
+            pid, std::nullopt, 'S'); // Process in sleeping state - should NOT report when reportUserspaceHangs=false
+
+        // Set monitor to only report hangs when process is in uninterruptible sleep
+        monitor.SetReportUserspaceHangs(false);
+
+        REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
+
+        // Register the task
+        REQUIRE(detector.AddMonitoredTask(pid, std::nullopt) == DCGM_ST_OK);
+
+        // Set the task as hung (unchanging fingerprint means IsHung() returns true)
+        detector.SetHungState(pid, std::nullopt, true);
+
+        // Wait for the monitor to process the hang but NOT submit a report (due to 'S' state)
+        auto const noInitialReport = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() > 0; }, 300ms);
+        REQUIRE_FALSE(noInitialReport);
+
+        // Now change the process state to 'D' (uninterruptible sleep) - should trigger report
+        detector.SetProcessState(pid, std::nullopt, 'D');
+
+        // Wait for the report to be submitted now that the process is in 'D' state
+        auto const reportAfterStateChange
+            = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() == 1; }, 300ms);
+        REQUIRE(reportAfterStateChange);
+
+        // Verify that subsequent checks don't generate additional reports (hasReported should be true now)
+        int const initialReportCount = handler.GetCallbackState().GetCallCount();
+        auto const noAdditionalReports
+            = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() > initialReportCount; }, 300ms);
+        REQUIRE_FALSE(noAdditionalReports);
 
         monitor.StopMonitoring();
     }

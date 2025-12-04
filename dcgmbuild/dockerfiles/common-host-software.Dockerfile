@@ -41,6 +41,7 @@ RUN set -ex; \
         python3 \
         python3-dev \
         python3-distro \
+        python3-pathspec \
         python3-requests \
         qemu-system-arm \
         qemu-user \

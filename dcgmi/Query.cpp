@@ -149,7 +149,7 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
 
         auto coreMap = HelperBuildCpuListFromRanges(
             HelperGetCpuRangesFromBitmask(stCpuHierarchy.cpus[entityId].ownedCores.bitmask, DCGM_MAX_NUM_CPU_CORES));
-        out[idStr][c_info].setOrAppend(std::string(c_name) + ": Grace TH500");
+        out[idStr][c_info].setOrAppend(std::string(c_name) + ": Grace");
         out[idStr][c_info].setOrAppend(std::string("Serial number : ") + stCpuHierarchy.cpus[entityId].serial);
         out[idStr][c_info].setOrAppend(coreMap);
     }

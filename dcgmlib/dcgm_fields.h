@@ -197,6 +197,41 @@ extern "C" {
  */
 #define DCGM_CLOCKS_THROTTLE_REASON_DISPLAY_CLOCKS DCGM_CLOCKS_EVENT_REASON_DISPLAY_CLOCKS
 
+/**
+ * GPU Fabric Health Status Mask for various fields can be obtained using the below macro.
+ * Ex - DCGM_GPU_FABRIC_HEALTH_GET(var, _DEGRADED_BW)
+ * @code{.cpp}
+    unsigned int getGpuFabricHealthBwValue(unsigned int healthMask)
+    {
+        return DCGM_GPU_FABRIC_HEALTH_GET(healthMask, _DEGRADED_BW);
+    }
+ * @endcode
+ */
+#define DCGM_GPU_FABRIC_HEALTH_GET(var, type) NVML_GPU_FABRIC_HEALTH_GET(var, type)
+
+/**
+ * GPU Fabric Health Status Mask for various fields can be tested using the below macro.
+ * Ex - DCGM_GPU_FABRIC_HEALTH_TEST(var, _DEGRADED_BW, _TRUE) // _NOT_SUPPORTED, _TRUE or _FALSE can be used
+ * @code{.cpp}
+ *      const char* unmaskGpuFabricHealthBw(unsigned int healthMask)
+ *      {
+ *          if (DCGM_GPU_FABRIC_HEALTH_TEST(healthMask, _DEGRADED_BW, _NOT_SUPPORTED))
+ *          {
+ *              return "not supported";
+ *          }
+ *          if (DCGM_GPU_FABRIC_HEALTH_TEST(healthMask, _DEGRADED_BW, _TRUE))
+ *          {
+ *              return "true";
+ *          }
+ *          if (DCGM_GPU_FABRIC_HEALTH_TEST(healthMask, _DEGRADED_BW, _FALSE))
+ *          {
+ *              return "false";
+ *          }
+ *          return "";
+ *      }
+ * @endcode
+ */
+#define DCGM_GPU_FABRIC_HEALTH_TEST(var, type, val) NVML_GPU_FABRIC_HEALTH_TEST(var, type, val)
 
 /**
  * GPU virtualization mode types for DCGM_FI_DEV_VIRTUAL_MODE
@@ -679,6 +714,13 @@ typedef unsigned int dcgm_field_eid_t;
  * The ID of the fabric clique to which this GPU belongs
  */
 #define DCGM_FI_DEV_FABRIC_CLIQUE_ID 173
+
+/**
+ * GPU Fabric health Status Mask.
+ * Use DCGM_GPU_FABRIC_HEALTH_TEST macro to check the different health statuses.
+ * Use DCGM_GPU_FABRIC_HEALTH_GET macro to get the different health statuses.
+ */
+#define DCGM_FI_DEV_FABRIC_HEALTH_MASK 174
 
 /**
  * Performance state (P-State) 0-15. 0=highest
@@ -2643,23 +2685,51 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_PROF_NVLINK_THROUGHPUT_LAST DCGM_FI_PROF_NVLINK_L17_RX_BYTES
 
 /**
- * C2C (Chip-to-Chip) interface metrics.
+ * The total number of bytes transmitted over the C2C (Chip-to-Chip) interface, including both header and payload data
  */
-#define DCGM_FI_PROF_C2C_TX_ALL_BYTES  1076
+#define DCGM_FI_PROF_C2C_TX_ALL_BYTES 1076
+
+/**
+ * The number of data-only bytes transmitted over the C2C (Chip-to-Chip) interface
+ */
 #define DCGM_FI_PROF_C2C_TX_DATA_BYTES 1077
-#define DCGM_FI_PROF_C2C_RX_ALL_BYTES  1078
+
+/**
+ * The total number of bytes received over the C2C (Chip-to-Chip) interface, including both header and payload data
+ */
+#define DCGM_FI_PROF_C2C_RX_ALL_BYTES 1078
+
+/**
+ * The number of data-only bytes received over the C2C (Chip-to-Chip) interface
+ */
 #define DCGM_FI_PROF_C2C_RX_DATA_BYTES 1079
 
 /**
- * GPU Host Memory Utilization
+ * Host Memory Cache Hit
+ *
+ * Percentage of requests to Host Memory that were served from cache
  */
-#define DCGM_FI_PROF_HOSTMEM_CACHE_HIT  1080
+#define DCGM_FI_PROF_HOSTMEM_CACHE_HIT 1080
+
+/**
+ * Host Memory Cache Miss
+ *
+ * Percentage of requests to Host Memory that were cache misses
+ */
 #define DCGM_FI_PROF_HOSTMEM_CACHE_MISS 1081
 
 /**
- * GPU Peer Memory Utilization
+ * Peer Memory Cache Hit
+ *
+ * Percentage of requests to Peer Memory that were served from cache
  */
-#define DCGM_FI_PROF_PEERMEM_CACHE_HIT  1082
+#define DCGM_FI_PROF_PEERMEM_CACHE_HIT 1082
+
+/**
+ * Peer Memory Cache Miss
+ *
+ * Percentage of requests to Peer Memory that were cache misses
+ */
 #define DCGM_FI_PROF_PEERMEM_CACHE_MISS 1083
 
 /**
@@ -3064,124 +3134,182 @@ typedef unsigned int dcgm_field_eid_t;
 
 #define DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN_NS 1424
 
-/*
-** DCGM Power smoothing fields.
-*/
+/**
+ * DCGM Power smoothing fields.
+ */
 
-/*
-** Enablement (0/DISABLED or 1/ENABLED)
-*/
-
+/**
+ * Enablement (0/DISABLED or 1/ENABLED)
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_ENABLED 1425
 
-/*
-** Current privilege level
-*/
-
+/**
+ * Current privilege level
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_PRIV_LVL 1426
 
-/*
-** Immediate ramp down enablement (0/DISABLED or 1/ENABLED)
-*/
-
+/**
+ * Immediate ramp down enablement (0/DISABLED or 1/ENABLED)
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED 1427
 
-/*
-** Applied TMP ceiling value in Watts
-*/
-
+/**
+ * Applied TMP ceiling value in Watts
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL 1428
 
-/*
-** Applied TMP floor value in Watts
-*/
-
+/**
+ * Applied TMP floor value in Watts
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR 1429
 
-/*
-** Max % TMP Floor value
-*/
-
+/**
+ * Max % TMP Floor value
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING 1430
 
-/*
-** Min % TMP Floor value
-*/
-
+/**
+ * Min % TMP Floor value
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING 1431
 
-/*
-** HW Circuitry % lifetime remaining
-*/
-
+/**
+ * HW Circuitry % lifetime remaining
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING 1432
 
-/*
-** Max number of preset profiles
-*/
-
+/**
+ * Max number of preset profiles
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES 1433
 
-/*
-** % TMP floor for a given profile
-*/
-
+/**
+ * % TMP floor for a given profile
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR 1434
 
-/*
-** Ramp up rate in mW/s for a given profile
-*/
-
+/**
+ * Ramp up rate in mW/s for a given profile
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE 1435
 
-/*
-** Ramp down rate in mW/s for a given profile
-*/
-
+/**
+ * Ramp down rate in mW/s for a given profile
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE 1436
 
-/*
-** Ramp down hysteresis value in ms for a given profile
-*/
-
+/**
+ * Ramp down hysteresis value in ms for a given profile
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL 1437
 
-/*
-** Active preset profile number
-*/
-
+/**
+ * Active preset profile number
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE 1438
 
-/*
-** % TMP floor for a given profile
-*/
-
+/**
+ * % TMP floor for a given profile
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR 1439
 
-/*
-** Ramp up rate in mW/s for a given profile
-*/
-
+/**
+ * Ramp up rate in mW/s for a given profile
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE 1440
 
-/*
-** Ramp down rate in mW/s for a given profile
-*/
-
+/**
+ * Ramp down rate in mW/s for a given profile
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE 1441
 
-/*
-** Ramp down hysteresis value in ms for a given profile
-*/
-
+/**
+ * Ramp down hysteresis value in ms for a given profile
+ *
+ * @note DCGM_FI_DEV_PWR_SMOOTHING_* fields requires that power smoothing in-band access privileges have been set to
+ * either level 1 or level 2 (e.g. via Redfish API)
+ */
 #define DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL 1442
+
+/**
+ * 1443 to 1500 entries reserved for power smoothing fields
+ */
+
+/*
+ * PCIe Correctable Errors Counter
+ */
+#define DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS 1501
+
+/**
+ * IMEX domain status (UP, DOWN, DEGRADED)
+ * Retrieved from nvidia-imex-ctl -N -j command
+ */
+#define DCGM_FI_IMEX_DOMAIN_STATUS 1502
+
+/**
+ * IMEX daemon status (0-7 numeric values)
+ * Retrieved from nvidia-imex-ctl -q command
+ * Values: INITIALIZING=0, STARTING_AUTH_SERVER=1, WAITING_FOR_PEERS=2,
+ *         WAITING_FOR_RECOVERY=3, INIT_GPU=4, READY=5, SHUTTING_DOWN=6, UNAVAILABLE=7
+ */
+#define DCGM_FI_IMEX_DAEMON_STATUS 1503
 
 /**
  * 1 greater than maximum fields above. This is the 1 greater
  * than the maximum field id that could be allocated.
  */
-
-#define DCGM_FI_MAX_FIELDS (DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL + 1)
+#define DCGM_FI_MAX_FIELDS (DCGM_FI_IMEX_DAEMON_STATUS + 1)
 
 
 /** @} */

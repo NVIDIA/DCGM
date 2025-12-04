@@ -43,7 +43,7 @@ do
                    libcufft-dev \
                    libcurand-dev
     do
-        find $CUDA/$CACHE -name "$PACKAGE*" -exec dpkg --extract {} $CMAKE_INSTALL_PREFIX \;
+        find $CUDA/$CACHE -name "$PACKAGE*" -exec sh -c 'dpkg-deb --fsys-tarfile "$1" | tar -xf - -C "$2" --skip-old-files' _ {} $CROSS_COMPILATION_SYSROOT \;
     done
 
     rm -rf $CUDA $CUDA.deb

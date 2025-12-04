@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Find all of the function symbols in the passed-in ptx file and append them as variables to 
+# Find all of the function symbols in the passed-in ptx file and append them as variables to
 # the passed in output file
 import sys
 
@@ -34,6 +34,4 @@ for line in ptxFp.readlines():
     lineParts = line.split()
     funcName = lineParts[2][0:-1]
 
-    outFp.write("const char *%s_func_name = \"%s\";\n" % (funcName, funcName))
-
-
+    outFp.write("char const *%s_func_name = \"%s\";\n" % (funcName, funcName))

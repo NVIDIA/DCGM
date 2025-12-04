@@ -1026,7 +1026,15 @@ int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId,
 int DcgmRecorder::CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &fatalErrorList)
 {
     dcgmFieldValue_v2 value;
+    // First try cached data to allow injected test values to be detected
     dcgmReturn_t ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER, value, 0);
+
+    // If cached data is not available or not supported, try live data
+    if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED || value.status == DCGM_ST_NO_DATA
+        || value.status == DCGM_ST_NOT_WATCHED)
+    {
+        ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER, value, DCGM_FV_FLAG_LIVE_DATA);
+    }
     if (ret == DCGM_ST_NOT_SUPPORTED || value.status == DCGM_ST_NOT_SUPPORTED)
     {
         log_debug("Skipping effective BER check because it is unsupported.");

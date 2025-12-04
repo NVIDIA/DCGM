@@ -23,6 +23,7 @@ set(SRCS
     DcgmClientHandler.cpp
     DcgmGroupManager.cpp
     DcgmHostEngineHandler.cpp
+    DcgmImexManager.cpp
     DcgmInjectionNvmlManager.cpp
     DcgmGpuInstance.cpp
     DcgmCoreCommunication.cpp
@@ -61,6 +62,7 @@ set(DEPS
     sysmon_interface
     transport_interface
     fmt::fmt
+    task_context_manager
 )
 
 target_sources(dcgm_entity_types PRIVATE DcgmEntityTypes.cpp)

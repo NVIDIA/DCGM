@@ -279,7 +279,7 @@ namespace detail
         SSHTunnelManagerBase()
         {
             std::vector<boost::filesystem::path> const binarySearchDirs = { "/usr/bin", "/usr/sbin" };
-            m_binaryPath = boost::process::search_path("ssh", binarySearchDirs);
+            m_binaryPath = boost::process::search_path("ssh", std::move(binarySearchDirs));
             m_currentUid = getuid();
         }
 

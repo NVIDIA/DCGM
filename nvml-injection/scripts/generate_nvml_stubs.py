@@ -987,6 +987,13 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
         for member_type, member_name in member_list:
             if member_type == "nvmlVgpuSchedulerParams_t" or member_type == "nvmlVgpuSchedulerSetParams_t":
                 print_body_line(f'NVML_LOG_ERR("{member_type} conatins union, and cannot compare now. May cause problems...");', out_file, 0)
+            elif "union nvmlPRMTLV_v1_t::" in member_type:
+                # The union cannot be generated automatically, write it manually.
+                print_generator_source_info(out_file, 1)
+                print_body_line("if (auto cmpRet = memcmp(a.inData, b.inData, sizeof(a.inData)); cmpRet != 0)", out_file, 0)
+                print_body_line("{", out_file, 0)
+                print_body_line("return cmpRet;", out_file, 1)
+                print_body_line("}", out_file, 0)
             elif is_basic_type(member_type) or is_enum_type(member_type, all_enum) or 'nvmlDevice_t' == member_type or 'nvmlGpuInstance_t' == member_type:
                 # basic type directly compares the value
                 print_generator_source_info(out_file, 1)
@@ -1319,6 +1326,10 @@ def is_pynvml_missing_struct(struct_name):
         "c_nvmlSystemEventSetWaitRequest_t",
         "c_nvmlSystemRegisterEventRequest_t",
         "c_nvmlSystemEventData_v1_t",
+        "c_nvmlNvlinkSupportedBwModes_t",
+        "c_nvmlNvlinkGetBwMode_t",
+        "c_nvmlNvlinkSetBwMode_t",
+        "c_nvmlPRMTLV_v1_t",
     }
     return struct_name_with_c_prefix in missing
 
@@ -2507,6 +2518,9 @@ def get_cannot_write_deserializer_struct(struct_with_member):
     for struct_name, member_list in struct_with_member.items():
         can = True
         for member_type, _ in member_list:
+            if "union " in member_type:
+                cannot_write_deserializer_struct[struct_name] = True
+                continue
             if "unnamed struct" in member_type:
                 cannot_write_deserializer_struct[struct_name] = True
                 continue
@@ -2591,7 +2605,7 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                     print_body_line(f'NvmlUuidParse({name}, uuid);', out_file, 1)
                     print_body_line(f'std::memcpy(&{variable_name}->{name}, uuid, sizeof({variable_name}->{name}));', out_file, 1)
                 else:
-                    print_body_line(f'std::memcpy(&{variable_name}->{name}, {name}.data(), sizeof({variable_name}->{name}));', out_file, 1)
+                    print_body_line(f'std::memcpy(&{variable_name}->{name}, {name}.data(), std::min({name}.size(), sizeof({variable_name}->{name})));', out_file, 1)
             elif "[" in member_type:
                 # custom type array
                 # for each element, we call corresponding deserializer and memcpy the result to our struct

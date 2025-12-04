@@ -941,3 +941,16 @@ def dcgmConfigSetWorkloadPowerProfile(dcgmHandle, workloadPowerProfile):
     ret = fn(dcgmHandle, byref(workloadPowerProfile))
     dcgm_structs._dcgmCheckReturn(ret)
     return ret
+
+@ensure_byte_strings()
+def dcgmHostengineEnvironmentVariableInfo(dcgmHandle, envVarInfo):
+    fn = dcgmFP("dcgmHostengineEnvironmentVariableInfo")
+    ret = fn(dcgmHandle, byref(envVarInfo))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+def dcgmDiagSendHeartbeat(dcgmHandle):
+    fn = dcgmFP("dcgmDiagSendHeartbeat")
+    ret = fn(dcgmHandle)
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret

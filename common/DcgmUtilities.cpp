@@ -488,12 +488,13 @@ static dcgmReturn_t BindToNumaNodes(const std::array<unsigned long long, 4> &nod
         {
             fmt::print(stderr, "Cannot load symbols from libnuma; not binding to NUMA nodes!\n");
             fflush(stderr);
+            dlclose(libnumaHandle);
             return DCGM_ST_LIBRARY_NOT_FOUND;
         }
     }
     else
     {
-        fmt::print(stderr, "Cannot load libnuma.so: not binding to NUMA nodes!\n");
+        fmt::print(stderr, "{}\n", DCGM_LIBNUMA_LOAD_ERROR_MSG);
         fflush(stderr);
         return DCGM_ST_LIBRARY_NOT_FOUND;
     }
@@ -504,6 +505,7 @@ static dcgmReturn_t BindToNumaNodes(const std::array<unsigned long long, 4> &nod
     {
         fmt::print(stderr, "Cannot allocate numa bitmask: not binding to NUMA nodes!\n");
         fflush(stderr);
+        dlclose(libnumaHandle);
         return DCGM_ST_MEMORY;
     }
 
@@ -528,6 +530,7 @@ static dcgmReturn_t BindToNumaNodes(const std::array<unsigned long long, 4> &nod
     }
 
     numa_bind(nodemask);
+    dlclose(libnumaHandle);
     return DCGM_ST_OK;
 }
 
@@ -922,6 +925,7 @@ FileHandle::FileHandle() noexcept
 
 FileHandle::FileHandle(int fd) noexcept
     : m_fd(fd)
+    , m_errno(0)
 {}
 
 FileHandle::~FileHandle() noexcept
@@ -1145,6 +1149,31 @@ LogPaths GetLogFilePath(std::string_view testName)
     return { .logFileName    = logDir / fmt::format("dcgm_{}.log", testName),
              .stdoutFileName = logDir / fmt::format("dcgm_{}_stdout.txt", testName),
              .stderrFileName = logDir / fmt::format("dcgm_{}_stderr.txt", testName) };
+}
+
+/*****************************************************************************/
+std::expected<std::string, dcgmReturn_t> FindExecutable(std::string_view executableName,
+                                                        std::vector<std::string> const &searchPaths,
+                                                        std::string &executableDir)
+{
+    for (auto const &path : searchPaths)
+    {
+        auto const filePath = std::filesystem::path(path) / executableName;
+        std::error_code ec;
+
+        if (std::filesystem::is_regular_file(filePath, ec) && !ec)
+        {
+            log_debug("Found {} in the path '{}'.", executableName, path);
+            executableDir = path;
+            return filePath.string();
+        }
+        log_debug("{} was not present in the path '{}'.", executableName, path);
+    }
+
+    log_error(
+        "Couldn't find the {} binary in the predefined search paths ({})", executableName, fmt::join(searchPaths, ":"));
+
+    return std::unexpected(DCGM_ST_NO_DATA);
 }
 
 } // namespace DcgmNs::Utils

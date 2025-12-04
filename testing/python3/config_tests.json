@@ -60,7 +60,12 @@
 	"test_dcgm_set_workload_power_profiles_error_with_new_nvml_api",
 	"test_dcgm_set_workload_power_profiles_with_new_nvml_api_invalid_group_id",
 	"test_dcgm_set_config_verify_profile_merged_with_target_config",
-	"test_dcgm_set_workload_power_profile_verify_profile_merged_with_target_config"
+	"test_dcgm_set_workload_power_profile_verify_profile_merged_with_target_config",
+	"test_kmsg_fatal_xid_parsing",
+	"test_dcgmi_diag_memory_max_free_memory_parameter",
+	"test_nvvs_plugin_skip_memtest_if_pre_defined_errors_present",
+	"test_nvvs_plugin_skip_memtest_if_all_entities_have_pre_defined_errors_present",
+	"test_dcgmi_diag_memory_max_free_memory_parameter"
     ],
     "modules_to_run_independent": [
     ]

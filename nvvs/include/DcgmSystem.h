@@ -25,7 +25,32 @@
 #include "dcgm_test_apis.h"
 #include <DcgmUtilities.h>
 
-class DcgmSystem
+class DcgmSystemBase
+{
+public:
+    virtual ~DcgmSystemBase() = default;
+
+    virtual void Init(dcgmHandle_t handle);
+    virtual dcgmReturn_t GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAttributes_t &deviceAttr);
+    virtual dcgmReturn_t GetGpuStatus(unsigned int gpuId, DcgmEntityStatus_t *gpuStatus);
+    virtual dcgmReturn_t GetAllSupportedDevices(std::vector<unsigned int> &gpuIdList);
+    virtual dcgmReturn_t GetAllDevices(std::vector<unsigned int> &gpuIdList);
+    virtual dcgmReturn_t GetGpuLatestValue(unsigned int gpuId,
+                                           unsigned short fieldId,
+                                           unsigned int flags,
+                                           dcgmFieldValue_v2 &value);
+    virtual dcgmReturn_t GetLatestValuesForGpus(const std::vector<unsigned int> &gpuIds,
+                                                std::vector<unsigned short> &fieldIds,
+                                                unsigned int flags,
+                                                dcgmFieldValueEntityEnumeration_f checker,
+                                                void *userData);
+    virtual bool IsInitialized() const;
+    virtual unsigned int GetCudaMajorVersion();
+    virtual unsigned int GetCudaMinorVersion();
+    virtual DcgmResult<dcgmChipArchitecture_t> GetGpuChipArchitecture(unsigned int gpuId);
+};
+
+class DcgmSystem final : public DcgmSystemBase
 {
 public:
     DcgmSystem();
@@ -34,7 +59,7 @@ public:
     /*
      * Saves a copy of the handle this system object should use
      */
-    void Init(dcgmHandle_t handle);
+    void Init(dcgmHandle_t handle) override;
 
     /*
      * Populates deviceAttr with the attributes retrieved from DCGM
@@ -45,7 +70,7 @@ public:
      * DCGM_ST_BADPARAM : if the handle hasn't been initialized
      * DCGM_ST_*        : if returned from calls to DCGM
      */
-    dcgmReturn_t GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAttributes_t &deviceAttr);
+    dcgmReturn_t GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAttributes_t &deviceAttr) override;
 
     /*
      * Populates gpuStatus with the status retrieved from DCGM
@@ -56,7 +81,7 @@ public:
      * DCGM_ST_BADPARAM : if the handle hasn't been initialized or gpuStatus is null
      * DCGM_ST_*        : if returned from calls to DCGM
      */
-    dcgmReturn_t GetGpuStatus(unsigned int gpuId, DcgmEntityStatus_t *gpuStatus);
+    dcgmReturn_t GetGpuStatus(unsigned int gpuId, DcgmEntityStatus_t *gpuStatus) override;
 
     /*
      * Populates gpuIdList with the supported GPUs present on this host.
@@ -67,7 +92,7 @@ public:
      * DCGM_ST_BADPARAM : if the handle hasn't been initialized
      * DCGM_ST_*        : if returned from calls to DCGM
      */
-    dcgmReturn_t GetAllSupportedDevices(std::vector<unsigned int> &gpuIdList);
+    dcgmReturn_t GetAllSupportedDevices(std::vector<unsigned int> &gpuIdList) override;
 
     /*
      * Populates gpuIdList with the GPUs present on this host.
@@ -78,7 +103,7 @@ public:
      * DCGM_ST_BADPARAM : if the handle hasn't been initialized
      * DCGM_ST_*        : if returned from calls to DCGM
      */
-    dcgmReturn_t GetAllDevices(std::vector<unsigned int> &gpuIdList);
+    dcgmReturn_t GetAllDevices(std::vector<unsigned int> &gpuIdList) override;
 
     /*
      * Retrieves the latest value for the specified field and populates dcgmFieldValue_v2 accordingly
@@ -91,7 +116,7 @@ public:
     dcgmReturn_t GetGpuLatestValue(unsigned int gpuId,
                                    unsigned short fieldId,
                                    unsigned int flags,
-                                   dcgmFieldValue_v2 &value);
+                                   dcgmFieldValue_v2 &value) override;
 
     /*
      * Retrieves the latest field values for the specified gpus and calls the given
@@ -106,7 +131,7 @@ public:
                                         std::vector<unsigned short> &fieldIds,
                                         unsigned int flags,
                                         dcgmFieldValueEntityEnumeration_f checker,
-                                        void *userData);
+                                        void *userData) override;
 
     /*
      * @return:
@@ -114,19 +139,19 @@ public:
      * true             : this system object is initialized
      * false            : this system object isn't initialized
      */
-    bool IsInitialized() const;
+    bool IsInitialized() const override;
 
     /*
      * @return: an integer representing the CUDA major version or 0 if it can't be
      * identified.
      */
-    unsigned int GetCudaMajorVersion();
+    unsigned int GetCudaMajorVersion() override;
 
     /*
      * @return: an integer representing the CUDA minor version or 0 if it can't be
      * identified.
      */
-    unsigned int GetCudaMinorVersion();
+    unsigned int GetCudaMinorVersion() override;
 
     /*
      * Populates chipArchitecture with the chip architecture retrieved from DCGM
@@ -136,7 +161,7 @@ public:
      * dcgmChipArchitecture_t       : success
      * std::unexpected<dcgmReturn_t> : if the handle hasn't been initialized or if returned from calls to DCGM
      */
-    DcgmResult<dcgmChipArchitecture_t> GetGpuChipArchitecture(unsigned int gpuId);
+    DcgmResult<dcgmChipArchitecture_t> GetGpuChipArchitecture(unsigned int gpuId) override;
 
 private:
     dcgmHandle_t m_handle; // We use this handle but we do not own it.

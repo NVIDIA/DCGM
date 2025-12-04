@@ -27,13 +27,11 @@
 #include <mutex>
 #include <optional>
 #include <random>
-#include <ranges>
 #include <string_view>
 #include <sys/types.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 /* Task Identifier, used as Fingerprint Store key */
 struct PidTidPair
@@ -92,8 +90,13 @@ struct PidTidPairHash
     }
 };
 
-/* Return type for FingerprintStore operations that may fail to return a fingerprint */
-using FingerprintStoreRet = std::pair<dcgmReturn_t, std::optional<TaskFingerprint>>;
+/* Return type for FingerprintStore operations that may fail to return a fingerprint. */
+struct FingerprintStoreRet
+{
+    dcgmReturn_t status;               //!< Operation result
+    std::optional<TaskFingerprint> fp; //!< Task fingerprint
+    std::optional<char> taskState;     //!< Task state
+};
 
 /**
  * Field indices in /proc/[pid]/stat
@@ -227,24 +230,12 @@ public:
      *
      * @param data Task state data from procfs
      * @param config Optional configuration for filtering proc stat fields
-     * @return Pair of status and optional fingerprint
+     * @return FingerprintStoreRet containing status, optional fingerprint, and optional task state
      * @returns DCGM_ST_OK and the fingerprint if found
      * @returns DCGM_ST_NO_DATA if the fingerprint is not found
      * @returns DCGM_ST_GENERIC_ERROR if there is an error retrieving the fingerprint
      */
     FingerprintStoreRet Compute(std::string_view data, std::optional<StatFieldConfig> config = std::nullopt);
-
-    /**
-     * Compute a fingerprint for a task by reading its procfs entry
-     *
-     * @param pid Process ID
-     * @param tid Optional thread ID
-     * @return Pair of status and optional fingerprint
-     * @returns DCGM_ST_OK and the fingerprint if found
-     * @returns DCGM_ST_NO_DATA if the fingerprint is not found
-     * @returns DCGM_ST_GENERIC_ERROR if there is an error retrieving the fingerprint
-     */
-    FingerprintStoreRet ComputeForTask(pid_t pid, std::optional<pid_t> tid = std::nullopt);
 
     /**
      * Store a fingerprint for a task
@@ -258,7 +249,7 @@ public:
      * Retrieve stored fingerprint for a task
      *
      * @param key Task identifier
-     * @return Pair of status and optional fingerprint
+     * @return FingerprintStoreRet containing status, optional fingerprint, and optional task state
      * @returns DCGM_ST_OK and the fingerprint if found
      * @returns DCGM_ST_NO_DATA if the fingerprint is not found
      * @returns DCGM_ST_GENERIC_ERROR if there is an error retrieving the fingerprint
@@ -275,15 +266,28 @@ public:
      */
     dcgmReturn_t Delete(PidTidPair const &key);
 
+    /**
+     * Compute a fingerprint for a task by reading its procfs entry and extract task state
+     *
+     * @param pid Process ID
+     * @param tid Optional thread ID
+     * @return FingerprintStoreRet containing status, optional fingerprint, and optional task state
+     * @returns DCGM_ST_OK, fingerprint, and state if successful
+     * @returns DCGM_ST_NO_DATA if the fingerprint cannot be computed
+     * @returns DCGM_ST_GENERIC_ERROR if there is an error
+     */
+    FingerprintStoreRet ComputeForTask(pid_t pid, std::optional<pid_t> tid = std::nullopt);
+
 private:
     /**
-     * Filter proc stat fields based on configuration
+     * Filter proc stat fields based on configuration and extract process state
      *
      * @param data Raw contents of proc stat file
      * @param config Configuration specifying which fields to include
-     * @return Filtered proc stat data containing only desired fields, empty string if invalid
+     * @return Pair containing filtered proc stat data and task state, if valid
      */
-    static std::string FilterProcStatFields(std::string_view data, StatFieldConfig const &config);
+    static std::pair<std::string, std::optional<char>> FilterProcStatFields(std::string_view data,
+                                                                            StatFieldConfig const &config);
 
     /**
      * Get the path to the proc file for the specified task.

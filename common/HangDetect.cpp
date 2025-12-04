@@ -28,16 +28,16 @@
 dcgmReturn_t HangDetect::RegisterProcess(pid_t pid)
 {
     // Check if process exists - no lock needed for initial check
-    auto [status, fp] = m_store.ComputeForTask(pid);
-    if (status == DCGM_ST_NO_DATA)
+    auto fpRet = m_store.ComputeForTask(pid);
+    if (fpRet.status == DCGM_ST_NO_DATA)
     {
         log_error("Process {} does not exist", pid);
         return DCGM_ST_BADPARAM;
     }
-    else if (status != DCGM_ST_OK)
+    else if (fpRet.status != DCGM_ST_OK)
     {
         log_error("Failed to verify process {}", pid);
-        return status;
+        return fpRet.status;
     }
 
     // Hold lock for the entire registration operation
@@ -45,15 +45,15 @@ dcgmReturn_t HangDetect::RegisterProcess(pid_t pid)
         std::lock_guard<std::mutex> lock(m_mutex);
 
         // Check if already registered
-        auto [retrieveStatus, existingFp] = m_store.Retrieve(PidTidPair { pid, std::nullopt });
-        if (retrieveStatus == DCGM_ST_OK)
+        auto curFpRet = m_store.Retrieve(PidTidPair { pid, std::nullopt });
+        if (curFpRet.status == DCGM_ST_OK)
         {
             log_warning("Process {} is already registered", pid);
             return DCGM_ST_DUPLICATE_KEY;
         }
 
         // Store the fingerprint and create empty thread set for the process
-        m_store.Update(PidTidPair { pid, std::nullopt }, *fp);
+        m_store.Update(PidTidPair { pid, std::nullopt }, fpRet.fp.value());
         m_monitoredTasks[pid] = std::unordered_set<int>();
     }
 
@@ -68,8 +68,8 @@ dcgmReturn_t HangDetect::UnregisterProcess(pid_t pid)
     dcgmReturn_t status;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        auto [checkStatus, _] = m_store.Retrieve(PidTidPair { pid, std::nullopt });
-        if (checkStatus != DCGM_ST_OK)
+        auto fpRet = m_store.Retrieve(PidTidPair { pid, std::nullopt });
+        if (fpRet.status != DCGM_ST_OK)
         {
             status = DCGM_ST_BADPARAM;
         }
@@ -97,16 +97,16 @@ dcgmReturn_t HangDetect::UnregisterProcess(pid_t pid)
 dcgmReturn_t HangDetect::RegisterTask(pid_t pid, pid_t tid)
 {
     // Compute initial fingerprint for task - no lock needed for initial check
-    auto [status, fp] = m_store.ComputeForTask(pid, tid);
-    if (status == DCGM_ST_NO_DATA)
+    auto fpRet = m_store.ComputeForTask(pid, tid);
+    if (fpRet.status == DCGM_ST_NO_DATA)
     {
         log_error("Task {}/{} does not exist", pid, tid);
         return DCGM_ST_BADPARAM;
     }
-    else if (status != DCGM_ST_OK)
+    else if (fpRet.status != DCGM_ST_OK)
     {
         log_error("Failed to verify task {}/{}", pid, tid);
-        return status;
+        return fpRet.status;
     }
 
     // Hold lock for the entire registration operation
@@ -114,15 +114,15 @@ dcgmReturn_t HangDetect::RegisterTask(pid_t pid, pid_t tid)
         std::lock_guard<std::mutex> lock(m_mutex);
 
         // Check if already registered
-        auto [retrieveStatus, existingFp] = m_store.Retrieve(PidTidPair { pid, tid });
-        if (retrieveStatus == DCGM_ST_OK)
+        auto curFpRet = m_store.Retrieve(PidTidPair { pid, tid });
+        if (curFpRet.status == DCGM_ST_OK)
         {
             log_warning("Task {}/{} is already registered", pid, tid);
             return DCGM_ST_DUPLICATE_KEY;
         }
 
         // Store the fingerprint and update monitored tasks atomically
-        m_store.Update(PidTidPair { pid, tid }, *fp);
+        m_store.Update(PidTidPair { pid, tid }, fpRet.fp.value());
         m_monitoredTasks[pid].insert(tid);
     }
 
@@ -137,8 +137,8 @@ dcgmReturn_t HangDetect::UnregisterTask(pid_t pid, pid_t tid)
     dcgmReturn_t status;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        auto [checkStatus, _] = m_store.Retrieve(PidTidPair { pid, tid });
-        if (checkStatus != DCGM_ST_OK)
+        auto fpRet = m_store.Retrieve(PidTidPair { pid, tid });
+        if (fpRet.status != DCGM_ST_OK)
         {
             status = DCGM_ST_BADPARAM;
         }
@@ -187,14 +187,14 @@ std::expected<bool, dcgmReturn_t> HangDetect::IsHung(pid_t pid, pid_t tid)
 std::expected<bool, dcgmReturn_t> HangDetect::IsHungImpl(pid_t pid, std::optional<pid_t> tid)
 {
     // Get current fingerprint before taking lock
-    auto [currentStatus, currentFp] = m_store.ComputeForTask(pid, tid);
-    if (currentStatus != DCGM_ST_OK)
+    auto fpRet = m_store.ComputeForTask(pid, tid);
+    if (fpRet.status != DCGM_ST_OK)
     {
         log_error("Failed to compute current fingerprint for {}/{}", pid, tid.value_or(0));
-        return std::unexpected(currentStatus);
+        return std::unexpected(fpRet.status);
     }
 
-    if (!currentFp.has_value())
+    if (!fpRet.fp.has_value())
     {
         log_error("Current fingerprint is empty for {}/{}", pid, tid.value_or(0));
         return std::unexpected(DCGM_ST_GENERIC_ERROR);
@@ -206,24 +206,24 @@ std::expected<bool, dcgmReturn_t> HangDetect::IsHungImpl(pid_t pid, std::optiona
     bool isHung = false;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        auto [retrieveStatus, fp] = m_store.Retrieve(PidTidPair { pid, tid });
-        if (retrieveStatus == DCGM_ST_OK)
+        auto oldFpRet = m_store.Retrieve(PidTidPair { pid, tid });
+        if (oldFpRet.status == DCGM_ST_OK)
         {
-            storedFp = std::move(fp);
+            storedFp = oldFpRet.fp;
             status   = DCGM_ST_OK;
 
             // Compare fingerprints - if they're the same, the task hasn't made progress
-            isHung = *storedFp == *currentFp;
+            isHung = storedFp.value() == fpRet.fp.value();
 
             // If fingerprints are different, update the stored one
             if (!isHung)
             {
-                m_store.Update(PidTidPair { pid, tid }, *currentFp);
+                m_store.Update(PidTidPair { pid, tid }, fpRet.fp.value());
             }
         }
         else
         {
-            status = retrieveStatus;
+            status = oldFpRet.status;
         }
     }
 
@@ -312,4 +312,26 @@ std::unordered_map<pid_t, std::unordered_set<int>> HangDetect::GetMonitoredTasks
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_monitoredTasks;
+}
+
+/************************************************************************************/
+
+std::optional<char> HangDetect::GetTaskState(pid_t pid, std::optional<pid_t> tid)
+{
+    // Use the FingerprintStore's new ComputeForTask method to get process state
+    auto fpRet = m_store.ComputeForTask(pid, tid);
+    if (fpRet.status == DCGM_ST_OK)
+    {
+        log_verbose("fpRet.taskState[{}:{}]: {}",
+                    pid,
+                    tid.has_value() ? std::to_string(*tid) : "0",
+                    fpRet.taskState.value_or('?'));
+        return fpRet.taskState;
+    }
+
+    log_debug("Failed to get process state for {}/{}: status={}",
+              pid,
+              tid.has_value() ? std::to_string(*tid) : "N/A",
+              fpRet.status);
+    return std::nullopt;
 }

@@ -263,6 +263,12 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddBlankValue(dcgm_field_entity_group_t entityGr
 
     switch (fieldMeta->fieldType)
     {
+        case DCGM_FT_BINARY:
+        {
+            char emptyBlob = 0;
+            return AddBlobValue(entityGroupId, entityId, fieldId, &emptyBlob, sizeof(emptyBlob), 0, status);
+        }
+
         case DCGM_FT_INT64:
             return AddInt64Value(entityGroupId, entityId, fieldId, DCGM_INT64_BLANK, 0, status);
 
@@ -273,7 +279,7 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddBlankValue(dcgm_field_entity_group_t entityGr
             return AddStringValue(entityGroupId, entityId, fieldId, DCGM_STR_BLANK, 0, status);
 
         default:
-            DCGM_LOG_ERROR << "Unhandled fieldType: " << fieldMeta->fieldType;
+            log_warning("Unhandled fieldType: {} for fieldId: {}", fieldMeta->fieldType, fieldId);
             return nullptr;
     }
 

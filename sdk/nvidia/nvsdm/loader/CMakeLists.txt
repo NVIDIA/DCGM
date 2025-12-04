@@ -26,6 +26,7 @@ target_link_libraries(sdk_nvsdm_loader
   INTERFACE
     sdk_nvsdm_loader_interface
   PRIVATE
+    task_context_manager
     sdk_nvsdm_interface
     dcgm_interface
     dl)

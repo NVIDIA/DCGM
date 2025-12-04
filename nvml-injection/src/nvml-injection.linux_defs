@@ -242,6 +242,7 @@
         nvmlVgpuInstanceClearAccountingPids;
         nvmlGetExcludedDeviceCount;
         nvmlGetExcludedDeviceInfoByIndex;
+        nvmlDeviceReadWritePRM_v1;
         nvmlGetVgpuVersion;
         nvmlSetVgpuVersion;
         nvmlDeviceGetHostVgpuMode;

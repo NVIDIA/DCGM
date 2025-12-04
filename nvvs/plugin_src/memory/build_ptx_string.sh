@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 # Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
@@ -14,18 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script generates l1tag.cu and l1tag.ptx
-# l1tag.ptx is then converted to l1tag_ptx_string as a hexified string
-# Last, symbol names are added to l1tag_ptx_string by find_ptx_symbols.py
+# This script generates memtest_kernel.ptx and l1tag.ptx
+# ptx files are then converted to ptx_string.h as a hexified string
+# Last, symbol names are added to ptx_string.h by find_ptx_symbols.py
 #
 # sm_30 is used here for Kepler or newer
 
 CUDA_IMAGE=nvcr.io/nvidia/cuda:10.2-devel-ubuntu18.04
-docker run \
-    --rm \
-    -v $(pwd):/work \
-    -w /work \
-    ${CUDA_IMAGE} \
-    /bin/bash -c "/usr/local/cuda/bin/nvcc -ptx -m64  -arch=sm_30 -o l1tag.ptx l1tag.cu || die 'Failed to compile l1tag.cu'; \
-                    /usr/local/cuda/bin/bin2c l1tag.ptx --padd 0 --name l1tag_ptx_string > l1tag_ptx_string.h; chmod a+w l1tag_ptx_string.h;"
-python find_ptx_symbols.py l1tag.ptx l1tag_ptx_string.h
+
+targets=(l1tag memtest_kernel)
+for target in "${targets[@]}"; do
+    docker run \
+        --rm \
+        -v "$(pwd)":/work \
+        -w /work \
+        ${CUDA_IMAGE} \
+        /bin/bash -c "/usr/local/cuda/bin/nvcc -ptx -m64  -arch=sm_30 -o ${target}.ptx ${target}.cu || { echo 'Failed to compile ${target}.cu'; exit 1; }; \
+                        /usr/local/cuda/bin/bin2c ${target}.ptx --padd 0 --name ${target}_ptx_string > ${target}_ptx_string.h; chmod a+w ${target}_ptx_string.h;"
+    python find_ptx_symbols.py ${target}.ptx ${target}_ptx_string.h
+done

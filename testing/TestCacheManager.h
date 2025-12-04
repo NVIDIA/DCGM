@@ -77,6 +77,12 @@ private:
     int TestAttachDetachWithWatches();
     int TestAreAllGpuIdsSameSku();
     int TestMultipleWatchersMaxAge();
+    int TestGetLatestSampleNoData();
+    int TestGetLatestSampleNoDataFvBuffer();
+
+    // Helper functions for field group testing
+    int TestSingleFieldNoDataSample(unsigned short fieldId, DcgmCacheManager &cacheManager);
+    int TestSingleFieldNoDataFvBuffer(unsigned short fieldId, DcgmCacheManager &cacheManager);
 
     /*************************************************************************/
     /*

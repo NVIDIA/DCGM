@@ -17,6 +17,9 @@
 
 #include <DcgmModule.h>
 #include <DcgmTaskRunner.h>
+#include <HangDetect.h>
+#include <HangDetectHandler.h>
+#include <HangDetectMonitor.h>
 #include <dcgm_core_structs.h>
 
 #include "DcgmNscqManager.h"
@@ -24,8 +27,13 @@
 #include "MessageGuard.hpp"
 #include "dcgm_nvswitch_structs.h"
 
+class TaskContextManager;
+
 namespace DcgmNs
 {
+
+class DcgmModuleNvSwitchHangDetectHandler;
+
 class DcgmModuleNvSwitch
 
     : public DcgmModuleWithCoreProxy<DcgmModuleIdNvSwitch>
@@ -74,6 +82,11 @@ private:
     using UnwatchFieldMessage
         = DcgmNs::MessageGuard<dcgm_nvswitch_msg_unwatch_field_v1, dcgm_nvswitch_msg_unwatch_field_version1>;
 
+    std::unique_ptr<DcgmModuleNvSwitchHangDetectHandler> m_handler { nullptr };
+    std::unique_ptr<HangDetect> m_detector { nullptr };
+    std::unique_ptr<HangDetectMonitor> m_monitor { nullptr };
+    TaskContextManager const *m_taskCtxMgr = nullptr; // Non-owning pointer to static TaskContextManager object.
+
     /*************************************************************************/
     dcgmReturn_t ProcessGetSwitchIds(dcgm_nvswitch_msg_get_switches_v1 *moduleCommand);
     dcgmReturn_t ProcessWatchField(WatchFieldMessage msg);
@@ -91,6 +104,10 @@ private:
     dcgmReturn_t ProcessGetEntityIds(dcgm_nvswitch_msg_get_entities_ids_t *moduleCommand);
     std::chrono::system_clock::time_point TryRunOnce(bool forceRun);
 
+    /**
+     * Initialize hang detection.
+     */
+    void InitHangDetect();
     void RescanDevicesState();
 
     /*
@@ -98,6 +115,26 @@ private:
     void run() override;
 
     friend class TestDcgmModuleNvSwitch;
+};
+
+/**
+ * Respond to hang detection events. */
+class DcgmModuleNvSwitchHangDetectHandler : public HangDetectHandler
+{
+public:
+    DcgmModuleNvSwitchHangDetectHandler()
+        : HangDetectHandler()
+    {}
+
+    void SetTaskContextManager(TaskContextManager const *taskCtxMgr)
+    {
+        m_taskCtxMgr = taskCtxMgr;
+    }
+
+    virtual void HandleHangDetectedEvent(HangDetectedEvent const &hangEvent) override;
+
+private:
+    class TaskContextManager const *m_taskCtxMgr = nullptr; // Non-owning pointer to static TaskContextManager object.
 };
 
 } // namespace DcgmNs

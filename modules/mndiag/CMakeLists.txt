@@ -92,3 +92,145 @@ target_link_libraries(dcgmmodulemndiag
 target_sources(dcgmmodulemndiag
     PRIVATE
         ${SRCS})
+
+install(
+    FILES cuda12/${CMAKE_SYSTEM_PROCESSOR}/libcurand.so.10.3.10.19
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda12/"
+    COMPONENT Cuda12)
+
+install(CODE "
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink libcurand.so.10.3.10.19 libcurand.so.10
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda12\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink libcurand.so.10 libcurand.so
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda12\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E make_directory updated
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda12\"
+        COMMAND_ERROR_IS_FATAL ANY)
+ 
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink ../libcurand.so.10.3.10.19 libcurand.so.10
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda12/updated\"
+        COMMAND_ERROR_IS_FATAL ANY)"
+    COMPONENT Cuda12)
+
+install(
+    PROGRAMS cuda12/${CMAKE_SYSTEM_PROCESSOR}/mnubergemm
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda12/"
+    COMPONENT Multinode_Cuda12)
+
+install(CODE "
+    file(RPATH_CHANGE
+        FILE \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBEXECDIR}/datacenter-gpu-manager-4/plugins/cuda12/mnubergemm\"
+        OLD_RPATH \"::::::::::::::::::::::::::::::::::::::::::::::::::::\"
+        NEW_RPATH \"$ORIGIN:$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}\")"
+    COMPONENT Multinode_Cuda12)
+
+install(
+    FILES cuda13/${CMAKE_SYSTEM_PROCESSOR}/libcurand.so.10.4.0.35
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda13/"
+    COMPONENT Cuda13)
+
+install(CODE "
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink libcurand.so.10.4.0.35 libcurand.so.10
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda13\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink libcurand.so.10 libcurand.so
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda13\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E make_directory updated
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda13\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink ../libcurand.so.10.4.0.35 libcurand.so.10
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda13/updated\"
+        COMMAND_ERROR_IS_FATAL ANY)"
+    COMPONENT Cuda13)
+
+install(
+    PROGRAMS cuda13/${CMAKE_SYSTEM_PROCESSOR}/mnubergemm
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda13"
+    COMPONENT Multinode_Cuda13)
+
+install(CODE "
+    file(RPATH_CHANGE
+        FILE \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/libexec/datacenter-gpu-manager-4/plugins/cuda13/mnubergemm\"
+        OLD_RPATH \"::::::::::::::::::::::::::::::::::::::::::::::::::::\"
+        NEW_RPATH \"$ORIGIN:$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}\")"
+    COMPONENT Multinode_Cuda13)
+
+install(
+    PROGRAMS cuda12/${CMAKE_SYSTEM_PROCESSOR}/mnubergemm
+    DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda12
+    COMPONENT Tests)
+
+install(
+    PROGRAMS cuda13/${CMAKE_SYSTEM_PROCESSOR}/mnubergemm
+    DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda13
+    COMPONENT Tests)
+
+install(
+    FILES cuda12/${CMAKE_SYSTEM_PROCESSOR}/libcurand.so.10.3.10.19
+    DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda12
+    COMPONENT Tests)
+
+install(
+    FILES cuda13/${CMAKE_SYSTEM_PROCESSOR}/libcurand.so.10.4.0.35
+    DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda13
+    COMPONENT Tests)
+
+install(CODE "
+    file(RPATH_CHANGE
+        FILE \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda12/mnubergemm\"
+        OLD_RPATH \"::::::::::::::::::::::::::::::::::::::::::::::::::::\"
+        NEW_RPATH \"$ORIGIN:$ORIGIN/../../../${DCGM_TESTS_ARCH}\")
+
+    file(RPATH_CHANGE
+        FILE \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda13/mnubergemm\"
+        OLD_RPATH \"::::::::::::::::::::::::::::::::::::::::::::::::::::\"
+        NEW_RPATH \"$ORIGIN:$ORIGIN/../../../${DCGM_TESTS_ARCH}\")
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink libcurand.so.10.3.10.19 libcurand.so.10
+        COMMAND \"${CMAKE_COMMAND}\" -E make_directory updated
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda12\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink libcurand.so.10 libcurand.so
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda12\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink ../libcurand.so.10.3.10.19 libcurand.so.10
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda12/updated\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink libcurand.so.10.4.0.35 libcurand.so.10
+        COMMAND \"${CMAKE_COMMAND}\" -E make_directory updated
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda13\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink libcurand.so.10 libcurand.so
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda13\"
+        COMMAND_ERROR_IS_FATAL ANY)
+
+    execute_process(
+        COMMAND \"${CMAKE_COMMAND}\" -E create_symlink ../libcurand.so.10.4.0.35 libcurand.so.10
+        WORKING_DIRECTORY \"\$ENV{DESTDIR}$<INSTALL_PREFIX>/${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda13/updated\"
+        COMMAND_ERROR_IS_FATAL ANY)"
+    COMPONENT Tests)

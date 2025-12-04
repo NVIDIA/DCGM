@@ -73,6 +73,7 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     , m_testDuration(.0)
     , m_gpuNvlinksExpectedUp(0)
     , m_nvSwitchNvlinksExpectedUp(0)
+    , m_cudaCompat(0)
     , m_useDgemm(0)
     , m_matrixDim(0)
     , m_maxAer(1)
@@ -299,15 +300,6 @@ void BusGrind::Go(std::string const &testName,
             SetResult(testName, NVVS_RESULT_FAIL);
         }
 
-        return;
-    }
-
-    if (st == NVVS_RESULT_SKIP)
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, PCIE_PLUGIN_NAME);
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
         return;
     }
 }

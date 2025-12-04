@@ -371,7 +371,7 @@ void ConfigFileParser_v2::ParseYaml()
             YAML::Node &dstSku = GetOrAddSku(id);
 
             DCGM_LOG_VERBOSE << "Descending to SKU's children";
-            parseTests(dstSku, srcSku);
+            parseTests(dstSku, std::move(srcSku));
         }
     }
 }
@@ -445,7 +445,7 @@ std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareGpuSet(std::vector<dcgmGr
                 ss.ignore();
             }
         }
-        gpuSet->GetProperties().index   = indexVector;
+        gpuSet->GetProperties().index   = std::move(indexVector);
         gpuSet->GetProperties().present = true; // so that things are parsed further down
     }
     else if (!nvvsCommon.indexString.empty())
@@ -463,12 +463,12 @@ std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareGpuSet(std::vector<dcgmGr
                 ss.ignore();
             }
         }
-        gpuSet->GetProperties().index   = indexVector;
+        gpuSet->GetProperties().index   = std::move(indexVector);
         gpuSet->GetProperties().present = true; // so that things are parsed further down
     }
     else if (!gpuIndexesFromEntityGroups.empty())
     {
-        gpuSet->GetProperties().index   = gpuIndexesFromEntityGroups;
+        gpuSet->GetProperties().index   = std::move(gpuIndexesFromEntityGroups);
         gpuSet->GetProperties().present = true; // so that things are parsed further down
     }
     else
@@ -511,7 +511,6 @@ std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareCpuSet(std::vector<dcgmGr
         {
             continue;
         }
-
         cpuEntityIds.push_back(entity.entityId);
     }
 
@@ -550,6 +549,7 @@ std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareCpuSet(std::vector<dcgmGr
     {
         cpuSet->AddEntityId(cpuEntityId);
     }
+    cpuSet->SetEntityGroup(DCGM_FE_CPU);
     return cpuSet;
 }
 

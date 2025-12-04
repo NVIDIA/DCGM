@@ -41,9 +41,9 @@ public:
     std::vector<int> m_gpuIds;
 
     // methods
-    WrapperSoftwareTestFramework() = default;
-    WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList);
-    WrapperSoftwareTestFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList);
+    WrapperSoftwareTestFramework(EntitySet &entitySet);
+    WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList, EntitySet &entitySet);
+    WrapperSoftwareTestFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList, EntitySet &entitySet);
     void WrapperInitTestNameMap();
     void WrapperInitTestParametersMap();
     void WrapperPopulateGpuInfo(std::vector<Gpu *> &gpuList);
@@ -67,12 +67,17 @@ public:
     }
 };
 
-WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList)
-    : SoftwarePluginFramework(std::move(gpuList))
+WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(EntitySet &entitySet)
+    : SoftwarePluginFramework(entitySet)
 {}
 
-WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList)
-    : SoftwarePluginFramework(std::move(entityList))
+WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList, EntitySet &entitySet)
+    : SoftwarePluginFramework(std::move(gpuList), entitySet)
+{}
+
+WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList,
+                                                           EntitySet &entitySet)
+    : SoftwarePluginFramework(std::move(entityList), entitySet)
 {}
 
 void WrapperSoftwareTestFramework::WrapperInitTestNameMap()
@@ -120,12 +125,13 @@ void WrapperSoftwareTestFramework::WrapperSetSoftwarePlugin(std::unique_ptr<Soft
 TEST_CASE("Test 1 - Software object creation with Output obj")
 {
     // test class
-    WrapperSoftwareTestFramework softwareObjLocal;
+    EntitySet entitySet;
+    WrapperSoftwareTestFramework softwareObjLocal(entitySet);
     softwareObjLocal.createGpuObject();
 
     // ---------------------------------------
     // software class
-    WrapperSoftwareTestFramework softwareObj(softwareObjLocal.m_visibleGpus);
+    WrapperSoftwareTestFramework softwareObj(softwareObjLocal.m_visibleGpus, entitySet);
 
     // ---------------
     // check the test map
@@ -161,7 +167,8 @@ TEST_CASE("Test 1 - Software object creation with Output obj")
 TEST_CASE("Test 2 - Init Test Name Map")
 {
     // test class
-    WrapperSoftwareTestFramework softwareObjLocal;
+    EntitySet entitySet;
+    WrapperSoftwareTestFramework softwareObjLocal(entitySet);
     softwareObjLocal.WrapperInitTestNameMap();
 
     // ---------------
@@ -192,7 +199,8 @@ TEST_CASE("Test 2 - Init Test Name Map")
 TEST_CASE("Test 3 - Init Test Parameters Map")
 {
     // test class
-    WrapperSoftwareTestFramework softwareObjLocal;
+    EntitySet entitySet;
+    WrapperSoftwareTestFramework softwareObjLocal(entitySet);
     softwareObjLocal.WrapperInitTestNameMap();
     softwareObjLocal.WrapperInitTestParametersMap();
 
@@ -239,7 +247,8 @@ TEST_CASE("Test 3 - Init Test Parameters Map")
 
 TEST_CASE("Test 4 - Populate GPU Information")
 {
-    WrapperSoftwareTestFramework softwareObjLocal(std::make_unique<dcgmDiagPluginEntityList_v1>());
+    EntitySet entitySet;
+    WrapperSoftwareTestFramework softwareObjLocal(std::make_unique<dcgmDiagPluginEntityList_v1>(), entitySet);
     softwareObjLocal.createGpuObject();
     softwareObjLocal.WrapperPopulateGpuInfo(softwareObjLocal.m_visibleGpus);
 

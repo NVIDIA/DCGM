@@ -22,6 +22,8 @@
 #define RUN_CUDA_KERNEL_REC \
     "Please check if a CUDA sample program can be run successfully on this host. Refer to https://github.com/nvidia/cuda-samples"
 
+double constexpr DEFAULT_MIN_ALLOCATION_PERCENTAGE = 75.0;
+
 /********************************************************************/
 /*
  * Sets the result for the GPU based on the value of 'passed'. Logs warnings from 'errorList' if the result is fail.
@@ -101,16 +103,9 @@ dcgmReturn_t SetCudaDriverMajorVersion(DcgmRecorder &dcgmRecorder,
                                        unsigned int &cudaDriverMajorVersion);
 
 /********************************************************************/
-/**
- * Find executable in search paths
- *
- * @param executableName Name of executable to find
- * @param searchPaths Vector of paths to search in
- * @param[out] executableDir Path to executable directory if found
- * @return std::expected<std::string, dcgmReturn_t> Path to executable if found, error code otherwise
- */
 std::expected<std::string, dcgmReturn_t> FindExecutable(std::string_view executableName,
-                                                        std::vector<std::string> const &searchPaths,
+                                                        unsigned int cudaDriverMajorVersion,
+                                                        bool useUpdatedPath,
                                                         std::string &executableDir);
 
 /********************************************************************/

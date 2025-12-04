@@ -186,7 +186,7 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
     {
         DCGM_LOG_ERROR << "Got nvml st " << nvmlReturn << " from nvmlGpmSampleGet().";
         m_gpmSamples.erase(latestSampleIt);
-        return DCGM_ST_NVML_ERROR;
+        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
     }
 
     return DCGM_ST_OK;
@@ -291,7 +291,7 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
     {
         DCGM_LOG_ERROR << "Got nonzero nvmlReturn " << nvmlReturn << " or mg->metrics[0].nvmlReturn "
                        << mg.metrics[0].nvmlReturn;
-        return DCGM_ST_NVML_ERROR;
+        return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
     }
 
     /* Success! */
@@ -408,7 +408,8 @@ bool DcgmGpmManager::DoesNvmlDeviceSupportGpm(nvmlDevice_t nvmlDevice)
     }
     else if (nvmlReturn != NVML_SUCCESS)
     {
-        DCGM_LOG_WARNING << "Got error " << nvmlErrorString(nvmlReturn)
+        DCGM_LOG_WARNING << "Got error " << nvmlErrorString(nvmlReturn) << " ("
+                         << DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn) << ")"
                          << " from nvmlGpmQueryDeviceSupport. Assuming no GPM support.";
         return false;
     }

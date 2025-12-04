@@ -26,7 +26,12 @@
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libTargetedPower.so.<SOFTWAREVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libTargetedStress.so.<MAJORVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libTargetedStress.so.<SOFTWAREVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libcurand.so
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libcurand.so.10
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libcurand.so.10.3.10.19
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/nvbandwidth
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/updated/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/updated/libcurand.so.10
 ./usr/share/
 ./usr/share/doc/
 ./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-cuda12/

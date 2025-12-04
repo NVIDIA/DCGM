@@ -46,6 +46,7 @@ private:
     dcgmReturn_t ProcessStop(dcgm_diag_msg_stop_t *msg);
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
     inline dcgmReturn_t ProcessRun(dcgm_module_command_header_t *moduleCommand);
+    void ProcessReceiveHeartbeat(dcgm_module_command_header_t *moduleCommand);
 
     dcgmReturn_t ProcessRun_v12(dcgm_diag_msg_run_v12 *msg);
     dcgmReturn_t ProcessRun_v11(dcgm_diag_msg_run_v11 *msg);

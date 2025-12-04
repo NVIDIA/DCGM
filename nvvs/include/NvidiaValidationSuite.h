@@ -75,6 +75,25 @@ public:
      * @return true if the GPU is to be included, false otherwise.
      **/
     bool IsGpuIncluded(unsigned int gpuIndex, std::vector<unsigned int> &gpuIndices) const;
+
+    /**
+     * Builds a CUDA_VISIBLE_DEVICES string from GPU indices and UUIDs.
+     * This is a pure helper function extracted for testability.
+     *
+     * Static because it's a pure function that only depends on its parameters,
+     * not on object state. This makes it easier to test and signals the function's
+     * independence from instance state.
+     *
+     * @param[in] gpuIndices: The DCGM GPU indices being tested
+     * @param[in] gpuVect: Vector of GPU objects to look up UUIDs
+     * @param[in] uuidGetter: Function to extract UUID from Gpu pointer (for testing)
+     *
+     * @returns: CUDA_VISIBLE_DEVICES string (comma-separated UUIDs), or empty string if no valid GPUs found
+     */
+    static std::string BuildCudaVisibleDevicesString(
+        std::vector<unsigned int> const &gpuIndices,
+        std::vector<Gpu *> const &gpuVect,
+        std::function<std::string(Gpu *)> uuidGetter = [](Gpu *g) { return g->getDeviceGpuUuid(); });
     // not private so they can be called in tests
 protected:
     // methods
@@ -95,6 +114,14 @@ protected:
     void InitializeAndCheckGpuObjs(GpuSet *set);
     void InitializeParameters(const std::string &parms, const ParameterValidator &pv);
     void ThrowTestNotFoundExecption() const;
+
+    /**
+     * Sets CUDA_VISIBLE_DEVICES environment variable to only the GPUs being tested.
+     * This ensures CUDA device indices map correctly to the GPUs we're testing.
+     *
+     * @param[in] gpuIndices: The DCGM GPU indices being tested
+     */
+    void SetCudaVisibleDevicesForTesting(std::vector<unsigned int> const &gpuIndices);
 
     // vars
     bool logInit;

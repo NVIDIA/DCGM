@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/cuda:12.8.0-base-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:13.0.1-base-ubuntu22.04
 
 LABEL io.k8s.display-name="NVIDIA DCGM"
 LABEL name="NVIDIA DCGM"
@@ -27,8 +27,9 @@ LABEL version="${VERSION}"
 ARG DCGM_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update \
- && apt-get install --assume-yes datacenter-gpu-manager-4-cuda12=1:${DCGM_VERSION} \
+RUN apt-get -qq update && apt-get upgrade -y --no-install-recommends \
+ && apt-get install --assume-yes datacenter-gpu-manager-4-cuda12=1:${DCGM_VERSION}-1 \
+ && apt-get install --assume-yes datacenter-gpu-manager-4-cuda13=1:${DCGM_VERSION}-1 \
  && apt-get install --assume-yes --no-install-recommends libcap2-bin \
  && apt-get purge --autoremove -y openssl
 

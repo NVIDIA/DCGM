@@ -23,6 +23,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#define MAX_CUDA_MAJOR_VERSION 13 /* The maximum version of CUDA built with this version of DCGM */
 
 #ifdef __cplusplus
 extern "C" {

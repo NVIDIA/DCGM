@@ -341,6 +341,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "gpu:1",
                                                 defaultFrequency,
                                                 "*:*",
+                                                true,
                                                 error);
     if (result != DCGM_ST_OK)
     {
@@ -446,6 +447,12 @@ int TestDiagManager::TestPopulateRunDiag()
         return -1;
     }
 
+    if (!(drd.flags & DCGM_RUN_FLAGS_ENABLE_HEARTBEAT))
+    {
+        fprintf(stderr, "Expected heartbeat to be enabled, but it wasn't.\n");
+        return -1;
+    }
+
     const char *tn1[] = { "pcie", "targeted power" };
     const char *tp1[] = { "pcie.test_pinned=false", "pcie.min_bandwidth=25000", "targeted power.temperature_max=82" };
     std::string debugFileName("kaladin");
@@ -474,6 +481,7 @@ int TestDiagManager::TestPopulateRunDiag()
         "",
         defaultFrequency,
         "",
+        false,
         error);
     if (result != DCGM_ST_OK)
     {
@@ -597,6 +605,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "",
                                                 defaultFrequency,
                                                 "",
+                                                false,
                                                 error);
     if (result != DCGM_ST_OK)
     {
@@ -632,6 +641,7 @@ int TestDiagManager::TestPopulateRunDiag()
         "",
         defaultFrequency,
         "",
+        false,
         error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -663,6 +673,7 @@ int TestDiagManager::TestPopulateRunDiag()
         "",
         defaultFrequency,
         "",
+        false,
         error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -694,6 +705,7 @@ int TestDiagManager::TestPopulateRunDiag()
         invalidExpectedNumEntities,
         defaultFrequency,
         "",
+        false,
         error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -725,6 +737,7 @@ int TestDiagManager::TestPopulateRunDiag()
         expectedNumEntities,
         defaultFrequency,
         "",
+        false,
         error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -754,6 +767,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "gpu:1",
                                                 validWatchFrequency,
                                                 "",
+                                                false,
                                                 error);
     if (result != DCGM_ST_OK)
     {
@@ -789,6 +803,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "gpu:1",
                                                 invalidWatchFrequency,
                                                 "",
+                                                false,
                                                 error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -818,6 +833,7 @@ int TestDiagManager::TestPopulateRunDiag()
                                                 "gpu:1",
                                                 invalidWatchFrequency,
                                                 "",
+                                                false,
                                                 error);
     if (result != DCGM_ST_BADPARAM)
     {
@@ -917,7 +933,7 @@ int TestDiagManager::TestPerformExternalCommand()
     wrapper.SetVersion(diagResponse.get());
     // Make the script that will fail
     CreateDummyFailScript();
-    am.PerformExternalCommand(dummyCmds, wrapper, &stdoutStr, &stderrStr);
+    am.PerformExternalCommand(dummyCmds, wrapper, 0, &stdoutStr, &stderrStr);
     if (stdoutStr.empty() && stderrStr.empty())
     {
         fprintf(stderr, "TestPerformExternalCommand should've captured stderr, but failed to do so.\n");

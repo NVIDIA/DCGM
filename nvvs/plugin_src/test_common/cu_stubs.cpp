@@ -194,3 +194,8 @@ CUresult cuStreamDestroy(CUstream /* hStream */)
 {
     return CUDA_SUCCESS;
 }
+
+CUresult cuDeviceGetCount(int * /* count */)
+{
+    return CUDA_SUCCESS;
+}

@@ -25,6 +25,7 @@ configure_file(diag-skus.yaml.in diag-skus.yaml @ONLY)
 
 add_subdirectory(plugin_src)
 add_subdirectory(src)
+add_subdirectory(mock)
 
 install(FILES nvvs.conf
         DESTINATION "${CMAKE_INSTALL_DOCDIR}/examples/"

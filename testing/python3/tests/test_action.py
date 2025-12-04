@@ -147,13 +147,13 @@ def test_dcgm_action_run_diag_bad_validation(handle, gpuIds):
         if i > 0:
             gpuIdStr += ","
         gpuIdStr += str(gpuId)
-    drd = dcgm_structs.c_dcgmRunDiag_v9()
-    drd.version = dcgm_structs.dcgmRunDiag_version9
+    drd = dcgm_structs.c_dcgmRunDiag_v10()
+    drd.version = dcgm_structs.dcgmRunDiag_version10
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_XLONG + 1 #use an invalid value
     drd.groupId = dcgm_structs.DCGM_GROUP_NULL #Initializing to DCGM_GROUP_NULL in case the constructor above doesn't and entityIds is specified.
     drd.entityIds = gpuIdStr
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
-        response = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version9)
+        _ = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version10)
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('A100x4-and-DGX.yaml')
@@ -161,13 +161,13 @@ def test_dcgm_action_run_diag_bad_validation(handle, gpuIds):
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_action_run_diag_on_heterogeneous_env(handle, gpuIds):
     # GPUs are specified by entity-id
-    drd = dcgm_structs.c_dcgmRunDiag_v9()
-    drd.version = dcgm_structs.dcgmRunDiag_version9
+    drd = dcgm_structs.c_dcgmRunDiag_v10()
+    drd.version = dcgm_structs.dcgmRunDiag_version10
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = dcgm_structs.DCGM_GROUP_NULL #Initializing to DCGM_GROUP_NULL in case the constructor above doesn't and entityIds is specified.
     drd.entityIds = "*"
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_GROUP_INCOMPATIBLE)):
-        _ = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version9)
+        _ = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version10)
 
     # GPUs are specified by group id
     drd = dcgm_structs.c_dcgmRunDiag_v10()
@@ -175,7 +175,7 @@ def test_dcgm_action_run_diag_on_heterogeneous_env(handle, gpuIds):
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
     drd.groupId = dcgm_structs.DCGM_GROUP_ALL_GPUS
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_GROUP_INCOMPATIBLE)):
-        _ = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version9)
+        _ = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version10)
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('A100x4-and-DGX.yaml')
@@ -190,4 +190,4 @@ def test_dcgm_action_run_diag_entity_and_group_specified(handle, gpuIds):
     # When both entity id and group are specified, entity id will be ignored.
     # It should return DCGM_ST_GROUP_INCOMPATIBLE as it is on heterogeneous env with group DCGM_GROUP_ALL_GPUS.
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_GROUP_INCOMPATIBLE)):
-        _ = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version9)
+        _ = test_utils.action_validate_wrapper(drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version10)

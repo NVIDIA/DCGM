@@ -29,6 +29,7 @@ import dcgm_internal_helpers
 import utils
 import threading
 import option_parser
+import re
 import shutil
 import string
 import time
@@ -50,6 +51,7 @@ import dcgm_field_helpers
 import nvml_injection
 import nvml_injection_structs
 import dcgm_nvml
+import re
 
 def _run_dcgmi_command(args):
     ''' run a command then return (retcode, stdout_lines, stderr_lines) '''
@@ -181,6 +183,48 @@ def _test_invalid_args(argsList):
     for args in argsList:
         retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
         _assert_invalid_dcgmi_results(args, retValue, stdout_lines, stderr_lines)
+
+def _assert_valid_dcgmi_help_results(args, retValue, stdout_lines, stderr_lines):
+    if (len(stdout_lines) == 0) and (len(stderr_lines) > 0):
+        logger.error('stderr: "%s"' % (stderr_lines)) 
+    assert (len(stdout_lines) > 0), 'No output detected for args "%s"' % ' '.join(args[1:])
+
+    output = ''
+    for line in stdout_lines:
+        output = output + line + ' '
+    if test_utils.is_mig_incompatible_failure(output):
+        test_utils.skip_test("Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
+
+    if retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value:
+        logger.error('Valid test - Function returned error code: %s . Args used: "%s"' % (retValue, ' '.join(args[1:]))) 
+        logger.error('Stdout:')
+        for line in stdout_lines:
+            logger.error('\t'+line)
+        logger.error('Stderr:')
+        for line in stderr_lines:
+            logger.error('\t'+line)
+        assert False, "See errors above."
+
+    # expected lines in help output - 
+    combined_output = ' '.join(stdout_lines + stderr_lines).lower()
+    required_elements = [
+        "usage:",                                      
+        "-h",                                          
+        "--help",                                      
+    ]
+    
+    if len(args) > 0:
+        subsystem_name = args[0].lower()
+        required_elements.append(subsystem_name)
+    
+    # Validate each required element
+    missing_elements = []
+    for element in required_elements:
+        if element not in combined_output:
+            missing_elements.append(element)
+    
+    assert len(missing_elements) == 0, f"Help output missing required elements: {missing_elements}. Full output:\n{combined_output}"
+    logger.info(f"Successfully validated dcgmi help output contains all required elements for args: {' '.join(args)}")
         
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_injection_gpus(2) #Injecting compute instances only works with live ampere or injected GPUs
@@ -590,6 +634,7 @@ def test_dcgmi_diag(handle, gpuIds):
            ["diag", "--run", "1", "--entity-id", gpu0Info.identifiers.uuid], # verifies --entity-id option accepts GPU UUID
            ["diag", "--run", "1", "-g", str(createdGroupId)], # verifies --group can work
            ["diag", "--run", "1", "-i", allGpusCsv, "-p", "generic_mode=true"], # This is a valid global parameter
+           ["diag", "--run", "1", "-i", allGpusCsv, "--enable-heartbeat"], # verifies that --enable-heartbeat works
            pciTestCmdLineArgs,
     ]
 
@@ -1585,8 +1630,8 @@ def test_dcgmi_diag_missing_gpu_expected_num_entities(handle, gpuIds):
     dev6Uuid = "GPU-8c52e150-ab3b-77f7-34c0-107fb2163182"
 
     def _run_diag_with_expected_entities(expectedEntities, expectError = False, error = dcgm_structs.DCGM_ST_OK):
-        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v9()
-        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version9
+        runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
+        runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
         runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_NULL
         runDiagInfo.entityIds = "*,cpu:*"
         runDiagInfo.expectedNumEntities = expectedEntities
@@ -1594,9 +1639,9 @@ def test_dcgmi_diag_missing_gpu_expected_num_entities(handle, gpuIds):
 
         if expectError:
             with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(error)):
-                response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version9)
+                response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
         else:
-            response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version9)
+            response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
             assert response, "Should have received a response"
             assert response.tests[0].name == "software", \
                 f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
@@ -2026,3 +2071,249 @@ def test_dcgmi_diag_ignore_error_codes_software(handle, gpuIds):
         logger.debug(f"Info msg: {response.info[i].msg}")
 
     assert suppressedErrorFound, f"Suppressed error info message not found for error code {dcgm_errors.DCGM_FR_ROW_REMAP_FAILURE}"
+
+
+def extract_line(output, line_to_extract):
+    for line in output:
+        if line_to_extract in line:
+            return line
+    return None
+    
+
+def helper_memory_max_free_memory_test(handle, args, max_free_memory_param, invalid=False):
+    # Run the diagnostic
+    dcgmi = apps.DcgmiApp(args)
+    dcgmi.start(120)
+    dcgmi.wait()
+    if invalid:
+        dcgmi.validate()
+
+    if not invalid:
+        allocated_line = extract_line(dcgmi.stdout_lines, "Allocated")
+        allocated_memory_bytes = None
+        if allocated_line and "bytes" in allocated_line:
+            # Parse: "Allocated 265751046 bytes (6.7%)"
+            import re
+            match = re.search(r'Allocated (\d+) bytes', allocated_line)
+            if match:
+                allocated_memory_bytes = int(match.group(1))
+
+        # Convert bytes to MB for comparison
+        allocated_memory_mb = allocated_memory_bytes // (1024 * 1024) if allocated_memory_bytes else 0
+
+        # Validate that allocated memory matches the max_free_memory parameter
+        tolerance_mb = 1  # 1MB tolerance
+        validation_passed = abs(allocated_memory_mb - max_free_memory_param) <= tolerance_mb
+
+        if not validation_passed:
+            logger.info("dcgmi.stdout_lines:\n" + "\n".join(dcgmi.stdout_lines))
+        assert validation_passed, f"Memory allocation ({allocated_memory_mb:.2f} MB) should match requested limit ({max_free_memory_param} MB) within tolerance ({tolerance_mb} MB)"
+        logger.info(f"Memory test passed: allocated {allocated_memory_mb:.2f} MB (requested: {max_free_memory_param} MB)")
+    else:
+        failure_line = extract_line(dcgmi.stdout_lines, "Caught an unknown exception")
+        failure_message_found = failure_line is not None
+        assert failure_message_found, "Expected failure message not found in dcgmi output: 'Caught an unknown exception while trying to execute the test'"
+        logger.info("Verified failure message for invalid max_free_memory parameter")
+
+@test_utils.run_with_standalone_host_engine(240)
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+@test_utils.run_only_with_ecc()
+def test_dcgmi_diag_memory_max_free_memory_parameter(handle, gpuIds):
+    # Following uses default memory size -> 97% on normal and 256MB on __DCGM_DIAG_SMALL_FB_MODE - manually tested, disabled for automation
+    # ["-5", "999999", "0"]
+
+    # Valid behaviour
+    for max_free_memory_param in [0.1, 5, 100]:
+        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=true", "-p", f"memory.max_free_memory_mb={max_free_memory_param}", "-v"]
+        logger.info(f"Testing memory plugin with max_free_memory={max_free_memory_param}")
+        helper_memory_max_free_memory_test(handle, args, max_free_memory_param)
+
+    # Invalid behaviour
+    for max_free_memory_param in ["abc", "ab51"]:
+        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=true", "-p", f"memory.max_free_memory_mb={max_free_memory_param}", "-v"]
+        logger.info(f"Testing failure cases with invalid max_free_memory parameters: {max_free_memory_param}")
+        helper_memory_max_free_memory_test(handle, args, max_free_memory_param, invalid=True)
+
+@test_utils.run_with_standalone_host_engine(120, heEnv={"CUDA_VISIBLE_DEVICES": "1,2,3"})
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_env_var_warning_hostengine_set(handle, gpuIds):
+    """
+    Test that the diag command shows a warning when the CUDA_VISIBLE_DEVICES environment variable is set.
+    """
+    original = os.environ.get('CUDA_VISIBLE_DEVICES')
+
+    try:
+        args = ["diag", "--run", "1", "-i", str(gpuIds[0])]
+
+        # Case 1: dcgmi=0,2, hostengine=1,2,3
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0,2"
+        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        err = "\n".join(stderr_lines)
+        assert "Hostengine Process Value: 1,2,3" in err
+        assert "Dcgmi Process Value: 0,2" in err
+        assert "Status: Values differ between local process and hostengine" in err
+        logger.info("Warning message correctly displayed when CUDA_VISIBLE_DEVICES mismatch detected")
+
+        # Case 2: dcgmi=1,2,3, hostengine=1,2,3
+        os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
+        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        err = "\n".join(stderr_lines)
+        assert "Hostengine Process Value: 1,2,3" in err
+        assert "Dcgmi Process Value: 1,2,3" in err
+        assert "Status: Values are consistent" in err
+        logger.info("Warning message correctly displayed when CUDA_VISIBLE_DEVICES is set and matches hostengine")
+        
+        # Case 3: unset dcgmi, hostengine=1,2,3
+        os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        err = "\n".join(stderr_lines)
+        assert "Environment Variable Information:" not in err
+        logger.info("Warning message correctly not displayed when CUDA_VISIBLE_DEVICES is unset")
+    finally:
+        # cleanup
+        if original is None:
+            os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+        else:
+            os.environ['CUDA_VISIBLE_DEVICES'] = original
+    
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_env_var_warning_hostengine_not_set(handle, gpuIds):
+    """
+    Test that the diag command shows a warning when the CUDA_VISIBLE_DEVICES environment variable is not set on hostengine.
+    """
+    original = os.environ.get('CUDA_VISIBLE_DEVICES')
+
+    try:
+        args = ["diag", "--run", "1", "-i", str(gpuIds[0])]
+
+        # Case 1: dcgmi=0,2, hostengine not set
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0,2"
+        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        err = "\n".join(stderr_lines)
+        assert "Hostengine Process Value: (not set)" in err
+        assert "Dcgmi Process Value: 0,2" in err
+        assert "Status: Failed to get hostengine environment variable" in err
+        logger.info("Warning message correctly displayed when CUDA_VISIBLE_DEVICES mismatch detected")
+        
+        # Case 2: unset dcgmi, hostengine not set
+        os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        err = "\n".join(stderr_lines)
+        assert "Environment Variable Information:" not in err
+        logger.info("Warning message correctly not displayed when CUDA_VISIBLE_DEVICES is unset")
+    finally:
+        # cleanup
+        if original is None:
+            os.environ.pop('CUDA_VISIBLE_DEVICES', None)
+        else:
+            os.environ['CUDA_VISIBLE_DEVICES'] = original    
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgmi_diag_h(handle, gpuIds):
+    '''
+    Test that dcgmi diag -h command line argument works.
+    '''
+    args = ["diag", "-h"]
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    _assert_valid_dcgmi_help_results(args, retValue, stdout_lines, stderr_lines)
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgmi_diag_help(handle, gpuIds):
+    '''
+    Test that dcgmi diag --help command line argument works.
+    '''
+    args = ["diag", "--help"]
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    _assert_valid_dcgmi_help_results(args, retValue, stdout_lines, stderr_lines)
+
+def helper_run_validate_memory_bw_memory_size(handle, args, memory_size, invalid=False):
+    dcgmi = apps.DcgmiApp(args)
+    dcgmi.start(120)
+    dcgmi.wait()
+
+    if not invalid:
+        # Memory size is bounded: minimum 6MB, maximum 756MB
+        expected_size = min(max(memory_size, 6), 756)
+            
+        config_line = extract_line(dcgmi.stdout_lines, "Memory bandwidth configured test size:")
+        configured_size = None
+        if config_line:
+            try:
+                match = re.search(r"Memory bandwidth configured test size:\s*([0-9.]+)\s*", config_line)
+                if match:
+                    configured_size = float(match.group(1))
+            except (ValueError, AttributeError):
+                logger.warning(f"Failed to parse configured memory size from line: {config_line}")
+
+        assert abs(configured_size - expected_size) < 0.1, f"Configured memory size ({configured_size} MB) does not match expected ({expected_size} MB)"
+                    
+    else:
+        dcgmi.validate()
+        failure_line = extract_line(dcgmi.stdout_lines, "Caught an unknown exception")
+        failure_message_found = failure_line is not None
+        assert failure_message_found, "Expected failure message not found in dcgmi output: 'Caught an unknown exception while trying to execute the test'"
+        logger.info("Verified failure message for invalid memory size parameter")
+
+@test_utils.run_with_standalone_host_engine(240)
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_memory_bw_memory_size_test(handle, gpuIds):
+    # Valid behaviour - Keeping small values for tests
+    for memory_size in [0.5, 10, 50]:
+        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory_bandwidth", "-v", "-p", "memory_bandwidth.is_allowed=true", "-p", f"memory_bandwidth.memory_size_mb={memory_size}"]
+        helper_run_validate_memory_bw_memory_size(handle, args, memory_size)
+
+    # Invalid behaviour
+    for memory_size in ["ab123c"]:
+        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory_bandwidth", "-v", "-p", "memory_bandwidth.is_allowed=true", "-p", f"memory_bandwidth.memory_size_mb={memory_size}"]
+        helper_run_validate_memory_bw_memory_size(handle, args, memory_size, invalid=True)
+
+def helper_extract_warning_message(stderr_lines):
+    warning_found = False
+    for line in stderr_lines:
+        if "WARNING: You are using a DCGM installation with limited functionality that does not offer diagnostic capabilities." in line:
+            warning_found = True
+            break
+    return warning_found
+    
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_removed_env_var_negative(handle, gpuIds):
+    """
+    Test DCGM_DIAG_REMOVED env var not set
+    """
+    args = ["diag", "--run", "1", "-i", str(gpuIds[0])]
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    
+    # Check that the warning message does NOT appear in stderr
+    warning_found = helper_extract_warning_message(stderr_lines)
+    
+    assert not warning_found, f"Unexpected warning message found in stderr when DCGM_DIAG_REMOVED is not set. stderr: {stderr_lines}"
+    logger.info("No warning message displayed when DCGM_DIAG_REMOVED is not set, as expected")
+
+@test_utils.run_with_standalone_host_engine(120, heEnv={"DCGM_DIAG_REMOVED": "1"})
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_diag_removed_env_var_positive(handle, gpuIds):
+    """
+    Test DCGM_DIAG_REMOVED env var set (should show warning)
+    """
+    args = ["diag", "--run", "1", "-i", str(gpuIds[0])]
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    
+    # Check that the warning message DOES appear in stderr
+    warning_found = helper_extract_warning_message(stderr_lines)
+    
+    assert warning_found, f"Expected warning message not found in stderr when DCGM_DIAG_REMOVED is set. stderr: {stderr_lines}"
+    logger.info("Warning message correctly displayed when DCGM_DIAG_REMOVED is set")

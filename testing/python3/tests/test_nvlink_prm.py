@@ -60,6 +60,7 @@ def test_nvlink_prm_field_registration(handle):
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_minimum_gpu_architecture(dcgm_structs.DCGM_CHIP_ARCH_BLACKWELL)
+@test_utils.run_only_with_nvml()
 def test_nvlink_prm_manual_link_entity_creation(handle, gpuIds):
     """
     Test creating link entities manually for specific GPU+port combinations
@@ -204,6 +205,7 @@ def test_dcgm_link_entity_id_encoding():
 
 
 @test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_nvml()
 def test_prm_field_injection_infrastructure(handle):
     """
     Test PRM field injection infrastructure for LINK entities.
@@ -314,6 +316,7 @@ def test_prm_field_injection_infrastructure(handle):
         assert field_value.value.i64 == expected_value, f"Batch field {field_id}: value mismatch"
 
 @test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_nvml()
 def test_prm_field_caching_with_field_group_watcher(handle):
     """
     Enhanced test using DcgmFieldGroupEntityWatcher to properly test PRM field caching optimization.
@@ -448,6 +451,7 @@ def test_prm_field_caching_with_field_group_watcher(handle):
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_minimum_gpu_architecture(dcgm_structs.DCGM_CHIP_ARCH_BLACKWELL)
+@test_utils.run_only_with_nvml()
 def test_nvlink_prm_watches(handle, gpuIds):
     """
     Comprehensive DCGM NvLink PRM watch validation test.

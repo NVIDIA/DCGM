@@ -147,7 +147,7 @@ private:
     std::string GetPluginCudalessDir();
 
     /********************************************************************/
-    std::vector<dcgmDiagPluginEntityInfo_v1> PopulateEntityInfoForPlugins(EntitySet *entitySet);
+    std::vector<dcgmDiagPluginEntityInfo_v1> PopulateEntityInfoForPlugins(EntitySet &entitySet);
 
     /********************************************************************/
     /*

@@ -369,6 +369,7 @@ def test_software_on_fabric_manager(handle, gpuIds):
             self.nvmlFunRet = dcgm_nvml.NVML_SUCCESS
             self.fbState = dcgm_nvml.NVML_GPU_FABRIC_STATE_COMPLETED
             self.fbStatus = dcgm_nvml.NVML_SUCCESS
+            self.fbHealthMask = 0
             self.isPass = True
             self.expectedErrorMsg = ""
             self.caseName = ""
@@ -381,6 +382,9 @@ def test_software_on_fabric_manager(handle, gpuIds):
 
         def SetFbStatus(self, status):
             self.fbStatus = status
+
+        def SetFbHealthMask(self, healthMask):
+            self.fbHealthMask = healthMask
 
         def SetIsPass(self, isPass):
             self.isPass = isPass
@@ -406,6 +410,7 @@ def test_software_on_fabric_manager(handle, gpuIds):
             injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_GPUFABRICINFOV
             injectedRet.values[0].value.GpuFabricInfoV.state = self.fbState
             injectedRet.values[0].value.GpuFabricInfoV.status = self.fbStatus
+            injectedRet.values[0].value.GpuFabricInfoV.healthMask = self.fbHealthMask
             injectedRet.valueCount = 1
             return injectedRet
 
@@ -455,6 +460,16 @@ def test_software_on_fabric_manager(handle, gpuIds):
     completeButErrorCase.SetExpectedErrorMsg("Training completed with an error")
     caseList.append(completeButErrorCase)
 
+    healthMaskCase = Case()
+    healthMaskCase.SetCaseName("healthMaskCase")
+    healthMaskCase.SetNvmlFunRet(dcgm_nvml.NVML_SUCCESS)
+    healthMaskCase.SetIsPass(False)
+    healthMaskCase.SetFbState(dcgm_nvml.NVML_GPU_FABRIC_STATE_COMPLETED)
+    healthMaskCase.SetFbStatus(dcgm_nvml.NVML_ERROR_UNKNOWN)
+    healthMaskCase.SetFbHealthMask(dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE)
+    healthMaskCase.SetExpectedErrorMsg(f"Health Mask: {dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE:#x}")
+    caseList.append(healthMaskCase)
+
     completeAndSuccessCase = Case()
     completeAndSuccessCase.SetCaseName("completeAndSuccessCase")
     completeAndSuccessCase.SetNvmlFunRet(dcgm_nvml.NVML_SUCCESS)
@@ -480,29 +495,74 @@ def test_software_on_fabric_manager(handle, gpuIds):
             assert response.numErrors == 1, f"Case: [{currentCase.GetCaseName()}], actual number of errors: [{response.numErrors}]"
             assert response.errors[0].msg.find(currentCase.GetExpectedErrorMsg()) != -1, f"Case: [{currentCase.GetCaseName()}], expected error: [{currentCase.GetExpectedErrorMsg()}], actual error message: [{response.errors[0].msg}]"
 
+def assert_gpu_result(response, gpuId, testId, expectedResult):
+    gpuResult = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuId and cur.testId == testId, response.results[:min(response.numResults, dcgm_structs.DCGM_DIAG_RESPONSE_RESULTS_MAX)]), None)
+    assert gpuResult, f"Expected to find a result for gpu {gpuId} with testId {testId}"
+    assert gpuResult.result == expectedResult, f"Actual result is {gpuResult.result}"
+
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
-def test_nvvs_plugin_skip_memtest_if_page_retirement_row_remap_present(handle, gpuIds):
+def test_nvvs_plugin_skip_memtest_if_pre_defined_errors_present(handle, gpuIds):
     dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="memtest", paramsStr="memtest.test_duration=10")
     dd.UseFakeGpus()
 
-    # Inject Row remap failure and check for memtest to be skipped.
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE, 1, 10, True, repeatCount=10)
+    softwareId = 0
+    memtestId = 1
+
+    # When errors are not present, memtest's shouldn't be skipped.
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    assert_gpu_result(response, gpuIds[0], memtestId, dcgm_structs.DCGM_DIAG_RESULT_PASS)
+    assert_gpu_result(response, gpuIds[1], memtestId, dcgm_structs.DCGM_DIAG_RESULT_PASS)
+
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_ROW_REMAP_PENDING,
+                dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
+                dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
+                dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE]
+
+    for fieldId in fieldIds:
+        inject_value(handle, gpuIds[0], fieldId, 64, 10, True, repeatCount=10)
+        response = test_utils.diag_execute_wrapper(dd, handle)
+        assert response.numErrors > 0
+        assert response.tests[softwareId].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"Actual result is {response.tests[softwareId].result}"
+        assert_gpu_result(response, gpuIds[0], softwareId, dcgm_structs.DCGM_DIAG_RESULT_FAIL)
+
+        assert response.tests[memtestId].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, f"Actual result is {response.tests[memtestId].result}"
+        assert response.tests[memtestId].numResults == 2, f"Actual number of results is {response.tests[memtestId].numResults}"
+
+        # When errors are present, GPU 0's memtest should be skipped with a reason.
+        assert_gpu_result(response, gpuIds[0], memtestId, dcgm_structs.DCGM_DIAG_RESULT_SKIP)
+
+        gpu0Info = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuIds[0] and cur.testId == memtestId, response.info[:min(response.numInfo, dcgm_structs.DCGM_DIAG_RESPONSE_INFO_MAX_V2)]), None)
+        assert gpu0Info, f"Expected to find a info for gpu {gpuIds[0]} with testId {memtestId}"
+        assert gpu0Info.msg.find("Skipping this test due to previously detected") != -1, f"Actual info is {gpu0Info.msg}"
+
+        assert_gpu_result(response, gpuIds[1], memtestId, dcgm_structs.DCGM_DIAG_RESULT_PASS)
+        inject_value(handle, gpuIds[0], fieldId, 0, 10, True, repeatCount=10) # reset the value
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus(2)
+def test_nvvs_plugin_skip_memtest_if_all_entities_have_pre_defined_errors_present(handle, gpuIds):
+    dd = DcgmDiag.DcgmDiag(gpuIds=gpuIds, testNamesStr="memtest", paramsStr="memtest.test_duration=10")
+    dd.UseFakeGpus()
+
+    softwareId = 0
+    memtestId = 1
+
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ROW_REMAP_PENDING, 64, 10, True, repeatCount=10)
+    inject_value(handle, gpuIds[1], dcgm_fields.DCGM_FI_DEV_ROW_REMAP_PENDING, 64, 10, True, repeatCount=10)
     response = test_utils.diag_execute_wrapper(dd, handle)
     assert response.numErrors > 0
-    assert response.tests[1].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP, f"Actual result is {response.tests[1].result}"
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE, 0, 10, True, repeatCount=10) # reset the value
+    assert response.tests[softwareId].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"Actual result is {response.tests[softwareId].result}"
+    assert response.tests[softwareId].numResults == 2, f"Actual number of results is {response.tests[softwareId].numResults}"
+    assert response.tests[memtestId].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP, f"Actual result is {response.tests[memtestId].result}"
+    assert response.tests[memtestId].numResults == 2, f"Actual number of results is {response.tests[memtestId].numResults}"
 
-    # Inject pending page retired failure and check for memtest to be skipped.
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING, 1, 10, True, repeatCount=10)
-    response = test_utils.diag_execute_wrapper(dd, handle)
-    assert response.numErrors > 0
-    assert response.tests[1].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP, f"Actual result is {response.tests[1].result}"
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING, 0, 10, True, repeatCount=10) # reset the value
+    for gpuId in gpuIds:
+        assert_gpu_result(response, gpuId, memtestId, dcgm_structs.DCGM_DIAG_RESULT_SKIP)
 
-    # After Row remap and pending page retired are reset i.e. not present, memtest's shouldn't be skipped.
-    response = test_utils.diag_execute_wrapper(dd, handle)
-    assert response.tests[1].result != dcgm_structs.DCGM_DIAG_RESULT_SKIP
+        gpuInfo = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuId and cur.testId == memtestId, response.info[:min(response.numInfo, dcgm_structs.DCGM_DIAG_RESPONSE_INFO_MAX_V2)]), None)
+        assert gpuInfo, f"Expected to find a info for gpu {gpuId} with testId {memtestId}"
+        assert gpuInfo.msg.find("Skipping this test due to previously detected") != -1, f"Actual info is {gpuInfo.msg}"
 
 @test_utils.run_only_when_path_exists(os.path.abspath("./apps/nvvs/nvvs"))
 @test_utils.run_with_persistence_mode_on()

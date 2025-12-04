@@ -97,6 +97,7 @@ public:
 #endif
     dcgmReturn_t ProcessNvmlCreateFakeEntity(dcgm_core_msg_nvml_create_injection_gpu_t &msg);
     dcgmReturn_t ProcessNvswitchGetBackend(dcgm_core_msg_nvswitch_get_backend_v1 &msg);
+    dcgmReturn_t ProcessHostengineEnvVarInfo(dcgm_core_msg_hostengine_env_var_t &msg);
 
     dcgmModuleProcessMessage_f GetMessageProcessingCallback() const;
 

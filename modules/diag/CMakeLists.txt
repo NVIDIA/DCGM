@@ -38,6 +38,8 @@ set(SRCS
     dcgm_diag_structs.h
     DcgmModuleDiag.cpp
     DcgmModuleDiag.h
+    DcgmDiagCallers.cpp
+    DcgmDiagCallers.h
 )
 
 target_link_libraries(dcgmmodulediag_private_static

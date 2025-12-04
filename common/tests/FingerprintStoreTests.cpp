@@ -15,6 +15,7 @@
  */
 
 #include "FingerprintStore.h"
+#include "MockFileSystemOperator.h"
 
 #include <catch2/catch_all.hpp>
 #include <dcgm_fields.h>
@@ -27,13 +28,15 @@
 class FingerprintStoreTest : public FingerprintStore
 {
 public:
+    using FingerprintStore::FingerprintStore;
     using FingerprintStore::GenerateUniqueSeed;
     using FingerprintStore::GetProcStatPath;
     using FingerprintStore::m_store;
 
     static inline std::string FilterProcStatFields(std::string_view data, StatFieldConfig const &config)
     {
-        return FingerprintStore::FilterProcStatFields(data, config);
+        auto [filtered, _] = FingerprintStore::FilterProcStatFields(data, config);
+        return filtered;
     }
 };
 
@@ -44,49 +47,49 @@ TEST_CASE("FingerprintStore::Compute")
     SECTION("Compute")
     {
         auto ret1 = fps.Compute("");
-        REQUIRE(ret1.first == DCGM_ST_NO_DATA);
-        REQUIRE(!ret1.second.has_value());
+        REQUIRE(ret1.status == DCGM_ST_NO_DATA);
+        REQUIRE(!ret1.fp.has_value());
 
         ret1 = fps.Compute(std::string(255, 'A'));
-        REQUIRE(ret1.first == DCGM_ST_OK);
-        REQUIRE(ret1.second.has_value());
+        REQUIRE(ret1.status == DCGM_ST_OK);
+        REQUIRE(ret1.fp.has_value());
 
         // Ensure the fingerprint is different
         auto ret2 = fps.Compute(std::string(255, 'B'));
-        REQUIRE(ret2.first == DCGM_ST_OK);
-        REQUIRE(ret2.second.has_value());
-        REQUIRE(*(ret1.second) != *(ret2.second));
+        REQUIRE(ret2.status == DCGM_ST_OK);
+        REQUIRE(ret2.fp.has_value());
+        REQUIRE(*(ret1.fp) != *(ret2.fp));
 
         // Linux 6.8.0. See proc_pid_stat(5) for details.
         std::string_view data
             = "186424 (cat) R 175206 186424 175206 34822 186424 4194304 92 0 0 0 0 0 0 0 20 0 1 0 718148738 8716288 448 18446744073709551615 98843718799360 98843718814593 140731843266560 0 0 0 0 0 0 0 0 0 17 6 0 0 0 0 0 98843718826672 98843718828136 98843746320384 140731843273929 140731843273956 140731843273956 140731843276779 0";
         auto ret3 = fps.Compute(data);
-        REQUIRE(ret3.first == DCGM_ST_OK);
-        REQUIRE(ret3.second.has_value());
-        REQUIRE(*(ret1.second) != *(ret3.second));
-        REQUIRE(*(ret2.second) != *(ret3.second));
+        REQUIRE(ret3.status == DCGM_ST_OK);
+        REQUIRE(ret3.fp.has_value());
+        REQUIRE(*(ret1.fp) != *(ret3.fp));
+        REQUIRE(*(ret2.fp) != *(ret3.fp));
 
         // Verify filtering affects the fingerprint
         auto config = StatFieldConfig::ForThread();
         auto ret4   = fps.Compute(data, config);
-        REQUIRE(ret4.first == DCGM_ST_OK);
-        REQUIRE(ret4.second.has_value());
-        REQUIRE(*(ret3.second) != *(ret4.second)); // Filtered fingerprint should differ from unfiltered
+        REQUIRE(ret4.status == DCGM_ST_OK);
+        REQUIRE(ret4.fp.has_value());
+        REQUIRE(*(ret3.fp) != *(ret4.fp)); // Filtered fingerprint should differ from unfiltered
     }
 
     SECTION("Edge Cases and Invalid Inputs")
     {
         // Test extremely large input
         auto ret = fps.Compute(std::string(1024 * 1024, 'X')); // 1MB of data
-        CHECK(ret.first == DCGM_ST_OK);
-        CHECK(ret.second.has_value());
+        CHECK(ret.status == DCGM_ST_OK);
+        CHECK(ret.fp.has_value());
 
         // Test Unicode input
         std::string unicode
             = "Hello \u4E16\u754C \U0001F30D \u043F\u0440\u0438\u0432\u0435\u0442 \u03B3\u03B5\u03B9\u03B1";
         ret = fps.Compute(unicode);
-        CHECK(ret.first == DCGM_ST_OK);
-        CHECK(ret.second.has_value());
+        CHECK(ret.status == DCGM_ST_OK);
+        CHECK(ret.fp.has_value());
 
         // Test non-printable ASCII
         std::string nonPrintable;
@@ -95,13 +98,13 @@ TEST_CASE("FingerprintStore::Compute")
             nonPrintable.push_back(c);
         }
         ret = fps.Compute(nonPrintable);
-        CHECK(ret.first == DCGM_ST_OK);
-        CHECK(ret.second.has_value());
+        CHECK(ret.status == DCGM_ST_OK);
+        CHECK(ret.fp.has_value());
 
         // Test mixed Unicode, ASCII, and control characters
         ret = fps.Compute("Hello\x01\x02\u4E16\u754C\x1F\U0001F30D\x7F");
-        CHECK(ret.first == DCGM_ST_OK);
-        CHECK(ret.second.has_value());
+        CHECK(ret.status == DCGM_ST_OK);
+        CHECK(ret.fp.has_value());
     }
 }
 
@@ -117,18 +120,18 @@ TEST_CASE("FingerprintStore::Operations")
     SECTION("Retrieve")
     {
         // Nothing has been populated in store
-        auto [ret, fp] = fps.Retrieve(absentKey);
-        REQUIRE(ret == DCGM_ST_NO_DATA);
-        REQUIRE(!fp.has_value());
+        auto fpRet = fps.Retrieve(absentKey);
+        REQUIRE(fpRet.status == DCGM_ST_NO_DATA);
+        REQUIRE(!fpRet.fp.has_value());
 
         // Store fingerprint with valid key
         fps.Update(testKey, testFp);
 
         // Retrieve Valid Key
-        std::tie(ret, fp) = fps.Retrieve(testKey);
-        REQUIRE(ret == DCGM_ST_OK);
-        REQUIRE(fp.has_value());
-        REQUIRE(*fp == testFp);
+        fpRet = fps.Retrieve(testKey);
+        REQUIRE(fpRet.status == DCGM_ST_OK);
+        REQUIRE(fpRet.fp.has_value());
+        REQUIRE(fpRet.fp.value() == testFp);
     }
 
     SECTION("Update")
@@ -144,10 +147,10 @@ TEST_CASE("FingerprintStore::Operations")
         REQUIRE(fps.m_store.size() == 1);
 
         // Verify the update
-        auto [ret, fp] = fps.Retrieve(testKey);
-        REQUIRE(ret == DCGM_ST_OK);
-        REQUIRE(fp.has_value());
-        REQUIRE(*fp == altFp);
+        auto fpRet = fps.Retrieve(testKey);
+        REQUIRE(fpRet.status == DCGM_ST_OK);
+        REQUIRE(fpRet.fp.has_value());
+        REQUIRE(fpRet.fp.value() == altFp);
     }
 
     SECTION("Delete")
@@ -169,9 +172,9 @@ TEST_CASE("FingerprintStore::Operations")
         REQUIRE(ret == DCGM_ST_NO_DATA);
 
         // Can't retrieve deleted entry
-        auto [ret2, fp] = fps.Retrieve(testKey);
-        REQUIRE(ret2 == DCGM_ST_NO_DATA);
-        REQUIRE(!fp.has_value());
+        auto fpRet = fps.Retrieve(testKey);
+        REQUIRE(fpRet.status == DCGM_ST_NO_DATA);
+        REQUIRE(!fpRet.fp.has_value());
     }
 
     SECTION("Edge Cases")
@@ -179,10 +182,10 @@ TEST_CASE("FingerprintStore::Operations")
         // Test with maximum possible PID/TID values
         auto maxKey = PidTidPair(std::numeric_limits<pid_t>::max(), std::numeric_limits<pid_t>::max());
         fps.Update(maxKey, testFp);
-        auto [ret, fp] = fps.Retrieve(maxKey);
-        REQUIRE(ret == DCGM_ST_OK);
-        REQUIRE(fp.has_value());
-        REQUIRE(*fp == testFp);
+        auto fpRet = fps.Retrieve(maxKey);
+        REQUIRE(fpRet.status == DCGM_ST_OK);
+        REQUIRE(fpRet.fp.has_value());
+        REQUIRE(fpRet.fp.value() == testFp);
     }
 }
 
@@ -277,14 +280,14 @@ TEST_CASE("FingerprintStore::Concurrent Operations")
                             store_size++;
                             break;
                         case 1:
-                            if (auto [ret, _] = fps.Retrieve(key); ret == DCGM_ST_OK)
+                            if (auto fpRet = fps.Retrieve(key); fpRet.status == DCGM_ST_OK)
                             {
-                                fps.Delete(key);
+                                (void)fps.Delete(key);
                                 store_size--;
                             }
                             break;
                         case 2:
-                            fps.Retrieve(key);
+                            (void)fps.Retrieve(key);
                             break;
                     }
                 }
@@ -571,5 +574,96 @@ TEST_CASE("FingerprintStore::FilterProcStatFields irregular data")
             INFO("Filtered: " << filtered);
             REQUIRE(filtered.starts_with(test.expected));
         }
+    }
+}
+
+TEST_CASE("FingerprintStore::ComputeWithState")
+{
+    FingerprintStoreTest fps {};
+
+    // Test data for different process states
+    std::string_view runningData         = "1234 (test) R 1 1 1 0 -1 4194368 1234 0 0 0 1000 2000 3000 4000";
+    std::string_view sleepingData        = "1234 (test) S 1 1 1 0 -1 4194368 1234 0 0 0 1000 2000 3000 4000";
+    std::string_view uninterruptibleData = "1234 (test) D 1 1 1 0 -1 4194368 1234 0 0 0 1000 2000 3000 4000";
+
+    SECTION("Basic state extraction")
+    {
+        auto fpRet1 = fps.Compute(runningData, StatFieldConfig::ForProcess());
+        REQUIRE(fpRet1.status == DCGM_ST_OK);
+        REQUIRE(fpRet1.fp.has_value());
+        REQUIRE(fpRet1.taskState.has_value());
+        REQUIRE(fpRet1.taskState.value() == 'R');
+
+        auto fpRet2 = fps.Compute(sleepingData, StatFieldConfig::ForProcess());
+        REQUIRE(fpRet2.status == DCGM_ST_OK);
+        REQUIRE(fpRet2.fp.has_value());
+        REQUIRE(fpRet2.taskState.has_value());
+        REQUIRE(fpRet2.taskState.value() == 'S');
+
+        auto fpRet3 = fps.Compute(uninterruptibleData, StatFieldConfig::ForProcess());
+        REQUIRE(fpRet3.status == DCGM_ST_OK);
+        REQUIRE(fpRet3.fp.has_value());
+        REQUIRE(fpRet3.taskState.has_value());
+        REQUIRE(fpRet3.taskState.value() == 'D');
+    }
+
+    SECTION("Empty input")
+    {
+        auto fpRet = fps.Compute("", StatFieldConfig::ForProcess());
+        REQUIRE(fpRet.status == DCGM_ST_NO_DATA);
+        REQUIRE(!fpRet.fp.has_value());
+        REQUIRE(!fpRet.taskState.has_value());
+    }
+
+    SECTION("Invalid format")
+    {
+        std::string_view invalidData = "1234 test process) S"; // Missing opening parenthesis
+        auto fpRet                   = fps.Compute(invalidData, StatFieldConfig::ForProcess());
+        REQUIRE(fpRet.status == DCGM_ST_NO_DATA);
+        REQUIRE(!fpRet.fp.has_value());
+        REQUIRE(!fpRet.taskState.has_value());
+    }
+}
+
+TEST_CASE("FingerprintStore::ComputeForTask")
+{
+    // Create a FingerprintStore with mocked filesystem for predictable testing
+    auto mockFs               = std::make_unique<MockFileSystemOperator>();
+    std::string_view testData = "1234 (test) R 1 1 1 0 -1 4194368 1234 0 0 0 1000 2000 3000 4000";
+
+    // Set up mock to return our test data
+    mockFs->MockFileContent("/proc/1234/stat", std::string(testData));
+
+    FingerprintStoreTest mockedFps(std::move(mockFs));
+
+    SECTION("Process fingerprint computation")
+    {
+        auto fpRet = mockedFps.ComputeForTask(1234, std::nullopt);
+        REQUIRE(fpRet.status == DCGM_ST_OK);
+        REQUIRE(fpRet.fp.has_value());
+        REQUIRE(fpRet.taskState.has_value());
+        REQUIRE(fpRet.taskState.value() == 'R');
+    }
+
+    SECTION("Thread fingerprint computation")
+    {
+        // Set up mock for thread path
+        auto threadMockFs = std::make_unique<MockFileSystemOperator>();
+        threadMockFs->MockFileContent("/proc/1234/task/5678/stat", std::string(testData));
+
+        FingerprintStoreTest threadFps(std::move(threadMockFs));
+        auto fpRet = threadFps.ComputeForTask(1234, 5678);
+        REQUIRE(fpRet.status == DCGM_ST_OK);
+        REQUIRE(fpRet.fp.has_value());
+        REQUIRE(fpRet.taskState.has_value());
+        REQUIRE(fpRet.taskState.value() == 'R');
+    }
+
+    SECTION("Non-existent process")
+    {
+        auto fpRet = mockedFps.ComputeForTask(9999, std::nullopt);
+        REQUIRE(fpRet.status == DCGM_ST_NO_DATA);
+        REQUIRE(!fpRet.fp.has_value());
+        REQUIRE(!fpRet.taskState.has_value());
     }
 }

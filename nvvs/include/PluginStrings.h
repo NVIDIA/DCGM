@@ -243,6 +243,7 @@
 
 #define MEMORY_STR_IS_ALLOWED                "is_allowed" /* Is the memory plugin allowed to run? */
 #define MEMORY_STR_MIN_ALLOCATION_PERCENTAGE "minimum_allocation_percentage"
+#define MEMORY_STR_MAX_FREE_MEMORY_MB        "max_free_memory_mb" /* Maximum free memory to use in MB */
 
 // Parameters controlling the cache subtest
 #define MEMORY_SUBTEST_L1TAG                     "gpu_memory_cache"
@@ -276,6 +277,9 @@
 #define MEMTEST_STR_TEST9          "test9"          /* whether to enable test9 */
 #define MEMTEST_STR_TEST10         "test10"         /* whether to enable test10 */
 #define MEMTEST_STR_NUM_CHUNKS     "num_chunks"     /* number of memory chunks to use */
+#define MEMTEST_STR_MIN_ALLOCATION_PERCENTAGE                                                                        \
+    "minimum_allocation_percentage" /* The minimum percentage of free memory to allocate to the test. If free memory \
+is less than this percentage, the test will be skipped */
 
 /******************************************************************************
  * HARDWARE PLUGIN
@@ -332,10 +336,10 @@
 #define MEMBW_PLUGIN_NAME     "memory_bandwidth"
 #define MEMBW_PLUGIN_CATEGORY PLUGIN_CATEGORY_STRESS
 
-#define MEMBW_STR_MINIMUM_BANDWIDTH "minimum_bandwidth" /* minimum bandwidth in MB / s */
-
-#define MEMBW_STR_IS_ALLOWED          "is_allowed"     /* Is the memory bandwidth plugin allowed to run? */
-#define MEMBW_STR_SBE_ERROR_THRESHOLD "max_sbe_errors" /* Threshold beyond which sbe's are treated as errors */
+#define MEMBW_STR_MINIMUM_BANDWIDTH   "minimum_bandwidth" /* minimum bandwidth in MB / s */
+#define MEMBW_STR_MEMORY_SIZE_MB      "memory_size_mb"    /* Size of each individual test array in MB */
+#define MEMBW_STR_IS_ALLOWED          "is_allowed"        /* Is the memory bandwidth plugin allowed to run? */
+#define MEMBW_STR_SBE_ERROR_THRESHOLD "max_sbe_errors"    /* Threshold beyond which sbe's are treated as errors */
 
 /****************************************************************************
  * PULSE TEST PLUGIN

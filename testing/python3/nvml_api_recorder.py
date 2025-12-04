@@ -712,13 +712,6 @@ def nvmlDeviceGetSramEccErrorStatus(device):
 
 
 class NVMLApiRecorder(object):
-    _attrs = {}
-    # mapping all fake nvmlGpuInstance_t to (parent device uuid, real nvmlGpuInstance_t)
-    _gpu_instances_mapping = {}
-    # mapping all fake nvmlComputeInstance_t to (parent device uuid, fake nvmlGpuInstance_t, real nvmlComputeInstance_t)
-    _compute_instance_mapping = {}
-    # an array of (mig device uuid, mig device)
-    _mig_devices_collector = []
     _nvml_global_attr_funcs = [
         NVMLSimpleFunc("nvmlDeviceGetCount", basic_type_value_parser),
         NVMLSimpleFunc("nvmlSystemGetDriverVersion", basic_type_value_parser),
@@ -1141,6 +1134,13 @@ class NVMLApiRecorder(object):
     ]
 
     def __enter__(self):
+        self._attrs = {}
+        # mapping all fake nvmlGpuInstance_t to (parent device uuid, real nvmlGpuInstance_t)
+        self._gpu_instances_mapping = {}
+        # mapping all fake nvmlComputeInstance_t to (parent device uuid, fake nvmlGpuInstance_t, real nvmlComputeInstance_t)
+        self._compute_instance_mapping = {}
+        # an array of (mig device uuid, mig device)
+        self._mig_devices_collector = []
         nvmlInit()
         return self
 

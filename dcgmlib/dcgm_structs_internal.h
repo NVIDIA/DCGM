@@ -1173,6 +1173,7 @@ DCGM_CASSERT(dcgmChildProcessParams_version1 == (long)0x01000040, 1);
 DCGM_CASSERT(dcgmChildProcessStatus_version1 == (long)0x01000014, 1);
 DCGM_CASSERT(dcgmLink_version1 == (long)0x01000004, 1);
 DCGM_CASSERT(dcgmWorkloadPowerProfile_version == (long)0x01000038, 1);
+DCGM_CASSERT(dcgmEnvVarInfo_version1 == (long)0x01000208, 1);
 
 #ifndef DCGM_ARRAY_CAPACITY
 #ifdef __cplusplus

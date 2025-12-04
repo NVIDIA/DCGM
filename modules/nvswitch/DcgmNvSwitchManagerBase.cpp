@@ -34,6 +34,7 @@ DcgmNvSwitchManagerBase::DcgmNvSwitchManagerBase(dcgmCoreCallbacks_t *dcc)
     : m_numNvSwitches(0)
     , m_nvSwitches {}
     , m_coreProxy(*dcc)
+    , m_lastConnectionStatus(ConnectionStatus::Unknown)
 {}
 
 /*************************************************************************/
@@ -362,7 +363,7 @@ dcgmReturn_t DcgmNvSwitchManagerBase::UpdateFields(timelib64_t &nextUpdateTime, 
 
     for (const auto &[fieldId, entities] : fieldEntityMap)
     {
-        if (m_paused)
+        if (CheckConnectionStatus() == ConnectionStatus::Paused)
         {
             log_debug("The NvSwitch module is paused. Filling fieldId {} with blank values", fieldId);
             BufferBlankValueForAllEntities(fieldId, buf, entities);
@@ -540,6 +541,64 @@ dcgmReturn_t DcgmNvSwitchManagerBase::SetEntityNvLinkLinkState(dcgm_nvswitch_msg
 dcgmReturn_t DcgmNvSwitchManagerBase::ReadIbCxStatusAllIbCxCards()
 {
     return DCGM_ST_NOT_SUPPORTED;
+}
+
+std::string_view DcgmNvSwitchManagerBase::GetConnectionStatusMessage(ConnectionStatus status) noexcept
+{
+    switch (status)
+    {
+        case ConnectionStatus::Ok:
+            return "The connection is okay";
+        case ConnectionStatus::Disconnected:
+            return "Not attached to driver, aborting";
+        case ConnectionStatus::Paused:
+            return "The nvswitch manager is paused. No actual data is available";
+        default:
+            return "Unknown connection status";
+    }
+}
+
+dcgmReturn_t DcgmNvSwitchManagerBase::CheckAndLogConnectionStatus()
+{
+    auto currentStatus             = CheckConnectionStatus();
+    std::string_view statusMessage = GetConnectionStatusMessage(currentStatus);
+    bool const statusChanged       = (currentStatus != m_lastConnectionStatus);
+
+    if (statusChanged)
+    {
+        m_lastConnectionStatus = currentStatus;
+    }
+
+    switch (currentStatus)
+    {
+        case ConnectionStatus::Disconnected:
+            if (statusChanged)
+            {
+                log_error("Status changed to disconnected: {}", statusMessage);
+            }
+            return DCGM_ST_UNINITIALIZED;
+
+        case ConnectionStatus::Paused:
+            if (statusChanged)
+            {
+                log_debug("Status changed to paused: {}", statusMessage);
+            }
+            return DCGM_ST_PAUSED;
+
+        case ConnectionStatus::Ok:
+            if (statusChanged)
+            {
+                log_debug("Status changed to connected: {}", statusMessage);
+            }
+            return DCGM_ST_OK;
+
+        default:
+            if (statusChanged)
+            {
+                log_error("Status changed to unknown: {}", statusMessage);
+            }
+            return DCGM_ST_UNINITIALIZED;
+    }
 }
 
 /*************************************************************************/

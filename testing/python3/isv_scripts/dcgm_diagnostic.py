@@ -34,7 +34,8 @@ class RunDCGM():
     
     def __enter__(self):
         dcgm_structs._dcgmInit()
-        self.handle = dcgm_agent.dcgmInit()
+        dcgm_agent.dcgmInit()
+        self.handle = dcgm_agent.dcgmStartEmbedded(self.opMode)
         return self.handle
         
     def __exit__(self, eType, value, traceback):

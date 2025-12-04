@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include "EntitySet.h"
-#include "PluginStrings.h"
 #include "Test.h"
 
 void EntitySet::SetName(std::string const &name)
@@ -122,4 +121,55 @@ void EntitySet::ClearEntityIds()
 unsigned int EntitySet::GetNumTests() const
 {
     return m_tests.size();
+}
+
+std::vector<dcgmDiagPluginEntityInfo_v1> EntitySet::PopulateEntityInfo() const
+{
+    std::vector<dcgmDiagPluginEntityInfo_v1> entityInfo;
+    for (auto const &entityId : m_entityIds)
+    {
+        if (!m_skippedForFutureTests.contains(entityId))
+        {
+            dcgmDiagPluginEntityInfo_v1 ei;
+            ei.entity.entityId      = entityId;
+            ei.entity.entityGroupId = m_entityGroup;
+            entityInfo.push_back(ei);
+        }
+    }
+    return entityInfo;
+}
+
+std::unordered_map<dcgm_field_eid_t, std::string> EntitySet::GetSkippedEntities() const
+{
+    return m_skippedForFutureTests;
+}
+
+void EntitySet::UpdateSkippedEntities(dcgmDiagEntityResults_v2 const &result)
+{
+    std::unordered_map<unsigned int, std::string> const errorToSkip
+        = { { DCGM_FR_UNCORRECTABLE_ROW_REMAP,
+              "Skipping this test due to previously detected uncorrectable row remapping." },
+            { DCGM_FR_PENDING_ROW_REMAP, "Skipping this test due to previously detected pending row remapping." },
+            { DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS,
+              "Skipping this test due to previously detected pending page retirements." },
+            { DCGM_FR_PENDING_PAGE_RETIREMENTS,
+              "Skipping this test due to previously detected pending page retirements." },
+            { DCGM_FR_RETIRED_PAGES_LIMIT,
+              "Skipping this test due to previously detected unacceptable total page retirements." },
+            { DCGM_FR_ROW_REMAP_FAILURE, "Skipping this test due to previously detected row remapping failure." } };
+
+    auto errors = std::span(result.errors, std::min(static_cast<size_t>(result.numErrors), std::size(result.errors)));
+    for (auto const &error : errors)
+    {
+        auto it = errorToSkip.find(error.code);
+        if (it == errorToSkip.end())
+        {
+            continue;
+        }
+        if (error.entity.entityGroupId != m_entityGroup)
+        {
+            continue;
+        }
+        m_skippedForFutureTests.insert({ error.entity.entityId, it->second });
+    }
 }

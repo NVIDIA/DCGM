@@ -118,7 +118,7 @@ private:
     std::optional<DcgmIpcTcpServerParams_t> m_tcpParameters;
     std::optional<DcgmIpcDomainServerParams_t> m_domainParameters;
 
-    /* Worker threads where cllbacks like
+    /* Worker threads where callbacks like
        ProcessMessage() and OnClientDisconnect() are called from */
     DcgmNs::ThreadPool m_workersPool;
 
@@ -158,6 +158,20 @@ public:
     static const int DCGM_IPC_CONNECTION_BACKLOG = 6;
 
     /*************************************************************************/
+    /**
+     * Constructor with hang detection support
+     *
+     * @param numWorkerThreads Number of worker threads to create
+     * @param monitor Hang detect monitor for worker threads and IPC thread
+     */
+    DcgmIpc(int numWorkerThreads, HangDetectMonitor *monitor);
+
+    /*************************************************************************/
+    /**
+     * Constructor without hang detection support
+     *
+     * @param numWorkerThreads Number of worker threads to create
+     */
     explicit DcgmIpc(int numWorkerThreads);
     ~DcgmIpc();
 
@@ -244,6 +258,12 @@ public:
     dcgmReturn_t CloseConnection(dcgm_connection_id_t connectionId);
 
 private:
+    /*************************************************************************/
+    /**
+     * Set the defaults for the DcgmIpc instance
+     */
+    void SetDefaults();
+
     /*************************************************************************/
     /* Helpers to start listening sockets */
     dcgmReturn_t InitTCPListenerSocket();

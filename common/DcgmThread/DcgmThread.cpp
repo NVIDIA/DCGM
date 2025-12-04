@@ -17,6 +17,9 @@
 
 #include "DcgmThread.h"
 #include "DcgmLogging.h"
+#include "HangDetectMonitor.h"
+#include "TaskContextManager.hpp"
+
 #include <cstdio>
 
 #ifdef __linux__
@@ -379,3 +382,7 @@ int DcgmThread::HasExited()
 }
 
 /*****************************************************************************/
+void DcgmThread::SetHangDetectMonitor(HangDetectMonitor *monitor)
+{
+    m_monitor = monitor;
+}

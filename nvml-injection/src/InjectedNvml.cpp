@@ -845,11 +845,11 @@ bool InjectedNvml::ParseDevices(const YAML::Node &devices)
         {
             m_serialToDevice[deviceSerial] = iter;
         }
-        nvmlPciInfo_t *pciInfo
-            = ah.GetAttribute(INJECTION_PCIINFO_KEY).GetCompoundValue().AsInjectionArgument().AsPciInfoPtr();
-        if (pciInfo != nullptr)
+        if (ah.GetAttribute(INJECTION_PCIINFO_KEY).GetCompoundValue().AsInjectionArgument().AsPciInfoPtr() != nullptr)
         {
-            m_busIdToDevice[pciInfo->busId] = iter;
+            nvmlPciInfo_t pciInfo
+                = *ah.GetAttribute(INJECTION_PCIINFO_KEY).GetCompoundValue().AsInjectionArgument().AsPciInfoPtr();
+            m_busIdToDevice[pciInfo.busId] = iter;
         }
     }
 
@@ -2401,12 +2401,12 @@ nvmlReturn_t InjectedNvml::RemoveGpu(std::string const &uuid)
 
     std::string serial = ahIter->GetAttribute(INJECTION_SERIAL_KEY).GetCompoundValue().AsInjectionArgument().AsString();
     unsigned int index = ahIter->GetAttribute(INJECTION_INDEX_KEY).GetCompoundValue().AsInjectionArgument().AsUInt();
-    nvmlPciInfo_t *pciInfo
-        = ahIter->GetAttribute(INJECTION_PCIINFO_KEY).GetCompoundValue().AsInjectionArgument().AsPciInfoPtr();
+    nvmlPciInfo_t pciInfo
+        = *ahIter->GetAttribute(INJECTION_PCIINFO_KEY).GetCompoundValue().AsInjectionArgument().AsPciInfoPtr();
 
     m_indexToDevice.erase(m_indexToDevice.begin() + index);
     m_serialToDevice.erase(serial);
-    m_busIdToDevice.erase(pciInfo->busId);
+    m_busIdToDevice.erase(pciInfo.busId);
 
     // Update index attribute of remaining devices based on new index
     for (unsigned int i = 0; i < m_indexToDevice.size(); i++)
@@ -2416,7 +2416,7 @@ nvmlReturn_t InjectedNvml::RemoveGpu(std::string const &uuid)
     }
 
     nvmlDeviceWithIdentifiers devIds = {
-        .pciBusId = pciInfo->busId,
+        .pciBusId = pciInfo.busId,
         .uuid     = uuid,
         .serial   = std::move(serial),
         .index    = index,

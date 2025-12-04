@@ -133,6 +133,15 @@ while [[ $# -ne 0 ]]; do
         --debug|-d)
             cmake_build_types+=(Debug)
             ;;
+        --debug-find)
+            cmake_arguments+=(--debug-find)
+            ;;
+        --debug-find-pkg)
+            cmake_arguments+=(--debug-find-pkg=$2)
+            build_arguments+=($1 $2)
+            shift 2
+            continue
+            ;;
         --gcc-analyzer)
             cmake_arguments+=(-D GCC_ANALYZER=ON)
             ;;
@@ -255,7 +264,7 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
             pushd "${DIR}/testing/python3"
             export PYLINTHOME="$CMAKE_BINARY_DIR/pylint_out"
             mkdir --parents "$PYLINTHOME"
-            find . -type f -name '*.py' | xargs pylint --rcfile pylintrc ../../multi-node/dcgm_multi-node_health_check.py
+            find . -type f -name '*.py' | xargs pylint --rcfile pylintrc
             popd
         fi
 

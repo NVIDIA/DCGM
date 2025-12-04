@@ -53,6 +53,28 @@ public:
 
     unsigned int GetNumTests() const;
 
+    /*
+     * Populate the entity info for the plugin.
+     * If an entity id is listed in m_skippedForFutureTests, it will not be included in the entity info.
+     *
+     * @return A vector of entity info.
+     */
+    std::vector<dcgmDiagPluginEntityInfo_v1> PopulateEntityInfo() const;
+
+    /*
+     * Get the skipped entities and their reasons.
+     *
+     * @return A map of entity id to reason for skipping.
+     */
+    std::unordered_map<dcgm_field_eid_t, std::string> GetSkippedEntities() const;
+
+    /*
+     * Update the skipped entities based on the results of the test.
+     *
+     * @param results The results of the test.
+     */
+    void UpdateSkippedEntities(dcgmDiagEntityResults_v2 const &results);
+
 private:
     std::string m_name;
     std::vector<Test *> m_customTestObjs;      // user-specified test objects
@@ -63,6 +85,10 @@ private:
     dcgm_field_entity_group_t m_entityGroup = DCGM_FE_NONE;
     std::vector<dcgm_field_eid_t> m_entityIds;
     std::unordered_set<std::string> m_tests; // set of tests that will be run
+
+    // When an entity id is listed in this map, it will be skipped for future tests.
+    // The string is the reason for skipping.
+    std::unordered_map<dcgm_field_eid_t, std::string> m_skippedForFutureTests;
 };
 
 #endif //_NVVS_NVVS_EntitySet_H_

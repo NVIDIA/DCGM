@@ -17,6 +17,7 @@
 #include "Memtest.h"
 #include "PluginStrings.h"
 #include "dcgm_fields.h"
+#include <PluginCommon.h>
 
 /*****************************************************************************/
 MemtestPlugin::MemtestPlugin(dcgmHandle_t handle)
@@ -45,6 +46,7 @@ MemtestPlugin::MemtestPlugin(dcgmHandle_t handle)
     tp->AddString(MEMTEST_STR_TEST10, "True");
     tp->AddString(MEMTEST_STR_NUM_CHUNKS, "1");
     tp->AddString(PS_IGNORE_ERROR_CODES, "");
+    tp->AddDouble(MEMTEST_STR_MIN_ALLOCATION_PERCENTAGE, DEFAULT_MIN_ALLOCATION_PERCENTAGE);
     m_infoStruct.defaultTestParameters = tp;
 }
 

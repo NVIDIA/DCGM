@@ -13,13 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <dcgm_nvml.h>
+
+// #include <dcgm_nvml.h>
+#include "dcgm_nvml.h"
 #include "nvml_error_strings.h"
 #include "nvml_loader_hook.h"
+
+#include <TaskContextManager.hpp>
+#include <atomic>
 #include <dlfcn.h>
 #include <cstdlib>
-
-#include <atomic>
+#include <cstdio>
 #include <mutex>
 
 static void *g_nvmlLib                                     = 0;
@@ -28,11 +32,15 @@ static std::atomic_uint32_t g_nvmlStaticLibResetHooksCount = 1;
 static bool g_injectionLibraryLoaded = false;
 #endif
 
-// The following defines the hooking mechanism that calls the hooked function
-// set by a user of this library. Insert this macro to enable an API to be hooked
-// if the hooked function is set. This was done because nvmlInit() is a special
-// case which must be hookable before it attempts to dynamically load a library.
-#define NVML_API_HOOK(libFunctionName, ...)                                          \
+/**
+ * The following defines the hooking mechanism that calls the hooked function
+ * set by a user of this library. Insert this macro to enable an API to be hooked
+ * if the hooked function is set. This was done because nvmlInit() is a special
+ * case which must be hookable before it attempts to dynamically load a library.
+ *
+ * The pre_ and post_ functions are called on entry and exit from the hook.
+ */
+ #define NVML_API_HOOK(libFunctionName, ...)                                         \
     do                                                                               \
     {                                                                                \
         if ((NULL != libFunctionName##HookedFunc)                                    \
@@ -41,11 +49,18 @@ static bool g_injectionLibraryLoaded = false;
             nvmlReturn_t hookedFuncResult;                                           \
             /* The number of times this hook was reset equals the number of times */ \
             /* the static library was reset. So call the hooked function */          \
+            pre_##libFunctionName();                                                 \
             hookedFuncResult = (*libFunctionName##HookedFunc)(__VA_ARGS__);          \
+            post_##libFunctionName();                                                \
             return hookedFuncResult;                                                 \
         }                                                                            \
     } while (0)
 
+/**
+ * This macro creates a dynamic wrapper for an NVML API entry point.
+ * It creates the functions to set and reset hooked functions.
+ * It also creates `pre_` and `post_` functions called on entry and exit from the function.
+ */
 #define NVML_DYNAMIC_WRAP(newName, libFunctionName, argtypes, ...)                                       \
     static libFunctionName##_loader_t libFunctionName##DefaultFunc = NULL;                               \
     static libFunctionName##_loader_t libFunctionName##HookedFunc  = NULL;                               \
@@ -55,10 +70,26 @@ static bool g_injectionLibraryLoaded = false;
         libFunctionName##HookResetCount = g_nvmlStaticLibResetHooksCount;                                \
         libFunctionName##HookedFunc     = nvmlFuncHook;                                                  \
     }                                                                                                    \
+                                                                                                         \
     void reset_##libFunctionName##Hook(void)                                                             \
     {                                                                                                    \
         libFunctionName##HookedFunc = NULL;                                                              \
     }                                                                                                    \
+                                                                                                         \
+    static __always_inline void pre_##libFunctionName(void) {                                            \
+        TaskContextManager *taskCtxMgr = static_cast<TaskContextManager *>(GetTaskContextManager());     \
+        if (taskCtxMgr) {                                                                                \
+            taskCtxMgr->addTask();                                                                       \
+        }                                                                                                \
+    }                                                                                                    \
+                                                                                                         \
+    static __always_inline void post_##libFunctionName(void) {                                           \
+        TaskContextManager *taskCtxMgr = static_cast<TaskContextManager *>(GetTaskContextManager());     \
+        if (taskCtxMgr) {                                                                                \
+            taskCtxMgr->removeTask();                                                                    \
+        }                                                                                                \
+    }                                                                                                    \
+                                                                                                         \
     nvmlReturn_t newName argtypes                                                                        \
     {                                                                                                    \
         static volatile uint32_t isLookupDone = 0;                                                       \
@@ -82,7 +113,10 @@ static bool g_injectionLibraryLoaded = false;
         if (!libFunctionName##DefaultFunc)                                                               \
             return NVML_ERROR_FUNCTION_NOT_FOUND;                                                        \
                                                                                                          \
-        return (*libFunctionName##DefaultFunc)(__VA_ARGS__);                                             \
+        pre_##libFunctionName();                                                                         \
+        nvmlReturn_t result = (*libFunctionName##DefaultFunc)(__VA_ARGS__);                              \
+        post_##libFunctionName();                                                                        \
+        return result;                                                                                   \
     }
 
 static void (*nvmlLoaderGetProcAddress(void *lib, const char *name))(void)
@@ -94,6 +128,9 @@ static void *nvmlLoaderLoadLibrary(const char *name)
 {
     return dlopen(name, RTLD_NOW);
 }
+
+/*************************************************************************************/
+/* Creates hookable functions for each defined API entry point. */
 
 #define NVML_ENTRY_POINT(nvmlFuncname, tsapiFuncname, argtypes, fmt, ...) \
     NVML_DYNAMIC_WRAP(nvmlFuncname, nvmlFuncname, argtypes, ##__VA_ARGS__)

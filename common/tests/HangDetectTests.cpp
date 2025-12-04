@@ -673,3 +673,53 @@ TEST_CASE("HangDetect::Concurrent Operations")
     // Print number of tasks still registered at end of test (should be 0 or close to 0)
     INFO("  Tasks still registered at end: " << stillRegistered);
 }
+
+TEST_CASE_METHOD(HangDetectTestFixture, "HangDetect::GetTaskState")
+{
+    SECTION("Get process state for registered process")
+    {
+        REQUIRE(SetupAndRegisterProcess(1234) == DCGM_ST_OK);
+
+        auto state = m_detector.GetTaskState(1234);
+        REQUIRE(state.has_value());
+        REQUIRE(state.value() == 'S'); // From TASK_STATE_1
+    }
+
+    SECTION("Get process state for registered task")
+    {
+        REQUIRE(SetupAndRegisterTask(1234, 5678) == DCGM_ST_OK);
+
+        auto state = m_detector.GetTaskState(1234, 5678);
+        REQUIRE(state.has_value());
+        REQUIRE(state.value() == 'S'); // From TASK_STATE_1
+    }
+
+    SECTION("Get process state for non-existent process")
+    {
+        auto state = m_detector.GetTaskState(9999);
+        REQUIRE(!state.has_value());
+    }
+
+    SECTION("Get process state for non-existent task")
+    {
+        auto state = m_detector.GetTaskState(1234, 9999);
+        REQUIRE(!state.has_value());
+    }
+
+    SECTION("Process state changes are reflected")
+    {
+        REQUIRE(SetupAndRegisterProcess(1234) == DCGM_ST_OK);
+
+        // Initial state
+        auto state1 = m_detector.GetTaskState(1234);
+        REQUIRE(state1.has_value());
+        REQUIRE(state1.value() == 'S');
+
+        // Change state
+        m_mockFsRef.MockFileContent("/proc/1234/stat", TASK_STATE_2);
+
+        auto state2 = m_detector.GetTaskState(1234);
+        REQUIRE(state2.has_value());
+        REQUIRE(state2.value() == 'S'); // Still 'S' since TASK_STATE_2 also has 'S'
+    }
+}

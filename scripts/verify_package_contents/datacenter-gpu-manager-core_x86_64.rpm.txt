@@ -24,7 +24,6 @@
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/libpluginCommon.so.<MAJORVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/libpluginCommon.so.<SOFTWAREVERSION>
-/usr/sbin/dcgm_multi-node_health_check.py
 /usr/sbin/gather-dcgm-logs.sh
 /usr/share/datacenter-gpu-manager-<MAJORVERSION>
 /usr/share/datacenter-gpu-manager-<MAJORVERSION>/bindings

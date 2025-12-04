@@ -23,6 +23,7 @@
 #include "DcgmiTest.h"
 #include "DeviceMonitor.h"
 #include "Diag.h"
+#include "Environment.h"
 #include "FieldGroup.h"
 #include "Group.h"
 #include "Health.h"
@@ -59,8 +60,25 @@
     if (arg.getValue() < 0)                       \
     throw TCLAP::CmdLineParseException("Positive value expected, negative value found", name)
 
-static const string g_hostnameHelpText
+static const std::string g_hostnameHelpText
     = "Connects to specified IP or fully-qualified domain name. To connect to a host engine that was started with -d (unix socket), prefix the unix socket filename with 'unix://'. [default = localhost]";
+
+static const std::string g_supportedEntitiesAndExamples
+    = "\nSupported entities: compute_instance, core, cpu, cx, gpu, instance, link, nvswitch, vgpu."
+      "\nExamples:"
+      "\n- Basic GPU IDs: '0,1,2' (GPUs 0, 1, and 2)"
+      "\n- Mixed entities: 'gpu:7,instance:1,compute_instance:2,nvswitch:5,cpu:3,core:4'"
+      "\n- Full names: 'gpu:3,instance:1,compute_instance:2,vgpu:1,nvswitch:0,cpu:0,core:0,cx:0,link:0'"
+      "\n- Short names: 'g:0,i:1,c:2,v:1,n:0,cpu:0,core:0,cx:0,l:0'"
+      "\n- Range syntax: '{0-2},instance:{0-1},cpu:{0-3}'"
+      "\n- Wildcards:"
+      "\n\t'*,cpu:*' (all available GPUs and CPUs)"
+      "\n\t'*/*' (all MIG GPU instances)"
+      "\n\t'*/*/*' (all Compute Instances)"
+      "\n\t'0/*' (all MIG GPU instances on GPU 0)"
+      "\n\t'0/*/0' (all Compute Instances 0 on all GPU Instance on GPU 0)"
+      "\n\t'*,*/*,*/*/*' (all possible GPUs, MIG GPU instances, and Compute Instances)"
+      "\n\t'cx:*' (all available CXs)";
 
 static const std::string HW_SLOWDOWN("hw_slowdown");
 static const std::string SW_THERMAL("sw_thermal");
@@ -191,6 +209,9 @@ dcgmReturn_t CommandLineParser::ProcessCommandLine(int argc, char const *const *
             ProcessVersionInfoCommandLine(argc, argv);
             return DCGM_ST_OK;
         }
+
+        // Validate CUDA_VISIBLE_DEVICES environment variable
+        ValidateEnvironmentInfo(argc, argv, "CUDA_VISIBLE_DEVICES");
 
         // call the correct subsystem
         auto it = m_functionMap.find(subsystemArg.getValue());
@@ -592,14 +613,16 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
     TCLAP::ValueArg<std::string> addDevice(
         "a",
         "add",
-        "Add device(s) to group. (csv gpuIds or entityIds simlar to gpu:0, instance:1, compute_instance:2, nvswitch:994, cpu:3, core:4)",
+        fmt::format(
+            "Add device(s) to group. (csv gpuIds or entityIds similar to gpu:0, instance:1, compute_instance:2, nvswitch:994, cpu:3, core:4).{}",
+            g_supportedEntitiesAndExamples),
         false,
         "",
         "entityId");
     TCLAP::ValueArg<std::string> removeDevice(
         "r",
         "remove",
-        "Remove device(s) from group. (csv gpuIds, or entityIds like gpu:0,nvswitch:994)",
+        "Remove device(s) from group. (csv gpuIds, or entityIds like gpu:0,nvswitch:994). Please refer to add option's help for examples.",
         false,
         "",
         "entityId");
@@ -1949,8 +1972,8 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                            " 4 - Extended (Longer-running System HW Diagnostics) \n"
                                            "Specific tests to run may be specified by name, and multiple tests may be "
                                            "specified as a comma separated list. For example, the command:\n\n"
-                                           " dcgmi diag -r \"sm stress,diagnostic\" \n\n"
-                                           "would run the SM Stress and Diagnostic tests together.",
+                                           " dcgmi diag -r \"pcie,diagnostic\" \n\n"
+                                           "would run the PCIE and Diagnostic tests together.",
                                            false,
                                            "1",
                                            "diag",
@@ -2076,7 +2099,13 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                              "iterations",
                                              cmd);
     TCLAP::ValueArg<std::string> entityIds(
-        "i", "entity-id", " Comma-separated list of entities to run the diag on.", false, "*,cpu:*", "entityId", cmd);
+        "i",
+        "entity-id",
+        fmt::format(" Comma-separated list of entities to run the diag on.{}", g_supportedEntitiesAndExamples),
+        false,
+        "*,cpu:*",
+        "entityId",
+        cmd);
 
     TCLAP::ValueArg<unsigned int> timeout(
         "t",
@@ -2106,7 +2135,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
         "",
         "ignoreErrorCodes",
         cmd);
-
+    TCLAP::SwitchArg enableHeartbeat("", "enable-heartbeat", "Enable heartbeat for the diagnostic.", cmd, false);
 
     // Set help output information
     helpOutput.addDescription("diag -- Used to run diagnostics on the system.");
@@ -2260,9 +2289,12 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     }
     ValidateParameters(concatenatedParams);
 
-    dcgmRunDiag_v10 drd = {};
+    // Check if DCGM_DIAG_REMOVED environment variable is set
+    EnvironmentInfo envInfo = EnvironmentInfo(hostAddress.getValue(), "DCGM_DIAG_REMOVED");
+    envInfo.CheckDiagEnabledEnvVar();
 
-    drd.version = dcgmRunDiag_version10;
+    dcgmRunDiag_v10 drd = {};
+    drd.version         = dcgmRunDiag_version10;
     std::string error;
 
     // We set it to BLANK by default so the processes underneath can use the ENV
@@ -2295,6 +2327,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
                                                 expectedNumEntities.getValue(),
                                                 watchFrequency.getValue(),
                                                 ignoreErrorCodes.getValue(),
+                                                enableHeartbeat.getValue(),
                                                 error);
 
     if (result == DCGM_ST_BADPARAM)
@@ -2661,15 +2694,17 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
 
-    TCLAP::ValueArg<std::string> entityIds("i",
-                                           "entity-id",
-                                           " Comma-separated list of entities to run the dmon on. "
-                                           "Default is -1 which runs for all supported GPU. Run dcgmi discovery -c to "
-                                           "check list of available GPU entities",
-                                           false,
-                                           "-1",
-                                           "entityId",
-                                           cmd);
+    TCLAP::ValueArg<std::string> entityIds(
+        "i",
+        "entity-id",
+        fmt::format(" Comma-separated list of entities to run the dmon on. "
+                    "Default is -1 which runs for all supported GPU. Run dcgmi discovery -c to "
+                    "check list of available GPU entities.{}",
+                    g_supportedEntitiesAndExamples),
+        false,
+        "-1",
+        "entityId",
+        cmd);
 
     TCLAP::ValueArg<std::string> groupId(
         "g", "group-id", " The group to query on the specified host.", false, "-1", "groupId", cmd);
@@ -3045,4 +3080,36 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     }
 
     return result;
+}
+
+void CommandLineParser::ValidateEnvironmentInfo(int argc, char const *const *argv, std::string const &envVarName)
+{
+    std::string host = "localhost";
+
+    try
+    {
+        TCLAP::CmdLine cmd("", ' ', "");
+        TCLAP::ValueArg<std::string> hostArg("", "host", "Host address", false, "localhost", "IP/FQDN");
+        TCLAP::SwitchArg helpArg("h", "help", "Help", false);
+        cmd.add(&hostArg);
+        cmd.add(&helpArg);
+
+        cmd.ignoreUnmatched(true);
+        cmd.parse(argc, argv);
+
+        // Skip validation if this is a help request
+        if (helpArg.getValue())
+        {
+            return;
+        }
+
+        host = hostArg.getValue();
+    }
+    catch (TCLAP::ArgException const &e)
+    {
+        log_error("Failed to parse host argument. Using default host: localhost");
+    }
+
+    EnvironmentInfo envInfo = EnvironmentInfo(host, envVarName);
+    envInfo.ValidateEnvVarValue();
 }

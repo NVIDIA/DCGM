@@ -114,7 +114,7 @@ static unsigned int getNvsdmPlatformFieldId(unsigned int dcgmFieldId)
     return NVSDM_PLATFORM_TELEM_CTR_NONE;
 }
 
-static unsigned int getNvsdmConnextXFeildId(unsigned int dcgmFieldId)
+static unsigned int getNvsdmConnextXFieldId(unsigned int dcgmFieldId)
 {
     switch (dcgmFieldId)
     {
@@ -148,7 +148,7 @@ static inline bool isDcgmToNvsdmFieldAvailable(unsigned int dcgmFieldId)
     if (dcgmFieldId != DCGM_FI_DEV_NVSWITCH_DEVICE_UUID && dcgmFieldId != DCGM_FI_DEV_CONNECTX_HEALTH
         && getNvsdmPortFieldId(dcgmFieldId) == NVSDM_PORT_TELEM_CTR_NONE
         && getNvsdmPlatformFieldId(dcgmFieldId) == NVSDM_PLATFORM_TELEM_CTR_NONE
-        && getNvsdmConnextXFeildId(dcgmFieldId) == NVSDM_CONNECTX_TELEM_CTR_NONE)
+        && getNvsdmConnextXFieldId(dcgmFieldId) == NVSDM_CONNECTX_TELEM_CTR_NONE)
     {
         log_info("DCGM fieldId {} doesn't map to any of the nvsdm field ids.", dcgmFieldId);
         return false;
@@ -197,28 +197,97 @@ bool DcgmNvsdmManager::IsValidNvSwitchId(dcgm_field_eid_t entityId)
 }
 
 /*************************************************************************/
-bool DcgmNvsdmManager::IsValidNvLinkId(dcgm_field_eid_t entityId)
+
+/**
+ * Result of validating NvLink ID
+ */
+enum class ValidateNvLinkIdResult
+{
+    NoError,
+    NotInitialized,
+    ExceedsMax,
+    Invalid,
+    Unknown
+};
+
+/*************************************************************************/
+
+/* Core validation logic without logging
+ * @param[in] entityId: The entity ID to validate
+ * @returns: Detailed validation status
+ */
+ValidateNvLinkIdResult DcgmNvsdmManager::ValidateNvLinkId(dcgm_field_eid_t entityId) const
 {
     if (entityId >= m_numNvSwitchPorts)
     {
-        log_error("entityId [{}] is not initialized. Number of nvsdm ports are [{}].", entityId, m_numNvSwitchPorts);
-        return false;
+        return ValidateNvLinkIdResult::NotInitialized;
     }
     if (entityId >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
     {
-        log_error(
-            "entityId [{}] for NvLink is more than max limit [{}].", entityId, DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH);
-        return false;
+        return ValidateNvLinkIdResult::ExceedsMax;
     }
     if (entityId >= m_nvSwitchPorts.size())
     {
-        log_error("entityId [{}] for NvLink is invalid, max [{}].", entityId, m_nvSwitchPorts.size());
+        return ValidateNvLinkIdResult::Invalid;
+    }
+    return ValidateNvLinkIdResult::NoError;
+}
+
+/*************************************************************************/
+void DcgmNvsdmManager::LogNvLinkValidationError(ValidateNvLinkIdResult status,
+                                                dcgm_field_eid_t entityId,
+                                                std::optional<dcgm_field_eid_t> switchEid) const
+{
+    std::string const entityContext
+        = switchEid ? fmt::format("Port entityId [{}] of switch entityId [{}]", entityId, *switchEid)
+                    : fmt::format("entityId [{}]", entityId);
+
+    switch (status)
+    {
+        case ValidateNvLinkIdResult::NotInitialized:
+            log_error("{} is not initialized. Number of nvsdm ports are [{}].", entityContext, m_numNvSwitchPorts);
+            break;
+        case ValidateNvLinkIdResult::ExceedsMax:
+            log_error("{} for NvLink is more than max limit [{}].", entityContext, DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH);
+            break;
+        case ValidateNvLinkIdResult::Invalid:
+            log_error("{} for NvLink is invalid, max [{}].", entityContext, m_nvSwitchPorts.size());
+            break;
+        case ValidateNvLinkIdResult::Unknown:
+            log_error("{} status is unknown.", entityContext);
+            break;
+        case ValidateNvLinkIdResult::NoError:
+            // No logging needed for valid case
+            break;
+    }
+}
+
+/*************************************************************************/
+
+bool DcgmNvsdmManager::IsValidNvLinkId(dcgm_field_eid_t entityId) const
+{
+    if (auto const status = ValidateNvLinkId(entityId); status != ValidateNvLinkIdResult::NoError)
+    {
+        LogNvLinkValidationError(status, entityId);
         return false;
     }
-
     return true;
 }
 
+/*************************************************************************/
+
+bool DcgmNvsdmManager::IsValidNvLinkId(dcgm_field_eid_t switchEid, dcgm_field_eid_t linkEid) const
+{
+    auto const status = ValidateNvLinkId(linkEid);
+    if (status != ValidateNvLinkIdResult::NoError)
+    {
+        LogNvLinkValidationError(status, linkEid, switchEid);
+        return false;
+    }
+    return true;
+}
+
+/*************************************************************************/
 static std::optional<double> nvsdmValToDouble(nvsdmVal_t val, uint16_t valType)
 {
     switch (valType)
@@ -370,7 +439,12 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
 
         param.telemValsArray[0].val.u64Val = 0; /* Reset val before querying. */
 
-        portId         = m_nvSwitchDevices[entityId].portIds[i];
+        portId = m_nvSwitchDevices[entityId].portIds[i];
+        if (!IsValidNvLinkId(entityId, portId))
+        {
+            // IsValidNvLinkId logs the error
+            return DCGM_ST_BADPARAM;
+        }
         nvsdmRet_t ret = m_nvsdm->nvsdmPortGetTelemetryValues(m_nvSwitchPorts[portId].port, &param);
         if (ret != NVSDM_SUCCESS || param.telemValsArray[0].status != NVSDM_SUCCESS)
         {
@@ -441,7 +515,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
         {
             if (!IsValidNvLinkId(entity.entityId))
             {
-                log_error("entityId [{}] for NvLink is not valid.", entity.entityId);
+                // IsValidNvLinkId logs the error
                 return DCGM_ST_BADPARAM;
             }
 
@@ -501,9 +575,13 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             unsigned int nvsdmPlatformFieldId = getNvsdmPlatformFieldId(fieldId);
             param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PLATFORM;
             param.telemValsArray[0].telemCtr  = nvsdmPlatformFieldId;
-            /* TODO(DCGM-4299): Using port 0 from switch for stub testing. Revisit after nvsdm library is live. */
-            nvsdmEntityId = m_nvSwitchDevices[entity.entityId].portIds[0];
-            targetPort    = m_nvSwitchPorts[nvsdmEntityId].port;
+            nvsdmEntityId                     = m_nvSwitchDevices[entity.entityId].portIds[0];
+            if (!IsValidNvLinkId(entity.entityId, nvsdmEntityId))
+            {
+                // IsValidNvLinkId logs the error
+                continue;
+            }
+            targetPort = m_nvSwitchPorts[nvsdmEntityId].port;
         }
         else if (entity.entityGroupId == DCGM_FE_CONNECTX)
         {
@@ -524,7 +602,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
                 continue;
             }
 
-            unsigned int const nvsdmConnectXFieldId = getNvsdmConnextXFeildId(fieldId);
+            unsigned int const nvsdmConnectXFieldId = getNvsdmConnextXFieldId(fieldId);
             param.telemValsArray[0].telemType       = NVSDM_TELEM_TYPE_CONNECTX;
             param.telemValsArray[0].telemCtr        = nvsdmConnectXFieldId;
         }
@@ -851,12 +929,11 @@ std::optional<std::vector<NvsdmPort>> DcgmNvsdmManager::ScanPorts(NvsdmDevice co
         return std::nullopt;
     }
 
-    unsigned int devicePortIdIndex = 0;
     for (auto &port : collector.data)
     {
-        if (devicePortIdIndex >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
+        if (ports.size() >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
         {
-            log_error("Max number of ports reached for device {}", dev.id);
+            log_info("Max number of ports reached for device {}", dev.id);
             continue;
         }
 
@@ -1076,19 +1153,10 @@ dcgmReturn_t DcgmNvsdmManager::ReadIbCxStatusAllIbCxCards()
 {
     log_debug("Reading IB CX cards status for all IB CX cards.");
 
-    switch (CheckConnectionStatus())
+    dcgmReturn_t returnValue = CheckAndLogConnectionStatus();
+    if (returnValue != DCGM_ST_OK)
     {
-        case ConnectionStatus::Disconnected:
-            log_error("Not attached to NVSDM, aborting.");
-            return DCGM_ST_UNINITIALIZED;
-        case ConnectionStatus::Paused:
-            log_debug("The manager is paused. No actual data is available.");
-            return DCGM_ST_PAUSED;
-        case ConnectionStatus::Ok:
-            break;
-        default:
-            log_error("Unknown connection status.");
-            return DCGM_ST_UNINITIALIZED;
+        return returnValue;
     }
 
     for (auto &ibCxDevice : m_ibCxDevices)
@@ -1108,19 +1176,10 @@ dcgmReturn_t DcgmNvsdmManager::ReadNvSwitchStatusAllSwitches()
 {
     log_debug("Reading switch status for all switches.");
 
-    switch (CheckConnectionStatus())
+    dcgmReturn_t returnValue = CheckAndLogConnectionStatus();
+    if (returnValue != DCGM_ST_OK)
     {
-        case ConnectionStatus::Disconnected:
-            log_error("Not attached to NvSwitches, aborting.");
-            return DCGM_ST_UNINITIALIZED;
-        case ConnectionStatus::Paused:
-            log_debug("The nvswitch manager is paused. No actual data is available.");
-            return DCGM_ST_PAUSED;
-        case ConnectionStatus::Ok:
-            break;
-        default:
-            log_error("Unknown connection status.");
-            return DCGM_ST_UNINITIALIZED;
+        return returnValue;
     }
 
     for (unsigned int i = 0; i < std::min(static_cast<size_t>(m_numNvSwitches), std::size(m_nvSwitchDevices)); i++)
@@ -1195,19 +1254,10 @@ dcgmReturn_t DcgmNvsdmManager::ReadLinkStatesAllSwitches()
 {
     log_debug("Reading NvLink states for all switches.");
 
-    switch (CheckConnectionStatus())
+    dcgmReturn_t returnValue = CheckAndLogConnectionStatus();
+    if (returnValue != DCGM_ST_OK)
     {
-        case ConnectionStatus::Disconnected:
-            log_error("Not attached to NvSwitches, aborting.");
-            return DCGM_ST_UNINITIALIZED;
-        case ConnectionStatus::Paused:
-            log_debug("The nvswitch manager is paused. No actual data is available.");
-            return DCGM_ST_PAUSED;
-        case ConnectionStatus::Ok:
-            break;
-        default:
-            log_error("Unknown connection status.");
-            return DCGM_ST_UNINITIALIZED;
+        return returnValue;
     }
 
     unsigned int switchLinkIndex[DCGM_MAX_NUM_SWITCHES] = {};

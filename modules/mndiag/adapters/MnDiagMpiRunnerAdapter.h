@@ -38,7 +38,7 @@ public:
      */
     void SetOutputCallback(OutputCallback callback) override
     {
-        m_mpiRunner->SetOutputCallback(callback);
+        m_mpiRunner->SetOutputCallback(std::move(callback));
     }
 
     /**
@@ -57,7 +57,7 @@ public:
      */
     void SetUserInfo(std::pair<std::string, uid_t> userInfo) override
     {
-        m_mpiRunner->SetUserInfo(userInfo);
+        m_mpiRunner->SetUserInfo(std::move(userInfo));
     }
 
     /**

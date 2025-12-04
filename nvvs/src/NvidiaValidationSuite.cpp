@@ -37,12 +37,14 @@
 #include <dcgm_structs_internal.h>
 #include <iostream>
 #include <memory>
+#include <ranges>
 #include <setjmp.h>
 #include <signal.h>
 #include <sstream>
 #include <stdexcept>
 #include <tclap/CmdLine.h>
 #include <time.h>
+#include <unordered_set>
 #include <vector>
 
 using namespace DcgmNs::Nvvs;
@@ -315,6 +317,88 @@ std::string NvidiaValidationSuite::BuildCommonGpusList(std::vector<unsigned int>
     return errorStr;
 }
 
+/*****************************************************************************/
+std::string NvidiaValidationSuite::BuildCudaVisibleDevicesString(std::vector<unsigned int> const &gpuIndices,
+                                                                 std::vector<Gpu *> const &gpuVect,
+                                                                 std::function<std::string(Gpu *)> uuidGetter)
+{
+    if (gpuIndices.empty())
+    {
+        return "";
+    }
+
+    // Build CUDA_VISIBLE_DEVICES string using GPU UUIDs
+    // UUIDs are more reliable than indices when other processes might be running
+    //
+    // IMPORTANT: Order matters - it determines CUDA device ordinals (0, 1, 2, ...)
+    // gpuIndices is already deduplicated by the caller and preserves user's specified order
+    //
+    // Example: User specifies "dcgmi diag -r 2 -i 3,1,2,1"
+    //   After deduplication: gpuIndices = [3, 1, 2]  (deduplicated, preserves order, NOT sorted)
+    //   CUDA mapping: GPU 3 -> device 0, GPU 1 -> device 1, GPU 2 -> device 2
+    //
+    std::vector<std::string> uuids;
+    uuids.reserve(gpuIndices.size());
+
+    for (auto const gpuIdx : gpuIndices)
+    {
+        // Find the corresponding Gpu object using std::ranges::find_if
+        auto it = std::ranges::find_if(gpuVect, [gpuIdx](Gpu *g) { return g != nullptr && g->GetGpuId() == gpuIdx; });
+
+        if (it != gpuVect.end())
+        {
+            // Use GPU UUID for CUDA_VISIBLE_DEVICES (most reliable)
+            uuids.push_back(uuidGetter(*it));
+        }
+        // Skip this GPU if not found (continue to next)
+    }
+
+    if (uuids.empty())
+    {
+        return "";
+    }
+
+    // Join UUIDs with commas - no leading or trailing commas
+    return fmt::format("{}", fmt::join(uuids, ","));
+}
+
+/*****************************************************************************/
+void NvidiaValidationSuite::SetCudaVisibleDevicesForTesting(std::vector<unsigned int> const &gpuIndices)
+{
+    // Log existing CUDA_VISIBLE_DEVICES if set, but we'll override it to match the GPUs being tested
+    char const *existingCvd = getenv("CUDA_VISIBLE_DEVICES");
+    if (existingCvd != nullptr && strlen(existingCvd) > 0)
+    {
+        log_info("CUDA_VISIBLE_DEVICES is currently set to '{}'. Will override to match GPUs being tested.",
+                 existingCvd);
+    }
+
+    if (gpuIndices.empty())
+    {
+        log_debug("No GPUs to test, not setting CUDA_VISIBLE_DEVICES");
+        return;
+    }
+
+    // Build the CUDA_VISIBLE_DEVICES value using the helper function
+    std::string const cvdValue = BuildCudaVisibleDevicesString(gpuIndices, m_gpuVect);
+
+    if (cvdValue.empty())
+    {
+        log_warning("No valid GPUs found to set in CUDA_VISIBLE_DEVICES");
+        return;
+    }
+
+    // Set the environment variable
+    if (setenv("CUDA_VISIBLE_DEVICES", cvdValue.c_str(), 1) != 0)
+    {
+        log_error("Failed to set CUDA_VISIBLE_DEVICES to '{}': {}", cvdValue, strerror(errno));
+        return;
+    }
+
+    log_info(
+        "Set CUDA_VISIBLE_DEVICES='{}' for testing GPUs: {}", cvdValue, fmt::format("{}", fmt::join(gpuIndices, ",")));
+}
+
 namespace
 {
 /*****************************************************************************/
@@ -475,6 +559,26 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     {
         return errorString;
     }
+
+    // Deduplicate GPU indices in case multiple entity sets reference the same GPUs
+    // Preserve the original order as specified by the user
+    std::vector<unsigned int> uniqueIndices;
+    std::unordered_set<unsigned int> seen;
+    uniqueIndices.reserve(gpuIndices.size());
+
+    for (auto const idx : gpuIndices)
+    {
+        if (seen.insert(idx).second)
+        {
+            uniqueIndices.push_back(idx);
+        }
+    }
+    gpuIndices = std::move(uniqueIndices);
+
+    // Set CUDA_VISIBLE_DEVICES to only the GPUs we're testing
+    // This ensures CUDA device indices map correctly when plugins initialize
+    // Thread safety: This is called before any plugin threads are started, so no synchronization needed
+    SetCudaVisibleDevicesForTesting(gpuIndices);
 
     errorString
         = ParseIgnoreErrorCodesString(nvvsCommon.ignoreErrorCodesString, nvvsCommon.parsedIgnoreErrorCodes, gpuIndices);

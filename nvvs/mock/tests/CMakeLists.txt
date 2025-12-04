@@ -12,7 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-install(
-    PROGRAMS dcgm_multi-node_health_check.py
-    DESTINATION "${CMAKE_INSTALL_SBINDIR}"
-    COMPONENT Core)
+if (NOT BUILD_TESTING)
+    return()
+endif()
+
+add_executable(nvvsMockTests)
+target_sources(nvvsMockTests
+    PRIVATE
+        DcgmSystemMockTests.cpp
+)
+
+target_link_libraries(nvvsMockTests
+    PRIVATE
+        Catch2::Catch2WithMain
+        nvvs_mock_interface
+        nvvs_without_main_objects
+        rt
+        ${YAML_STATIC_LIBS}
+)
+
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    catch_discover_tests(nvvsMockTests EXTRA_ARGS --colour-mode ansi)
+endif()

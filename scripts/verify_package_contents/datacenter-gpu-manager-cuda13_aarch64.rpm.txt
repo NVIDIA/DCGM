@@ -21,6 +21,11 @@
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libTargetedPower.so.<SOFTWAREVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libTargetedStress.so.<MAJORVERSION>
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libTargetedStress.so.<SOFTWAREVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libcurand.so
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libcurand.so.10
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/libcurand.so.10.4.0.35
 /usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/nvbandwidth
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/updated
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda13/updated/libcurand.so.10
 /usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda13-<BASEPACKAGEVERSION>
 /usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda13-<BASEPACKAGEVERSION>/LICENSE

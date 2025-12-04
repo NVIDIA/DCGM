@@ -19,6 +19,7 @@
 #include "DcgmFvBuffer.h"
 #include "DcgmGpmManager.hpp"
 #include "DcgmGpuInstance.h"
+#include "DcgmImexManager.h"
 #include "DcgmInjectionNvmlManager.h"
 #include "DcgmKmsgReader.h"
 #include "DcgmMigManager.h"
@@ -1816,6 +1817,8 @@ private:
     std::vector<dcgmcmEventSubscription_t> m_subscriptions[DcgmcmEventTypeSize]; // Stored callbacks
 
     DcgmGpmManager m_gpmManager; // Interfaces with NVML GPU Performance Monitoring (GPM) APIs
+
+    DcgmImexManager m_imexManager; // Manages IMEX status collection
 
     DcgmMigManager m_migManager; // Tracks MIG information for quick lookup
                                  // Tracks the timestamp of a user request that we delay mig reconfig processing

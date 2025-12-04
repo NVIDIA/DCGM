@@ -16,6 +16,7 @@ add_subdirectory(tests)
 
 declare_nvvs_plugin(common .)
 nvvs_plugin_srcs(pluginCommon)
+target_link_libraries(pluginCommon PUBLIC dcgm_common)
 
 target_sources(nvvs_plugins_common_objects PRIVATE PluginCommon.cpp)
-target_link_libraries(nvvs_plugins_common_objects PRIVATE nvvs_plugins_common_interface)
+target_link_libraries(nvvs_plugins_common_objects PRIVATE nvvs_plugins_common_interface dcgm_common)

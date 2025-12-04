@@ -40,6 +40,10 @@
  * Utility methods for DCGM
  *************************************************************************/
 
+/*************************************************************************/
+/* Error message constants */
+#define DCGM_LIBNUMA_LOAD_ERROR_MSG "Cannot load libnuma.so: not binding to NUMA nodes!"
+
 /**
  * @brief Defines the behavior of the \c ChangeUser() function.
  */
@@ -624,6 +628,18 @@ struct LogPaths
  * @return LogPaths The log file paths
  */
 LogPaths GetLogFilePath(std::string_view testName);
+
+/**
+ * Find executable in search paths
+ *
+ * @param executableName Name of executable to find
+ * @param searchPaths Vector of paths to search in
+ * @param[out] executableDir Path to executable directory if found
+ * @return std::expected<std::string, dcgmReturn_t> Path to executable if found, error code otherwise
+ */
+std::expected<std::string, dcgmReturn_t> FindExecutable(std::string_view executableName,
+                                                        std::vector<std::string> const &searchPaths,
+                                                        std::string &executableDir);
 
 } // namespace DcgmNs::Utils
 #endif // DCGM_UTILITIES_H

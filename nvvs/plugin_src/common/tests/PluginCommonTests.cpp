@@ -15,6 +15,8 @@
  */
 #include <PluginCommon.h>
 
+#include <DcgmBuildInfo.hpp>
+
 #include <catch2/catch_all.hpp>
 #include <filesystem>
 #include <fstream>
@@ -204,65 +206,6 @@ TEST_CASE("SetCudaDriverVersions parameter validation", "[PluginCommon]")
     }
 }
 
-TEST_CASE("FindExecutable", "[PluginCommon]")
-{
-    // Create a temporary directory and executable for testing
-    std::filesystem::path tempDir = std::filesystem::current_path() / "tmp";
-    std::filesystem::create_directories(tempDir);
-    std::filesystem::path testExecutable = tempDir / "test_exe";
-    std::ofstream { testExecutable }.close();
-    std::filesystem::permissions(
-        testExecutable, std::filesystem::perms::owner_exec, std::filesystem::perm_options::add);
-
-    struct TestCase
-    {
-        std::string name;
-        std::vector<std::string> searchPaths;
-        bool expectSuccess;
-        std::string expectedPath;
-        std::string expectedDir;
-        dcgmReturn_t expectedError;
-    };
-
-    std::vector<TestCase> testCases
-        = { { "Executable found in search paths",
-              { tempDir.string() },
-              true,
-              testExecutable.string(),
-              tempDir.string(),
-              DCGM_ST_OK },
-            { "Executable not found returns error", { "/nonexistent/path" }, false, "", "", DCGM_ST_NO_DATA },
-            { "Multiple search paths - found in second path",
-              { "/nonexistent", tempDir.string() },
-              true,
-              testExecutable.string(),
-              tempDir.string(),
-              DCGM_ST_OK } };
-
-    for (const auto &tc : testCases)
-    {
-        SECTION(tc.name)
-        {
-            std::string executableDir;
-            auto result = FindExecutable("test_exe", tc.searchPaths, executableDir);
-
-            REQUIRE(result.has_value() == tc.expectSuccess);
-            if (result.has_value())
-            {
-                REQUIRE(result.value() == tc.expectedPath);
-                REQUIRE(executableDir == tc.expectedDir);
-            }
-            else
-            {
-                REQUIRE(result.error() == tc.expectedError);
-            }
-        }
-    }
-
-    // Cleanup
-    std::filesystem::remove_all(tempDir);
-}
-
 TEST_CASE("GetDefaultSearchPaths", "[PluginCommon]")
 {
     SECTION("Returns expected number of paths")
@@ -306,4 +249,65 @@ TEST_CASE("GetDefaultSearchPaths", "[PluginCommon]")
             REQUIRE(pathsAreDifferent(paths1, paths2));
         }
     }
+}
+
+std::filesystem::path MakeExecutable(std::filesystem::path const &path, std::string const &execName)
+{
+    std::filesystem::path testExecutable = path / execName;
+    std::ofstream { testExecutable }.close();
+    std::filesystem::permissions(
+        testExecutable, std::filesystem::perms::owner_exec, std::filesystem::perm_options::add);
+    return testExecutable;
+}
+
+TEST_CASE("FindExecutableComplex", "[PluginCommon]")
+{
+    // Create temporary directories and executable for testing
+    std::filesystem::path tmpDirs[] = { std::filesystem::current_path() / "apps",
+                                        std::filesystem::current_path() / "apps/nvvs",
+                                        std::filesystem::current_path() / "apps/nvvs/plugins",
+                                        std::filesystem::current_path() / "./apps/nvvs/plugins/cuda14",
+                                        std::filesystem::current_path() / "./apps/nvvs/plugins/cuda13",
+                                        std::filesystem::current_path() / "./apps/nvvs/plugins/cuda12" };
+
+    unsigned int constexpr cuda13Index = 4;
+    unsigned int constexpr cuda12Index = 5;
+
+    for (auto &&tmpDir : tmpDirs)
+    {
+        std::filesystem::create_directories(tmpDir);
+    }
+
+    std::string execName = "test_exe";
+
+    SECTION("Find in MAX CUDA DIR")
+    {
+        std::filesystem::path cuda13ExecPath = MakeExecutable(tmpDirs[cuda13Index], execName);
+        std::string executableDir;
+        auto result = FindExecutable(execName, 14, false, executableDir);
+        REQUIRE(result.has_value());
+        REQUIRE(cuda13ExecPath.string().ends_with(result.value()));
+        REQUIRE(tmpDirs[cuda13Index].string().ends_with(executableDir));
+    }
+
+    SECTION("Don't find in CUDA 12")
+    {
+        std::string executableDir = "";
+        auto result               = FindExecutable(execName, 12, false, executableDir);
+        REQUIRE(result.has_value() == false);
+        REQUIRE(executableDir.empty());
+    }
+
+    SECTION("Find in CUDA 12")
+    {
+        std::filesystem::path cuda12ExecPath = MakeExecutable(tmpDirs[cuda12Index], execName);
+        std::string executableDir;
+        auto result = FindExecutable(execName, 12, false, executableDir);
+        REQUIRE(result.has_value());
+        REQUIRE(cuda12ExecPath.string().ends_with(result.value()));
+        REQUIRE(tmpDirs[cuda12Index].string().ends_with(executableDir));
+    }
+
+    // Cleanup
+    std::filesystem::remove_all(tmpDirs[0]);
 }

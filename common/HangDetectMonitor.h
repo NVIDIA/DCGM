@@ -72,12 +72,12 @@ class HangDetectMonitor
 public:
     struct TaskWatch
     {
-        std::chrono::milliseconds checkInterval;             // How often to check for hangs
-        std::chrono::milliseconds expiryTime;                // How long a task can be hung before considered expired
-        std::chrono::steady_clock::time_point lastCheckTime; // Last time this task was checked
-        std::chrono::steady_clock::time_point hangStartTime; // When the task first entered hung state
-        bool isHung;                                         // Current hang state
-        bool hasReported { false };                          // Track if current hang has been reported
+        std::chrono::milliseconds checkInterval {};             // How often to check for hangs
+        std::chrono::milliseconds expiryTime {};                // How long a task can be hung before considered expired
+        std::chrono::steady_clock::time_point lastCheckTime {}; // Last time this task was checked
+        std::chrono::steady_clock::time_point hangStartTime {}; // When the task first entered hung state
+        bool isHung { false };                                  // Current hang state
+        bool hasReported { false };                             // Track if current hang has been reported
     };
 
     // Internal structure for tracking pending hang reports
@@ -227,6 +227,18 @@ public:
         return DCGM_ST_BADPARAM;
     }
 
+    /**
+     * Set whether to report hangs for userspace processes
+     *
+     * @param reportUserspaceHangs If true, report all hangs (default behavior).
+     *                            If false, only report hangs when process is in uninterruptible sleep ('D' state).
+     */
+    void SetReportUserspaceHangs(bool reportUserspaceHangs)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_reportUserspaceHangs = reportUserspaceHangs;
+    }
+
 private:
     /**
      * Check if any tasks are hung
@@ -325,6 +337,7 @@ private:
     // Configuration
     std::chrono::milliseconds const m_defaultCheckInterval;
     std::chrono::milliseconds const m_defaultExpiryTime;
+    bool m_reportUserspaceHangs { true }; // Default: report all hangs (preserve existing behavior)
 
     /**
      * The handler implements application-specific logic for handling hang events.

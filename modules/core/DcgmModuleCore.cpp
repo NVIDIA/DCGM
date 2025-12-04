@@ -239,6 +239,10 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
                     *(dcgm_core_msg_get_workload_power_profiles_status_v1 *)moduleCommand);
                 break;
 
+            case DCGM_CORE_SR_HOSTENGINE_ENV_VAR_INFO:
+                dcgmReturn = ProcessHostengineEnvVarInfo(*(dcgm_core_msg_hostengine_env_var_t *)moduleCommand);
+                break;
+
 #ifdef INJECTION_LIBRARY_AVAILABLE
             case DCGM_CORE_SR_NVML_INJECT_DEVICE:
                 dcgmReturn = ProcessNvmlInjectDevice(*(dcgm_core_msg_nvml_inject_device_t *)moduleCommand);
@@ -2586,4 +2590,56 @@ dcgmReturn_t DcgmModuleCore::ProcessNvswitchGetBackend(dcgm_core_msg_nvswitch_ge
     SafeCopyTo<sizeof(msg.backendName), sizeof(nvsMsg.backendName)>(msg.backendName, nvsMsg.backendName);
 
     return ret;
+}
+
+
+dcgmReturn_t DcgmModuleCore::ProcessHostengineEnvVarInfo(dcgm_core_msg_hostengine_env_var_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_hostengine_env_var_version);
+    if (DCGM_ST_OK != ret)
+    {
+        log_error("Version mismatch");
+        msg.envVarInfo.ret = ret;
+        return ret;
+    }
+
+    if (msg.envVarInfo.version != dcgmEnvVarInfo_version)
+    {
+        log_error("Struct version mismatch");
+        msg.envVarInfo.ret = DCGM_ST_VER_MISMATCH;
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    const char *envVarName = msg.envVarInfo.envVarName;
+    if (envVarName == nullptr || envVarName[0] == '\0')
+    {
+        log_error("No environment variable name provided");
+        msg.envVarInfo.ret = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    static const std::unordered_set<std::string> allowedEnvVars = {
+        "CUDA_VISIBLE_DEVICES",
+        "DCGM_DIAG_REMOVED",
+    };
+    if (!allowedEnvVars.contains(std::string { envVarName }))
+    {
+        log_debug("Environment variable '{}' is not allowed", envVarName);
+        msg.envVarInfo.ret = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+
+    const char *envValue = getenv(envVarName);
+    if (envValue == nullptr)
+    {
+        log_debug("Environment variable '{}' is not set", envVarName);
+        msg.envVarInfo.envVarValue[0] = '\0';
+        msg.envVarInfo.ret            = DCGM_ST_NOT_CONFIGURED;
+        return DCGM_ST_OK;
+    }
+
+    log_debug("Environment variable '{}' is set to '{}'", envVarName, envValue);
+    SafeCopyTo(msg.envVarInfo.envVarValue, envValue);
+    msg.envVarInfo.ret = DCGM_ST_OK;
+    return DCGM_ST_OK;
 }

@@ -19,6 +19,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "DcgmDiagCallers.h"
 #include "DcgmDiagResponseWrapper.h"
 #include "DcgmMutex.h"
 #include "DcgmUtilities.h"
@@ -67,7 +68,7 @@ public:
                                           dcgm_connection_id_t connectionId);
 
     /* perform the specified validation */
-    dcgmReturn_t RunDiag(dcgmRunDiag_v10 *drd, DcgmDiagResponseWrapper &response);
+    dcgmReturn_t RunDiag(dcgmRunDiag_v10 *drd, DcgmDiagResponseWrapper &response, dcgm_connection_id_t connectionId);
 
     /* possibly run the DCGM diagnostic and perform an action */
     dcgmReturn_t RunDiagAndAction(dcgmRunDiag_v10 *drd,
@@ -106,6 +107,7 @@ public:
                                     std::string *stderrStr,
                                     dcgmRunDiag_v10 *drd,
                                     DcgmDiagResponseWrapper &response,
+                                    dcgm_connection_id_t connectionId,
                                     std::string const &fakeGpuIds               = "",
                                     std::string const &entityIds                = "",
                                     ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes);
@@ -139,9 +141,22 @@ public:
     /* perform external command - switched to public for testing*/
     dcgmReturn_t PerformExternalCommand(std::vector<std::string> &args,
                                         DcgmDiagResponseWrapper &response,
+                                        dcgm_connection_id_t connectionId,
                                         std::string *stdoutStr,
                                         std::string *stderrStr,
                                         ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes);
+
+    /**
+     * Called when a connection is removed.
+     * @param connectionId
+     */
+    void OnConnectionRemove(dcgm_connection_id_t connectionId);
+
+    /**
+     * Receive a heartbeat.
+     * @param connectionId
+     */
+    void ReceiveHeartbeat(dcgm_connection_id_t connectionId);
 
 #ifndef __DIAG_UNIT_TESTING__
 private:
@@ -150,16 +165,21 @@ private:
     const std::string m_nvvsPath;
 
     /* Variables for ensuring only one instance of nvvs is running at a time */
-    mutable DcgmMutex m_mutex;                 // mutex for m_nvvsPid and m_ticket
-    pid_t m_nvvsPID;                           // Do not directly modify this variable. Use UpdateChildPID instead.
-    uint64_t m_ticket;                         // Ticket used to prevent invalid updates to pid of child process.
+    mutable DcgmMutex m_mutex; // mutex for m_nvvsPid and m_ticket
+    pid_t m_nvvsPID;           // Do not directly modify this variable. Use UpdateRunningNvvsState instead.
+    uint64_t m_ticket;         // Ticket used to prevent invalid updates to pid of child process.
     ChildProcessHandle_t m_childProcessHandle; // Handle for the spawned child process
+    std::optional<dcgm_connection_id_t>
+        m_connectionId; // Which connection is executing the nvvs, std::nullopt if nvvs is not running
 
     /* pointers to libdcgm callback functions */
     DcgmCoreProxy m_coreProxy;
 
     bool m_amShuttingDown; /* Is the diag manager in the process of shutting down?. This
                               is guarded by m_mutex and only set by ~DcgmDiagManager() */
+
+    /* Information about the callers of the diag */
+    DcgmDiagCallers m_diagCallers;
 
     /* Map to hold plugin name - plugin test result mapping */
     std::unordered_map<std::string, unsigned short> const m_testNameResultFieldId
@@ -188,14 +208,18 @@ private:
     uint64_t GetTicket();
 
     /*
-     * Updates the PID of the nvvs child.
+     * Updates the PID of the nvvs child and the connection id of the nvvs caller.
      * myTicket is used to ensure that the current thread is allowed to update the pid. (e.g. ensure another thread
      * has not modified the PID since the calling thread last updated it.)
+     *
+     * @param value[in] - the PID of the nvvs child
+     * @param myTicket[in] - the ticket used to prevent invalid updates to pid of child process
+     * @param connectionId[in] - the connection id of the nvvs caller
      */
-    void UpdateChildPID(pid_t value, uint64_t myTicket);
+    void UpdateRunningNvvsState(pid_t value, uint64_t myTicket, std::optional<dcgm_connection_id_t> connectionId);
 
     /*
-     * Adds the arguments related to the run option based on the contents of the dcgmRunDiag_t struct.
+     * Adds the arguments related to the run option based on the contents of the dcgmRunDiag_v10 struct.
      */
     dcgmReturn_t AddRunOptions(std::vector<std::string> &cmdArgs, dcgmRunDiag_v10 *drd) const;
 
@@ -236,7 +260,8 @@ private:
                                                                std::string const &entityIds,
                                                                std::unordered_set<std::string_view> const &testNames,
                                                                dcgmReturn_t lastRunRet,
-                                                               DcgmDiagResponseWrapper &response);
+                                                               DcgmDiagResponseWrapper &response,
+                                                               dcgm_connection_id_t connectionId);
 
     /**
      * Update the diag status field in the Cache Manager.

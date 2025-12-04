@@ -21,6 +21,64 @@
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 
+// DcgmSystemBase default implementations
+void DcgmSystemBase::Init(dcgmHandle_t)
+{}
+
+dcgmReturn_t DcgmSystemBase::GetDeviceAttributes(unsigned int, dcgmDeviceAttributes_t &)
+{
+    return DCGM_ST_NOT_SUPPORTED;
+}
+
+dcgmReturn_t DcgmSystemBase::GetGpuStatus(unsigned int, DcgmEntityStatus_t *)
+{
+    return DCGM_ST_NOT_SUPPORTED;
+}
+
+dcgmReturn_t DcgmSystemBase::GetAllSupportedDevices(std::vector<unsigned int> &)
+{
+    return DCGM_ST_NOT_SUPPORTED;
+}
+
+dcgmReturn_t DcgmSystemBase::GetAllDevices(std::vector<unsigned int> &)
+{
+    return DCGM_ST_NOT_SUPPORTED;
+}
+
+dcgmReturn_t DcgmSystemBase::GetGpuLatestValue(unsigned int, unsigned short, unsigned int, dcgmFieldValue_v2 &)
+{
+    return DCGM_ST_NOT_SUPPORTED;
+}
+
+dcgmReturn_t DcgmSystemBase::GetLatestValuesForGpus(const std::vector<unsigned int> &,
+                                                    std::vector<unsigned short> &,
+                                                    unsigned int,
+                                                    dcgmFieldValueEntityEnumeration_f,
+                                                    void *)
+{
+    return DCGM_ST_NOT_SUPPORTED;
+}
+
+bool DcgmSystemBase::IsInitialized() const
+{
+    return false;
+}
+
+unsigned int DcgmSystemBase::GetCudaMajorVersion()
+{
+    return 0;
+}
+
+unsigned int DcgmSystemBase::GetCudaMinorVersion()
+{
+    return 0;
+}
+
+DcgmResult<dcgmChipArchitecture_t> DcgmSystemBase::GetGpuChipArchitecture(unsigned int)
+{
+    return std::unexpected(DCGM_ST_NOT_SUPPORTED);
+}
+
 DcgmSystem::DcgmSystem()
     : m_handle(0)
     , m_cudaMajorVersion(0)

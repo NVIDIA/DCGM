@@ -15,9 +15,8 @@
  */
 
 #include "DcgmChildProcessManager.hpp"
-
-#include <ChildProcess/ChildProcessBuilder.hpp>
-#include <DcgmStringHelpers.h>
+#include "DcgmStringHelpers.h"
+#include "HangDetectMonitor.h"
 
 using namespace DcgmNs::Common::Subprocess;
 
@@ -61,11 +60,15 @@ static dcgmReturn_t WriteStdLinesToFd(StdLines &stdLines, int fd, std::stop_toke
         if (auto ret = WriteToFd(reinterpret_cast<std::byte const *>(line.data()), line.size(), dataFd, stop_token);
             ret != DCGM_ST_OK)
         {
+            // Caller is responsible for closing the file descriptor
+            fd = dataFd.Release();
             return ret;
         }
         // StdLines iterates over lines. Restore newline to the end of the current line.
         if (auto ret = WriteToFd(reinterpret_cast<std::byte const *>("\n"), 1, dataFd, stop_token); ret != DCGM_ST_OK)
         {
+            // Caller is responsible for closing the file descriptor
+            fd = dataFd.Release();
             return ret;
         }
     }
@@ -82,6 +85,8 @@ static dcgmReturn_t WriteFramedChannelToFd(FramedChannel &channel, int fd, std::
         if (auto ret = WriteToFd(reinterpret_cast<std::byte const *>(frame.data()), frame.size(), dataFd, stop_token);
             ret != DCGM_ST_OK)
         {
+            // Caller is responsible for closing the file descriptor
+            fd = dataFd.Release();
             return ret;
         }
     }
@@ -109,7 +114,7 @@ dcgmReturn_t DcgmChildProcessManager::CreateChannelPipe(auto &channelSource, aut
 }
 
 DcgmChildProcessManager::DcgmChildProcessManager(ChildProcessFactory processFactory)
-    : m_processFactory(processFactory)
+    : m_processFactory(std::move(processFactory))
     , m_ioContext(std::make_unique<IoContext>())
 {}
 
@@ -231,11 +236,16 @@ dcgmReturn_t DcgmChildProcessManager::Spawn(dcgmChildProcessParams_t const &para
     }
 
     handle = GetNextHandle();
+
     AddProcessInfo(handle,
                    ProcessInfo { .process         = std::move(process),
                                  .stdErrPipe      = std::move(stdErrPipe),
                                  .stdOutPipe      = std::move(stdOutPipe),
                                  .dataChannelPipe = std::move(dataChannelPipe) });
+
+    /* To avoid duplicative tracking of the process, start hang detection after adding the process info.
+       This means a process that fails pipe creation could be created and unmonitored. */
+    StartHangDetection(pid);
 
     return DCGM_ST_OK;
 }
@@ -268,6 +278,7 @@ dcgmReturn_t DcgmChildProcessManager::Stop(ChildProcessHandle_t handle, bool for
     }
 
     auto &processInfo = (*processInfoRef).get();
+    auto const pid    = processInfo.process->GetPid().value_or(0);
     processInfo.process->Stop(force);
     if (processInfo.process->IsAlive())
     {
@@ -279,6 +290,11 @@ dcgmReturn_t DcgmChildProcessManager::Stop(ChildProcessHandle_t handle, bool for
         {
             log_info("Process {} has not terminated yet after SIGTERM.", processInfo.process->GetPid().value());
         }
+    }
+
+    if (pid != 0)
+    {
+        StopHangDetection(pid);
     }
     return DCGM_ST_OK;
 }
@@ -368,12 +384,18 @@ dcgmReturn_t DcgmChildProcessManager::Destroy(ChildProcessHandle_t handle, int s
     {
         return DCGM_ST_BADPARAM;
     }
-    processInfoNode.mapped().process->Kill(sigTermTimeoutSec);
-    if (processInfoNode.mapped().process->IsAlive())
+    auto const &mappedProcess = processInfoNode.mapped();
+    auto const pid            = mappedProcess.process->GetPid().value_or(0);
+    mappedProcess.process->Kill(sigTermTimeoutSec);
+    if (mappedProcess.process->IsAlive())
     {
         log_error("Process {} did not terminate in time after SIGKILL. Destroying ChildProcess instance anyway.",
-                  processInfoNode.mapped().process->GetPid().value());
+                  mappedProcess.process->GetPid().value());
         return DCGM_ST_CHILD_NOT_KILLED;
+    }
+    if (pid != 0)
+    {
+        StopHangDetection(pid);
     }
     return DCGM_ST_OK;
 }
@@ -455,6 +477,34 @@ std::optional<std::reference_wrapper<DcgmChildProcessManager::ProcessInfo>> Dcgm
     return it->second;
 }
 
+/**
+ * Helper class to stop hang detection on exit from scope (in case of exception).
+ */
+class StopHangDetectGuard
+{
+public:
+    StopHangDetectGuard(DcgmChildProcessManager &manager, pid_t const pid)
+        : m_manager(manager)
+        , m_pid(pid)
+    {
+        if (m_pid == 0)
+        {
+            log_verbose("Specified process with unexpected pid 0");
+        }
+    }
+    ~StopHangDetectGuard()
+    {
+        if (m_pid != 0)
+        {
+            m_manager.StopHangDetection(m_pid);
+        }
+    }
+
+private:
+    DcgmChildProcessManager &m_manager; // caller must ensure manager remains valid
+    pid_t m_pid = 0;
+};
+
 dcgmReturn_t DcgmChildProcessManager::Reset()
 {
     log_debug("Resetting ChildProcessManager - destroying all child processes");
@@ -478,6 +528,9 @@ dcgmReturn_t DcgmChildProcessManager::Reset()
     // Kill processes
     for (auto &[handle, processInfo] : processesToDestroy)
     {
+        auto const pid = processInfo.process->GetPid().value_or(0);
+        StopHangDetectGuard hangDetectionGuard(*this, pid);
+
         try
         {
             processInfo.process->Kill(3);
@@ -511,6 +564,11 @@ DcgmChildProcessManager::~DcgmChildProcessManager()
 {
     for (auto &[handle, processInfo] : m_processes)
     {
+        if (auto const pid = processInfo.process->GetPid().value_or(0); pid != 0)
+        {
+            StopHangDetectGuard hangDetectionGuard(*this, pid);
+        }
+
         // Kill the process with a short sigterm timeout
         processInfo.process->Kill(1);
         // Join the threads before destroying the ChildProcess instance
@@ -530,4 +588,39 @@ DcgmChildProcessManager::~DcgmChildProcessManager()
             processInfo.dataChannelPipe.thread.join();
         }
     }
+}
+
+/*************************************************************************/
+
+void DcgmChildProcessManager::SetHangDetectMonitor(class HangDetectMonitor *monitor)
+{
+    if (m_monitor != monitor)
+    {
+        m_monitor = monitor;
+        log_verbose("Hang detection monitor set");
+    }
+}
+
+void DcgmChildProcessManager::StartHangDetection(pid_t const pid)
+{
+    if (!m_monitor)
+    {
+        log_debug("Not monitoring this process: hang detection is disabled");
+        return;
+    }
+
+    m_monitor->AddMonitoredTask(pid);
+    log_verbose("Started hang detection for process {}", pid);
+}
+
+void DcgmChildProcessManager::StopHangDetection(pid_t const pid)
+{
+    if (!m_monitor)
+    {
+        log_verbose("Unable to stop monitoring this process: no monitor set");
+        return;
+    }
+
+    m_monitor->RemoveMonitoredTask(pid);
+    log_verbose("Stopped hang detection for process {}", pid);
 }

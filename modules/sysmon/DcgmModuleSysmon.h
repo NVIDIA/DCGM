@@ -23,6 +23,8 @@
 
 #include <DcgmModule.h>
 #include <DcgmTaskRunner.h>
+#include <HangDetect.h>
+#include <HangDetectHandler.h>
 #include <TimeLib.hpp>
 #include <dcgm_core_structs.h>
 
@@ -58,6 +60,8 @@ public:
     Timelib::TimePoint m_timestamp;
     std::vector<SysmonUtilizationSampleCore> m_cores;
 };
+
+class DcgmModuleSysmonHangDetectHandler;
 
 typedef std::map<Timelib::TimePoint, SysmonUtilizationSample> sysmonUtilSampleMap_t;
 
@@ -139,6 +143,11 @@ private:
     std::unordered_map<unsigned int, std::string> m_socketTemperatureWarnFileMap;
     std::unordered_map<unsigned int, std::string> m_socketTemperatureCritFileMap;
 
+    bool m_hangDetectDisabled { false };
+    std::unique_ptr<HangDetect> m_detector { nullptr };
+    std::unique_ptr<HangDetectMonitor> m_monitor { nullptr };
+    std::unique_ptr<HangDetectHandler> m_handler { nullptr };
+
     /*************************************************************************/
     dcgmReturn_t ProcessGetCpus(GetCpusMessage msg);
     dcgmReturn_t ProcessGetEntityStatus(GetEntityStatusMessage msg);
@@ -191,7 +200,16 @@ private:
     dcgmReturn_t GetUtilizationSampleSize(size_t &numSamples);
     dcgmReturn_t AddUtilizationSample(SysmonUtilizationSample &item);
 
+    void InitHangDetect();
+
     void run() override;
+};
+
+/** Respond to hang detected events */
+class DcgmModuleSysmonHangDetectHandler : public HangDetectHandler
+{
+public:
+    virtual void HandleHangDetectedEvent(HangDetectedEvent const &hangEvent) override;
 };
 
 } // namespace DcgmNs

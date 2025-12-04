@@ -31,7 +31,7 @@
 class Software : public Plugin
 {
 public:
-    Software(dcgmHandle_t handle);
+    Software(dcgmHandle_t handle, std::unique_ptr<DcgmSystemBase> dcgmSystem = nullptr);
     ~Software()
     {}
 
@@ -70,7 +70,7 @@ private:
     std::string m_subtestName;
     TestParameters tp;
     DcgmRecorder m_dcgmRecorder;
-    DcgmSystem m_dcgmSystem;
+    std::unique_ptr<DcgmSystemBase> m_dcgmSystem;
     dcgmHandle_t m_handle;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
 
@@ -91,6 +91,13 @@ private:
     void checkFabricManager();
     void LogAndSetFMError(unsigned int gpuId, dcgmFabricManagerStatus_t status);
     void setSubtestName(std::string const &name);
+
+    // virtual methods
+    virtual std::string GetDeviceDirectory() const
+    {
+        static std::string const deviceDir = "/dev";
+        return deviceDir;
+    }
 };
 
 std::vector<dcgmDiagPluginParameterInfo_t> GetSwParameterInfo();

@@ -9626,6 +9626,49 @@ nvmlReturn_t nvmlGetExcludedDeviceInfoByIndex(unsigned int index, nvmlExcludedDe
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t nvmlDeviceReadWritePRM_v1(nvmlDevice_t device, nvmlPRMTLV_v1_t *buffer)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceReadWritePRM_v1");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(buffer));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "ReadWritePRM", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "ReadWritePRM", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "ReadWritePRM", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
 nvmlReturn_t nvmlGetVgpuVersion(nvmlVgpuVersion_t *supported, nvmlVgpuVersion_t *current)
 {
     // The following snippet is generated from write_function

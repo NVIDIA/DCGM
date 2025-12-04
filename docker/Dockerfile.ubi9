@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/cuda:12.8.0-base-ubi9
+FROM nvcr.io/nvidia/cuda:13.0.1-base-ubi9
 
 LABEL io.k8s.display-name="NVIDIA DCGM"
 LABEL name="NVIDIA DCGM"
@@ -28,7 +28,10 @@ ARG DCGM_VERSION
 ARG SUB_VERSION
 
 RUN dnf clean expire-cache \
- && dnf install --assumeyes datacenter-gpu-manager-4-cuda12-${VERSION}.$(uname -m) \
+ && dnf update --disablerepo=* --enablerepo=ubi-9-appstream-rpms --enablerepo=ubi-9-baseos-rpms -y \
+ && dnf upgrade --disablerepo=* --enablerepo=ubi-9-appstream-rpms --enablerepo=ubi-9-baseos-rpms -y \
+ && dnf install --assumeyes datacenter-gpu-manager-4-cuda13-${DCGM_VERSION}-1.$(uname -m) \
+ && dnf install --assumeyes datacenter-gpu-manager-4-cuda12-${DCGM_VERSION}-1.$(uname -m) \
  && dnf install --assumeyes --setopt=install_weak_deps=False libcap \
  && dnf clean all
 

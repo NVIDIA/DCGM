@@ -674,16 +674,10 @@ dcgmReturn_t DcgmNscqManager::ReadNvSwitchStatusAllSwitches()
 {
     log_debug("Reading switch status for all switches");
 
-    switch (CheckConnectionStatus())
+    dcgmReturn_t returnValue = CheckAndLogConnectionStatus();
+    if (returnValue != DCGM_ST_OK)
     {
-        case ConnectionStatus::Disconnected:
-            log_error("Not attached to NvSwitches. Aborting");
-            return DCGM_ST_UNINITIALIZED;
-        case ConnectionStatus::Paused:
-            log_debug("The nvswitch manager is paused. No actual data is available.");
-            return DCGM_ST_PAUSED;
-        default:
-            break;
+        return returnValue;
     }
 
     const char nscqPath[] = "/drv/nvswitch/{device}/blacklisted"; // RELINGO_IGNORE until the driver is updated
@@ -762,16 +756,10 @@ dcgmReturn_t DcgmNscqManager::ReadLinkStatesAllSwitches()
 {
     log_debug("Reading NvLink states for all switches");
 
-    switch (CheckConnectionStatus())
+    dcgmReturn_t returnValue = CheckAndLogConnectionStatus();
+    if (returnValue != DCGM_ST_OK)
     {
-        case ConnectionStatus::Disconnected:
-            log_error("Not attached to NvSwitches. Aborting");
-            return DCGM_ST_UNINITIALIZED;
-        case ConnectionStatus::Paused:
-            log_debug("The nvswitch manager is paused. No actual data is available.");
-            return DCGM_ST_PAUSED;
-        case ConnectionStatus::Ok:
-            break;
+        return returnValue;
     }
 
     dcgmReturn_t dcgmRet = DCGM_ST_NO_DATA;
@@ -900,16 +888,10 @@ dcgmReturn_t DcgmNscqManager::ReadNvSwitchFatalErrorsAllSwitches()
 
     const char *nscqPath = nscq_nvswitch_port_error_fatal;
 
-    switch (CheckConnectionStatus())
+    dcgmReturn_t returnValue = CheckAndLogConnectionStatus();
+    if (returnValue != DCGM_ST_OK)
     {
-        case ConnectionStatus::Disconnected:
-            log_error("Not attached to NvSwitches. Aborting");
-            return DCGM_ST_UNINITIALIZED;
-        case ConnectionStatus::Paused:
-            log_debug("The nvswitch manager is paused. No actual data is available.");
-            return DCGM_ST_PAUSED;
-        case ConnectionStatus::Ok:
-            break;
+        return returnValue;
     }
 
     struct TempData

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <map>
+#include <string_view>
 
 #include "dcgm_nvswitch_structs.h"
 
@@ -271,14 +272,9 @@ public:
 
 #ifndef DCGM_NVSWITCH_TEST // Allow tests to peek in
 protected:
+    // Declare test class as friend
+    friend class TestDcgmNvSwitchManagerBase;
 #endif
-    unsigned int m_numNvSwitches;                             // Number of entries in m_nvSwitches that are valid
-    dcgm_nvswitch_info_t m_nvSwitches[DCGM_MAX_NUM_SWITCHES]; // All of the NvSwitches we know about
-    DcgmWatchTable m_watchTable;                              // Our internal watch table
-    DcgmCoreProxy m_coreProxy;                                // Proxy class for communication with DCGM core
-    DcgmNvSwitchError m_fatalErrors[DCGM_MAX_NUM_SWITCHES];   // Fatal errors. Max 1 per switch
-    bool m_paused = false;                                    // Is the Switch Manager paused?
-
     /*************************************************************************/
     /**
      * Adds one fake nv switch and returns the id, or returns DCGM_ENTITY_ID_BAD to signify failure
@@ -325,12 +321,21 @@ protected:
                                         DcgmFvBuffer &buf,
                                         const std::vector<dcgm_field_update_info_t> &entities);
 
+    /*************************************************************************/
     enum class ConnectionStatus
     {
         Ok,           //!< The NvSwitch Module is connected to the driver
         Disconnected, //!< The NvSwitch Module is not connected to the driver (not initialized)
         Paused,       //!< The NvSwitch Module is paused and not connected to the driver
+        Unknown,      //!< Initial state - used internally to ensure first call always logs
     };
+
+    /**
+     * @brief Get log message for a given ConnectionStatus
+     * @param[in] status The connection status to get message for
+     * @returns String view of the log message
+     */
+    std::string_view GetConnectionStatusMessage(ConnectionStatus status) noexcept;
 
     /**
      * @brief Returns the connection status of the Switch Manager.
@@ -339,6 +344,13 @@ protected:
      * @return \c ConnectionStatus::Paused:       The Switch Manager is paused and not connected to the driver
      */
     virtual ConnectionStatus CheckConnectionStatus() const = 0;
+
+    /*************************************************************************/
+    /**
+     * @brief Check connection status and log only on status changes to prevent flooding
+     * @returns DCGM_ST_OK if connected, DCGM_ST_PAUSED if paused, DCGM_ST_UNINITIALIZED if disconnected
+     */
+    dcgmReturn_t CheckAndLogConnectionStatus();
 
     /*************************************************************************/
     /**
@@ -370,5 +382,13 @@ protected:
     dcgmReturn_t PreWatchFieldCheck(const dcgm_field_entity_group_t entityGroupId,
                                     const unsigned int entityId,
                                     bool forceWatch);
+
+    /*************************************************************************/
+    unsigned int m_numNvSwitches;                             // Number of entries in m_nvSwitches that are valid
+    dcgm_nvswitch_info_t m_nvSwitches[DCGM_MAX_NUM_SWITCHES]; // All of the NvSwitches we know about
+    DcgmWatchTable m_watchTable;                              // Our internal watch table
+    DcgmCoreProxy m_coreProxy;                                // Proxy class for communication with DCGM core
+    DcgmNvSwitchError m_fatalErrors[DCGM_MAX_NUM_SWITCHES];   // Fatal errors. Max 1 per switch
+    ConnectionStatus m_lastConnectionStatus;                  // Last known connection status to prevent log flooding
 };
 } // namespace DcgmNs

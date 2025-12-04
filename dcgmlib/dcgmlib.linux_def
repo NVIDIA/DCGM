@@ -139,6 +139,8 @@
         dcgmMultinodeRequest;
         dcgmPowerProfileIdToName;
         dcgmConfigSetWorkloadPowerProfile;
+        dcgmDiagSendHeartbeat;
+        dcgmHostengineEnvironmentVariableInfo;
 
     local:
         *;

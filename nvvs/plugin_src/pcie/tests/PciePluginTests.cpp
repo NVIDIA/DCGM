@@ -19,6 +19,7 @@
 #include "dcgm_fields.h"
 #include <PluginStrings.h>
 #include <UniquePtrUtil.h>
+#include <bw_checker/BwCheckerMain.h>
 #include <catch2/catch_all.hpp>
 #include <tuple>
 #include <vector>
@@ -129,7 +130,10 @@ TEST_CASE("Pcie: pcie_check_nvlink_status_expected")
 #define BWC_JSON_ERROR  "error"
 #define BWC_JSON_ERRORS "errors"
 
-std::string testJson1 = R""(
+std::string startDelimiter = BWC_JSON_OUTPUT_START;
+std::string endDelimiter   = BWC_JSON_OUTPUT_END;
+
+std::string testJson1 = startDelimiter + R""(
 {
     "GPUs" : [
         {
@@ -140,8 +144,9 @@ std::string testJson1 = R""(
         }
     ]
 }
-)"";
-std::string testJson2 = R""(
+)"" + endDelimiter;
+
+std::string testJson2 = startDelimiter + R""(
 {
     "GPUs" : [
         {
@@ -152,8 +157,9 @@ std::string testJson2 = R""(
         }
     ]
 }
-)"";
-std::string testJson3 = R""(
+)"" + endDelimiter;
+
+std::string testJson3 = startDelimiter + R""(
 {
     "GPUs" : [
         {
@@ -162,7 +168,7 @@ std::string testJson3 = R""(
         }
     ]
 }
-)"";
+)"" + endDelimiter;
 
 TEST_CASE("Pcie: ProcessChildrenOutputs")
 {
@@ -178,8 +184,10 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     std::vector<dcgmChildInfo_t> childrenInfo;
     dcgmChildInfo_t childInfo;
     childInfo.stdoutStr     = testJson3;
+    childInfo.stderrStr     = "";
     childInfo.pid           = 23981;
     childInfo.readOutputRet = 12;
+    childInfo.readErrorRet  = 0;
     childInfo.outputFdIndex = 0;
     childrenInfo.push_back(childInfo);
 
@@ -237,13 +245,69 @@ TEST_CASE("Pcie: ProcessChildrenOutputs")
     bg4.m_testParameters = tp;
     memset(entityResults.get(), 0, sizeof(*entityResults));
     childrenInfo.clear();
-    childInfo.stdoutStr = "This isn't json";
+    childInfo.stdoutStr    = "This isn't json";
+    childInfo.stderrStr    = "";
+    childInfo.readErrorRet = 0;
     childrenInfo.push_back(std::move(childInfo));
     ret = ProcessChildrenOutputs(childrenInfo, bg4, groupName);
     CHECK(ret == 1);
     bg4.GetResults(bg4.GetPcieTestName(), entityResults.get());
     CHECK(entityResults->numErrors == 1);                 // we get one failure for bad json
     CHECK(entityResults->errors[0].entity.entityId == 0); // this error isn't tied to a GPU id
+    CHECK(entityResults->errors[0].entity.entityGroupId == DCGM_FE_NONE);
+
+    // Test with stderr output (libnuma warnings on stderr, clean JSON on stdout)
+    BusGrind bg5(handle);
+    bg5.InitializeForEntityList(bg5.GetPcieTestName(), *entityInfo);
+    tp = new TestParameters();
+    tp->AddSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH, minBw);
+    bg5.m_testParameters = tp;
+    memset(entityResults.get(), 0, sizeof(*entityResults));
+    childrenInfo.clear();
+    // libnuma warning goes to stderr (properly separated now)
+    childInfo.stderrStr = "libnuma: Warning: node 3 not allowed";
+    // Clean JSON with delimiters on stdout
+    childInfo.stdoutStr = startDelimiter
+                          + "\n"
+                            "{\n"
+                            "    \"GPUs\" : [\n"
+                            "        {\n"
+                            "            \"gpuId\" : 2,\n"
+                            "            \"maxRxBw\" : 395002000.8,\n"
+                            "            \"maxTxBw\" : 49502000.8,\n"
+                            "            \"maxBidirBw\" : 4902.8\n"
+                            "        }\n"
+                            "    ]\n"
+                            "}\n"
+                          + endDelimiter;
+    childInfo.readOutputRet = 0;
+    childInfo.readErrorRet  = 0;
+    childrenInfo.push_back(childInfo);
+    ret = ProcessChildrenOutputs(childrenInfo, bg5, groupName);
+    CHECK(ret == 0); // Should successfully parse
+    bg5.GetResults(bg5.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 0); // No errors
+
+    // Test with stderr read failure and JSON parsing failure
+    BusGrind bg6(handle);
+    bg6.InitializeForEntityList(bg6.GetPcieTestName(), *entityInfo);
+    tp = new TestParameters();
+    tp->AddSubTestDouble(groupName, PCIE_STR_MIN_BANDWIDTH, minBw);
+    bg6.m_testParameters = tp;
+    memset(entityResults.get(), 0, sizeof(*entityResults));
+    childrenInfo.clear();
+    // Malformed stdout (no delimiters) - will cause JSON parsing to fail
+    childInfo.stdoutStr = "{\"GPUs\": []}";
+    // stderr has libnuma warning, but read failed so it can't be processed
+    childInfo.stderrStr     = "libnuma: Warning: node 3 not allowed\nlibnuma: Warning: cpu 0 not allowed";
+    childInfo.readOutputRet = 0;
+    childInfo.readErrorRet  = EIO; // stderr read failed
+    childrenInfo.push_back(childInfo);
+    ret = ProcessChildrenOutputs(childrenInfo, bg6, groupName);
+    CHECK(ret == 1); // Should fail
+    bg6.GetResults(bg6.GetPcieTestName(), entityResults.get());
+    CHECK(entityResults->numErrors == 1);                 // Error reported
+    CHECK(entityResults->errors[0].entity.entityId == 0); // Not tied to specific GPU
     CHECK(entityResults->errors[0].entity.entityGroupId == DCGM_FE_NONE);
 }
 
@@ -330,6 +394,75 @@ TEST_CASE("Pcie: StartDcgmGroupWatch")
         globalWatchError                        = DCGM_ST_BADPARAM;
         std::unique_ptr<DcgmGroup> dcgmGroupPtr = StartDcgmGroupWatch(&bg, fieldIds, gpuIds);
         REQUIRE(dcgmGroupPtr.get() == nullptr);
+    }
+}
+
+TEST_CASE("Pcie: ExtractJson with delimiters")
+{
+    std::string startDelimiter(BWC_JSON_OUTPUT_START);
+    std::string endDelimiter(BWC_JSON_OUTPUT_END);
+
+    SECTION("JSON with proper delimiters")
+    {
+        std::string jsonValue = "{\"test\": \"value\"}";
+        std::string output    = startDelimiter + "\n" + jsonValue + "\n" + endDelimiter;
+        auto result           = ExtractJson(output);
+        CHECK(result == jsonValue + "\n"); // Trailing newline is included
+    }
+
+    SECTION("JSON with delimiters and prefix contamination")
+    {
+        std::string jsonValue = "{\"GPUs\": []}";
+        std::string output
+            = "libnuma: Warning: node 3 not allowed\n" + startDelimiter + "\n" + jsonValue + "\n" + endDelimiter;
+        auto result = ExtractJson(output);
+        CHECK(result == jsonValue + "\n"); // Trailing newline is included
+    }
+
+    SECTION("JSON with only start delimiter")
+    {
+        std::string jsonValue = "{\"GPUs\": []}";
+        std::string output    = startDelimiter + "\n" + jsonValue + "\n";
+        auto result           = ExtractJson(output);
+        CHECK(result.empty());
+    }
+
+    SECTION("JSON without delimiters")
+    {
+        std::string output = "{\"GPUs\": []}";
+        auto result        = ExtractJson(output);
+        CHECK(result.empty());
+    }
+
+    SECTION("Empty output")
+    {
+        std::string output = "";
+        auto result        = ExtractJson(output);
+        CHECK(result.empty());
+    }
+
+    SECTION("Multiple lines of warnings before JSON")
+    {
+        std::string jsonValue = "{\n"
+                                "    \"GPUs\" : [\n"
+                                "        {\n"
+                                "            \"gpuId\" : 0\n"
+                                "        }\n"
+                                "    ]\n"
+                                "}\n";
+        std::string output    = "libnuma: Warning: node 3 not allowed\n"
+                                "libnuma: Warning: node 4 not allowed\n"
+                                "libnuma: Warning: node 5 not allowed\n"
+                             + startDelimiter + "\n" + jsonValue + endDelimiter;
+        auto result = ExtractJson(output);
+        CHECK(result == jsonValue);
+    }
+
+    SECTION("No newline after start delimiter - does not parse")
+    {
+        std::string output = startDelimiter + "{\"test\": 1}" + endDelimiter;
+        auto result        = ExtractJson(output);
+        CHECK(result.empty());
     }
 }
 

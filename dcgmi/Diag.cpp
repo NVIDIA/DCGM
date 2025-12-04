@@ -24,6 +24,7 @@
 #include "dcgm_fields.h"
 #include <charconv>
 #include <chrono>
+#include <condition_variable>
 #include <ctype.h>
 #include <fstream>
 #include <iomanip>
@@ -37,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -205,6 +207,27 @@ RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v10 &drd
 
 void RemoteDiagExecutor::run()
 {
+    std::jthread heartbeatThread;
+
+    if (m_drd.flags & DCGM_RUN_FLAGS_ENABLE_HEARTBEAT)
+    {
+        heartbeatThread = std::jthread([this](std::stop_token st) {
+            std::condition_variable_any cv;
+            std::mutex m;
+            auto constexpr heartbeatInterval = std::chrono::seconds(8);
+
+            while (!st.stop_requested())
+            {
+                auto ret = dcgmDiagSendHeartbeat(m_handle);
+                if (ret != DCGM_ST_OK)
+                {
+                    log_debug("Failed to send heartbeat: {}", ret);
+                }
+                std::unique_lock<std::mutex> lock(m);
+                cv.wait_for(lock, st, heartbeatInterval, []() { return false; });
+            }
+        });
+    }
     m_result = dcgmActionValidate_v2(m_handle, &m_drd, m_response.get());
 }
 

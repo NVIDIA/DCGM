@@ -519,6 +519,16 @@ private:
                 }
                 break;
             }
+            case INJECTION_DRAMENCRYPTIONINFO_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.DramEncryptionInfoPtr = static_cast<nvmlDramEncryptionInfo_t *>(malloc(allocateNum * sizeof(*other.m_value.DramEncryptionInfoPtr)));
+                if (m_value.DramEncryptionInfoPtr != nullptr)
+                {
+                    std::memcpy(m_value.DramEncryptionInfoPtr, other.m_value.DramEncryptionInfoPtr, allocateNum * sizeof(*other.m_value.DramEncryptionInfoPtr));
+                }
+                break;
+            }
             case INJECTION_DRIVERMODEL_PTR:
             {
                 unsigned int allocateNum = m_isArray ? m_arrLen : 1;
@@ -1129,6 +1139,36 @@ private:
                 }
                 break;
             }
+            case INJECTION_NVLINKGETBWMODE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvlinkGetBwModePtr = static_cast<nvmlNvlinkGetBwMode_t *>(malloc(allocateNum * sizeof(*other.m_value.NvlinkGetBwModePtr)));
+                if (m_value.NvlinkGetBwModePtr != nullptr)
+                {
+                    std::memcpy(m_value.NvlinkGetBwModePtr, other.m_value.NvlinkGetBwModePtr, allocateNum * sizeof(*other.m_value.NvlinkGetBwModePtr));
+                }
+                break;
+            }
+            case INJECTION_NVLINKSETBWMODE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvlinkSetBwModePtr = static_cast<nvmlNvlinkSetBwMode_t *>(malloc(allocateNum * sizeof(*other.m_value.NvlinkSetBwModePtr)));
+                if (m_value.NvlinkSetBwModePtr != nullptr)
+                {
+                    std::memcpy(m_value.NvlinkSetBwModePtr, other.m_value.NvlinkSetBwModePtr, allocateNum * sizeof(*other.m_value.NvlinkSetBwModePtr));
+                }
+                break;
+            }
+            case INJECTION_NVLINKSUPPORTEDBWMODES_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.NvlinkSupportedBwModesPtr = static_cast<nvmlNvlinkSupportedBwModes_t *>(malloc(allocateNum * sizeof(*other.m_value.NvlinkSupportedBwModesPtr)));
+                if (m_value.NvlinkSupportedBwModesPtr != nullptr)
+                {
+                    std::memcpy(m_value.NvlinkSupportedBwModesPtr, other.m_value.NvlinkSupportedBwModesPtr, allocateNum * sizeof(*other.m_value.NvlinkSupportedBwModesPtr));
+                }
+                break;
+            }
             case INJECTION_NVLINKVERSION_PTR:
             {
                 unsigned int allocateNum = m_isArray ? m_arrLen : 1;
@@ -1136,6 +1176,16 @@ private:
                 if (m_value.NvlinkVersionPtr != nullptr)
                 {
                     std::memcpy(m_value.NvlinkVersionPtr, other.m_value.NvlinkVersionPtr, allocateNum * sizeof(*other.m_value.NvlinkVersionPtr));
+                }
+                break;
+            }
+            case INJECTION_PRMTLV_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PRMTLV_v1Ptr = static_cast<nvmlPRMTLV_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.PRMTLV_v1Ptr)));
+                if (m_value.PRMTLV_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.PRMTLV_v1Ptr, other.m_value.PRMTLV_v1Ptr, allocateNum * sizeof(*other.m_value.PRMTLV_v1Ptr));
                 }
                 break;
             }
@@ -3397,6 +3447,36 @@ public:
     }
 
     // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlDramEncryptionInfo_t *DramEncryptionInfoPtr, bool inHeap = false)
+        : m_type(INJECTION_DRAMENCRYPTIONINFO_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DramEncryptionInfoPtr = DramEncryptionInfoPtr;
+    }
+    InjectionArgument(nvmlDramEncryptionInfo_t DramEncryptionInfo)
+        : m_type(INJECTION_DRAMENCRYPTIONINFO)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DramEncryptionInfo = DramEncryptionInfo;
+    }
+    InjectionArgument(nvmlDramEncryptionInfo_t *DramEncryptionInfoPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_DRAMENCRYPTIONINFO_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.DramEncryptionInfoPtr = DramEncryptionInfoPtr;
+    }
+
+    nvmlDramEncryptionInfo_t *AsDramEncryptionInfoPtr() const
+    {
+        return m_value.DramEncryptionInfoPtr;
+    }
+
+    nvmlDramEncryptionInfo_t const &AsDramEncryptionInfo() const
+    {
+        return m_value.DramEncryptionInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
     InjectionArgument(nvmlDriverModel_t *DriverModelPtr, bool inHeap = false)
         : m_type(INJECTION_DRIVERMODEL_PTR), m_inHeap(inHeap)
     {
@@ -5187,6 +5267,96 @@ public:
     }
 
     // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlNvlinkGetBwMode_t *NvlinkGetBwModePtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKGETBWMODE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkGetBwModePtr = NvlinkGetBwModePtr;
+    }
+    InjectionArgument(nvmlNvlinkGetBwMode_t NvlinkGetBwMode)
+        : m_type(INJECTION_NVLINKGETBWMODE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkGetBwMode = NvlinkGetBwMode;
+    }
+    InjectionArgument(nvmlNvlinkGetBwMode_t *NvlinkGetBwModePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKGETBWMODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkGetBwModePtr = NvlinkGetBwModePtr;
+    }
+
+    nvmlNvlinkGetBwMode_t *AsNvlinkGetBwModePtr() const
+    {
+        return m_value.NvlinkGetBwModePtr;
+    }
+
+    nvmlNvlinkGetBwMode_t const &AsNvlinkGetBwMode() const
+    {
+        return m_value.NvlinkGetBwMode;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlNvlinkSetBwMode_t *NvlinkSetBwModePtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKSETBWMODE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkSetBwModePtr = NvlinkSetBwModePtr;
+    }
+    InjectionArgument(nvmlNvlinkSetBwMode_t NvlinkSetBwMode)
+        : m_type(INJECTION_NVLINKSETBWMODE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkSetBwMode = NvlinkSetBwMode;
+    }
+    InjectionArgument(nvmlNvlinkSetBwMode_t *NvlinkSetBwModePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKSETBWMODE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkSetBwModePtr = NvlinkSetBwModePtr;
+    }
+
+    nvmlNvlinkSetBwMode_t *AsNvlinkSetBwModePtr() const
+    {
+        return m_value.NvlinkSetBwModePtr;
+    }
+
+    nvmlNvlinkSetBwMode_t const &AsNvlinkSetBwMode() const
+    {
+        return m_value.NvlinkSetBwMode;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlNvlinkSupportedBwModes_t *NvlinkSupportedBwModesPtr, bool inHeap = false)
+        : m_type(INJECTION_NVLINKSUPPORTEDBWMODES_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkSupportedBwModesPtr = NvlinkSupportedBwModesPtr;
+    }
+    InjectionArgument(nvmlNvlinkSupportedBwModes_t NvlinkSupportedBwModes)
+        : m_type(INJECTION_NVLINKSUPPORTEDBWMODES)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkSupportedBwModes = NvlinkSupportedBwModes;
+    }
+    InjectionArgument(nvmlNvlinkSupportedBwModes_t *NvlinkSupportedBwModesPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_NVLINKSUPPORTEDBWMODES_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.NvlinkSupportedBwModesPtr = NvlinkSupportedBwModesPtr;
+    }
+
+    nvmlNvlinkSupportedBwModes_t *AsNvlinkSupportedBwModesPtr() const
+    {
+        return m_value.NvlinkSupportedBwModesPtr;
+    }
+
+    nvmlNvlinkSupportedBwModes_t const &AsNvlinkSupportedBwModes() const
+    {
+        return m_value.NvlinkSupportedBwModes;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
     InjectionArgument(nvmlNvlinkVersion_t *NvlinkVersionPtr, bool inHeap = false)
         : m_type(INJECTION_NVLINKVERSION_PTR), m_inHeap(inHeap)
     {
@@ -5214,6 +5384,36 @@ public:
     nvmlNvlinkVersion_t const &AsNvlinkVersion() const
     {
         return m_value.NvlinkVersion;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPRMTLV_v1_t *PRMTLV_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_PRMTLV_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMTLV_v1Ptr = PRMTLV_v1Ptr;
+    }
+    InjectionArgument(nvmlPRMTLV_v1_t PRMTLV_v1)
+        : m_type(INJECTION_PRMTLV_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMTLV_v1 = PRMTLV_v1;
+    }
+    InjectionArgument(nvmlPRMTLV_v1_t *PRMTLV_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PRMTLV_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMTLV_v1Ptr = PRMTLV_v1Ptr;
+    }
+
+    nvmlPRMTLV_v1_t *AsPRMTLV_v1Ptr() const
+    {
+        return m_value.PRMTLV_v1Ptr;
+    }
+
+    nvmlPRMTLV_v1_t const &AsPRMTLV_v1() const
+    {
+        return m_value.PRMTLV_v1;
     }
 
     // The following snippet is generated from write_injection_argument_header

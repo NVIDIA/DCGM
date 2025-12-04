@@ -402,7 +402,7 @@ dcgmReturn_t MnDiag::HelperDisplayAsCli(dcgmMnDiagResponse_v1 const &response, b
             std::string hostLabel = fmt::format("Host {}", i);
 
             // Display host row with overall status
-            cmdView.addDisplayParameter("<DATA_NAME", hostLabel);
+            cmdView.addDisplayParameter("<DATA_NAME", std::move(hostLabel));
             cmdView.addDisplayParameter("<DATA_INFO", to_string(hostStatus));
             cmdView.display();
 

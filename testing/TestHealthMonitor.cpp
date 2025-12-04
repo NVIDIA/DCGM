@@ -34,18 +34,14 @@ TestHealthMonitor::TestHealthMonitor()
 
     // Initialize devastating XIDs
     m_devastatingXids = {
-        { 48, "Double Bit ECC Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR },
-        { 74,
-          DCGM_FR_NVLINK_ERROR_CRITICAL_MSG,
-          DCGM_HEALTH_RESULT_FAIL,
-          DCGM_HEALTH_WATCH_NVLINK,
-          DCGM_FR_NVLINK_ERROR_CRITICAL },
+        { 48, "Double Bit ECC Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
+        { 74, "NVLink Critical Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
         { 79, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_FALLEN_OFF_BUS },
-        { 94, "Contained Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR },
-        { 95, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_UNCONTAINED_ERROR },
+        { 94, "Contained Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
+        { 95, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_UNCONTAINED_ERROR },
         { 119, "GSP RPC Timeout", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
         { 120, "GSP Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
-        { 140, "ECC unrecovered error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR }
+        { 140, "ECC unrecovered error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR }
     };
 
     // Initialize subsystem XIDs
@@ -102,7 +98,6 @@ TestHealthMonitor::TestHealthMonitor()
           DCGM_HEALTH_WATCH_NVLINK,
           DCGM_FR_NVLINK_ERROR_THRESHOLD },
         { 73, "NVLink Flow Control Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
-        { 74, "NVLink Error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
         { 121, "C2C Link corrected error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
         { 137, "NVLink FLA privilege error", DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
 
@@ -836,12 +831,13 @@ int TestHealthMonitor::TestHMCheckXids()
 }
 
 dcgmReturn_t TestHealthMonitor::TestSingleXid(unsigned int const gpuId,
-                                              int const xid,
+                                              uint64_t const xid,
                                               char const *const xidDesc,
                                               dcgmHealthWatchResults_t const expectedStatus,
                                               dcgmError_t const expectedError,
                                               auto const timestamp,
-                                              std::unique_ptr<dcgmHealthResponse_t> &response) const
+                                              std::unique_ptr<dcgmHealthResponse_t> &response,
+                                              dcgmHealthSystems_t const currentSubsystem) const
 {
     dcgmInjectFieldValue_t fv {};
     fv.version   = dcgmInjectFieldValue_version;
@@ -854,37 +850,65 @@ dcgmReturn_t TestHealthMonitor::TestSingleXid(unsigned int const gpuId,
     dcgmReturn_t result = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
     if (result != DCGM_ST_OK)
     {
-        fprintf(
-            stderr, "dcgmInjectFieldValue failed with %d for XID %d (%s)\n", static_cast<int>(result), xid, xidDesc);
+        fprintf(stderr,
+                "dcgmInjectFieldValue failed with %d for XID %llu (%s)\n",
+                static_cast<int>(result),
+                static_cast<unsigned long long>(xid),
+                xidDesc);
         return result;
     }
 
     result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
     if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
     {
-        fprintf(stderr, "dcgmHealthCheck failed with %d for XID %d (%s)\n", static_cast<int>(result), xid, xidDesc);
+        fprintf(stderr,
+                "dcgmHealthCheck failed with %d for XID %llu (%s)\n",
+                static_cast<int>(result),
+                static_cast<unsigned long long>(xid),
+                xidDesc);
         return result;
     }
 
     if (response->overallHealth != expectedStatus)
     {
         fprintf(stderr,
-                "XID %d (%s) did not trigger expected health status %d\n",
-                xid,
+                "XID %llu (%s) did not trigger expected health status %d, actual health status %d\n",
+                static_cast<unsigned long long>(xid),
                 xidDesc,
-                static_cast<int>(expectedStatus));
+                static_cast<int>(expectedStatus),
+                static_cast<int>(response->overallHealth));
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    // Verify the error code matches what we expect
-    if (response->incidents[0].error.code != expectedError)
+    bool foundMatchingSubsystem = false;
+    for (unsigned int i = 0; i < response->incidentCount; i++)
+    {
+        if (response->incidents[i].system == currentSubsystem)
+        {
+            // Verify the error code matches what we expect
+            if (response->incidents[i].error.code != expectedError)
+            {
+                fprintf(stderr,
+                        "XID %llu (%s) triggered error code %d but expected %d for subsystem %d\n",
+                        static_cast<unsigned long long>(xid),
+                        xidDesc,
+                        response->incidents[i].error.code,
+                        expectedError,
+                        static_cast<int>(currentSubsystem));
+                return DCGM_ST_GENERIC_ERROR;
+            }
+            foundMatchingSubsystem = true;
+            break;
+        }
+    }
+
+    if (!foundMatchingSubsystem)
     {
         fprintf(stderr,
-                "XID %d (%s) triggered error code %d but expected %d\n",
-                xid,
+                "XID %llu (%s) did not trigger any incident for expected subsystem %d\n",
+                static_cast<unsigned long long>(xid),
                 xidDesc,
-                response->incidents[0].error.code,
-                expectedError);
+                static_cast<int>(currentSubsystem));
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -899,9 +923,8 @@ int TestHealthMonitor::TestDevastatingXids()
     memset(response.get(), 0, sizeof(*response));
 
     // Enable all health monitoring since devastating XIDs are critical hardware errors
-    dcgmHealthSystems_t newSystems
-        = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM | DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_ALL);
-    response->version = dcgmHealthResponse_version;
+    dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_ALL);
+    response->version              = dcgmHealthResponse_version;
 
     auto now = Now();
 
@@ -935,7 +958,8 @@ int TestHealthMonitor::TestDevastatingXids()
                                m_devastatingXids[i].expectedStatus,
                                m_devastatingXids[i].expectedError,
                                now + std::chrono::seconds(i),
-                               response);
+                               response,
+                               m_devastatingXids[i].subsystem);
         if (result != DCGM_ST_OK)
         {
             return result;
@@ -990,7 +1014,8 @@ int TestHealthMonitor::TestSubsystemXids()
                                m_subsystemXids[i].expectedStatus,
                                m_subsystemXids[i].expectedError,
                                now + std::chrono::seconds(i),
-                               response);
+                               response,
+                               m_subsystemXids[i].subsystem);
         if (result != DCGM_ST_OK)
         {
             return result;
@@ -1008,9 +1033,9 @@ int TestHealthMonitor::TestXidSeverityLevels()
     memset(response.get(), 0, sizeof(*response));
 
     // Enable all subsystems for testing
-    dcgmHealthSystems_t newSystems
-        = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_MEM | DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_THERMAL
-                              | DCGM_HEALTH_WATCH_POWER | DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_INFOROM);
+    dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(
+        DCGM_HEALTH_WATCH_ALL | DCGM_HEALTH_WATCH_MEM | DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_THERMAL
+        | DCGM_HEALTH_WATCH_POWER | DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_INFOROM);
     response->version = dcgmHealthResponse_version;
 
     auto now = Now();
@@ -1044,7 +1069,8 @@ int TestHealthMonitor::TestXidSeverityLevels()
                            DCGM_HEALTH_RESULT_WARN,
                            DCGM_FR_XID_ERROR,
                            now,
-                           response);
+                           response,
+                           DCGM_HEALTH_WATCH_MEM);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -1057,21 +1083,22 @@ int TestHealthMonitor::TestXidSeverityLevels()
                            DCGM_HEALTH_RESULT_FAIL,
                            DCGM_FR_XID_ERROR,
                            now + 1s,
-                           response);
+                           response,
+                           DCGM_HEALTH_WATCH_ALL);
     if (result != DCGM_ST_OK)
     {
         return result;
     }
 
-    // Test multiple XIDs of different severities
-    // First inject a WARN level XID
+    // Test that FAIL-level XIDs override WARN-level XIDs for the rest of the test.
     result = TestSingleXid(groupInfo->entityList[0].entityId,
                            31,
                            "MMU Error (Memory subsystem)",
-                           DCGM_HEALTH_RESULT_WARN,
+                           DCGM_HEALTH_RESULT_FAIL,
                            DCGM_FR_XID_ERROR,
                            now + 2s,
-                           response);
+                           response,
+                           DCGM_HEALTH_WATCH_MEM);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -1084,7 +1111,8 @@ int TestHealthMonitor::TestXidSeverityLevels()
                            DCGM_HEALTH_RESULT_FAIL,
                            DCGM_FR_XID_ERROR,
                            now + 3s,
-                           response);
+                           response,
+                           DCGM_HEALTH_WATCH_ALL);
     if (result != DCGM_ST_OK)
     {
         return result;

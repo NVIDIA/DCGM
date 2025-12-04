@@ -162,7 +162,7 @@ public:
     {
         MockMnDiagMpiRunnerRegistry::IncrementCounter(
             m_runnerId, &MockMnDiagMpiRunnerRegistry::RunnerStats::setOutputCallbackCount);
-        m_lastCallback = callback;
+        m_lastCallback = std::move(callback);
     }
 
     std::string GetLastCommand() const override

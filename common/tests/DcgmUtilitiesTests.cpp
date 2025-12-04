@@ -19,6 +19,7 @@
 
 #include <DcgmException.hpp>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <set>
@@ -258,4 +259,63 @@ TEST_CASE("RunCmdAndGetOutput")
         REQUIRE(tokens[0] == "command");
         REQUIRE(tokens[5] == "arg5");
     }
+}
+
+TEST_CASE("Utils: FindExecutable", "[DcgmUtilities]")
+{
+    // Create a temporary directory and executable for testing
+    std::filesystem::path tempDir = std::filesystem::current_path() / "tmp";
+    std::filesystem::create_directories(tempDir);
+    std::filesystem::path testExecutable = tempDir / "test_exe";
+    std::ofstream { testExecutable }.close();
+    std::filesystem::permissions(
+        testExecutable, std::filesystem::perms::owner_exec, std::filesystem::perm_options::add);
+
+    struct TestCase
+    {
+        std::string name;
+        std::vector<std::string> searchPaths;
+        bool expectSuccess;
+        std::string expectedPath;
+        std::string expectedDir;
+        dcgmReturn_t expectedError;
+    };
+
+    std::vector<TestCase> testCases
+        = { { "Executable found in search paths",
+              { tempDir.string() },
+              true,
+              testExecutable.string(),
+              tempDir.string(),
+              DCGM_ST_OK },
+            { "Executable not found returns error", { "/nonexistent/path" }, false, "", "", DCGM_ST_NO_DATA },
+            { "Multiple search paths - found in second path",
+              { "/nonexistent", tempDir.string() },
+              true,
+              testExecutable.string(),
+              tempDir.string(),
+              DCGM_ST_OK } };
+
+    for (const auto &tc : testCases)
+    {
+        SECTION(tc.name)
+        {
+            std::string executableDir;
+            auto result = DcgmNs::Utils::FindExecutable("test_exe", tc.searchPaths, executableDir);
+
+            REQUIRE(result.has_value() == tc.expectSuccess);
+            if (result.has_value())
+            {
+                REQUIRE(result.value() == tc.expectedPath);
+                REQUIRE(executableDir == tc.expectedDir);
+            }
+            else
+            {
+                REQUIRE(result.error() == tc.expectedError);
+            }
+        }
+    }
+
+    // Cleanup
+    std::filesystem::remove_all(tempDir);
 }

@@ -50,6 +50,18 @@ void HangDetectMonitor::CheckTasks()
     auto tasksToUpdate = CollectTaskUpdates(monitoredTasks, now);
 
     std::vector<PendingHangReport> reports;
+
+    // Structure to collect logging info while locked, log after unlock
+    struct LogInfo
+    {
+        pid_t pid;
+        std::optional<pid_t> tid;
+        char processState;
+        bool shouldReport;
+        bool stateCheckFailed = false;
+    };
+    std::vector<LogInfo> logsToWrite;
+
     // Update states under lock
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -60,12 +72,57 @@ void HangDetectMonitor::CheckTasks()
             // Generate hang report if task is hung and hasn't been reported
             if (watch.isHung && !watch.hasReported)
             {
-                reports.push_back(PendingHangReport {
-                    .pid        = key.pid,
-                    .tid        = key.tid,
-                    .expiryTime = std::chrono::duration_cast<std::chrono::seconds>(watch.expiryTime) });
-                m_taskWatches[key].hasReported = true;
+                bool shouldReport = true;
+
+                // Check process state if userspace hang reporting is disabled
+                if (!m_reportUserspaceHangs)
+                {
+                    // Only report if process is in uninterruptible sleep ('D' state)
+                    auto result = m_detector.GetTaskState(key.pid, key.tid);
+                    if (result.has_value())
+                    {
+                        char processState = result.value();
+                        shouldReport      = (processState == 'D'); // Only report uninterruptible sleep
+
+                        // Collect logging info to write after unlock
+                        logsToWrite.push_back(LogInfo { .pid          = key.pid,
+                                                        .tid          = key.tid,
+                                                        .processState = processState,
+                                                        .shouldReport = shouldReport });
+                    }
+                    else
+                    {
+                        // Collect logging info for failed state check
+                        logsToWrite.push_back(LogInfo { .pid              = key.pid,
+                                                        .tid              = key.tid,
+                                                        .processState     = '\0',
+                                                        .shouldReport     = true,
+                                                        .stateCheckFailed = true });
+                        // If we can't get process state, report the hang to be safe
+                        shouldReport = true;
+                    }
+                }
+
+                if (shouldReport)
+                {
+                    reports.push_back(PendingHangReport {
+                        .pid        = key.pid,
+                        .tid        = key.tid,
+                        .expiryTime = std::chrono::duration_cast<std::chrono::seconds>(watch.expiryTime) });
+                    m_taskWatches[key].hasReported = true;
+                }
             }
+        }
+    }
+
+    // Write logs after releasing the lock
+    for (const auto &logInfo : logsToWrite)
+    {
+        if (logInfo.stateCheckFailed)
+        {
+            log_warning("Failed to get process state for {}/{}, reporting hang anyway",
+                        logInfo.pid,
+                        logInfo.tid.has_value() ? std::to_string(*logInfo.tid) : "N/A");
         }
     }
 

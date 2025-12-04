@@ -872,6 +872,7 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS,
+        dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS,
     ]
     exceptionFieldIds.extend(g_profilingFieldIds)
 
@@ -1274,7 +1275,7 @@ def test_platform_info_fields(handle, gpuIds):
     """
     platformFields = {
         dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: ("3f26f0def26b9c79", "0x799c6bf2def0263f"),
-        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: ("3f26f0def26bdeaa", "3f26f0de-f26b-deaa-0000-000000000000"),
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: ("31383232343235323034303336", "1822425204036"),
         dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER: 1,
         dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX: 2,
         dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID: 3,
@@ -1332,7 +1333,7 @@ def test_platform_info_fields_invalid_values(handle, gpuIds):
     """
     injectedPlatformFields = {
         dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID: "3f26f0def26b9c79",
-        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: "",
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER: "ffffffffffffffffffffffffffffffff",
         dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SLOT_NUMBER: 255,
         dcgm_fields.DCGM_FI_DEV_PLATFORM_TRAY_INDEX: 255,
         dcgm_fields.DCGM_FI_DEV_PLATFORM_HOST_ID: 3,
@@ -1366,7 +1367,7 @@ def test_platform_info_fields_invalid_values(handle, gpuIds):
 
     strFields = [
         dcgm_fields.DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID,
-        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER
+        dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER,
     ]
     for field in strFields:
         dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuIds[0], field, 1, 3600.0, 0)
@@ -1386,6 +1387,31 @@ def test_platform_info_fields_invalid_values(handle, gpuIds):
         dcgm_agent.dcgmUpdateAllFields(handle, 1)
         values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuIds[0], [field])
         assert (values[0].value.i64 == expectedPlatformFields[field]), f"Expected value {expectedPlatformFields[field]} for field {field}, but got {values[0].value.i64}"
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_only_with_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(30)
+@test_utils.run_only_if_mig_is_disabled()
+@test_utils.run_with_nvml_injected_gpus()
+def test_chassis_serial_number_empty_value(handle, gpuIds):
+    """
+    This test injects empty chassis serial number field and verifies that blank string value is retrieved.
+    """
+
+    injectedRet = nvml_injection.c_injectNvmlRet_t()
+    injectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
+    injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_PLATFORMINFO
+    injectedRet.values[0].value.PlatformInfo.chassisSerialNumber = bytes.fromhex("")
+    injectedRet.valueCount = 1
+    ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuIds[0], "PlatformInfo", None, 0, injectedRet)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    expectedValue = dcgmvalue.DCGM_STR_BLANK
+    dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER, 1, 3600.0, 0)
+    dcgm_agent.dcgmUpdateAllFields(handle, 1)
+    values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuIds[0], [dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER])
+    assert (values[0].value.str == expectedValue), f"Expected value {expectedValue} for field {dcgm_fields.DCGM_FI_DEV_PLATFORM_CHASSIS_SERIAL_NUMBER}, but got {values[0].value.str}"
 
 def helper_inject_ber_float(handle, gpuIds, berFieldId, berFloatFieldId, fakeBer, expectedBerFloat):
     """Helper function to inject and verify BER values

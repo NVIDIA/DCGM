@@ -133,6 +133,7 @@ DCGM_ST_REMOTE_SSH_CONNECTION_FAILED    = -61  # An SSH connection to a remote h
 DCGM_ST_CHILD_SPAWN_FAILED              = -62  # A child process could not be spawned
 DCGM_ST_FILE_IO_ERROR                   = -63  # A file operation failed
 DCGM_ST_CHILD_SIGNAL_RECEIVED           = -64  # A child process received a signal
+DCGM_ST_CALLER_ALREADY_STOPPED          = -65  # The caller is already stopped
 
 DCGM_GROUP_DEFAULT = 0  # All the GPUs on the node are added to the group
 DCGM_GROUP_EMPTY   = 1  # Creates an empty group
@@ -309,6 +310,7 @@ class DCGMError(Exception):
         DCGM_ST_CHILD_SPAWN_FAILED:              "A child process could not be spawned",
         DCGM_ST_FILE_IO_ERROR:                   "A file operation failed",
         DCGM_ST_CHILD_SIGNAL_RECEIVED:           "A child process received a signal",
+        DCGM_ST_CALLER_ALREADY_STOPPED:          "The caller is already stopped",
     }
 
     def __new__(typ, value):
@@ -2183,6 +2185,7 @@ DCGM_RUN_FLAGS_TRAIN       = 0x0004
 # UNUSED
 DCGM_RUN_FLAGS_FORCE_TRAIN = 0x0008
 DCGM_RUN_FLAGS_FAIL_EARLY  = 0x0010 # Enable fail early checks for the Targeted Stress, Targeted Power, SM Stress, and Diagnostic tests
+DCGM_RUN_FLAGS_ENABLE_HEARTBEAT = 0x0020 # Enable heartbeat for the diagnostic
 
 class c_dcgmRunDiag_v7(_PrintableStructure):
     _fields_ = [
@@ -2257,7 +2260,7 @@ class c_dcgmRunDiag_v9(_PrintableStructure):
         ('failCheckInterval', c_uint), # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
         ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN), # The expected number of entities the diag will run on.
         ('entityIds', c_char * DCGM_ENTITY_ID_LIST_LEN), # Comma-separated list of entity ids. Cannot be specified with the groupId.
-        ('watchFrequency', c_uint), # The watch frequency for fields being watched 
+        ('watchFrequency', c_uint), # The watch frequency for fields being watched
     ]
 
 dcgmRunDiag_version9 = make_dcgm_version(c_dcgmRunDiag_v9, 9)
@@ -2725,3 +2728,16 @@ class c_dcgmWorkloadPowerProfile_v1(_PrintableStructure):
 c_dcgmWorkloadPowerProfile_t = c_dcgmWorkloadPowerProfile_v1
 dcgmWorkloadPowerProfile_version1 = make_dcgm_version(c_dcgmWorkloadPowerProfile_v1, 1)
 dcgmWorkloadPowerProfile_version = dcgmWorkloadPowerProfile_version1
+
+# Environment Variable Info structure
+class c_dcgmEnvVarInfo_v1(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint),
+        ('envVarName', c_char * DCGM_MAX_STR_LENGTH),
+        ('envVarValue', c_char * DCGM_MAX_STR_LENGTH),
+        ('ret', c_int),
+    ]
+
+c_dcgmEnvVarInfo_t = c_dcgmEnvVarInfo_v1
+dcgmEnvVarInfo_version1 = make_dcgm_version(c_dcgmEnvVarInfo_v1, 1)
+dcgmEnvVarInfo_version = dcgmEnvVarInfo_version1

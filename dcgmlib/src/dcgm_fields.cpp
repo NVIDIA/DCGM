@@ -1091,6 +1091,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_FABRIC_HEALTH_MASK,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "fabric_health_mask",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "FMHMSK",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PSTATE,
                                              DCGM_FT_INT64,
                                              8,
@@ -5916,6 +5926,39 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "pcie_count_correctable_errors",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS,
+                                             "PCIECOER",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_IMEX_DOMAIN_STATUS,
+                                             DCGM_FT_STRING,
+                                             0,
+                                             "imex_domain_status",
+                                             DCGM_FS_GLOBAL,
+                                             0,
+                                             "IMEXD",
+                                             "",
+                                             DCGM_FE_NONE,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_IMEX_DAEMON_STATUS,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "imex_daemon_status",
+                                             DCGM_FS_GLOBAL,
+                                             0,
+                                             "IMEXS",
+                                             "#",
+                                             DCGM_FE_NONE,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
 
     return 0;
 }

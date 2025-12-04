@@ -159,12 +159,14 @@ def test_dcgm_library_existence():
         'libdcgmmoduleconfig.so.4',
         'libdcgmmodulehealth.so.4',
         'libdcgmmodulenvswitch.so.4',
+        'libdcgmmoduleprofiling.so.4',
         'libdcgm_cublas_proxy11.so.4',
-        'libdcgm_cublas_proxy12.so.4',
         'libdcgmmodulediag.so.4',
         'libdcgmmodulemndiag.so.4',
         'libdcgmmoduleintrospect.so.4',
         'libdcgmmodulepolicy.so.4',
+        'libdcgmmodulevgpu.so.4',
+        'libnvperf_dcgm_host.so',
     ]
 
     name_to_found = {}

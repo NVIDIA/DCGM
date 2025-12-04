@@ -20,9 +20,10 @@
 
 /*****************************************************************************/
 /* Introspect Subrequest IDs */
-#define DCGM_DIAG_SR_RUN   1
-#define DCGM_DIAG_SR_STOP  2
-#define DCGM_DIAG_SR_COUNT 2 /* Keep as last entry with same value as highest number */
+#define DCGM_DIAG_SR_RUN            1
+#define DCGM_DIAG_SR_STOP           2
+#define DCGM_DIAG_SR_SEND_HEARTBEAT 3
+#define DCGM_DIAG_SR_COUNT          3 /* Keep as last entry with same value as highest number */
 
 /*****************************************************************************/
 /* Subrequest message definitions */

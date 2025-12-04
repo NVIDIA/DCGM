@@ -499,3 +499,263 @@ void WrapperNvidiaValidationSuite::WrapperOverrideParameters(TestParameters *tp,
 {
     overrideParameters(tp, lowerCaseTestName);
 }
+
+// Helper class to create test GPUs with custom UUIDs
+// Uses dependency injection via the uuidGetter parameter
+class TestGpuHelper
+{
+public:
+    std::unique_ptr<Gpu> CreateGpu(unsigned int gpuId, std::string const &uuid)
+    {
+        auto gpu             = std::make_unique<Gpu>(gpuId);
+        m_uuidMap[gpu.get()] = uuid;
+        return gpu;
+    }
+
+    std::string GetUuid(Gpu *gpu) const
+    {
+        auto it = m_uuidMap.find(gpu);
+        if (it != m_uuidMap.end())
+        {
+            return it->second;
+        }
+        return ""; // Should not happen in tests
+    }
+
+private:
+    std::map<Gpu *, std::string> m_uuidMap; // Instance variable - automatically cleaned up
+};
+
+
+SCENARIO("BuildCudaVisibleDevicesString creates correct CUDA_VISIBLE_DEVICES strings")
+{
+    GIVEN("Empty GPU indices")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        std::vector<unsigned int> gpuIndices;
+        std::vector<Gpu *> gpuVect;
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It returns an empty string")
+            {
+                CHECK(result.empty());
+            }
+        }
+    }
+
+    GIVEN("Single GPU")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        auto gpu0 = helper.CreateGpu(0, "GPU-00000000-0000-0000-0000-000000000000");
+        std::vector<Gpu *> gpuVect { gpu0.get() };
+        std::vector<unsigned int> gpuIndices { 0 };
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It returns the single GPU UUID")
+            {
+                CHECK(result == "GPU-00000000-0000-0000-0000-000000000000");
+            }
+        }
+    }
+
+    GIVEN("Multiple GPUs in sequential order")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        auto gpu0 = helper.CreateGpu(0, "GPU-00000000-0000-0000-0000-000000000000");
+        auto gpu1 = helper.CreateGpu(1, "GPU-11111111-1111-1111-1111-111111111111");
+        auto gpu2 = helper.CreateGpu(2, "GPU-22222222-2222-2222-2222-222222222222");
+        auto gpu3 = helper.CreateGpu(3, "GPU-33333333-3333-3333-3333-333333333333");
+
+        std::vector<Gpu *> gpuVect { gpu0.get(), gpu1.get(), gpu2.get(), gpu3.get() };
+        std::vector<unsigned int> gpuIndices { 0, 1, 2, 3 };
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It returns comma-separated UUIDs in order")
+            {
+                CHECK(
+                    result
+                    == "GPU-00000000-0000-0000-0000-000000000000,GPU-11111111-1111-1111-1111-111111111111,GPU-22222222-2222-2222-2222-222222222222,GPU-33333333-3333-3333-3333-333333333333");
+            }
+        }
+    }
+
+    GIVEN("Multiple GPUs in non-sequential order")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        auto gpu0 = helper.CreateGpu(0, "GPU-00000000-0000-0000-0000-000000000000");
+        auto gpu1 = helper.CreateGpu(1, "GPU-11111111-1111-1111-1111-111111111111");
+        auto gpu2 = helper.CreateGpu(2, "GPU-22222222-2222-2222-2222-222222222222");
+        auto gpu3 = helper.CreateGpu(3, "GPU-33333333-3333-3333-3333-333333333333");
+
+        std::vector<Gpu *> gpuVect { gpu0.get(), gpu1.get(), gpu2.get(), gpu3.get() };
+        std::vector<unsigned int> gpuIndices { 3, 1 };
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It returns UUIDs in the order of gpuIndices")
+            {
+                CHECK(result == "GPU-33333333-3333-3333-3333-333333333333,GPU-11111111-1111-1111-1111-111111111111");
+            }
+        }
+    }
+
+    GIVEN("GPU index not found in gpuVect")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        auto gpu0 = helper.CreateGpu(0, "GPU-00000000-0000-0000-0000-000000000000");
+        auto gpu1 = helper.CreateGpu(1, "GPU-11111111-1111-1111-1111-111111111111");
+
+        std::vector<Gpu *> gpuVect { gpu0.get(), gpu1.get() };
+        std::vector<unsigned int> gpuIndices { 0, 5, 1 }; // GPU 5 doesn't exist
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It skips the missing GPU and includes valid ones")
+            {
+                CHECK(result == "GPU-00000000-0000-0000-0000-000000000000,GPU-11111111-1111-1111-1111-111111111111");
+            }
+        }
+    }
+
+    GIVEN("All GPU indices not found in gpuVect")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        auto gpu0 = helper.CreateGpu(0, "GPU-00000000-0000-0000-0000-000000000000");
+        auto gpu1 = helper.CreateGpu(1, "GPU-11111111-1111-1111-1111-111111111111");
+
+        std::vector<Gpu *> gpuVect { gpu0.get(), gpu1.get() };
+        std::vector<unsigned int> gpuIndices { 5, 6, 7 }; // None exist
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It returns an empty string")
+            {
+                CHECK(result.empty());
+            }
+        }
+    }
+
+    GIVEN("gpuVect with nullptr entries")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        auto gpu0 = helper.CreateGpu(0, "GPU-00000000-0000-0000-0000-000000000000");
+        auto gpu2 = helper.CreateGpu(2, "GPU-22222222-2222-2222-2222-222222222222");
+
+        std::vector<Gpu *> gpuVect { gpu0.get(), nullptr, gpu2.get() };
+        std::vector<unsigned int> gpuIndices { 0, 2 };
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It handles nullptr gracefully and returns valid UUIDs")
+            {
+                CHECK(result == "GPU-00000000-0000-0000-0000-000000000000,GPU-22222222-2222-2222-2222-222222222222");
+            }
+        }
+    }
+
+    GIVEN("Testing GPU 3 only on a 4-GPU system")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        auto gpu0 = helper.CreateGpu(0, "GPU-00000000-0000-0000-0000-000000000000");
+        auto gpu1 = helper.CreateGpu(1, "GPU-11111111-1111-1111-1111-111111111111");
+        auto gpu2 = helper.CreateGpu(2, "GPU-22222222-2222-2222-2222-222222222222");
+        auto gpu3 = helper.CreateGpu(3, "GPU-33333333-3333-3333-3333-333333333333");
+
+        std::vector<Gpu *> gpuVect { gpu0.get(), gpu1.get(), gpu2.get(), gpu3.get() };
+        std::vector<unsigned int> gpuIndices { 3 };
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It returns only GPU 3's UUID")
+            {
+                CHECK(result == "GPU-33333333-3333-3333-3333-333333333333");
+            }
+        }
+    }
+
+    GIVEN("Non-contiguous GPU selection (GPUs 1 and 3)")
+    {
+        TestGpuHelper helper;
+        auto testUuidGetter = [&helper](Gpu *gpu) {
+            return helper.GetUuid(gpu);
+        };
+
+        auto gpu0 = helper.CreateGpu(0, "GPU-00000000-0000-0000-0000-000000000000");
+        auto gpu1 = helper.CreateGpu(1, "GPU-11111111-1111-1111-1111-111111111111");
+        auto gpu2 = helper.CreateGpu(2, "GPU-22222222-2222-2222-2222-222222222222");
+        auto gpu3 = helper.CreateGpu(3, "GPU-33333333-3333-3333-3333-333333333333");
+
+        std::vector<Gpu *> gpuVect { gpu0.get(), gpu1.get(), gpu2.get(), gpu3.get() };
+        std::vector<unsigned int> gpuIndices { 1, 3 };
+
+        WHEN("BuildCudaVisibleDevicesString is called")
+        {
+            std::string result
+                = NvidiaValidationSuite::BuildCudaVisibleDevicesString(gpuIndices, gpuVect, testUuidGetter);
+
+            THEN("It returns UUIDs for GPUs 1 and 3 in that order")
+            {
+                CHECK(result == "GPU-11111111-1111-1111-1111-111111111111,GPU-33333333-3333-3333-3333-333333333333");
+            }
+        }
+    }
+}

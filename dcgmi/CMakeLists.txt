@@ -52,7 +52,8 @@ target_sources(dcgmi_objects_without_main PRIVATE
     ProcessStats.cpp
     Query.cpp
     Topo.cpp
-    Version.cpp)
+    Version.cpp
+    Environment.cpp)
 
 target_link_libraries(dcgmi_objects PUBLIC dcgmi_objects_without_main)
 target_sources(dcgmi_objects PRIVATE main_dcgmi.cpp)

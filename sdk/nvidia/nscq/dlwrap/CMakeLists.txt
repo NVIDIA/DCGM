@@ -25,5 +25,6 @@ target_link_libraries(sdk_nscq_loader
   INTERFACE
     sdk_nscq_loader_interface
   PRIVATE
+    task_context_manager
     pthread
     dl)

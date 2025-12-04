@@ -213,7 +213,7 @@ TEST_CASE("UdsSSHTunnelManager tests")
         std::vector<ChildProcessHandle_t> tcpServers;
         auto portStr = fmt::format("{}/ssh_0.sock", localUnixPathPrefix);
 
-        StartUdsServers(childProcessManager, { portStr }, tcpServers);
+        StartUdsServers(childProcessManager, { std::move(portStr) }, tcpServers);
         // Verify that the next available file number is used for the ssh session
         auto tunnelState = manager.StartSession(remoteHostname, remoteUnixPath, localUnixPath, uid);
         CHECK(tunnelState == TunnelState::Active);

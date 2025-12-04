@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(tests)
+
 macro(define_dcgmproftester cuda_version)
     set(dcgmproftester_exec dcgmproftester${cuda_version})
 
