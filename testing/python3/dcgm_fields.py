@@ -232,14 +232,14 @@ DCGM_FI_DEV_PCIE_MAX_LINK_WIDTH = 236 #PCIe Max Link Width
 DCGM_FI_DEV_PCIE_LINK_GEN       = 237 #PCIe Current Link Generation
 DCGM_FI_DEV_PCIE_LINK_WIDTH     = 238 #PCIe Current Link Width
 #Violation counters
-DCGM_FI_DEV_POWER_VIOLATION     = 240 #Power Violation time in usec
-DCGM_FI_DEV_THERMAL_VIOLATION   = 241 #Thermal Violation time in usec
-DCGM_FI_DEV_SYNC_BOOST_VIOLATION = 242 #Sync Boost Violation time in usec
-DCGM_FI_DEV_BOARD_LIMIT_VIOLATION = 243 #Board Limit Violation time in usec.
-DCGM_FI_DEV_LOW_UTIL_VIOLATION    = 244 #Low Utilization Violation time in usec.
-DCGM_FI_DEV_RELIABILITY_VIOLATION = 245 #Reliability Violation time in usec.
-DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION = 246 #App Clocks Violation time in usec.
-DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION = 247 #Base Clocks Violation time in usec.
+DCGM_FI_DEV_POWER_VIOLATION     = 240 #Power Violation time in nsec
+DCGM_FI_DEV_THERMAL_VIOLATION   = 241 #Thermal Violation time in nsec
+DCGM_FI_DEV_SYNC_BOOST_VIOLATION = 242 #Sync Boost Violation time in nsec
+DCGM_FI_DEV_BOARD_LIMIT_VIOLATION = 243 #Board Limit Violation time in nsec.
+DCGM_FI_DEV_LOW_UTIL_VIOLATION    = 244 #Low Utilization Violation time in nsec.
+DCGM_FI_DEV_RELIABILITY_VIOLATION = 245 #Reliability Violation time in nsec.
+DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION = 246 #App Clocks Violation time in nsec.
+DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION = 247 #Base Clocks Violation time in nsec.
 #Framebuffer usage
 DCGM_FI_DEV_FB_TOTAL            = 250 #Total framebuffer memory in MB
 DCGM_FI_DEV_FB_FREE             = 251 #Total framebuffer used in MB
