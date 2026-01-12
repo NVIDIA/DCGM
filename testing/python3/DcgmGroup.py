@@ -510,7 +510,7 @@ class DcgmGroupAction:
         runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
         runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
         for i in range(len(testName)):
-            runDiagInfo.testNames[0][i] = testName[i]
+            runDiagInfo.testNames[i] = testName[i]
         runDiagInfo.groupId = self._groupId
         runDiagInfo.validate = dcgm_structs.DCGM_POLICY_VALID_NONE
         response = dcgm_agent.dcgmActionValidate_v2(self._dcgmHandle.handle, runDiagInfo)
