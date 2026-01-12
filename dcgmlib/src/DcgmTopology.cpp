@@ -782,7 +782,7 @@ dcgmReturn_t GetActiveNvSwitchNvLinkCountsForAllGpus(const std::vector<dcgm_topo
         return DCGM_ST_INSUFFICIENT_SIZE;
     }
 
-    gpuCounts = {};
+    gpuCounts.assign(gpuInfo.size(), 0);
 
     // Attempt to query through NVML. This is not supported in all drivers so
     // there is a fallback approach below
