@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ from ctypes import *
 import nvml_injection
 from _test_helpers import skip_test_if_no_dcgm_nvml
 
+
 @test_utils.run_only_as_root()
 @test_utils.skip_test_on_vm()
 @skip_test_if_no_dcgm_nvml()
@@ -49,7 +50,8 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
         - field values read after this event return blank values
     """
     funcCallCounts = nvml_injection.c_injectNvmlFuncCallCounts_t()
-    ret = dcgm_agent_internal.dcgmGetNvmlInjectFuncCallCount(handle, funcCallCounts)
+    ret = dcgm_agent_internal.dcgmGetNvmlInjectFuncCallCount(
+        handle, funcCallCounts)
     assert (ret == dcgm_structs.DCGM_ST_OK)
     assert funcCallCounts.numFuncs > 0, "numFuncs value: %u" % funcCallCounts.numFuncs
 
@@ -65,10 +67,11 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
     # field values to blank. This test is not designed to run when an XID 999 from a
     # previous test run is already in /dev/kmsg.
     if dcgmvalue.DCGM_STR_IS_BLANK(gpuPciBusIdAttrib):
-        test_utils.skip_test("PCI bus ID for GPU {} is blank. Skipping test.".format(gpuIds[0]))
+        test_utils.skip_test(
+            "PCI bus ID for GPU {} is blank. Skipping test.".format(gpuIds[0]))
 
     # The pciBusId attribute here is in the format of 00000000:01:00.0, and should be in
-    # the format "0000:01:00" in the kmsg message. Remove the "0000" prefix and the ".0" 
+    # the format "0000:01:00" in the kmsg message. Remove the "0000" prefix and the ".0"
     # suffix.
     gpuPciBusId = gpuPciBusIdAttrib[4:-2]
 
@@ -80,7 +83,8 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
             kmsgFile.write(message)
     except Exception as e:
         errorMessage = "{}: {}".format(message, e)
-        test_utils.skip_test("Unable to write XID to /dev/kmsg due to {}. Skipping test.".format(errorMessage))
+        test_utils.skip_test(
+            "Unable to write XID to /dev/kmsg due to {}. Skipping test.".format(errorMessage))
 
     # The CacheManager thread that reads the XID events from the kmsgReader thread runs
     # every 1 second. Wait for a few seconds for the event to be read, before resetting
@@ -94,47 +98,55 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
     # thread to wake up and attempt to call into NVML.
     time.sleep(30)
     funcCallCounts = nvml_injection.c_injectNvmlFuncCallCounts_t()
-    ret = dcgm_agent_internal.dcgmGetNvmlInjectFuncCallCount(handle, funcCallCounts)
+    ret = dcgm_agent_internal.dcgmGetNvmlInjectFuncCallCount(
+        handle, funcCallCounts)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     for i in range(funcCallCounts.numFuncs):
-        logger.debug("NVML function {} called {} times".format(funcCallCounts.funcCallInfo[i].funcName, funcCallCounts.funcCallInfo[i].funcCallCount))
+        logger.debug("NVML function {} called {} times".format(
+            funcCallCounts.funcCallInfo[i].funcName, funcCallCounts.funcCallInfo[i].funcCallCount))
 
     assert funcCallCounts.numFuncs == 0, "numFuncs value: %u" % funcCallCounts.numFuncs
 
     updateFreq = 1000000
-    maxKeepAge = 600.0 #10 minutes
-    maxKeepEntries = 0 #no limit
+    maxKeepAge = 600.0  # 10 minutes
+    maxKeepEntries = 0  # no limit
 
     # Assert that the corresponding XID event was recorded
     fieldId = dcgm_fields.DCGM_FI_DEV_XID_ERRORS
-    dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuIds[0], fieldId, updateFreq, maxKeepAge, maxKeepEntries)
+    dcgm_agent_internal.dcgmWatchFieldValue(
+        handle, gpuIds[0], fieldId, updateFreq, maxKeepAge, maxKeepEntries)
     dcgm_agent.dcgmUpdateAllFields(handle, 1)
 
     maxCount = 100
     startTs = 0
     endTs = 0
-    values = dcgm_agent_internal.dcgmGetMultipleValuesForField(handle, gpuIds[0], fieldId, maxCount, startTs, endTs, dcgm_structs.DCGM_ORDER_ASCENDING)
+    values = dcgm_agent_internal.dcgmGetMultipleValuesForField(
+        handle, gpuIds[0], fieldId, maxCount, startTs, endTs, dcgm_structs.DCGM_ORDER_ASCENDING)
     assert len(values) > 0, "No XID event registered"
     xidFound = False
     for fieldValue in values:
         xidNum = fieldValue.value.i64
         xidTs = fieldValue.ts
-        logger.debug("Read XID value {} and timestamp {}".format(xidNum, xidTs))
-        if(xidNum == int(xid)):
+        logger.debug(
+            "Read XID value {} and timestamp {}".format(xidNum, xidTs))
+        if (xidNum == int(xid)):
             xidFound = True
     assert xidFound, "XID {} not found in registered XID events".format(xid)
 
     # Assert that the sample fields report blank values
-    fieldIds = [dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP, dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION]
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP,
+                dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION]
     for fieldId in fieldIds:
-        dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuIds[0], fieldId, updateFreq, maxKeepAge, maxKeepEntries)
+        dcgm_agent_internal.dcgmWatchFieldValue(
+            handle, gpuIds[0], fieldId, updateFreq, maxKeepAge, maxKeepEntries)
         dcgm_agent.dcgmUpdateAllFields(handle, 1)
 
         maxCount = 100
         startTs = 0
         endTs = 0
-        values = dcgm_agent_internal.dcgmGetMultipleValuesForField(handle, gpuIds[0], fieldId, maxCount, startTs, endTs, dcgm_structs.DCGM_ORDER_ASCENDING)
+        values = dcgm_agent_internal.dcgmGetMultipleValuesForField(
+            handle, gpuIds[0], fieldId, maxCount, startTs, endTs, dcgm_structs.DCGM_ORDER_ASCENDING)
         assert len(values) > 0
 
         for fieldValue in values:

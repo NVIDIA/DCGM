@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,14 @@
 
 #include <concepts>
 #include <dcgm_structs.h>
+#include <dcgm_structs_internal.h>
 #include <fmt/format.h>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
+
+#include "DcgmUtilities.h"
 
 
 /*****************************************************************************/
@@ -145,5 +149,21 @@ int strictStrToInt(std::string const &str);
  * @return The trimmed string
  */
 std::string Trim(std::string_view str);
+
+/**
+ * @brief Converts a string to a uint32_t
+ * @param str The string to convert
+ * @return The converted uint32_t on success
+ * @return DCGM_ST_GENERIC_ERROR on failure
+ */
+DcgmResult<std::uint32_t> StrToUint32(std::string_view str);
+
+/**
+ * Convert DcgmEntityStatus_t enum to human-readable string representation
+ *
+ * @param[in] status Entity status enum value
+ * @return String view representation of the status
+ */
+std::string_view DcgmEntityStatusToString(DcgmEntityStatus_t status) noexcept;
 
 } // namespace DcgmNs

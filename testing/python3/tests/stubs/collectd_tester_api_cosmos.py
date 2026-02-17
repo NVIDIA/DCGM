@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,32 +13,44 @@
 # limitations under the License.
 
 ################################################################################
-##### Spoof collectd for our testing framework
+# Spoof collectd for our testing framework
 ################################################################################
 import collectd_tester_globals
 import dcgm_collectd
 
 ################################################################################
+
+
 def register_init(func_ptr):
     collectd_tester_globals.gvars['init'] = func_ptr
 
 ################################################################################
+
+
 def register_read(func_ptr):
     collectd_tester_globals.gvars['read'] = func_ptr
 
 ################################################################################
+
+
 def register_shutdown(func_ptr):
     collectd_tester_globals.gvars['shutdown'] = func_ptr
 
 ################################################################################
+
+
 def info(msg):
     print(msg)
 
 ################################################################################
+
+
 def debug(msg):
     pass
 
 ################################################################################
+
+
 class Values:
 
     ############################################################################
@@ -62,4 +74,3 @@ class Values:
 
             # Put this in a global dictionary for later inspection
             collectd_tester_globals.gvars['out'][gpuId][fieldTag] = oneVal
-

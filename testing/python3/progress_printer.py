@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,12 +18,14 @@ import datetime
 
 _erisTestNumber = 0
 
+
 class ProgressPrinter(object):
     def subtest_start(self, subtest):
         pass
 
     def subtest_finish(self, subtest):
         pass
+
 
 class DefaultProgressPrinter(ProgressPrinter):
     def subtest_start(self, subtest):
@@ -35,23 +37,28 @@ class DefaultProgressPrinter(ProgressPrinter):
             if subtest.dvssc_log:
                 self.childrenTest = ""
                 _erisTestNumber += 1
-                subtest._DefaultProgressPrinter_header_log_id = logger.info("\n&&&& RUNNING %s - %d\n" % (subtest.name, _erisTestNumber), defer=subtest.quiet)
+                subtest._DefaultProgressPrinter_header_log_id = logger.info(
+                    "\n&&&& RUNNING %s - %d\n" % (subtest.name, _erisTestNumber), defer=subtest.quiet)
             else:
-                subtest._DefaultProgressPrinter_header_log_id = logger.info("", defer=subtest.quiet)
+                subtest._DefaultProgressPrinter_header_log_id = logger.info(
+                    "", defer=subtest.quiet)
         else:
-           subtest._DefaultProgressPrinter_header_log_id = logger.info("- Test %s" % (subtest.name), defer=subtest.quiet)
+            subtest._DefaultProgressPrinter_header_log_id = logger.info(
+                "- Test %s" % (subtest.name), defer=subtest.quiet)
 
         logger.indent_icrement()
 
         if subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
-            logger.info("Test %s start time: %s" % (subtest.name, datetime.datetime.now()))
+            logger.info("Test %s start time: %s" %
+                        (subtest.name, datetime.datetime.now()))
 
     def subtest_finish(self, subtest):
         global _erisTestNumber
-        
+
         if subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
-            logger.info("Test %s end time: %s" % (subtest.name, datetime.datetime.now()))
-        
+            logger.info("Test %s end time: %s" %
+                        (subtest.name, datetime.datetime.now()))
+
         if subtest.result == test_utils.SubTest.FAILED and test_utils.reRunning == True:
             subtest.result = test_utils.SubTest.FAILURE_LOGGED
             logger.error(subtest.result_details)
@@ -63,21 +70,28 @@ class DefaultProgressPrinter(ProgressPrinter):
 
         if subtest.result == test_utils.SubTest.SKIPPED:
             with logger.IndentBlock():
-                logger.info("SKIPPED: " + str(subtest.result_details_raw.exception))
+                logger.info(
+                    "SKIPPED: " + str(subtest.result_details_raw.exception))
         elif subtest.result != test_utils.SubTest.SUCCESS:
             logger.info("<< %s" % (subtest))
 
         if option_parser.options.eris:
             if subtest.dvssc_log and subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
                 if subtest.result == test_utils.SubTest.SKIPPED:
-                    logger.info("\n&&&& WAIVED %s - %d\n" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& WAIVED %s - %d\n" %
+                                (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.SUCCESS and not self.childrenTest == "F":
-                    logger.info("\n&&&& PASSED %s - %d\n" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& PASSED %s - %d\n" %
+                                (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.FAILURE_LOGGED:
-                    logger.info("\n&&&& FAILURE_LOGGED %s - %d\n" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& FAILURE_LOGGED %s - %d\n" %
+                                (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.FAILED or self.childrenTest == "F":
-                    logger.info("\n&&&& FAILED %s - %d\n" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& FAILED %s - %d\n" %
+                                (subtest.name, _erisTestNumber))
                 elif subtest.result == test_utils.SubTest.NOT_CONNECTED:
-                    logger.info("\n&&&& RETRY %s - %d\n" % (subtest.name, _erisTestNumber))
+                    logger.info("\n&&&& RETRY %s - %d\n" %
+                                (subtest.name, _erisTestNumber))
+
 
 progress_printer = DefaultProgressPrinter()

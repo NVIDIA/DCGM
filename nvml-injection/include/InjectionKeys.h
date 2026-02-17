@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,6 +138,7 @@ extern const char *INJECTION_IRQNUM_KEY;
 extern const char *INJECTION_NUMGPUCORES_KEY;
 extern const char *INJECTION_POWERSOURCE_KEY;
 extern const char *INJECTION_MEMORYBUSWIDTH_KEY;
+extern const char *INJECTION_UNREPAIRABLEMEMORYFLAG_KEY;
 extern const char *INJECTION_PCIELINKMAXSPEED_KEY;
 extern const char *INJECTION_PCIESPEED_KEY;
 extern const char *INJECTION_ADAPTIVECLOCKINFOSTATUS_KEY;
@@ -187,8 +188,6 @@ extern const char *INJECTION_METRICS_KEY;
 extern const char *INJECTION_DRIVERMODEL_KEY;
 extern const char *INJECTION_PCIBUSID_KEY;
 extern const char *INJECTION_ECCERRORCOUNTS_KEY;
-extern const char *INJECTION_POWERMODE_KEY;
-extern const char *INJECTION_SUPPORTEDPOWERMODES_KEY;
 extern const char *INJECTION_FANSPEEDINFO_KEY;
 extern const char *INJECTION_HANDLEBYINDEX_KEY;
 extern const char *INJECTION_LEDSTATE_KEY;

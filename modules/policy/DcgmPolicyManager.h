@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,7 @@ typedef struct
                                      Conditions are global to a GPU. Which conditions
                                      trigger callbacks are per-watcher in watchers[] */
     std::vector<dpm_watcher_t> watchers; /* connectionId+requestIds that care about this */
+    bool alive;                          /* Whether the GPU is alive (i.e., attached) */
 } dpm_gpu_t;
 
 /******************************************************************
@@ -122,6 +123,16 @@ public:
     void OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer);
 
     /*************************************************************************/
+    /*
+     * Attach GPUs to the policy manager
+     */
+    dcgmReturn_t AttachGpus();
+
+    /*************************************************************************/
+    /*
+     * Detach GPUs from the policy manager
+     */
+    dcgmReturn_t DetachGpus();
 
 private:
     /* variables */
@@ -137,6 +148,11 @@ private:
     /* How many GPUs are currently valid in m_gpus? */
     int m_numGpus;
     dpm_gpu_t m_gpus[DCGM_MAX_NUM_DEVICES]; /* Per-GPU information */
+
+    std::vector<dpm_watcher_t> m_metaGroupWatchers; /* Watchers for the meta group (DCGM_GROUP_ALL_GPUS), used to add
+                                                       back when GPUs are attached */
+    dcgmPolicy_t m_metaGroupPolicy; /* Policy for the meta group (DCGM_GROUP_ALL_GPUS), used to add back when GPUs are
+                                       attached */
 
     /* methods */
     void SetViolation(DcgmViolationPolicyAlert_t alertType,
@@ -165,6 +181,30 @@ private:
      *
      *****************************************************************************/
     dcgmReturn_t WatchFields(dcgm_connection_id_t connectionId);
+
+    /*************************************************************************/
+    /*
+     * Add a watcher to the m_metaGroupWatchers, it will ignore if the watcher is already in the list.
+     * It is expected to be called with m_mutex locked.
+     *
+     * @param watcher IN: The watcher to add
+     */
+    void AddMetaGroupWatcher(dpm_watcher_t watcher);
+
+    /*************************************************************************/
+    /*
+     * Remove a watcher from m_metaGroupWatchers, it will ignore if the watcher is not in the list.
+     * It is expected to be called with m_mutex locked.
+     *
+     * @param connectionId IN: The connection ID of the watcher to remove
+     */
+    void RemoveMetaGroupWatcher(dcgm_connection_id_t connectionId);
+
+    /*************************************************************************/
+    /*
+     * Add the meta group policy to the watchers
+     */
+    void AddMetaGroupPolicyToWatchers(std::vector<dcgmGroupEntityPair_t> const &entities);
 };
 
 #endif // DCGMPOLICYMANAGER_H

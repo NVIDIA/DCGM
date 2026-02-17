@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,14 +48,14 @@ if 'DCGM_HOSTNAME' in os.environ:
 if 'DCGMLIBPATH' in os.environ:
     g_dcgmLibPath = os.environ['DCGMLIBPATH']
 
-c_ONE_SEC_IN_USEC = 1000000    
+c_ONE_SEC_IN_USEC = 1000000
 
-g_intervalSec = 10 # Default
+g_intervalSec = 10  # Default
 
-g_dcgmIgnoreFields = [dcgm_fields.DCGM_FI_DEV_UUID] # Fields not to publish
+g_dcgmIgnoreFields = [dcgm_fields.DCGM_FI_DEV_UUID]  # Fields not to publish
 
 g_publishFieldIds = [
-    dcgm_fields.DCGM_FI_DEV_UUID, #Needed for plugin instance
+    dcgm_fields.DCGM_FI_DEV_UUID,  # Needed for plugin instance
     dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
     dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
     dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
@@ -86,7 +86,7 @@ g_publishFieldIds = [
     dcgm_fields.DCGM_FI_DEV_PCIE_TX_THROUGHPUT,
     dcgm_fields.DCGM_FI_DEV_PCIE_RX_THROUGHPUT,
     dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS
-    ]
+]
 
 g_fieldIntervalMap = None
 g_parseRegEx = None
@@ -131,21 +131,26 @@ interval_regex = r"(:[0-9]*(\.[0-9]+)?)?,?"
 # Here, we combine a field regex or field list regex with an optional
 # interval regex. Multiple of these may appear in succession.
 
-g_parseRegEx = re.compile(r"((" + field_regex + r"|(" + fields_regex + r"))" + interval_regex + r")")
+g_parseRegEx = re.compile(
+    r"((" + field_regex + r"|(" + fields_regex + r"))" + interval_regex + r")")
+
 
 class DcgmCollectdPlugin(DcgmReader):
     ###########################################################################
     def __init__(self):
         global c_ONE_SEC_IN_USEC
-        
-        collectd.debug('Initializing DCGM with interval={}s'.format(g_intervalSec))
-        DcgmReader.__init__(self, fieldIds=g_publishFieldIds, ignoreList=g_dcgmIgnoreFields, fieldGroupName='collectd_plugin', updateFrequency=g_intervalSec*c_ONE_SEC_IN_USEC, fieldIntervalMap = g_fieldIntervalMap)
+
+        collectd.debug(
+            'Initializing DCGM with interval={}s'.format(g_intervalSec))
+        DcgmReader.__init__(self, fieldIds=g_publishFieldIds, ignoreList=g_dcgmIgnoreFields, fieldGroupName='collectd_plugin',
+                            updateFrequency=g_intervalSec * c_ONE_SEC_IN_USEC, fieldIntervalMap=g_fieldIntervalMap)
 
 
 ###########################################################################
+
     def CustomDataHandler(self, fvs):
         global c_ONE_SEC_IN_USEC
-        
+
         value = collectd.Values(type='gauge')  # pylint: disable=no-member
         value.plugin = 'dcgm_collectd'
 
@@ -168,16 +173,18 @@ class DcgmCollectdPlugin(DcgmReader):
 
                 # Filter out times too close together (< 1.0 sec) but always
                 # include latest one.
-                
+
                 for val in gpuFv[fieldId][::-1]:
                     # Skip blank values. Otherwise, we'd have to insert a placeholder blank value based on the fieldId
                     if val.isBlank:
                         continue
 
-                    valTimeSec1970 = (val.ts / c_ONE_SEC_IN_USEC) #Round down to 1-second for now
+                    # Round down to 1-second for now
+                    valTimeSec1970 = (val.ts / c_ONE_SEC_IN_USEC)
                     if (lastValTime - valTimeSec1970) < 1.0:
-                        collectd.debug("DCGM sample for field ID %d too soon  at %f, last one sampled at %f" % (fieldId, valTimeSec1970, lastValTime))
-                        val.isBlank = True # Filter this one out
+                        collectd.debug("DCGM sample for field ID %d too soon  at %f, last one sampled at %f" % (
+                            fieldId, valTimeSec1970, lastValTime))
+                        val.isBlank = True  # Filter this one out
                         continue
 
                     lastValTime = valTimeSec1970
@@ -189,12 +196,14 @@ class DcgmCollectdPlugin(DcgmReader):
                     if val.isBlank:
                         continue
 
-                    # Round down to 1-second for now                    
+                    # Round down to 1-second for now
                     valTimeSec1970 = (val.ts / c_ONE_SEC_IN_USEC)
                     valueArray = [val.value, ]
-                    value.dispatch(type=fieldTag, type_instance=typeInstance, time=valTimeSec1970, values=valueArray, plugin=value.plugin)
-                    
-                    collectd.debug("    gpuId %d, tag %s, sample %d, value %s, time %s" % (gpuId, fieldTag, i, str(val.value), str(val.ts)))  # pylint: disable=no-member
+                    value.dispatch(type=fieldTag, type_instance=typeInstance,
+                                   time=valTimeSec1970, values=valueArray, plugin=value.plugin)
+
+                    collectd.debug("    gpuId %d, tag %s, sample %d, value %s, time %s" % (
+                        gpuId, fieldTag, i, str(val.value), str(val.ts)))  # pylint: disable=no-member
                     i += 1
 
     ###########################################################################
@@ -206,15 +215,17 @@ class DcgmCollectdPlugin(DcgmReader):
         collectd.error(msg)  # pylint: disable=no-member
 
 ###############################################################################
-##### Parse supplied collectd configuration object.
+# Parse supplied collectd configuration object.
 ###############################################################################
+
+
 def parse_config(config):
     global c_ONE_SEC_IN_USEC
     global g_intervalSec
     global g_fieldIntervalMap
     global g_parseRegEx
     global g_fieldRegEx
- 
+
     g_fieldIntervalMap = {}
 
     for node in config.children:
@@ -223,11 +234,11 @@ def parse_config(config):
         elif node.key == 'FieldIds':
             fieldIds = node.values[0]
 
-            # And we parse out the field ID list with this regex.            
+            # And we parse out the field ID list with this regex.
             field_set_list = g_parseRegEx.finditer(fieldIds)
 
             for field_set in field_set_list:
-                # We get the list of fields...                
+                # We get the list of fields...
                 fields = field_set.group(2)
 
                 # ... and the optional interval.
@@ -238,27 +249,30 @@ def parse_config(config):
                 if (interval_str == None) or (interval_str == ":"):
                     interval = int(g_intervalSec * c_ONE_SEC_IN_USEC)
                 else:
-                    interval = int(float(interval_str[1:]) * c_ONE_SEC_IN_USEC) # strip :
+                    # strip :
+                    interval = int(float(interval_str[1:]) * c_ONE_SEC_IN_USEC)
 
                 # Here we parse out either multiple fields sharing an
                 # interval, or a single field.
-                if fields[0:1] == "(": # a true field set
+                if fields[0:1] == "(":  # a true field set
                     fields = fields[1:-1]
                     field_list = g_fieldRegEx.finditer(fields)
                     for field_group in field_list:
-                        
+
                         # We map any field names to field numbers, and add
                         # them to the list for the interval
-                        field = dcgm_fields_collectd.GetFieldByName(field_group.group(2))
+                        field = dcgm_fields_collectd.GetFieldByName(
+                            field_group.group(2))
                         if (field >= 0):
                             # We keep a set of fields for each unique interval
                             if interval not in g_fieldIntervalMap.keys():
                                 g_fieldIntervalMap[interval] = []
                             g_fieldIntervalMap[interval] += [field]
                         else:
-                            collectd.error("Field " + field_group.group(2) + " does not exist.")
-                else: # just one field
-                    # Map field name to number.                    
+                            collectd.error(
+                                "Field " + field_group.group(2) + " does not exist.")
+                else:  # just one field
+                    # Map field name to number.
                     field = dcgm_fields_collectd.GetFieldByName(fields)
                     if (field >= 0):
                         # We keep a set of fields for each unique interval
@@ -267,12 +281,12 @@ def parse_config(config):
                         g_fieldIntervalMap[interval] += [field]
                     else:
                         collectd.error("Field " + fields + " does not exist.")
-    
+
 
 ###############################################################################
-##### Wrapper the Class methods for collectd callbacks
+# Wrapper the Class methods for collectd callbacks
 ###############################################################################
-def config_dcgm(config = None):
+def config_dcgm(config=None):
     """
     collectd config for dcgm is in the form of a dcgm.conf file, usually
     installed in /etc/collectd/collectd.conf.d/dcgm.conf.
@@ -312,16 +326,19 @@ def config_dcgm(config = None):
     is asynchronous sometimes one less than expected will be collected and other
     times one more than expected will be collected.
     """
-    
+
     # If we throw an exception here, collectd config will terminate loading the
     # plugin.
     if config is not None:
         parse_config(config)
 
     # Register the read function with the default collectd sampling interval.
-    collectd.register_read(read_dcgm, interval=g_intervalSec)  # pylint: disable=no-member
+    collectd.register_read(
+        read_dcgm, interval=g_intervalSec)  # pylint: disable=no-member
 
 ###############################################################################
+
+
 def init_dcgm():
     global g_dcgmCollectd
 
@@ -332,23 +349,31 @@ def init_dcgm():
     g_dcgmCollectd.Init()
 
 ###############################################################################
+
+
 def shutdown_dcgm():
     g_dcgmCollectd.Shutdown()
 
 ###############################################################################
+
+
 def read_dcgm(data=None):
     if g_dcgmCollectd.m_fieldGroup is None:
-        collectd.error('No DCGM fields collected: Did you forget FieldIds collectd DCGM config entries or not start nv-hostengine?')
+        collectd.error(
+            'No DCGM fields collected: Did you forget FieldIds collectd DCGM config entries or not start nv-hostengine?')
     else:
         g_dcgmCollectd.Process()
 
+
 def register_collectd_callbacks():
-    collectd.register_config(config_dcgm, name="dcgm_collectd_plugin")  # pylint: disable=no-member
+    collectd.register_config(
+        config_dcgm, name="dcgm_collectd_plugin")  # pylint: disable=no-member
     # config_dcgm registers read since it needs to parse the sampling interval.
     collectd.register_init(init_dcgm)  # pylint: disable=no-member
     collectd.register_shutdown(shutdown_dcgm)  # pylint: disable=no-member
 
+
 ###############################################################################
-##### Main
+# Main
 ###############################################################################
 register_collectd_callbacks()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,40 @@ enum class WasExecuted_t : bool
 
 } //namespace
 
+struct DetachedGpuInfo
+{
+    unsigned int gpuId;        //!< GPU ID
+    DcgmEntityStatus_t status; //!< Status (Detached or Inaccessible)
+    std::string skuDeviceId;   //!< PCI device ID (formatted as hex string, e.g., "2335")
+    std::string serialNum;     //!< GPU serial number
+};
+
+class DiagRunningFlag
+{
+public:
+    DiagRunningFlag() = default;
+
+    bool IsStopped() const
+    {
+        return m_stopDiag;
+    }
+
+    void Stop(std::string reason)
+    {
+        m_stopDiag = true;
+        m_reason   = std::move(reason);
+    }
+
+    std::string GetStopReason() const
+    {
+        return m_reason;
+    }
+
+private:
+    bool m_stopDiag = false;
+    std::string m_reason;
+};
+
 class DcgmDiagManager
 {
 public:
@@ -79,10 +113,11 @@ public:
     /*
      * Stops a running diagnostic if any. Does not stop diagnostics that are not launched by nv-hostengine .
      *
+     * @param reason - the reason for stopping the diagnostic
      * Returns: DCGM_ST_OK on success or if no diagnostic is currently running.
      *          DCGM_ST_* on failure. Currently there are no failure conditions.
      */
-    dcgmReturn_t StopRunningDiag();
+    dcgmReturn_t StopRunningDiag(std::string const &reason);
 
     /**
      * Enforces User defined configuration for the GPU
@@ -158,6 +193,12 @@ public:
      */
     void ReceiveHeartbeat(dcgm_connection_id_t connectionId);
 
+    /**
+     * Called when GPUs are attached or detached.
+     * @param isAttached - true if the GPUs are attached, false if the GPUs are detached
+     */
+    void OnAttachDetachGpus(bool isAttached);
+
 #ifndef __DIAG_UNIT_TESTING__
 private:
 #endif
@@ -171,6 +212,10 @@ private:
     ChildProcessHandle_t m_childProcessHandle; // Handle for the spawned child process
     std::optional<dcgm_connection_id_t>
         m_connectionId; // Which connection is executing the nvvs, std::nullopt if nvvs is not running
+    std::optional<DiagRunningFlag>
+        m_diagRunningFlag; // This optional will indicate an ongoing diagnostic; it will be set
+                           // to `std::nullopt` when no diagnostic is active. If present, it can
+                           // be used to ask the worker to leave early and avoid invoking NVVS.
 
     /* pointers to libdcgm callback functions */
     DcgmCoreProxy m_coreProxy;
@@ -194,7 +239,8 @@ private:
             { EUD_PLUGIN_NAME, DCGM_FI_DEV_DIAG_EUD_RESULT },
             { CPU_EUD_TEST_NAME, DCGM_FI_DEV_DIAG_CPU_EUD_RESULT },
             { SW_PLUGIN_NAME, DCGM_FI_DEV_DIAG_SOFTWARE_RESULT },
-            { NVBANDWIDTH_PLUGIN_NAME, DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT } };
+            { NVBANDWIDTH_PLUGIN_NAME, DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT },
+            { NCCL_TESTS_PLUGIN_NAME, DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT } };
 
     /* methods */
 
@@ -277,4 +323,62 @@ private:
      * @param response - the response wrapper to update
      */
     dcgmReturn_t ReadDataFromFd(DcgmNs::Utils::FileHandle &dataFd, DcgmDiagResponseWrapper &response);
+
+    /**
+     * Check if the diagnostic is being stopped and handle it.
+     *
+     * @param response - the response wrapper to update
+     */
+    dcgmReturn_t CheckAndHandleRunningFlag(DcgmDiagResponseWrapper &response);
+
+    /**
+     * Get detached or inaccessible GPUs from the requested entities.
+     *
+     * @param[in] entityIds - the entity IDs string (e.g., "0,1,2" or "gpu:0,1" or "*")
+     * @param[out] isGpuWildcard - set to true if the request contains GPU wildcard tokens (*, gpu:*, g:*)
+     * @param[out] detachedGpuInfos - vector of DetachedGpuInfo with GPU IDs, status, and SKU device ID
+     * @param[out] allDetached - Set to true if all requested GPUs are detached or inaccessible; false otherwise
+     * @return DCGM_ST_OK on success, error code otherwise
+     */
+    dcgmReturn_t GetDetachedGpus(std::string const &entityIds,
+                                 bool &isGpuWildcard,
+                                 std::vector<DetachedGpuInfo> &detachedGpuInfos,
+                                 bool &allDetached);
+
+
+    /**
+     * Check if entity IDs string contains any GPU-related request.
+     *
+     * Parses comma-separated tokens to identify GPU entities and wildcard patterns.
+     * Returns false for requests containing only non-GPU entities / MIG patterns.
+     *
+     * @param[in] gpuIdsStr - Entity IDs string with comma-separated tokens
+     * @param[out] isGpuWildcard - Set to true if request contains GPU wildcard tokens (*, gpu:*, g:*)
+     * @return true if this contains at least one GPU-related token, false otherwise
+     */
+    bool HasGpuRequest(std::string const &gpuIdsStr, bool &isGpuWildcard);
+
+    /**
+     * Handle detached or inaccessible GPUs after NVVS execution.
+     * Updates the response with detached GPU information.
+     *
+     * @param[in] detachedGpuInfos - Vector of DetachedGpuInfo with GPU information
+     * @param[in,out] response - The diagnostic response to update
+     * @param[in] isTestResultFailed - If true, mark test results as FAIL; if false, keep as NOT_RUN
+     */
+    void HandleDetachedGpuResponse(std::vector<DetachedGpuInfo> &detachedGpuInfos,
+                                   DcgmDiagResponseWrapper &response,
+                                   bool isTestResultFailed);
+
+    /**
+     * Handle detached or inaccessible GPUs after NVVS execution.
+     * Updates the response with detached GPU information.
+     *
+     * @param[in] response - The diagnostic response to update
+     * @param[in] fakeGpuIds - The fake GPU IDs string
+     * @param[in] entityIds - The entity IDs string
+     */
+    void HandleDetachedInaccessibleGpus(DcgmDiagResponseWrapper &response,
+                                        std::string const &fakeGpuIds,
+                                        std::string const &entityIds);
 };

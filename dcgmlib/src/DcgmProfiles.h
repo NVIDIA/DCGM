@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "NvmlTaskRunner.hpp"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 
@@ -26,31 +27,35 @@
 typedef struct
 {
     unsigned int gpuId;
-    nvmlDevice_t nvmlDevice;
+    SafeNvmlHandle nvmlDevice;
 } dcgm_power_profile_helper_t;
 
 /*************************************************************************/
 /*
  * Get information about the profiles supported on this device
  *
+ * nvmlDriver    IN: A started NVML task runner
  * gpuInfo       IN: gpu to query
  * profilesInfo OUT: information about supported profiles
  *
  * Returns 0 on success
  *        <0 on error. See DCGM_ST_? #defines
  */
-dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(dcgm_power_profile_helper_t const *gpuInfo,
+dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(NvmlTaskRunner &nvmlDriver,
+                                              dcgm_power_profile_helper_t const *gpuInfo,
                                               dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo);
 
 /*************************************************************************/
 /*
  * Get status information about the profiles supported on this device
  *
+ * nvmlDriver    IN: A started NVML task runner
  * gpuInfo       IN: gpu to query
  * profileStatus OUT: status information about supported profiles
  *
  * Returns 0 on success
  *        <0 on error. See DCGM_ST_? #defines
  */
-dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(dcgm_power_profile_helper_t const *gpuInfo,
+dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(NvmlTaskRunner &nvmlDriver,
+                                                dcgm_power_profile_helper_t const *gpuInfo,
                                                 dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus);

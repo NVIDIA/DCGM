@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,8 @@ public:
     bool HelperJsonAddResult(dcgmDiagResponse_v12 const &response,
                              dcgmDiagTestRun_v2 const &test,
                              dcgmDiagEntityResult_v1 const &result,
-                             Json::Value &resultEntry);
+                             Json::Value &resultEntry,
+                             bool includeAllErrors = false);
     void HelperJsonBuildOutput(Json::Value &output, dcgmDiagResponse_v12 const &response);
     void InitializeDiagResponse(dcgmDiagResponse_v12 &response);
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,36 +14,107 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e -o pipefail -o nounset
+set -e -o pipefail -o nounset -x
 
 if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -eq 0 ]]; then
-    $(dirname $(realpath "${0}"))/intodocker.sh --pull -- "${0}" "$@"
+    "$(dirname "$(realpath "${0}")")/intodocker.sh" --pull -- "${0}" "$@"
     exit $?
 fi
 
 files_from=staged
 
-function GetCppFiles(){
-    local git_top_dir=$(pwd)
+readonly BATCH_SIZE=$(nproc)
+
+# Python exclusion pattern matching .pep8 config and autopep8 defaults
+# Manual exclusions required: autopep8 has no --assume-filename equivalent for stdin
+readonly PYTHON_EXCLUDE_PATTERN='(^|/)(_out|sdk|PerfWorks|__pycache__)(/|$)|testing/python3/libs_3rdparty/|(^|/)\.'
+
+function GetChangedFiles(){
     case ${files_from} in
         staged)
-            local top_files=$(git diff --cached --name-only --diff-filter=d | grep -E "\.(cpp|h|hpp|c)$")
-            local sub_files=$(git submodule foreach --quiet --recursive "git diff --cached --name-only --diff-filter=d | grep -E \"\.(cpp|h|hpp|c)$\" | xargs -r -n1 realpath --relative-to=${git_top_dir}")
-            echo "${top_files}"$'\n'"${sub_files}"
+            git diff --cached --name-only --diff-filter=d
             ;;
         merged)
-            local top_files=$(git diff-tree --name-only --diff-filter=d -r -m --no-commit-id HEAD | grep -E "\.(cpp|h|hpp|c)$")
-            local sub_files=$(git submodule foreach --quiet --recursive "git diff-tree --name-only --diff-filter=d -r -m --no-commit-id HEAD | grep -E \"\.(cpp|h|hpp|c)$\" | xargs -r -n1 realpath --relative-to=${git_top_dir}")
-            echo "${top_files}"$'\n'"${sub_files}"
+            git diff-tree --name-only --diff-filter=d -r -m --no-commit-id HEAD
             ;;
         *)
+            return
             ;;
     esac
 }
 
+function GetCppFiles(){
+    GetChangedFiles | grep -E "\.(cpp|h|hpp|c)$" || true
+}
+
+function DetectPythonFiles(){
+    while IFS= read -r file
+    do
+        if (git show :"${file}" 2>/dev/null | file - | grep -q 'Python script')
+        then
+            printf '%s\n' "${file}"
+        fi
+    done
+}
+
+function GetPythonFiles(){
+    local all_files=$(GetChangedFiles | grep -vE "${PYTHON_EXCLUDE_PATTERN}" || true)
+
+    echo "${all_files}" | grep -E "\.py$" || true
+    echo "${all_files}" | grep -vE "\.py$" | DetectPythonFiles || true
+}
+
 function GetFileContent(){
-    local filename=$(basename "${1}")
-    git show :"./${filename}"
+    local filename="${1}"
+    git show :"${filename}"
+}
+
+# Generic file validation function
+# Args: $1=language_name, $2=format_command; reads file list from stdin
+function ValidateFiles(){
+    local language_name="${1}"
+    local format_command="${2}"
+    local -a files=()
+
+    while IFS= read -r file; do
+        pushd "$(dirname "$(realpath "${file}")")" >/dev/null
+        if ! cmp -s <(GetFileContent "${file}") <(GetFileContent "${file}" | eval "${format_command}"); then
+            files+=("${file}")
+        fi
+        popd >/dev/null
+    done
+
+    if [[ ${#files[@]} -gt 0 ]]; then
+        echo "${language_name} format error within the following files:" >&2
+        printf "%s\n" "${files[@]}" >&2
+
+        if [ ${show_diff} -eq 1 ]; then
+            for file in "${files[@]}"; do
+                pushd "$(dirname "$(realpath "${file}")")" >/dev/null
+                diff -au --label "${file}" <(GetFileContent "${file}") --label "${file} (Formatted)" \
+                    <(GetFileContent "${file}" | eval "${format_command}") || true
+                popd >/dev/null
+                echo ""
+            done
+        fi
+
+        return 1
+    fi
+
+    return 0
+}
+
+function ValidateCppFiles(){
+    GetCppFiles | ValidateFiles "C/C++" "clang-format --style=file --assume-filename=\${file}"
+}
+
+function ValidatePythonFiles(){
+    if ! command -v autopep8 &> /dev/null; then
+        echo "WARNING: autopep8 not found. Skipping Python file validation." >&2
+        return 0
+    fi
+
+    GetPythonFiles | ValidateFiles "Python" "autopep8 -"
 }
 
 function usage() {
@@ -54,15 +125,14 @@ Usage: ${0} [options]
         -m --merged     : Check merged files instead of staged files (for Jenkins)
         -h --help       : This information
 
-    Without --merged argument this script will validate changed AND staged C/CPP/H/HPP files."
+    Without --merged argument this script will validate staged C/CPP/H/HPP and Python files."
 }
 
 LONG_OPTS=merged,diff,help
 SHORT_OPTS=m,d,h
 
-! PARSED=$(getopt --options=${SHORT_OPTS} --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
-if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-    echo "Failed to parse arguments"
+if ! PARSED=$(getopt --options=${SHORT_OPTS} --longoptions=${LONG_OPTS} --name "${0}" -- "$@"); then
+    echo "Failed to parse arguments" >&2
     exit 1
 fi
 
@@ -88,36 +158,20 @@ while true; do
             break
             ;;
         *)
-            echo "Wrong arguments"
+            echo "Wrong arguments" >&2
             exit 1
             ;;
     esac
 done
 
-input_files=$(GetCppFiles || true)
+has_errors=0
 
-files=()
-for file in ${input_files}; do
-    pushd $(dirname $(realpath ${file})) >/dev/null
-    if ! cmp -s <(GetFileContent ${file}) <(GetFileContent ${file} | clang-format --style=file --assume-filename=${file}); then
-        files+=("${file}")
-    fi
-    popd >/dev/null
-done
-
-if [[ ${#files[@]} -gt 0 ]]; then
-    echo Format error within the following files:
-    printf "%s\n" "${files[@]}"
-
-    if [ ${show_diff} -eq 1 ]; then
-        for file in ${files[@]}; do
-            pushd $(dirname $(realpath ${file})) >/dev/null
-            diff -au --label ${file} <(GetFileContent ${file}) --label "${file} (Formatted)" <(GetFileContent ${file} | \
-                clang-format --style=file --assume-filename=${file}) || true
-            popd >/dev/null
-            echo ""
-        done
-    fi
-
-    exit 1
+if ! ValidateCppFiles; then
+    has_errors=1
 fi
+
+if ! ValidatePythonFiles; then
+    has_errors=1
+fi
+
+exit $has_errors

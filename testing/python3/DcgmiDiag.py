@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@ import dcgm_fields
 import nvidia_smi_utils
 import test_utils
 
+
 def trimJsonText(text):
     return text[text.find('{'):text.rfind('}') + 1]
+
 
 logFile = "nvvs_diag.log"
 
@@ -50,10 +52,14 @@ DIAG_THERMAL_SUGGEST = "A GPU has thermal violations happening. Please make sure
 DIAG_VARY_SUGGEST = "Please check for transient conditions on this machine that can disrupt consistency from run to run"
 
 errorTuples = [(dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS, DIAG_CLOCKS_EVENT_WARNING, DIAG_CLOCKS_EVENT_SUGGEST),
-               (dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, DIAG_DBE_WARNING, DIAG_DBE_SUGGEST),
-               (dcgm_fields.DCGM_FI_DEV_ECC_CURRENT, DIAG_ECC_MODE_WARNING, DIAG_ECC_MODE_SUGGEST),
-               (dcgm_fields.DCGM_FI_DEV_INFOROM_CONFIG_VALID, DIAG_INFOROM_WARNING, DIAG_INFOROM_SUGGEST),
-               (dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, DIAG_THERMAL_WARNING, DIAG_THERMAL_SUGGEST)
+               (dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
+                DIAG_DBE_WARNING, DIAG_DBE_SUGGEST),
+               (dcgm_fields.DCGM_FI_DEV_ECC_CURRENT,
+                DIAG_ECC_MODE_WARNING, DIAG_ECC_MODE_SUGGEST),
+               (dcgm_fields.DCGM_FI_DEV_INFOROM_CONFIG_VALID,
+                DIAG_INFOROM_WARNING, DIAG_INFOROM_SUGGEST),
+               (dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
+                DIAG_THERMAL_WARNING, DIAG_THERMAL_SUGGEST)
                ]
 
 
@@ -129,10 +135,12 @@ class FailedTestInfo():
                                   (self.GetFullError(), fieldName)
         elif val != correct_val:
             self.m_evaluatedMsg = None
-            self.m_isAnError = False # nvidia-smi reports an error in this field, so this is not a DCGM mistake
+            # nvidia-smi reports an error in this field, so this is not a DCGM mistake
+            self.m_isAnError = False
             if (self.m_fieldId):
                 self.m_evaluatedMsg = "%s\nnvidia-smi found a value of %s for field %s instead of %s" % \
-                                      (self.GetFullError(), str(val), fieldName, str(correct_val))
+                                      (self.GetFullError(), str(val),
+                                       fieldName, str(correct_val))
             else:
                 self.m_evaluatedMsg = self.GetFullError()
         else:
@@ -151,16 +159,16 @@ class FailedTestInfo():
 class DcgmiDiag:
 
     ################################################################################
-    def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True,  
+    def __init__(self, gpuIds=None, testNamesStr='', paramsStr='', verbose=True,
                  dcgmiPrefix='', runMode=0, configFile='', debugLevel=0, debugFile=''):
-        #gpuList is expected to be a string. Convert it if it was provided
+        # gpuList is expected to be a string. Convert it if it was provided
         self.gpuList = None
         if gpuIds is not None:
             if isinstance(gpuIds, str):
                 self.gpuList = gpuIds
             else:
-                self.gpuList = ",".join(map(str,gpuIds))
-        
+                self.gpuList = ",".join(map(str, gpuIds))
+
         self.testNamesStr = testNamesStr
         self.paramsStr = paramsStr
         self.verbose = verbose
@@ -208,7 +216,7 @@ class DcgmiDiag:
                 cmd.append(test_utils.DebugLevelToString(self.debugLevel))
 
         cmd.append('-j')
-        
+
         if self.verbose:
             cmd.append('-v')
 
@@ -221,11 +229,11 @@ class DcgmiDiag:
             cmd.append(self.gpuList)
 
         return cmd
-    
+
     ################################################################################
     def AddGpuList(self, gpu_list):
         self.gpuList = gpu_list
-    
+
     ################################################################################
     def FindFailedTests(self, jsondict, failed_list):
         ENTITY_ID_FIELD = 'entity_id'
@@ -237,9 +245,11 @@ class DcgmiDiag:
                 if result[STATUS_FIELD] == TEST_STATUS_FAIL:
                     if WARNINGS_FIELD in result:
                         if ENTITY_ID_FIELD in result:
-                            entityPair = (result[ENTITY_GROUP_FIELD], result[ENTITY_ID_FIELD])
+                            entityPair = (
+                                result[ENTITY_GROUP_FIELD], result[ENTITY_ID_FIELD])
                         info = '\n'.join(result.get(INFO_FIELD) or [])
-                        failed_list.append(FailedTestInfo(testName, result.get(WARNINGS_FIELD), info, entityPair))
+                        failed_list.append(FailedTestInfo(
+                            testName, result.get(WARNINGS_FIELD), info, entityPair))
                         return True
             return False
 
@@ -248,11 +258,12 @@ class DcgmiDiag:
             if summary[STATUS_FIELD] == TEST_STATUS_FAIL:
                 if WARNINGS_FIELD in summary:
                     info = '\n'.join(summary.get(INFO_FIELD) or [])
-                    failed_list.append(FailedTestInfo(testName, summary.get(WARNINGS_FIELD), info))
+                    failed_list.append(FailedTestInfo(
+                        testName, summary.get(WARNINGS_FIELD), info))
                     return True
                 if not failed_list:
-                    failed_list.append(FailedTestInfo(testName, [{ 'warning' : f'Status in \'{TEST_SUMMARY_FIELD}\' is ' \
-                                                                  f'\'{summary[STATUS_FIELD]}\'' }]))
+                    failed_list.append(FailedTestInfo(testName, [{'warning': f'Status in \'{TEST_SUMMARY_FIELD}\' is '
+                                                                  f'\'{summary[STATUS_FIELD]}\''}]))
             return False
 
         if not isinstance(jsondict, dict):
@@ -263,19 +274,22 @@ class DcgmiDiag:
             # This is a test entry.
             testName = jsondict[NAME_FIELD]
             assert isinstance(jsondict[RESULTS_FIELD], list)
-            findFailuresInResults(testName, jsondict[RESULTS_FIELD], failed_list)
+            findFailuresInResults(
+                testName, jsondict[RESULTS_FIELD], failed_list)
 
             assert NAME_FIELD in jsondict
             assert isinstance(jsondict[NAME_FIELD], str)
 
             assert TEST_SUMMARY_FIELD in jsondict
             assert isinstance(jsondict[TEST_SUMMARY_FIELD], dict)
-            findFailuresInTestSummary(testName, jsondict[TEST_SUMMARY_FIELD], failed_list)
+            findFailuresInTestSummary(
+                testName, jsondict[TEST_SUMMARY_FIELD], failed_list)
         elif RUNTIME_ERROR_FIELD in jsondict:
             # Experienced a complete failure while trying to run the diagnostic. No need
             # to parse for further errors because there will be no other json entries.
             # failInfo wants something that looks like a 'warnings' array
-            failed_list.append(FailedTestInfo('System_Failure', [{ 'warning' : jsondict.get(RUNTIME_ERROR_FIELD) }] ))
+            failed_list.append(FailedTestInfo('System_Failure', [
+                               {'warning': jsondict.get(RUNTIME_ERROR_FIELD)}]))
         else:
             for key in jsondict:
                 if isinstance(jsondict[key], list):
@@ -292,11 +306,12 @@ class DcgmiDiag:
         for failInfo in failed_list:
             fieldId = failInfo.GetFieldId()
             if fieldId:
-                val, correct_val = nsc.GetErrorValue(failInfo.GetGpuId(), fieldId)
+                val, correct_val = nsc.GetErrorValue(
+                    failInfo.GetGpuId(), fieldId)
                 failInfo.SetFailureMessage(val, correct_val)
 
         return failed_list
-    
+
     ################################################################################
     def SetAndCheckOutput(self, stdout, stderr, ret=0, nsc=None):
         self.lastStdout = stdout
@@ -309,7 +324,7 @@ class DcgmiDiag:
     ################################################################################
     def CheckOutput(self, nsc):
         failed_list = []
-        
+
         if self.lastStdout:
             try:
                 jsondict = json.loads(trimJsonText(self.lastStdout))
@@ -320,14 +335,14 @@ class DcgmiDiag:
 
             failed_list = self.IdentifyFailingTests(jsondict, nsc)
 
-            # Saves diag stdout into a log file - use append to get multiple runs in 
+            # Saves diag stdout into a log file - use append to get multiple runs in
             # the same file if we're called repeatedly.
             with open(logFile, "a") as f:
                 f.seek(0)
                 f.write(str(self.lastStdout))
 
         if self.lastStderr:
-            # Saves diag stderr into a log file - use append to get multiple runs in 
+            # Saves diag stderr into a log file - use append to get multiple runs in
             # the same file if we're called repeatedly.
             with open(logFile, "a") as f:
                 f.seek(0)
@@ -343,7 +358,8 @@ class DcgmiDiag:
 
         nsc = nvidia_smi_utils.NvidiaSmiJob()
         nsc.start()
-        runner = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        runner = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         (stdout_buf, stderr_buf) = runner.communicate()
         self.lastStdout = stdout_buf and stdout_buf.decode('utf-8')
         self.lastStderr = stderr_buf and stderr_buf.decode('utf-8')
@@ -352,7 +368,7 @@ class DcgmiDiag:
         nsc.join()
 
         return self.CheckOutput(nsc)
-    
+
     ################################################################################
     def DidIFail(self):
         if self.failed_list:
@@ -365,7 +381,7 @@ class DcgmiDiag:
             return True
 
         return False
-    
+
     ################################################################################
     def RunDcgmiDiag(self, config_file, runMode=0):
         oldConfig = self.configFile
@@ -403,7 +419,7 @@ class DcgmiDiag:
     ################################################################################
     def SetConfigFile(self, config_file):
         self.configFile = config_file
-    
+
     ################################################################################
     def SetRunMode(self, run_mode):
         self.runMode = run_mode
@@ -423,10 +439,12 @@ class DcgmiDiag:
             print("\nNo stderr output")
         self.PrintFailures()
 
+
 def main():
     dd = DcgmiDiag()
     failed = dd.Run()
     dd.PrintLastRunStatus()
+
 
 if __name__ == '__main__':
     main()

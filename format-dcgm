@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,17 +18,26 @@ set -e
 
 TOP_LEVEL_DIR=$(pwd)
 
-if [ "$DCGM_BUILD_INSIDE_DOCKER" = 1 ]; then
-    for file in $(find . "(" -not -ipath "./_out/*" -a -not -ipath "./sdk/*" -a -not -ipath "./PerfWorks/*" ")" \
-                  -a "(" -iname "*.h" -o -iname "*.hpp" -o -iname "*.c" -o -iname "*.cpp" ")"); do
-
-        pushd $(dirname $(realpath ${TOP_LEVEL_DIR}/$file)) >/dev/null
-        clang-format -i --style=file $(basename ${TOP_LEVEL_DIR}/$file)
-        popd >/dev/null
-
-    done
-
-    wait
-else
-    ./intodocker.sh -- bash -c "$0 $@"
+if [ "$DCGM_BUILD_INSIDE_DOCKER" != 1 ]; then
+    ./intodocker.sh -- bash "$0" "$@"
+    exit $?
 fi
+
+function format_cxx() {
+    find "${TOP_LEVEL_DIR}" -type f \
+        "(" -name "*.[ch]" -o -name "*.[ch]pp" ")" \
+        -print0 \
+        | xargs -0 -n 1 -P 0 clang-format -i
+}
+ 
+function format_python() {
+    if ! command -v autopep8 &> /dev/null; then
+        echo "WARNING: autopep8 not found. Python files will NOT be formatted." >&2
+        return
+    fi
+
+    autopep8 --in-place --recursive --jobs 0 "${TOP_LEVEL_DIR}"
+}
+
+format_cxx
+format_python

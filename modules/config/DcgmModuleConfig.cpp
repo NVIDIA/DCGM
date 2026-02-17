@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,6 +184,14 @@ dcgmReturn_t DcgmModuleConfig::ProcessCoreMessage(dcgm_module_command_header_t *
 
         case DCGM_CORE_SR_PAUSE_RESUME:
             log_debug("Received Pause/Resume message");
+            break;
+
+        case DCGM_CORE_SR_ATTACH_GPUS:
+            retSt = mpConfigManager->AttachGpus();
+            break;
+
+        case DCGM_CORE_SR_DETACH_GPUS:
+            retSt = mpConfigManager->DetachGpus();
             break;
 
         default:

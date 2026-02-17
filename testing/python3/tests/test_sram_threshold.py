@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import utils
 import os
 from ctypes import *
 
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
@@ -50,7 +51,8 @@ def test_inject_sram_threshold(handle, gpuIds):
         injectedRet.values[0].value.EccSramErrorStatus.bThresholdExceeded = threshold
         injectedRet.valueCount = 1
 
-        ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "SramEccErrorStatus", None, 0, injectedRet)
+        ret = dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "SramEccErrorStatus", None, 0, injectedRet)
         assert (ret == dcgm_structs.DCGM_ST_OK)
 
     def validate_sram_threshold(handle, gpuId, threshold):
@@ -58,33 +60,42 @@ def test_inject_sram_threshold(handle, gpuIds):
         entity.entityGroupId = dcgm_fields.DCGM_FE_GPU
         entity.entityId = gpuId
 
-        fieldIDs = [ dcgm_fields.DCGM_FI_DEV_THRESHOLD_SRM ]
+        fieldIDs = [dcgm_fields.DCGM_FI_DEV_THRESHOLD_SRM]
 
         responses = {}
 
         for fieldId in fieldIDs:
             dictKey = "%d:%d:%d" % (dcgm_fields.DCGM_FE_GPU, gpuId, fieldId)
-            responses[dictKey] = 0 #0 responses so far
+            responses[dictKey] = 0  # 0 responses so far
 
-        fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(handle, [entity], fieldIDs, dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
-        
+        fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(
+            handle, [entity], fieldIDs, dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
+
         for i, fieldValue in enumerate(fieldValues):
-            assert(fieldValue.version == dcgm_structs.dcgmFieldValue_version2), "idx %d Version was x%X. not x%X" % (i, fieldValue.version, dcgm_structs.dcgmFieldValue_version2)
-            dictKey = "%d:%d:%d" % (fieldValue.entityGroupId, fieldValue.entityId, fieldValue.fieldId)
-            assert dictKey in responses and responses[dictKey] == 0, "Mismatch on dictKey %s. Responses: %s" % (dictKey, str(responses))
-            assert(fieldValue.status == dcgm_structs.DCGM_ST_OK), "idx %d status was %d" % (i, fieldValue.status)
-            assert(fieldValue.ts != 0), "idx %d timestamp was 0" % i
-            assert(fieldValue.unused == 0), "idx %d unused was %d" % (i, fieldValue.unused)
-            assert(fieldValue.fieldType == ord(dcgm_fields.DCGM_FT_INT64)), "Field %d type is wrong: %c %c" % (fieldValue.fieldId, fieldValue.fieldType, dcgm_fields.DCGM_FT_INT64)
-            assert(fieldValue.value.i64 == threshold), "Field %d value wrong: %d != %d" % (fieldValue.fieldId, fieldValue.value.i64, threshold)
+            assert (fieldValue.version == dcgm_structs.dcgmFieldValue_version2), "idx %d Version was x%X. not x%X" % (
+                i, fieldValue.version, dcgm_structs.dcgmFieldValue_version2)
+            dictKey = "%d:%d:%d" % (
+                fieldValue.entityGroupId, fieldValue.entityId, fieldValue.fieldId)
+            assert dictKey in responses and responses[dictKey] == 0, "Mismatch on dictKey %s. Responses: %s" % (
+                dictKey, str(responses))
+            assert (fieldValue.status == dcgm_structs.DCGM_ST_OK), "idx %d status was %d" % (
+                i, fieldValue.status)
+            assert (fieldValue.ts != 0), "idx %d timestamp was 0" % i
+            assert (fieldValue.unused == 0), "idx %d unused was %d" % (
+                i, fieldValue.unused)
+            assert (fieldValue.fieldType == ord(dcgm_fields.DCGM_FT_INT64)), "Field %d type is wrong: %c %c" % (
+                fieldValue.fieldId, fieldValue.fieldType, dcgm_fields.DCGM_FT_INT64)
+            assert (fieldValue.value.i64 == threshold), "Field %d value wrong: %d != %d" % (
+                fieldValue.fieldId, fieldValue.value.i64, threshold)
             responses[dictKey] += 1
 
     threshold = 1337
-    
-    status = dcgm_nvml.c_nvmlEccSramErrorStatus_v1_t()
-    
-    status.bThresholdExceeded = threshold # Technically a bool, but we verify int
 
-    mock_sram_threshold_counter(handle, gpuId, threshold, dcgm_nvml.NVML_SUCCESS)
-    
+    status = dcgm_nvml.c_nvmlEccSramErrorStatus_v1_t()
+
+    status.bThresholdExceeded = threshold  # Technically a bool, but we verify int
+
+    mock_sram_threshold_counter(
+        handle, gpuId, threshold, dcgm_nvml.NVML_SUCCESS)
+
     validate_sram_threshold(handle, gpuId, threshold)

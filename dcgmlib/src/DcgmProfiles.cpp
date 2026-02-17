@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,8 @@
 #include <unordered_map>
 #include <vector>
 
-dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(dcgm_power_profile_helper_t const *gpuInfo,
+dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(NvmlTaskRunner &nvmlDriver,
+                                              dcgm_power_profile_helper_t const *gpuInfo,
                                               dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo)
 {
     if ((gpuInfo == nullptr) || (profilesInfo == nullptr))
@@ -42,7 +43,8 @@ dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(dcgm_power_profile_helper_t const 
 
     nvmlProfilesInfo.version = nvmlWorkloadPowerProfileProfilesInfo_v1;
 
-    nvmlReturn_t nvmlSt = nvmlDeviceWorkloadPowerProfileGetProfilesInfo(gpuInfo->nvmlDevice, &nvmlProfilesInfo);
+    nvmlReturn_t nvmlSt
+        = nvmlDriver.NvmlDeviceWorkloadPowerProfileGetProfilesInfo(gpuInfo->nvmlDevice, &nvmlProfilesInfo);
 
     if (nvmlSt == NVML_ERROR_NOT_SUPPORTED)
     {
@@ -79,7 +81,8 @@ dcgmReturn_t DcgmGetWorkloadPowerProfilesInfo(dcgm_power_profile_helper_t const 
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(dcgm_power_profile_helper_t const *gpuInfo,
+dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(NvmlTaskRunner &nvmlDriver,
+                                                dcgm_power_profile_helper_t const *gpuInfo,
                                                 dcgmDeviceWorkloadPowerProfilesStatus_v1 *profilesStatus)
 {
     if ((gpuInfo == nullptr) || (profilesStatus == nullptr))
@@ -91,7 +94,7 @@ dcgmReturn_t DcgmGetWorkloadPowerProfilesStatus(dcgm_power_profile_helper_t cons
 
     profiles.version = nvmlWorkloadPowerProfileCurrentProfiles_v1;
 
-    nvmlReturn_t nvmlSt = nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(gpuInfo->nvmlDevice, &profiles);
+    nvmlReturn_t nvmlSt = nvmlDriver.NvmlDeviceWorkloadPowerProfileGetCurrentProfiles(gpuInfo->nvmlDevice, &profiles);
 
     if (nvmlSt == NVML_ERROR_NOT_SUPPORTED)
     {

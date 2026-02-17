@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,6 +90,7 @@ void SoftwarePluginFramework::initTestNameMap()
                       { "Persistence Mode", "persistence_mode" },
                       { "Environmental Variables", "env_variables" },
                       { "Page Retirement/Row Remap", "page_retirement" },
+                      { "Memory Health", "memory_health" },
                       { "SRAM Threshold Count", "sram_threshold" },
                       { "Graphics Processes", "graphics_processes" },
                       { "Inforom", "inforom" },

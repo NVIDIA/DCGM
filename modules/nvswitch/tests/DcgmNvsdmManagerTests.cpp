@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -890,5 +890,70 @@ TEST_CASE("UpdateFields returns blank values when paused")
     for (int i = 0; i < numFields; i++)
     {
         REQUIRE(fieldIdsFromCustomPost.find(fieldIds[i]) != fieldIdsFromCustomPost.end());
+    }
+}
+
+TEST_CASE("DcgmNvsdmManager::HandleCompositeFieldId")
+{
+    DcgmFieldsInit();
+
+    SECTION("Aggregates only UP links and supports 64-bit values for throughput fields")
+    {
+        constexpr uint32_t nvsdmSwitchVendorID = 0xc8763;
+        constexpr uint16_t nvsdmPortLID        = 5566;
+        constexpr uint64_t throughputValue     = UINT32_MAX + 1ULL; // To test support for 64-bit values
+        constexpr uint32_t numPorts            = 3;
+        constexpr uint32_t switchID            = 0;
+
+        NvsdmMockDevice dev(NVSDM_DEV_TYPE_SWITCH, switchID, nvsdmSwitchVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+
+        // Create 3 ports with different states
+        constexpr std::array<nvsdmPortState_t, numPorts> portStates = {
+            NVSDM_PORT_STATE_ACTIVE, // Port 0: UP
+            NVSDM_PORT_STATE_DOWN,   // Port 1: DOWN - should be skipped
+            NVSDM_PORT_STATE_ACTIVE  // Port 2: UP
+        };
+
+        nvsdmTelem_v1_t val {};
+        val.valType    = NVSDM_VAL_TYPE_UINT64;
+        val.status     = NVSDM_SUCCESS;
+        val.val.u64Val = throughputValue;
+
+        for (size_t i = 0; i < numPorts; i++)
+        {
+            NvsdmMockPort port(i, nvsdmPortLID);
+            port.SetPortState(portStates[i]);
+            port.SetFieldValue(NVSDM_PORT_TELEM_CTR_EXT_XMIT_DATA, val);
+            dev.AddPort(port);
+        }
+
+        std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+        mockNvsdm->InjectDevice(dev);
+
+        dcgmCoreCallbacks_t dcc = {};
+        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+        // Get composite field (DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX) value
+        DcgmFvBuffer buf;
+        timelib64_t now = timelib_usecSince1970();
+        std::vector<dcgm_field_update_info_t> entities;
+        dcgm_field_update_info_t entity;
+        entity.entityGroupId = DCGM_FE_SWITCH;
+        entity.entityId      = switchID;
+        entities.push_back(entity);
+
+        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX, buf, entities, now)
+                == DCGM_ST_OK);
+
+        // Verify the aggregated value is correct
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+
+        // Should aggregate only UP links: port0 (throughputValue) + port2 (throughputValue) = 2 * throughputValue
+        REQUIRE(fv->value.i64 == (throughputValue * 2));
+        REQUIRE(fv->value.i64 > UINT32_MAX);
+        REQUIRE(fv->fieldId == DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
     }
 }

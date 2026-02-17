@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,6 +42,8 @@ base_test_name = "run_dcgm_diag"
 test_name = ""
 
 ################################################################################
+
+
 def print_parseable_status(phase_name, iteration):
     if iteration:
         print("&&&& %s %s_%d" % (phase_name, test_name, iteration))
@@ -49,6 +51,8 @@ def print_parseable_status(phase_name, iteration):
         print("&&&& %s %s_%d" % (phase_name, test_name, iteration))
 
 ################################################################################
+
+
 def remove_file_yolo(filename):
     '''
     Try to remove a file, not caring if any error occurs
@@ -115,6 +119,7 @@ def setupEnvironment(cmdArgs):
 def trimJsonText(text):
     return text[text.find('{'):text.rfind('}') + 1]
 
+
 DIAG_CLOCKS_EVENT_WARNING = "Clocks are being optimized for"
 DIAG_INFOROM_WARNING = "Error calling NVML API nvmlDeviceValidateInforom"
 DIAG_THERMAL_WARNING = "Thermal violations totaling "
@@ -127,12 +132,13 @@ DIAG_THERMAL_SUGGEST = "A GPU has thermal violations happening. Please make sure
 DIAG_MIG_INCOMPATIBLE_SUGGEST = "You must disable MIG mode or configure instances that use the entire GPU to run the diagnostic."
 DIAG_MIG_MULTIPLE_GPU_SUGGEST = "You must run on only one GPU at a time when MIG is configured."
 
+
 class TestRunner():
 
     ################################################################################
     def __init__(self, cycles, dcgmiDiag, verbose):
         self.cycles = int(cycles)
-        self.dcgmiDiag = dcgmiDiag 
+        self.dcgmiDiag = dcgmiDiag
         self.verbose = verbose
         self.failed_runs = 0
         self.failing_tests = {}
@@ -158,7 +164,8 @@ class TestRunner():
         msg = ''
         if recommendation:
             msg = "Iteration %d test '%s' is ignoring error '%s' : %s" % \
-                (runIndex, failureInfo.GetTestname(), failureInfo.GetFullError(), recommendation)
+                (runIndex, failureInfo.GetTestname(),
+                 failureInfo.GetFullError(), recommendation)
         else:
             msg = "Iteration %d test '%s' failed: '%s'" % \
                 (runIndex, failureInfo.GetTestname(), failureInfo.GetFullError())
@@ -180,12 +187,15 @@ class TestRunner():
         for key in self.failing_tests:
             runFailures = 0
             for failureInfo in self.failing_tests[key]:
-                recommendation = self.matchesExclusion(failureInfo.GetWarning())
+                recommendation = self.matchesExclusion(
+                    failureInfo.GetWarning())
                 if recommendation:
-                    print(self.getErrorMessage(failureInfo, key, recommendation))
+                    print(self.getErrorMessage(
+                        failureInfo, key, recommendation))
                     numExclusions += 1
                 else:
-                    failureDetails.append(self.getErrorMessage(failureInfo, key, None))
+                    failureDetails.append(
+                        self.getErrorMessage(failureInfo, key, None))
                     runFailures += 1
 
             if runFailures > 0:
@@ -203,7 +213,8 @@ class TestRunner():
         Helper method to run a give command
         """
 
-        print("Running command: %s " % " ".join(self.dcgmiDiag.BuildDcgmiCommand()))
+        print("Running command: %s " % " ".join(
+            self.dcgmiDiag.BuildDcgmiCommand()))
         ret = 0
         fail_total = 0
         exclusion_total = 0
@@ -227,7 +238,6 @@ class TestRunner():
 
             fail_total = fail_total + failCount
             exclusion_total = exclusion_total + exclusionCount
-
 
         if self.verbose:
             print(self.dcgmiDiag.lastStdout)
@@ -255,6 +265,8 @@ class TestRunner():
         return [failCount, exclusionCount]
 
 ################################################################################
+
+
 def checkCmdLine(cmdArgs, settings):
 
     if cmdArgs.device_id:
@@ -270,7 +282,8 @@ def checkCmdLine(cmdArgs, settings):
             sys.exit(1)
         elif len(cmdArgs.device_id) == 1:
             if not cmdArgs.device_id[0].isdigit():
-                print("\"{}\" is not a valid device ID, please provide a number instead.".format(cmdArgs.device_id[0]))
+                print("\"{}\" is not a valid device ID, please provide a number instead.".format(
+                    cmdArgs.device_id[0]))
                 sys.exit(1)
         else:
             print("Device list validated successfully")
@@ -294,21 +307,32 @@ def checkCmdLine(cmdArgs, settings):
     settings['cycles'] = cmdArgs.cycles
 
 ################################################################################
+
+
 def parseCommandLine():
 
-    parser = argparse.ArgumentParser(description="DCGM DIAGNOSTIC TEST FRAMEWORK")
-    parser.add_argument("-c", "--cycles", required=True, help="Number of test cycles to run, all tests are one cycle.")
-    parser.add_argument("-v", "--vulcan", action="store_true", help="Deprecated flag for running in the eris environment")
-    parser.add_argument("--verbose", action="store_true", help="Sets verbose mode")
-    parser.add_argument("-d", "--device-id", help="Comma separated list of nvml device ids.")
-    parser.add_argument("-r", "--run-mode", default=4, help="Specify the tests to run: (1,2,3, or 4")
-    parser.add_argument("-t", "--test-names", default="", help="Specify a comma-separated list of test names. Will override run mode")
+    parser = argparse.ArgumentParser(
+        description="DCGM DIAGNOSTIC TEST FRAMEWORK")
+    parser.add_argument("-c", "--cycles", required=True,
+                        help="Number of test cycles to run, all tests are one cycle.")
+    parser.add_argument("-v", "--vulcan", action="store_true",
+                        help="Deprecated flag for running in the eris environment")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Sets verbose mode")
+    parser.add_argument("-d", "--device-id",
+                        help="Comma separated list of nvml device ids.")
+    parser.add_argument("-r", "--run-mode", default=4,
+                        help="Specify the tests to run: (1,2,3, or 4")
+    parser.add_argument("-t", "--test-names", default="",
+                        help="Specify a comma-separated list of test names. Will override run mode")
 
     args = parser.parse_args()
 
     return args
 
 ################################################################################
+
+
 def main(cmdArgs):
 
     settings = {}
@@ -334,18 +358,18 @@ def main(cmdArgs):
                   gpuGroups[0])
         gpuGroup = gpuGroups[0]
         gpuIdStr = ",".join(map(str, gpuGroup))
-        del(dcgmHandle)
+        del (dcgmHandle)
         dcgmHandle = None
     else:
         gpuIdStr = settings['dev_id']
-    
+
     # Skip checks for nvlinks and pci width to avoid QA bugs
     paramsStr = "pcie.test_nvlink_status=false"
     paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
     paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
 
     dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, testNamesStr=settings['test_names'], paramsStr=paramsStr,
-                dcgmiPrefix=prefix, runMode=settings['run_mode'], debugLevel=5, debugFile=debugFile)
+                                    dcgmiPrefix=prefix, runMode=settings['run_mode'], debugLevel=5, debugFile=debugFile)
 
     # Start tests
     run_test = TestRunner(settings['cycles'], dcgmiDiag, settings['verbose'])
@@ -354,6 +378,7 @@ def main(cmdArgs):
     failedCount, exclusionCount = run_test.run()
 
     return [failedCount, exclusionCount]
+
 
 if __name__ == "__main__":
     cmdArgs = parseCommandLine()
@@ -371,7 +396,8 @@ if __name__ == "__main__":
         logger.info("Passed: {}".format(PASSED_COUNT))
         logger.info("Failed: {}".format(failedCount))
         logger.info("Waived: {}".format(exclusionCount))
-        logger.info("Total:  {}".format(PASSED_COUNT + failedCount + exclusionCount))
+        logger.info("Total:  {}".format(
+            PASSED_COUNT + failedCount + exclusionCount))
         logger.info("Cycles: {}".format(cmdArgs.cycles))
         logger.info("==================================\n\n")
     else:

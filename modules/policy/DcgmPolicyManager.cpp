@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,13 @@
  */
 #include "DcgmPolicyManager.h"
 #include "DcgmLogging.h"
+#include "dcgm_fields.h"
 #include "dcgm_structs.h"
-
-#include <iostream>
-#include <sstream>
-#include <stdexcept>
+#include "dcgm_structs_internal.h"
+#include <algorithm>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+#include <ranges>
 
 
 /*****************************************************************************
@@ -51,7 +53,16 @@ dcgmReturn_t DcgmPolicyManager::Init(void)
         log_error("GetGpuCount returned {}", deviceCount);
         return DCGM_ST_INIT_ERROR;
     }
+    std::vector<unsigned int> aliveGpuIds;
+    aliveGpuIds.reserve(deviceCount);
+    if (auto ret = mpCoreProxy.GetGpuIds(1, aliveGpuIds); ret != DCGM_ST_OK)
+    {
+        log_error("Got error {} from GetGpuIds()", errorString(ret));
+        return ret;
+    }
 
+    std::vector<unsigned int> outOfRangeGpuIds;
+    outOfRangeGpuIds.reserve(deviceCount);
     dcgm_mutex_lock(m_mutex);
 
     /* Zero all devices in case more GPUs are added later (late discovery / injection) */
@@ -63,10 +74,31 @@ dcgmReturn_t DcgmPolicyManager::Init(void)
         m_gpus[i].currentPolicies.version = dcgmPolicy_version;
 
         m_gpus[i].watchers.clear();
+        m_gpus[i].alive = false;
     }
     m_numGpus = deviceCount;
 
+    for (auto const &gpuId : aliveGpuIds)
+    {
+        if (gpuId >= std::size(m_gpus))
+        {
+            outOfRangeGpuIds.push_back(gpuId);
+            continue;
+        }
+        m_gpus[gpuId].alive = true;
+    }
+
+    // Most DCGM users have a single client, so we expect one ALL_GPUs group watcher per user. We estimate up to five
+    // watchers to cover most scenarios.
+    int constexpr estimatedMetaGroupWatchers = 5;
+    m_metaGroupWatchers.reserve(estimatedMetaGroupWatchers);
+
     dcgm_mutex_unlock(m_mutex);
+
+    if (!outOfRangeGpuIds.empty())
+    {
+        log_error("Got {} out of range GPU ids: {}", outOfRangeGpuIds.size(), fmt::join(outOfRangeGpuIds, ", "));
+    }
 
     return DCGM_ST_OK;
 }
@@ -76,6 +108,10 @@ void DcgmPolicyManager::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
 {
     dcgmBufferedFv_t *fv;
     dcgmBufferedFvCursor_t cursor = 0;
+    std::vector<unsigned int> detachedGpuIds;
+    detachedGpuIds.reserve(DCGM_MAX_NUM_DEVICES);
+    std::vector<unsigned int> outOfRangeGpuIds;
+    outOfRangeGpuIds.reserve(DCGM_MAX_NUM_DEVICES);
 
     /* This is a bit coarse-grained for now, but it's clean */
     dcgmMutexReturn_t mutexSt = dcgm_mutex_lock(m_mutex);
@@ -89,10 +125,22 @@ void DcgmPolicyManager::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
             continue;
         }
 
+        if (fv->entityId >= std::size(m_gpus))
+        {
+            outOfRangeGpuIds.push_back(fv->entityId);
+            continue;
+        }
+
         /* Does this GPU have an active policy? */
         if (!m_gpus[fv->entityId].policiesHaveBeenSet)
         {
             log_debug("Ignored gpuId {} without policies set", fv->entityId);
+            continue;
+        }
+
+        if (!m_gpus[fv->entityId].alive)
+        {
+            detachedGpuIds.push_back(fv->entityId);
             continue;
         }
 
@@ -140,6 +188,16 @@ void DcgmPolicyManager::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
 
     if (mutexSt != DCGM_MUTEX_ST_LOCKEDBYME)
         dcgm_mutex_unlock(m_mutex);
+
+    if (!detachedGpuIds.empty())
+    {
+        log_debug("Got {} detached GPU ids: {}", detachedGpuIds.size(), fmt::join(detachedGpuIds, ", "));
+    }
+
+    if (!outOfRangeGpuIds.empty())
+    {
+        log_debug("Got {} out of range GPU ids: {}", outOfRangeGpuIds.size(), fmt::join(outOfRangeGpuIds, ", "));
+    }
 }
 
 /****************************************************************************/
@@ -655,6 +713,7 @@ dcgmReturn_t DcgmPolicyManager::WatchFields(dcgm_connection_id_t connectionId)
 dcgmReturn_t DcgmPolicyManager::RegisterForPolicy(dcgm_policy_msg_register_t *msg)
 {
     unsigned int groupId = (uintptr_t)msg->groupId;
+    bool isMetaGroup     = (groupId == DCGM_GROUP_ALL_GPUS);
     dcgmReturn_t dcgmReturn;
     std::vector<dcgmGroupEntityPair_t> entities;
 
@@ -672,7 +731,7 @@ dcgmReturn_t DcgmPolicyManager::RegisterForPolicy(dcgm_policy_msg_register_t *ms
         return dcgmReturn;
     }
 
-    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -685,24 +744,56 @@ dcgmReturn_t DcgmPolicyManager::RegisterForPolicy(dcgm_policy_msg_register_t *ms
     memset(&newWatcher.lastSentTimestamp, 0, sizeof(newWatcher.lastSentTimestamp));
     newWatcher.conditions = msg->condition;
 
-    dcgm_mutex_lock(m_mutex);
-
-    for (unsigned int i = 0; i < entities.size(); i++)
+    std::vector<std::tuple<dcgmPolicyCondition_t, dcgm_field_eid_t, dcgm_connection_id_t, dcgm_request_id_t>>
+        addedEntries;
+    addedEntries.reserve(entities.size());
     {
-        /* Policy manager only supports GPUs for now */
-        if (entities[i].entityGroupId != DCGM_FE_GPU)
-            continue;
+        DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
 
-        m_gpus[entities[i].entityId].watchers.push_back(newWatcher);
+        for (unsigned int i = 0; i < entities.size(); i++)
+        {
+            if (entities[i].entityGroupId != DCGM_FE_GPU)
+            {
+                continue;
+            }
 
-        log_debug("Added policy condition x{:X}, gpuId {}, connectionId {}, requestId {}",
-                  newWatcher.conditions,
-                  entities[i].entityId,
-                  newWatcher.connectionId,
-                  newWatcher.requestId);
+            if (entities[i].entityId >= std::size(m_gpus))
+            {
+                return DCGM_ST_BADPARAM;
+            }
+
+            if (!m_gpus[entities[i].entityId].alive)
+            {
+                return DCGM_ST_GPU_IS_LOST;
+            }
+        }
+
+        for (unsigned int i = 0; i < entities.size(); i++)
+        {
+            if (entities[i].entityGroupId != DCGM_FE_GPU)
+            {
+                continue;
+            }
+
+            m_gpus[entities[i].entityId].watchers.push_back(newWatcher);
+            addedEntries.push_back(std::make_tuple(
+                newWatcher.conditions, entities[i].entityId, newWatcher.connectionId, newWatcher.requestId));
+        }
+
+        if (isMetaGroup)
+        {
+            AddMetaGroupWatcher(newWatcher);
+        }
     }
 
-    dcgm_mutex_unlock(m_mutex);
+    for (auto const &[condition, entityId, connectionId, requestId] : addedEntries)
+    {
+        log_debug("Added policy condition x{:X}, gpuId {}, connectionId {}, requestId {}",
+                  condition,
+                  entityId,
+                  connectionId,
+                  requestId);
+    }
 
     /* Make sure the fields we want updates for are updating. We want this
        after we have our callbacks in place and don't have the lock anymore
@@ -719,7 +810,9 @@ dcgmReturn_t DcgmPolicyManager::ProcessSetPolicy(dcgm_policy_msg_set_policy_t *m
     unsigned int i;
     std::vector<dcgmGroupEntityPair_t> entities;
 
-    groupId = (uintptr_t)msg->groupId;
+    groupId          = (uintptr_t)msg->groupId;
+    bool isMetaGroup = (groupId == DCGM_GROUP_ALL_GPUS);
+
     /* Verify group id is valid */
     dcgmReturn_t dcgmReturn = mpCoreProxy.VerifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
@@ -728,7 +821,7 @@ dcgmReturn_t DcgmPolicyManager::ProcessSetPolicy(dcgm_policy_msg_set_policy_t *m
         return dcgmReturn;
     }
 
-    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -742,27 +835,53 @@ dcgmReturn_t DcgmPolicyManager::ProcessSetPolicy(dcgm_policy_msg_set_policy_t *m
         return DCGM_ST_NOT_CONFIGURED;
     }
 
-    dcgm_mutex_lock(m_mutex);
-
-    for (i = 0; i < entities.size(); i++)
+    std::vector<std::tuple<dcgm_connection_id_t, dcgmPolicyCondition_t, dcgm_field_eid_t>> updatedEntries;
+    updatedEntries.reserve(entities.size());
     {
-        /* Policy management is only supported for GPUs at this time */
-        if (entities[i].entityGroupId != DCGM_FE_GPU)
-            continue;
+        DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
 
-        unsigned int gpuId = entities[i].entityId;
+        for (i = 0; i < entities.size(); i++)
+        {
+            if (entities[i].entityGroupId != DCGM_FE_GPU)
+            {
+                continue;
+            }
 
-        m_gpus[gpuId].policiesHaveBeenSet = true;
+            if (entities[i].entityId >= std::size(m_gpus))
+            {
+                return DCGM_ST_BADPARAM;
+            }
 
-        memcpy(&m_gpus[gpuId].currentPolicies, &msg->policy, sizeof(m_gpus[gpuId].currentPolicies));
+            if (!m_gpus[entities[i].entityId].alive)
+            {
+                return DCGM_ST_GPU_IS_LOST;
+            }
+        }
 
-        log_debug("connectionId {} set policy mask x{:X} for gpuId {}",
-                  msg->header.connectionId,
-                  msg->policy.condition,
-                  gpuId);
+        for (i = 0; i < entities.size(); i++)
+        {
+            if (entities[i].entityGroupId != DCGM_FE_GPU)
+            {
+                continue;
+            }
+
+            unsigned int const gpuId          = entities[i].entityId;
+            m_gpus[gpuId].policiesHaveBeenSet = true;
+            memcpy(&m_gpus[gpuId].currentPolicies, &msg->policy, sizeof(m_gpus[gpuId].currentPolicies));
+
+            updatedEntries.push_back(std::make_tuple(msg->header.connectionId, msg->policy.condition, gpuId));
+        }
+
+        if (isMetaGroup)
+        {
+            m_metaGroupPolicy = msg->policy;
+        }
     }
 
-    dcgm_mutex_unlock(m_mutex);
+    for (auto const &[connectionId, condition, entityId] : updatedEntries)
+    {
+        log_debug("connectionId {} set policy mask x{:X} for gpuId {}", connectionId, condition, entityId);
+    }
 
     return DCGM_ST_OK;
 }
@@ -785,7 +904,7 @@ dcgmReturn_t DcgmPolicyManager::ProcessGetPolicies(dcgm_policy_msg_get_policies_
         return dcgmReturn;
     }
 
-    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -799,22 +918,31 @@ dcgmReturn_t DcgmPolicyManager::ProcessGetPolicies(dcgm_policy_msg_get_policies_
         return DCGM_ST_NOT_CONFIGURED;
     }
 
-    dcgm_mutex_lock(m_mutex);
+    DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
 
     msg->numPolicies = 0;
     for (i = 0; i < entities.size() && msg->numPolicies < DCGM_MAX_NUM_DEVICES; i++)
     {
-        /* Policy management is only supported for GPUs at this time */
         if (entities[i].entityGroupId != DCGM_FE_GPU)
+        {
             continue;
+        }
+
+        if (entities[i].entityId >= std::size(m_gpus))
+        {
+            return DCGM_ST_BADPARAM;
+        }
+
+        if (!m_gpus[entities[i].entityId].alive)
+        {
+            return DCGM_ST_GPU_IS_LOST;
+        }
 
         unsigned int gpuId = entities[i].entityId;
 
         memcpy(&msg->policies[msg->numPolicies], &m_gpus[gpuId].currentPolicies, sizeof(msg->policies[0]));
         msg->numPolicies++;
     }
-
-    dcgm_mutex_unlock(m_mutex);
 
     return DCGM_ST_OK;
 }
@@ -847,6 +975,8 @@ void DcgmPolicyManager::RemoveWatchersForConnection(dcgm_connection_id_t connect
                 watcherIt = m_gpus[i].watchers.erase(watcherIt);
             }
         }
+
+        RemoveMetaGroupWatcher(connectionId);
     }
 
     /* notify each seenRequestIds for connectionId that it's gone */
@@ -875,4 +1005,156 @@ void DcgmPolicyManager::OnClientDisconnect(dcgm_connection_id_t connectionId)
     RemoveWatchersForConnection(connectionId);
 }
 
-/*****************************************************************************/
+void DcgmPolicyManager::AddMetaGroupPolicyToWatchers(std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    if (entities.empty() || m_metaGroupWatchers.empty())
+    {
+        return;
+    }
+
+    for (auto const &entity : entities)
+    {
+        if (entity.entityGroupId != DCGM_FE_GPU)
+        {
+            continue;
+        }
+
+        unsigned int const gpuId = entity.entityId;
+
+        if (gpuId >= std::size(m_gpus) || !m_gpus[gpuId].alive)
+        {
+            continue;
+        }
+        for (auto const &watcher : m_metaGroupWatchers)
+        {
+            bool const existed
+                = std::find_if(m_gpus[gpuId].watchers.begin(),
+                               m_gpus[gpuId].watchers.end(),
+                               [&watcher](const dpm_watcher_t &w) {
+                                   return w.connectionId == watcher.connectionId && w.requestId == watcher.requestId;
+                               })
+                  != m_gpus[gpuId].watchers.end();
+            if (!existed)
+            {
+                m_gpus[gpuId].watchers.push_back(watcher);
+                log_debug("Added policy condition x{:X}, gpuId {}, connectionId {}, requestId {}",
+                          watcher.conditions,
+                          gpuId,
+                          watcher.connectionId,
+                          watcher.requestId);
+            }
+        }
+
+        m_gpus[gpuId].policiesHaveBeenSet = true;
+        memcpy(&m_gpus[gpuId].currentPolicies, &m_metaGroupPolicy, sizeof(m_gpus[gpuId].currentPolicies));
+        log_debug("set policy mask x{:X} for gpuId {}", m_metaGroupPolicy.condition, gpuId);
+    }
+}
+
+dcgmReturn_t DcgmPolicyManager::AttachGpus()
+{
+    int deviceCount = mpCoreProxy.GetGpuCount(0);
+    if (deviceCount < 0)
+    {
+        log_error("GetGpuCount returned {}", deviceCount);
+        return DCGM_ST_INIT_ERROR;
+    }
+
+    unsigned int groupId    = DCGM_GROUP_ALL_GPUS;
+    dcgmReturn_t dcgmReturn = mpCoreProxy.VerifyAndUpdateGroupId(&groupId);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        log_error("Error: Bad group id parameter: {}, ret {}", groupId, dcgmReturn);
+        return dcgmReturn;
+    }
+
+    std::vector<dcgmGroupEntityPair_t> entities;
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
+        return dcgmReturn;
+    }
+    std::unordered_set<dcgmGroupEntityPair_t> const aliveGpuIds(entities.begin(), entities.end());
+
+    using WatchSet = std::set<std::pair<dcgm_connection_id_t, dcgm_request_id_t>>;
+    WatchSet inactive;
+    WatchSet active;
+    std::vector<std::pair<dcgm_connection_id_t, dcgm_request_id_t>> toNotifyClients;
+    std::unordered_set<dcgm_connection_id_t> connectionIds;
+    connectionIds.reserve(m_metaGroupWatchers.size());
+    {
+        DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
+        m_numGpus         = deviceCount;
+        for (unsigned int i = 0; i < std::min(std::size(m_gpus), static_cast<std::size_t>(m_numGpus)); i++)
+        {
+            m_gpus[i].alive = aliveGpuIds.contains({ DCGM_FE_GPU, i });
+            if (!m_gpus[i].alive)
+            {
+                m_gpus[i].policiesHaveBeenSet = false;
+                memset(&m_gpus[i].currentPolicies, 0, sizeof(m_gpus[i].currentPolicies));
+                m_gpus[i].currentPolicies.version = dcgmPolicy_version;
+                for (auto &watcher : m_gpus[i].watchers)
+                {
+                    inactive.insert({ watcher.connectionId, watcher.requestId });
+                }
+                m_gpus[i].watchers.clear();
+            }
+            else
+            {
+                for (auto &watcher : m_gpus[i].watchers)
+                {
+                    active.insert({ watcher.connectionId, watcher.requestId });
+                }
+            }
+        }
+
+        // Prevent sending completion notifications for watchers that are still alive.
+        // For the case that one watcher was registered to two GPUs, and one of the GPUs is detached, this
+        // watcher will be inserted into inactive set above, but, we don't want to send completion notifications for the
+        // watcher as it should still receive notifications for the other active GPU.
+        std::ranges::set_difference(inactive, active, std::back_inserter(toNotifyClients));
+
+        AddMetaGroupPolicyToWatchers(entities);
+        for (auto const &watcher : m_metaGroupWatchers)
+        {
+            m_haveWatchedFields.erase(watcher.connectionId);
+            connectionIds.insert(watcher.connectionId);
+        }
+    }
+
+    for (auto const &[connectionId, requestId] : toNotifyClients)
+    {
+        mpCoreProxy.NotifyRequestOfCompletion(connectionId, requestId);
+    }
+
+    for (auto const &connectionId : connectionIds)
+    {
+        WatchFields(connectionId);
+    }
+
+    log_info("Attached {} GPUs to policy manager", deviceCount);
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmPolicyManager::DetachGpus()
+{
+    DcgmLockGuard dlg = DcgmLockGuard(m_mutex);
+    for (auto &gpu : m_gpus | std::views::take(m_numGpus))
+    {
+        gpu.alive = false;
+    }
+    return DCGM_ST_OK;
+}
+
+void DcgmPolicyManager::AddMetaGroupWatcher(dpm_watcher_t watcher)
+{
+    m_metaGroupWatchers.push_back(watcher);
+}
+
+void DcgmPolicyManager::RemoveMetaGroupWatcher(dcgm_connection_id_t connectionId)
+{
+    DcgmNs::Utils::EraseIf(m_metaGroupWatchers, [connectionId](const dpm_watcher_t &watcher) {
+        return watcher.connectionId == connectionId;
+    });
+}

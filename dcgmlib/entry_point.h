@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,11 +72,11 @@ DCGM_ENTRY_POINT(dcgmSetEntityNvLinkLinkState,
 
 DCGM_ENTRY_POINT(dcgmEngineRun,
                  tsapiEngineRun,
-                 (unsigned short portNumber, char const *socketPath, unsigned int isConnectionTCP),
+                 (unsigned short portNumber, char const *socketPath, unsigned int connectionType),
                  "({} {} {})",
                  portNumber,
                  socketPath,
-                 isConnectionTCP)
+                 connectionType)
 
 DCGM_ENTRY_POINT(dcgmGetAllDevices,
                  tsapiEngineGetAllDevices,
@@ -1017,5 +1017,19 @@ DCGM_ENTRY_POINT(dcgmHostengineEnvironmentVariableInfo,
                  "({}, {})",
                  pDcgmHandle,
                  pEnvVarInfo)
+
+DCGM_ENTRY_POINT(dcgmAttachDriver, tsapiAttachDriver, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
+
+DCGM_ENTRY_POINT(dcgmDetachDriver, tsapiDetachDriver, (dcgmHandle_t pDcgmHandle), "({})", pDcgmHandle)
+
+DCGM_ENTRY_POINT(dcgmEmptyCache, tsapiEmptyCache, (dcgmHandle_t dcgmHandle), "({})", dcgmHandle)
+
+DCGM_ENTRY_POINT(dcgmMarkModulesReloadable,
+                 tsapiMarkModulesReloadable,
+                 (dcgmHandle_t dcgmHandle, dcgmModulesReloadable_v1 *msg),
+                 "({} {})",
+                 dcgmHandle,
+                 msg)
+
 
 /*****************************************************************************/

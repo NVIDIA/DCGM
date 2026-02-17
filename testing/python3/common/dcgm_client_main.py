@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,12 +16,16 @@ from . import dcgm_client_cli_parser as cli
 import signal
 
 ###############################################################################
+
+
 def exit_handler(signum, frame):
     # The Prometheus client does something smarter but more complex
     # Here we just exit
     exit()
 
 ###############################################################################
+
+
 def initialize_signal_handlers():
     signal.signal(signal.SIGINT, exit_handler)
     signal.signal(signal.SIGTERM, exit_handler)

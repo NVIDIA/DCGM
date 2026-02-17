@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,6 +72,7 @@ typedef enum
     DcgmCoreReqIdGetDriverVersion                 = 60, // DcgmCacheManager::GetDriverVersion()
     DcgmCoreReqIdChildProcessManagerReset         = 61, // ChildProcessManager::Reset()
     DcgmCoreReqIdGetCudaVersion                   = 62, // DcgmCoreProxy::GetCudaVersion()
+    DcgmCoreReqIdGetGpuStatus                     = 63, // DcgmCacheManager::GetGpuStatus()
     DcgmCoreReqIdCount                                  // Always keep this one last
 } dcgmCoreReqCmd_t;
 
@@ -151,6 +152,16 @@ typedef struct
     dcgm_connection_id_t connectionId; // !< the connection id this request is associated with
     unsigned int groupId;              // !< the group id for this request
 } dcgmCoreBasicGroupParams_t;
+
+/*
+ * Parameters for querying group entities requests
+ */
+typedef struct
+{
+    dcgm_connection_id_t connectionId; // !< the connection id this request is associated with
+    unsigned int groupId;              // !< the group id for this request
+    bool activeOnly;                   // !< whether to only return active entities
+} dcgmCoreGetGroupEntitiesParams_t;
 
 /*
  * Struct covering the parameters for simple requests about all the GPUs
@@ -494,6 +505,17 @@ typedef dcgmCoreGetGpuList_v1 dcgmCoreGetGpuList_t;
 typedef struct
 {
     dcgm_module_command_header_t header; // Command header
+    unsigned int gpuId;
+    DcgmEntityStatus_t status;
+} dcgmCoreGetGpuStatus_v1;
+
+#define dcgmCoreGetGpuStatus_version1 MAKE_DCGM_VERSION(dcgmCoreGetGpuStatus_v1, 1)
+#define dcgmCoreGetGpuStatus_version  dcgmCoreGetGpuStatus_version1
+typedef dcgmCoreGetGpuStatus_v1 dcgmCoreGetGpuStatus_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header; // Command header
     dcgmCoreQueryFieldParams_t request;
     dcgmCoreBasicResponse_t response;
 } dcgmCoreQueryField_v1;
@@ -648,24 +670,24 @@ typedef dcgmCoreSetValue_v1 dcgmCoreSetValue_t;
 typedef struct
 {
     dcgm_module_command_header_t header; // Command header
-    dcgmCoreBasicGroupParams_t request;
+    dcgmCoreGetGroupEntitiesParams_t request;
     dcgmCoreEntityInfoResponse_t response;
-} dcgmCoreGetGroupEntities_v2;
+} dcgmCoreGetGroupEntities_v3;
 
-#define dcgmCoreGetGroupEntities_version2 MAKE_DCGM_VERSION(dcgmCoreGetGroupEntities_v2, 2)
-#define dcgmCoreGetGroupEntities_version  dcgmCoreGetGroupEntities_version2
-typedef dcgmCoreGetGroupEntities_v2 dcgmCoreGetGroupEntities_t;
+#define dcgmCoreGetGroupEntities_version3 MAKE_DCGM_VERSION(dcgmCoreGetGroupEntities_v3, 3)
+#define dcgmCoreGetGroupEntities_version  dcgmCoreGetGroupEntities_version3
+typedef dcgmCoreGetGroupEntities_v3 dcgmCoreGetGroupEntities_t;
 
 typedef struct
 {
     dcgm_module_command_header_t header; // Command header
-    dcgmCoreBasicGroupParams_t request;
+    dcgmCoreGetGroupEntitiesParams_t request;
     dcgmCoreGpuIdsResponse_t response;
-} dcgmCoreGetGroupGpuIds_v1;
+} dcgmCoreGetGroupGpuIds_v2;
 
-#define dcgmCoreGetGroupGpuIds_version1 MAKE_DCGM_VERSION(dcgmCoreGetGroupGpuIds_v1, 1)
-#define dcgmCoreGetGroupGpuIds_version  dcgmCoreGetGroupGpuIds_version1
-typedef dcgmCoreGetGroupGpuIds_v1 dcgmCoreGetGroupGpuIds_t;
+#define dcgmCoreGetGroupGpuIds_version2 MAKE_DCGM_VERSION(dcgmCoreGetGroupGpuIds_v2, 2)
+#define dcgmCoreGetGroupGpuIds_version  dcgmCoreGetGroupGpuIds_version2
+typedef dcgmCoreGetGroupGpuIds_v2 dcgmCoreGetGroupGpuIds_t;
 
 using DcgmLoggingRecord = plog::Record;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,8 +131,8 @@ public:
      *         exhaustion.
      */
     template <class T, class P>
-    [[nodiscard]] auto Enqueue(std::unique_ptr<NamedBasicTask<T, P>> task,
-                               bool isContinuation = false) -> std::optional<std::shared_future<P>>
+    [[nodiscard]] auto Enqueue(std::unique_ptr<NamedBasicTask<T, P>> task, bool isContinuation = false)
+        -> std::optional<std::shared_future<P>>
     {
         if (m_debugLogging.load(std::memory_order_relaxed))
         {

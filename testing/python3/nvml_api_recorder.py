@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,17 +46,20 @@ COMPUTE_INSTANCE = "ComputeInstance"
 MIG_DEVICE = "MigDevice"
 GPM = "GPM"
 
+
 def run_nvml_func(func, *args, **kwargs):
     try:
         return NVML_SUCCESS, func(*args, **kwargs)
     except NVMLError as error:
         return error.value, 0
 
+
 def run_nvml_func_str(func_str, *args, **kwargs):
     try:
         return NVML_SUCCESS, eval(f"{func_str}(*args, **kwargs)")
     except NVMLError as error:
         return error.value, 0
+
 
 def run_nvml_no_output_func_str(func_str, *args, **kwargs):
     try:
@@ -65,12 +68,14 @@ def run_nvml_no_output_func_str(func_str, *args, **kwargs):
     except NVMLError as error:
         return error.value
 
+
 def run_nvml_two_attrs_func_str(func_str, *args, **kwargs):
     try:
         ret_val1, ret_val2 = eval(f"{func_str}(*args, **kwargs)")
         return NVML_SUCCESS, ret_val1, ret_val2
     except NVMLError as error:
         return error.value, 0, 0
+
 
 def run_nvml_three_attrs_func_str(func_str, *args, **kwargs):
     try:
@@ -79,15 +84,19 @@ def run_nvml_three_attrs_func_str(func_str, *args, **kwargs):
     except NVMLError as error:
         return error.value, 0, 0, 0
 
+
 def run_nvml_four_attrs_func_str(func_str, *args, **kwargs):
     try:
-        ret_val1, ret_val2, ret_val3, ret_val4 = eval(f"{func_str}(*args, **kwargs)")
+        ret_val1, ret_val2, ret_val3, ret_val4 = eval(
+            f"{func_str}(*args, **kwargs)")
         return NVML_SUCCESS, ret_val1, ret_val2, ret_val3, ret_val4
     except NVMLError as error:
         return error.value, 0, 0, 0, 0
 
+
 def nvmlDeviceGetMemoryInfo_v2(handle):
     return nvmlDeviceGetMemoryInfo(handle, version=2)
+
 
 def nvml_func_key_suffix_extract(func_str):
     key_prefixes = [
@@ -125,17 +134,21 @@ def nvml_func_key_suffix_extract(func_str):
                 return func_str[7:-3]
     raise RuntimeError(f"Unknown function: {func_str}")
 
+
 def basic_type_value_parser(value):
     if type(value) is str:
         quoted_str = f'{value}'
         return quoted_str
     return value
 
+
 def arr_0_value_parser(value):
     return value[0]
 
+
 def basic_c_type_value_parser(value):
     return value.value
+
 
 def memory_info_parser(value):
     return {
@@ -143,6 +156,7 @@ def memory_info_parser(value):
         "free": value.free,
         "used": value.used,
     }
+
 
 def memory_info_v2_parser(value):
     return {
@@ -152,6 +166,7 @@ def memory_info_v2_parser(value):
         "reserved": value.reserved,
         "version": value.version,
     }
+
 
 def pci_info_parser(value):
     return {
@@ -164,11 +179,13 @@ def pci_info_parser(value):
         "busId": value.busId,
     }
 
+
 def utilization_parser(value):
     return {
         "gpu": value.gpu,
         "memory": value.memory,
     }
+
 
 def fbc_stats_parser(value):
     return {
@@ -177,11 +194,13 @@ def fbc_stats_parser(value):
         "averageLatency": value.averageLatency,
     }
 
+
 def cuda_capability_parser(major, minor):
     return {
         "major": major,
         "minor": minor,
     }
+
 
 def current_pending_parser(current, pending):
     return {
@@ -189,17 +208,20 @@ def current_pending_parser(current, pending):
         "pending": pending,
     }
 
+
 def current_pending_mode_parser(current, pending):
     return {
         "currentMode": current,
         "pendingMode": pending,
     }
 
+
 def affinity_parser(value):
     ret = []
     for i in range(8):
         ret.append(value[i])
     return ret
+
 
 def bar1_memory_info_parser(value):
     return {
@@ -208,11 +230,13 @@ def bar1_memory_info_parser(value):
         "bar1Used": value.bar1Used,
     }
 
+
 def violation_status_parser(value):
     return {
         "referenceTime": value.referenceTime,
         "violationTime": value.violationTime,
     }
+
 
 def codec_utilization_parser(utilization, sampling_period_us):
     return {
@@ -220,11 +244,13 @@ def codec_utilization_parser(utilization, sampling_period_us):
         "samplingPeriodUs": sampling_period_us,
     }
 
+
 def clock_value_parser(min_clock, max_clock):
     return {
         "minGpuClockMHz": min_clock,
         "maxGpuClockMHz": max_clock,
     }
+
 
 def auto_boost_enable_parser(is_enabled, default_is_enabled):
     return {
@@ -232,11 +258,13 @@ def auto_boost_enable_parser(is_enabled, default_is_enabled):
         "defaultIsEnabled": default_is_enabled,
     }
 
+
 def power_management_limit_constraints_parser(min_limit, max_limit):
     return {
         "minLimit": min_limit,
         "maxLimit": max_limit,
     }
+
 
 def accounting_stat_parser(value):
     return {
@@ -250,12 +278,15 @@ def accounting_stat_parser(value):
         # "reserved": value.reserved,
     }
 
+
 def sample_parser(values):
     _, samples = values
     ret = []
     for value in samples:
-        ret.append({"timestamp": value.timeStamp, "sampleValue": value.sampleValue.uiVal})
+        ret.append({"timestamp": value.timeStamp,
+                   "sampleValue": value.sampleValue.uiVal})
     return ret
+
 
 def topology_value_parser(devices):
     ret = []
@@ -264,11 +295,13 @@ def topology_value_parser(devices):
         ret.append(device_idx)
     return ret
 
+
 def device_id_parser(device_id, subsystem_id):
     return {
         "deviceID": device_id,
         "subsystemID": subsystem_id,
     }
+
 
 def resolution_parser(xdim, ydim):
     return {
@@ -276,11 +309,13 @@ def resolution_parser(xdim, ydim):
         "ydim": ydim,
     }
 
+
 def vm_id_parser(vm_id, vm_id_type):
     return {
         "vmId": vm_id.decode("utf-8"),
         "vmIdType": vm_id_type,
     }
+
 
 def vgpu_expire_value_parser(value):
     return {
@@ -293,12 +328,14 @@ def vgpu_expire_value_parser(value):
         "status": value.status,
     }
 
+
 def vgpu_license_parser(value):
     return {
         "isLicensed": value.isLicensed,
         "licenseExpiry": vgpu_expire_value_parser(value.licenseExpiry),
         "currentState": value.currentState,
     }
+
 
 def vgpu_utilization_parser(values):
     ret = []
@@ -312,6 +349,7 @@ def vgpu_utilization_parser(values):
             "decUtil": value.decUtil.uiVal,
         })
     return ret
+
 
 def vgpu_process_utilization_parser(values):
     ret = []
@@ -328,6 +366,7 @@ def vgpu_process_utilization_parser(values):
         })
     return ret
 
+
 def process_utilization_parser(values):
     ret = []
     for value in values:
@@ -340,6 +379,7 @@ def process_utilization_parser(values):
             "decUtil": value.decUtil,
         })
     return ret
+
 
 def vgpu_metadata_parser(value):
     return {
@@ -357,17 +397,20 @@ def vgpu_metadata_parser(value):
         # "opaqueData": value.opaqueData,
     }
 
+
 def gsp_firmware_mode_parser(is_enabled, default_mode):
     return {
         "isEnabled": is_enabled,
         "defaultMode": default_mode,
     }
 
+
 def vgpu_host_supported_range_paser(value):
     return {
         "minVersion": value.minVersion,
         "maxVersion": value.maxVersion,
     }
+
 
 def vgpu_pgpu_metadata_parser(value):
     return {
@@ -383,6 +426,7 @@ def vgpu_pgpu_metadata_parser(value):
         # "opaqueData": value.opaqueData,
     }
 
+
 def license_expiry_parser(value):
     return {
         "year": value.year,
@@ -393,6 +437,7 @@ def license_expiry_parser(value):
         "sec": value.sec,
         "status": value.status,
     }
+
 
 def grid_license_parser(value):
     ret = {
@@ -412,12 +457,14 @@ def grid_license_parser(value):
         ret["gridLicensableFeatures"].append(feature)
     return ret
 
+
 def encoder_stats_parser(session_count, average_fps, average_latency):
     return {
         "sessionCount": session_count,
         "averageFps": average_fps,
         "averageLatency": average_latency
     }
+
 
 def encoder_sessions_parser(sessions):
     ret = []
@@ -433,6 +480,7 @@ def encoder_sessions_parser(sessions):
             "encodeLatency": session.encodeLatency,
         })
     return ret
+
 
 def fbc_sessions_parser(sessions):
     ret = []
@@ -452,6 +500,7 @@ def fbc_sessions_parser(sessions):
             "averageLatency": session.averageLatency,
         })
     return ret
+
 
 def field_value_parser(field_value):
     ret = {
@@ -477,11 +526,13 @@ def field_value_parser(field_value):
         ret["value"] = 0
     return ret
 
+
 def accounting_pid_parser(count, pids):
     ret = []
     for i in range(count.value):
         ret.append(pids[i].value)
     return ret
+
 
 def instance_profile_parser(value):
     return {
@@ -500,11 +551,13 @@ def instance_profile_parser(value):
         "name": value.name,
     }
 
+
 def placement_parser(value):
     return {
         "start": value.start,
         "size": value.size,
     }
+
 
 def instance_info_parser(parent_device_uuid, value):
     return {
@@ -513,6 +566,7 @@ def instance_info_parser(parent_device_uuid, value):
         "profileId": value.profileId,
         "placement": placement_parser(value.placement),
     }
+
 
 def ci_profile_info_parser(ci_info):
     return {
@@ -529,6 +583,7 @@ def ci_profile_info_parser(ci_info):
         "name": ci_info.name,
     }
 
+
 def ci_info_parser(parent_device_uuid, fake_gpu_instance, ci_info):
     return {
         "device": parent_device_uuid,
@@ -537,6 +592,7 @@ def ci_info_parser(parent_device_uuid, fake_gpu_instance, ci_info):
         "profileId": ci_info.profileId,
         "placement": placement_parser(ci_info.placement),
     }
+
 
 def attributes_parser(value):
     return {
@@ -551,6 +607,7 @@ def attributes_parser(value):
         "memorySizeMB": value.memorySizeMB,
     }
 
+
 def remapped_row_parser(corr_rows, unc_rows, is_pending, failure_occured):
     return {
         "corrRows": corr_rows,
@@ -558,6 +615,7 @@ def remapped_row_parser(corr_rows, unc_rows, is_pending, failure_occured):
         "isPending": is_pending,
         "failureOccurred": failure_occured,
     }
+
 
 def row_remapper_histogram_parser(value):
     return {
@@ -568,12 +626,14 @@ def row_remapper_histogram_parser(value):
         "none": value.none,
     }
 
+
 def conf_compute_state_parser(conf_compute_state):
     return {
         "environment": conf_compute_state.environment,
         "ccFeature": conf_compute_state.ccFeature,
         "devToolsMode": conf_compute_state.devToolsMode,
     }
+
 
 def runing_process_parser(processes):
     ret = []
@@ -586,6 +646,7 @@ def runing_process_parser(processes):
         })
     return ret
 
+
 def ecc_error_count_parser(value):
     return {
         "l1Cache": value.l1Cache,
@@ -593,6 +654,7 @@ def ecc_error_count_parser(value):
         "deviceMemory": value.deviceMemory,
         "registerFile": value.registerFile,
     }
+
 
 def bridge_chip_info_parser(value):
     ret = {
@@ -606,10 +668,12 @@ def bridge_chip_info_parser(value):
         })
     return ret
 
+
 class NVMLSimpleFunc(object):
     def __init__(self, func_str, value_parser):
         self._func_str = func_str
         self._value_parser = value_parser
+
 
 class NVMLSimpleVersionFunc(object):
     def __init__(self, func_str, version, value_parser):
@@ -617,11 +681,13 @@ class NVMLSimpleVersionFunc(object):
         self._version = version
         self._value_parser = value_parser
 
+
 class NVMLSimpleArrayOutputFunc(object):
     def __init__(self, func_str, arr_size, value_parser):
         self._func_str = func_str
         self._arr_size = arr_size
         self._value_parser = value_parser
+
 
 class NVMLExtraKeyArrayOutputFunc(object):
     def __init__(self, func_str, arr_size, possible_inputs: List[int], value_parser):
@@ -630,11 +696,13 @@ class NVMLExtraKeyArrayOutputFunc(object):
         self._possible_inputs = possible_inputs
         self._value_parser = value_parser
 
+
 class NVMLExtraKeyFunc(object):
     def __init__(self, func_str, possible_inputs: List[int], value_parser):
         self._func_str = func_str
         self._possible_inputs = possible_inputs
         self._value_parser = value_parser
+
 
 class NVMLTwoKeysFunc(object):
     def __init__(self, func_str, key1_possible_inputs: List[int], key2_possible_inputs: List[int], value_parser):
@@ -643,6 +711,7 @@ class NVMLTwoKeysFunc(object):
         self._key2_possible_inputs = key2_possible_inputs
         self._value_parser = value_parser
 
+
 class NVMLThreeKeysFunc(object):
     def __init__(self, func_str, key1_possible_inputs: List[int], key2_possible_inputs: List[int], key3_possible_inputs: List[int], value_parser):
         self._func_str = func_str
@@ -650,6 +719,7 @@ class NVMLThreeKeysFunc(object):
         self._key2_possible_inputs = key2_possible_inputs
         self._key3_possible_inputs = key3_possible_inputs
         self._value_parser = value_parser
+
 
 def fabric_info_parser(value):
     dev_uuid = uuid.UUID(int=int.from_bytes(value.clusterUuid, 'big'))
@@ -660,12 +730,14 @@ def fabric_info_parser(value):
         "state": value.state,
     }
 
+
 def nvmlDeviceGetGpuFabricInfo(device):
     import dcgm_nvml as pynvml
     import nvml_injection_structs
     c_fabricInfo = nvml_injection_structs.c_nvmlGpuFabricInfo_t_dcgm_ver()
     pynvml.nvmlDeviceGetGpuFabricInfo(device, byref(c_fabricInfo))
     return c_fabricInfo
+
 
 def fabric_infov_parser(value):
     dev_uuid = uuid.UUID(int=int.from_bytes(value.clusterUuid, 'big'))
@@ -678,6 +750,7 @@ def fabric_infov_parser(value):
         "healthMask": value.healthMask,
     }
 
+
 def nvmlDeviceGetGpuFabricInfoV(device):
     import dcgm_nvml as pynvml
     import nvml_injection_structs
@@ -685,6 +758,7 @@ def nvmlDeviceGetGpuFabricInfoV(device):
     c_fabricInfo.version = pynvml.nvmlGpuFabricInfo_v2
     pynvml.nvmlDeviceGetGpuFabricInfoV(device, byref(c_fabricInfo))
     return c_fabricInfo
+
 
 def sram_ecc_error_status_parser(value):
     return {
@@ -703,6 +777,7 @@ def sram_ecc_error_status_parser(value):
         "bThresholdExceeded": value.bThresholdExceeded,
     }
 
+
 def nvmlDeviceGetSramEccErrorStatus(device):
     import dcgm_nvml as pynvml
     c_sramErrStatus = pynvml.c_nvmlEccSramErrorStatus_v1_t()
@@ -716,10 +791,13 @@ class NVMLApiRecorder(object):
         NVMLSimpleFunc("nvmlDeviceGetCount", basic_type_value_parser),
         NVMLSimpleFunc("nvmlSystemGetDriverVersion", basic_type_value_parser),
         NVMLSimpleFunc("nvmlSystemGetNVMLVersion", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlSystemGetCudaDriverVersion", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlSystemGetCudaDriverVersion_v2", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlSystemGetCudaDriverVersion",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlSystemGetCudaDriverVersion_v2",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlGetExcludedDeviceCount", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlSystemGetConfComputeState", conf_compute_state_parser),
+        NVMLSimpleFunc("nvmlSystemGetConfComputeState",
+                       conf_compute_state_parser),
     ]
 
     # which has one device input and no output
@@ -735,77 +813,111 @@ class NVMLApiRecorder(object):
         NVMLSimpleFunc("nvmlDeviceGetBoardId", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetMultiGpuBoard", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetBrand", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetPersistenceMode", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetPersistenceMode",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetPowerState", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetPerformanceState", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetPerformanceState",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetPowerUsage", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetTotalEnergyConsumption", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetPowerManagementMode", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetPowerManagementLimit", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetTotalEnergyConsumption",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetPowerManagementMode",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetPowerManagementLimit",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetFanSpeed", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetNumFans", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetMaxPcieLinkGeneration", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetMaxPcieLinkWidth", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetCurrPcieLinkGeneration", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetCurrPcieLinkWidth", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetMaxPcieLinkGeneration",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetMaxPcieLinkWidth",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetCurrPcieLinkGeneration",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetCurrPcieLinkWidth",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetBridgeChipInfo", bridge_chip_info_parser),
-        NVMLSimpleFunc("nvmlDeviceGetSupportedEventTypes", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetInforomConfigurationChecksum", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetSupportedEventTypes",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetInforomConfigurationChecksum",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetDisplayActive", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetPowerManagementDefaultLimit", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetCurrentClocksThrottleReasons", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetSupportedClocksThrottleReasons", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetPowerManagementDefaultLimit",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetCurrentClocksThrottleReasons",
+                       basic_type_value_parser),
+        NVMLSimpleFunc(
+            "nvmlDeviceGetSupportedClocksThrottleReasons", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetIndex", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetAccountingMode", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetAccountingBufferSize", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetRetiredPagesPendingStatus", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetAccountingBufferSize",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetRetiredPagesPendingStatus",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetMinorNumber", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetEnforcedPowerLimit", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetPcieReplayCounter", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetEnforcedPowerLimit",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetPcieReplayCounter",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetHostVgpuMode", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetGpuInstanceId", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetComputeInstanceId", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetMaxMigDeviceCount", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetComputeInstanceId",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetMaxMigDeviceCount",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetAttributes", attributes_parser),
-        NVMLSimpleFunc("nvmlDeviceGetRowRemapperHistogram", row_remapper_histogram_parser),
+        NVMLSimpleFunc("nvmlDeviceGetRowRemapperHistogram",
+                       row_remapper_histogram_parser),
         NVMLSimpleFunc("nvmlDeviceGetBusType", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetIrqNum", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetNumGpuCores", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetPowerSource", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetMemoryBusWidth", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetPcieLinkMaxSpeed", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetAdaptiveClockInfoStatus", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetPcieLinkMaxSpeed",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetAdaptiveClockInfoStatus",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetPcieSpeed", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetGpcClkVfOffset", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetMemClkVfOffset", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetArchitecture", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceIsMigDeviceHandle", basic_c_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceIsMigDeviceHandle",
+                       basic_c_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetPciInfo", pci_info_parser),
         NVMLSimpleFunc("nvmlDeviceGetUtilizationRates", utilization_parser),
         NVMLSimpleFunc("nvmlDeviceGetFBCStats", fbc_stats_parser),
-        NVMLSimpleFunc("nvmlDeviceGetInforomImageVersion", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetInforomImageVersion",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetName", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetSerial", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetBoardPartNumber", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetBoardPartNumber",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetUUID", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetBAR1MemoryInfo", bar1_memory_info_parser),
         NVMLSimpleFunc("nvmlDeviceGetVbiosVersion", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetComputeRunningProcesses", runing_process_parser),
-        NVMLSimpleFunc("nvmlDeviceGetGraphicsRunningProcesses", runing_process_parser),
-        NVMLSimpleFunc("nvmlDeviceGetMPSComputeRunningProcesses", runing_process_parser),
-        NVMLSimpleFunc("nvmlDeviceGetSupportedMemoryClocks", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetComputeRunningProcesses",
+                       runing_process_parser),
+        NVMLSimpleFunc("nvmlDeviceGetGraphicsRunningProcesses",
+                       runing_process_parser),
+        NVMLSimpleFunc("nvmlDeviceGetMPSComputeRunningProcesses",
+                       runing_process_parser),
+        NVMLSimpleFunc("nvmlDeviceGetSupportedMemoryClocks",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetAccountingPids", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetVirtualizationMode", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetVirtualizationMode",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetSupportedVgpus", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetCreatableVgpus", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetActiveVgpus", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetVgpuMetadata", vgpu_pgpu_metadata_parser),
-        NVMLSimpleFunc("nvmlDeviceGetGridLicensableFeatures", grid_license_parser),
-        NVMLSimpleFunc("nvmlDeviceGetEncoderSessions", encoder_sessions_parser),
+        NVMLSimpleFunc("nvmlDeviceGetGridLicensableFeatures",
+                       grid_license_parser),
+        NVMLSimpleFunc("nvmlDeviceGetEncoderSessions",
+                       encoder_sessions_parser),
         NVMLSimpleFunc("nvmlDeviceGetFBCSessions", fbc_sessions_parser),
         NVMLSimpleFunc("nvmlDeviceGetGpuFabricInfo", fabric_info_parser),
         NVMLSimpleFunc("nvmlDeviceGetGpuFabricInfoV", fabric_infov_parser),
-        NVMLSimpleFunc("nvmlDeviceGetSramEccErrorStatus", sram_ecc_error_status_parser),        
+        NVMLSimpleFunc("nvmlDeviceGetSramEccErrorStatus",
+                       sram_ecc_error_status_parser),
     ]
 
     # which has one device input, version and produces one output
@@ -814,14 +926,20 @@ class NVMLApiRecorder(object):
 
     # which has one device input and two outputs
     _nvml_device_two_attrs_funcs = [
-        NVMLSimpleFunc("nvmlDeviceGetCudaComputeCapability", cuda_capability_parser),
+        NVMLSimpleFunc("nvmlDeviceGetCudaComputeCapability",
+                       cuda_capability_parser),
         NVMLSimpleFunc("nvmlDeviceGetDriverModel", current_pending_parser),
         NVMLSimpleFunc("nvmlDeviceGetEccMode", current_pending_parser),
-        NVMLSimpleFunc("nvmlDeviceGetEncoderUtilization", codec_utilization_parser),
-        NVMLSimpleFunc("nvmlDeviceGetDecoderUtilization", codec_utilization_parser),
-        NVMLSimpleFunc("nvmlDeviceGetGpuOperationMode", current_pending_parser),
-        NVMLSimpleFunc("nvmlDeviceGetAutoBoostedClocksEnabled", auto_boost_enable_parser),
-        NVMLSimpleFunc("nvmlDeviceGetPowerManagementLimitConstraints", power_management_limit_constraints_parser),
+        NVMLSimpleFunc("nvmlDeviceGetEncoderUtilization",
+                       codec_utilization_parser),
+        NVMLSimpleFunc("nvmlDeviceGetDecoderUtilization",
+                       codec_utilization_parser),
+        NVMLSimpleFunc("nvmlDeviceGetGpuOperationMode",
+                       current_pending_parser),
+        NVMLSimpleFunc("nvmlDeviceGetAutoBoostedClocksEnabled",
+                       auto_boost_enable_parser),
+        NVMLSimpleFunc("nvmlDeviceGetPowerManagementLimitConstraints",
+                       power_management_limit_constraints_parser),
         NVMLSimpleFunc("nvmlDeviceGetMigMode", current_pending_mode_parser),
     ]
 
@@ -837,85 +955,129 @@ class NVMLApiRecorder(object):
 
     # which has one device input and another input indicated in possible_inputs
     _nvml_device_extra_key_attr_funcs = [
-        NVMLExtraKeyFunc("nvmlDeviceGetClockInfo", range(NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetMaxClockInfo", range(NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetInforomVersion", range(NVML_INFOROM_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetViolationStatus", [NVML_PERF_POLICY_POWER, NVML_PERF_POLICY_THERMAL, NVML_PERF_POLICY_SYNC_BOOST, NVML_PERF_POLICY_BOARD_LIMIT, NVML_PERF_POLICY_LOW_UTILIZATION, NVML_PERF_POLICY_RELIABILITY, NVML_PERF_POLICY_TOTAL_APP_CLOCKS, NVML_PERF_POLICY_TOTAL_BASE_CLOCKS], violation_status_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetTemperature", range(NVML_TEMPERATURE_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetTemperatureThreshold", range(NVML_TEMPERATURE_THRESHOLD_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetApplicationsClock", range(NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetMaxCustomerBoostClock", range(NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetDefaultApplicationsClock", range(NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetRetiredPages", range(NVML_PAGE_RETIREMENT_CAUSE_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetRetiredPages_v2", range(NVML_PAGE_RETIREMENT_CAUSE_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetAPIRestriction", range(NVML_RESTRICTED_API_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetPcieThroughput", range(NVML_PCIE_UTIL_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetTopologyNearestGpus", [NVML_TOPOLOGY_INTERNAL, NVML_TOPOLOGY_SINGLE, NVML_TOPOLOGY_MULTIPLE, NVML_TOPOLOGY_HOSTBRIDGE, NVML_TOPOLOGY_NODE, NVML_TOPOLOGY_SYSTEM], topology_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkState", range(NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkVersion", range(NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkRemotePciInfo", range(NVML_NVLINK_MAX_LINKS), pci_info_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkRemoteDeviceType", range(NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetVgpuUtilization", [0], vgpu_utilization_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetEncoderCapacity", [NVML_ENCODER_QUERY_H264, NVML_ENCODER_QUERY_HEVC, NVML_ENCODER_QUERY_AV1], basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetVgpuProcessUtilization", [0], vgpu_process_utilization_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetProcessUtilization", [0], process_utilization_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetGpuInstanceProfileInfo", range(NVML_GPU_INSTANCE_PROFILE_COUNT), instance_profile_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetClockInfo", range(
+            NVML_CLOCK_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetMaxClockInfo", range(
+            NVML_CLOCK_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetInforomVersion", range(
+            NVML_INFOROM_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetViolationStatus", [NVML_PERF_POLICY_POWER, NVML_PERF_POLICY_THERMAL, NVML_PERF_POLICY_SYNC_BOOST, NVML_PERF_POLICY_BOARD_LIMIT,
+                         NVML_PERF_POLICY_LOW_UTILIZATION, NVML_PERF_POLICY_RELIABILITY, NVML_PERF_POLICY_TOTAL_APP_CLOCKS, NVML_PERF_POLICY_TOTAL_BASE_CLOCKS], violation_status_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetTemperature", range(
+            NVML_TEMPERATURE_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetTemperatureThreshold", range(
+            NVML_TEMPERATURE_THRESHOLD_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetApplicationsClock", range(
+            NVML_CLOCK_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetMaxCustomerBoostClock",
+                         range(NVML_CLOCK_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetDefaultApplicationsClock", range(
+            NVML_CLOCK_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetRetiredPages", range(
+            NVML_PAGE_RETIREMENT_CAUSE_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetRetiredPages_v2", range(
+            NVML_PAGE_RETIREMENT_CAUSE_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetAPIRestriction", range(
+            NVML_RESTRICTED_API_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetPcieThroughput", range(
+            NVML_PCIE_UTIL_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetTopologyNearestGpus", [NVML_TOPOLOGY_INTERNAL, NVML_TOPOLOGY_SINGLE,
+                         NVML_TOPOLOGY_MULTIPLE, NVML_TOPOLOGY_HOSTBRIDGE, NVML_TOPOLOGY_NODE, NVML_TOPOLOGY_SYSTEM], topology_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkState", range(
+            NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkVersion", range(
+            NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkRemotePciInfo",
+                         range(NVML_NVLINK_MAX_LINKS), pci_info_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkRemoteDeviceType", range(
+            NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetVgpuUtilization",
+                         [0], vgpu_utilization_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetEncoderCapacity", [
+                         NVML_ENCODER_QUERY_H264, NVML_ENCODER_QUERY_HEVC, NVML_ENCODER_QUERY_AV1], basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetVgpuProcessUtilization", [
+                         0], vgpu_process_utilization_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetProcessUtilization",
+                         [0], process_utilization_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetGpuInstanceProfileInfo", range(
+            NVML_GPU_INSTANCE_PROFILE_COUNT), instance_profile_parser),
     ]
 
     # which has one device input and another two input indicated in key1_possible_inputs, key2_possible_inputs
     _nvml_device_two_keys_attr_funcs = [
-        NVMLTwoKeysFunc("nvmlDeviceGetDetailedEccErrors", range(NVML_MEMORY_ERROR_TYPE_COUNT), range(NVML_ECC_COUNTER_TYPE_COUNT), ecc_error_count_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetTotalEccErrors", range(NVML_MEMORY_ERROR_TYPE_COUNT), range(NVML_ECC_COUNTER_TYPE_COUNT), basic_type_value_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetMemoryAffinity", [8], range(2), affinity_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetCpuAffinityWithinScope", [8], range(2), affinity_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetClock", range(NVML_CLOCK_COUNT), range(NVML_CLOCK_ID_COUNT), basic_type_value_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetSamples", range(NVML_SAMPLINGTYPE_COUNT), [0], sample_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkCapability", range(NVML_NVLINK_MAX_LINKS), range(NVML_NVLINK_CAP_COUNT), basic_type_value_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkErrorCounter", range(NVML_NVLINK_MAX_LINKS), range(NVML_NVLINK_ERROR_COUNT), basic_type_value_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkUtilizationCounter", range(NVML_NVLINK_MAX_LINKS), range(2), basic_type_value_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetDetailedEccErrors", range(
+            NVML_MEMORY_ERROR_TYPE_COUNT), range(NVML_ECC_COUNTER_TYPE_COUNT), ecc_error_count_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetTotalEccErrors", range(NVML_MEMORY_ERROR_TYPE_COUNT), range(
+            NVML_ECC_COUNTER_TYPE_COUNT), basic_type_value_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetMemoryAffinity", [
+                        8], range(2), affinity_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetCpuAffinityWithinScope",
+                        [8], range(2), affinity_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetClock", range(NVML_CLOCK_COUNT), range(
+            NVML_CLOCK_ID_COUNT), basic_type_value_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetSamples", range(
+            NVML_SAMPLINGTYPE_COUNT), [0], sample_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkCapability", range(
+            NVML_NVLINK_MAX_LINKS), range(NVML_NVLINK_CAP_COUNT), basic_type_value_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkErrorCounter", range(
+            NVML_NVLINK_MAX_LINKS), range(NVML_NVLINK_ERROR_COUNT), basic_type_value_parser),
+        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkUtilizationCounter", range(
+            NVML_NVLINK_MAX_LINKS), range(2), basic_type_value_parser),
     ]
 
     _nvml_device_three_keys_attr_funcs = [
-        NVMLThreeKeysFunc("nvmlDeviceGetMemoryErrorCounter", range(NVML_MEMORY_ERROR_TYPE_COUNT), range(NVML_ECC_COUNTER_TYPE_COUNT), range(NVML_MEMORY_LOCATION_COUNT), basic_type_value_parser),
+        NVMLThreeKeysFunc("nvmlDeviceGetMemoryErrorCounter", range(NVML_MEMORY_ERROR_TYPE_COUNT), range(
+            NVML_ECC_COUNTER_TYPE_COUNT), range(NVML_MEMORY_LOCATION_COUNT), basic_type_value_parser),
     ]
 
     # which has one device input along with expected array size
     _nvml_device_array_size_as_input_funcs = [
-        NVMLSimpleArrayOutputFunc("nvmlDeviceGetCpuAffinity", 8, affinity_parser),
+        NVMLSimpleArrayOutputFunc(
+            "nvmlDeviceGetCpuAffinity", 8, affinity_parser),
     ]
 
     # which has one device input along with expected array size with extra key
     _nvml_device_array_size_as_input_extra_key_funcs = [
-        NVMLExtraKeyArrayOutputFunc("nvmlDeviceGetMemoryAffinity", 8, range(2), affinity_parser),
-        NVMLExtraKeyArrayOutputFunc("nvmlDeviceGetCpuAffinityWithinScope", 8, range(2), affinity_parser),
+        NVMLExtraKeyArrayOutputFunc(
+            "nvmlDeviceGetMemoryAffinity", 8, range(2), affinity_parser),
+        NVMLExtraKeyArrayOutputFunc(
+            "nvmlDeviceGetCpuAffinityWithinScope", 8, range(2), affinity_parser),
     ]
 
     # which has two devices input, framework will iterate all possible combination for produing results
     _nvml_device_two_devices_input_funcs = [
         NVMLSimpleFunc("nvmlDeviceOnSameBoard", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlDeviceGetTopologyCommonAncestor", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlDeviceGetTopologyCommonAncestor",
+                       basic_type_value_parser),
     ]
 
     # which has two devices input along with an extra key, framework will iterate all possible combination for produing results
     _nvml_device_two_devices_input_and_extra_key_funcs = [
-        NVMLExtraKeyFunc("nvmlDeviceGetP2PStatus", range(NVML_P2P_CAPS_INDEX_UNKNOWN), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlDeviceGetP2PStatus", range(
+            NVML_P2P_CAPS_INDEX_UNKNOWN), basic_type_value_parser),
     ]
 
     # which takes one vGPU type and produces one result
     _nvml_vgpu_type_simple_funcs = [
         NVMLSimpleFunc("nvmlVgpuTypeGetClass", basic_type_value_parser),
         NVMLSimpleFunc("nvmlVgpuTypeGetName", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuTypeGetGpuInstanceProfileId", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuTypeGetFramebufferSize", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuTypeGetNumDisplayHeads", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuTypeGetGpuInstanceProfileId",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuTypeGetFramebufferSize",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuTypeGetNumDisplayHeads",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlVgpuTypeGetLicense", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuTypeGetFrameRateLimit", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuTypeGetMaxInstancesPerVm", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuTypeGetFrameRateLimit",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuTypeGetMaxInstancesPerVm",
+                       basic_type_value_parser),
     ]
 
     # which takes one vGPU type and a possible_inputs. It then produces one result
     _nvml_vgpu_type_extra_key_attrs_funcs = [
-        NVMLExtraKeyFunc("nvmlVgpuTypeGetCapabilities", range(NVML_VGPU_CAP_COUNT), basic_type_value_parser),
+        NVMLExtraKeyFunc("nvmlVgpuTypeGetCapabilities", range(
+            NVML_VGPU_CAP_COUNT), basic_type_value_parser),
     ]
 
     # which takes one vGPU type and a possible_inputs. It then produces two result
@@ -1006,7 +1168,6 @@ class NVMLApiRecorder(object):
         "nvmlDeviceSetCpuAffinity",
         "nvmlDeviceClearCpuAffinity",
         "nvmlDeviceSetPersistenceMode",
-        "nvmlDeviceSetPowerMode",
         "nvmlDeviceSetTemperatureThreshold",
         "nvmlDeviceSetGpuOperationMode",
         "nvmlDeviceSetGpuLockedClocks",
@@ -1060,8 +1221,6 @@ class NVMLApiRecorder(object):
         # function not found
         # in PyNVML, version is passed by parameter but it still shows not found
         "nvmlDeviceGetMemoryInfo_v2",
-        "nvmlDeviceGetPowerMode",
-        "nvmlDeviceGetSupportedPowerModes",
 
         # deprecated functions
         "nvmlUnitGetCount",
@@ -1105,32 +1264,41 @@ class NVMLApiRecorder(object):
     _nvml_vgpu_instance_simple_funcs = [
         NVMLSimpleFunc("nvmlVgpuInstanceGetUUID", basic_type_value_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetMdevUUID", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuInstanceGetVmDriverVersion", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetVmDriverVersion",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetFbUsage", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuInstanceGetLicenseStatus", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetLicenseStatus",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetLicenseInfo", vgpu_license_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetType", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuInstanceGetFrameRateLimit", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetFrameRateLimit",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetEccMode", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuInstanceGetEncoderCapacity", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetEncoderCapacity",
+                       basic_type_value_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetMetadata", vgpu_metadata_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetGpuPciId", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuInstanceGetGpuInstanceId", basic_type_value_parser),
-        NVMLSimpleFunc("nvmlVgpuInstanceGetEncoderSessions", encoder_sessions_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetGpuInstanceId",
+                       basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetEncoderSessions",
+                       encoder_sessions_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetFBCStats", fbc_stats_parser),
         NVMLSimpleFunc("nvmlVgpuInstanceGetFBCSessions", fbc_sessions_parser),
-        NVMLSimpleFunc("nvmlVgpuInstanceGetAccountingMode", basic_type_value_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetAccountingMode",
+                       basic_type_value_parser),
     ]
 
     # which takes one vGPU instance and produces two attributes
     _nvml_vgpu_instance_two_attrs_funcs = [
         NVMLSimpleFunc("nvmlVgpuInstanceGetVmID", vm_id_parser),
-        NVMLSimpleFunc("nvmlVgpuInstanceGetAccountingPids", accounting_pid_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetAccountingPids",
+                       accounting_pid_parser),
     ]
 
     # which takes one vGPU instance and produces three attributes
     _nvml_vgpu_instance_three_attrs_funcs = [
-        NVMLSimpleFunc("nvmlVgpuInstanceGetEncoderStats", encoder_stats_parser),
+        NVMLSimpleFunc("nvmlVgpuInstanceGetEncoderStats",
+                       encoder_stats_parser),
     ]
 
     def __enter__(self):
@@ -1155,16 +1323,19 @@ class NVMLApiRecorder(object):
             func_ret, ret_val = run_nvml_func_str(global_func._func_str)
             self._attrs[GLOBAL_KEY][suffix_key][FUNC_RETURN] = func_ret
             if func_ret == NVML_SUCCESS:
-                self._attrs[GLOBAL_KEY][suffix_key][RETURN_VAL] = global_func._value_parser(ret_val)
+                self._attrs[GLOBAL_KEY][suffix_key][RETURN_VAL] = global_func._value_parser(
+                    ret_val)
 
     # Some GPU does not support nvmlDeviceGetMemoryInfo_v2, add rollback layer
     def _record_device_memory_info_func(self, nvml_device, device_attr):
-        func_ret, ret_val = run_nvml_func(nvmlDeviceGetMemoryInfo_v2, nvml_device)
+        func_ret, ret_val = run_nvml_func(
+            nvmlDeviceGetMemoryInfo_v2, nvml_device)
         suffix_key = "MemoryInfo"
         device_attr[suffix_key] = {}
         device_attr[suffix_key][FUNC_RETURN] = func_ret
         if func_ret == NVML_SUCCESS:
-            device_attr[suffix_key][RETURN_VAL] = memory_info_v2_parser(ret_val)
+            device_attr[suffix_key][RETURN_VAL] = memory_info_v2_parser(
+                ret_val)
             return
         func_ret, ret_val = run_nvml_func(nvmlDeviceGetMemoryInfo, nvml_device)
         device_attr[suffix_key][FUNC_RETURN] = func_ret
@@ -1176,56 +1347,72 @@ class NVMLApiRecorder(object):
             return
         num_fans = nvmlDeviceGetNumFans(nvml_device)
         fan_speed_funcs = [
-            NVMLExtraKeyFunc("nvmlDeviceGetFanSpeed_v2", range(num_fans), basic_type_value_parser),
-            NVMLExtraKeyFunc("nvmlDeviceGetTargetFanSpeed", range(num_fans), basic_type_value_parser),
+            NVMLExtraKeyFunc("nvmlDeviceGetFanSpeed_v2", range(
+                num_fans), basic_type_value_parser),
+            NVMLExtraKeyFunc("nvmlDeviceGetTargetFanSpeed",
+                             range(num_fans), basic_type_value_parser),
         ]
         for extra_key_func in fan_speed_funcs:
             suffix_key = nvml_func_key_suffix_extract(extra_key_func._func_str)
             device_attr[suffix_key] = {}
             for input in extra_key_func._possible_inputs:
-                func_ret, ret_val = run_nvml_func_str(extra_key_func._func_str, nvml_device, input)
+                func_ret, ret_val = run_nvml_func_str(
+                    extra_key_func._func_str, nvml_device, input)
                 device_attr[suffix_key][input] = {}
                 device_attr[suffix_key][input][FUNC_RETURN] = func_ret
-                device_attr[suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(ret_val)
+                device_attr[suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(
+                    ret_val)
 
     def _record_device_supported_graphics_clocks(self, nvml_device, device_attr):
-        func_ret, memory_clocks = run_nvml_func(nvmlDeviceGetSupportedMemoryClocks, nvml_device)
-        suffix_key = nvml_func_key_suffix_extract("nvmlDeviceGetSupportedGraphicsClocks")
+        func_ret, memory_clocks = run_nvml_func(
+            nvmlDeviceGetSupportedMemoryClocks, nvml_device)
+        suffix_key = nvml_func_key_suffix_extract(
+            "nvmlDeviceGetSupportedGraphicsClocks")
         device_attr[suffix_key] = {}
         if func_ret != NVML_SUCCESS:
             return
         for memory_clock in memory_clocks:
             device_attr[suffix_key][memory_clock] = {}
-            func_ret, ret_val = run_nvml_func(nvmlDeviceGetSupportedGraphicsClocks, nvml_device, memory_clock)
+            func_ret, ret_val = run_nvml_func(
+                nvmlDeviceGetSupportedGraphicsClocks, nvml_device, memory_clock)
             device_attr[suffix_key][memory_clock][FUNC_RETURN] = func_ret
             device_attr[suffix_key][memory_clock][RETURN_VAL] = ret_val
 
     def _record_device_accounting(self, nvml_device, device_attr):
-        func_ret, pids = run_nvml_func(nvmlDeviceGetAccountingPids, nvml_device)
-        suffix_key = nvml_func_key_suffix_extract("nvmlDeviceGetAccountingStats")
+        func_ret, pids = run_nvml_func(
+            nvmlDeviceGetAccountingPids, nvml_device)
+        suffix_key = nvml_func_key_suffix_extract(
+            "nvmlDeviceGetAccountingStats")
         if func_ret != NVML_SUCCESS:
             return
         device_attr[suffix_key] = {}
         for pid in pids:
-            func_ret, ret_val = run_nvml_func(nvmlDeviceGetAccountingStats, nvml_device, pid)
+            func_ret, ret_val = run_nvml_func(
+                nvmlDeviceGetAccountingStats, nvml_device, pid)
             device_attr[suffix_key][pid] = {}
             device_attr[suffix_key][pid][RETURN_VAL] = func_ret
-            device_attr[suffix_key][pid][RETURN_VAL] = accounting_stat_parser(ret_val)
+            device_attr[suffix_key][pid][RETURN_VAL] = accounting_stat_parser(
+                ret_val)
 
     def _record_device_vgpu_type_max_count(self, nvml_device, device_attr):
-        func_ret, supported_vgpu_types = run_nvml_func(nvmlDeviceGetSupportedVgpus, nvml_device)
+        func_ret, supported_vgpu_types = run_nvml_func(
+            nvmlDeviceGetSupportedVgpus, nvml_device)
         if func_ret != NVML_SUCCESS:
             return
-        suffix_key = nvml_func_key_suffix_extract("nvmlVgpuTypeGetMaxInstances")
+        suffix_key = nvml_func_key_suffix_extract(
+            "nvmlVgpuTypeGetMaxInstances")
         device_attr[suffix_key] = {}
         for supported_vgpu_type in supported_vgpu_types:
             device_attr[suffix_key][supported_vgpu_type] = {}
-            func_ret, ret_val = run_nvml_func(nvmlVgpuTypeGetMaxInstances, nvml_device, supported_vgpu_type)
+            func_ret, ret_val = run_nvml_func(
+                nvmlVgpuTypeGetMaxInstances, nvml_device, supported_vgpu_type)
             device_attr[suffix_key][supported_vgpu_type][FUNC_RETURN] = func_ret
-            device_attr[suffix_key][supported_vgpu_type][RETURN_VAL] = basic_type_value_parser(ret_val)
+            device_attr[suffix_key][supported_vgpu_type][RETURN_VAL] = basic_type_value_parser(
+                ret_val)
 
     def _record_device_field_values(self, nvml_device, device_attr):
-        func_ret, values = run_nvml_func(nvmlDeviceGetFieldValues, nvml_device, range(NVML_FI_MAX))
+        func_ret, values = run_nvml_func(
+            nvmlDeviceGetFieldValues, nvml_device, range(NVML_FI_MAX))
         suffix_key = nvml_func_key_suffix_extract("nvmlDeviceGetFieldValues")
         device_attr[suffix_key] = {}
         device_attr[suffix_key][FUNC_RETURN] = func_ret
@@ -1237,17 +1424,21 @@ class NVMLApiRecorder(object):
             device_attr[suffix_key][RETURN_VAL][value.fieldId] = parsed_value
 
     def _record_device_instance(self, nvml_device, device_attr, device_uuid):
-        func_ret, current, _ = run_nvml_two_attrs_func_str("nvmlDeviceGetMigMode", nvml_device)
+        func_ret, current, _ = run_nvml_two_attrs_func_str(
+            "nvmlDeviceGetMigMode", nvml_device)
         if func_ret != NVML_SUCCESS or current != NVML_DEVICE_MIG_ENABLE:
             return
         for profile in range(NVML_GPU_INSTANCE_PROFILE_COUNT):
-            func_ret, profile_info = run_nvml_func(nvmlDeviceGetGpuInstanceProfileInfo, nvml_device, profile)
+            func_ret, profile_info = run_nvml_func(
+                nvmlDeviceGetGpuInstanceProfileInfo, nvml_device, profile)
             if func_ret != NVML_SUCCESS:
                 continue
-            suffix_key = nvml_func_key_suffix_extract("nvmlDeviceGetGpuInstanceRemainingCapacity")
+            suffix_key = nvml_func_key_suffix_extract(
+                "nvmlDeviceGetGpuInstanceRemainingCapacity")
             if suffix_key not in device_attr:
                 device_attr[suffix_key] = {}
-            func_ret, count = run_nvml_func(nvmlDeviceGetGpuInstanceRemainingCapacity, nvml_device, profile_info.id)
+            func_ret, count = run_nvml_func(
+                nvmlDeviceGetGpuInstanceRemainingCapacity, nvml_device, profile_info.id)
             device_attr[suffix_key][profile_info.id] = {}
             device_attr[suffix_key][profile_info.id][FUNC_RETURN] = func_ret
             if func_ret != NVML_SUCCESS:
@@ -1256,65 +1447,78 @@ class NVMLApiRecorder(object):
             InstancesArray = c_nvmlGpuInstance_t * MAX_NUM_INSTANCE
             c_count = c_uint()
             c_profile_instances = InstancesArray()
-            suffix_key = nvml_func_key_suffix_extract("nvmlDeviceGetGpuInstances")
+            suffix_key = nvml_func_key_suffix_extract(
+                "nvmlDeviceGetGpuInstances")
             if suffix_key not in device_attr:
                 device_attr[suffix_key] = {}
-            func_ret = run_nvml_no_output_func_str("nvmlDeviceGetGpuInstances", nvml_device, profile_info.id, c_profile_instances, byref(c_count))
+            func_ret = run_nvml_no_output_func_str(
+                "nvmlDeviceGetGpuInstances", nvml_device, profile_info.id, c_profile_instances, byref(c_count))
             device_attr[suffix_key][profile_info.id] = {}
             device_attr[suffix_key][profile_info.id][FUNC_RETURN] = func_ret
             if func_ret != NVML_SUCCESS:
                 continue
             device_attr[suffix_key][profile_info.id][RETURN_VAL] = []
             for i in range(c_count.value):
-                func_ret, instance_info = run_nvml_func(nvmlGpuInstanceGetInfo, c_profile_instances[i])
+                func_ret, instance_info = run_nvml_func(
+                    nvmlGpuInstanceGetInfo, c_profile_instances[i])
                 if func_ret != NVML_SUCCESS:
                     continue
                 # create fake_gpu_instance so that we can index it in c++
                 fake_gpu_instance = f"{device_uuid}_{instance_info.id}"
-                device_attr[suffix_key][profile_info.id][RETURN_VAL].append(fake_gpu_instance)
+                device_attr[suffix_key][profile_info.id][RETURN_VAL].append(
+                    fake_gpu_instance)
                 self._gpu_instances_mapping[fake_gpu_instance] = {}
-                self._gpu_instances_mapping[fake_gpu_instance] = (device_uuid, c_profile_instances[i])
+                self._gpu_instances_mapping[fake_gpu_instance] = (
+                    device_uuid, c_profile_instances[i])
 
     def _record_mig_devices_uuid(self, nvml_device, device_attr):
         if nvmlDeviceIsMigDeviceHandle(nvml_device):
             return
-        func_ret, mig_count = run_nvml_func(nvmlDeviceGetMaxMigDeviceCount, nvml_device)
+        func_ret, mig_count = run_nvml_func(
+            nvmlDeviceGetMaxMigDeviceCount, nvml_device)
         if func_ret != NVML_SUCCESS:
             return
         # Actual NVML APIs don't provide this, we add this one for the fake mig device handle in c++
         suffix = "MigDeviceUUID"
         device_attr[suffix] = []
         for mig_idx in range(mig_count):
-            func_ret, nvml_mig_device = run_nvml_func(nvmlDeviceGetMigDeviceHandleByIndex, nvml_device, mig_idx)
+            func_ret, nvml_mig_device = run_nvml_func(
+                nvmlDeviceGetMigDeviceHandleByIndex, nvml_device, mig_idx)
             if func_ret != NVML_SUCCESS:
                 continue
             mig_device_uuid = nvmlDeviceGetUUID(nvml_mig_device)
             device_attr[suffix].append(mig_device_uuid)
-            self._mig_devices_collector.append((mig_device_uuid, nvml_mig_device))
+            self._mig_devices_collector.append(
+                (mig_device_uuid, nvml_mig_device))
 
     def _get_two_samples_mig_device(self, nvml_device):
-        func_ret, instance_id = run_nvml_func(nvmlDeviceGetGpuInstanceId, nvml_device)
+        func_ret, instance_id = run_nvml_func(
+            nvmlDeviceGetGpuInstanceId, nvml_device)
         if func_ret != NVML_SUCCESS:
             return None, None
         sample1 = nvmlGpmSampleAlloc()
-        func_ret, sample1 = run_nvml_func(nvmlGpmMigSampleGet, nvml_device, instance_id, sample1)
+        func_ret, sample1 = run_nvml_func(
+            nvmlGpmMigSampleGet, nvml_device, instance_id, sample1)
         if func_ret != NVML_SUCCESS:
             return None, None
         time.sleep(1)
         sample2 = nvmlGpmSampleAlloc()
-        func_ret, sample2 = run_nvml_func(nvmlGpmMigSampleGet, nvml_device, instance_id, sample2)
+        func_ret, sample2 = run_nvml_func(
+            nvmlGpmMigSampleGet, nvml_device, instance_id, sample2)
         if func_ret != NVML_SUCCESS:
             return None, None
         return sample1, sample2
 
     def _get_two_samples_normal_device(self, nvml_device):
         sample1 = nvmlGpmSampleAlloc()
-        func_ret, sample1 = run_nvml_func(nvmlGpmSampleGet, nvml_device, sample1)
+        func_ret, sample1 = run_nvml_func(
+            nvmlGpmSampleGet, nvml_device, sample1)
         if func_ret != NVML_SUCCESS:
             return None, None
         time.sleep(1)
         sample2 = nvmlGpmSampleAlloc()
-        func_ret, sample2 = run_nvml_func(nvmlGpmSampleGet, nvml_device, sample2)
+        func_ret, sample2 = run_nvml_func(
+            nvmlGpmSampleGet, nvml_device, sample2)
         if func_ret != NVML_SUCCESS:
             return None, None
         return sample1, sample2
@@ -1326,7 +1530,8 @@ class NVMLApiRecorder(object):
             return self._get_two_samples_normal_device(nvml_device)
 
     def _record_gpm(self, nvml_device, device_attr):
-        func_ret, support = run_nvml_func(nvmlGpmQueryDeviceSupport, nvml_device)
+        func_ret, support = run_nvml_func(
+            nvmlGpmQueryDeviceSupport, nvml_device)
         device_attr["QueryDeviceSupport"] = {}
         device_attr["QueryDeviceSupport"][FUNC_RETURN] = func_ret
         if func_ret != NVML_SUCCESS:
@@ -1368,54 +1573,66 @@ class NVMLApiRecorder(object):
     def _get_device_attrs(self, nvml_device, device_uuid):
         device_attr = {}
         for simple_func in self._nvml_device_attr_funcs:
-            func_ret, ret_val = run_nvml_func_str(simple_func._func_str, nvml_device)
+            func_ret, ret_val = run_nvml_func_str(
+                simple_func._func_str, nvml_device)
             suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
             device_attr[suffix_key] = {}
             device_attr[suffix_key][FUNC_RETURN] = func_ret
             if func_ret == NVML_SUCCESS:
-                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val)
+                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(
+                    ret_val)
 
         for simple_func in self._nvml_device_with_version_attr_funcs:
-            func_ret, ret_val = run_nvml_func_str(simple_func._func_str, nvml_device, version=simple_func._version)
+            func_ret, ret_val = run_nvml_func_str(
+                simple_func._func_str, nvml_device, version=simple_func._version)
             suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
             device_attr[suffix_key] = {}
             device_attr[suffix_key][FUNC_RETURN] = func_ret
             if func_ret == NVML_SUCCESS:
-                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val)
+                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(
+                    ret_val)
 
         for simple_func in self._nvml_device_two_attrs_funcs:
-            func_ret, ret_val1, ret_val2 = run_nvml_two_attrs_func_str(simple_func._func_str, nvml_device)
+            func_ret, ret_val1, ret_val2 = run_nvml_two_attrs_func_str(
+                simple_func._func_str, nvml_device)
             suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
             device_attr[suffix_key] = {}
             device_attr[suffix_key][FUNC_RETURN] = func_ret
             if func_ret == NVML_SUCCESS:
-                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val1, ret_val2)
+                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(
+                    ret_val1, ret_val2)
 
         for simple_func in self._nvml_device_three_attrs_funcs:
-            func_ret, ret_val1, ret_val2, ret_val3 = run_nvml_three_attrs_func_str(simple_func._func_str, nvml_device)
+            func_ret, ret_val1, ret_val2, ret_val3 = run_nvml_three_attrs_func_str(
+                simple_func._func_str, nvml_device)
             suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
             device_attr[suffix_key] = {}
             device_attr[suffix_key][FUNC_RETURN] = func_ret
             if func_ret == NVML_SUCCESS:
-                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val1, ret_val2, ret_val3)
+                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(
+                    ret_val1, ret_val2, ret_val3)
 
         for simple_func in self._nvml_device_four_attrs_funcs:
-            func_ret, ret_val1, ret_val2, ret_val3, ret_val4 = run_nvml_four_attrs_func_str(simple_func._func_str, nvml_device)
+            func_ret, ret_val1, ret_val2, ret_val3, ret_val4 = run_nvml_four_attrs_func_str(
+                simple_func._func_str, nvml_device)
             suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
             device_attr[suffix_key] = {}
             device_attr[suffix_key][FUNC_RETURN] = func_ret
             if func_ret == NVML_SUCCESS:
-                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val1, ret_val2, ret_val3, ret_val4)
+                device_attr[suffix_key][RETURN_VAL] = simple_func._value_parser(
+                    ret_val1, ret_val2, ret_val3, ret_val4)
 
         for extra_key_func in self._nvml_device_extra_key_attr_funcs:
             suffix_key = nvml_func_key_suffix_extract(extra_key_func._func_str)
             device_attr[suffix_key] = {}
             for input in extra_key_func._possible_inputs:
-                func_ret, ret_val = run_nvml_func_str(extra_key_func._func_str, nvml_device, input)
+                func_ret, ret_val = run_nvml_func_str(
+                    extra_key_func._func_str, nvml_device, input)
                 device_attr[suffix_key][input] = {}
                 device_attr[suffix_key][input][FUNC_RETURN] = func_ret
                 if func_ret == NVML_SUCCESS:
-                    device_attr[suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(ret_val)
+                    device_attr[suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(
+                        ret_val)
 
         for two_keys_func in self._nvml_device_two_keys_attr_funcs:
             suffix_key = nvml_func_key_suffix_extract(two_keys_func._func_str)
@@ -1423,61 +1640,77 @@ class NVMLApiRecorder(object):
             for key1 in two_keys_func._key1_possible_inputs:
                 device_attr[suffix_key][key1] = {}
                 for key2 in two_keys_func._key2_possible_inputs:
-                    func_ret, ret_val = run_nvml_func_str(two_keys_func._func_str, nvml_device, key1, key2)
+                    func_ret, ret_val = run_nvml_func_str(
+                        two_keys_func._func_str, nvml_device, key1, key2)
                     device_attr[suffix_key][key1][key2] = {}
                     device_attr[suffix_key][key1][key2][FUNC_RETURN] = func_ret
                     if func_ret == NVML_SUCCESS:
-                        device_attr[suffix_key][key1][key2][RETURN_VAL] = two_keys_func._value_parser(ret_val)
+                        device_attr[suffix_key][key1][key2][RETURN_VAL] = two_keys_func._value_parser(
+                            ret_val)
 
         for three_keys_func in self._nvml_device_three_keys_attr_funcs:
-            suffix_key = nvml_func_key_suffix_extract(three_keys_func._func_str)
+            suffix_key = nvml_func_key_suffix_extract(
+                three_keys_func._func_str)
             device_attr[suffix_key] = {}
             for key1 in three_keys_func._key1_possible_inputs:
                 device_attr[suffix_key][key1] = {}
                 for key2 in three_keys_func._key2_possible_inputs:
                     device_attr[suffix_key][key1][key2] = {}
                     for key3 in three_keys_func._key3_possible_inputs:
-                        func_ret, ret_val = run_nvml_func_str(three_keys_func._func_str, nvml_device, key1, key2, key3)
+                        func_ret, ret_val = run_nvml_func_str(
+                            three_keys_func._func_str, nvml_device, key1, key2, key3)
                         device_attr[suffix_key][key1][key2][key3] = {}
                         device_attr[suffix_key][key1][key2][key3][FUNC_RETURN] = func_ret
                         if func_ret == NVML_SUCCESS:
-                            device_attr[suffix_key][key1][key2][key3][RETURN_VAL] = three_keys_func._value_parser(ret_val)
+                            device_attr[suffix_key][key1][key2][key3][RETURN_VAL] = three_keys_func._value_parser(
+                                ret_val)
 
         for simple_array_out_func in self._nvml_device_array_size_as_input_funcs:
-            suffix_key = nvml_func_key_suffix_extract(simple_array_out_func._func_str)
+            suffix_key = nvml_func_key_suffix_extract(
+                simple_array_out_func._func_str)
             device_attr[suffix_key] = {}
-            func_ret, ret_val = run_nvml_func_str(simple_array_out_func._func_str, nvml_device, simple_array_out_func._arr_size)
+            func_ret, ret_val = run_nvml_func_str(
+                simple_array_out_func._func_str, nvml_device, simple_array_out_func._arr_size)
             device_attr[suffix_key][FUNC_RETURN] = func_ret
             if func_ret == NVML_SUCCESS:
-                device_attr[suffix_key][RETURN_VAL] = simple_array_out_func._value_parser(ret_val)
+                device_attr[suffix_key][RETURN_VAL] = simple_array_out_func._value_parser(
+                    ret_val)
 
         for extra_key_array_out_func in self._nvml_device_array_size_as_input_extra_key_funcs:
-            suffix_key = nvml_func_key_suffix_extract(extra_key_array_out_func._func_str)
+            suffix_key = nvml_func_key_suffix_extract(
+                extra_key_array_out_func._func_str)
             device_attr[suffix_key] = {}
             for input in extra_key_array_out_func._possible_inputs:
-                func_ret, ret_val = run_nvml_func_str(extra_key_array_out_func._func_str, nvml_device, extra_key_array_out_func._arr_size, input)
+                func_ret, ret_val = run_nvml_func_str(
+                    extra_key_array_out_func._func_str, nvml_device, extra_key_array_out_func._arr_size, input)
                 device_attr[suffix_key][input] = {}
                 device_attr[suffix_key][input][FUNC_RETURN] = func_ret
                 if func_ret == NVML_SUCCESS:
-                    device_attr[suffix_key][input][RETURN_VAL] = extra_key_array_out_func._value_parser(ret_val)
+                    device_attr[suffix_key][input][RETURN_VAL] = extra_key_array_out_func._value_parser(
+                        ret_val)
 
         for j in range(self._attrs[GLOBAL_KEY][COUNT][RETURN_VAL]):
             nvml_device_j = nvmlDeviceGetHandleByIndex(j)
             device_uuid_j = nvmlDeviceGetUUID(nvml_device_j)
             for two_devices_input_func in self._nvml_device_two_devices_input_funcs:
-                suffix_key = nvml_func_key_suffix_extract(two_devices_input_func._func_str)
-                func_ret, ret_val = run_nvml_func_str(two_devices_input_func._func_str, nvml_device, nvml_device_j)
+                suffix_key = nvml_func_key_suffix_extract(
+                    two_devices_input_func._func_str)
+                func_ret, ret_val = run_nvml_func_str(
+                    two_devices_input_func._func_str, nvml_device, nvml_device_j)
                 if suffix_key not in device_attr:
                     device_attr[suffix_key] = {}
                 device_attr[suffix_key][device_uuid_j] = {}
                 device_attr[suffix_key][device_uuid_j][FUNC_RETURN] = func_ret
                 if func_ret == NVML_SUCCESS:
-                    device_attr[suffix_key][device_uuid_j][RETURN_VAL] = two_devices_input_func._value_parser(ret_val)
+                    device_attr[suffix_key][device_uuid_j][RETURN_VAL] = two_devices_input_func._value_parser(
+                        ret_val)
 
             for two_devices_input_and_extra_key_func in self._nvml_device_two_devices_input_and_extra_key_funcs:
-                suffix_key = nvml_func_key_suffix_extract(two_devices_input_and_extra_key_func._func_str)
+                suffix_key = nvml_func_key_suffix_extract(
+                    two_devices_input_and_extra_key_func._func_str)
                 for input in two_devices_input_and_extra_key_func._possible_inputs:
-                    func_ret, ret_val = run_nvml_func_str(two_devices_input_and_extra_key_func._func_str, nvml_device, nvml_device_j, input)
+                    func_ret, ret_val = run_nvml_func_str(
+                        two_devices_input_and_extra_key_func._func_str, nvml_device, nvml_device_j, input)
                     if suffix_key not in device_attr:
                         device_attr[suffix_key] = {}
                     if device_uuid_j not in device_attr[suffix_key]:
@@ -1485,7 +1718,8 @@ class NVMLApiRecorder(object):
                     device_attr[suffix_key][device_uuid_j][input] = {}
                     device_attr[suffix_key][device_uuid_j][input][FUNC_RETURN] = func_ret
                     if func_ret == NVML_SUCCESS:
-                        device_attr[suffix_key][device_uuid_j][input][RETURN_VAL] = two_devices_input_and_extra_key_func._value_parser(ret_val)
+                        device_attr[suffix_key][device_uuid_j][input][RETURN_VAL] = two_devices_input_and_extra_key_func._value_parser(
+                            ret_val)
 
         for func_str in self._nvml_device_no_output_funcs:
             suffix_key = nvml_func_key_suffix_extract(func_str)
@@ -1512,14 +1746,16 @@ class NVMLApiRecorder(object):
             nvml_device = nvmlDeviceGetHandleByIndex(device_idx)
             device_uuid = nvmlDeviceGetUUID(nvml_device)
             self._attrs[GLOBAL_KEY][DEVICE_ORDER].append(device_uuid)
-            self._attrs[DEVICE][device_uuid] = self._get_device_attrs(nvml_device, device_uuid)
+            self._attrs[DEVICE][device_uuid] = self._get_device_attrs(
+                nvml_device, device_uuid)
 
     def _record_vgpu_types_funcs(self):
         self._attrs[VGPU_TYPE] = {}
         vgpu_type_ids = []
         for idx in range(self._attrs[GLOBAL_KEY][COUNT][RETURN_VAL]):
             nvml_device = nvmlDeviceGetHandleByIndex(idx)
-            func_ret, ids = run_nvml_func(nvmlDeviceGetSupportedVgpus, nvml_device)
+            func_ret, ids = run_nvml_func(
+                nvmlDeviceGetSupportedVgpus, nvml_device)
             if func_ret != NVML_SUCCESS:
                 continue
             vgpu_type_ids.extend(ids)
@@ -1527,58 +1763,74 @@ class NVMLApiRecorder(object):
         for vgpu_type_id in vgpu_type_ids:
             self._attrs[VGPU_TYPE][vgpu_type_id] = {}
             for simple_func in self._nvml_vgpu_type_simple_funcs:
-                func_ret, ret_val = run_nvml_func_str(simple_func._func_str, vgpu_type_id)
-                suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
+                func_ret, ret_val = run_nvml_func_str(
+                    simple_func._func_str, vgpu_type_id)
+                suffix_key = nvml_func_key_suffix_extract(
+                    simple_func._func_str)
                 self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key] = {}
                 self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][FUNC_RETURN] = func_ret
                 if func_ret == NVML_SUCCESS:
-                    self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val)
+                    self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][RETURN_VAL] = simple_func._value_parser(
+                        ret_val)
 
             for extra_key_func in self._nvml_vgpu_type_extra_key_attrs_funcs:
-                suffix_key = nvml_func_key_suffix_extract(extra_key_func._func_str)
+                suffix_key = nvml_func_key_suffix_extract(
+                    extra_key_func._func_str)
                 self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key] = {}
                 for input in extra_key_func._possible_inputs:
-                    func_ret, ret_val = run_nvml_func_str(extra_key_func._func_str, nvml_device, input)
+                    func_ret, ret_val = run_nvml_func_str(
+                        extra_key_func._func_str, nvml_device, input)
                     self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][input] = {}
                     self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][input][FUNC_RETURN] = func_ret
                     if func_ret == NVML_SUCCESS:
-                        self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(ret_val)
+                        self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(
+                            ret_val)
 
             for simple_func in self._nvml_vgpu_type_two_attrs_funcs:
-                func_ret, ret_val1, ret_val2 = run_nvml_two_attrs_func_str(simple_func._func_str, vgpu_type_id)
-                suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
+                func_ret, ret_val1, ret_val2 = run_nvml_two_attrs_func_str(
+                    simple_func._func_str, vgpu_type_id)
+                suffix_key = nvml_func_key_suffix_extract(
+                    simple_func._func_str)
                 self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key] = {}
                 self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][FUNC_RETURN] = func_ret
                 if func_ret == NVML_SUCCESS:
-                    self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val1, ret_val2)
+                    self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][RETURN_VAL] = simple_func._value_parser(
+                        ret_val1, ret_val2)
 
             for extra_key_func in self._nvml_vgpu_type_extra_key_two_attrs_funcs:
-                suffix_key = nvml_func_key_suffix_extract(extra_key_func._func_str)
+                suffix_key = nvml_func_key_suffix_extract(
+                    extra_key_func._func_str)
                 self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key] = {}
                 for input in extra_key_func._possible_inputs:
-                    func_ret, ret_val1, ret_val2 = run_nvml_two_attrs_func_str(extra_key_func._func_str, vgpu_type_id, input)
+                    func_ret, ret_val1, ret_val2 = run_nvml_two_attrs_func_str(
+                        extra_key_func._func_str, vgpu_type_id, input)
                     self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][input] = {}
                     self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][input][FUNC_RETURN] = func_ret
                     if func_ret == NVML_SUCCESS:
-                        self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(ret_val1, ret_val2)
+                        self._attrs[VGPU_TYPE][vgpu_type_id][suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(
+                            ret_val1, ret_val2)
 
     def _record_vgpu_instnace_accounting(self, vgpu_instance):
         count, c_pids = nvmlVgpuInstanceGetAccountingPids(vgpu_instance)
         pids = accounting_pid_parser(count, c_pids)
-        suffix_key = nvml_func_key_suffix_extract("nvmlVgpuInstanceGetAccountingStats")
+        suffix_key = nvml_func_key_suffix_extract(
+            "nvmlVgpuInstanceGetAccountingStats")
         self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key] = {}
         for pid in pids:
             self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][pid] = {}
-            func_ret, ret_val = run_nvml_func(nvmlVgpuInstanceGetAccountingStats, vgpu_instance, pid)
+            func_ret, ret_val = run_nvml_func(
+                nvmlVgpuInstanceGetAccountingStats, vgpu_instance, pid)
             self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][pid][FUNC_RETURN] = func_ret
-            self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][pid][RETURN_VAL] = accounting_stat_parser(ret_val)
+            self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][pid][RETURN_VAL] = accounting_stat_parser(
+                ret_val)
 
     def _record_vgpu_instances_funcs(self):
         self._attrs[VGPU_INSTANCE] = {}
         vgpu_instances = []
         for idx in range(self._attrs[GLOBAL_KEY][COUNT][RETURN_VAL]):
             nvml_device = nvmlDeviceGetHandleByIndex(idx)
-            func_ret, instances = run_nvml_func(nvmlDeviceGetActiveVgpus, nvml_device)
+            func_ret, instances = run_nvml_func(
+                nvmlDeviceGetActiveVgpus, nvml_device)
             if func_ret != NVML_SUCCESS:
                 continue
             vgpu_instances.extend(instances)
@@ -1586,28 +1838,37 @@ class NVMLApiRecorder(object):
         for vgpu_instance in vgpu_instances:
             self._attrs[VGPU_INSTANCE][vgpu_instance] = {}
             for simple_func in self._nvml_vgpu_instance_simple_funcs:
-                func_ret, ret_val = run_nvml_func_str(simple_func._func_str, vgpu_instance)
-                suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
+                func_ret, ret_val = run_nvml_func_str(
+                    simple_func._func_str, vgpu_instance)
+                suffix_key = nvml_func_key_suffix_extract(
+                    simple_func._func_str)
                 self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key] = {}
                 self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][FUNC_RETURN] = func_ret
                 if func_ret == NVML_SUCCESS:
-                    self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val)
+                    self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][RETURN_VAL] = simple_func._value_parser(
+                        ret_val)
 
             for simple_func in self._nvml_vgpu_instance_two_attrs_funcs:
-                func_ret, ret_val1, ret_val2 = run_nvml_two_attrs_func_str(simple_func._func_str, vgpu_instance)
-                suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
+                func_ret, ret_val1, ret_val2 = run_nvml_two_attrs_func_str(
+                    simple_func._func_str, vgpu_instance)
+                suffix_key = nvml_func_key_suffix_extract(
+                    simple_func._func_str)
                 self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key] = {}
                 self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][FUNC_RETURN] = func_ret
                 if func_ret == NVML_SUCCESS:
-                    self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val1, ret_val2)
+                    self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][RETURN_VAL] = simple_func._value_parser(
+                        ret_val1, ret_val2)
 
             for simple_func in self._nvml_vgpu_instance_three_attrs_funcs:
-                func_ret, ret_val1, ret_val2, ret_val3 = run_nvml_three_attrs_func_str(simple_func._func_str, vgpu_instance)
-                suffix_key = nvml_func_key_suffix_extract(simple_func._func_str)
+                func_ret, ret_val1, ret_val2, ret_val3 = run_nvml_three_attrs_func_str(
+                    simple_func._func_str, vgpu_instance)
+                suffix_key = nvml_func_key_suffix_extract(
+                    simple_func._func_str)
                 self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key] = {}
                 self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][FUNC_RETURN] = func_ret
                 if func_ret == NVML_SUCCESS:
-                    self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][RETURN_VAL] = simple_func._value_parser(ret_val1, ret_val2, ret_val3)
+                    self._attrs[VGPU_INSTANCE][vgpu_instance][suffix_key][RETURN_VAL] = simple_func._value_parser(
+                        ret_val1, ret_val2, ret_val3)
 
             self._record_vgpu_instnace_accounting(vgpu_instance)
 
@@ -1615,22 +1876,27 @@ class NVMLApiRecorder(object):
         excluded_device_count = nvmlGetExcludedDeviceCount()
         self._attrs[EXCLUDED_DEVICE] = {}
         for idx in range(excluded_device_count):
-            _, excluded_device_info = run_nvml_func(nvmlGetExcludedDeviceInfoByIndex, idx)
+            _, excluded_device_info = run_nvml_func(
+                nvmlGetExcludedDeviceInfoByIndex, idx)
             self._attrs[EXCLUDED_DEVICE][excluded_device_info.uuid] = {}
-            self._attrs[EXCLUDED_DEVICE][excluded_device_info.uuid]["pci"] = pci_info_parser(excluded_device_info.pci)
+            self._attrs[EXCLUDED_DEVICE][excluded_device_info.uuid]["pci"] = pci_info_parser(
+                excluded_device_info.pci)
 
     def _record_compute_instance(self):
         self._attrs[COMPUTE_INSTANCE] = {}
         for fake_ci, instance_obj in self._compute_instance_mapping.items():
             self._attrs[COMPUTE_INSTANCE][fake_ci] = {}
             parent_device_uuid, fake_gpu_instance, real_ci = instance_obj
-            suffix_key = nvml_func_key_suffix_extract("nvmlComputeInstanceGetInfo")
+            suffix_key = nvml_func_key_suffix_extract(
+                "nvmlComputeInstanceGetInfo")
             self._attrs[COMPUTE_INSTANCE][fake_ci][suffix_key] = {}
-            func_ret, ci_info = run_nvml_func(nvmlComputeInstanceGetInfo, real_ci)
+            func_ret, ci_info = run_nvml_func(
+                nvmlComputeInstanceGetInfo, real_ci)
             self._attrs[COMPUTE_INSTANCE][fake_ci][suffix_key][FUNC_RETURN] = func_ret
             if func_ret != NVML_SUCCESS:
                 continue
-            self._attrs[COMPUTE_INSTANCE][fake_ci][suffix_key][RETURN_VAL] = ci_info_parser(parent_device_uuid, fake_gpu_instance, ci_info)
+            self._attrs[COMPUTE_INSTANCE][fake_ci][suffix_key][RETURN_VAL] = ci_info_parser(
+                parent_device_uuid, fake_gpu_instance, ci_info)
 
     def _record_gpu_instances(self):
         self._attrs[GPU_INSTANCE] = {}
@@ -1639,59 +1905,74 @@ class NVMLApiRecorder(object):
             self._attrs[GPU_INSTANCE][fake_gpu_instance] = {}
             suffix_key = nvml_func_key_suffix_extract("nvmlGpuInstanceGetInfo")
             self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key] = {}
-            func_ret, info = run_nvml_func_str("nvmlGpuInstanceGetInfo", real_gpu_instance)
+            func_ret, info = run_nvml_func_str(
+                "nvmlGpuInstanceGetInfo", real_gpu_instance)
             self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][FUNC_RETURN] = func_ret
             if func_ret != NVML_SUCCESS:
                 continue
-            self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][RETURN_VAL] = instance_info_parser(parent_device_uuid, info)
-            suffix_key = nvml_func_key_suffix_extract("nvmlGpuInstanceGetComputeInstanceProfileInfo")
+            self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][RETURN_VAL] = instance_info_parser(
+                parent_device_uuid, info)
+            suffix_key = nvml_func_key_suffix_extract(
+                "nvmlGpuInstanceGetComputeInstanceProfileInfo")
             self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key] = {}
             all_ci_profile_ids = []
             for ci_instance_profile in range(NVML_COMPUTE_INSTANCE_PROFILE_COUNT):
-                self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile] = {}
+                self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile] = {
+                }
                 for ci_engine_profile in range(NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_COUNT):
-                    self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile][ci_engine_profile] = {}
+                    self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile][ci_engine_profile] = {
+                    }
                     func_ret, ci_profile_info = run_nvml_func(
-                                nvmlGpuInstanceGetComputeInstanceProfileInfo, real_gpu_instance, ci_instance_profile, ci_engine_profile)
+                        nvmlGpuInstanceGetComputeInstanceProfileInfo, real_gpu_instance, ci_instance_profile, ci_engine_profile)
                     self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile][ci_engine_profile][FUNC_RETURN] = func_ret
                     if func_ret != NVML_SUCCESS:
                         continue
-                    self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile][ci_engine_profile][RETURN_VAL] = ci_profile_info_parser(ci_profile_info)
+                    self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile][
+                        ci_engine_profile][RETURN_VAL] = ci_profile_info_parser(ci_profile_info)
                     all_ci_profile_ids.append(ci_profile_info.id)
 
-            suffix_key = nvml_func_key_suffix_extract("nvmlGpuInstanceGetComputeInstanceRemainingCapacity")
+            suffix_key = nvml_func_key_suffix_extract(
+                "nvmlGpuInstanceGetComputeInstanceRemainingCapacity")
             self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key] = {}
             for ci_profile_id in all_ci_profile_ids:
-                func_ret, count = run_nvml_func(nvmlGpuInstanceGetComputeInstanceRemainingCapacity, real_gpu_instance, ci_profile_id)
-                self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_profile_id] = {}
+                func_ret, count = run_nvml_func(
+                    nvmlGpuInstanceGetComputeInstanceRemainingCapacity, real_gpu_instance, ci_profile_id)
+                self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_profile_id] = {
+                }
                 self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_profile_id][FUNC_RETURN] = func_ret
                 if func_ret != NVML_SUCCESS:
                     continue
                 self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_profile_id][RETURN_VAL] = count
 
-            suffix_key = nvml_func_key_suffix_extract("nvmlGpuInstanceGetComputeInstances")
+            suffix_key = nvml_func_key_suffix_extract(
+                "nvmlGpuInstanceGetComputeInstances")
             self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key] = {}
             for ci_profile_id in all_ci_profile_ids:
-                self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_profile_id] = []
+                self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_profile_id] = [
+                ]
                 InstancesArray = c_nvmlComputeInstance_t * MAX_NUM_INSTANCE
                 c_count = c_uint()
                 c_profile_instances = InstancesArray()
                 func_ret = run_nvml_no_output_func_str(
-                        "nvmlGpuInstanceGetComputeInstances", real_gpu_instance, ci_profile_id, c_profile_instances, byref(c_count))
+                    "nvmlGpuInstanceGetComputeInstances", real_gpu_instance, ci_profile_id, c_profile_instances, byref(c_count))
                 if func_ret != NVML_SUCCESS:
                     continue
                 for i in range(c_count.value):
-                    func_ret, ci_info = run_nvml_func(nvmlComputeInstanceGetInfo, c_profile_instances[i])
+                    func_ret, ci_info = run_nvml_func(
+                        nvmlComputeInstanceGetInfo, c_profile_instances[i])
                     if func_ret != NVML_SUCCESS:
                         continue
                     fake_ci = f"{fake_gpu_instance}_{ci_info.id}"
-                    self._compute_instance_mapping[fake_ci] = (parent_device_uuid, fake_gpu_instance, c_profile_instances[i])
-                    self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_profile_id].append(fake_ci)
+                    self._compute_instance_mapping[fake_ci] = (
+                        parent_device_uuid, fake_gpu_instance, c_profile_instances[i])
+                    self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_profile_id].append(
+                        fake_ci)
 
     def _record_mig_devices_funcs(self):
         self._attrs[MIG_DEVICE] = {}
         for mig_device_uuid, mig_device in self._mig_devices_collector:
-            self._attrs[MIG_DEVICE][mig_device_uuid] = self._get_device_attrs(mig_device, mig_device_uuid)
+            self._attrs[MIG_DEVICE][mig_device_uuid] = self._get_device_attrs(
+                mig_device, mig_device_uuid)
 
     def record(self, out_file_path):
         self._record_global_attr()
@@ -1782,6 +2063,7 @@ class NVMLApiRecorder(object):
                 print(func)
                 has_not_handled = True
         return has_not_handled
+
 
 if __name__ == "__main__":
     with NVMLApiRecorder() as recorder:

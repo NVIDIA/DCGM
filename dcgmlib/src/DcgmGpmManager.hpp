@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 
 #include "DcgmEntityTypes.hpp"
 #include "DcgmGpuInstance.h"
+#include "NvmlTaskRunner.hpp"
 #include <DcgmLogging.h>
 #include <DcgmUtilities.h>
 #include <DcgmWatchTable.h>
@@ -138,7 +139,8 @@ public:
      * Get a sample for the given fieldId
      *
      */
-    dcgmReturn_t GetLatestSample(nvmlDevice_t nvmlDevice,
+    dcgmReturn_t GetLatestSample(NvmlTaskRunner &nvmlDriver,
+                                 SafeNvmlHandle nvmlDevice,
                                  DcgmGpuInstance *const pGpuInstance,
                                  double &value,
                                  unsigned int fieldId,
@@ -167,7 +169,8 @@ private:
      * fetches one from NVML.
      * Either way, return a pointer to the latest sample in our sample buffer.
      */
-    dcgmReturn_t MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
+    dcgmReturn_t MaybeFetchNewSample(NvmlTaskRunner &nvmlDriver,
+                                     SafeNvmlHandle nvmlDevice,
                                      DcgmGpuInstance *const pGpuInstance,
                                      timelib64_t now,
                                      timelib64_t updateInterval,
@@ -263,8 +266,9 @@ public:
      * @return DCGM_ST_OK on success.
      *         Other DCGM_ST_? error code on failure.
      */
-    dcgmReturn_t GetLatestSample(dcgm_entity_key_t entityKey,
-                                 nvmlDevice_t nvmlDevice,
+    dcgmReturn_t GetLatestSample(NvmlTaskRunner &nvmlDriver,
+                                 dcgm_entity_key_t entityKey,
+                                 SafeNvmlHandle nvmlDevice,
                                  DcgmGpuInstance *const pGpuInstance,
                                  double &value,
                                  timelib64_t now);
@@ -276,7 +280,7 @@ public:
      *         result in false being returned.
      *
      */
-    static bool DoesNvmlDeviceSupportGpm(nvmlDevice_t nvmlDevice);
+    static bool DoesNvmlDeviceSupportGpm(NvmlTaskRunner &nvmlDriver, SafeNvmlHandle nvmlDevice);
 
     /*************************************************************************/
 };

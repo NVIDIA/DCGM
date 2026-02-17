@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1683,6 +1683,50 @@ nvmlReturn_t nvmlDeviceGetBAR1MemoryInfo(nvmlDevice_t device, nvmlBAR1Memory_t *
     return NVML_SUCCESS;
 }
 
+nvmlReturn_t nvmlDeviceGetUnrepairableMemoryFlag(nvmlDevice_t device,
+                                                 nvmlUnrepairableMemoryStatus_t *unrepairableMemoryStatus)
+{
+    // The following snippet is generated from write_function
+    if (GLOBAL_PASS_THROUGH_MODE)
+    {
+        auto PassThruNvml = PassThruNvml::GetInstance();
+        if (PassThruNvml->IsLoaded(__func__) == false)
+        {
+            PassThruNvml->LoadFunction(__func__);
+        }
+        return NVML_ERROR_NOT_SUPPORTED;
+    }
+    else
+    {
+        // The following snippet is generated from write_function
+        auto *injectedNvml = InjectedNvml::GetInstance();
+        if (!injectedNvml)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        injectedNvml->AddFuncCallCount("nvmlDeviceGetUnrepairableMemoryFlag");
+        // The following snippet is generated from write_function
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        args.push_back(InjectionArgument(device));
+        preparedValues.push_back(InjectionArgument(unrepairableMemoryStatus));
+
+        if (injectedNvml->IsGetter(__func__))
+        {
+            return injectedNvml->GetWrapper(__func__, "UnrepairableMemoryFlag", args, preparedValues);
+        }
+        else if (injectedNvml->IsEventApi(__func__))
+        {
+            return injectedNvml->EventApiWrapper(__func__, "UnrepairableMemoryFlag", args, preparedValues);
+        }
+        else
+        {
+            return injectedNvml->SetWrapper(__func__, "UnrepairableMemoryFlag", args, preparedValues);
+        }
+    }
+    return NVML_SUCCESS;
+}
+
 nvmlReturn_t nvmlDeviceGetViolationStatus(nvmlDevice_t device,
                                           nvmlPerfPolicyType_t perfPolicyType,
                                           nvmlViolationTime_t *violTime)
@@ -1854,120 +1898,6 @@ nvmlReturn_t nvmlDeviceGetPowerUsage(nvmlDevice_t device, unsigned int *power)
         {
             return injectedNvml->SetWrapper(__func__, "PowerUsage", args, preparedValues);
         }
-    }
-    return NVML_SUCCESS;
-}
-
-nvmlReturn_t nvmlDeviceGetPowerMode(nvmlDevice_t device, unsigned int *powerModeId)
-{
-    // The following snippet is generated from write_function
-    if (GLOBAL_PASS_THROUGH_MODE)
-    {
-        auto PassThruNvml = PassThruNvml::GetInstance();
-        if (PassThruNvml->IsLoaded(__func__) == false)
-        {
-            PassThruNvml->LoadFunction(__func__);
-        }
-        return NVML_ERROR_NOT_SUPPORTED;
-    }
-    else
-    {
-        // The following snippet is generated from write_function
-        auto *injectedNvml = InjectedNvml::GetInstance();
-        if (!injectedNvml)
-        {
-            return NVML_ERROR_UNINITIALIZED;
-        }
-        injectedNvml->AddFuncCallCount("nvmlDeviceGetPowerMode");
-        // The following snippet is generated from write_function
-        std::vector<InjectionArgument> args;
-        std::vector<InjectionArgument> preparedValues;
-        args.push_back(InjectionArgument(device));
-        preparedValues.push_back(InjectionArgument(powerModeId));
-
-        if (injectedNvml->IsGetter(__func__))
-        {
-            return injectedNvml->GetWrapper(__func__, "PowerMode", args, preparedValues);
-        }
-        else if (injectedNvml->IsEventApi(__func__))
-        {
-            return injectedNvml->EventApiWrapper(__func__, "PowerMode", args, preparedValues);
-        }
-        else
-        {
-            return injectedNvml->SetWrapper(__func__, "PowerMode", args, preparedValues);
-        }
-    }
-    return NVML_SUCCESS;
-}
-
-nvmlReturn_t nvmlDeviceGetSupportedPowerModes(nvmlDevice_t device, unsigned int *supportedPowerModes)
-{
-    // The following snippet is generated from write_function
-    if (GLOBAL_PASS_THROUGH_MODE)
-    {
-        auto PassThruNvml = PassThruNvml::GetInstance();
-        if (PassThruNvml->IsLoaded(__func__) == false)
-        {
-            PassThruNvml->LoadFunction(__func__);
-        }
-        return NVML_ERROR_NOT_SUPPORTED;
-    }
-    else
-    {
-        // The following snippet is generated from write_function
-        auto *injectedNvml = InjectedNvml::GetInstance();
-        if (!injectedNvml)
-        {
-            return NVML_ERROR_UNINITIALIZED;
-        }
-        injectedNvml->AddFuncCallCount("nvmlDeviceGetSupportedPowerModes");
-        // The following snippet is generated from write_function
-        std::vector<InjectionArgument> args;
-        std::vector<InjectionArgument> preparedValues;
-        args.push_back(InjectionArgument(device));
-        preparedValues.push_back(InjectionArgument(supportedPowerModes));
-
-        if (injectedNvml->IsGetter(__func__))
-        {
-            return injectedNvml->GetWrapper(__func__, "SupportedPowerModes", args, preparedValues);
-        }
-        else if (injectedNvml->IsEventApi(__func__))
-        {
-            return injectedNvml->EventApiWrapper(__func__, "SupportedPowerModes", args, preparedValues);
-        }
-        else
-        {
-            return injectedNvml->SetWrapper(__func__, "SupportedPowerModes", args, preparedValues);
-        }
-    }
-    return NVML_SUCCESS;
-}
-
-nvmlReturn_t nvmlDeviceSetPowerMode(nvmlDevice_t device, unsigned int powerModeId)
-{
-    // The following snippet is generated from write_function
-    if (GLOBAL_PASS_THROUGH_MODE)
-    {
-        auto PassThruNvml = PassThruNvml::GetInstance();
-        if (PassThruNvml->IsLoaded(__func__) == false)
-        {
-            PassThruNvml->LoadFunction(__func__);
-        }
-        return NVML_ERROR_NOT_SUPPORTED;
-    }
-    else
-    {
-        // The following snippet is generated from write_function
-        auto *injectedNvml = InjectedNvml::GetInstance();
-        if (!injectedNvml)
-        {
-            return NVML_ERROR_UNINITIALIZED;
-        }
-        injectedNvml->AddFuncCallCount("nvmlDeviceSetPowerMode");
-        // The following snippet is generated from generate_setter_functions
-        InjectionArgument value(powerModeId);
-        return injectedNvml->DeviceSet(device, "PowerMode", {}, NvmlFuncReturn(NVML_SUCCESS, value));
     }
     return NVML_SUCCESS;
 }

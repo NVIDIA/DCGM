@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,8 +44,8 @@ public:
      * @param pDcgmHandle DCGM handle to connect to
      * @return dcgmReturn_t DCGM_ST_OK if successful
      */
-    virtual dcgmReturn_t Connect_v2(const char *ipAddress,
-                                    dcgmConnectV2Params_t *connectParams,
+    virtual dcgmReturn_t Connect_v3(const char *connectionString,
+                                    dcgmConnectV3Params_t *connectParams,
                                     dcgmHandle_t *pDcgmHandle)
         = 0;
 

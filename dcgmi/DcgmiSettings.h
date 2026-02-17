@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,18 @@ public:
                                     const std::string &targetLogger,
                                     const std::string &targetSeverity,
                                     bool outputAsJson);
+
+protected:
+    dcgmReturn_t DoExecuteConnected() override;
+};
+
+class DcgmiSettingsAttachDetachDriver : public Command
+{
+private:
+    bool m_attach;
+
+public:
+    DcgmiSettingsAttachDetachDriver(std::string hostname, bool attach);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -167,7 +167,9 @@ void Allowlist::PostProcessAllowlist(std::vector<Gpu *> &gpus)
 static bool IsBoolParam(std::string const &param)
 {
     static std::unordered_set<std::string> const boolParams = {
-        "use_dgemv", "use_dgemm", "use_doubles", "l1_is_allowed", "enable_fp16_gemm", "enable_gpu_data_exchange",
+        "use_dgemv",         "use_dgemm",        "use_doubles",
+        "l1_is_allowed",     "enable_fp16_gemm", "enable_gpu_data_exchange",
+        "always_use_tensor",
     };
     return boolParams.find(param) != boolParams.end();
 }

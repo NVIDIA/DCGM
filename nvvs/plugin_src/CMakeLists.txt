@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ macro(declare_nvvs_plugin plugin_name dirpath)
             PUBLIC
                 nvvs_plugins_${plugin_name}_interface
             PRIVATE
+                dcgm
                 dcgm_mutex
                 dcgm_thread
                 dcgm_logging
@@ -81,6 +82,7 @@ add_subdirectory(cuda_common)
 add_subdirectory(diagnostic)
 add_subdirectory(memory)
 add_subdirectory(memtest)
+add_subdirectory(nccl_tests)
 add_subdirectory(nvbandwidth)
 add_subdirectory(pcie)
 add_subdirectory(targetedpower)

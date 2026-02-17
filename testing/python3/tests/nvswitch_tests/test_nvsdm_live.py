@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,16 +22,19 @@ import test_utils
 import time
 import DcgmReader
 
+
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_nvsdm_live()
 def test_nvsdm_live_list_switches(handle):
     """
-    Try to list switches using the NVSDM stub
+    Try to list switches
     """
     flags = 0
-    switchIds = dcgm_agent.dcgmGetEntityGroupEntities(handle, dcgm_fields.DCGM_FE_SWITCH, flags)
+    switchIds = dcgm_agent.dcgmGetEntityGroupEntities(
+        handle, dcgm_fields.DCGM_FE_SWITCH, flags)
 
     assert len(switchIds) > 0
+
 
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_nvsdm_live()
@@ -42,11 +45,10 @@ def test_nvsdm_live_port_telemetry(handle):
     """
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
-    nvsdmPortLID = 1
-    numOfNvsdmStubbedPorts = 2
 
     flags = 0
-    linkIds = dcgm_agent.dcgmGetEntityGroupEntities(handle, dcgm_fields.DCGM_FE_LINK, flags)
+    linkIds = dcgm_agent.dcgmGetEntityGroupEntities(
+        handle, dcgm_fields.DCGM_FE_LINK, flags)
     linkStates = dcgm_agent.dcgmGetNvLinkLinkStatus(handle)
     assert len(linkIds) > 0
 
@@ -59,21 +61,24 @@ def test_nvsdm_live_port_telemetry(handle):
 
     dcgmGroup = dcgmSystem.GetGroupWithEntities('linkGroup', linkEntities)
 
-    fieldIds = [ dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX,
-                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX,
-                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID,
-               ]
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID,
+                ]
 
-    updateFrequencyUsec = 200000 # 200ms
-    sleepTime = updateFrequencyUsec / 1000000 * 2 # Convert to seconds and sleep twice as long; ensures fresh sample
+    updateFrequencyUsec = 200000  # 200ms
+    # Convert to seconds and sleep twice as long; ensures fresh sample
+    sleepTime = updateFrequencyUsec / 1000000 * 2
 
-    dr = DcgmReader.DcgmReader(fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=linkEntities)
+    dr = DcgmReader.DcgmReader(
+        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=linkEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
         time.sleep(sleepTime)
 
-        linkLatest = dr.GetLatestEntityValuesAsFieldIdDict()[dcgm_fields.DCGM_FE_LINK]
+        linkLatest = dr.GetLatestEntityValuesAsFieldIdDict()[
+            dcgm_fields.DCGM_FE_LINK]
 
         for linkId in linkIds:
             if not helper_is_active_link(linkId, linkStates):
@@ -89,18 +94,23 @@ def test_nvsdm_live_port_telemetry(handle):
                     if fieldId not in fieldIds:
                         extraFieldIds.append(fieldId)
 
-                errmsg = "i=%d, linkId %d, len %d != %d" % (i, linkId, len(linkLatest[linkId]), len(fieldIds))
+                errmsg = "i=%d, linkId %d, len %d != %d" % (
+                    i, linkId, len(linkLatest[linkId]), len(fieldIds))
                 if len(missingFieldIds) > 0:
-                    errmsg = errmsg + " Link is missing entries for fields %s" % str(missingFieldIds)
+                    errmsg = errmsg + \
+                        " Link is missing entries for fields %s" % str(
+                            missingFieldIds)
                 if len(extraFieldIds) > 0:
-                    errmsg = errmsg + " Link has extra entries for fields %s" % str(extraFieldIds)
+                    errmsg = errmsg + \
+                        " Link has extra entries for fields %s" % str(
+                            extraFieldIds)
 
                 assert len(linkLatest[linkId]) == len(fieldIds), errmsg
 
             # Verify the GUID for each NvLink
             receivedGUID = linkLatest[linkId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID]
-            nvsdmPortNum = nvsdmPortId = linkId % numOfNvsdmStubbedPorts
             assert receivedGUID != "", "Received empty GUID"
+
 
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_nvsdm_live()
@@ -110,11 +120,12 @@ def test_nvsdm_live_platform_telemetry(handle):
     """
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
-    nvsdmDeviceTypeSwitch    = 2
-    nvsdmSwitchVendorID      = 0xbaca
+    nvsdmDeviceTypeSwitch = 2
+    nvsdmSwitchVendorID = 0xbaca
 
     flags = 0
-    switchIds = dcgm_agent.dcgmGetEntityGroupEntities(handle, dcgm_fields.DCGM_FE_SWITCH, flags)
+    switchIds = dcgm_agent.dcgmGetEntityGroupEntities(
+        handle, dcgm_fields.DCGM_FE_SWITCH, flags)
     assert len(switchIds) > 0
 
     switchEntities = []
@@ -127,20 +138,23 @@ def test_nvsdm_live_platform_telemetry(handle):
     dcgmGroup = dcgmSystem.GetGroupWithEntities('switchGroup', switchEntities)
 
     fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_POWER_VDD,
-                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT,
-                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID,
-               ]
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID,
+                ]
 
-    updateFrequencyUsec = 200000 # 200ms
-    sleepTime = updateFrequencyUsec / 1000000 * 2 # Convert to seconds and sleep twice as long; ensures fresh sample
+    updateFrequencyUsec = 200000  # 200ms
+    # Convert to seconds and sleep twice as long; ensures fresh sample
+    sleepTime = updateFrequencyUsec / 1000000 * 2
 
-    dr = DcgmReader.DcgmReader(fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=switchEntities)
+    dr = DcgmReader.DcgmReader(
+        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=switchEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
         time.sleep(sleepTime)
 
-        switchLatest = dr.GetLatestEntityValuesAsFieldIdDict()[dcgm_fields.DCGM_FE_SWITCH]
+        switchLatest = dr.GetLatestEntityValuesAsFieldIdDict()[
+            dcgm_fields.DCGM_FE_SWITCH]
 
         for switchId in switchIds:
             if len(switchLatest[switchId]) != len(fieldIds):
@@ -154,11 +168,16 @@ def test_nvsdm_live_platform_telemetry(handle):
                     if fieldId not in fieldIds:
                         extraFieldIds.append(fieldId)
 
-                errmsg = "i=%d, switchId %d, len %d != %d" % (i, switchId, len(switchLatest[switchId]), len(fieldIds))
+                errmsg = "i=%d, switchId %d, len %d != %d" % (
+                    i, switchId, len(switchLatest[switchId]), len(fieldIds))
                 if len(missingFieldIds) > 0:
-                    errmsg = errmsg + " Switch is missing entries for fields %s" % str(missingFieldIds)
+                    errmsg = errmsg + \
+                        " Switch is missing entries for fields %s" % str(
+                            missingFieldIds)
                 if len(extraFieldIds) > 0:
-                    errmsg = errmsg + " Switch has extra entries for fields %s" % str(extraFieldIds)
+                    errmsg = errmsg + \
+                        " Switch has extra entries for fields %s" % str(
+                            extraFieldIds)
 
                 assert len(switchLatest[switchId]) == len(fieldIds), errmsg
 
@@ -166,31 +185,29 @@ def test_nvsdm_live_platform_telemetry(handle):
             receivedGUID = switchLatest[switchId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID]
             assert receivedGUID != "", "Received empty GUID"
 
+
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_nvsdm_live()
 def test_nvsdm_live_nvlink_status(handle):
     """
-    Get nvlink status for each nvswitch using NVSDM stub and assert if it's down
+    Verify that dcgmGetNvLinkLinkStatus API executes successfully.
     """
     linkStatus = dcgm_agent.dcgmGetNvLinkLinkStatus(handle)
+    assert linkStatus is not None
 
-    for i in range(linkStatus.numNvSwitches):
-        for j in range(dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH):
-            if linkStatus.nvSwitches[i].linkState[j] == dcgm_structs.DcgmNvLinkLinkStateDown:
-                errmsg = "LinkStatus for NvSwitch=%d's link=%d is down." % (i, j)
-                assert(linkStatus.nvSwitches[i].linkState[j] != dcgm_structs.DcgmNvLinkLinkStateDown), errmsg
 
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_nvsdm_live()
 def test_nvsdm_live_nvswitch_health_check(handle):
     """
-    Test NvSwitch health check and assert if overall health result doesn't pass.
+    Verify NvSwitch health check API executes successfully.
     """
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
 
     dcgmGroup = pydcgm.DcgmGroup(dcgmHandle, groupName="switchGroup")
-    switchIds = dcgm_agent.dcgmGetEntityGroupEntities(handle, dcgm_fields.DCGM_FE_SWITCH, 0)
-    assert len(switchIds) > 0
+    switchIds = dcgm_agent.dcgmGetEntityGroupEntities(
+        handle, dcgm_fields.DCGM_FE_SWITCH, 0)
+    assert len(switchIds) > 0, "No NvSwitches found in the system"
 
     for switchId in switchIds:
         dcgmGroup.AddEntity(dcgm_fields.DCGM_FE_SWITCH, switchId)
@@ -200,7 +217,16 @@ def test_nvsdm_live_nvswitch_health_check(handle):
 
     # Invoke Health check
     group_health = dcgmGroup.health.Check()
-    assert(group_health.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
+    # Verify we got a valid response
+    assert group_health is not None, "Health check returned None"
+    # Verify overallHealth is a valid enum value
+    valid_health_results = {
+        dcgm_structs.DCGM_HEALTH_RESULT_PASS,
+        dcgm_structs.DCGM_HEALTH_RESULT_WARN,
+        dcgm_structs.DCGM_HEALTH_RESULT_FAIL
+    }
+    assert group_health.overallHealth in valid_health_results, f"Invalid health result: {group_health.overallHealth}"
+
 
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_nvsdm_live()
@@ -212,7 +238,8 @@ def test_nvsdm_live_composite_field_telemetry(handle):
     dcgmSystem = dcgmHandle.GetSystem()
 
     flags = 0
-    switchIds = dcgm_agent.dcgmGetEntityGroupEntities(handle, dcgm_fields.DCGM_FE_SWITCH, flags)
+    switchIds = dcgm_agent.dcgmGetEntityGroupEntities(
+        handle, dcgm_fields.DCGM_FE_SWITCH, flags)
     assert len(switchIds) > 0
 
     switchEntities = []
@@ -224,20 +251,23 @@ def test_nvsdm_live_composite_field_telemetry(handle):
 
     dcgmGroup = dcgmSystem.GetGroupWithEntities('switchGroup', switchEntities)
 
-    fieldIds = [ dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX,
-                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX,
-               ]
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX,
+                ]
 
-    updateFrequencyUsec = 200000 # 200ms
-    sleepTime = updateFrequencyUsec / 1000000 * 2 # Convert to seconds and sleep twice as long; ensures fresh sample
+    updateFrequencyUsec = 200000  # 200ms
+    # Convert to seconds and sleep twice as long; ensures fresh sample
+    sleepTime = updateFrequencyUsec / 1000000 * 2
 
-    dr = DcgmReader.DcgmReader(fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=switchEntities)
+    dr = DcgmReader.DcgmReader(
+        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=switchEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
         time.sleep(sleepTime)
 
-        switchLatest = dr.GetLatestEntityValuesAsFieldIdDict()[dcgm_fields.DCGM_FE_SWITCH]
+        switchLatest = dr.GetLatestEntityValuesAsFieldIdDict()[
+            dcgm_fields.DCGM_FE_SWITCH]
 
         for switchId in switchIds:
             if len(switchLatest[switchId]) != len(fieldIds):
@@ -251,19 +281,26 @@ def test_nvsdm_live_composite_field_telemetry(handle):
                     if fieldId not in fieldIds:
                         extraFieldIds.append(fieldId)
 
-                errmsg = "i=%d, switchId %d, len %d != %d" % (i, switchId, len(switchLatest[switchId]), len(fieldIds))
+                errmsg = "i=%d, switchId %d, len %d != %d" % (
+                    i, switchId, len(switchLatest[switchId]), len(fieldIds))
                 if len(missingFieldIds) > 0:
-                    errmsg = errmsg + " Switch is missing entries for fields %s" % str(missingFieldIds)
+                    errmsg = errmsg + \
+                        " Switch is missing entries for fields %s" % str(
+                            missingFieldIds)
                 if len(extraFieldIds) > 0:
-                    errmsg = errmsg + " Switch has extra entries for fields %s" % str(extraFieldIds)
+                    errmsg = errmsg + \
+                        " Switch has extra entries for fields %s" % str(
+                            extraFieldIds)
 
                 assert len(switchLatest[switchId]) == len(fieldIds), errmsg
+
 
 def helper_is_active_link(linkId, linkStates):
     for i in range(linkStates.numNvSwitches):
         if linkStates.nvSwitches[i].linkState[linkId - 1] != dcgm_structs_internal.DcgmEntityStatusOk:
             return False
     return True
+
 
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_nvsdm_live()

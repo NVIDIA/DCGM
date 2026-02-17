@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ os.environ['DCGM_TESTING_FRAMEWORK'] = 'True'
 if 'LD_LIBRARY_PATH' in os.environ:
     os.environ['DCGMLIBPATH'] = os.environ['LD_LIBRARY_PATH']
 
-stubspath  = os.path.dirname(os.path.realpath(__file__)) + '/stubs/'
+stubspath = os.path.dirname(os.path.realpath(__file__)) + '/stubs/'
 if stubspath not in sys.path:
-     sys.path.insert(0, stubspath)
+    sys.path.insert(0, stubspath)
 
 import collectd_tester_globals
 import dcgm_collectd_plugin
@@ -40,10 +40,11 @@ class Config:
     pseudo collectd Config class.
     """
 
-    def __init__(self, key = None, values = None):
+    def __init__(self, key=None, values=None):
         self.key = key
         self.values = values
         self.children = []
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -55,25 +56,27 @@ def test_collectd_basic_integration(handle, gpuIds):
     dcgmSystem = dcgmHandle.GetSystem()
 
     specificFieldIds = [dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-                dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
-                dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION]
+                        dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
+                        dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
+                        dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION]
 
     fieldValues = [1,
                    5,
                    1000,
                    9000]
 
-    for gpuId in gpuIds:    
+    for gpuId in gpuIds:
         for i in range(0, len(specificFieldIds)):
             field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
             field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
             field.fieldId = specificFieldIds[i]
             field.status = 0
             field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-            field.ts = int((time.time()+10) * 1000000.0) # set the injected data into the future
+            # set the injected data into the future
+            field.ts = int((time.time() + 10) * 1000000.0)
             field.value.i64 = fieldValues[i]
-            ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, field)
+            ret = dcgm_agent_internal.dcgmInjectFieldValue(
+                handle, gpuId, field)
             assert (ret == dcgm_structs.DCGM_ST_OK)
 
     gvars = collectd_tester_globals.gvars
@@ -105,7 +108,7 @@ def test_collectd_basic_integration(handle, gpuIds):
             assert gpuDict[fieldTag] == fieldValues[i]
 
 
-def helper_collectd_config(gpuIds, config, verify_fields = True):
+def helper_collectd_config(gpuIds, config, verify_fields=True):
     """
     Verify config via dcgm plugin. Verify fields parsed, if desired.
     """
@@ -129,7 +132,7 @@ def helper_collectd_config(gpuIds, config, verify_fields = True):
 
     if (verify_fields):
         # Verify that we can read back the fields we watch.
-        fieldTags = [ 'sm_clock', 'memory_clock', 'video_clock' ]
+        fieldTags = ['sm_clock', 'memory_clock', 'video_clock']
 
         for gpuId in gpuIds:
             assert str(gpuId) in outDict
@@ -148,6 +151,7 @@ def helper_collectd_config(gpuIds, config, verify_fields = True):
                 # values.
                 # assert gpuDict[fieldTag] == fieldValues[i]
 
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 def test_collectd_config_integration(handle, gpuIds):
@@ -156,9 +160,11 @@ def test_collectd_config_integration(handle, gpuIds):
     """
     config = Config()
 
-    config.children = [Config('Interval', ['2']), Config('FieldIds', ['(100,memory_clock):5,video_clock:.1'])]
+    config.children = [Config('Interval', ['2']), Config(
+        'FieldIds', ['(100,memory_clock):5,video_clock:.1'])]
 
     helper_collectd_config(gpuIds, config)
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -169,9 +175,11 @@ def test_collectd_config_bad_alpha_field(handle, gpuIds):
     """
     config = Config()
 
-    config.children = [Config('Interval', ['2']), Config('FieldIds', ['(100,memory_clock):5,video_clock:.1,foo_clock:1'])]
+    config.children = [Config('Interval', ['2']), Config(
+        'FieldIds', ['(100,memory_clock):5,video_clock:.1,foo_clock:1'])]
 
     helper_collectd_config(gpuIds, config)
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -182,9 +190,11 @@ def test_collectd_config_bad_numeric_field(handle, gpuIds):
     """
     config = Config()
 
-    config.children = [Config('Interval', ['2']), Config('FieldIds', ['(100,memory_clock):5,video_clock:.1,1010:1'])]
+    config.children = [Config('Interval', ['2']), Config(
+        'FieldIds', ['(100,memory_clock):5,video_clock:.1,1010:1'])]
 
     helper_collectd_config(gpuIds, config)
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()

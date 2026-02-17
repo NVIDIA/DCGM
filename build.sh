@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -102,6 +102,7 @@ do
 done
 
 CLEAN=0
+COVERAGE=0
 DEB=0
 INSTALL=1
 OS=Linux
@@ -125,6 +126,7 @@ while [[ $# -ne 0 ]]; do
             CLEAN=1
             ;;
         --coverage)
+            COVERAGE=1
             cmake_arguments+=(-D DCGM_BUILD_COVERAGE=ON)
             ;;
         --deb)
@@ -227,6 +229,11 @@ CMAKE_INSTALL_LIBDIR[DEB]=lib/$TARGET
 CMAKE_INSTALL_LIBDIR[RPM]=lib64
 CMAKE_INSTALL_LIBDIR[TGZ]=lib/$TARGET
 
+declare -A CMAKE_INSTALL_SO_NO_EXE
+CMAKE_INSTALL_SO_NO_EXE[DEB]=TRUE
+CMAKE_INSTALL_SO_NO_EXE[RPM]=FALSE
+CMAKE_INSTALL_SO_NO_EXE[TGZ]=FALSE
+
 aarch64=aarch64
 x86_64=amd64
 
@@ -238,7 +245,6 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
     SUFFIX=$OS-${!ARCHITECTURE}-${CMAKE_BUILD_TYPE,,}
     CMAKE_BINARY_DIR="$DIR/_out/build/$SUFFIX"
     CMAKE_INSTALL_PREFIX="$DIR/_out/$SUFFIX"
-    CMAKE_TOOLCHAIN_FILE="$DIR/cmake/$TARGET-toolchain.cmake"
 
     [[ $CLEAN -eq 0 ]] || rm -rf "$CMAKE_BINARY_DIR" "$CMAKE_INSTALL_PREFIX"
     mkdir --parents "$CMAKE_INSTALL_PREFIX"
@@ -248,15 +254,15 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
            -B "$CMAKE_BINARY_DIR" \
            -U CMAKE_INSTALL_LIBDIR \
            -D CMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
-           -D CMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_FILE \
            -D CMAKE_INSTALL_PREFIX=$CMAKE_INSTALL_PREFIX \
+           -D CMAKE_INSTALL_SO_NO_EXE=FALSE \
            "${cmake_arguments[@]}")
 
     cp --force "$CMAKE_BINARY_DIR/compile_commands.json" "$CMAKE_SOURCE_DIR/"
 
     declare -a build_prefix
 
-    (set -x; "${build_prefix[@]}" cmake --build "$CMAKE_BINARY_DIR")
+    (set -x; cmake --build "$CMAKE_BINARY_DIR")
 
     if [[ $TESTS -eq 1 ]]; then
         if [[ $DCGM_SKIP_PYTHON_LINTING -eq 0 ]]; then
@@ -269,6 +275,25 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
         fi
 
         (set -x; ctest --output-on-failure --test-dir "$CMAKE_BINARY_DIR")
+
+        if [[ $COVERAGE -eq 1 ]]; then
+            (set -x;
+             mkdir --parents $CMAKE_BINARY_DIR/html;
+             GCOV_EXECUTABLE="$(
+                 sed --regexp-extended \
+                     --quiet \
+                     's/CoverageCommand: (.*)/\1/p' \
+                     "$CMAKE_BINARY_DIR/DartConfiguration.tcl")"
+
+             gcovr --cobertura "$CMAKE_BINARY_DIR/coverage.xml" \
+                   --cobertura-pretty \
+                   --exclude-unreachable-branches \
+                   --filter "$CMAKE_SOURCE_DIR/.*" \
+                   --gcov-executable "$GCOV_EXECUTABLE" \
+                   --gcov-ignore-parse-errors \
+                   --html-details "$CMAKE_BINARY_DIR/html/index.html" \
+                   --root "$CMAKE_SOURCE_DIR")
+        fi
     fi
 
     test $INSTALL -eq 0 || (set -x; cmake --install "$CMAKE_BINARY_DIR")
@@ -284,7 +309,8 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
             (set -x;
              cmake -S "$CMAKE_SOURCE_DIR" \
                    -B "$CMAKE_BINARY_DIR" \
-                   -D CMAKE_INSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR[$GENERATOR]};
+                   -D CMAKE_INSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR[$GENERATOR]} \
+                   -D CMAKE_INSTALL_SO_NO_EXE=${CMAKE_INSTALL_SO_NO_EXE[$GENERATOR]};
              cmake --build "$CMAKE_BINARY_DIR";
              cpack -G $GENERATOR --verbose)
         fi

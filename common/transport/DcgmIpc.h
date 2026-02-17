@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,7 @@
 #include <dcgm_structs_internal.h>
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
-#include <event2/dns.h>
 #include <event2/event.h>
-#include <event2/thread.h>
 #include <functional>
 #include <future>
 #include <optional>
@@ -43,6 +41,13 @@ typedef struct
 {
     std::string domainSocketPath; /* Path to the domain socket file to listen on */
 } DcgmIpcDomainServerParams_t;
+
+struct DcgmIpcVsockServerParams_t
+{
+    unsigned int cid;    //!< CID (context ID) to bind to
+    unsigned short port; //!< Port to bind to
+    bool bindAny;        //!< Whether to bind to any address
+};
 
 typedef enum
 {
@@ -104,6 +109,9 @@ public:
     dcgmReturn_t ReadMessages(struct bufferevent *bev, std::vector<std::unique_ptr<DcgmMessage>> &messages);
 };
 
+using InitParams
+    = std::optional<std::variant<DcgmIpcTcpServerParams_t, DcgmIpcDomainServerParams_t, DcgmIpcVsockServerParams_t>>;
+
 class DcgmIpc : public DcgmThread
 {
 private:
@@ -112,11 +120,13 @@ private:
     evdns_base *m_dnsBase;
     struct event *m_tcpListenEvent;
     struct event *m_domainListenEvent;
+    struct event *m_vsockListenEvent = nullptr;
 
     /* Optional parameters for TCP/IP and domain socket listener sockets.
        If these are not set, then don't start a listening server */
     std::optional<DcgmIpcTcpServerParams_t> m_tcpParameters;
     std::optional<DcgmIpcDomainServerParams_t> m_domainParameters;
+    std::optional<DcgmIpcVsockServerParams_t> m_vsockParameters;
 
     /* Worker threads where callbacks like
        ProcessMessage() and OnClientDisconnect() are called from */
@@ -128,6 +138,7 @@ private:
     /* Listening socket file descriptors (FDs) */
     int m_tcpListenSocketFd;
     int m_domainListenSocketFd;
+    int m_vsockListenSocketFd = -1;
 
     pthread_t m_ipcThreadId; /* ID of the IPC thread */
 
@@ -182,8 +193,7 @@ public:
 
     /*************************************************************************/
     /* Soft constructor. Returns DCGM_ST_OK on success */
-    dcgmReturn_t Init(std::optional<DcgmIpcTcpServerParams_t> tcpParameters,
-                      std::optional<DcgmIpcDomainServerParams_t> domainParameters,
+    dcgmReturn_t Init(InitParams initParams,
                       DcgmIpcProcessMessageFunc_f processMessageFunc,
                       void *processMessageData,
                       DcgmIpcProcessDisconnectFunc_f processDisconnectFunc,
@@ -215,6 +225,11 @@ public:
      *
      */
     dcgmReturn_t ConnectDomain(std::string path, dcgm_connection_id_t &connectionId, unsigned int timeoutMs);
+
+    dcgmReturn_t ConnectVsock(unsigned int cid,
+                              unsigned short port,
+                              dcgm_connection_id_t &connectionId,
+                              unsigned int timeoutMs);
 
     /*************************************************************************/
     /* Monitor a socket file descriptor (fd) that has already been opened
@@ -268,6 +283,7 @@ private:
     /* Helpers to start listening sockets */
     dcgmReturn_t InitTCPListenerSocket();
     dcgmReturn_t InitUnixListenerSocket();
+    dcgmReturn_t InitVsockListenerSocket();
 
     /*************************************************************************/
     dcgm_connection_id_t GetNextConnectionId();
@@ -310,8 +326,7 @@ private:
     public:
         DcgmIpc *m_ipc;                       /* Instance of DcgmIpc this is associated with. Not owned here */
         std::string m_path;                   /* Path to the unix socket to open */
-        dcgm_connection_id_t m_connectionId;  /* Connection ID that was assigned to this
-                                             pending connect */
+        dcgm_connection_id_t m_connectionId;  /* Connection ID that was assigned to this pending connect */
         std::promise<dcgmReturn_t> m_promise; /* Promise used to return if we connected or not */
 
         DcgmIpcConnectDomain(DcgmIpc *ipc, std::string path, dcgm_connection_id_t connectionId)
@@ -323,6 +338,34 @@ private:
 
     static void ConnectDomainAsyncImplCB(evutil_socket_t, short, void *data);
     void ConnectDomainAsyncImpl(DcgmIpcConnectDomain &domainConnect);
+
+    class DcgmIpcConnectVsock
+    {
+    public:
+        DcgmIpc *m_ipc;                       /*!< Instance of DcgmIpc this is associated with. Not owned here */
+        unsigned int m_cid;                   /*!< CID to connect to */
+        unsigned short m_port;                /*!< Port to connect to */
+        dcgm_connection_id_t m_connectionId;  /*!< Connection ID that was assigned to this pending connection */
+        std::promise<dcgmReturn_t> m_promise; /*!< Promise used to return if we connected or not */
+
+        DcgmIpcConnectVsock(DcgmIpc *ipc,
+                            unsigned int const cid,
+                            unsigned short const port,
+                            dcgm_connection_id_t const connectionId)
+            : m_ipc(ipc)
+            , m_cid(cid)
+            , m_port(port)
+            , m_connectionId(connectionId)
+        {}
+
+        std::future<dcgmReturn_t> GetFuture()
+        {
+            return m_promise.get_future();
+        }
+    };
+
+    static void ConnectVsockAsyncImplCB(evutil_socket_t, short, void *data);
+    void ConnectVsockAsyncImpl(DcgmIpcConnectVsock &vsockConnect);
 
     /*****************************************************************************/
     struct DcgmIpcMonitorSocketFd

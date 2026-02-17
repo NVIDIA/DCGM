@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3467,6 +3467,28 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(
+        DCGM_FI_DEV_NVLINK_GET_STATE,
+        DCGM_FT_INT64,
+        8,
+        "nvlink_state",
+        DCGM_FS_ENTITY,
+        /* NVML_FI_DEV_NVLINK_GET_STATE - override, to allow FE_LINK entity handling */
+        0,
+        "NVLSTA",
+        "",
+        DCGM_FE_LINK,
+        getWidthForEnum(DCGM_FIELD_WIDTH_10));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ppcnt_ibpc_port_xmit_wait",
+                                             DCGM_FS_ENTITY,
+                                             0,
+                                             "NLIPXWA",
+                                             "",
+                                             DCGM_FE_LINK,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MEMORY_TEMP,
                                              DCGM_FT_INT64,
                                              8,
@@ -4804,6 +4826,18 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              "",
                                              DCGM_FE_NONE,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_10));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT,
+                                             DCGM_FT_INT64,
+                                             sizeof(std::int64_t),
+                                             "nccl_tests_test_result",
+                                             DCGM_FS_GLOBAL,
+                                             0,
+                                             "NCCLTRES",
+                                             "",
+                                             DCGM_FE_NONE,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_10));
+
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS,
                                              DCGM_FT_INT64,
                                              8,
@@ -4887,7 +4921,7 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
     DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS,
                                              DCGM_FT_INT64,
                                              8,
-                                             "nvlink_rcv_generate_err",
+                                             "nvlink_rcv_general_err",
                                              DCGM_FS_DEVICE,
                                              NVML_FI_DEV_NVLINK_COUNT_RCV_GENERAL_ERRORS,
                                              "NLRCVGE",
@@ -5001,6 +5035,16 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              DCGM_FS_ENTITY,
                                              NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS,
                                              "NLEFE",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_20));
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "nvlink_ecc_data_error_count_total",
+                                             DCGM_FS_ENTITY,
+                                             NVML_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL,
+                                             "NLEDECT",
                                              "",
                                              DCGM_FE_GPU,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_20));
@@ -5957,6 +6001,39 @@ static int DcgmFieldsPopulateFieldTableWithFormatting(void)
                                              0,
                                              "IMEXS",
                                              "#",
+                                             DCGM_FE_NONE,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "memory_unrepairable_flag",
+                                             DCGM_FS_DEVICE,
+                                             0,
+                                             "MEMUNR",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "gpu_recovery_action",
+                                             DCGM_FS_DEVICE,
+                                             NVML_FI_DEV_GET_GPU_RECOVERY_ACTION,
+                                             "GPURECOV",
+                                             "",
+                                             DCGM_FE_GPU,
+                                             getWidthForEnum(DCGM_FIELD_WIDTH_5));
+
+    DcgmFieldsPopulateOneFieldWithFormatting(DCGM_FI_BIND_UNBIND_EVENT,
+                                             DCGM_FT_INT64,
+                                             8,
+                                             "bind_unbind_event",
+                                             DCGM_FS_GLOBAL,
+                                             0,
+                                             "BINDUNB",
+                                             "",
                                              DCGM_FE_NONE,
                                              getWidthForEnum(DCGM_FIELD_WIDTH_5));
 

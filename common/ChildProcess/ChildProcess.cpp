@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,9 +155,8 @@ struct ChildProcess::Impl
         co_return 0;
     }
 
-    static auto StdLinesProcess(ChildProcess::Impl &self,
-                                boost::process::async_pipe &sourcePipe,
-                                StdLines &target) -> boost::asio::awaitable<int>
+    static auto StdLinesProcess(ChildProcess::Impl &self, boost::process::async_pipe &sourcePipe, StdLines &target)
+        -> boost::asio::awaitable<int>
     {
         auto cancellationState = co_await boost::asio::this_coro::cancellation_state;
         boost::asio::streambuf buffer;

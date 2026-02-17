@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ except ImportError:
     logger.warning(MOCK_MSG)
     MOCK_INSTALLED = False
 
+
 def skip_test_if_no_mock():
     '''
     Returns a decorator for functions. The decorator skips
@@ -41,6 +42,8 @@ def skip_test_if_no_mock():
     return decorator
 
 # Do not use this class directly
+
+
 class _MaybeMock:
     def __call__(self, *args, **kwds):
         return skip_test_if_no_mock()
@@ -49,6 +52,7 @@ class _MaybeMock:
         if (MOCK_INSTALLED):
             return getattr(mock, attr)
         return self
+
 
 def KeywordizeLastArgument(keywordName):
     '''
@@ -65,7 +69,8 @@ def KeywordizeLastArgument(keywordName):
             fn(*args, **kwargs)
         return wrapper
     return decorator
-    
+
+
 maybemock = _MaybeMock()
 
 DCGM_NVML_NOT_EXIST_MSG = "dcgm_nvml not presented."
@@ -83,6 +88,7 @@ if not nvml_injection_structs.nvml_injection_usable:
     logger.warning(DCGM_NVML_VER_MSG)
     DCGM_NVML_PRESENTED = False
 
+
 def skip_test_if_no_dcgm_nvml():
     '''
     Returns a decorator for functions. The decorator skips
@@ -99,6 +105,8 @@ def skip_test_if_no_dcgm_nvml():
     return decorator
 
 # Do not use this class directly
+
+
 class _MaybeDcgmNVML:
     def __call__(self, *args, **kwds):
         return skip_test_if_no_dcgm_nvml()
@@ -107,5 +115,6 @@ class _MaybeDcgmNVML:
         if (DCGM_NVML_PRESENTED):
             return getattr(dcgm_nvml, attr)
         return self
+
 
 maybe_dcgm_nvml = _MaybeDcgmNVML()

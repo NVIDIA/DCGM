@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,8 +68,6 @@ private:
      */
     void Cleanup();
 
-    bool LaunchExecutable(std::string const &testName, std::vector<std::string> const &execArgv);
-
     std::string GetNvBandwidthTestName() const;
 
     void appendExtraArgv(std::vector<std::string> &execArgv) const;
@@ -79,7 +77,7 @@ private:
                                                            Set when the go() method is called. DO NOT FREE */
     DcgmRecorder m_dcgmRecorder;
     dcgmHandle_t m_handle { 0 };
-    bool m_dcgmRecorderInitialized { false };                  /* Has DcgmRecorder been initialized? */
+    bool m_dcgmRecorderInitialized { true };                   /* Has DcgmRecorder been initialized? */
     unsigned int m_cudaDriverMajorVersion;                     /* Cuda driver major version */
     unsigned int m_cudaDriverMinorVersion { 0 };               /* Cuda driver minor version */
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo; // The information about each GPU

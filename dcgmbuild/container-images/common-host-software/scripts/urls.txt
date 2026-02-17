@@ -1,0 +1,6 @@
+ccache https://github.com/ccache/ccache/releases/download/v4.12.2/ccache-4.12.2-linux-x86_64.tar.xz d5aa5316d18bbb68ba332deca057e9f87e997f46316cb20beb4ef7e264f9181242d80b39629c59b92aff5fe0a1ce83bd35eb398a7f0353cff4ef0aa2730edeff
+clang https://apt.llvm.org/llvm.sh 0ee4a97c7348567c1407e783893f64836027e4f053ed71ad77ee5703af312f3ede81d713bddc3768befc601fceb5b3c3c5c6725acbce289fa026b9176602d014
+cmake https://github.com/Kitware/CMake/releases/download/v4.1.1/cmake-4.1.1-linux-x86_64.sh c51ce071fff93f6825d2f2496d9adb3bd331c4ccbb7204278770fb2890973cbb4884ad766d084cdd2adbda96659bf69a694aca29d3e1cb0a99cf141abee8a9d3
+git-lfs https://github.com/git-lfs/git-lfs/releases/download/v2.13.3/git-lfs-linux-amd64-v2.13.3.tar.gz 110906644dd558705b996271066c18cc3e017035ceecf6dcea8a600691914513204f25a6d1549d20ca398d9bab78993d08ef66cc1744d1df8c74fadbdec965e7
+lcov https://github.com/linux-test-project/lcov/archive/v2.0.tar.gz 5d64b77154ab77d04607ad7bd18afa370ccce90d74a7a48ed8f2f506534ee856e9b2bd1271931797f6e79ee37b0c0f9b65d9dd2cfed99377b708679ca0cab772
+ripgrep https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep-14.1.0-x86_64-unknown-linux-musl.tar.gz 1b5bb5c7179e110210552e0339ff7165b8addd06e8a2c3cd4e56d303cf78bd072beaa2960fede9dd50186ddbbdb20faac284656f304e08924ebafa200f92e715

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,13 +33,14 @@ def helper_inject_vgpu_configuration(handle, gpuId, eccModeVal, powerLimitVal, c
     Helper method to inject configuration to Cachemanager
     """
     if (eccModeVal != None):
-         # inject an error into Ecc Mode
+        # inject an error into Ecc Mode
         eccMode = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
         eccMode.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
         eccMode.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_CURRENT
         eccMode.status = 0
         eccMode.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-        eccMode.ts = int((time.time()+1) * 1000000.0) # set the injected data into the future
+        # set the injected data into the future
+        eccMode.ts = int((time.time() + 1) * 1000000.0)
         eccMode.value.i64 = eccModeVal
 
         ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, eccMode)
@@ -51,12 +52,13 @@ def helper_inject_vgpu_configuration(handle, gpuId, eccModeVal, powerLimitVal, c
         powerLimit.fieldId = dcgm_fields.DCGM_FI_DEV_POWER_MGMT_LIMIT
         powerLimit.status = 0
         powerLimit.fieldType = ord(dcgm_fields.DCGM_FT_DOUBLE)
-        powerLimit.ts = int((time.time()+1) * 1000000.0) # set the injected data into the future
+        # set the injected data into the future
+        powerLimit.ts = int((time.time() + 1) * 1000000.0)
         powerLimit.value.dbl = powerLimitVal
 
-        ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, powerLimit)
+        ret = dcgm_agent_internal.dcgmInjectFieldValue(
+            handle, gpuId, powerLimit)
         assert (ret == dcgm_structs.DCGM_ST_OK)
-
 
     if (computeModeVal != None):
         computeMode = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
@@ -64,11 +66,14 @@ def helper_inject_vgpu_configuration(handle, gpuId, eccModeVal, powerLimitVal, c
         computeMode.fieldId = dcgm_fields.DCGM_FI_DEV_COMPUTE_MODE
         computeMode.status = 0
         computeMode.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-        computeMode.ts = int((time.time()+1) * 1000000.0) # set the injected data into the future
+        # set the injected data into the future
+        computeMode.ts = int((time.time() + 1) * 1000000.0)
         computeMode.value.i64 = computeModeVal
 
-        ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, computeMode)
+        ret = dcgm_agent_internal.dcgmInjectFieldValue(
+            handle, gpuId, computeMode)
         assert (ret == dcgm_structs.DCGM_ST_OK)
+
 
 def helper_get_status_list(statusHandle):
     """
@@ -83,6 +88,7 @@ def helper_get_status_list(statusHandle):
         errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
     return errorList
+
 
 '''
 def helper_investigate_status(statusHandle):
@@ -101,6 +107,7 @@ def helper_investigate_status(statusHandle):
         errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 '''
 
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_nvml()
 def test_dcgm_vgpu_config_standalone_get_devices(handle):
@@ -110,7 +117,8 @@ def test_dcgm_vgpu_config_standalone_get_devices(handle):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert	len(gpuIdList) >= 0, "Not able to find devices for standalone case"
+    assert len(gpuIdList) >= 0, "Not able to find devices for standalone case"
+
 
 def helper_dcgm_vgpu_config_get_attributes(handle):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -122,16 +130,18 @@ def helper_dcgm_vgpu_config_get_attributes(handle):
     for gpuId in gpuIdList:
         attributes = systemObj.discovery.GetGpuAttributes(gpuId)
         assert (attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_SUPPORTED
-            and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_FOUND
-            and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_SUPPORTED
-            and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_PERMISSIONED), "Not able to find attributes"
+                and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_FOUND
+                and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_SUPPORTED
+                and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_PERMISSIONED), "Not able to find attributes"
+
 
 @test_utils.run_with_standalone_host_engine(20)
 def test_dcgm_vgpu_config_standalone_get_attributes(handle):
     """
-	Get Device attributes for each GPU ID
-	"""
+        Get Device attributes for each GPU ID
+        """
     helper_dcgm_vgpu_config_get_attributes(handle)
+
 
 '''
 def helper_dcgm_vgpu_config_set(handle):
@@ -413,34 +423,40 @@ def test_dcgm_vgpu_default_status_handler(handle, gpuIds):
     policy = dcgm_agent.dcgmPolicyGet(handle, groupObj.GetId(), len(gpuIds), 0)
 '''
 
+
 @test_utils.run_with_standalone_host_engine(60)
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
     test_utils.skip_test("Skipping this test until bug 200377294 is fixed")
 
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_EMPTY, "test1")
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_EMPTY, "test1")
 
     validDevice = -1
     for x in gpuIds:
-        fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, x, [dcgm_fields.DCGM_FI_DEV_RETIRED_DBE])
+        fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+            handle, x, [dcgm_fields.DCGM_FI_DEV_RETIRED_DBE])
         if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
             validDevice = x
         break
 
     if (validDevice == -1):
-        test_utils.skip_test("Can only run if at least one GPU with ECC is present")
+        test_utils.skip_test(
+            "Can only run if at least one GPU with ECC is present")
 
     ret = dcgm_agent.dcgmGroupAddDevice(handle, groupId, validDevice)
-    assert (ret == dcgm_structs.DCGM_ST_OK),"Failed to add a device to the group %d. Return %d" % (groupId.value, ret)
+    assert (ret == dcgm_structs.DCGM_ST_OK), "Failed to add a device to the group %d. Return %d" % (
+        groupId.value, ret)
 
     groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId)
 
-    #Create a status handle
+    # Create a status handle
     status_handle = dcgm_agent.dcgmStatusCreate()
 
-    ## Get original ECC mode on the device
-    vgpu_config_values = dcgm_agent_internal.dcgmVgpuConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+    # Get original ECC mode on the device
+    vgpu_config_values = dcgm_agent_internal.dcgmVgpuConfigGet(
+        handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
     assert len(vgpu_config_values) > 0, "Failed to work with NULL status handle"
 
     eccmodeOnGroupExisting = vgpu_config_values[0].mEccMode
@@ -449,25 +465,23 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
     else:
         eccmodeOnGroupToSet = 0
 
-    #print eccmodeOnGroupExisting
-    #print eccmodeOnGroupToSet
+    # print eccmodeOnGroupExisting
+    # print eccmodeOnGroupToSet
 
-    ## Toggle the ECC mode on the group
+    # Toggle the ECC mode on the group
     vgpu_config_values = dcgm_structs.c_dcgmDeviceVgpuConfig_v1()
     vgpu_config_values.mEccMode = eccmodeOnGroupToSet
     vgpu_config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     vgpu_config_values.mPowerLimit.type = dcgmvalue.DCGM_INT32_BLANK
     vgpu_config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
 
-
-
-
-    #Clear the status handle to log the errors while setting the config
+    # Clear the status handle to log the errors while setting the config
     ret = dcgm_agent.dcgmStatusClear(status_handle)
-    assert ret == dcgm_structs.DCGM_ST_OK, "Failed to clear the status handle. Return %d" %ret
+    assert ret == dcgm_structs.DCGM_ST_OK, "Failed to clear the status handle. Return %d" % ret
 
     try:
-        ret = dcgm_agent_internal.dcgmVgpuConfigSet(handle, groupId, vgpu_config_values, status_handle)
+        ret = dcgm_agent_internal.dcgmVgpuConfigSet(
+            handle, groupId, vgpu_config_values, status_handle)
     except dcgm_structs.DCGMError as e:
         pass
 
@@ -476,24 +490,30 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
     if len(errors) > 0:
         for error in errors:
             if error.status == dcgm_structs.DCGM_ST_RESET_REQUIRED:
-                test_utils.skip_test("Skipping the test - Unable to reset the Gpu, FieldId - %d, Return - %d" % (error.fieldId, error.status))
+                test_utils.skip_test(
+                    "Skipping the test - Unable to reset the Gpu, FieldId - %d, Return - %d" % (error.fieldId, error.status))
             else:
-                test_utils.skip_test("Skipping the test - Unable to set the ECC mode. FieldId - %d, Return %d" % (error.fieldId,error.status))
+                test_utils.skip_test(
+                    "Skipping the test - Unable to set the ECC mode. FieldId - %d, Return %d" % (error.fieldId, error.status))
 
-    #Sleep after reset and then apply update for it to occur
+    # Sleep after reset and then apply update for it to occur
     time.sleep(2)
 
     dcgm_agent.dcgmUpdateAllFields(handle, 1)
-    
-    #Clear the status handle to log the errors while setting the config
+
+    # Clear the status handle to log the errors while setting the config
     ret = dcgm_agent.dcgmStatusClear(status_handle)
-    assert ret == dcgm_structs.DCGM_ST_OK, "Failed to clear the status handle. Return %d" %ret
+    assert ret == dcgm_structs.DCGM_ST_OK, "Failed to clear the status handle. Return %d" % ret
 
-    #Get the current configuration
-    config_values = dcgm_agent_internal.dcgmVgpuConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
-    assert len(config_values) > 0, "Failed to get configuration using dcgmiVgpuConfigGet"
+    # Get the current configuration
+    config_values = dcgm_agent_internal.dcgmVgpuConfigGet(
+        handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+    assert len(
+        config_values) > 0, "Failed to get configuration using dcgmiVgpuConfigGet"
 
-    assert config_values[0].mEccMode == (eccmodeOnGroupToSet), "ECC mode different from the set value"
+    assert config_values[0].mEccMode == (
+        eccmodeOnGroupToSet), "ECC mode different from the set value"
+
 
 @test_utils.run_with_standalone_host_engine(60)
 @test_utils.run_only_with_live_gpus()
@@ -501,11 +521,12 @@ def test_dcgm_vgpu_attributes(handle, gpuIds):
     """
     Verifies that vGPU attributes are properly queried
     """
-    vgpuAttributes = dcgm_agent_internal.dcgmGetVgpuDeviceAttributes(handle, gpuIds[0])
-    assert  vgpuAttributes.activeVgpuInstanceCount >= 0, "Active vGPU instance count is negative!"
+    vgpuAttributes = dcgm_agent_internal.dcgmGetVgpuDeviceAttributes(
+        handle, gpuIds[0])
+    assert vgpuAttributes.activeVgpuInstanceCount >= 0, "Active vGPU instance count is negative!"
 
     if (vgpuAttributes.activeVgpuInstanceCount > 0):
-        vgpuInstanceAttributes = dcgm_agent_internal.dcgmGetVgpuInstanceAttributes(handle, vgpuAttributes.activeVgpuInstanceIds[0])
-        assert  len(vgpuInstanceAttributes.vmName) > 0, "Active vGPU VM name is blank!"
-
-
+        vgpuInstanceAttributes = dcgm_agent_internal.dcgmGetVgpuInstanceAttributes(
+            handle, vgpuAttributes.activeVgpuInstanceIds[0])
+        assert len(
+            vgpuInstanceAttributes.vmName) > 0, "Active vGPU VM name is blank!"

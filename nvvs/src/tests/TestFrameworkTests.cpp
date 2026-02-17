@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,29 +75,53 @@ std::string getThisExecsLocation()
 
 SCENARIO("GetPluginBaseDir returns plugin directory relative to current process's location")
 {
-    const std::string myLocation = getThisExecsLocation();
-    const std::string pluginDir  = myLocation + "/plugins";
+    std::string const pluginDir = getThisExecsLocation() + "/plugins";
+    INFO("pluginDir: " << pluginDir);
+
     std::vector<std::unique_ptr<EntitySet>> entitySet;
     WrapperTestFramework tf(entitySet);
 
-    rmdir(pluginDir.c_str());
+    // TODO: DCGM-6030
+    //
+    // Execution of a unit test should not have observable side effects on the
+    // state of the process or test system. This is a file system race with
+    // other unit tests executing concurrently. However, the semantics of the
+    // GetPluginBaseDir member function of the TestFramework class leave little
+    // alternative.
+    //
+    // At time of writing the TestFramework::GetPluginBaseDir eagerly verifies
+    // the existence of each subdirectory in the search path. This is a
+    // time-of-check/time-of-use race condition. In addition, it renders the
+    // function impure and imposes contraints on test scheduling.
+    if (rmdir(pluginDir.c_str()) != 0 && errno != ENOENT)
+    {
+        FAIL("rmdir failed: " << strerror(errno));
+    }
+
     CHECK_THROWS(tf.WrapperGetPluginBaseDir());
 
-    int st = mkdir(pluginDir.c_str(), 770);
-    if (st != 0)
+    if (mkdir(pluginDir.c_str(), static_cast<mode_t>(0770)) != 0 && errno != EEXIST)
     {
-        // This has fail at this point. The checks below are only to aid in debugging the failure
-        CHECK(std::string { "" } == pluginDir);
-        CHECK(std::string { "" } == std::string { strerror(errno) });
+        FAIL("mkdir failed: " << strerror(errno));
     }
+
     CHECK(tf.WrapperGetPluginBaseDir() == pluginDir);
 }
 
 SCENARIO("GetPluginCudalessDir returns cudaless directory in plugin directory")
 {
-    const std::string myLocation = getThisExecsLocation();
-    const std::string pluginDir  = myLocation + "/plugins/cudaless/";
+    std::string const pluginDir = getThisExecsLocation() + "/plugins";
+    INFO("pluginDir: " << pluginDir);
+
+    if (mkdir(pluginDir.c_str(), static_cast<mode_t>(0770)) != 0 && errno != EEXIST)
+    {
+        FAIL("mkdir failed: " << strerror(errno));
+    }
+
     std::vector<std::unique_ptr<EntitySet>> entitySet;
     WrapperTestFramework tf(entitySet);
-    CHECK(tf.WrapperGetPluginCudalessDir() == pluginDir);
+
+    std::string const reference = pluginDir + "/cudaless/";
+
+    CHECK(tf.WrapperGetPluginCudalessDir() == reference);
 }

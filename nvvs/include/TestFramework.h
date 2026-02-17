@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,7 +105,6 @@ private:
     std::map<std::string, std::vector<Test *>> m_testCategories;
     std::list<void *> dlList;
     bool skipRest;
-    mode_t m_nvvsBinaryMode;
     uid_t m_nvvsOwnerUid;
     gid_t m_nvvsOwnerGid;
     // This is one of the GPU IDs used for the tests. If a GPU set is present, it is set to the first GPU in the entity

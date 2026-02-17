@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +47,9 @@ TEST_CASE("GetP2PError")
     dcgmError_t memoryError, writerError;
 
 
+    SetUp();
     SECTION("Verify summary value 0 results in PCIe error")
     {
-        SetUp();
         // Fill the summary response fields as needed for the test
         globalResponse.fieldType     = DCGM_FT_INT64;
         globalResponse.summaryCount  = 1;
@@ -70,10 +70,9 @@ TEST_CASE("GetP2PError")
 
     SECTION("Verify blank summary value results in PCIe error")
     {
-        SetUp();
         globalResponse.fieldType     = DCGM_FT_INT64;
         globalResponse.summaryCount  = 1;
-        globalResponse.values[0].i64 = 0;
+        globalResponse.values[0].i64 = DCGM_INT64_BLANK;
         GetP2PError(&bg, startTime, gpuId, memoryError, writerError);
 
         CHECK(memoryError == DCGM_FR_BROKEN_P2P_PCIE_MEMORY_DEVICE);
@@ -82,7 +81,6 @@ TEST_CASE("GetP2PError")
 
     SECTION("Verify summary function returning DCGM_ST_NO_DATA results in PCIe error")
     {
-        SetUp();
         globalErrorCode = DCGM_ST_NO_DATA;
         GetP2PError(&bg, startTime, gpuId, memoryError, writerError);
 
@@ -92,7 +90,6 @@ TEST_CASE("GetP2PError")
 
     SECTION("Verify non-blank/non-zero summary value results in NVLink error")
     {
-        SetUp();
         globalResponse.fieldType     = DCGM_FT_INT64;
         globalResponse.summaryCount  = 1;
         globalResponse.values[0].i64 = 4398734;
@@ -104,7 +101,6 @@ TEST_CASE("GetP2PError")
 
     SECTION("Verify summary function returning error results in P2P error")
     {
-        SetUp();
         globalErrorCode = DCGM_ST_NOT_WATCHED;
         GetP2PError(&bg, startTime, gpuId, memoryError, writerError);
 

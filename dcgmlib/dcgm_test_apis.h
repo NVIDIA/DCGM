@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,25 +32,12 @@ extern "C" {
 /*****************************************************************************
  *****************************************************************************/
 /*****************************************************************************
- * DCGM Test Methods, only used for testing, not officially supported
+ * DCGM Test and Internal APIs - used for testing, debugging, and dcgm_private modules, not officially supported
  *****************************************************************************/
 /*****************************************************************************
  *****************************************************************************/
 
 #define DCGM_EMBEDDED_HANDLE 0x7fffffff
-
-/**
- * This method starts the Host Engine Server
- *
- * @param portNumber      IN: TCP port to listen on. This is only used if isTcp == 1.
- * @param socketPath      IN: This is the path passed to bind() when creating the socket
- *                            For isConnectionTCP == 1, this is the bind address. "" or NULL = All interfaces
- *                            For isConnectionTCP == 0, this is the path to the domain socket to use
- * @param isConnectionTCP IN: Whether to listen on a TCP/IP socket (1) or a unix domain socket (0)
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmEngineRun(unsigned short portNumber,
-                                           char const *socketPath,
-                                           unsigned int isConnectionTCP);
 
 /**
  * This method is used to get values corresponding to the fields.
@@ -335,15 +322,6 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetCacheManagerFieldInfo(dcgmHandle_t pDcgmHand
                                                           dcgmCacheManagerFieldInfo_v4_t *fieldInfo);
 
 /**
- * This method returns the status of the gpu
- *
- * @param gpuId
- * @param DcgmEntityStatus_t
- *
- */
-dcgmReturn_t DCGM_PUBLIC_API dcgmGetGpuStatus(dcgmHandle_t pDcgmHandle, unsigned int gpuId, DcgmEntityStatus_t *status);
-
-/**
  * Create fake entities for injection testing
  *
  * @param createFakeEntities Details about the number and type of entities to create
@@ -451,6 +429,49 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmNvswitchGetBackend(dcgmHandle_t pDcgmHandle,
                                                     bool *active,
                                                     char *backendName,
                                                     unsigned int backendNameLength);
+
+/**
+ * @brief Empty the Cache Manager cache.
+ *
+ * Empty the Cache Manager cache. This is intended to be used by the test
+ * framework between tests that share decorators amortised among them.
+ *
+ * @param[in] pDcgmHandle        - DCGM Handle of an active connection
+ *
+ * @return
+ *      - \ref DCGM_ST_OK if successful
+ *      - \ref DCGM_ST_* on error
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmEmptyCache(dcgmHandle_t pDcgmHandle);
+
+/**
+ * @brief Mark hostengine modules reloadable.
+ *
+ * Restore hostengine modules to a reloadable (as opposed to unloaded) state
+ * to facilitate module loading and denylisting tests.
+ *
+ * Calling it with a 0 module mask updates it with a mask of modules already
+ * loaded.
+ *
+ * Calling it with a non-zero module mask, marks those modules reloadable.
+ * mask of originally loaded modules is returned.
+ *
+ * By inverting the mask of modules reported loaded (having passed 0 to not
+ * unload anything), and passing that in as the module mask in a later call,
+ * the modules INITIALLY loaded will remain marked as loaded and any new ones
+ * loaded will be marked as reloadable.
+ *
+ * @param[in]     pDcgmHandle - DCGM Handle of an active connection
+ * @param[in/out] msg         - struct containing the module mask, updated to
+ *                              reflect modules that remained loaded.
+ *                              In: mask of modules to mark as reloadable.
+ *                              Out: mask of modules previously loaded.
+ *
+ * @return
+ *      - \ref DCGM_ST_OK if successful
+ *      - \ref DCGM_ST_* on error
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmMarkModulesReloadable(dcgmHandle_t pDcgmHandle, dcgmModulesReloadable_v1 *msg);
 
 #ifdef __cplusplus
 }

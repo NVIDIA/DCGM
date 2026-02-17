@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #define _DCGM_GPU_INSTANCE_H_
 
 #include "DcgmEntityTypes.hpp"
+#include "NvmlTaskRunner.hpp"
 
 #include <dcgm_nvml.h>
 #include <dcgm_structs.h>
@@ -33,12 +34,13 @@ struct dcgmcm_gpu_compute_instance_t
     unsigned int parentGpuId {};                                //!< Parent device
     DcgmNs::Mig::Nvml::GpuInstanceId nvmlParentInstanceId;      //!< Parent GPU instance unique within the GPU
     unsigned int profileId {};                                  //!< Unique profile ID within the GPU instance
-    nvmlGpuInstance_t parentInstance {};                        //!< NVML handle for the parent instance
-    nvmlComputeInstance_t computeInstance {};                   //!< NVML handle for this compute instance
+    SafeGpuInstance parentInstance {};                          //!< NVML handle for the parent instance
+    SafeComputeInstance computeInstance {};                     //!< NVML handle for this compute instance
     nvmlComputeInstanceProfileInfo_t profile {};                //!< Profile information for this compute instance
     dcgmMigProfile_t sliceProfile {};                           //!< The slice profile for this compute instance
     std::string profileName;                                    //!< The name of the compute instance profile
     nvmlDevice_t migDevice {};                                  //!< The handle of the MIG device type
+    SafeNvmlHandle safeMigNvmlHandle;                           //!< The safe NVML handle of the MIG device
 };
 using dcgmcm_gpu_compute_instance_p = dcgmcm_gpu_compute_instance_t *;
 
@@ -49,7 +51,7 @@ public:
     DcgmGpuInstance(DcgmNs::Mig::GpuInstanceId dcgmInstanceId,
                     unsigned int nvmlInstanceId,
                     DcgmNs::Mig::GpuInstanceProfileId profileId,
-                    nvmlGpuInstance_t const &instance,
+                    SafeGpuInstance const &instance,
                     nvmlGpuInstancePlacement_t const &placement,
                     nvmlGpuInstanceProfileInfo_t const &profileInfo,
                     unsigned int sliceProfile);
@@ -87,7 +89,7 @@ public:
      * @return DCGM_ST_OK                         - if the specified compute instance exists
      *         DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND - if the compute instance isn't found
      */
-    dcgmReturn_t StoreMigDeviceHandle(unsigned int nvmlComputeInstanceId, nvmlDevice_t migDevice);
+    dcgmReturn_t StoreMigDeviceHandle(unsigned int nvmlComputeInstanceId, SafeNvmlHandle migDevice);
 
     /*****************************************************************************/
     /*
@@ -99,7 +101,7 @@ public:
      * @return the NVML mig device handle if found
      *         nullptr if no matching compute instance is found
      */
-    nvmlDevice_t GetMigDeviceHandle(unsigned int dcgmComputeInstanceId) const;
+    SafeNvmlHandle GetMigDeviceHandle(unsigned int dcgmComputeInstanceId) const;
 
     /*****************************************************************************/
     DcgmNs::Mig::GpuInstanceId const &GetInstanceId() const;
@@ -111,7 +113,7 @@ public:
     DcgmNs::Mig::GpuInstanceProfileId const &GetProfileId() const;
 
     /*****************************************************************************/
-    nvmlGpuInstance_t GetInstanceHandle() const;
+    SafeGpuInstance GetInstanceHandle() const;
 
     /*****************************************************************************/
     nvmlGpuInstancePlacement_t GetInstancePlacement() const;
@@ -178,7 +180,7 @@ private:
     DcgmNs::Mig::Nvml::GpuInstanceId m_nvmlInstanceId;
     DcgmNs::Mig::GpuInstanceProfileId m_profileId;
     dcgmMigProfile_t m_sliceProfile;
-    nvmlGpuInstance_t m_instance;
+    SafeGpuInstance m_instance;
     nvmlGpuInstancePlacement_t m_placement;
     nvmlGpuInstanceProfileInfo_t m_profileInfo;
     std::vector<dcgmcm_gpu_compute_instance_t> m_computeInstances;

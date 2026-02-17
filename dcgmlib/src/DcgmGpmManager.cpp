@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "DcgmGpmManager.hpp"
+#include "NvmlTaskRunner.hpp"
 #include <DcgmUtilities.h>
 #include <TimeLib.hpp>
 
@@ -128,7 +129,8 @@ void DcgmGpmManagerEntity::PruneOldSamples(timelib64_t now)
               m_freedGpmSamples.size());
 }
 /****************************************************************************/
-dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
+dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(NvmlTaskRunner &nvmlDriver,
+                                                       SafeNvmlHandle nvmlDevice,
                                                        DcgmGpuInstance *const pGpuInstance,
                                                        timelib64_t now,
                                                        timelib64_t updateInterval,
@@ -170,21 +172,21 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
                         giIndex.id);
             return DCGM_ST_NO_DATA;
         }
-        nvmlReturn = nvmlGpmMigSampleGet(nvmlDevice, giIndex.id, latestSampleIt->second.m_sample);
+        nvmlReturn = nvmlDriver.NvmlGpmMigSampleGet(nvmlDevice, giIndex.id, latestSampleIt->second.m_sample);
     }
     else
     {
         // If a GPU-CI is destroyed, nvmlDevice here is NULL
-        if (!nvmlDevice)
+        if (!nvmlDevice.nvmlDevice)
         {
             DCGM_LOG_ERROR << "Received null nvmlDevice ";
             return DCGM_ST_NO_DATA;
         }
-        nvmlReturn = nvmlGpmSampleGet(nvmlDevice, latestSampleIt->second.m_sample);
+        nvmlReturn = nvmlDriver.NvmlGpmSampleGet(nvmlDevice, latestSampleIt->second.m_sample);
     }
     if (nvmlReturn != NVML_SUCCESS)
     {
-        DCGM_LOG_ERROR << "Got nvml st " << nvmlReturn << " from nvmlGpmSampleGet().";
+        DCGM_LOG_ERROR << "Got nvml st " << nvmlReturn << " from NvmlGpmSampleGet().";
         m_gpmSamples.erase(latestSampleIt);
         return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
     }
@@ -193,7 +195,8 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(nvmlDevice_t nvmlDevice,
 }
 
 /****************************************************************************/
-dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
+dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(NvmlTaskRunner &nvmlDriver,
+                                                   SafeNvmlHandle nvmlDevice,
                                                    DcgmGpuInstance *const pGpuInstance,
                                                    double &value,
                                                    unsigned int fieldId,
@@ -252,7 +255,7 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
     PruneOldSamples(now);
 
     dcgmSampleMap::iterator latestSampleIt;
-    dcgmReturn = MaybeFetchNewSample(nvmlDevice, pGpuInstance, now, updateInterval, latestSampleIt);
+    dcgmReturn = MaybeFetchNewSample(nvmlDriver, nvmlDevice, pGpuInstance, now, updateInterval, latestSampleIt);
     if (dcgmReturn != DCGM_ST_OK)
     {
         /* Any error is already logged by MaybeFetchNewSample */
@@ -285,7 +288,7 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(nvmlDevice_t nvmlDevice,
     mg.sample1              = baselineSampleIt->second.m_sample;
     mg.sample2              = latestSampleIt->second.m_sample;
     mg.metrics[0].metricId  = metricId;
-    nvmlReturn_t nvmlReturn = nvmlGpmMetricsGet(&mg);
+    nvmlReturn_t nvmlReturn = nvmlDriver.NvmlGpmMetricsGet(&mg);
 
     if (nvmlReturn != NVML_SUCCESS || mg.metrics[0].nvmlReturn != NVML_SUCCESS)
     {
@@ -370,8 +373,9 @@ dcgmReturn_t DcgmGpmManager::RemoveWatcher(dcgm_entity_key_t entityKey, DcgmWatc
 }
 
 /****************************************************************************/
-dcgmReturn_t DcgmGpmManager::GetLatestSample(dcgm_entity_key_t entityKey,
-                                             nvmlDevice_t nvmlDevice,
+dcgmReturn_t DcgmGpmManager::GetLatestSample(NvmlTaskRunner &nvmlDriver,
+                                             dcgm_entity_key_t entityKey,
+                                             SafeNvmlHandle nvmlDevice,
                                              DcgmGpuInstance *const pGpuInstance,
                                              double &value,
                                              timelib64_t now)
@@ -389,17 +393,17 @@ dcgmReturn_t DcgmGpmManager::GetLatestSample(dcgm_entity_key_t entityKey,
         return DCGM_ST_NOT_WATCHED;
     }
 
-    return entityIt->second.GetLatestSample(nvmlDevice, pGpuInstance, value, entityKey.fieldId, now);
+    return entityIt->second.GetLatestSample(nvmlDriver, nvmlDevice, pGpuInstance, value, entityKey.fieldId, now);
 }
 
 /****************************************************************************/
-bool DcgmGpmManager::DoesNvmlDeviceSupportGpm(nvmlDevice_t nvmlDevice)
+bool DcgmGpmManager::DoesNvmlDeviceSupportGpm(NvmlTaskRunner &nvmlDriver, SafeNvmlHandle nvmlDevice)
 {
     nvmlGpmSupport_t gpmSupport {};
 
     gpmSupport.version = NVML_GPM_SUPPORT_VERSION;
 
-    nvmlReturn_t nvmlReturn = nvmlGpmQueryDeviceSupport(nvmlDevice, &gpmSupport);
+    nvmlReturn_t nvmlReturn = nvmlDriver.NvmlGpmQueryDeviceSupport(nvmlDevice, &gpmSupport);
     if (nvmlReturn == NVML_ERROR_FUNCTION_NOT_FOUND)
     {
         DCGM_LOG_WARNING
@@ -408,7 +412,7 @@ bool DcgmGpmManager::DoesNvmlDeviceSupportGpm(nvmlDevice_t nvmlDevice)
     }
     else if (nvmlReturn != NVML_SUCCESS)
     {
-        DCGM_LOG_WARNING << "Got error " << nvmlErrorString(nvmlReturn) << " ("
+        DCGM_LOG_WARNING << "Got error " << nvmlDriver.NvmlErrorString(nvmlReturn) << " ("
                          << DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn) << ")"
                          << " from nvmlGpmQueryDeviceSupport. Assuming no GPM support.";
         return false;
@@ -417,7 +421,7 @@ bool DcgmGpmManager::DoesNvmlDeviceSupportGpm(nvmlDevice_t nvmlDevice)
     bool retVal = gpmSupport.isSupportedDevice != 0 ? true : false;
 
     DCGM_LOG_DEBUG << "nvmlGpmQueryDeviceSupport returned isSupportedDevice " << retVal << " for nvmlDevice x"
-                   << std::hex << (void *)nvmlDevice;
+                   << std::hex << (void *)nvmlDevice.nvmlDevice;
     return retVal;
 }
 

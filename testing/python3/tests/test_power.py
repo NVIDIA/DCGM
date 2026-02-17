@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ import dcgm_agent
 import test_utils
 import dcgm_structs
 
+
 def test_dcgm_pwr_profile_ids():
     """
     Verify that every valid power-profile ID maps to a unique string.
@@ -26,9 +27,11 @@ def test_dcgm_pwr_profile_ids():
 
     for profile_id in range(0, dcgm_structs.DCGM_POWER_PROFILE_MAX):
         name = dcgm_agent.dcgmPowerProfileIdToName(profile_id)
-        assert name.startswith("POWER_PROFILE_"), f"Power Profile ID {profile_id} {name} does not start with POWER_PROFILE_"
-        assert name not in profile_names, f"Power Profile ID {profile_id} {name} is a duplicate." 
+        assert name.startswith(
+            "POWER_PROFILE_"), f"Power Profile ID {profile_id} {name} does not start with POWER_PROFILE_"
+        assert name not in profile_names, f"Power Profile ID {profile_id} {name} is a duplicate."
         profile_names.add(name)
+
 
 def test_dcgm_pwr_profile_ids_out_of_range():
     """
@@ -36,4 +39,5 @@ def test_dcgm_pwr_profile_ids_out_of_range():
     dcgm_structs.DCGM_ST_BADPARAM.
     """
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
-        dcgm_agent.dcgmPowerProfileIdToName(dcgm_structs.DCGM_POWER_PROFILE_MAX)
+        dcgm_agent.dcgmPowerProfileIdToName(
+            dcgm_structs.DCGM_POWER_PROFILE_MAX)

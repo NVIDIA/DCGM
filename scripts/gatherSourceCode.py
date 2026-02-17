@@ -1,6 +1,6 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,9 +37,9 @@ sourceDirNames = [
     'modules/vgpu'
 ]
 
-copyExts = ['.c','.cpp','.h', '.proto']
+copyExts = ['.c', '.cpp', '.h', '.proto']
 
-#Files that we should exclude, even if they match the extension
+# Files that we should exclude, even if they match the extension
 excludeFiles = ['topology.proto', ]
 
 tgzFilename = "./dcgm_source.tar.gz"
@@ -49,9 +49,11 @@ licenseText = open(licenseFilename).read()
 
 outputTempFolder = "./dcgm_source"
 
+
 def removeOutputFile():
     if os.path.isfile(tgzFilename):
         os.remove(tgzFilename)
+
 
 def tarfileFilterFunction(tarInfo):
     tarInfo.mtime = time.time()
@@ -61,10 +63,11 @@ def tarfileFilterFunction(tarInfo):
     tarInfo.gname = "nvidia"
     return tarInfo
 
+
 print("Cleaning up previous runs")
 removeOutputFile()
 
-#Recreate our temp folder
+# Recreate our temp folder
 if os.path.isdir(outputTempFolder):
     shutil.rmtree(outputTempFolder)
 os.mkdir(outputTempFolder)
@@ -81,7 +84,7 @@ for sourceDirName in sourceDirNames:
     filenames = os.listdir(sourceInputDir + sourceDirName)
 
     for filename in filenames:
-        #Should we exclude this file from the archive?
+        # Should we exclude this file from the archive?
         if filename in excludeFiles:
             print("EXCLUDED: " + filename)
             continue
@@ -92,7 +95,7 @@ for sourceDirName in sourceDirNames:
             if inputFilename.endswith(copyExt):
                 keepFile = True
                 break
-        
+
         if not keepFile:
             continue
 
@@ -111,8 +114,7 @@ for sourceDirName in sourceDirNames:
 
         print("Wrote " + outputFilename)
 
-#Write tar file
+# Write tar file
 print("Writing " + tgzFilename)
 tarFileObj.add(outputTempFolder, filter=tarfileFilterFunction)
 print("Done")
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@
 #include <dcgm_fields.h>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
+#include <fmt/ranges.h>
 #include <tclap/ArgException.h>
 #include <timelib.h>
 
@@ -266,7 +267,12 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
     TCLAP::ValueArg<int> groupId("g", "group", "The group ID to query.", false, DCGM_GROUP_ALL_GPUS, "groupId", cmd);
     TCLAP::ValueArg<int> cpuId("", "cpuid", "The CPU ID to query.", false, 0, "cpuId", cmd);
     TCLAP::SwitchArg verbose("v", "verbose", "Display policy information per GPU.", cmd, false);
-    TCLAP::SwitchArg getList("l", "list", "List all GPUs and NVIDIA CPUs discovered on the host.", false);
+    TCLAP::SwitchArg allGpus("a", "all", "Display all GPUs including inactive ones.", false);
+    TCLAP::SwitchArg getList(
+        "l",
+        "list",
+        "List GPUs and NVIDIA CPUs discovered on the host. By default, only active GPUs are shown.",
+        false);
     TCLAP::SwitchArg computeInstances(
         "c", "compute-hierarchy", "List all of the gpu instances and compute instances", false);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN");
@@ -277,11 +283,13 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
     xors.push_back(&computeInstances);
     cmd.xorAdd(xors);
     cmd.add(&hostAddress);
+    cmd.add(&allGpus);
 
     // Set help output information
     helpOutput.addDescription("discovery -- Used to discover and identify GPUs and their attributes.");
     helpOutput.addToGroup("1", &hostAddress);
     helpOutput.addToGroup("1", &getList);
+    helpOutput.addToGroup("1", &allGpus);
 
     helpOutput.addToGroup("2", &hostAddress);
     helpOutput.addToGroup("2", &getInfo);
@@ -310,7 +318,7 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
 
     if (getList.isSet())
     {
-        result = QueryDeviceList(hostAddress.getValue()).Execute();
+        result = QueryDeviceList(hostAddress.getValue(), allGpus.isSet()).Execute();
     }
     else if (computeInstances.isSet())
     {
@@ -1221,11 +1229,12 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
     TCLAP::ValueArg<std::string> setWatches("s",
                                             "set",
                                             "Set the watches to be monitored. [default = pm]\n a - all watches"
-                                            "\n p - PCIe watches (*)"
-                                            "\n m - memory watches (*)"
+                                            "\n d - driver watches"
                                             "\n i - infoROM watches"
-                                            "\n t - thermal and power watches (*)"
+                                            "\n m - memory watches (*)"
                                             "\n n - NVLink watches (*)"
+                                            "\n p - PCIe watches (*)"
+                                            "\n t - thermal and power watches (*)"
                                             "\n (*) watch requires 60 sec before first query",
                                             false,
                                             "pm",
@@ -1316,11 +1325,11 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                 case 'u':
                         //bitwiseWatches|= DCGM_HEALTH_WATCH_MCU;
                         //bitwiseWatches|= DCGM_HEALTH_WATCH_PMU;
-
-                case 'd':
-                        //bitwiseWatches|= DCGM_HEALTH_WATCH_DRIVER;
-                     *
                      */
+                case 'd':
+                    bitwiseWatches |= DCGM_HEALTH_WATCH_DRIVER;
+                    CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
+                    break;
                 case 't':
                     bitwiseWatches |= DCGM_HEALTH_WATCH_THERMAL;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_POWER;
@@ -1344,6 +1353,7 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVLINK;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVSWITCH_FATAL;
+                    bitwiseWatches |= DCGM_HEALTH_WATCH_DRIVER;
 
                     if (setWatches.getValue().length() > 1)
                     {
@@ -2918,19 +2928,46 @@ dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const 
     TCLAP::SwitchArg json("j", "json", "Print the output in a json format", cmd, false);
 
     TCLAP::ValueArg<std::string> targetSeverity(
-        "", "logging-severity", "Set logging severity", true, "", "targetSeverity", cmd);
+        "", "logging-severity", "Set logging severity", false, "", "targetSeverity", cmd);
     TCLAP::ValueArg<std::string> targetLogger("", "target-logger", loggerHelpMsg, false, "BASE", "targetLogger", cmd);
+
+    TCLAP::SwitchArg attachDriver(
+        "",
+        "attach-driver",
+        "Attach driver to the DCGM hostengine, this is useful in some cases like when you want to update driver without "
+        "restarting the hostengine",
+        cmd,
+        false);
+    TCLAP::SwitchArg detachDriver(
+        "",
+        "detach-driver",
+        "Detach driver from the DCGM hostengine, this is useful in some cases like when you want to "
+        "update driver without restarting the hostengine",
+        cmd,
+        false);
 
     cmd.parse(argc, argv);
 
-    if (!targetSeverity.isSet())
+    if (targetSeverity.isSet())
     {
-        throw TCLAP::CmdLineParseException("No argument provided for configuring hostengine (dcgmi set)");
+        return DcgmiSettingsSetLoggingSeverity(
+                   hostAddress.getValue(), targetLogger.getValue(), targetSeverity.getValue(), json.getValue())
+            .Execute();
     }
 
-    return DcgmiSettingsSetLoggingSeverity(
-               hostAddress.getValue(), targetLogger.getValue(), targetSeverity.getValue(), json.getValue())
-        .Execute();
+    if (attachDriver.isSet() && detachDriver.isSet())
+    {
+        throw TCLAP::CmdLineParseException(
+            "Both --attach-driver and --detach-driver were specified. Please use only one at a time");
+    }
+
+    if (attachDriver.isSet() || detachDriver.isSet())
+    {
+        return DcgmiSettingsAttachDetachDriver(hostAddress.getValue(), attachDriver.isSet()).Execute();
+    }
+
+    throw TCLAP::CmdLineParseException(
+        "Invalid argument provided for configuring hostengine, please refer to the help (dcgmi set --help)");
 }
 
 dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *const *argv)

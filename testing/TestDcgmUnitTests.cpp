@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ public:
     {
         int ret;
 
-        ret = dcgmEngineRun(5555, (char *)"127.0.0.1", 1);
+        ret = dcgmEngineRun(5555, (char *)"127.0.0.1", DcgmConnectionTypeTcp);
         if (ret)
         {
             fprintf(stderr, "dcgmServerRun returned %d\n", ret);

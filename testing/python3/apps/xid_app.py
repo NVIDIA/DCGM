@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,16 +15,20 @@ from . import app_runner
 import os
 import utils
 
+
 class XidApp(app_runner.AppRunner):
     paths = {
-            "Linux_32bit": "./apps/xid/xid_32bit",
-            "Linux_64bit": "./apps/xid/xid_64bit",
-            "Windows_64bit": "./apps/xid/xid_64bit.exe"
-            }
+        "Linux_32bit": "./apps/xid/xid_32bit",
+        "Linux_64bit": "./apps/xid/xid_64bit",
+        "Windows_64bit": "./apps/xid/xid_64bit.exe"
+    }
+
     def __init__(self, device):
         self.device = device
-        path = os.path.join(utils.script_dir, XidApp.paths[utils.platform_identifier])
-        super(XidApp, self).__init__(path, ["-i", device.busId], cwd=os.path.dirname(path))
+        path = os.path.join(
+            utils.script_dir, XidApp.paths[utils.platform_identifier])
+        super(XidApp, self).__init__(
+            path, ["-i", device.busId], cwd=os.path.dirname(path))
 
     def start(self, timeout=app_runner.default_timeout):
         """
@@ -33,7 +37,7 @@ class XidApp(app_runner.AppRunner):
         Raises exception with EOFError if XID application cannot start.
         """
         super(XidApp, self).start(timeout)
-        
+
         # if matching line is not found then EOFError exception is risen
         self.stdout_readtillmatch(lambda x: x == "All done. Finishing.")
 

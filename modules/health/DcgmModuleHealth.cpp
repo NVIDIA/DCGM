@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include "DcgmModuleHealth.h"
 #include "DcgmHealthResponse.h"
 #include "DcgmLogging.h"
+#include "dcgm_core_structs.h"
 #include <dcgm_api_export.h>
 #include <dcgm_structs.h>
 
@@ -194,6 +195,11 @@ dcgmReturn_t DcgmModuleHealth::ProcessFieldValuesUpdated(dcgm_core_msg_field_val
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmModuleHealth::ProcessAttachGpus()
+{
+    return mpHealthWatch->AttachGpus();
+}
+
 dcgmReturn_t DcgmModuleHealth::ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand)
 {
     dcgmReturn_t retSt = DCGM_ST_OK;
@@ -210,6 +216,13 @@ dcgmReturn_t DcgmModuleHealth::ProcessCoreMessage(dcgm_module_command_header_t *
 
         case DCGM_CORE_SR_PAUSE_RESUME:
             log_debug("Received Pause/Resume message");
+            break;
+
+        case DCGM_CORE_SR_ATTACH_GPUS:
+            if (auto ret = ProcessAttachGpus(); ret != DCGM_ST_OK)
+            {
+                log_error("ProcessAttachGpus failed with {}", ret);
+            }
             break;
 
         default:

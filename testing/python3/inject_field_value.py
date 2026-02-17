@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,10 +32,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--fieldId', dest='fieldId', type=int, required=True)
 parser.add_argument('-i', dest='gpuId', type=int, default=0)
 parser.add_argument('-o', '--offset', dest='offset', type=float, default=0)
-parser.add_argument('-v', '--value', dest='fieldValue', type=int, required=True)
+parser.add_argument('-v', '--value', dest='fieldValue',
+                    type=int, required=True)
 parser.add_argument('-l', '--loop', dest='loop', action='store_true')
 parser.add_argument('--interval', dest='interval', type=float)
-parser.add_argument('--iterations', dest='iterations', type=int, 
+parser.add_argument('--iterations', dest='iterations', type=int,
                     help='Set to 0 to insert the given value until stopped via SIGINT')
 args = parser.parse_args()
 
@@ -47,17 +48,22 @@ if args.iterations is not None and args.iterations < 0:
     print("iterations must be >= 0")
     sys.exit(-1)
 
-handle = pydcgm.DcgmHandle(None, 'localhost', dcgm_structs.DCGM_OPERATION_MODE_AUTO)
+handle = pydcgm.DcgmHandle(None,
+                           ipAddress='localhost',
+                           opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO
+                           )
 
 if not args.loop:
-    dcgm_field_injection_helpers.inject_value(handle.handle, args.gpuId, args.fieldId, args.fieldValue, args.offset)
+    dcgm_field_injection_helpers.inject_value(
+        handle.handle, args.gpuId, args.fieldId, args.fieldValue, args.offset)
     sys.exit(0)
 
 # loop
 try:
     i = 0
     while args.iterations == 0 or i < args.iterations:
-        dcgm_field_injection_helpers.inject_value(handle.handle, args.gpuId, args.fieldId, args.fieldValue, args.offset)
+        dcgm_field_injection_helpers.inject_value(
+            handle.handle, args.gpuId, args.fieldId, args.fieldValue, args.offset)
         time.sleep(args.interval)
         i += 1
 except KeyboardInterrupt:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,18 +32,24 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
 {
     // TODO: Add a version check
     // parameterNames must be null terminated
-    const char *parameterNames[] = { DIAGNOSTIC_STR_SBE_ERROR_THRESHOLD,
-                                     DIAGNOSTIC_STR_TEST_DURATION,
-                                     DIAGNOSTIC_STR_USE_DOUBLES,
-                                     DIAGNOSTIC_STR_TEMPERATURE_MAX,
-                                     DIAGNOSTIC_STR_IS_ALLOWED,
-                                     DIAGNOSTIC_STR_MATRIX_DIM,
-                                     DIAGNOSTIC_STR_PRECISION,
-                                     DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT,
-                                     nullptr };
-    const dcgmPluginValue_t paramTypes[]
-        = { DcgmPluginParamInt, DcgmPluginParamInt,  DcgmPluginParamBool,   DcgmPluginParamFloat, DcgmPluginParamBool,
-            DcgmPluginParamInt, DcgmPluginParamNone, DcgmPluginParamString, DcgmPluginParamFloat };
+    const char *parameterNames[]         = { DIAGNOSTIC_STR_SBE_ERROR_THRESHOLD,
+                                             DIAGNOSTIC_STR_TEST_DURATION,
+                                             DIAGNOSTIC_STR_USE_DOUBLES,
+                                             DIAGNOSTIC_STR_TEMPERATURE_MAX,
+                                             DIAGNOSTIC_STR_IS_ALLOWED,
+                                             DIAGNOSTIC_STR_MATRIX_DIM,
+                                             DIAGNOSTIC_STR_PRECISION,
+                                             DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT,
+                                             DIAGNOSTIC_STR_ALWAYS_USE_TENSOR,
+                                             DIAGNOSTIC_STR_CLOCKS_TOLERANCE_PCNT,
+                                             DIAGNOSTIC_STR_POWER_TOLERANCE_PCNT,
+                                             DIAGNOSTIC_STR_TOLERANCE_PCNT,
+                                             nullptr };
+    const dcgmPluginValue_t paramTypes[] = {
+        DcgmPluginParamInt,   DcgmPluginParamInt,    DcgmPluginParamBool,  DcgmPluginParamFloat, DcgmPluginParamBool,
+        DcgmPluginParamInt,   DcgmPluginParamString, DcgmPluginParamFloat, DcgmPluginParamBool,  DcgmPluginParamFloat,
+        DcgmPluginParamFloat, DcgmPluginParamFloat,  DcgmPluginParamNone,
+    };
     char const *descripton = "This plugin will stress the framebuffer of a list of GPUs.";
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 from DcgmiDiag import DcgmiDiag
 import utils
 
+
 def main():
     dd = DcgmiDiag(dcgmiPrefix=utils.verify_binary_locations())
     passedCount = 0
@@ -26,6 +27,7 @@ def main():
         else:
             print("&&&& PASSED dcgmi_diag_test")
             passedCount += 1
+
 
 if __name__ == '__main__':
     main()

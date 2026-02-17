@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,6 +303,10 @@ std::string Topo::HelperGetAffinity(unsigned long const *cpuAffinity)
         }
     }
     auto result = ss_.str();
+    if (result.size() < 2)
+    {
+        return "N/A";
+    }
     result.resize(result.length() - 2);
     return result;
 }

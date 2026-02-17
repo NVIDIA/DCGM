@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,52 @@ namespace DcgmNs
 {
 
 using EntityMap = std::unordered_map<DcgmNs::ParseResult, dcgmGroupEntityPair_t>;
+
+namespace EntityPrefixes
+{
+    constexpr std::array GpuPrefixes { "gpu:", "g:" };
+
+    constexpr std::array CpuPrefixes { "cpu:", "core:" };
+
+    constexpr std::array MigPrefixes { "instance:", "i:", "compute_instance:", "c:" };
+
+    constexpr std::array SwitchNetworkPrefixes { "nvswitch:", "n:", "cx:" };
+
+    constexpr std::array VGpuPrefixes { "vgpu:", "v:" };
+
+    constexpr std::array LinkPrefixes { "link:", "l:" };
+
+    constexpr bool IsNonGpuPrefix(std::string_view token)
+    {
+        for (auto const &prefix : CpuPrefixes)
+        {
+            if (token.starts_with(prefix))
+                return true;
+        }
+        for (auto const &prefix : MigPrefixes)
+        {
+            if (token.starts_with(prefix))
+                return true;
+        }
+        for (auto const &prefix : SwitchNetworkPrefixes)
+        {
+            if (token.starts_with(prefix))
+                return true;
+        }
+        for (auto const &prefix : VGpuPrefixes)
+        {
+            if (token.starts_with(prefix))
+                return true;
+        }
+        for (auto const &prefix : LinkPrefixes)
+        {
+            if (token.starts_with(prefix))
+                return true;
+        }
+        return false;
+    }
+} //namespace EntityPrefixes
+
 
 EntityMap &operator<<(EntityMap &entityMap, dcgmMigHierarchyInfo_v2 const &info);
 

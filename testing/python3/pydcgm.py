@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@ def _python_version_check():
     if python_version < '3':
         print('[ERROR] Detected Python version {}. These bindings are for Python 3.5+.'.format(python_version))
         sys.exit(1)
+
+
 _python_version_check()
 
-#Bring classes into this namespace
+# Bring classes into this namespace
 from DcgmHandle import *
 from DcgmGroup import *
 from DcgmStatus import *
@@ -37,5 +39,7 @@ if '__DCGM_TESTING_FRAMEWORK_ACTIVE' in os.environ and os.environ['__DCGM_TESTIN
 '''
 Define a unique exception type we will return so that callers can distinguish our exceptions from python standard ones
 '''
+
+
 class DcgmException(Exception):
     pass

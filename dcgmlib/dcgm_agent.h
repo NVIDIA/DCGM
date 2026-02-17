@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,6 +63,26 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmInit(void);
  *        - \ref DCGM_ST_UNINITIALIZED        if the library was not shut down properly
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmShutdown(void);
+
+/**
+ * This method starts the Host Engine Server
+ *
+ * @param[in] portNumber      TCP port to listen on. This is only used for TCP and VSOCK connection types.
+ * @param[in] socketPath      This is the path passed to bind() when creating the socket
+ *                            For the TCP connection type, this is the bind address. "" or NULL = All interfaces
+ *                            For the DOMAIN_SOCKET connection type, this is the path to the domain socket to use
+ *                            For the VSOCK connection type, this is either text representation of CID or ""/nullptr to
+ *                            bind to any CID.
+ * @param[in] connectionType  Specifies which protocol should be used for the connection type.
+ *                            One of the dcgmConnectionType_t enum values
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the server started successfully
+ *        - \ref DCGM_ST_*                    on error
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmEngineRun(unsigned short portNumber,
+                                           char const *socketPath,
+                                           unsigned int connectionType);
 
 /**
  * Start an embedded host engine agent within this process.
@@ -162,6 +182,35 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmConnect(const char *ipAddress, dcgmHandle_t *pD
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmConnect_v2(const char *ipAddress,
                                             dcgmConnectV2Params_t *connectParams,
+                                            dcgmHandle_t *pDcgmHandle);
+
+/**
+ * This method is used to connect to a stand-alone host engine process. Remote host engines are started
+ * by running the nv-hostengine command.
+ *
+ * @param connectionString IN: Valid connection string for the remote host engine to connect to.
+ *                             Use the following format:
+ *                             - tcp://x.x.x.x:yyyy (TCP/IP address)
+ *                             - tcp://x.x.x.x (TCP/IP address with default port DCGM_HE_PORT_NUMBER)
+ *
+ *                             - unix:///path/to/socket (Unix Domain socket)
+ *
+ *                             - vsock://cid:port (VMware vSock)
+ *                             - vsock://cid (VMware vSock with default port DCGM_HE_PORT_NUMBER)
+ *
+ * @param connectParams IN: Additional connection parameters. See \ref dcgmConnectV3Params_t for details.
+ * @param pDcgmHandle  OUT: DCGM Handle of the remote host engine
+ *
+ * @return
+ *         - \ref DCGM_ST_OK                   if we successfully connected to the remote host engine
+ *         - \ref DCGM_ST_CONNECTION_NOT_VALID if the remote host engine could not be reached
+ *         - \ref DCGM_ST_UNINITIALIZED        if DCGM has not been initialized with \ref dcgmInit.
+ *         - \ref DCGM_ST_BADPARAM             if pDcgmHandle is NULL or connectionString is invalid
+ *         - \ref DCGM_ST_INIT_ERROR           if DCGM encountered an error while initializing the remote client library
+ *         - \ref DCGM_ST_UNINITIALIZED        if DCGM has not been initialized with \ref dcgmInit
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmConnect_v3(const char *connectionString,
+                                            dcgmConnectV3Params_t *connectParams,
                                             dcgmHandle_t *pDcgmHandle);
 
 /**
@@ -348,10 +397,24 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetDeviceAttributes(dcgmHandle_t pDcgmHandle,
                                                      dcgmDeviceAttributes_t *pDcgmAttr);
 
 /**
+ * Get the status of a GPU
+ *
+ * @param[in] pDcgmHandle   DCGM Handle of an active connection
+ * @param[in] gpuId         GPU ID to query status for
+ * @param[out] status       Pointer to store the GPU status
+ *
+ * @return
+ *      - \ref DCGM_ST_OK if successful
+ *      - \ref DCGM_ST_BADPARAM if any parameter is invalid
+ *      - \ref DCGM_ST_* on other errors
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetGpuStatus(dcgmHandle_t pDcgmHandle, unsigned int gpuId, DcgmEntityStatus_t *status);
+
+/**
  * Gets device workload power profile information and status.
  *
  * @param pDcgmHandle             IN: DCGM Handle
- * @param gpuId                   IN: GPU Id corresponding to which topology information should be fetched
+ * @param gpuId                   IN: GPU Id corresponding to which the information should be fetched
  * @param profilesInfo           OUT: Information about each of the supported workload power profiles available on this
  *                                    device
  * @param profilesStatus         OUT: Currently active, requested, and enforced workload power profiles on this device
@@ -2127,6 +2190,44 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmDiagSendHeartbeat(dcgmHandle_t pDcgmHandle);
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmHostengineEnvironmentVariableInfo(dcgmHandle_t pDcgmHandle,
                                                                    dcgmEnvVarInfo_t *pEnvVarInfo);
+
+/**
+ * Attach the driver to the DCGM.
+ *
+ * This API attaches NVML to DCGM. It does nothing if the driver is already attached. Use this to update
+ * the driver without restarting DCGM. \ref dcgmDetachDriver
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmAttachDriver(dcgmHandle_t pDcgmHandle);
+
+/**
+ * Detach the driver from the DCGM.
+ *
+ * This API detaches NVML from DCGM. It does nothing if the driver is already detached. Use this to update
+ * the driver without restarting DCGM. \ref dcgmAttachDriver
+ *
+ * @param pDcgmHandle        IN: DCGM Handle
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmDetachDriver(dcgmHandle_t pDcgmHandle);
+
+/**
+ * Get Friendly Power Profile name.
+ *
+ * @param[in]  dcgmPowerProfileType_t id GPU Identifier
+ * @param[out] const char **              pointer to name
+ *
+ * @return
+ *        - \ref DCGM_ST_OK                   if the call was successful
+ *        - \ref DCGM_ST_BADPARAM             if params. are bad (null pointer)
+ */
+dcgmReturn_t DCGM_PUBLIC_API dcgmPowerProfileIdToName(dcgmPowerProfileType_t id, char const **name);
 
 #ifdef __cplusplus
 }

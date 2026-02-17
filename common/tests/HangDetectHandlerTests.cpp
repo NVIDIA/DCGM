@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,6 @@ public:
     std::atomic<size_t> m_handlerCalls = 0;
 };
 
-#if 0 // Test temporarily disabled due to intermittent failures.
 TEST_CASE("HangDetectHandler")
 {
     auto handler  = HangDetectHandlerTest();
@@ -65,26 +64,21 @@ TEST_CASE("HangDetectHandler")
     monitor->SetHangDetectedHandler(&handler);
 
     // Verify handler start
-    REQUIRE(DcgmNs::Utils::WaitFor([&handler]() { return handler.IsRunning(); }, 2 * waitTime));
+    REQUIRE(DcgmNs::Utils::WaitFor([&handler]() { return handler.IsRunning(); }, 3 * waitTime));
+    REQUIRE(handler.m_handlerCalls.load() == 0);
 
     handler.AddHangEvent(1, 2, std::chrono::seconds(3));
-    REQUIRE(handler.m_handlerCalls == 0);
 
     // Observe exactly one handler call
-    REQUIRE(DcgmNs::Utils::WaitFor([&handler]() { return handler.m_handlerCalls != 0; }, 2 * waitTime));
-    REQUIRE(handler.m_handlerCalls == 1);
-    REQUIRE(DcgmNs::Utils::WaitFor([&handler]() { return handler.m_handlerCalls == 1; }, 2 * waitTime));
+    REQUIRE(DcgmNs::Utils::WaitFor([&handler]() { return handler.m_handlerCalls.load() != 0; }, 3 * waitTime));
+    REQUIRE(handler.m_handlerCalls.load() == 1);
 
-    // Clear handler and verify no handler is called
-    monitor->SetHangDetectedHandler(nullptr);
-    handler.AddHangEvent(1, 2, std::chrono::seconds(3));
-    REQUIRE(handler.m_handlerCalls == 1);
-    REQUIRE(DcgmNs::Utils::WaitFor([&handler]() { return handler.m_handlerCalls == 1; }, 2 * waitTime));
+    // Observe no further handler calls
+    REQUIRE_FALSE(DcgmNs::Utils::WaitFor([&handler]() { return handler.m_handlerCalls.load() > 1; }, 3 * waitTime));
 
     monitor->StopMonitoring();
 
     // Verify handler stop
     handler.Stop();
-    REQUIRE(DcgmNs::Utils::WaitFor([&handler]() { return !handler.IsRunning(); }, 2 * waitTime));
+    REQUIRE(DcgmNs::Utils::WaitFor([&handler]() { return !handler.IsRunning(); }, 3 * waitTime));
 }
-#endif

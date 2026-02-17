@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,10 +25,10 @@ target_sources(dcgmlibtests
         dcgm_error_tests.cpp
         GpmTests.cpp
         DcgmKmsgReaderTests.cpp
-        DcgmClientHandlerTests.cpp
         DcgmResourceManagerTests.cpp
         DcgmTopologyTests.cpp
         DcgmImexManagerTests.cpp
+        NvmlTaskRunnerTests.cpp
 )
 
 target_link_libraries(dcgmlibtests PRIVATE
@@ -56,6 +56,10 @@ target_link_libraries(dcgmlibtests
         rt
         dl
 )
+
+if (${LINK_INJECTION_LIB} STREQUAL "true")
+    target_link_libraries(dcgmlibtests PRIVATE nvml_injection)
+endif()
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(dcgmlibtests EXTRA_ARGS --colour-mode ansi)

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,30 +25,32 @@ ignore_List = [dcgm_fields.DCGM_FI_DEV_PCI_BUSID, dcgm_fields.DCGM_FI_DEV_UUID]
 
 
 publishFieldIds = [
-            dcgm_fields.DCGM_FI_DEV_PCI_BUSID, #Needed for plugin_instance
-            dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
-            dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
-            dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
-            dcgm_fields.DCGM_FI_DEV_GPU_UTIL,
-            dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
-            dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-            dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-            dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
-            dcgm_fields.DCGM_FI_DEV_ECC_DBE_AGG_TOTAL,
-            dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
-            dcgm_fields.DCGM_FI_DEV_FB_FREE,
-            dcgm_fields.DCGM_FI_DEV_FB_USED,
-            dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-            dcgm_fields.DCGM_FI_DEV_UUID
-            ]
+    dcgm_fields.DCGM_FI_DEV_PCI_BUSID,  # Needed for plugin_instance
+    dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
+    dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
+    dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
+    dcgm_fields.DCGM_FI_DEV_GPU_UTIL,
+    dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
+    dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
+    dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
+    dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_ECC_DBE_AGG_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_FB_FREE,
+    dcgm_fields.DCGM_FI_DEV_FB_USED,
+    dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
+    dcgm_fields.DCGM_FI_DEV_UUID
+]
+
 
 class DcgmJson(DcgmReader):
     def __init__(self):
-        DcgmReader.__init__(self, fieldIds=publishFieldIds, ignoreList=ignore_List)
-        self.m_jsonData = {} #Json data for each field.
-        self.m_list=[] # list of jsons of all the fields.
+        DcgmReader.__init__(self, fieldIds=publishFieldIds,
+                            ignoreList=ignore_List)
+        self.m_jsonData = {}  # Json data for each field.
+        self.m_list = []  # list of jsons of all the fields.
     ###########################################################################
-    
+
     '''
     The customDataHandler creates a json from the fvs dictionary. All jsons are appended to a list which is then returned from
     the function.
@@ -60,7 +62,8 @@ class DcgmJson(DcgmReader):
     list of all the jsons for each gpuID. 
 
     '''
-    def CustomDataHandler(self,fvs):
+
+    def CustomDataHandler(self, fvs):
         for gpuId in list(fvs.keys()):
             gpuFv = fvs[gpuId]
             typeInstance = str(gpuId)
@@ -78,14 +81,15 @@ class DcgmJson(DcgmReader):
                 self.m_list.append(json.dumps(self.m_jsonData))
 
     ###########################################################################
-    
+
     '''
     function to create json from the field value dictionary.
     '''
-    def CreateJson(self,data=None):
+
+    def CreateJson(self, data=None):
         self.Process()
         return self.m_list
-    
+
     ###########################################################################
 
 ###############################################################################

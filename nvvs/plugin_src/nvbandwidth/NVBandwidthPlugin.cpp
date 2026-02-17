@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -222,7 +222,7 @@ void NVBandwidthPlugin::Go(std::string const &testName,
     ParseIgnoreErrorCodesParam(testName, m_testParameters.GetString(PS_IGNORE_ERROR_CODES));
     m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
 
-    // Make sure the memory copy utilitization is low before launching the nvbandwidth test
+    // Make sure the memory copy utilization is low before launching the nvbandwidth test
     // This is to avoid the memory bandwidth from being saturated and affecting the results
     // of the nvbandwidth test
     dcgmFieldValue_v2 memCopyUtil = {};
@@ -246,7 +246,7 @@ void NVBandwidthPlugin::Go(std::string const &testName,
         }
         if (ret != DCGM_ST_OK)
         {
-            std::string errStr = fmt::format("Failed to get the memory copy utilitization for the GPU: {}",
+            std::string errStr = fmt::format("Failed to get the memory copy utilization for the GPU: {}",
                                              entityInfo->entities[entityIdx].entity.entityId);
             log_error(errStr);
             dcgmDiagError_v1 err { .entity   = entityInfo->entities[entityIdx].entity,
@@ -270,7 +270,7 @@ void NVBandwidthPlugin::Go(std::string const &testName,
         if (memCopyUtil.value.i64 > MAX_MEM_COPY_UTIL_PERCENTAGE)
         {
             std::string errStr = fmt::format(
-                "The memory copy utilitization for the GPU: {} is greater than 10%. This may affect the results of the nvbandwidth test.",
+                "The memory copy utilization for the GPU: {} is greater than 10%. This may affect the results of the nvbandwidth test.",
                 entityInfo->entities[entityIdx].entity.entityId);
             log_error(errStr);
             dcgmDiagError_v1 err { .entity   = entityInfo->entities[entityIdx].entity,
@@ -358,143 +358,16 @@ void NVBandwidthPlugin::Go(std::string const &testName,
     execArgv.push_back("-v");
 
     appendExtraArgv(execArgv);
-    if (LaunchExecutable(testName, execArgv))
+    std::string output;
+    auto launchResult = LaunchExecutable(testName, execArgv, &output);
+    if (!launchResult.has_value())
     {
         SetResult(testName, NVVS_RESULT_FAIL);
-    }
-    else
-    {
-        SetResult(testName, NVVS_RESULT_PASS);
-    }
-    return;
-}
-
-bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vector<std::string> const &execArgv)
-{
-    // Spawn a process running NVBandwidth executable
-    DcgmNs::Utils::FileHandle outputFd;
-    pid_t childPid = DcgmNs::Utils::ForkAndExecCommand(execArgv, nullptr, &outputFd, nullptr, true, nullptr, nullptr);
-
-    if (childPid < 0)
-    {
-        // Failure - Couldn't launch the child process
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        const std::string err = fmt::format("Couldn't fork to launch the NVBandwidth: '{}'", strerror(errno));
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-        AddError(testName, d);
-        return true;
-    }
-
-    log_info("Launched the nvbandwidth ({}) with pid {}", execArgv[0], childPid);
-
-    if (auto const ret = HangDetectRegisterProcess(childPid); ret != DCGM_ST_OK)
-    {
-        log_warning("Failed to register child process with pid {} for hang detection: {}", childPid, ret);
-        // We'll keep going, but NVVS's monitor won't detect any hangs in this process
-    }
-
-    /* Unregister from hang detection before blocking on ReadProcessOutput and waitpid() to avoid
-     * false positives. Detection is re-enabled after waitpid() completes.
-     */
-    HangDetectUnregisterTask(getpid(), getpid());
-
-    fmt::memory_buffer stdoutStream;
-
-    if (auto const ret = DcgmNs::Utils::ReadProcessOutput(stdoutStream, std::move(outputFd)); ret != 0)
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        const std::string err = fmt::format("Error while reading output from the NVBandwidth: '{}'", strerror(errno));
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-        AddError(testName, d);
-        return true;
-    }
-
-    auto const logPaths = DcgmNs::Utils::GetLogFilePath(testName);
-
-    {
-        std::ofstream logFile(logPaths.logFileName.string());
-        bool logToNvvsLog { false };
-
-        if (!logFile.is_open())
-        {
-            log_error("Failed to open log file: {}. Reason: {}", logPaths.logFileName.string(), strerror(errno));
-            logToNvvsLog = true;
-        }
-        else
-        {
-            logFile.write(stdoutStream.data(), stdoutStream.size());
-            if (!logFile.good())
-            {
-                log_error(
-                    "Failed to write to log file: {}. Reason: {}", logPaths.logFileName.string(), strerror(errno));
-                logToNvvsLog = true;
-            }
-        }
-
-        if (logToNvvsLog)
-        {
-            // log the stdout/stderr of nvbandwidth binary to nvvs.log when failed to open or write to log file
-            log_info("External command stdout: \n{}\n", fmt::to_string(stdoutStream));
-        }
-    }
-
-    // Get exit status of child
-    int childStatus { 0 };
-    if (waitpid(childPid, &childStatus, 0) == -1)
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        std::string const err = fmt::format("Error while waiting for the NVBandwidth: '{}'", strerror(errno));
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-        AddError(testName, d);
-        return true;
-    }
-
-    HangDetectUnregisterProcess(childPid);
-
-    // Check exit status
-    if (WIFEXITED(childStatus))
-    {
-        auto exitCode = WEXITSTATUS(childStatus);
-        if (exitCode != 0)
-        {
-            DcgmError d { DcgmError::GpuIdTag::Unknown };
-            std::string const err = fmt::format("The NVBandwidth exited with non-zero status {}", exitCode);
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-            d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
-            AddError(testName, d);
-            return true;
-        }
-    }
-    else if (WIFSIGNALED(childStatus))
-    {
-        // Child terminated due to signal
-        auto exitCode = WTERMSIG(childStatus);
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        std::string const err = fmt::format("The NVBandwidth terminated with signal {}", exitCode);
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-        d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
-        AddError(testName, d);
-        return true;
-    }
-    else
-    {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        std::string const err = "The NVBandwidth is being traced or otherwise can't exit";
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
-        d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
-        AddError(testName, d);
-        return true;
-    }
-
-    // Restore hang detection for this thread, in case we hang while reading the output.
-    if (auto const ret = HangDetectRegisterTask(getpid(), getpid()); ret != DCGM_ST_OK)
-    {
-        log_warning("Failed to re-register this thread with pid {} for hang detection: {}", getpid(), ret);
-        // We'll keep going, but NVVS's monitor won't detect any hangs in this thread
+        return;
     }
 
     // Parse the json output from NVBandwidth executable
-    auto [hasError, result] = AttemptToReadOutput(fmt::to_string(stdoutStream));
+    auto [hasError, result] = AttemptToReadOutput(output);
     if (hasError)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
@@ -504,12 +377,15 @@ bool NVBandwidthPlugin::LaunchExecutable(std::string const &testName, std::vecto
             err += result.value().overallError.value();
         }
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, err.c_str());
+        auto const logPaths = DcgmNs::Utils::GetLogFilePath(testName);
         d.SetNextSteps(fmt::format(R"(Please check the Nvbandwidth log in '{}')", logPaths.logFileName.string()));
         AddError(testName, d);
-        return true;
+        SetResult(testName, NVVS_RESULT_FAIL);
+        return;
     }
 
-    return false;
+    SetResult(testName, NVVS_RESULT_PASS);
+    return;
 }
 
 std::pair<bool, std::optional<NVBandwidthResult>> NVBandwidthPlugin::AttemptToReadOutput(std::string_view output)

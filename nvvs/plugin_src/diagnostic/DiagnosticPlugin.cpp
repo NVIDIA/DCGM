@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@
  */
 
 /*
- * Copyright (c) 2016, Ville Timonen
+ * Copyright (c) 2016-2026, Ville Timonen
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,19 @@
 
 // Used to report op/s, measured through Visual Profiler, CUBLAS from CUDA 7.5
 // (Seems that they indeed take the naive dim^3 approach)
-#define OPS_PER_MUL 17188257792ul
+#define OPS_PER_2048_MUL 17188257792ul
+
+/*
+ * OPS_PER_2048_MUL is based on the number of OPS performed for a 2048 x 2048 x 2048 matrix
+ * This function calculates how many OPS we're running based on actual matrix dimensions and
+ * converts the result to gigaflops.
+ */
+double CalculateGFlopsMultiplier(unsigned int matrixDim)
+{
+    double ratioTo2048 = matrixDim / 2048.0;
+    double opsRatio    = ratioTo2048 * ratioTo2048 * ratioTo2048;
+    return OPS_PER_2048_MUL * opsRatio / 1024.0 / 1024.0 / 1024.0;
+}
 
 /*****************************************************************************/
 /*
@@ -81,6 +93,7 @@ GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle)
     , m_gflopsTolerancePcnt(0.0)
     , m_precision(DIAG_SINGLE_PRECISION)
     , m_matrixDim(2048)
+    , m_useTensorAlways(false)
 {
     m_infoStruct.testIndex      = DCGM_DIAGNOSTIC_INDEX;
     m_infoStruct.testCategories = "Hardware";
@@ -97,6 +110,7 @@ GpuBurnPlugin::GpuBurnPlugin(dcgmHandle_t handle)
     m_testParameters->AddString(DIAGNOSTIC_STR_IS_ALLOWED, "False");
     m_testParameters->AddDouble(DIAGNOSTIC_STR_MATRIX_DIM, 2048.0);
     m_testParameters->AddDouble(DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT, 0.0);
+    m_testParameters->AddString(DIAGNOSTIC_STR_ALWAYS_USE_TENSOR, "False");
     m_testParameters->AddString(PS_LOGFILE, "stats_diagnostic.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_testParameters->AddString(PS_IGNORE_ERROR_CODES, "");
@@ -356,6 +370,7 @@ void GpuBurnPlugin::Go(std::string const &testName,
     m_sbeFailureThreshold = m_testParameters->GetDouble(DIAGNOSTIC_STR_SBE_ERROR_THRESHOLD);
     m_matrixDim           = static_cast<unsigned int>(m_testParameters->GetDouble(DIAGNOSTIC_STR_MATRIX_DIM));
     m_gflopsTolerancePcnt = m_testParameters->GetDouble(DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT);
+    m_useTensorAlways     = m_testParameters->GetBoolFromString(DIAGNOSTIC_STR_ALWAYS_USE_TENSOR);
 
     if (m_testDuration < 1.0)
     {
@@ -642,10 +657,11 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
         return false; // Caller will check for main_should_stop and set the test skipped
     }
     std::vector<double> gflops(operationsPerformed.size());
+    double gflopsMultiplier = CalculateGFlopsMultiplier(m_matrixDim);
     for (size_t i = 0; i < operationsPerformed.size(); i++)
     {
         // Calculate the approximate gigaflops and record it as info for this test
-        gflops[i] = operationsPerformed[i] * OPS_PER_MUL / (1024 * 1024 * 1024) / m_testDuration;
+        gflops[i] = operationsPerformed[i] * gflopsMultiplier / m_testDuration;
         char buf[1024];
         snprintf(buf,
                  sizeof(buf),
@@ -655,11 +671,9 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
         AddInfoVerboseForGpu(GetDiagnosticTestName(), m_device[i]->gpuId, buf);
     }
 
-    if (gflops.size() > 1 && m_gflopsTolerancePcnt > 0.0)
+    if (CheckVariationFailures(startTime, gflops))
     {
-        double gflopsMinThreshold = GetGflopsMinThreshold(gflops, m_gflopsTolerancePcnt);
-        auto indices              = GetGflopsBelowMinThreshold(gflops, gflopsMinThreshold);
-        ReportGpusBelowMinThreshold(gflops, indices, gflopsMinThreshold);
+        log_error("At least one GPU has an issue keeping up with the others on this system, per user settings.");
     }
 
     /* Set pass/failed status.
@@ -671,51 +685,123 @@ bool GpuBurnPlugin::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
     return true;
 }
 
-/****************************************************************************/
-/*
- * GpuBurnPlugin::GetGflopsMeanAndMinThreshold
- */
-/****************************************************************************/
-double GpuBurnPlugin::GetGflopsMinThreshold(const std::vector<double> &gflops, double tolerancePcnt) const
+void GpuBurnPlugin::SetToleranceIfUnset(std::string_view const &name, double &param, double tolerancePcnt)
 {
-    double mean = std::accumulate(gflops.begin(), gflops.end(), 0.0) / gflops.size();
-    return (1.0 - tolerancePcnt) * mean;
+    if (param <= 0.0 && tolerancePcnt > 0.0)
+    {
+        log_debug("{} has been set to {} from {}", name, tolerancePcnt, DIAGNOSTIC_STR_TOLERANCE_PCNT);
+        param = tolerancePcnt;
+    }
 }
 
-/****************************************************************************/
-/*
- * GpuBurnPlugin::GetGflopsBelowMinThershold
- */
-/****************************************************************************/
-std::vector<size_t> GpuBurnPlugin::GetGflopsBelowMinThreshold(const std::vector<double> &gflops, double minThresh) const
+static char GetDcgmFieldType(unsigned short fieldId)
 {
-    std::vector<size_t> result;
-    for (size_t i = 0; i < gflops.size(); i++)
+    dcgm_field_meta_p fieldInfo = DcgmFieldGetById(fieldId);
+
+    if (fieldInfo != nullptr)
     {
-        if (gflops[i] < minThresh)
-            result.push_back(i);
+        return fieldInfo->fieldType;
     }
-    return result;
+
+    return ' ';
 }
 
-/****************************************************************************/
-/*
- * GpuBurnPlugin::ReportGpusBelowMinThreshold
- */
-/****************************************************************************/
-void GpuBurnPlugin::ReportGpusBelowMinThreshold(const std::vector<double> &gflops,
-                                                const std::vector<size_t> &indices,
-                                                double minThresh)
+bool GpuBurnPlugin::CheckToleranceForField(unsigned short fieldId,
+                                           double tolerancePcnt,
+                                           unsigned long startTime,
+                                           unsigned long endTime)
 {
-    for (size_t i : indices)
+    if (tolerancePcnt <= 0.0)
     {
-        DcgmError d { m_device[i]->gpuId };
-        //  "Detected %.2f %s for GPU %u which is below the threshold %.2f"
-        DCGM_ERROR_FORMAT_MESSAGE(
-            DCGM_FR_GFLOPS_THRESHOLD_VIOLATION, d, gflops[i], "GFLOPs", m_device[i]->gpuId, minThresh);
-        log_error(d.GetMessage());
-        AddError(GetDiagnosticTestName(), d);
+        return false;
     }
+
+    bool errorDetected = false;
+
+    char fieldType = GetDcgmFieldType(fieldId);
+    switch (fieldType)
+    {
+        case DCGM_FT_INT64:
+        {
+            std::vector<unsigned long> iAvgs;
+            dcgmReturn_t ret = GetAverages(fieldId, iAvgs, startTime, endTime);
+
+            if (ret != DCGM_ST_OK)
+            {
+                log_error("Cannot check variation failures for clock speeds: {}", errorString(ret));
+            }
+            else if (CheckAveragesForExcessiveVariation(iAvgs, tolerancePcnt, "Clock Speed"))
+            {
+                errorDetected = true;
+            }
+            break;
+        }
+
+        case DCGM_FT_DOUBLE:
+        {
+            std::vector<double> dblAvgs;
+            dcgmReturn_t ret = GetAverages(fieldId, dblAvgs, startTime, endTime);
+
+            if (ret != DCGM_ST_OK)
+            {
+                log_error("Cannot check variation failures for power usage: {}", errorString(ret));
+            }
+            else if (CheckAveragesForExcessiveVariation(dblAvgs, tolerancePcnt, "Power Usage"))
+            {
+                errorDetected = true;
+            }
+            break;
+        }
+
+        default:
+            log_error("Unsupported field ID {}", fieldId);
+            break;
+    }
+
+    return errorDetected;
+}
+
+void GpuBurnPlugin::CorrectTolerancePercentageIfWrong(double &pcnt, std::string_view const &name) const
+{
+    if (pcnt >= 1.0 || pcnt < 0.0)
+    {
+        log_error(
+            "Ignoring user-specified tolerance percentage {} for {}: the percentage must be a value between 0.0 and 1.0",
+            pcnt,
+            name);
+        pcnt = 0.0;
+    }
+}
+
+bool GpuBurnPlugin::CheckVariationFailures(unsigned long startTime, std::vector<double> &gflops)
+{
+    bool errorDetected   = false;
+    double tolerancePcnt = m_testParameters->GetDouble(DIAGNOSTIC_STR_TOLERANCE_PCNT);
+    errorDetected        = CheckAveragesForExcessiveVariation(gflops, m_gflopsTolerancePcnt, "GFLOPs");
+
+    CorrectTolerancePercentageIfWrong(tolerancePcnt, "Global Tolerance");
+
+    unsigned long endTime     = timelib_usecSince1970();
+    double clockTolerancePcnt = m_testParameters->GetDouble(DIAGNOSTIC_STR_CLOCKS_TOLERANCE_PCNT);
+    double powerTolerancePcnt = m_testParameters->GetDouble(DIAGNOSTIC_STR_POWER_TOLERANCE_PCNT);
+
+    CorrectTolerancePercentageIfWrong(clockTolerancePcnt, DIAGNOSTIC_STR_CLOCKS_TOLERANCE_PCNT);
+    CorrectTolerancePercentageIfWrong(powerTolerancePcnt, DIAGNOSTIC_STR_POWER_TOLERANCE_PCNT);
+
+    SetToleranceIfUnset(DIAGNOSTIC_STR_CLOCKS_TOLERANCE_PCNT, clockTolerancePcnt, tolerancePcnt);
+    SetToleranceIfUnset(DIAGNOSTIC_STR_POWER_TOLERANCE_PCNT, powerTolerancePcnt, tolerancePcnt);
+
+    if (clockTolerancePcnt > 0.0)
+    {
+        errorDetected |= CheckToleranceForField(DCGM_FI_DEV_SM_CLOCK, clockTolerancePcnt, startTime, endTime);
+    }
+
+    if (powerTolerancePcnt > 0.0)
+    {
+        errorDetected |= CheckToleranceForField(DCGM_FI_DEV_POWER_USAGE, powerTolerancePcnt, startTime, endTime);
+    }
+
+    return errorDetected;
 }
 
 std::string GpuBurnPlugin::GetDiagnosticTestName() const
@@ -1228,6 +1314,16 @@ int GpuBurnWorker::Compute(int precisionIndex)
     return 0;
 }
 
+double GpuBurnWorker::GetGFlopsMultiplier()
+{
+    if (m_gflopsMultiplier == 0.0)
+    {
+        m_gflopsMultiplier = CalculateGFlopsMultiplier(m_matrixDim);
+    }
+
+    return m_gflopsMultiplier;
+}
+
 /****************************************************************************/
 void GpuBurnWorker::run()
 {
@@ -1261,6 +1357,15 @@ void GpuBurnWorker::run()
     startTime = timelib_dsecSince1970();
     std::vector<DcgmError> errorList;
     bool hintedTensorCores = false; /* Have we hinted cublas to use tensor cores yet? */
+
+    if (m_plugin.AlwaysUseTensor())
+    {
+        log_debug("Enabling tensor math for GPU {} because parameter settings request it.", m_device->gpuId);
+        CHECK_CUBLAS_ERROR("cublasSetMathMode", CublasProxy::CublasSetMathMode(m_cublas, CUBLAS_TENSOR_OP_MATH));
+        hintedTensorCores = true;
+    }
+
+    double gflopsMultiplier = GetGFlopsMultiplier();
 
     do
     {
@@ -1330,7 +1435,7 @@ void GpuBurnWorker::run()
             }
         }
 
-        double gflops = m_iters * OPS_PER_MUL / (1024 * 1024 * 1024) / (iterEnd - iterStart);
+        double gflops = m_iters * gflopsMultiplier / (iterEnd - iterStart);
         m_plugin.SetGpuStat(m_plugin.GetDiagnosticTestName(), m_device->gpuId, gflopsKey, gflops);
 
     } while (computeTime < m_testDuration && !ShouldStop() && !st);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -116,14 +116,14 @@ public:
     /**
      * @brief Connect_v2 mock - returns the configured result
      */
-    dcgmReturn_t Connect_v2(const char *ipAddress,
-                            dcgmConnectV2Params_t *connectParams,
+    dcgmReturn_t Connect_v3(const char *connectionString,
+                            dcgmConnectV3Params_t *connectParams,
                             dcgmHandle_t *pDcgmHandle) override
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
         // Save the last connection parameters for inspection
-        m_lastIpAddress = ipAddress ? ipAddress : "";
+        m_lastConnectionString = connectionString ? connectionString : "";
         if (connectParams)
         {
             m_lastConnectParams = *connectParams;
@@ -143,8 +143,8 @@ public:
 
         // Store connection info for this handle
         ConnectionInfo info;
-        info.ipAddress                = ipAddress ? ipAddress : "";
-        info.params                   = connectParams ? *connectParams : dcgmConnectV2Params_t {};
+        info.connectionString         = connectionString ? connectionString : "";
+        info.params                   = connectParams ? *connectParams : dcgmConnectV3Params_t {};
         m_connectionsByHandle[handle] = std::move(info);
 
         return m_connectResult;
@@ -268,25 +268,25 @@ public:
     }
 
     /**
-     * @brief Get the last IP address used for Connect_v2
+     * @brief Get the last connection string used for Connect_v3
      */
-    std::string GetLastIpAddress() const
+    std::string GetLastConnectionString() const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_lastIpAddress;
+        return m_lastConnectionString;
     }
 
     /**
-     * @brief Get the last connect parameters used for Connect_v2
+     * @brief Get the last connect parameters used for Connect_v3
      */
-    dcgmConnectV2Params_t GetLastConnectParams() const
+    dcgmConnectV3Params_t GetLastConnectParams() const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_lastConnectParams;
     }
 
     /**
-     * @brief Get the number of times Connect_v2 was called
+     * @brief Get the number of times Connect_v3 was called
      */
     int GetConnectCallCount() const
     {
@@ -321,11 +321,11 @@ public:
         m_sendRequestCallCount = 0;
         m_sendRequestResult    = DCGM_ST_OK;
 
-        m_lastIpAddress     = "";
-        m_lastConnectParams = {};
-        m_connectCallCount  = 0;
-        m_connectResult     = DCGM_ST_OK;
-        m_nextHandle        = 0;
+        m_lastConnectionString = "";
+        m_lastConnectParams    = {};
+        m_connectCallCount     = 0;
+        m_connectResult        = DCGM_ST_OK;
+        m_nextHandle           = 0;
         m_connectionsByHandle.clear();
 
         m_lastDisconnectedHandle = 0;
@@ -343,8 +343,8 @@ public:
     // Track connections by handle
     struct ConnectionInfo
     {
-        std::string ipAddress;
-        dcgmConnectV2Params_t params;
+        std::string connectionString;
+        dcgmConnectV3Params_t params;
     };
 
     /**
@@ -396,8 +396,8 @@ private:
     std::atomic<int> m_sendRequestCallCount { 0 };
 
     // For Connect call tracking
-    std::string m_lastIpAddress;
-    dcgmConnectV2Params_t m_lastConnectParams = {};
+    std::string m_lastConnectionString;
+    dcgmConnectV3Params_t m_lastConnectParams = {};
     std::atomic<int> m_connectCallCount { 0 };
     std::atomic<dcgmHandle_t> m_nextHandle { 0 };
 

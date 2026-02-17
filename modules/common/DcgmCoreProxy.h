@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,13 @@
 
 #include <vector>
 
+enum class EntityListOption
+{
+    // All entities will be included
+    All,
+    // Only DcgmEntityStatusOk and DcgmEntityStatusFake will be included
+    ActiveOnly,
+};
 
 class DcgmCoreProxy
 {
@@ -44,6 +51,14 @@ public:
      * @param[out] gpuIds - the GPU ids retrieved
      */
     dcgmReturn_t GetGpuIds(int activeOnly, std::vector<unsigned int> &gpuIds);
+
+    /**
+     *
+     * @param[in]  gpuId - the GPU id to check
+     *
+     * @returns the GPU status retrieved
+     */
+    DcgmEntityStatus_t GetGpuStatus(unsigned int gpuId);
 
     /**
      * @param[in] gpuIds - the list of GPU ids to check
@@ -245,9 +260,12 @@ public:
 
     /**
      * @param[in]  groupId - the id of the group whose entities are being retrieved
+     * @param[in]  option - the option when listing entities
      * @param[out] entities - the list of entities with information about entity group and id
      */
-    dcgmReturn_t GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities) const;
+    dcgmReturn_t GetGroupEntities(unsigned int groupId,
+                                  EntityListOption option,
+                                  std::vector<dcgmGroupEntityPair_t> &entities) const;
 
     /**
      * @param[in]  connectionId - the id of the connection
@@ -259,10 +277,12 @@ public:
     /**
      * @param[in]  connectionId - the id of the connection
      * @param[in]  groupId - the id of the group we're checking
+     * @param[in]  option - the option when listing entities
      * @param[out]  gpuIds - populated with the complete list of GPU ids for this group
      */
     dcgmReturn_t GetGroupGpuIds(dcgm_connection_id_t connectionId,
                                 unsigned int groupId,
+                                EntityListOption option,
                                 std::vector<unsigned int> &gpuIds) const;
 
 

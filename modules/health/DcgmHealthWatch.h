@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,13 @@ struct XidHealthInfo
     dcgmError_t errorCode;             // Specific error code from dcgmError_enum, defaults to DCGM_FR_XID_ERROR
 };
 
+struct HealthWatchState
+{
+    dcgmHealthSystems_t systems;
+    dcgm_connection_id_t connectionId;
+    long long updateInterval;
+    double maxKeepAge;
+};
 
 /* This class is implements the background health check methods
  * within the hostengine
@@ -93,6 +100,12 @@ public:
     */
     void ProcessXidFv(dcgmBufferedFv_t *fv);
 
+
+    /*
+    Handle the attach GPUs message
+    */
+    dcgmReturn_t AttachGpus();
+
     /*
      * @param system - the system whose name we seek.
      *
@@ -110,7 +123,7 @@ public:
 private:
     DcgmCoreProxy mpCoreProxy;
     /* Map of groupId -> dcgmHealthSystems_t of the watched health systems of a given groupId */
-    typedef std::map<unsigned int, dcgmHealthSystems_t> groupWatchTable_t;
+    typedef std::map<unsigned int, HealthWatchState> groupWatchTable_t;
     groupWatchTable_t mGroupWatchState;
 
     DcgmMutex *m_mutex;
@@ -181,11 +194,29 @@ private:
                            DcgmWatcher watcher,
                            long long updateInterval,
                            double maxKeepAge);
+    dcgmReturn_t SetGlobalChecks(dcgmHealthSystems_t systems,
+                                 DcgmWatcher watcher,
+                                 long long updateInterval,
+                                 double maxKeepAge);
     dcgmReturn_t SetNvSwitchWatches(std::vector<unsigned int> &groupSwitchIds,
                                     dcgmHealthSystems_t systems,
                                     DcgmWatcher watcher,
                                     long long updateInterval,
                                     double maxKeepAge);
+
+    /*************************************************************************/
+    /*
+     * Monitor global (system-wide) health checks that are not entity-specific
+     *
+     * These checks apply to the entire system rather than individual GPUs,
+     * switches, or other entities. Examples include IMEX fabric status.
+     *
+     * @param healthSystemsMask - Bitmask of which health systems are enabled
+     * @param response          - Response object to populate with any incidents
+     *
+     * @return DCGM_ST_OK on success, error code otherwise
+     */
+    dcgmReturn_t MonitorGlobalHealthChecks(dcgmHealthSystems_t healthSystemsMask, DcgmHealthResponse &response);
 
     dcgmReturn_t MonitorPcie(dcgm_field_entity_group_t entityGroupId,
                              dcgm_field_eid_t entityId,
@@ -222,6 +253,21 @@ private:
                                  long long startTime,
                                  long long endTime,
                                  DcgmHealthResponse &response);
+    /**
+     * Monitor Fabric fields and report possible health issues.
+     *
+     * @param entityGroupId The entity group ID
+     * @param entityId The entity ID
+     * @param startTime The start time (currently ignored)
+     * @param endTime The end time (currently ignored)
+     * @param response The health response
+     * @return The return value
+     */
+    dcgmReturn_t MonitorFabricFields(dcgm_field_entity_group_t entityGroupId,
+                                     dcgm_field_eid_t entityId,
+                                     long long startTime,
+                                     long long endTime,
+                                     DcgmHealthResponse &response);
     dcgmReturn_t MonitorNVLink(dcgm_field_entity_group_t entityGroupId,
                                dcgm_field_eid_t entityId,
                                long long startTime,
@@ -237,6 +283,16 @@ private:
                                       long long startTime,
                                       long long endTime,
                                       DcgmHealthResponse &response);
+
+    /**
+     * Check if MIG is enabled for a given GPU
+     *
+     * @param[in] gpuId
+     * @return true if MIG is enabled, false otherwise
+     */
+
+    bool IsGpuMigEnabled(dcgm_field_eid_t gpuId);
+
     // Monitor the status (up / down) of the NVLink links
     dcgmReturn_t MonitorNVLinkStatus(dcgm_field_entity_group_t entityGroupId,
                                      dcgm_field_eid_t entityId,
@@ -269,6 +325,25 @@ private:
                                             long long startTime,
                                             long long endTime,
                                             DcgmHealthResponse &response);
+
+    dcgmReturn_t MonitorMemUnrepairableFlag(dcgm_field_entity_group_t entityGroupId,
+                                            dcgm_field_eid_t entityId,
+                                            DcgmHealthResponse &response);
+
+    dcgmReturn_t MonitorImex(dcgm_field_entity_group_t entityGroupId,
+                             dcgm_field_eid_t entityId,
+                             DcgmHealthResponse &response);
+
+    dcgmReturn_t SetDriver(dcgm_field_entity_group_t entityGroupId,
+                           dcgm_field_eid_t entityId,
+                           bool enableWatch,
+                           DcgmWatcher const &watcher,
+                           long long updateInterval,
+                           double maxKeepAge);
+
+    dcgmReturn_t MonitorGpuRecoveryAction(dcgm_field_entity_group_t entityGroupId,
+                                          dcgm_field_eid_t entityId,
+                                          DcgmHealthResponse &response);
 
     bool FitsGpuHardwareCheck(dcgm_field_entity_group_t entityGroupId);
 

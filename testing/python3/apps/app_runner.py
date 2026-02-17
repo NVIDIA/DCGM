@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,8 @@ import option_parser
 import utils
 import test_utils
 
-default_timeout = 10.0 # 10s
+default_timeout = 10.0  # 10s
+
 
 class AppRunner(object):
     """
@@ -53,8 +54,9 @@ class AppRunner(object):
     RETVALUE_TIMEOUT = "Terminated - Timeout"
 
     _processes = []               # Contains list of all processes running in the background
-    _processes_not_validated = [] # Contains list of processes that finished with non 0 error code 
-                                  #     and were not marked as validated
+    # Contains list of processes that finished with non 0 error code
+    _processes_not_validated = []
+    #     and were not marked as validated
     _process_nb = 0
 
     def __init__(self, executable, args=None, cwd=None, env=None):
@@ -69,7 +71,8 @@ class AppRunner(object):
 
         self._timer = None              # to implement timeout
         self._subprocess = None
-        self._retvalue = None           # stored return code or string when the app was terminated
+        # stored return code or string when the app was terminated
+        self._retvalue = None
         self._lock = threading.Lock()   # to implement thread safe timeout/terminate
         self.stdout_lines = []          # buff that stores all app's output
         self.stderr_lines = []
@@ -77,7 +80,7 @@ class AppRunner(object):
         self._logfile_stderr = None
         self._is_validated = False
         self._info_message = False
-        
+
         self.process_nb = AppRunner._process_nb
         AppRunner._process_nb += 1
 
@@ -88,7 +91,7 @@ class AppRunner(object):
         """
         self.start(timeout)
         return self.wait()
-    
+
     def start(self, timeout=default_timeout):
         """
         Begin executing the application.
@@ -100,22 +103,23 @@ class AppRunner(object):
         assert self._subprocess is None
 
         logger.debug("Starting " + str(self))
-        
+
         env = self._create_subprocess_env()
         if utils.is_linux():
             if os.path.exists(self.executable):
                 # On linux, for binaries inside the package (not just commands in the path) test that they have +x
                 # e.g. if package is extracted on windows and copied to Linux, the +x privileges will be lost
-                assert os.access(self.executable, os.X_OK), "Application binary %s is not executable! Make sure that the testing archive has been correctly extracted." % (self.executable)
+                assert os.access(self.executable, os.X_OK), "Application binary %s is not executable! Make sure that the testing archive has been correctly extracted." % (
+                    self.executable)
         self.startTime = datetime.datetime.now()
         self._subprocess = subprocess.Popen(
-                [self.executable] + self.args, 
-                stdin=None, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                cwd=self.cwd,
-                env=env)
-        AppRunner._processes.append(self) # keep track of running processe
+            [self.executable] + self.args,
+            stdin=None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=self.cwd,
+            env=env)
+        AppRunner._processes.append(self)  # keep track of running processe
         # Start timeout if we want one
         self._timer = None
         if timeout is not None:
@@ -129,34 +133,40 @@ class AppRunner(object):
                 # Also python sometimes complains about file names being too long.
                 #   IOError: [Errno 36] File name too long
                 return "_".join([utils.string_to_valid_file_name(x)[:16] for x in self.args])[:50]
-            shortname = os.path.basename(self.executable) + "_" + args_to_fname(self.args)
+            shortname = os.path.basename(
+                self.executable) + "_" + args_to_fname(self.args)
             stdout_fname = os.path.relpath(os.path.join(
                 logger.log_dir, "app_%03d_%s_stdout.txt" % (self.process_nb, shortname)))
             stderr_fname = os.path.relpath(os.path.join(
                 logger.log_dir, "app_%03d_%s_stderr.txt" % (self.process_nb, shortname)))
             # If the app fails, this message will get printed. If it succeeds it'll get popped in _process_finish
             self._info_message = logger.info("Starting %s...\nstdout in %s\nstderr in %s" % (
-                str(self)[:64], # cut the string to make it more readable
+                str(self)[:64],  # cut the string to make it more readable
                 stdout_fname, stderr_fname), defer=True)
             self._logfile_stdout = open(stdout_fname, "w", encoding='utf-8')
             self._logfile_stderr = open(stderr_fname, "w", encoding='utf-8')
 
+    # Non-reentrant, call with lock
     def _process_finish(self, stdout_buf, stderr_buf):
         """
         Logs return code/string and reads the remaining stdout/stderr.
 
         """
-        logger.debug("Application %s returned with status: %s" % (self.executable, self._retvalue))
+        logger.debug("Application %s returned with status: %s" %
+                     (self.executable, self._retvalue))
         self.runTime = datetime.datetime.now() - self.startTime
 
-        self._split_and_log_lines(stdout_buf, self.stdout_lines, self._logfile_stdout)
-        self._split_and_log_lines(stderr_buf, self.stderr_lines, self._logfile_stderr)
+        self._split_and_log_lines(
+            stdout_buf, self.stdout_lines, self._logfile_stdout)
+        self._split_and_log_lines(
+            stderr_buf, self.stderr_lines, self._logfile_stderr)
 
         if self._logfile_stdout:
             self._logfile_stdout.close()
         if self._logfile_stderr:
             self._logfile_stderr.close()
-        AppRunner._processes.remove(self)
+        self.remove()
+
         if self._retvalue != 0 and self._retvalue != AppRunner.RETVALUE_TERMINATED:
             AppRunner._processes_not_validated.append(self)
         else:
@@ -171,7 +181,8 @@ class AppRunner(object):
         if self._retvalue is not None:
             return self._retvalue
 
-        logger.debug("Waiting for application %s, pid %d to finish" % (str(self), self._subprocess.pid))
+        logger.debug("Waiting for application %s, pid %d to finish" %
+                     (str(self), self._subprocess.pid))
         stdout_buf, stderr_buf = self._subprocess.communicate()
         if self._timer is not None:
             self._timer.cancel()
@@ -179,7 +190,8 @@ class AppRunner(object):
         with self._lock:                   # set ._retvalue in thread safe way. Make sure it wasn't set by timeout already
             if self._retvalue is None:
                 self._retvalue = self._subprocess.returncode
-                self._process_finish(stdout_buf.decode('utf-8'), stderr_buf.decode('utf-8'))
+                self._process_finish(stdout_buf.decode(
+                    'utf-8'), stderr_buf.decode('utf-8'))
 
         return self._retvalue
 
@@ -189,8 +201,10 @@ class AppRunner(object):
             if self._retvalue is not None:
                 stdout_buf = self._read_all_remaining(self._subprocess.stdout)
                 stderr_buf = self._read_all_remaining(self._subprocess.stderr)
-                self._process_finish(stdout_buf, stderr_buf)
-                
+
+                with self._lock:
+                    self._process_finish(stdout_buf, stderr_buf)
+
         return self._retvalue
 
     def _trigger_timeout(self):
@@ -198,8 +212,9 @@ class AppRunner(object):
         Function called by timeout routine. Kills the app in a thread safe way.
 
         """
-        logger.warning("App %s with pid %d has timed out. Killing it." % (self.executable, self.getpid()))
-        with self._lock: # set ._retvalue in thread safe way. Make sure that app wasn't terminated already
+        logger.warning("App %s with pid %d has timed out. Killing it." %
+                       (self.executable, self.getpid()))
+        with self._lock:  # set ._retvalue in thread safe way. Make sure that app wasn't terminated already
             if self._retvalue is not None:
                 return self._retvalue
 
@@ -237,20 +252,27 @@ class AppRunner(object):
         Forcfully terminates the application and return the app's error code/string.
 
         """
-        with self._lock: # set ._retvalue in thread safe way. Make sure that app didn't timeout
+        with self._lock:  # set ._retvalue in thread safe way. Make sure that app didn't timeout
             if self._retvalue is not None:
                 return self._retvalue
 
             if self._timer is not None:
                 self._timer.cancel()
             self._subprocess.kill()
-            
+
             stdout_buf = self._read_all_remaining(self._subprocess.stdout)
             stderr_buf = self._read_all_remaining(self._subprocess.stderr)
             self._retvalue = AppRunner.RETVALUE_TERMINATED
             self._process_finish(stdout_buf, stderr_buf)
-            
+
             return self._retvalue
+
+    # Non-reentrant, call with lock.
+    def remove(self):
+        plist = AppRunner._processes
+
+        if self in plist:
+            plist.remove(self)
 
     def signal(self, signal):
         """
@@ -309,7 +331,7 @@ class AppRunner(object):
                 self.stdout_lines.append(line)
 
             if match_fn(rawline) is True:
-                return 
+                return
         raise EOFError("Process finished and requested match wasn't found")
 
     def retvalue(self):
@@ -326,12 +348,13 @@ class AppRunner(object):
         Returns the pid of the process
 
         """
-        
+
         return self._subprocess.pid
 
     def __str__(self):
         return ("AppRunner #%d: %s %s (cwd: %s; env: %s)" %
                 (self.process_nb, self.executable, " ".join(self.args), self.cwd, self.env))
+
     def __repr__(self):
         return str(self)
 
@@ -342,17 +365,18 @@ class AppRunner(object):
 
         """
         import test_utils
+
         def log_output(message, process):
             """
             Prints last 10 lines of stdout and stderr for faster lookup
             """
             logger.info("%s: %s" % (message, process))
-            
+
             numLinesToPrint = 100
-            #Print more lines for ERIS since this is all we'll have to go by
+            # Print more lines for ERIS since this is all we'll have to go by
             if option_parser.options.dvssc_testing or option_parser.options.eris:
                 numLinesToPrint = 500
-            
+
             logger.info("Last %d lines of stdout" % numLinesToPrint)
             with logger.IndentBlock():
                 for line in process.stdout_lines[-numLinesToPrint:]:
@@ -363,12 +387,15 @@ class AppRunner(object):
                     logger.info(line)
 
         with test_utils.SubTest("not terminated processes", quiet=True):
-            assert AppRunner._processes == [], "Some processes were not terminated by previous test: " + str(AppRunner._processes)
+            assert AppRunner._processes == [
+            ], "Some processes were not terminated by previous test: " + str(AppRunner._processes)
         for process in AppRunner._processes[:]:
             log_output("Unterminated process", process)
             process.terminate()
         with test_utils.SubTest("not validated processes", quiet=True):
             for process in AppRunner._processes_not_validated:
-                log_output("Process returned %s ret code" % process.retvalue(), process)
-            assert AppRunner._processes_not_validated == [], "Some processes failed and were not validated by previous test: " + str(AppRunner._processes_not_validated)
+                log_output("Process returned %s ret code" %
+                           process.retvalue(), process)
+            assert AppRunner._processes_not_validated == [
+            ], "Some processes failed and were not validated by previous test: " + str(AppRunner._processes_not_validated)
         AppRunner._processes_not_validated = []

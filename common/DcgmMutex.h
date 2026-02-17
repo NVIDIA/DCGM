@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,8 +183,7 @@ public:
 
     ~DcgmLockGuard() noexcept
     {
-        if (m_mutex != nullptr && m_mutexReturn == DCGM_MUTEX_ST_OK)
-            dcgm_mutex_unlock(m_mutex);
+        Unlock();
     }
 
     DcgmLockGuard &operator=(DcgmLockGuard const &) = delete;
@@ -218,6 +217,20 @@ public:
         m_mutexReturn   = r.m_mutexReturn;
         r.m_mutex       = nullptr;
         r.m_mutexReturn = DCGM_MUTEX_ST_NOTLOCKED;
+    }
+
+    /**
+     * @brief Unlock the mutex.
+     * @note This function is only necessary if you want to release the lock before it goes out of a scope
+     */
+    void Unlock()
+    {
+        if (m_mutex != nullptr && m_mutexReturn == DCGM_MUTEX_ST_OK)
+        {
+            dcgm_mutex_unlock(m_mutex);
+            m_mutex       = nullptr;
+            m_mutexReturn = DCGM_MUTEX_ST_NOTLOCKED;
+        }
     }
 
 private:

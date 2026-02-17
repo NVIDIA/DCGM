@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,15 +21,18 @@ inputfile = ''
 outputfile = ''
 keys = ''
 
+
 def printUsage():
     print str(sys.argv[0]) + ' [-i <inputfile>] [-o <outputfile>] -k <keys (comma separated)>'
+
 
 def parseArgs(argv):
     global inputfile
     global outputfile
     global keys
     try:
-        opts, args = getopt.getopt(argv,"hi:o:k:",["ifile=","ofile=","keys="])
+        opts, args = getopt.getopt(
+            argv, "hi:o:k:", ["ifile=", "ofile=", "keys="])
     except getopt.GetoptError:
         printUsage()
         sys.exit(2)
@@ -49,6 +52,7 @@ def parseArgs(argv):
         printUsage()
         sys.exit()
 
+
 def cleanup():
     global jsonFile
     global outHandle
@@ -59,14 +63,16 @@ def cleanup():
     if outHandle is not sys.stdout:
         outHandle.close()
 
-if __name__ == "__main__":
-   parseArgs(sys.argv[1:])
 
-jsonFile  = open(inputfile) if inputfile is not "" else sys.stdin
+if __name__ == "__main__":
+    parseArgs(sys.argv[1:])
+
+jsonFile = open(inputfile) if inputfile is not "" else sys.stdin
 jsonData = json.load(jsonFile)
 
-outHandle = open(outputfile, 'wb') if outputfile is not ""  else sys.stdout 
-csvWriter = csv.writer(outHandle, quotechar='"', quoting=csv.QUOTE_ALL, delimiter=",")
+outHandle = open(outputfile, 'wb') if outputfile is not "" else sys.stdout
+csvWriter = csv.writer(outHandle, quotechar='"',
+                       quoting=csv.QUOTE_ALL, delimiter=",")
 
 keyList = keys.split(",")
 
@@ -93,5 +99,3 @@ for gpu in gpusData:
         print 'Key \"' + key + '\" not found in JSON file.'
 
 cleanup()
-
-

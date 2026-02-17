@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ private:
     dcgmReturn_t ProcessCoreMessage(dcgm_module_command_header_t *moduleCommand);
     dcgmReturn_t ProcessFieldValuesUpdated(dcgm_core_msg_field_values_updated_t *msg);
     dcgmReturn_t ProcessGroupRemoved(dcgm_core_msg_group_removed_t *msg);
+    dcgmReturn_t ProcessAttachGpus();
 
     /*************************************************************************/
     /* Private member variables */

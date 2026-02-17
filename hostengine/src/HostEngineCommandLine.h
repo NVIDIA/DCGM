@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include "dcgm_structs.h"
+#include "dcgm_structs_internal.h"
 
 #include <array>
 #include <filesystem>
@@ -37,12 +38,14 @@ public:
 
     HostEngineCommandLine(HostEngineCommandLine &&)            = default;
     HostEngineCommandLine &operator=(HostEngineCommandLine &&) = default;
-    [[nodiscard]] std::string const &GetUnixSocketPath() const; //!< Host Engine Unix domain socket path
-    [[nodiscard]] bool IsConnectionTcp() const;                 //!< Flag to indicate that connection is TCP/IP
-    [[nodiscard]] bool ShouldTerminate() const;                 //!< Flag to indicate that daemon should be terminated
-    [[nodiscard]] std::uint16_t GetPort() const;                //!< Host Engine port number
-    [[nodiscard]] bool ShouldDaemonize() const;                 //!< Flag to daemonize
-    [[nodiscard]] std::string const &GetBindInterface() const;  //!< IP address to bind to. "" = all interfaces
+    [[nodiscard]] std::string const &GetUnixSocketPath() const;   //!< Host Engine Unix domain socket path
+    [[nodiscard]] dcgmConnectionType_t GetConnectionType() const; //!< Connection type
+    [[nodiscard]] bool ShouldTerminate() const;                   //!< Flag to indicate that daemon should be terminated
+    [[nodiscard]] std::uint16_t GetPort() const;                  //!< Host Engine port number
+    [[nodiscard]] bool ShouldDaemonize() const;                   //!< Flag to daemonize
+    [[nodiscard]] std::string const &GetBindInterface() const;    //!< IP address to bind to. "" = all interfaces
+    [[nodiscard]] std::string const &GetVsockCid() const;         //!< Vsock CID to bind to. "" = any
+    [[nodiscard]] std::uint16_t GetVsockPort() const;             //!< Vsock port number
 
     //! PID filename to use to prevent more than one Host Engine instance from running
     [[nodiscard]] std::string const &GetPidFilePath() const;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -618,7 +618,6 @@ void DcgmDiagResponseWrapper::RecordSystemError(std::string const &sysError) con
     }
 }
 
-
 dcgmReturn_t DcgmDiagResponseWrapper::SetVersion12(dcgmDiagResponse_v12 *response)
 {
     m_version         = dcgmDiagResponse_version12;
@@ -996,4 +995,134 @@ std::string DcgmDiagResponseWrapper::GetSystemErr() const
 unsigned int DcgmDiagResponseWrapper::GetVersion() const
 {
     return m_version;
+}
+
+dcgmReturn_t DcgmDiagResponseWrapper::AddGpuStatusToAllTests(unsigned int gpuId,
+                                                             DcgmEntityStatus_t status,
+                                                             std::string const &skuDeviceId,
+                                                             std::string const &serialNum,
+                                                             bool isFail)
+{
+    if (!StateIsValid())
+    {
+        log_error(DDRW_NOT_INITIALIZED_FMT);
+        return DCGM_ST_UNINITIALIZED;
+    }
+
+    if (m_version != dcgmDiagResponse_version12)
+    {
+        log_debug("AddGpuStatusToAllTests is only supported for v12 responses");
+        return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    dcgmDiagResponse_v12 &response = *m_response.v12ptr;
+
+    // Get status string
+    std::string statusStr;
+    switch (status)
+    {
+        case DcgmEntityStatusDetached:
+            statusStr = "detached";
+            break;
+        case DcgmEntityStatusInaccessible:
+            statusStr = "inaccessible";
+            break;
+        default:
+            statusStr = "unavailable";
+            break;
+    }
+
+    dcgmGroupEntityPair_t entity {};
+    entity.entityGroupId = DCGM_FE_GPU;
+    entity.entityId      = gpuId;
+
+    // Check if entity already exists, if not add it
+    bool entityExists = false;
+    for (unsigned int i = 0; i < response.numEntities; i++)
+    {
+        if (response.entities[i].entity.entityGroupId == entity.entityGroupId
+            && response.entities[i].entity.entityId == entity.entityId)
+        {
+            entityExists = true;
+            break;
+        }
+    }
+
+    if (!entityExists)
+    {
+        if (response.numEntities >= DCGM_DIAG_RESPONSE_ENTITIES_MAX)
+        {
+            log_error("Cannot add {} status GPU {}: entities array is full", statusStr, gpuId);
+            return DCGM_ST_INSUFFICIENT_SIZE;
+        }
+
+        response.entities[response.numEntities].entity = entity;
+        SafeCopyTo(response.entities[response.numEntities].skuDeviceId, skuDeviceId.c_str());
+        SafeCopyTo(response.entities[response.numEntities].serialNum, serialNum.c_str());
+        response.numEntities++;
+    }
+
+    // Add result for each test
+    for (unsigned int testIdx = 0; testIdx < response.numTests; testIdx++)
+    {
+        if (response.numResults >= DCGM_DIAG_RESPONSE_RESULTS_MAX)
+        {
+            log_error("Cannot add result for {} status GPU {}: results array is full", statusStr, gpuId);
+            return DCGM_ST_INSUFFICIENT_SIZE;
+        }
+
+        if (response.tests[testIdx].numResults >= DCGM_DIAG_TEST_RUN_RESULTS_MAX)
+        {
+            log_error("Cannot add result for {} status GPU {} to test {}: test results array is full",
+                      statusStr,
+                      gpuId,
+                      response.tests[testIdx].name);
+            continue;
+        }
+
+        // Add result entry
+        unsigned int resultIdx                                                    = response.numResults;
+        response.results[resultIdx].entity                                        = entity;
+        response.results[resultIdx].result                                        = DCGM_DIAG_RESULT_NOT_RUN;
+        response.results[resultIdx].testId                                        = testIdx;
+        response.tests[testIdx].resultIndices[response.tests[testIdx].numResults] = resultIdx;
+        response.tests[testIdx].numResults++;
+        response.numResults++;
+
+        // Add error message
+        std::string msg = fmt::format("GPU {} is {}.", gpuId, statusStr);
+        if (response.numErrors >= DCGM_DIAG_RESPONSE_ERRORS_MAX)
+        {
+            log_error("Cannot add error for {} status GPU {}: errors array is full", statusStr, gpuId);
+            continue;
+        }
+
+        if (response.tests[testIdx].numErrors >= DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)
+        {
+            log_error("Cannot add error for {} status GPU {} to test {}: test errors array is full",
+                      statusStr,
+                      gpuId,
+                      response.tests[testIdx].name);
+            continue;
+        }
+
+        unsigned int errorIdx              = response.numErrors;
+        response.errors[errorIdx].entity   = entity;
+        response.errors[errorIdx].code     = DCGM_FR_INTERNAL;
+        response.errors[errorIdx].category = DCGM_FR_EC_INTERNAL_OTHER;
+        response.errors[errorIdx].severity = DCGM_ERROR_UNKNOWN;
+        response.errors[errorIdx].testId   = testIdx;
+        SafeCopyTo(response.errors[errorIdx].msg, msg.c_str());
+        response.tests[testIdx].errorIndices[response.tests[testIdx].numErrors] = errorIdx;
+        response.tests[testIdx].numErrors++;
+        response.numErrors++;
+
+        // Update PASS tests to FAIL if requested
+        if (isFail && response.tests[testIdx].result == DCGM_DIAG_RESULT_PASS)
+        {
+            response.tests[testIdx].result = DCGM_DIAG_RESULT_FAIL;
+        }
+    }
+
+    return DCGM_ST_OK;
 }

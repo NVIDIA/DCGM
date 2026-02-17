@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import logger
 import subprocess
 import test_utils
 from . import test_nvswitch_utils
+
 
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_nvswitches()
@@ -94,10 +95,12 @@ def test_nvswitch_traffic_p2p(handle, switchIds):
                 -1].value
 
     # Generate write traffic for the nvswitches
-    test_utils.run_p2p_bandwidth_app(test_nvswitch_utils.MEMCPY_DTOD_WRITE_CE_BANDWIDTH)
+    test_utils.run_p2p_bandwidth_app(
+        test_nvswitch_utils.MEMCPY_DTOD_WRITE_CE_BANDWIDTH)
 
     # Generate read traffic for the nvswitches
-    test_utils.run_p2p_bandwidth_app(test_nvswitch_utils.MEMCPY_DTOD_READ_CE_BANDWIDTH)
+    test_utils.run_p2p_bandwidth_app(
+        test_nvswitch_utils.MEMCPY_DTOD_READ_CE_BANDWIDTH)
 
     # read the counters again after sending traffic
     nvSwitchBandwidth0Watcher.GetMore()
@@ -123,5 +126,3 @@ def test_nvswitch_traffic_p2p(handle, switchIds):
     assert counter0RxAfter > counter0RxBefore, "counter0Rx did not increase"
     assert counter1TxAfter > counter1TxBefore, "Counter1Tx did not increase"
     assert counter1RxAfter > counter1RxBefore, "counter1Rx did not increase"
-
-

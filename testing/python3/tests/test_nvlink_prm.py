@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,14 +22,15 @@ import test_utils
 import pydcgm
 import logger
 import dcgm_field_helpers
+import dcgm_field_injection_helpers
 from ctypes import *
+
 
 @test_utils.run_with_embedded_host_engine()
 def test_nvlink_prm_field_registration(handle):
     """
     Test that all PRM fields are properly registered with correct metadata
     """
-    # All 13 PRM field IDs (580-592)
     prm_fields = [
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
@@ -44,6 +45,7 @@ def test_nvlink_prm_field_registration(handle):
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
     ]
 
     # Verify all fields are registered with correct metadata
@@ -56,6 +58,7 @@ def test_nvlink_prm_field_registration(handle):
 
         # Verify field has non-empty name and description
         assert len(fieldMeta.tag) > 0, f"Field {field_id} has empty tag"
+
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -92,7 +95,8 @@ def test_nvlink_prm_manual_link_entity_creation(handle, gpuIds):
             fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(
                 handle, [entity], [test_field], dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
 
-            assert len(fieldValues) == 1, f"Expected 1 field value, got {len(fieldValues)}"
+            assert len(
+                fieldValues) == 1, f"Expected 1 field value, got {len(fieldValues)}"
             fieldValue = fieldValues[0]
 
             # Verify the entity decoding worked correctly
@@ -109,10 +113,12 @@ def test_nvlink_prm_manual_link_entity_creation(handle, gpuIds):
             ]
             assert fieldValue.status in valid_statuses, f"Unexpected status: {fieldValue.status}"
 
-            logger.debug(f"Successfully queried GPU {gpuId} port {port_index} (entity ID {raw_entity_id:08x}): status {fieldValue.status}")
+            logger.debug(
+                f"Successfully queried GPU {gpuId} port {port_index} (entity ID {raw_entity_id:08x}): status {fieldValue.status}")
 
         except Exception as e:
-            logger.warning(f"Failed to query PRM field for manually created link GPU {gpuId} port {port_index}: {e}")
+            logger.warning(
+                f"Failed to query PRM field for manually created link GPU {gpuId} port {port_index}: {e}")
 
 
 def test_dcgm_link_t_structure():
@@ -159,7 +165,8 @@ def test_dcgm_link_t_structure():
     link.raw = 0x12345678
     # The field values should reflect the bit-unpacked raw value
     assert link.type == (0x12345678 & 0xFF), "Raw->type conversion failed"
-    assert link.index == ((0x12345678 >> 8) & 0xFFFF), "Raw->index conversion failed"
+    assert link.index == ((0x12345678 >> 8) &
+                          0xFFFF), "Raw->index conversion failed"
     assert link.id == ((0x12345678 >> 24) & 0xFF), "Raw->id conversion failed"
 
 
@@ -201,7 +208,8 @@ def test_dcgm_link_entity_id_encoding():
         manual_packed = (entity_id << 24) | (port_index << 8) | entity_type
         assert packed_entity_id == manual_packed, f"Property packing differs from manual: 0x{packed_entity_id:08x} != 0x{manual_packed:08x}"
 
-        logger.debug(f"Entity {entity_type}:{entity_id}:{port_index} -> 0x{packed_entity_id:08x}")
+        logger.debug(
+            f"Entity {entity_type}:{entity_id}:{port_index} -> 0x{packed_entity_id:08x}")
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -217,8 +225,6 @@ def test_prm_field_injection_infrastructure(handle):
     # 3. Injected values can be retrieved using cached data queries
     #
     # Note: This tests the injection infrastructure, not live hardware queries.
-
-    import dcgm_field_injection_helpers
 
     # Create synthetic link entity ID (no real hardware needed)
     link = dcgm_structs.c_dcgm_link_t()
@@ -239,12 +245,16 @@ def test_prm_field_injection_infrastructure(handle):
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO,
     ]
 
-    pprm_field = dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY
+    misc_fields = [
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+    ]
 
     # Define test field groups for validation
     watched_plr_fields = plr_fields[:2]  # Simulate watched PLR fields
-    watched_recovery_fields = recovery_fields[:1]  # Simulate watched recovery field
-    all_test_fields = plr_fields + recovery_fields + [pprm_field]
+    # Simulate watched recovery field
+    watched_recovery_fields = recovery_fields[:1]
+    all_test_fields = plr_fields + recovery_fields + misc_fields
 
     # Inject synthetic values to simulate hardware providing data
     injected_values = {}
@@ -263,14 +273,15 @@ def test_prm_field_injection_infrastructure(handle):
     entity.entityId = linkEntityId
 
     # Test field retrieval from different register groups
-    test_fields = watched_plr_fields + watched_recovery_fields + [pprm_field]
+    test_fields = watched_plr_fields + watched_recovery_fields + misc_fields
 
     for field_id in test_fields:
         # Query using cached data (not live) to test injection infrastructure
         values = dcgm_agent.dcgmEntitiesGetLatestValues(
             handle, [entity], [field_id], 0)  # Use cached data only
 
-        assert len(values) == 1, f"Expected 1 value for field {field_id}, got {len(values)}"
+        assert len(
+            values) == 1, f"Expected 1 value for field {field_id}, got {len(values)}"
         field_value = values[0]
 
         # Verify structure
@@ -285,9 +296,9 @@ def test_prm_field_injection_infrastructure(handle):
 
     # Test cross-register-group injection/retrieval
     cross_group_fields = [
-        plr_fields[0],      # PLR group
-        recovery_fields[0], # Recovery group
-        pprm_field,         # PPRM group
+        plr_fields[0],         # PLR group
+        recovery_fields[0],    # Recovery group
+        *misc_fields,          # PPRM, IBPC group
     ]
 
     for field_id in cross_group_fields:
@@ -306,7 +317,8 @@ def test_prm_field_injection_infrastructure(handle):
     values = dcgm_agent.dcgmEntitiesGetLatestValues(
         handle, [entity], batch_fields, 0)  # Use cached data
 
-    assert len(values) == len(batch_fields), f"Batch query: expected {len(batch_fields)} values, got {len(values)}"
+    assert len(values) == len(
+        batch_fields), f"Batch query: expected {len(batch_fields)} values, got {len(values)}"
 
     for i, field_value in enumerate(values):
         field_id = batch_fields[i]
@@ -314,6 +326,7 @@ def test_prm_field_injection_infrastructure(handle):
 
         assert field_value.status == dcgm_structs.DCGM_ST_OK, f"Batch field {field_id}: status {field_value.status}"
         assert field_value.value.i64 == expected_value, f"Batch field {field_id}: value mismatch"
+
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_nvml()
@@ -333,7 +346,8 @@ def test_prm_field_caching_with_field_group_watcher(handle):
     link.index = 3  # Port 3 (different from other tests)
     linkEntityId = link.raw
 
-    logger.debug(f"Testing PRM caching with field group watcher using link entity: 0x{linkEntityId:08x}")
+    logger.debug(
+        f"Testing PRM caching with field group watcher using link entity: 0x{linkEntityId:08x}")
 
     # Define PRM fields for testing (subset from each register group)
     plr_fields = [
@@ -347,9 +361,12 @@ def test_prm_field_caching_with_field_group_watcher(handle):
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TOTAL_SUCCESSFUL_EVENTS,
     ]
 
-    pprm_field = dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY
+    misc_fields = [
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+    ]
 
-    all_test_fields = plr_fields + recovery_fields + [pprm_field]
+    all_test_fields = plr_fields + recovery_fields + misc_fields
 
     # Create DCGM handle and group infrastructure
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -364,36 +381,41 @@ def test_prm_field_caching_with_field_group_watcher(handle):
     groupObj = systemObj.GetGroupWithEntities('PRM_test_links', [linkEntity])
 
     # Create field group with PRM fields
-    fieldGroupObj = pydcgm.DcgmFieldGroup(handleObj, "PRM_test_fields", all_test_fields)
+    fieldGroupObj = pydcgm.DcgmFieldGroup(
+        handleObj, "PRM_test_fields", all_test_fields)
 
     try:
-        # Inject synthetic values before starting watcher
-        logger.debug("Injecting synthetic values for PRM fields")
-        injected_values = {}
-        for i, field_id in enumerate(all_test_fields):
-            test_value = 8000 + i * 200  # Unique values: 8000, 8200, 8400, etc.
-            injected_values[field_id] = test_value
-
-            dcgm_field_injection_helpers.inject_field_value_i64(
-                handle, linkEntityId, field_id, test_value, 0, dcgm_fields.DCGM_FE_LINK)
-
         # Create field group entity watcher (this properly sets up watches)
         operationMode = dcgm_structs.DCGM_OPERATION_MODE_AUTO
-        updateFreq = 100000  # 100ms in microseconds
-        maxKeepAge = 300.0   # 5 minutes
-        maxKeepSamples = 100 # Keep up to 100 samples
+        updateFreq = 3_600_000_000  # 1h in microseconds
+        maxKeepAge = 300.0          # 5 minutes
+        maxKeepSamples = 100        # Keep up to 100 samples
 
         logger.debug("Creating DcgmFieldGroupEntityWatcher for PRM fields")
         fieldWatcher = dcgm_field_helpers.DcgmFieldGroupEntityWatcher(
             handle, groupObj.GetId(), fieldGroupObj, operationMode,
             updateFreq, maxKeepAge, maxKeepSamples, 0)
 
+        # Inject synthetic values before starting watcher
+        logger.debug("Injecting synthetic values for PRM fields")
+        injected_values = {}
+        for i, field_id in enumerate(all_test_fields):
+            # Unique values: 8000, 8200, 8400, etc.
+            test_value = 8000 + i * 200
+            injected_values[field_id] = test_value
+
+            dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, linkEntityId, field_id, test_value, 0, dcgm_fields.DCGM_FE_LINK)
+
+        fieldWatcher.GetAllSinceLastCall()
+
         # Verify that the watcher captured our injected values
         logger.debug("Verifying field watcher captured injected values")
 
         # Check that we have values for our link entity
         assert dcgm_fields.DCGM_FE_LINK in fieldWatcher.values, "No LINK entities found in watcher values"
-        assert linkEntityId in fieldWatcher.values[dcgm_fields.DCGM_FE_LINK], f"Link entity {linkEntityId:08x} not found in watcher values"
+        assert linkEntityId in fieldWatcher.values[
+            dcgm_fields.DCGM_FE_LINK], f"Link entity {linkEntityId:08x} not found in watcher values"
 
         entity_values = fieldWatcher.values[dcgm_fields.DCGM_FE_LINK][linkEntityId]
 
@@ -402,7 +424,8 @@ def test_prm_field_caching_with_field_group_watcher(handle):
             assert field_id in entity_values, f"Field {field_id} not found in entity values"
 
             field_samples = entity_values[field_id]
-            assert len(field_samples) > 0, f"No samples found for field {field_id}"
+            assert len(
+                field_samples) > 0, f"No samples found for field {field_id}"
 
             # Check the latest sample
             latest_sample = field_samples[-1]  # Most recent sample
@@ -410,9 +433,11 @@ def test_prm_field_caching_with_field_group_watcher(handle):
 
             if not latest_sample.isBlank:
                 assert latest_sample.value == expected_value, f"Field {field_id}: got {latest_sample.value}, expected {expected_value}"
-                logger.debug(f"Field {field_id}: correct value {latest_sample.value}")
+                logger.debug(
+                    f"Field {field_id}: correct value {latest_sample.value}")
             else:
-                logger.debug(f"Field {field_id}: blank value (status may indicate unsupported)")
+                logger.debug(
+                    f"Field {field_id}: blank value (status may indicate unsupported)")
 
         # Test caching optimization scenario:
         # Force an update to trigger potential hardware queries and caching
@@ -427,9 +452,9 @@ def test_prm_field_caching_with_field_group_watcher(handle):
 
         # Check that we can access fields from different register groups
         test_cross_group = [
-            plr_fields[0],      # PLR group
-            recovery_fields[0], # Recovery group
-            pprm_field,         # PPRM group
+            plr_fields[0],         # PLR group
+            recovery_fields[0],    # Recovery group
+            *misc_fields,          # PPRM, IBPC group
         ]
 
         for field_id in test_cross_group:
@@ -439,9 +464,11 @@ def test_prm_field_caching_with_field_group_watcher(handle):
 
                 if not latest_sample.isBlank:
                     assert latest_sample.value == expected_value, f"Cross-group field {field_id}: value mismatch"
-                    logger.debug(f"Cross-group field {field_id}: correct value")
+                    logger.debug(
+                        f"Cross-group field {field_id}: correct value")
 
-        logger.debug("PRM field caching optimization test with field group watcher completed successfully")
+        logger.debug(
+            "PRM field caching optimization test with field group watcher completed successfully")
 
     finally:
         # Cleanup is handled automatically by fieldWatcher and groupObj destructors
@@ -461,7 +488,7 @@ def test_nvlink_prm_watches(handle, gpuIds):
 
     # Use the first available GPU from the passed gpuIds
     gpuId = gpuIds[0]
-    
+
     link = dcgm_structs.c_dcgm_link_t()
     link.type = dcgm_fields.DCGM_FE_GPU
     link.index = 1  # Port/link index
@@ -472,20 +499,26 @@ def test_nvlink_prm_watches(handle, gpuIds):
     try:
         # Check if this link entity is discoverable in the system
         flags = 0
-        existing_linkIds = dcgm_agent.dcgmGetEntityGroupEntities(handle, dcgm_fields.DCGM_FE_LINK, flags)
-        
+        existing_linkIds = dcgm_agent.dcgmGetEntityGroupEntities(
+            handle, dcgm_fields.DCGM_FE_LINK, flags)
+
         if linkEntityId not in existing_linkIds:
-            test_utils.skip_test(f"Link entity {linkEntityId:08x} (GPU {gpuId}, port {link.index}) not found in system. Available links: {[f'{lid:08x}' for lid in existing_linkIds[:5]]}")
-            
-        logger.debug(f"Validated link entity {linkEntityId:08x} exists in system")
-        
+            test_utils.skip_test(
+                f"Link entity {linkEntityId:08x} (GPU {gpuId}, port {link.index}) not found in system. Available links: {[f'{lid:08x}' for lid in existing_linkIds[:5]]}")
+
+        logger.debug(
+            f"Validated link entity {linkEntityId:08x} exists in system")
+
     except Exception as e:
-        test_utils.skip_test(f"Failed to validate link entity {linkEntityId:08x} for gpu {gpuId}: {e}")
+        test_utils.skip_test(
+            f"Failed to validate link entity {linkEntityId:08x} for gpu {gpuId}: {e}")
 
     try:
         # Step 1: Establish the watch
-        group_id = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_EMPTY, "prm_test")
-        dcgm_agent.dcgmGroupAddEntity(handle, group_id, dcgm_fields.DCGM_FE_LINK, linkEntityId)
+        group_id = dcgm_agent.dcgmGroupCreate(
+            handle, dcgm_structs.DCGM_GROUP_EMPTY, "prm_test")
+        dcgm_agent.dcgmGroupAddEntity(
+            handle, group_id, dcgm_fields.DCGM_FE_LINK, linkEntityId)
 
         # Test all PRM fields
         field_ids = [
@@ -495,16 +528,20 @@ def test_nvlink_prm_watches(handle, gpuIds):
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES,
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES,
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS,
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS,
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
         ]
-        
+
         updateFreq = 100000  # 100ms (0.1 second)
         maxKeepAge = 60.0
         maxKeepSamples = 0
         collectTime = 5
-        field_group_id = dcgm_agent.dcgmFieldGroupCreate(handle, field_ids, "all_prm_fields")
-        dcgm_agent.dcgmWatchFields(handle, group_id, field_group_id, updateFreq, maxKeepAge, maxKeepSamples)
-        logger.debug(f"Watch established for {len(field_ids)} PRM fields on link entity {linkEntityId:08x} (GPU {gpuId}, port {link.index})")
+        field_group_id = dcgm_agent.dcgmFieldGroupCreate(
+            handle, field_ids, "all_prm_fields")
+        dcgm_agent.dcgmWatchFields(
+            handle, group_id, field_group_id, updateFreq, maxKeepAge, maxKeepSamples)
+        logger.debug(
+            f"Watch established for {len(field_ids)} PRM fields on link entity {linkEntityId:08x} (GPU {gpuId}, port {link.index})")
 
         # Step 2: Wait for substantial data collection
         logger.debug(f"Waiting {collectTime} seconds for data collection...")
@@ -521,14 +558,15 @@ def test_nvlink_prm_watches(handle, gpuIds):
         fields_with_data = 0
         fields_with_nonzero_data = 0
 
-        field_names = {            
+        field_names = {
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODES: "PLR_RCV_CODES",
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODE_ERR: "PLR_RCV_CODES_ERR",
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_UNCORRECTABLE_CODE: "PLR_RCV_CODES_UNCTBL",
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES: "PLR_TX_CODES",
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES: "PLR_TX_RETRY_CODES",
             dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS: "PLR_TX_RETRY_CODES_ERR",
-            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS: "PLR_SYNC_EVENTS"
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS: "PLR_SYNC_EVENTS",
+            dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT: "IBPC_PORT_XMIT_WAIT",
         }
 
         for field_id in field_ids:
@@ -542,13 +580,15 @@ def test_nvlink_prm_watches(handle, gpuIds):
 
                     successful_fields += 1
 
-                    logger.debug(f"Field {field_name} ({field_id}): Status={fv.status}, Value={fv.value.i64:X}, Timestamp={fv.ts}")
+                    logger.debug(
+                        f"Field {field_name} ({field_id}): Status={fv.status}, Value={fv.value.i64:X}, Timestamp={fv.ts}")
 
                     if fv.status == dcgm_structs.DCGM_ST_OK:
                         fields_with_data += 1
                         if fv.value != 0:
                             fields_with_nonzero_data += 1
-                            logger.debug(f"Non-zero data for {field_name}: {fv.value.i64:X}")
+                            logger.debug(
+                                f"Non-zero data for {field_name}: {fv.value.i64:X}")
                         else:
                             logger.debug(f"Zero value for {field_name}")
                     elif fv.status == dcgm_structs.DCGM_ST_NO_DATA:
@@ -556,10 +596,12 @@ def test_nvlink_prm_watches(handle, gpuIds):
                     elif fv.status == dcgm_structs.DCGM_ST_NOT_SUPPORTED:
                         logger.debug(f"Field {field_name} not supported")
                     else:
-                        logger.error(f"Error status for {field_name}: {fv.status}")
+                        logger.error(
+                            f"Error status for {field_name}: {fv.status}")
 
             except Exception as e:
-                logger.error(f"{field_names.get(field_id, f'Field_{field_id}')} failed: {e}")
+                logger.error(
+                    f"{field_names.get(field_id, f'Field_{field_id}')} failed: {e}")
 
         # Assert basic field access and data availability criteria here
         # Basic field access - 80% success rate
@@ -575,7 +617,6 @@ def test_nvlink_prm_watches(handle, gpuIds):
         logger.debug("Testing with live data flag...")
         live_fields_with_data = 0
 
-        #for field_id in [dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODES, dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES]:
         for field_id in field_ids:
             try:
                 fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(
@@ -584,7 +625,8 @@ def test_nvlink_prm_watches(handle, gpuIds):
                 if len(fieldValues) > 0:
                     fv = fieldValues[0]
                     field_name = field_names[field_id]
-                    logger.debug(f"LIVE {field_name}: status={fv.status}, value={fv.value.i64:X}")
+                    logger.debug(
+                        f"LIVE {field_name}: status={fv.status}, value={fv.value.i64:X}")
 
                     if fv.status == dcgm_structs.DCGM_ST_OK:
                         live_fields_with_data += 1
@@ -644,4 +686,3 @@ def test_nvlink_prm_watches(handle, gpuIds):
             dcgm_agent.dcgmGroupDestroy(handle, group_id)
         except Exception:
             pass
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ public:
     dcgmReturn_t ProcessUnwatchFieldValue(dcgm_core_msg_unwatch_field_value_t &msg);
     dcgmReturn_t ProcessInjectFieldValue(dcgm_core_msg_inject_field_value_t &msg);
     dcgmReturn_t ProcessGetCacheManagerFieldInfo(dcgm_core_msg_get_cache_manager_field_info_t &msg);
+    dcgmReturn_t ProcessEmptyCache(dcgm_core_msg_empty_cache_t &msg);
     dcgmReturn_t ProcessWatchFields(dcgm_core_msg_watch_fields_t &msg);
     dcgmReturn_t ProcessUnwatchFields(dcgm_core_msg_watch_fields_t &msg);
     dcgmReturn_t ProcessGetTopology(dcgm_core_msg_get_topology_t &msg);
@@ -78,6 +79,7 @@ public:
     dcgmReturn_t ProcessCreateFakeEntities(dcgm_core_msg_create_fake_entities_t &msg);
     dcgmReturn_t ProcessWatchPredefinedFields(dcgm_core_msg_watch_predefined_fields_t &msg);
     dcgmReturn_t ProcessModuleDenylist(dcgm_core_msg_module_denylist_t &msg);
+    dcgmReturn_t ProcessModulesReloadable(dcgm_core_msg_modules_reloadable_t &msg);
     dcgmReturn_t ProcessModuleStatus(dcgm_core_msg_module_status_t &msg);
     dcgmReturn_t ProcessHostEngineHealth(dcgm_core_msg_hostengine_health_t &msg);
     dcgmReturn_t ProcessFieldGroupGetAll(dcgm_core_msg_fieldgroup_get_all_t &msg);
@@ -98,6 +100,9 @@ public:
     dcgmReturn_t ProcessNvmlCreateFakeEntity(dcgm_core_msg_nvml_create_injection_gpu_t &msg);
     dcgmReturn_t ProcessNvswitchGetBackend(dcgm_core_msg_nvswitch_get_backend_v1 &msg);
     dcgmReturn_t ProcessHostengineEnvVarInfo(dcgm_core_msg_hostengine_env_var_t &msg);
+
+    dcgmReturn_t ProcessAttachDriver(dcgm_core_msg_attach_driver_t &msg);
+    dcgmReturn_t ProcessDetachDriver(dcgm_core_msg_detach_driver_t &msg);
 
     dcgmModuleProcessMessage_f GetMessageProcessingCallback() const;
 

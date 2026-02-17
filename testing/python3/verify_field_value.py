@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,13 +30,14 @@ Returns 20 on failure and prints "Failed" to stdout.
 """
 )
 parser.add_argument('-f', '--fieldId', type=int, required=True)
-parser.add_argument('-v', '--expectedValue', type=int, required=True, help='The expected value for the field')
+parser.add_argument('-v', '--expectedValue', type=int,
+                    required=True, help='The expected value for the field')
 parser.add_argument('-i', '--gpuId', type=int, required=True)
-parser.add_argument('-w', '--maxWait', type=float, required=True, 
+parser.add_argument('-w', '--maxWait', type=float, required=True,
                     help='The maximum number of seconds the script should wait for the expected value before failing')
-parser.add_argument('--checkInterval', type=float, required=False, default=0.5, 
+parser.add_argument('--checkInterval', type=float, required=False, default=0.5,
                     help='How often the field value should be updated in seconds')
-parser.add_argument('-n', '--numMatches', type=int, required=False, default=3, 
+parser.add_argument('-n', '--numMatches', type=int, required=False, default=3,
                     help='The number of occurences of expected value to look for before treating it as a success')
 
 args = parser.parse_args()
@@ -50,6 +51,7 @@ RET_VALUE_FAILED = 20
 MOST_RECENT_TS = 0
 NUM_MATCHES = 0
 PASSED = False
+
 
 class FieldReader(DcgmReader):
     def CustomFieldHandler(self, gpuId, fieldId, fieldTag, val):
@@ -73,9 +75,11 @@ class FieldReader(DcgmReader):
                 PASSED = True
                 return
 
+
 def main():
     interval_in_usec = int(args.checkInterval * 1000000)
-    fr = FieldReader(fieldIds=[args.fieldId], updateFrequency=interval_in_usec, gpuIds=[args.gpuId])
+    fr = FieldReader(
+        fieldIds=[args.fieldId], updateFrequency=interval_in_usec, gpuIds=[args.gpuId])
 
     start = time.time()
     while True:
@@ -87,6 +91,7 @@ def main():
             print("Failed")
             return RET_VALUE_FAILED
         time.sleep(args.checkInterval)
+
 
 if __name__ == "__main__":
     sys.exit(main())

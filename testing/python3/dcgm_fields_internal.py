@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,11 +24,11 @@ import dcgm_fields
 dcgmFP = dcgm_structs._dcgmGetFunctionPointer
 
 
-#internal-only fields
-DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES          = 210 #Memory utilization samples
-DCGM_FI_DEV_GPU_UTIL_SAMPLES               = 211 #SM utilization samples
-DCGM_FI_DEV_GRAPHICS_PIDS                  = 220 #Graphics processes running on the GPU.
-DCGM_FI_DEV_COMPUTE_PIDS                   = 221 #Compute processes running on the GPU.
+# internal-only fields
+DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES = 210  # Memory utilization samples
+DCGM_FI_DEV_GPU_UTIL_SAMPLES = 211  # SM utilization samples
+DCGM_FI_DEV_GRAPHICS_PIDS = 220  # Graphics processes running on the GPU.
+DCGM_FI_DEV_COMPUTE_PIDS = 221  # Compute processes running on the GPU.
 
 DCGM_FI_SYSMON_FIRST_ID = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_TOTAL
-DCGM_FI_SYSMON_LAST_ID  = dcgm_fields.DCGM_FI_DEV_CPU_MODEL
+DCGM_FI_SYSMON_LAST_ID = dcgm_fields.DCGM_FI_DEV_CPU_MODEL

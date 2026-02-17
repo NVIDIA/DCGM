@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "DcgmDiagManager.h"
+#include "DcgmCoreProxy.h"
 
 #include <ChildProcess/ChildProcess.hpp>
 #include <ChildProcess/ChildProcessBuilder.hpp>
@@ -38,6 +39,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <iterator>
 #include <ranges>
 #include <sstream>
@@ -832,6 +834,11 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
             return DCGM_ST_CALLER_ALREADY_STOPPED;
         }
 
+        if (auto ret = CheckAndHandleRunningFlag(response); ret != DCGM_ST_OK)
+        {
+            return ret;
+        }
+
         auto serviceAccount
             = useServiceAccount == ExecuteWithServiceAccount::Yes ? GetServiceAccount(m_coreProxy) : std::nullopt;
 
@@ -939,6 +946,13 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
        DCGM_ST_NVVS_ERROR or DCGM_ST_GENERIC_ERROR instead */
     log_debug("Launched external command '{}' (PID: {})", fmt::to_string(fmt::join(args, " ")), pid);
 
+    DcgmNs::Defer destroyChildProcess([this]() {
+        if (m_childProcessHandle != 0)
+        {
+            m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
+            m_childProcessHandle = 0;
+        }
+    });
 
     // Get file descriptors for stdout/stderr/data
     int dataFd   = -1;
@@ -983,11 +997,6 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
         if (auto ret = ReadDataFromFd(dataHandle, response); ret != DCGM_ST_OK)
         {
             log_error("Failed to read data from FD: {}", errorString(ret));
-            if (m_childProcessHandle != 0)
-            {
-                m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
-                m_childProcessHandle = 0;
-            }
             return ret;
         }
     }
@@ -998,11 +1007,6 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
     if (auto ret = m_coreProxy.ChildProcessWait(m_childProcessHandle); ret != DCGM_ST_OK)
     {
         log_error("Error waiting for child process: {}", errorString(ret));
-        if (m_childProcessHandle != 0)
-        {
-            m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
-            m_childProcessHandle = 0;
-        }
         return DCGM_ST_NVVS_ERROR;
     }
 
@@ -1016,11 +1020,6 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
     if (auto ret = m_coreProxy.ChildProcessGetStatus(m_childProcessHandle, status); ret != DCGM_ST_OK)
     {
         log_error("Error getting child process status: {}", errorString(ret));
-        if (m_childProcessHandle != 0)
-        {
-            m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
-            m_childProcessHandle = 0;
-        }
         return DCGM_ST_NVVS_ERROR;
     }
 
@@ -1029,6 +1028,11 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
     {
         log_error("The external command '{}' may still be running.", args[0]);
         return DCGM_ST_NVVS_ERROR;
+    }
+
+    if (auto ret = CheckAndHandleRunningFlag(response); ret != DCGM_ST_OK)
+    {
+        return ret;
     }
 
     if (status.exitCode != 0)
@@ -1043,21 +1047,11 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
                               fmt::format("The DCGM diagnostic subprocess was terminated due to signal {}"
                                           "\n**************\n",
                                           status.receivedSignalNumber));
-            if (m_childProcessHandle != 0)
-            {
-                m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
-                m_childProcessHandle = 0;
-            }
             return DCGM_ST_NVVS_KILLED;
         }
 
         if (status.exitCode == NVVS_ST_TEST_NOT_FOUND)
         {
-            if (m_childProcessHandle != 0)
-            {
-                m_coreProxy.ChildProcessDestroy(m_childProcessHandle);
-                m_childProcessHandle = 0;
-            }
             return DCGM_ST_NVVS_NO_AVAILABLE_TEST;
         }
 
@@ -1070,6 +1064,7 @@ dcgmReturn_t DcgmDiagManager::PerformExternalCommand(std::vector<std::string> &a
         log_error("Error destroying child process: {}", errorString(ret));
     }
 
+    destroyChildProcess.Disarm();
     return DCGM_ST_OK;
 }
 
@@ -1085,9 +1080,16 @@ void DcgmDiagManager::AppendDummyArgs(std::vector<std::string> &args)
 }
 
 /****************************************************************************/
-dcgmReturn_t DcgmDiagManager::StopRunningDiag()
+dcgmReturn_t DcgmDiagManager::StopRunningDiag(std::string const &reason)
 {
     DcgmLockGuard lock(&m_mutex);
+    if (!m_diagRunningFlag.has_value())
+    {
+        log_debug("No diagnostic is running");
+        return DCGM_ST_OK;
+    }
+    m_diagRunningFlag->Stop(reason);
+
     if (m_nvvsPID < 0)
     {
         DCGM_LOG_DEBUG << "No diagnostic is running";
@@ -1168,7 +1170,7 @@ auto ExecuteAndParseNvvs(DcgmDiagManager &self,
                                      "Nvvs stderr: \n{}\n",
                                      errorString(result.ret),
                                      stderrStr);
-        if (result.ret != DCGM_ST_NVVS_NO_AVAILABLE_TEST)
+        if (result.ret != DCGM_ST_NVVS_NO_AVAILABLE_TEST && result.ret != DCGM_ST_DIAG_STOPPED)
         {
             log_error(msg);
             response.RecordSystemError({ msg.data(), msg.size() });
@@ -1459,7 +1461,8 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd,
             return ret;
         }
 
-        ret = m_coreProxy.GetGroupGpuIds(0, static_cast<unsigned int>(drd->groupId), gpuIds);
+        ret = m_coreProxy.GetGroupGpuIds(
+            0, static_cast<unsigned int>(drd->groupId), EntityListOption::ActiveOnly, gpuIds);
         if (ret != DCGM_ST_OK)
         {
             log_error("Got st {} from GetGroupGpuIds()", (int)ret);
@@ -1524,7 +1527,15 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd,
         return DCGM_ST_CALLER_ALREADY_STOPPED;
     }
 
+    if (auto ret = CheckAndHandleRunningFlag(response); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
     auto nvvsResults = ExecuteAndParseNvvs(*this, response, drd, connectionId, fakeGpuIds, entityIds);
+
+    HandleDetachedInaccessibleGpus(response, fakeGpuIds, entityIds);
+
     // Some tests require root access. If no tests are found to run, consider re-running them
     // with root privileges to attempt execution again. Need to check again below for NO_AVAILABLE_TEST.
     if (nvvsResults.ret != DCGM_ST_OK && nvvsResults.ret != DCGM_ST_NVVS_NO_AVAILABLE_TEST)
@@ -1560,6 +1571,11 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd,
     {
         log_debug("Caller already stopped.");
         return DCGM_ST_CALLER_ALREADY_STOPPED;
+    }
+
+    if (auto ret = CheckAndHandleRunningFlag(response); ret != DCGM_ST_OK)
+    {
+        return ret;
     }
 
     auto [eudWasRerun, eudRet]
@@ -1633,6 +1649,10 @@ unsigned int DcgmDiagManager::GetTestIndex(const std::string &testName)
     {
         index = DCGM_NVBANDWIDTH_INDEX;
     }
+    else if (compareName == "nccl_tests")
+    {
+        index = DCGM_NCCL_TESTS_INDEX;
+    }
 
     return index;
 }
@@ -1660,6 +1680,14 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
         return resRet;
     }
 
+    {
+        DcgmLockGuard lock(&m_mutex);
+        m_diagRunningFlag = DiagRunningFlag();
+    }
+    DcgmNs::Defer clearDiagStopFlag([this]() {
+        DcgmLockGuard lock(&m_mutex);
+        m_diagRunningFlag = std::nullopt;
+    });
     m_diagCallers.SetConnectionId(connectionId);
     DcgmNs::Defer defer([this, connectionId]() { m_diagCallers.ResetConnectionId(connectionId); });
 
@@ -1699,7 +1727,7 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
             return dcgmReturn;
         }
 
-        dcgmReturn = m_coreProxy.GetGroupEntities(gId, entities);
+        dcgmReturn = m_coreProxy.GetGroupEntities(gId, EntityListOption::ActiveOnly, entities);
         if (dcgmReturn != DCGM_ST_OK)
         {
             DCGM_LOG_ERROR << "Error: Failed to get group entities for group " << gId << ": "
@@ -1736,6 +1764,11 @@ dcgmReturn_t DcgmDiagManager::RunDiagAndAction(dcgmRunDiag_v10 *drd,
         {
             log_debug("Caller already stopped.");
             return DCGM_ST_CALLER_ALREADY_STOPPED;
+        }
+
+        if (auto ret = CheckAndHandleRunningFlag(response); ret != DCGM_ST_OK)
+        {
+            return ret;
         }
 
         retValidation = RunDiag(drd, response, connectionId);
@@ -1783,7 +1816,6 @@ dcgmReturn_t DcgmDiagManager::PauseResumeHostEngine(bool pause = false)
     log_debug("PauseResumeHostEngine({}) returns {} ({})", pause, ret, errorString(ret));
     return ret;
 }
-
 
 dcgmReturn_t DcgmDiagManager::ReadDataFromFd(DcgmNs::Utils::FileHandle &dataFd, DcgmDiagResponseWrapper &response)
 {
@@ -1885,6 +1917,18 @@ dcgmReturn_t DcgmDiagManager::ReadDataFromFd(DcgmNs::Utils::FileHandle &dataFd, 
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmDiagManager::CheckAndHandleRunningFlag(DcgmDiagResponseWrapper &response)
+{
+    DcgmLockGuard lock(&m_mutex);
+    if (m_diagRunningFlag.has_value() && m_diagRunningFlag->IsStopped())
+    {
+        log_info("Diagnostic is being stopped. Reason: {}", m_diagRunningFlag->GetStopReason());
+        response.RecordSystemError(m_diagRunningFlag->GetStopReason());
+        return DCGM_ST_DIAG_STOPPED;
+    }
+    return DCGM_ST_OK;
+}
+
 void DcgmDiagManager::OnConnectionRemove(dcgm_connection_id_t connectionId)
 {
     if (!m_diagCallers.Exists(connectionId) || !m_diagCallers.IsHeartbeatEnabled(connectionId))
@@ -1899,7 +1943,8 @@ void DcgmDiagManager::OnConnectionRemove(dcgm_connection_id_t connectionId)
         return;
     }
     log_error("Stopping running diag for connection {}", connectionId);
-    if (auto ret = StopRunningDiag(); ret != DCGM_ST_OK)
+    if (auto ret = StopRunningDiag("Stopped running diagnostic due to connection is no longer active");
+        ret != DCGM_ST_OK)
     {
         log_debug("failed to stop running diag, err: [{}]", ret);
     }
@@ -1913,4 +1958,224 @@ void DcgmDiagManager::ReceiveHeartbeat(dcgm_connection_id_t connectionId)
     }
     log_verbose("Received heartbeat from connection {}", connectionId);
     m_diagCallers.ReceiveHeartbeat(connectionId);
+}
+
+void DcgmDiagManager::OnAttachDetachGpus(bool isAttached)
+{
+    log_info("GPUs are {}, stopping diagnostic", isAttached ? "attached" : "detached");
+    if (auto ret = StopRunningDiag("Stopped running diagnostic due to GPUs being attached or detached");
+        ret != DCGM_ST_OK)
+    {
+        log_error("failed to stop running diag, err: [{}]", ret);
+    }
+}
+
+dcgmReturn_t DcgmDiagManager::GetDetachedGpus(std::string const &entityIds,
+                                              bool &isGpuWildcard,
+                                              std::vector<DetachedGpuInfo> &detachedGpuInfos,
+                                              bool &allDetached)
+{
+    // Check if this is a GPU-related request (wildcard or explicit)
+    if (!HasGpuRequest(entityIds, isGpuWildcard))
+    {
+        allDetached   = false;
+        isGpuWildcard = false;
+        detachedGpuInfos.clear();
+        return DCGM_ST_OK;
+    }
+
+    detachedGpuInfos.clear();
+
+    // Get all GPUs from the system
+    std::vector<dcgmcm_gpu_info_cached_t> allGpuInfos;
+    dcgmReturn_t ret = m_coreProxy.GetAllGpuInfo(allGpuInfos);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("Failed to get GPU info: {}", errorString(ret));
+        return ret;
+    }
+
+    std::vector<std::pair<unsigned, std::string>> allGpuIdUuids;
+    std::unordered_map<unsigned int, DetachedGpuInfo> detachedGpuMap;
+
+    // Get the detached GPUs
+    for (auto const &gpuInfo : allGpuInfos)
+    {
+        allGpuIdUuids.emplace_back(gpuInfo.gpuId, gpuInfo.uuid);
+
+        if (gpuInfo.status == DcgmEntityStatusDetached || gpuInfo.status == DcgmEntityStatusInaccessible)
+        {
+            DetachedGpuInfo info;
+            info.gpuId       = gpuInfo.gpuId;
+            info.status      = gpuInfo.status;
+            info.skuDeviceId = fmt::format("{:04X}", gpuInfo.pciInfo.pciDeviceId >> 16);
+            info.serialNum   = gpuInfo.serial;
+
+            detachedGpuMap[gpuInfo.gpuId] = info;
+        }
+    }
+
+    if (detachedGpuMap.empty())
+    {
+        allDetached = false;
+        detachedGpuInfos.clear();
+        return DCGM_ST_OK;
+    }
+
+    // Get the requested GPUs from entityIds
+    std::vector<unsigned int> requestedGpuIds;
+    if (isGpuWildcard)
+    {
+        // For GPU wildcard (*, gpu:*, g:*), all GPUs are considered "requested"
+        for (auto const &[gpuId, uuid] : allGpuIdUuids)
+        {
+            requestedGpuIds.push_back(gpuId);
+        }
+    }
+    else
+    {
+        // Get MIG hierarchy for parsing, use empty hierarchy if it fails
+        dcgmMigHierarchy_v2 migHierarchy {};
+        migHierarchy.version = dcgmMigHierarchy_version2;
+        migHierarchy.count   = 0;
+
+        auto ret = m_coreProxy.GetGpuInstanceHierarchy(migHierarchy);
+        if (ret != DCGM_ST_OK)
+        {
+            log_debug("GetGpuInstanceHierarchy failed with {}, using empty hierarchy for parsing", errorString(ret));
+        }
+
+        requestedGpuIds = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, allGpuIdUuids, entityIds);
+    }
+
+    // Find intersection: which detached GPUs were actually requested?
+    for (auto const &gpuId : requestedGpuIds)
+    {
+        if (auto it = detachedGpuMap.find(gpuId); it != detachedGpuMap.end())
+        {
+            detachedGpuInfos.push_back(it->second);
+        }
+    }
+
+    // Check if all requested GPUs (that exist in system) are detached
+    if (!requestedGpuIds.empty() && detachedGpuInfos.size() == requestedGpuIds.size())
+    {
+        allDetached = true;
+    }
+
+    return DCGM_ST_OK;
+}
+
+bool DcgmDiagManager::HasGpuRequest(std::string const &gpuIdsStr, bool &isGpuWildcard)
+{
+    auto tokens           = DcgmNs::Split(gpuIdsStr, ',');
+    bool hasGpuToken      = false;
+    bool hasWildcardToken = false;
+
+    for (auto const &tokenView : tokens)
+    {
+        // Remove empty spaces
+        std::string token = DcgmNs::Trim(tokenView);
+
+        // Skip empty tokens
+        if (token.empty())
+        {
+            continue;
+        }
+
+        // Skip MIG patterns (contain '/')
+        if (token.find('/') != std::string::npos)
+        {
+            continue;
+        }
+
+        // Skip non-GPU entity prefixes
+        if (DcgmNs::EntityPrefixes::IsNonGpuPrefix(token))
+        {
+            continue;
+        }
+
+        // GPU wildcard: "*", "gpu:*", "g:*"
+        if (token == "*" || token == "gpu:*" || token == "g:*")
+        {
+            hasGpuToken      = true;
+            hasWildcardToken = true;
+            continue;
+        }
+
+        // Explicit GPU with prefix: "gpu:0", "g:1"
+        if (token.starts_with("gpu:") || token.starts_with("g:"))
+        {
+            hasGpuToken = true;
+            continue;
+        }
+
+        // GPU range without prefix: "{0-2}"
+        if (token.contains('{') && token.contains('}') && !token.contains(':'))
+        {
+            hasGpuToken = true;
+            continue;
+        }
+
+        // Plain number without prefix (default = GPU): "0", "1", "2"
+        bool isNumber = std::ranges::all_of(token, [](char c) { return std::isdigit(c); });
+        if (isNumber)
+        {
+            hasGpuToken = true;
+        }
+    }
+
+    if (!hasGpuToken)
+    {
+        log_debug("Skipping detached GPU handling for non-GPU request: {}", gpuIdsStr);
+        return false;
+    }
+
+    isGpuWildcard = hasWildcardToken;
+    return true;
+}
+
+void DcgmDiagManager::HandleDetachedGpuResponse(std::vector<DetachedGpuInfo> &detachedGpuInfos,
+                                                DcgmDiagResponseWrapper &response,
+                                                bool isTestResultFailed)
+{
+    // Add per-test results for each detached GPU
+    for (auto const &info : detachedGpuInfos)
+    {
+        if (auto addRet = response.AddGpuStatusToAllTests(
+                info.gpuId, info.status, info.skuDeviceId, info.serialNum, isTestResultFailed);
+            addRet != DCGM_ST_OK)
+        {
+            log_error("Failed to add detached GPU {} to response: {}", info.gpuId, errorString(addRet));
+        }
+    }
+}
+
+void DcgmDiagManager::HandleDetachedInaccessibleGpus(DcgmDiagResponseWrapper &response,
+                                                     std::string const &fakeGpuIds,
+                                                     std::string const &entityIds)
+{
+    std::string const &entityIdsStr = !fakeGpuIds.empty() ? fakeGpuIds : entityIds;
+    bool allDetached                = false;
+    bool isGpuWildcard              = false;
+    std::vector<DetachedGpuInfo> detachedGpuInfos;
+
+    if (auto ret = GetDetachedGpus(entityIdsStr, isGpuWildcard, detachedGpuInfos, allDetached); ret != DCGM_ST_OK)
+    {
+        log_debug("Failed to get detached GPUs: {}", errorString(ret));
+    }
+
+    if (!detachedGpuInfos.empty())
+    {
+        if (allDetached)
+        {
+            std::string sysError = fmt::format("All {} requested GPUs are detached. No diagnostic will be run.",
+                                               detachedGpuInfos.size());
+            response.RecordSystemError(sysError);
+        }
+        else
+        {
+            HandleDetachedGpuResponse(detachedGpuInfos, response, !isGpuWildcard);
+        }
+    }
 }

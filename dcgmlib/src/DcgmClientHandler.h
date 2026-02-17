@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "dcgm_module_structs.h"
 #include "dcgm_structs.h"
 #include <DcgmBuildInfo.hpp>
+#include <UriParser.hpp>
 #include <iostream>
 
 typedef struct
@@ -53,10 +54,9 @@ public:
      * This method is used to get Connection to the host engine corresponding to
      * the IP address
      *****************************************************************************/
-    dcgmReturn_t GetConnHandleForHostEngine(const char *identifier,
+    dcgmReturn_t GetConnHandleForHostEngine(const char *connectionString,
                                             dcgmHandle_t *pDcgmHandle,
-                                            unsigned int timeoutMs,
-                                            bool addressIsUnixSocket);
+                                            unsigned int timeoutMs);
 
     /*****************************************************************************
      * This method is used to close connection with the Host Engine
@@ -101,10 +101,8 @@ private:
                                         std::vector<char> &result,
                                         unsigned int &portNumber);
 
-    dcgmReturn_t TryConnectingToHostEngine(char const identifier[],
-                                           unsigned int portNumber,
+    dcgmReturn_t TryConnectingToHostEngine(DcgmNs::Common::EndpointVariant const &endpoint,
                                            dcgmHandle_t *pDcgmHandle,
-                                           bool addressIsUnixSocket,
                                            int connectionTimeoutMs);
 
     /*************************************************************************/

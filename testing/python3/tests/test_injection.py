@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ from dcgm_structs import dcgmExceptionClass
 
 import time
 
+
 def get_usec_since_1970():
     sec = time.time()
     return int(sec * 1000000.0)
@@ -33,12 +34,17 @@ def helper_verify_fv_equal(fv1, fv2):
     Helper function to verify that fv1 == fv2 with useful errors if they are not equal. An
     assertion is thrown from this if they are not equal
     '''
-    #assert fv1.version == fv2.version #Don't check version. We may be comparing injected values to retrieved ones
-    assert fv1.fieldId == fv2.fieldId, "%d != %d" % (fv1.value.fieldId, fv2.value.fieldId)
-    assert fv1.status == fv2.status, "%d != %d" % (fv1.value.status, fv2.value.status)
-    assert fv1.fieldType == fv2.fieldType, "%d != %d" % (fv1.value.fieldType, fv2.value.fieldType)
+    # assert fv1.version == fv2.version #Don't check version. We may be comparing injected values to retrieved ones
+    assert fv1.fieldId == fv2.fieldId, "%d != %d" % (
+        fv1.value.fieldId, fv2.value.fieldId)
+    assert fv1.status == fv2.status, "%d != %d" % (
+        fv1.value.status, fv2.value.status)
+    assert fv1.fieldType == fv2.fieldType, "%d != %d" % (
+        fv1.value.fieldType, fv2.value.fieldType)
     assert fv1.ts == fv2.ts, "%d != %d" % (fv1.value.ts, fv2.value.ts)
-    assert fv1.value.i64 == fv2.value.i64, "%d != %d" % (fv1.value.i64, fv2.value.i64)
+    assert fv1.value.i64 == fv2.value.i64, "%d != %d" % (
+        fv1.value.i64, fv2.value.i64)
+
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(1)
@@ -48,7 +54,7 @@ def test_dcgm_injection_agent(handle, gpuIds):
     """
     gpuId = gpuIds[0]
 
-    #Make a base value that is good for starters
+    # Make a base value that is good for starters
     fvGood = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     fvGood.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     fvGood.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_CURRENT
@@ -57,28 +63,32 @@ def test_dcgm_injection_agent(handle, gpuIds):
     fvGood.ts = get_usec_since_1970()
     fvGood.value.i64 = 1
 
-    fieldInfoBefore = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
+    fieldInfoBefore = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
+        handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
     countBefore = fieldInfoBefore.numSamples
 
-    #This will throw an exception if it fails
+    # This will throw an exception if it fails
     dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvGood)
 
-    fieldInfoAfter = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
+    fieldInfoAfter = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
+        handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
     countAfter = fieldInfoAfter.numSamples
 
-    assert countAfter > countBefore, "Expected countAfter %d > countBefore %d after injection" % (countAfter, countBefore)
+    assert countAfter > countBefore, "Expected countAfter %d > countBefore %d after injection" % (
+        countAfter, countBefore)
 
-    #Fetch the value we just inserted and verify its attributes are the same
-    fvFetched = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId, [fvGood.fieldId, ])[0]
+    # Fetch the value we just inserted and verify its attributes are the same
+    fvFetched = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+        handle, gpuId, [fvGood.fieldId, ])[0]
     helper_verify_fv_equal(fvFetched, fvGood)
 
-    #Should be able to insert a null timestamp. The agent will just use "now"
+    # Should be able to insert a null timestamp. The agent will just use "now"
     fvAlsoGood = fvGood
     fvAlsoGood.ts = 0
-    #This will thrown an exception if it fails
+    # This will thrown an exception if it fails
     dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvAlsoGood)
 
-    #Now make some attributes bad and expect an error
+    # Now make some attributes bad and expect an error
     fvBad = fvGood
     fvBad.fieldType = ord(dcgm_fields.DCGM_FT_DOUBLE)
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
@@ -98,6 +108,7 @@ def test_dcgm_injection_agent(handle, gpuIds):
     fvBad.fieldId = dcgm_fields.DCGM_FI_MAX_FIELDS + 100
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
         dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvBad)
+
 
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_injection_gpus(1)
@@ -107,7 +118,7 @@ def test_dcgm_injection_remote(handle, gpuIds):
     """
     gpuId = gpuIds[0]
 
-    #Make a base value that is good for starters
+    # Make a base value that is good for starters
     fvGood = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     fvGood.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     fvGood.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_CURRENT
@@ -116,28 +127,32 @@ def test_dcgm_injection_remote(handle, gpuIds):
     fvGood.ts = get_usec_since_1970()
     fvGood.value.i64 = 1
 
-    fieldInfoBefore = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
+    fieldInfoBefore = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
+        handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
     countBefore = fieldInfoBefore.numSamples
 
-    #This will throw an exception if it fails
+    # This will throw an exception if it fails
     dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvGood)
 
-    fieldInfoAfter = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
+    fieldInfoAfter = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
+        handle, gpuId, dcgm_fields.DCGM_FE_GPU, fvGood.fieldId)
     countAfter = fieldInfoAfter.numSamples
 
-    assert countAfter > countBefore, "Expected countAfter %d > countBefore %d after injection" % (countAfter, countBefore)
+    assert countAfter > countBefore, "Expected countAfter %d > countBefore %d after injection" % (
+        countAfter, countBefore)
 
-    #Fetch the value we just inserted and verify its attributes are the same
-    fvFetched = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId, [fvGood.fieldId, ])[0]
+    # Fetch the value we just inserted and verify its attributes are the same
+    fvFetched = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+        handle, gpuId, [fvGood.fieldId, ])[0]
     helper_verify_fv_equal(fvFetched, fvGood)
 
-    #Should be able to insert a null timestamp. The agent will just use "now"
+    # Should be able to insert a null timestamp. The agent will just use "now"
     fvAlsoGood = fvGood
     fvAlsoGood.ts = 0
-    #This will thrown an exception if it fails
+    # This will thrown an exception if it fails
     dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvAlsoGood)
 
-    #Now make some attributes bad and expect an error
+    # Now make some attributes bad and expect an error
     fvBad = fvGood
     fvBad.fieldType = ord(dcgm_fields.DCGM_FT_DOUBLE)
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
@@ -157,6 +172,7 @@ def test_dcgm_injection_remote(handle, gpuIds):
     fvBad.fieldId = dcgm_fields.DCGM_FI_MAX_FIELDS + 100
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
         dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvBad)
+
 
 def helper_verify_multi_values(fieldValues, order, injectedValues):
     """
@@ -183,28 +199,33 @@ def helper_verify_multi_values(fieldValues, order, injectedValues):
             logger.error("Null timestamp at index %d" % i)
             Nerrors += 1
         if fv.ts != injectedFv.ts:
-            logger.error("Timestamp mismatch at index %d: read %d. injected %d" % (i, fv.ts, injectedFv.ts))
+            logger.error("Timestamp mismatch at index %d: read %d. injected %d" % (
+                i, fv.ts, injectedFv.ts))
             Nerrors += 1
         if fv.value.i64 != injectedFv.value.i64:
-            logger.error("Value mismatch at index %d: read %d. injected %d" % (i, fv.value.i64, injectedFv.value.i64))
+            logger.error("Value mismatch at index %d: read %d. injected %d" % (
+                i, fv.value.i64, injectedFv.value.i64))
             Nerrors += 1
 
-        #Don't compare against previous until we are > 1
+        # Don't compare against previous until we are > 1
         if i < 1:
             continue
 
-        fvPrev = fieldValues[i-1]
+        fvPrev = fieldValues[i - 1]
 
         if order == dcgm_structs.DCGM_ORDER_ASCENDING:
             if fv.ts <= fvPrev.ts:
-                logger.error("Out of order ASC timestamp at index %d, fv.ts %d, fvPrev.ts %d" % (i, fv.ts, fvPrev.ts))
+                logger.error("Out of order ASC timestamp at index %d, fv.ts %d, fvPrev.ts %d" % (
+                    i, fv.ts, fvPrev.ts))
                 Nerrors += 1
-        else: #Descending
+        else:  # Descending
             if fv.ts >= fvPrev.ts:
-                logger.error("Out of order DESC timestamp at index %d, fv.ts %d, fvPrev.ts %d" % (i, fv.ts, fvPrev.ts))
+                logger.error("Out of order DESC timestamp at index %d, fv.ts %d, fvPrev.ts %d" % (
+                    i, fv.ts, fvPrev.ts))
                 Nerrors += 1
 
     assert Nerrors < 1, "Comparison errors occurred"
+
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(1)
@@ -219,10 +240,9 @@ def test_dcgm_injection_multi_fetch_agent(handle, gpuIds):
     lastTs = 0
     injectedValues = []
 
-    #Make a base value that is good for starters
+    # Make a base value that is good for starters
 
-
-    #Inject the values we're going to fetch
+    # Inject the values we're going to fetch
     for i in range(NinjectValues):
 
         fvGood = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
@@ -233,30 +253,37 @@ def test_dcgm_injection_multi_fetch_agent(handle, gpuIds):
         fvGood.ts = firstTs + i
         fvGood.value.i64 = 1 + i
 
-        #This will throw an exception if it fails
+        # This will throw an exception if it fails
         dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvGood)
 
         injectedValues.append(fvGood)
 
-    #Fetch in forward order with no timestamp. Verify
+    # Fetch in forward order with no timestamp. Verify
     startTs = 0
     endTs = 0
-    maxCount = 2 * NinjectValues #Pick a bigger number so we can verify only NinjectValues come back
+    # Pick a bigger number so we can verify only NinjectValues come back
+    maxCount = 2 * NinjectValues
     order = dcgm_structs.DCGM_ORDER_ASCENDING
-    fvFetched = dcgm_agent_internal.dcgmGetMultipleValuesForField(handle, gpuId, fvGood.fieldId, maxCount, startTs, endTs, order)
+    fvFetched = dcgm_agent_internal.dcgmGetMultipleValuesForField(
+        handle, gpuId, fvGood.fieldId, maxCount, startTs, endTs, order)
 
-    assert len(fvFetched) == NinjectValues, "Expected %d rows. Got %d" % (NinjectValues, len(fvFetched))
+    assert len(fvFetched) == NinjectValues, "Expected %d rows. Got %d" % (
+        NinjectValues, len(fvFetched))
     helper_verify_multi_values(fvFetched, order, injectedValues)
 
-    #Now do the same fetch with descending values
+    # Now do the same fetch with descending values
     startTs = 0
     endTs = 0
-    maxCount = 2 * NinjectValues #Pick a bigger number so we can verify only NinjectValues come back
+    # Pick a bigger number so we can verify only NinjectValues come back
+    maxCount = 2 * NinjectValues
     order = dcgm_structs.DCGM_ORDER_DESCENDING
-    fvFetched = dcgm_agent_internal.dcgmGetMultipleValuesForField(handle, gpuId, fvGood.fieldId, maxCount, startTs, endTs, order)
+    fvFetched = dcgm_agent_internal.dcgmGetMultipleValuesForField(
+        handle, gpuId, fvGood.fieldId, maxCount, startTs, endTs, order)
 
-    assert len(fvFetched) == NinjectValues, "Expected %d rows. Got %d" % (NinjectValues, len(fvFetched))
+    assert len(fvFetched) == NinjectValues, "Expected %d rows. Got %d" % (
+        NinjectValues, len(fvFetched))
     helper_verify_multi_values(fvFetched, order, injectedValues)
+
 
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_injection_gpus(1)
@@ -272,7 +299,7 @@ def test_dcgm_injection_multi_fetch_remote(handle, gpuIds):
     lastTs = 0
     injectedValues = []
 
-    #Inject the values we're going to fetch
+    # Inject the values we're going to fetch
     for i in range(NinjectValues):
         fvGood = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
         fvGood.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
@@ -282,37 +309,44 @@ def test_dcgm_injection_multi_fetch_remote(handle, gpuIds):
         fvGood.ts = firstTs + i
         fvGood.value.i64 = 1 + i
 
-        #This will throw an exception if it fails
+        # This will throw an exception if it fails
         dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvGood)
 
         injectedValues.append(fvGood)
 
     lastTs = fvGood.ts
 
-    #Fetch in forward order with no timestamp. Verify
+    # Fetch in forward order with no timestamp. Verify
     startTs = 0
     endTs = 0
-    maxCount = 2 * NinjectValues #Pick a bigger number so we can verify only NinjectValues come back
+    # Pick a bigger number so we can verify only NinjectValues come back
+    maxCount = 2 * NinjectValues
     order = dcgm_structs.DCGM_ORDER_ASCENDING
-    fvFetched = dcgm_agent_internal.dcgmGetMultipleValuesForField(handle, gpuId, fvGood.fieldId, maxCount, startTs, endTs, order)
+    fvFetched = dcgm_agent_internal.dcgmGetMultipleValuesForField(
+        handle, gpuId, fvGood.fieldId, maxCount, startTs, endTs, order)
 
-    assert len(fvFetched) == NinjectValues, "Expected %d rows. Got %d" % (NinjectValues, len(fvFetched))
+    assert len(fvFetched) == NinjectValues, "Expected %d rows. Got %d" % (
+        NinjectValues, len(fvFetched))
     helper_verify_multi_values(fvFetched, order, injectedValues)
 
-    #Now do the same fetch with descending values
+    # Now do the same fetch with descending values
     startTs = 0
     endTs = 0
-    maxCount = 2 * NinjectValues #Pick a bigger number so we can verify only NinjectValues come back
+    # Pick a bigger number so we can verify only NinjectValues come back
+    maxCount = 2 * NinjectValues
     order = dcgm_structs.DCGM_ORDER_DESCENDING
-    fvFetched = dcgm_agent_internal.dcgmGetMultipleValuesForField(handle, gpuId, fvGood.fieldId, maxCount, startTs, endTs, order)
+    fvFetched = dcgm_agent_internal.dcgmGetMultipleValuesForField(
+        handle, gpuId, fvGood.fieldId, maxCount, startTs, endTs, order)
 
-    assert len(fvFetched) == NinjectValues, "Expected %d rows. Got %d" % (NinjectValues, len(fvFetched))
+    assert len(fvFetched) == NinjectValues, "Expected %d rows. Got %d" % (
+        NinjectValues, len(fvFetched))
     helper_verify_multi_values(fvFetched, order, injectedValues)
+
 
 def helper_test_dcgm_injection_summaries(handle, gpuIds):
 
     gpuId = gpuIds[0]
-    
+
     # Watch the field we're inserting into
     dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL, 1, 3600.0,
                                             10000)
@@ -320,7 +354,7 @@ def helper_test_dcgm_injection_summaries(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
 
-    #Make a base value that is good for starters
+    # Make a base value that is good for starters
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL
@@ -334,12 +368,12 @@ def helper_test_dcgm_injection_summaries(handle, gpuIds):
         field.value.i64 = i
         ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, field)
         assert (ret == dcgm_structs.DCGM_ST_OK)
-    
+
     time.sleep(1)
 
     systemObj.UpdateAllFields(1)
 
-    tmpMask = dcgm_structs.DCGM_SUMMARY_MIN | dcgm_structs.DCGM_SUMMARY_MAX 
+    tmpMask = dcgm_structs.DCGM_SUMMARY_MIN | dcgm_structs.DCGM_SUMMARY_MAX
     tmpMask = tmpMask | dcgm_structs.DCGM_SUMMARY_AVG | dcgm_structs.DCGM_SUMMARY_DIFF
     # Pass baseTime for the start to get nothing from the first query
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NO_DATA)):
@@ -355,6 +389,7 @@ def helper_test_dcgm_injection_summaries(handle, gpuIds):
     assert (request.response.values[2].i64 == 4)
     assert (request.response.values[3].i64 == 9)
 
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(1)
 def test_dcgm_injection_summaries_embedded(handle, gpuIds):
@@ -362,7 +397,3 @@ def test_dcgm_injection_summaries_embedded(handle, gpuIds):
     Verifies that inject works and we can get summaries of that data
     """
     helper_test_dcgm_injection_summaries(handle, gpuIds)
-
-
-
-

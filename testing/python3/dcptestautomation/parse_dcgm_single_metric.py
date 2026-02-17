@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@ import argparse
 import collections
 import csv
 
+
 class ParseDcgmSingleMetric:
     "class for parsing a single metric"
 
@@ -29,28 +30,33 @@ class ParseDcgmSingleMetric:
     def createFieldsFromMetricLabel(self, metricLabelString, gpu_list):
         print(("GPU Count", gpuCount))
         for i in range(0, gpuCount):
-            #self.metric_label_list.append(str(gpu_list[i]) + '_' + str(metricLabelString))
-            self.metric_label_list.append(str(metricLabelString) + '_' + str(gpu_list[i]))
-
+            # self.metric_label_list.append(str(gpu_list[i]) + '_' + str(metricLabelString))
+            self.metric_label_list.append(
+                str(metricLabelString) + '_' + str(gpu_list[i]))
 
     def writeToCsv(self, sample_num):
         dict_row = {}
         if gpuCount == 8:
-            dict_row = {'Sample Number':sample_num, self.metric_label_list[0]:self.dcgm_val_gpu[0], self.metric_label_list[1]:self.dcgm_val_gpu[1], self.metric_label_list[2]:self.dcgm_val_gpu[2], self.metric_label_list[3]:self.dcgm_val_gpu[3], self.metric_label_list[4]:self.dcgm_val_gpu[4], self.metric_label_list[5]:self.dcgm_val_gpu[5], self.metric_label_list[6]:self.dcgm_val_gpu[6], self.metric_label_list[7]:self.dcgm_val_gpu[7],}
+            dict_row = {'Sample Number': sample_num, self.metric_label_list[0]: self.dcgm_val_gpu[0], self.metric_label_list[1]: self.dcgm_val_gpu[1], self.metric_label_list[2]: self.dcgm_val_gpu[2], self.metric_label_list[3]: self.dcgm_val_gpu[3], self.metric_label_list[4]: self.dcgm_val_gpu[4], self.metric_label_list[5]: self.dcgm_val_gpu[5], self.metric_label_list[6]: self.dcgm_val_gpu[6], self.metric_label_list[7]: self.dcgm_val_gpu[7], }
         elif gpuCount == 7:
-            dict_row = {'Sample Number':sample_num, self.metric_label_list[0]:self.dcgm_val_gpu[0], self.metric_label_list[1]:self.dcgm_val_gpu[1], self.metric_label_list[2]:self.dcgm_val_gpu[2], self.metric_label_list[3]:self.dcgm_val_gpu[3], self.metric_label_list[4]:self.dcgm_val_gpu[4], self.metric_label_list[5]:self.dcgm_val_gpu[5], self.metric_label_list[6]:self.dcgm_val_gpu[6]}
+            dict_row = {'Sample Number': sample_num, self.metric_label_list[0]: self.dcgm_val_gpu[0], self.metric_label_list[1]: self.dcgm_val_gpu[1], self.metric_label_list[2]: self.dcgm_val_gpu[2],
+                        self.metric_label_list[3]: self.dcgm_val_gpu[3], self.metric_label_list[4]: self.dcgm_val_gpu[4], self.metric_label_list[5]: self.dcgm_val_gpu[5], self.metric_label_list[6]: self.dcgm_val_gpu[6]}
         elif gpuCount == 6:
-            dict_row = {'Sample Number':sample_num, self.metric_label_list[0]:self.dcgm_val_gpu[0], self.metric_label_list[1]:self.dcgm_val_gpu[1], self.metric_label_list[2]:self.dcgm_val_gpu[2], self.metric_label_list[3]:self.dcgm_val_gpu[3], self.metric_label_list[4]:self.dcgm_val_gpu[4], self.metric_label_list[5]:self.dcgm_val_gpu[5]}
+            dict_row = {'Sample Number': sample_num, self.metric_label_list[0]: self.dcgm_val_gpu[0], self.metric_label_list[1]: self.dcgm_val_gpu[1], self.metric_label_list[2]: self.dcgm_val_gpu[2], self.metric_label_list[3]: self.dcgm_val_gpu[3], self.metric_label_list[4]: self.dcgm_val_gpu[4], self.metric_label_list[5]: self.dcgm_val_gpu[5]}
         elif gpuCount == 5:
-            dict_row = {'Sample Number':sample_num, self.metric_label_list[0]:self.dcgm_val_gpu[0], self.metric_label_list[1]:self.dcgm_val_gpu[1], self.metric_label_list[2]:self.dcgm_val_gpu[2], self.metric_label_list[3]:self.dcgm_val_gpu[3], self.metric_label_list[4]:self.dcgm_val_gpu[4]}
+            dict_row = {'Sample Number': sample_num, self.metric_label_list[0]: self.dcgm_val_gpu[0], self.metric_label_list[1]: self.dcgm_val_gpu[1],
+                        self.metric_label_list[2]: self.dcgm_val_gpu[2], self.metric_label_list[3]: self.dcgm_val_gpu[3], self.metric_label_list[4]: self.dcgm_val_gpu[4]}
         elif gpuCount == 4:
-            dict_row = {'Sample Number':sample_num, self.metric_label_list[0]:self.dcgm_val_gpu[0], self.metric_label_list[1]:self.dcgm_val_gpu[1], self.metric_label_list[2]:self.dcgm_val_gpu[2], self.metric_label_list[3]:self.dcgm_val_gpu[3]}
+            dict_row = {'Sample Number': sample_num, self.metric_label_list[0]: self.dcgm_val_gpu[0], self.metric_label_list[1]                        : self.dcgm_val_gpu[1], self.metric_label_list[2]: self.dcgm_val_gpu[2], self.metric_label_list[3]: self.dcgm_val_gpu[3]}
         elif gpuCount == 3:
-            dict_row = {'Sample Number':sample_num, self.metric_label_list[0]:self.dcgm_val_gpu[0], self.metric_label_list[1]:self.dcgm_val_gpu[1], self.metric_label_list[2]:self.dcgm_val_gpu[2]}
+            dict_row = {'Sample Number': sample_num, self.metric_label_list[0]: self.dcgm_val_gpu[0],
+                        self.metric_label_list[1]: self.dcgm_val_gpu[1], self.metric_label_list[2]: self.dcgm_val_gpu[2]}
         elif gpuCount == 2:
-            dict_row = {'Sample Number':sample_num, self.metric_label_list[0]:self.dcgm_val_gpu[0], self.metric_label_list[1]:self.dcgm_val_gpu[1]}
+            dict_row = {'Sample Number': sample_num,
+                        self.metric_label_list[0]: self.dcgm_val_gpu[0], self.metric_label_list[1]: self.dcgm_val_gpu[1]}
         elif gpuCount == 1:
-            dict_row = {'Sample Number':sample_num, self.metric_label_list[0]:self.dcgm_val_gpu[0]}
+            dict_row = {'Sample Number': sample_num,
+                        self.metric_label_list[0]: self.dcgm_val_gpu[0]}
 
         return dict_row
 
@@ -59,7 +65,7 @@ class ParseDcgmSingleMetric:
         csvFileName = 'dcgm_' + str(metric) + '.csv'
         sample_num = 0
         f = open(fName, 'r+')
-        lines = f.readlines() # read all lines at once
+        lines = f.readlines()  # read all lines at once
         metric_label = lines[0].split()[2]
         gpuCount = len((gpu_list).split(","))
 
@@ -77,12 +83,12 @@ class ParseDcgmSingleMetric:
                     line = lines[i]
                     row = line.split()
                     if row == [] or row[0] == 'Id' or row[1] == 'GPU/Sw':
-                        #print ("Skipping non data row: " + str(row))
-                        i = i+1
+                        # print ("Skipping non data row: " + str(row))
+                        i = i + 1
                     elif row[0].isdigit():
                         for k in range(0, gpuCount):
-                            val = float(lines[i+k].split()[1])
-                            #print (val, i)
+                            val = float(lines[i + k].split()[1])
+                            # print (val, i)
                             self.dcgm_val_gpu.append(val)
 
                         sample_num = sample_num + 1
@@ -91,27 +97,33 @@ class ParseDcgmSingleMetric:
                         i += gpuCount
                         self.dcgm_val_gpu[:] = []
                 except IndexError:
-                    i = i+1
+                    i = i + 1
                 except StopIteration:
                     pass
         print("Done")
+
 
 def main(cmdArgs):
     fName = cmdArgs.fileName
     metric = cmdArgs.metric
     gpu_list = cmdArgs.gpu_list
-    #parse and output the data
+    # parse and output the data
     po = ParseDcgmSingleMetric()
     po.parseAndWriteToCsv(fName, metric, gpu_list)
 
 
 def parseCommandLine():
-    parser = argparse.ArgumentParser(description="Parse logs from dcgmLogs into a csv")
-    parser.add_argument("-f", "--fileName", required=True, help="fielName of the file to be parsed and outputted to csv")
-    parser.add_argument("-m", "--metric", required=True, help="metric for which the data is being analyzed")
-    parser.add_argument("-i", "--gpu_list", required=False, default='0,1,2,3,4,5,6,7', help="metric for which the data is being analyzed")
+    parser = argparse.ArgumentParser(
+        description="Parse logs from dcgmLogs into a csv")
+    parser.add_argument("-f", "--fileName", required=True,
+                        help="fielName of the file to be parsed and outputted to csv")
+    parser.add_argument("-m", "--metric", required=True,
+                        help="metric for which the data is being analyzed")
+    parser.add_argument("-i", "--gpu_list", required=False, default='0,1,2,3,4,5,6,7',
+                        help="metric for which the data is being analyzed")
     args = parser.parse_args()
     return args
+
 
 if __name__ == "__main__":
     cmdArgs = parseCommandLine()

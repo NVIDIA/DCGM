@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,19 +149,20 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
                                      PCIE_STR_PARALLEL_BW_CHECK_DURATION,
                                      PCIE_STR_DONT_BIND_NUMA,
                                      PCIE_STR_MAX_NVLINK_RECOVERY_ERRORS,
+                                     PCIE_STR_MAX_PCIE_CORRECTABLE_ERRORS,
                                      nullptr };
     char const *description      = "This plugin will exercise the PCIe bus for a given list of GPUs.";
     const dcgmPluginValue_t paramTypes[]
-        = { DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamFloat,
-            DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamFloat,
-            DcgmPluginParamInt,  DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
-            DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamInt,
-            DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamString,
-            DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamInt,
-            DcgmPluginParamNone };
+        = { DcgmPluginParamBool,  DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
+            DcgmPluginParamBool,  DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamFloat,
+            DcgmPluginParamInt,   DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamFloat,
+            DcgmPluginParamInt,   DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
+            DcgmPluginParamBool,  DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
+            DcgmPluginParamBool,  DcgmPluginParamBool, DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamBool,
+            DcgmPluginParamBool,  DcgmPluginParamBool, DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamInt,
+            DcgmPluginParamBool,  DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamString,
+            DcgmPluginParamInt,   DcgmPluginParamInt,  DcgmPluginParamInt,  DcgmPluginParamBool,  DcgmPluginParamInt,
+            DcgmPluginParamFloat, DcgmPluginParamNone };
 
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);

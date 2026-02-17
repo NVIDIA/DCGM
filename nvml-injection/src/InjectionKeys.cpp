@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,6 +137,7 @@ const char *INJECTION_IRQNUM_KEY = "IrqNum"; // Function name(s): nvmlDeviceGetI
 const char *INJECTION_NUMGPUCORES_KEY = "NumGpuCores"; // Function name(s): nvmlDeviceGetNumGpuCores, nvmlDeviceGetNumGpuCores, nvmlDeviceGetNumGpuCores, nvmlDeviceGetNumGpuCores, nvmlDeviceGetNumGpuCores, nvmlDeviceGetNumGpuCores, nvmlDeviceGetNumGpuCores, nvmlDeviceGetNumGpuCores, nvmlDeviceGetNumGpuCores
 const char *INJECTION_POWERSOURCE_KEY = "PowerSource"; // Function name(s): nvmlDeviceGetPowerSource, nvmlDeviceGetPowerSource, nvmlDeviceGetPowerSource, nvmlDeviceGetPowerSource, nvmlDeviceGetPowerSource, nvmlDeviceGetPowerSource, nvmlDeviceGetPowerSource, nvmlDeviceGetPowerSource, nvmlDeviceGetPowerSource
 const char *INJECTION_MEMORYBUSWIDTH_KEY = "MemoryBusWidth"; // Function name(s): nvmlDeviceGetMemoryBusWidth, nvmlDeviceGetMemoryBusWidth, nvmlDeviceGetMemoryBusWidth, nvmlDeviceGetMemoryBusWidth, nvmlDeviceGetMemoryBusWidth, nvmlDeviceGetMemoryBusWidth, nvmlDeviceGetMemoryBusWidth, nvmlDeviceGetMemoryBusWidth, nvmlDeviceGetMemoryBusWidth
+const char *INJECTION_UNREPAIRABLEMEMORYFLAG_KEY = "UnrepairableMemoryFlag"; // Function name(s): nvmlDeviceGetUnrepairableMemoryFlag, nvmlDeviceGetUnrepairableMemoryFlag, nvmlDeviceGetUnrepairableMemoryFlag, nvmlDeviceGetUnrepairableMemoryFlag, nvmlDeviceGetUnrepairableMemoryFlag, nvmlDeviceGetUnrepairableMemoryFlag, nvmlDeviceGetUnrepairableMemoryFlag, nvmlDeviceGetUnrepairableMemoryFlag, nvmlDeviceGetUnrepairableMemoryFlag
 const char *INJECTION_PCIELINKMAXSPEED_KEY = "PcieLinkMaxSpeed"; // Function name(s): nvmlDeviceGetPcieLinkMaxSpeed, nvmlDeviceGetPcieLinkMaxSpeed, nvmlDeviceGetPcieLinkMaxSpeed, nvmlDeviceGetPcieLinkMaxSpeed, nvmlDeviceGetPcieLinkMaxSpeed, nvmlDeviceGetPcieLinkMaxSpeed, nvmlDeviceGetPcieLinkMaxSpeed, nvmlDeviceGetPcieLinkMaxSpeed, nvmlDeviceGetPcieLinkMaxSpeed
 const char *INJECTION_PCIESPEED_KEY = "PcieSpeed"; // Function name(s): nvmlDeviceGetPcieSpeed, nvmlDeviceGetPcieSpeed, nvmlDeviceGetPcieSpeed, nvmlDeviceGetPcieSpeed, nvmlDeviceGetPcieSpeed, nvmlDeviceGetPcieSpeed, nvmlDeviceGetPcieSpeed, nvmlDeviceGetPcieSpeed, nvmlDeviceGetPcieSpeed
 const char *INJECTION_ADAPTIVECLOCKINFOSTATUS_KEY = "AdaptiveClockInfoStatus"; // Function name(s): nvmlDeviceGetAdaptiveClockInfoStatus, nvmlDeviceGetAdaptiveClockInfoStatus, nvmlDeviceGetAdaptiveClockInfoStatus, nvmlDeviceGetAdaptiveClockInfoStatus, nvmlDeviceGetAdaptiveClockInfoStatus, nvmlDeviceGetAdaptiveClockInfoStatus, nvmlDeviceGetAdaptiveClockInfoStatus, nvmlDeviceGetAdaptiveClockInfoStatus, nvmlDeviceGetAdaptiveClockInfoStatus
@@ -186,8 +187,6 @@ const char *INJECTION_METRICS_KEY = "Metrics"; // Function name(s): nvmlGpmMetri
 const char *INJECTION_DRIVERMODEL_KEY = "DriverModel"; // Function name(s): nvmlDeviceSetDriverModel, nvmlDeviceGetDriverModel, nvmlDeviceGetDriverModel
 const char *INJECTION_PCIBUSID_KEY = "PciBusId"; // Function name(s): nvmlDeviceGetHandleByPciBusId, nvmlDeviceGetHandleByPciBusId, nvmlDeviceGetHandleByPciBusId_v2, nvmlDeviceGetHandleByPciBusId_v2
 const char *INJECTION_ECCERRORCOUNTS_KEY = "EccErrorCounts"; // Function name(s): nvmlDeviceClearEccErrorCounts
-const char *INJECTION_POWERMODE_KEY = "PowerMode"; // Function name(s): nvmlDeviceGetPowerMode, nvmlDeviceGetPowerMode, nvmlDeviceSetPowerMode, nvmlDeviceSetPowerMode
-const char *INJECTION_SUPPORTEDPOWERMODES_KEY = "SupportedPowerModes"; // Function name(s): nvmlDeviceGetSupportedPowerModes, nvmlDeviceGetSupportedPowerModes
 const char *INJECTION_FANSPEEDINFO_KEY = "FanSpeedInfo"; // Function name(s): nvmlUnitGetFanSpeedInfo, nvmlUnitGetFanSpeedInfo
 const char *INJECTION_HANDLEBYINDEX_KEY = "HandleByIndex"; // Function name(s): nvmlUnitGetHandleByIndex, nvmlUnitGetHandleByIndex
 const char *INJECTION_LEDSTATE_KEY = "LedState"; // Function name(s): nvmlUnitGetLedState, nvmlUnitGetLedState, nvmlUnitSetLedState, nvmlUnitSetLedState

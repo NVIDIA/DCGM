@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 import itertools
 import math
 
+
 def mean(series):
     '''Calculate the mean of an iterable'''
     length = 0
@@ -21,11 +22,12 @@ def mean(series):
     for i in series:    # must iterate because generators have no len()
         total += i
         length += 1
-        
+
     if length == 0:
         return 0
-    
+
     return total / length
+
 
 def correlation_coefficient(x, y):
     '''
@@ -33,12 +35,13 @@ def correlation_coefficient(x, y):
     '''
     xBar = mean(x)
     yBar = mean(y)
-    xyBar = mean(xi*yi for xi, yi in zip(x, y))
-    
+    xyBar = mean(xi * yi for xi, yi in zip(x, y))
+
     xSquaredBar = mean(xi**2 for xi in x)
     ySquaredBar = mean(yi**2 for yi in y)
-    
-    return (xyBar - xBar*yBar) / (math.sqrt((xSquaredBar-xBar**2) * (ySquaredBar-yBar**2)))
+
+    return (xyBar - xBar * yBar) / (math.sqrt((xSquaredBar - xBar**2) * (ySquaredBar - yBar**2)))
+
 
 def standard_deviation(x):
     '''
@@ -47,5 +50,5 @@ def standard_deviation(x):
     xBar = mean(x)
     N = len(x)
     sumTerm = sum((xi - xBar)**2 for xi in x)
-    
-    return math.sqrt((1./(N-1)) * sumTerm)
+
+    return math.sqrt((1. / (N - 1)) * sumTerm)

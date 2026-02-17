@@ -8,6 +8,7 @@
         dcgmConfigSet;
         dcgmConnect;
         dcgmConnect_v2;
+        dcgmConnect_v3;
         dcgmCpuHierarchyCpuOwnsCore;
         dcgmDisconnect;
         dcgmEngineRun;
@@ -63,6 +64,7 @@
         dcgmJobRemoveAll;
         dcgmJobStartStats;
         dcgmJobStopStats;
+        dcgmMarkModulesReloadable;
         dcgmModuleDenylist;
         dcgmModuleGetStatuses;
         dcgmPolicyGet;
@@ -122,6 +124,7 @@
         dcgmSetEntityNvLinkLinkState;
         dcgmCreateMigEntity;
         dcgmDeleteMigEntity;
+        dcgmEmptyCache;
         dcgmErrorGetPriorityByCode;
         dcgmErrorGetCategoryByCode;
         dcgmErrorGetFormatMsgByCode;
@@ -129,9 +132,11 @@
         dcgmCreateNvmlInjectionGpu;
         dcgmInjectNvmlDevice;
         dcgmInjectNvmlDeviceForFollowingCalls;
+        dcgmInjectedNvmlDeviceReset;
         dcgmGetNvmlInjectFuncCallCount;
         dcgmResetNvmlInjectFuncCallCount;
         dcgmRemoveNvmlInjectedGpu;
+	dcgmInjectedNvmlDeviceReset;
         dcgmRestoreNvmlInjectedGpu;
         dcgmPauseTelemetryForDiag;
         dcgmResumeTelemetryForDiag;
@@ -141,6 +146,9 @@
         dcgmConfigSetWorkloadPowerProfile;
         dcgmDiagSendHeartbeat;
         dcgmHostengineEnvironmentVariableInfo;
+        dcgmAttachDriver;
+        dcgmDetachDriver;
+        dcgmEmptyCache;
 
     local:
         *;

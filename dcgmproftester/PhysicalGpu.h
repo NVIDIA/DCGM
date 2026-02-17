@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -335,9 +335,9 @@ private:
 
     unsigned int m_workers { 0 }; /* Active worker Slices added */
 
-    dcgmHandle_t m_dcgmHandle { (uintptr_t) nullptr }; /* Host Engine handle */
-    dcgmDeviceAttributes_t m_dcgmDeviceAttr {};        /* DCGM device attributes for this GPU */
-    dcgmFieldGrp_t m_fieldGroupId { 0 };               /* Fields we are watching for m_groupId */
+    dcgmHandle_t m_dcgmHandle { (uintptr_t)nullptr }; /* Host Engine handle */
+    dcgmDeviceAttributes_t m_dcgmDeviceAttr {};       /* DCGM device attributes for this GPU */
+    dcgmFieldGrp_t m_fieldGroupId { 0 };              /* Fields we are watching for m_groupId */
 
     uint64_t m_majorComputeCapability { 0 }; /* Compute capability */
     uint64_t m_minorComputeCapability { 0 }; /* Compute capability */

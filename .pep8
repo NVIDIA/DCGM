@@ -1,0 +1,6 @@
+# autopep8 configuration for DCGM
+[pep8]
+# E402: Module level import not at top of file (tracked in DCGM-6330)
+ignore = E402
+# Exclude: build artifacts, external code, SDK, third-party libraries
+exclude = _out,sdk,PerfWorks,__pycache__,*/testing/python3/libs_3rdparty/*

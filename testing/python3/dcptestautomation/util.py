@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ from subprocess import PIPE, Popen
 # Prints the stdout to screen and returns a return code from the shell
 #
 ###############################################################################################
+
+
 def executeBashCmd(cmd, prnt):
     """
     Executes a shell command as a separated process, return stdout, stderr and returncode
@@ -42,7 +44,7 @@ def executeBashCmd(cmd, prnt):
         stderr = stderr_buf.decode('utf-8')
 
         if stdout:
-            print(stdout)#pass
+            print(stdout)  # pass
         if stderr:
             print(stderr)
     except Exception as msg:
@@ -57,21 +59,27 @@ def executeBashCmd(cmd, prnt):
 # Returns success in the end.
 #
 ###############################################################################################
+
+
 def removeDependencies(prnt):
-    #Remove existing installation files and binaries
-    ret = executeBashCmd("echo {0} | sudo pip uninstall pandas".format('y'), prnt)
+    # Remove existing installation files and binaries
+    ret = executeBashCmd(
+        "echo {0} | sudo pip uninstall pandas".format('y'), prnt)
     print(("sudo pip uninstall pandas returned: ", ret[0]))
-    #if module is not installed, this returns 1, so check for both values
+    # if module is not installed, this returns 1, so check for both values
     if (ret[0] in [0, 1]):
-        ret = executeBashCmd("echo {0} | sudo pip uninstall wget".format('y'), prnt)
+        ret = executeBashCmd(
+            "echo {0} | sudo pip uninstall wget".format('y'), prnt)
         print(("sudo pip uninstall wget returned: ", ret[0]))
 
     if (ret[0] in [0, 1]):
-        ret = executeBashCmd("echo {0} | sudo pip uninstall xlwt".format('y'), prnt)
+        ret = executeBashCmd(
+            "echo {0} | sudo pip uninstall xlwt".format('y'), prnt)
         print(("sudo pip uninstall xlwt returned: ", ret[0]))
 
     if (ret[0] in [0, 1]):
-        ret = executeBashCmd("echo {0} | sudo pip uninstall xlrd".format('y'), prnt)
+        ret = executeBashCmd(
+            "echo {0} | sudo pip uninstall xlrd".format('y'), prnt)
         print(("sudo pip uninstall xlrd returned: ", ret[0]))
 
     if ret[0] in [0, 1]:
@@ -84,7 +92,7 @@ def removeDependencies(prnt):
 
 def installDependencies(prnt):
     ret = 0
-    #Install all dependent libraries
+    # Install all dependent libraries
     ret = executeBashCmd("sudo pip install pandas", prnt)
     if ret[0] == 0:
         ret = executeBashCmd("sudo pip install wget", prnt)

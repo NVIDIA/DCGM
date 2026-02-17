@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -225,10 +225,10 @@ private:
     fd_set m_parentReadFds {}; /* parent Read Fd set for workers */
     int m_maxFd { 0 };         /* maximum worker read file descriptor */
 
-    dcgmHandle_t m_dcgmHandle { (uintptr_t) nullptr };     /* Host engine handle */
-    bool m_dcgmIsInitialized { false };                    /* Have we started DCGM? */
-    dcgmGpuGrp_t m_groupId { (uintptr_t) nullptr };        /* GPUs we're watching */
-    dcgmFieldGrp_t m_fieldGroupId { (uintptr_t) nullptr }; /* Fields watched */
+    dcgmHandle_t m_dcgmHandle { (uintptr_t)nullptr };     /* Host engine handle */
+    bool m_dcgmIsInitialized { false };                   /* Have we started DCGM? */
+    dcgmGpuGrp_t m_groupId { (uintptr_t)nullptr };        /* GPUs we're watching */
+    dcgmFieldGrp_t m_fieldGroupId { (uintptr_t)nullptr }; /* Fields watched */
 
     std::vector<dcgmFieldValue_v1> m_dcgmValues; /* Cache of values that have been fetched so far. */
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,6 @@
 #include <HangDetectMonitor.h>
 #include <core/DcgmModuleCore.h>
 #include <dcgm_core_communication.h>
-#include <iostream>
-#include <mutex>
 #include <unordered_map>
 
 #define INJECTION_MODE_ENV_VAR "NVML_INJECTION_MODE"
@@ -67,6 +65,39 @@ class DcgmHostEngineHandler;
 class TaskContextManager;
 
 /*****************************************************************************/
+/* This class handles reading NVML system events like GPU bind and unbind */
+class DcgmNvmlSystemEventThread : public DcgmTaskRunner
+{
+public:
+    DcgmNvmlSystemEventThread(DcgmHostEngineHandler &hostEngineHandler);
+    ~DcgmNvmlSystemEventThread() override;
+
+    void run() override;
+
+    void SetCacheManager(DcgmCacheManager *cacheManager);
+
+    void SetGroupManager(DcgmGroupManager *groupManager);
+
+    std::optional<std::shared_future<dcgmReturn_t>> AttachDriver();
+    std::optional<std::shared_future<dcgmReturn_t>> DetachDriver();
+
+private:
+    dcgmReturn_t Init();
+    bool Shutdown();
+
+    dcgmReturn_t WaitSystemEvent();
+    dcgmReturn_t AttachDriverImpl();
+    dcgmReturn_t DetachDriverImpl();
+
+    DcgmCacheManager *m_cacheManager { nullptr };
+    DcgmGroupManager *m_groupManager { nullptr };
+    bool m_nvmlInitialized { false };
+    bool m_threadReadyToGo { false };
+    nvmlSystemEventSet_t m_eventSet {};
+    bool m_eventSetCreated { false };
+    DcgmHostEngineHandler &m_hostEngineHandler;
+};
+
 /**
  * Respond to hang detection events. */
 class EngineHangDetectHandler : public HangDetectHandler
@@ -118,12 +149,22 @@ public:
      The "C" API for this method will be part of Internal control APIs which can
      be invoked by NV Host Engine
      *****************************************************************************/
-    dcgmReturn_t RunServer(unsigned short portNumber, char const *socketPath, unsigned int isConnectionTCP);
+    dcgmReturn_t RunServer(unsigned short portNumber, char const *socketPath, dcgmConnectionType_t connectionType);
 
     /*****************************************************************************
      * This method is used to handle a client disconnecting from the host engine
      *****************************************************************************/
     void OnConnectionRemove(dcgm_connection_id_t connectionId);
+
+    /*****************************************************************************
+     * This method is used to detach GPUs from the modules
+     *****************************************************************************/
+    void DetachGpusFromModules();
+
+    /*****************************************************************************
+     * This method is used to attach GPUs to the modules
+     *****************************************************************************/
+    void AttachGpusToModules();
 
     /*****************************************************************************
      This method retrieves the instance of the current cache manager
@@ -324,6 +365,7 @@ public:
     dcgmReturn_t HelperWatchPredefined(dcgmWatchPredefined_t *watchPredef, DcgmWatcher &dcgmWatcher);
     dcgmReturn_t HelperModuleDenylist(dcgmModuleId_t moduleId);
     dcgmReturn_t HelperModuleStatus(dcgmModuleGetStatuses_v1 &msg);
+    dcgmReturn_t HelperModulesReloadable(dcgmMsgModulesReloadable_v1 &info);
     unsigned int GetHostEngineHealth() const;
 
     /*****************************************************************************
@@ -490,6 +532,26 @@ public:
      */
     dcgmReturn_t ChildProcessManagerReset();
 
+    /*****************************************************************************/
+    void LoadNvml();
+
+    /*****************************************************************************/
+    void ShutdownNvml() noexcept;
+
+    bool IsNvmlLoaded() const;
+
+    /**
+     * Attach the driver to the system.
+     * @return DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t AttachDriver();
+
+    /**
+     * Detach the driver from the system.
+     * @return DCGM_ST_OK if successful, error code otherwise
+     */
+    dcgmReturn_t DetachDriver();
+
 private:
     DcgmMutex m_lock = DcgmMutex(0);
 
@@ -529,6 +591,38 @@ private:
      *         DCGM_ST_MODULE_NOT_LOADED on error
      *****************************************************************************/
     dcgmReturn_t LoadModule(dcgmModuleId_t moduleId);
+
+    /**
+     * Actually unload modules or mark some not loaded.
+     *
+     * This is part of shutting down and test framework hostengine state
+     * resetting.
+     *
+     * The caller is responsible for acquiring a lock preventing re-entrancy.
+     *
+     * loadingMask deserves some explanation. On entry, it is the mask of
+     * modules to unload. On exit, it is the mask of modules that remain loaded
+     * This allows determining what modules are initally loaded with pointer
+     * to a value of 0 on entry (don't unload anything). Armed with the list
+     * of modules initially loaded, one can negate it to be passed another time
+     * to unload (or just mark reloadable, to permit loading again) all other
+     * modules that may have been loaded. This is how modules loaded by tests
+     * get marked unloaded to allow reloading them.
+     *
+     * unloadedMask is the mask of modules actually unloaded or marked
+     * reloadable, if not specified as nullptr (the default). It is generally
+     * for debugging purposes, to allow logging after return as it is required
+     * that this method will be called inside a thread lock, not recommended
+     * for logging inside it.
+     *
+     * Arguments:
+     *   notLoad      bool     false: unload, true: just mark as not loaded.
+     *   loadingdMask uint32_t modules mask to unload on entry, loaded on exit.
+     *   unloadedMask uint32_t modules mask unloaded on exit.
+     *
+     * unloadMask and unloadedMask default to nullptr.
+     */
+    void UnloadModules(bool notLoad = false, uint32_t *loadingMask = nullptr, uint32_t *unloadedMask = nullptr);
 
     dcgmReturn_t SendModuleMessage(dcgmModuleId_t moduleId, dcgm_module_command_header_t *moduleCommand);
 
@@ -622,12 +716,6 @@ private:
     }
 
     /*****************************************************************************/
-    void LoadNvml();
-
-    /*****************************************************************************/
-    void ShutdownNvml();
-
-    /*****************************************************************************/
     /* DcgmIpc callbacks */
     static void StaticProcessMessage(dcgm_connection_id_t connectionId,
                                      std::unique_ptr<DcgmMessage> message,
@@ -646,7 +734,6 @@ private:
      Private Constructor and Destructor to achieve Singelton design
      *****************************************************************************/
     DcgmHostEngineHandler()
-        : m_nvmlLoaded(false)
     {}
     explicit DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params);
     virtual ~DcgmHostEngineHandler();
@@ -690,18 +777,24 @@ private:
     /* This data structure stores pluggable modules for handling client requests */
     dcgmhe_module_info_t m_modules[DcgmModuleIdCount] {};
 
-    /* Watched requests. Currently used to track policy management callbacks. Protected by Lock()/Unlock() */
+    /* Watched requests. Currently used to track policy management callbacks.
+       Protected by m_watchedRequestsMutex (NOT m_lock) to avoid deadlock with module locks.
+       Using shared_ptr to allow releasing the lock before calling ProcessMessage on callbacks. */
+    std::mutex m_watchedRequestsMutex;
     dcgm_request_id_t m_nextWatchedRequestId {};
-    typedef std::unordered_map<dcgm_request_id_t, std::unique_ptr<DcgmRequest>> watchedRequests_t;
+    typedef std::unordered_map<dcgm_request_id_t, std::shared_ptr<DcgmRequest>> watchedRequests_t;
     watchedRequests_t m_watchedRequests;
 
     unsigned int m_hostengineHealth {};
     std::string m_serviceAccount;
     bool m_usingInjectionNvml {};
-    bool m_nvmlLoaded {};
+    std::atomic<bool> m_nvmlLoaded   = false;
+    std::atomic<bool> m_gpusDetached = false;
 
     DcgmResourceManager m_resourceManager;
     DcgmChildProcessManager m_childProcessManager;
+
+    std::unique_ptr<DcgmNvmlSystemEventThread> m_nvmlSystemEventThread;
 };
 
 #endif /* DCGMHOSTENGINEHANDLER_H */

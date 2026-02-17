@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+Mock all_reduce_perf script for testing the NCCL tests plugin.
+
+Controlled via environment variables:
+- MOCK_NCCL_OUTPUT_MODE: pass, fail_oob, fail_bw, none (default: pass)
+- MOCK_NCCL_EXIT_CODE: integer exit code (default: 0 for pass/none, non-zero for fail modes)
+"""
+
+import os
+import sys
+
+OUTPUT_PASS = """# Collective test starting: all_reduce_perf
+# nThread 1 nGpus 1 minBytes 33554432 maxBytes 33554432 step: 1048576(bytes) warmup iters: 1 iters: 20 agg iters: 1 validation: 1 graph: 0
+#
+# Using devices
+#  Rank  0 Group  0 Pid 12345 on testhost device  0 [0000:1b:00] NVIDIA Test GPU
+#
+#                                                                   out-of-place                                 in-place
+#       size         count      type   redop    root     time   algbw   busbw  #wrong     time   algbw   busbw  #wrong  #iters
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)             (us)  (GB/s)  (GB/s)
+    33554432       8388608     float     sum      -1    25.74  1303.8    0.00       0     0.37   89754    0.00       0      20
+# Out of bounds values : 0 OK
+# Avg bus bandwidth    : 0
+#
+# Collective test concluded: all_reduce_perf
+"""
+
+OUTPUT_FAIL_OOB = """# Collective test starting: all_reduce_perf
+# nThread 1 nGpus 1 minBytes 33554432 maxBytes 33554432 step: 1048576(bytes) warmup iters: 1 iters: 20 agg iters: 1 validation: 1 graph: 0
+#
+# Using devices
+#  Rank  0 Group  0 Pid 12345 on testhost device  0 [0000:1b:00] NVIDIA Test GPU
+#
+#                                                                   out-of-place                                 in-place
+#       size         count      type   redop    root     time   algbw   busbw  #wrong     time   algbw   busbw  #wrong  #iters
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)             (us)  (GB/s)  (GB/s)
+    33554432       8388608     float     sum      -1    25.66  1307.8    0.00       1     0.11  291905    0.00       1      20
+# Out of bounds values : 2 FAILED
+# Avg bus bandwidth    : 0
+#
+# Collective test concluded: all_reduce_perf
+ .. testhost pid 12345: Test failure common.cu:1127
+"""
+
+OUTPUT_FAIL_BW = """# Collective test starting: all_reduce_perf
+# nThread 1 nGpus 1 minBytes 33554432 maxBytes 33554432 step: 1048576(bytes) warmup iters: 1 iters: 20 agg iters: 1 validation: 1 graph: 0
+#
+# Using devices
+#  Rank  0 Group  0 Pid 12345 on testhost device  0 [0000:1b:00] NVIDIA Test GPU
+#
+#                                                                   out-of-place                                 in-place
+#       size         count      type   redop    root     time   algbw   busbw  #wrong     time   algbw   busbw  #wrong  #iters
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)             (us)  (GB/s)  (GB/s)
+    33554432       8388608     float     sum      -1    25.70  1305.8    0.00       0     0.19  175724    0.00       0      20
+# Out of bounds values : 0 OK
+# Avg bus bandwidth    : 0 FAILED
+#
+# Collective test concluded: all_reduce_perf
+ .. testhost pid 12345: Test failure common.cu:1126
+"""
+
+
+def main():
+    mode = os.environ.get("MOCK_NCCL_OUTPUT_MODE", "pass")
+    exit_code_str = os.environ.get("MOCK_NCCL_EXIT_CODE")
+
+    if mode == "pass":
+        print(OUTPUT_PASS)
+        exit_code = int(exit_code_str) if exit_code_str else 0
+    elif mode == "pass_exit1":
+        print(OUTPUT_PASS)
+        exit_code = int(exit_code_str) if exit_code_str else 1
+    elif mode == "fail_oob":
+        print(OUTPUT_FAIL_OOB)
+        exit_code = int(exit_code_str) if exit_code_str else 1
+    elif mode == "fail_bw":
+        print(OUTPUT_FAIL_BW)
+        exit_code = int(exit_code_str) if exit_code_str else 1
+    elif mode == "none":
+        exit_code = int(exit_code_str) if exit_code_str else 0
+    else:
+        print(f"Unknown mode: {mode}", file=sys.stderr)
+        exit_code = 1
+
+    sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    main()

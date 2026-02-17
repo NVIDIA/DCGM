@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -312,6 +312,9 @@ constexpr dcgmReturn_t NvmlReturnToDcgmReturn(nvmlReturn_t nvmlReturn)
         case NVML_ERROR_INSUFFICIENT_RESOURCES:
             return DCGM_ST_INSUFFICIENT_RESOURCES;
 
+        case NVML_ERROR_UNINITIALIZED:
+            return DCGM_ST_NVML_NOT_LOADED;
+
         case NVML_ERROR_IRQ_ISSUE:
         case NVML_ERROR_LIBRARY_NOT_FOUND:
         case NVML_ERROR_FUNCTION_NOT_FOUND:
@@ -319,7 +322,6 @@ constexpr dcgmReturn_t NvmlReturnToDcgmReturn(nvmlReturn_t nvmlReturn)
         case NVML_ERROR_OPERATING_SYSTEM:
         case NVML_ERROR_LIB_RM_VERSION_MISMATCH:
         case NVML_ERROR_ALREADY_INITIALIZED:
-        case NVML_ERROR_UNINITIALIZED:
         case NVML_ERROR_UNKNOWN:
         case NVML_ERROR_INSUFFICIENT_SIZE:
         case NVML_ERROR_INSUFFICIENT_POWER:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,23 @@
  * limitations under the License.
  */
 
-// #include <dcgm_nvml.h>
 #include "dcgm_nvml.h"
 #include "nvml_error_strings.h"
 #include "nvml_loader_hook.h"
 
 #include <TaskContextManager.hpp>
+#include <NvmlRecursiveSharedMutex.h>
 #include <atomic>
 #include <dlfcn.h>
 #include <cstdlib>
 #include <cstdio>
+#include <iostream>
 #include <mutex>
 
 static void *g_nvmlLib                                     = 0;
 static std::atomic_uint32_t g_nvmlStaticLibResetHooksCount = 1;
+static NvmlRecursiveSharedMutex g_nvmlLibLockRecursive;
+static std::atomic<int> g_openCount = 0;
 #ifdef INJECTION_LIBRARY_AVAILABLE
 static bool g_injectionLibraryLoaded = false;
 #endif
@@ -44,7 +47,8 @@ static bool g_injectionLibraryLoaded = false;
     do                                                                               \
     {                                                                                \
         if ((NULL != libFunctionName##HookedFunc)                                    \
-            && (libFunctionName##HookResetCount == g_nvmlStaticLibResetHooksCount))  \
+            && (libFunctionName##HookResetCount == g_nvmlStaticLibResetHooksCount)   \
+            && (g_openCount.load(std::memory_order_acquire) > 0))                    \
         {                                                                            \
             nvmlReturn_t hookedFuncResult;                                           \
             /* The number of times this hook was reset equals the number of times */ \
@@ -61,7 +65,7 @@ static bool g_injectionLibraryLoaded = false;
  * It creates the functions to set and reset hooked functions.
  * It also creates `pre_` and `post_` functions called on entry and exit from the function.
  */
-#define NVML_DYNAMIC_WRAP(newName, libFunctionName, argtypes, ...)                                       \
+#define NVML_DYNAMIC_WRAP(newName, takeLock, libFunctionName, argtypes, ...)                             \
     static libFunctionName##_loader_t libFunctionName##DefaultFunc = NULL;                               \
     static libFunctionName##_loader_t libFunctionName##HookedFunc  = NULL;                               \
     static volatile unsigned int libFunctionName##HookResetCount   = 0;                                  \
@@ -93,9 +97,14 @@ static bool g_injectionLibraryLoaded = false;
     nvmlReturn_t newName argtypes                                                                        \
     {                                                                                                    \
         static volatile uint32_t isLookupDone = 0;                                                       \
+        NvmlSharedLockGuard guard(g_nvmlLibLockRecursive, true);                                         \
+        if (takeLock)                                                                                    \
+        {                                                                                                \
+            guard.lock();                                                                                \
+        }                                                                                                \
         NVML_API_HOOK(libFunctionName, ##__VA_ARGS__);                                                   \
                                                                                                          \
-        if (!g_nvmlLib)                                                                                  \
+        if (!g_nvmlLib || g_openCount.load(std::memory_order_acquire) == 0)                              \
             return NVML_ERROR_UNINITIALIZED;                                                             \
                                                                                                          \
         if (isLookupDone != g_nvmlStaticLibResetHooksCount)                                              \
@@ -133,13 +142,13 @@ static void *nvmlLoaderLoadLibrary(const char *name)
 /* Creates hookable functions for each defined API entry point. */
 
 #define NVML_ENTRY_POINT(nvmlFuncname, tsapiFuncname, argtypes, fmt, ...) \
-    NVML_DYNAMIC_WRAP(nvmlFuncname, nvmlFuncname, argtypes, ##__VA_ARGS__)
+    NVML_DYNAMIC_WRAP(nvmlFuncname, true, nvmlFuncname, argtypes, ##__VA_ARGS__)
 #include "entry_points.h"
 #undef NVML_ENTRY_POINT
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
 #define NVML_INJECTION_ENTRY_POINT(nvmlFuncname, tsapiFuncname, argtypes, fmt, ...) \
-    NVML_DYNAMIC_WRAP(nvmlFuncname, nvmlFuncname, argtypes, ##__VA_ARGS__)
+    NVML_DYNAMIC_WRAP(nvmlFuncname, true, nvmlFuncname, argtypes, ##__VA_ARGS__)
 #include <entry_point_nvml_injection.h>
 #undef NVML_INJECTION_ENTRY_POINT
 #endif
@@ -159,32 +168,30 @@ static nvmlReturn_t nvmlLoadDefaultSharedLibrary(void)
     std::lock_guard<std::mutex> guard(dcgmLibLock);
 
 #ifdef _UNIX
-    const char *nvmlPaths[] =
-    {
-        //
-        // for Ubuntu we support /usr/lib{,32,64}/nvidia-current/...
-        // However, we add these paths to ldconfig so this is not needed
-        // If user messes with ldconfig after the installer sets things up it's up to them to fix apps
-        //
-        "libnvidia-ml.so.1",
-        // For x64 .run and other installs
-        "/usr/lib64/libnvidia-ml.so.1",
-        // For RPM Fusion (64 bit)
-        "/usr/lib64/nvidia/libnvidia-ml.so.1",
-        // For some 32 bit and some 64 bit .run and other installs
-        "/usr/lib/libnvidia-ml.so.1",
-        // For some 32 bit .run and other installs
-        "/usr/lib32/libnvidia-ml.so.1",
-        // For RPM Fusion (32 bit)
-        "/usr/lib/nvidia/libnvidia-ml.so.1",
-        nullptr
-    };
+    const char *nvmlPaths[]
+        = { //
+            // for Ubuntu we support /usr/lib{,32,64}/nvidia-current/...
+            // However, we add these paths to ldconfig so this is not needed
+            // If user messes with ldconfig after the installer sets things up it's up to them to fix apps
+            //
+            "libnvidia-ml.so.1",
+            // For x64 .run and other installs
+            "/usr/lib64/libnvidia-ml.so.1",
+            // For RPM Fusion (64 bit)
+            "/usr/lib64/nvidia/libnvidia-ml.so.1",
+            // For some 32 bit and some 64 bit .run and other installs
+            "/usr/lib/libnvidia-ml.so.1",
+            // For some 32 bit .run and other installs
+            "/usr/lib32/libnvidia-ml.so.1",
+            // For RPM Fusion (32 bit)
+            "/usr/lib/nvidia/libnvidia-ml.so.1",
+            nullptr
+          };
 
     const char **paths = nvmlPaths;
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
-    const char *nvmlInjectionPaths[] =
-    {
+    const char *nvmlInjectionPaths[] = {
         "libnvml_injection.so.1",
         "./apps/amd64/libnvml_injection.so.1",
         "./libnvml_injection.so.1",
@@ -194,7 +201,7 @@ static nvmlReturn_t nvmlLoadDefaultSharedLibrary(void)
     char *injectionMode = getenv("NVML_INJECTION_MODE");
     if (injectionMode != nullptr)
     {
-        paths = nvmlInjectionPaths;
+        paths                    = nvmlInjectionPaths;
         g_injectionLibraryLoaded = true;
     }
 #endif
@@ -218,54 +225,127 @@ static nvmlReturn_t nvmlLoadDefaultSharedLibrary(void)
 }
 
 static nvmlReturn_t localNvmlInit(void);
-NVML_DYNAMIC_WRAP(localNvmlInit, nvmlInit, ())
+NVML_DYNAMIC_WRAP(localNvmlInit, false, nvmlInit, ())
 nvmlReturn_t nvmlInit(void)
 {
+    NvmlExclusiveLockGuard guard(g_nvmlLibLockRecursive);
+    g_openCount.fetch_add(1, std::memory_order_release);
     NVML_API_HOOK(nvmlInit);
 
     if (!g_nvmlLib)
     {
         nvmlReturn_t result = nvmlLoadDefaultSharedLibrary();
         if (NVML_SUCCESS != result)
+        {
+            g_openCount.fetch_sub(1, std::memory_order_release);
             return result;
+        }
     }
 
-    return localNvmlInit();
+    auto ret = localNvmlInit();
+    if (ret != NVML_SUCCESS)
+    {
+        g_openCount.fetch_sub(1, std::memory_order_release);
+    }
+    return ret;
 }
 
 static nvmlReturn_t localNvmlInit_v2(void);
-NVML_DYNAMIC_WRAP(localNvmlInit_v2, nvmlInit_v2, ())
+NVML_DYNAMIC_WRAP(localNvmlInit_v2, false, nvmlInit_v2, ())
 nvmlReturn_t nvmlInit_v2(void)
 {
+    NvmlExclusiveLockGuard guard(g_nvmlLibLockRecursive);
+    g_openCount.fetch_add(1, std::memory_order_release);
     NVML_API_HOOK(nvmlInit_v2);
 
     if (!g_nvmlLib)
     {
         nvmlReturn_t result = nvmlLoadDefaultSharedLibrary();
         if (NVML_SUCCESS != result)
+        {
+            g_openCount.fetch_sub(1, std::memory_order_release);
             return result;
+        }
     }
 
-    return localNvmlInit_v2();
+    auto ret = localNvmlInit_v2();
+    if (ret != NVML_SUCCESS)
+    {
+        g_openCount.fetch_sub(1, std::memory_order_release);
+    }
+    return ret;
 }
 
 static nvmlReturn_t localNvmlInitWithFlags(unsigned int flags);
-NVML_DYNAMIC_WRAP(localNvmlInitWithFlags, nvmlInitWithFlags, (unsigned int flags), flags)
+NVML_DYNAMIC_WRAP(localNvmlInitWithFlags, false, nvmlInitWithFlags, (unsigned int flags), flags)
 nvmlReturn_t nvmlInitWithFlags(unsigned int flags)
 {
+    NvmlExclusiveLockGuard guard(g_nvmlLibLockRecursive);
+    g_openCount.fetch_add(1, std::memory_order_release);
     NVML_API_HOOK(nvmlInitWithFlags, 0);
 
     if (!g_nvmlLib)
     {
         nvmlReturn_t result = nvmlLoadDefaultSharedLibrary();
         if (NVML_SUCCESS != result)
+        {
+            g_openCount.fetch_sub(1, std::memory_order_release);
             return result;
+        }
     }
 
-    return localNvmlInitWithFlags(flags);
+    auto ret = localNvmlInitWithFlags(flags);
+    if (ret != NVML_SUCCESS)
+    {
+        g_openCount.fetch_sub(1, std::memory_order_release);
+    }
+    return ret;
 }
 
-NVML_DYNAMIC_WRAP(nvmlShutdown, nvmlShutdown, ())
+[[nodiscard]] static nvmlReturn_t nvmlReleaseLibrary(void)
+{
+    if (g_openCount.load(std::memory_order_acquire) != 0)
+    {
+        std::cerr << "g_openCount.load(std::memory_order_acquire) != 0" << std::endl;
+        return NVML_ERROR_INVALID_STATE;
+    }
+    if (g_injectionLibraryLoaded)
+    {
+        // intentionally no-op, we cannot release the injection library as some of functions rely on the global
+        // variables (e.g., nvmlSystemEventSetWaitImpl).
+    }
+    else
+    {
+        dlclose(g_nvmlLib);
+        g_nvmlLib = nullptr;
+        resetAllNvmlHooks();
+    }
+    return NVML_SUCCESS;
+}
+
+static nvmlReturn_t localNvmlShutdown(void);
+NVML_DYNAMIC_WRAP(localNvmlShutdown, false, nvmlShutdown, ())
+nvmlReturn_t nvmlShutdown(void)
+{
+    NvmlExclusiveLockGuard guard(g_nvmlLibLockRecursive);
+    if (!g_nvmlLib || g_openCount.load(std::memory_order_acquire) == 0)
+    {
+        return NVML_ERROR_UNINITIALIZED;
+    }
+
+    auto ret = localNvmlShutdown();
+    if (ret != NVML_SUCCESS)
+    {
+        return ret;
+    }
+
+    g_openCount.fetch_sub(1, std::memory_order_release);
+    if (g_openCount.load(std::memory_order_acquire) == 0)
+    {
+        return nvmlReleaseLibrary();
+    }
+    return ret;
+}
 
 typedef const char *(*nvmlErrorString_loader_t)(nvmlReturn_t result);
 static const char *localNvmlErrorString(nvmlReturn_t result)
@@ -307,7 +387,7 @@ const char *nvmlErrorString(nvmlReturn_t result)
 }
 
 /**
- * Notifies all hooks that they are to reset the next time their associated NVML API is 
+ * Notifies all hooks that they are to reset the next time their associated NVML API is
  * invoked using a global reset counter. API's compare their local counter to the global
  * count and reset their hooks if a mismatch is detected.
  */
@@ -330,7 +410,7 @@ void nvmlClearLibraryHandleIfNeeded(void)
     {
         needToClear = true;
     }
- 
+
     if (needToClear && g_nvmlLib != 0)
     {
         dlclose(g_nvmlLib);
@@ -338,5 +418,4 @@ void nvmlClearLibraryHandleIfNeeded(void)
         resetAllNvmlHooks();
     }
 }
-#endif 
-
+#endif

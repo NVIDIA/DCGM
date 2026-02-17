@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,12 +33,14 @@ target_sources(nvmlicoretests
         ../nvml_generated_stubs.cpp
         ../nvml_stubs.cpp
         ../PassThruNvml.cpp
+        ../UnitTestHelpers.cpp
 )
 
 target_include_directories(nvmlicoretests
     PRIVATE
         ..
         ${YAML_INCLUDE_DIR}
+        ${UNIT_TEST_HELPERS_HEADER_DIR} # for UnitTestHelpers.cpp to be able to include generated header (WithInjectionSku.h).
 )
 
 target_link_libraries(nvmlicoretests
@@ -48,6 +50,7 @@ target_link_libraries(nvmlicoretests
         nvmli_interface
         sdk_nvml_interface
         dcgm_common
+        dcgm
         common_interface
         rt
         dl
@@ -56,5 +59,7 @@ target_link_libraries(nvmlicoretests
 )
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    catch_discover_tests(nvmlicoretests EXTRA_ARGS --colour-mode ansi)
+    catch_discover_tests(nvmlicoretests
+        PROPERTIES SKIP_REGULAR_EXPRESSION "[1-9][0-9]* skipped"
+        EXTRA_ARGS --colour-mode ansi)
 endif()

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # limitations under the License.
 import json
 import pygal
-from pygal.style import Style # pylint: disable=import-error
+from pygal.style import Style  # pylint: disable=import-error
 import sys
 import getopt
 import string
@@ -23,15 +23,18 @@ inputfile = ''
 outputfile = ''
 keys = ''
 
+
 def printUsage():
     print str(sys.argv[0]) + ' [-i <inputfile>] -o <outputfile> -k <keys (comma separated)>'
+
 
 def parseArgs(argv):
     global inputfile
     global outputfile
     global keys
     try:
-        opts, args = getopt.getopt(argv,"hi:o:k:",["ifile=","ofile=","keys="])
+        opts, args = getopt.getopt(
+            argv, "hi:o:k:", ["ifile=", "ofile=", "keys="])
     except getopt.GetoptError:
         printUsage()
         sys.exit(2)
@@ -53,16 +56,18 @@ def parseArgs(argv):
         printUsage()
         sys.exit()
 
+
 def cleanup():
     global jsonFile
 
     if jsonFile is not sys.stdin:
         jsonFile.close()
 
-if __name__ == "__main__":
-   parseArgs(sys.argv[1:])
 
-jsonFile  = open(inputfile) if inputfile is not "" else sys.stdin
+if __name__ == "__main__":
+    parseArgs(sys.argv[1:])
+
+jsonFile = open(inputfile) if inputfile is not "" else sys.stdin
 jsonData = json.load(jsonFile)
 
 keyList = keys.split(",")
@@ -75,10 +80,10 @@ custom_style = Style(
             '#82b414', '#fd971f', '#56c2d6', '#808384', '#8c54fe',
             '#465457'))
 
-lineChart = pygal.Line(x_labels_major_every=10, show_minor_x_labels=False, show_dots=False, legend_font_size=10, \
+lineChart = pygal.Line(x_labels_major_every=10, show_minor_x_labels=False, show_dots=False, legend_font_size=10,
                        legend_at_bottom=True, style=custom_style, include_x_axis=False)
 
-try: 
+try:
     key = keyList[0]
     lineChart.x_labels = map(str, range(0, len(gpusData["0"][key])))
 except KeyError:
@@ -91,16 +96,15 @@ for gpu in gpusData:
             secondaryAxis = False
 
             for entry in gpusData[gpu][key]:
-                line.append(entry["value"]);
+                line.append(entry["value"])
             if key == "gpu_temperature" or key == "power_violation":
                 secondaryAxis = True
 
-            lineChart.add(str(key) + ' ' + str(gpu), line, secondary=secondaryAxis)
+            lineChart.add(str(key) + ' ' + str(gpu),
+                          line, secondary=secondaryAxis)
     except KeyError:
         print 'Key \"' + key + '\" not found in JSON file.'
 
 lineChart.render_to_file(outputfile)
 
 cleanup()
-
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,8 +206,8 @@ public:
     void ResetFuncCallCounts();
     funcCallMap_t GetFuncCallCounts();
 
-    nvmlReturn_t RemoveGpu(std::string const &uuid);
-    nvmlReturn_t RestoreGpu(std::string const &uuid);
+    nvmlReturn_t RemoveGpu(std::string const &uuid, bool lock = true);
+    nvmlReturn_t RestoreGpu(std::string const &uuid, bool lock = true);
 
     void SetFileSystemOp(std::unique_ptr<FileSystemOperator> fsOp);
 
@@ -261,9 +261,6 @@ private:
     std::unordered_map<std::string, NvmlFuncReturn> m_globalAttributes;
 
     funcCallMap_t m_nvmlFuncCallCounts;
-
-    std::vector<std::string> m_bindGpus;
-    std::vector<std::string> m_unbindGpus;
 
     bool m_allowAttach                        = true;
     unsigned long long m_registeredEventTypes = 0;
@@ -331,4 +328,8 @@ private:
     void ObjectlessSetNoLock(const std::string &key, const InjectionArgument &value);
 
     nvmlReturn_t nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequest_t *request);
+
+    // This is used for emulating GPU detachment before host engine initialization.
+    // We will detach the GPUs before the host engine is initialized.
+    void HandleGpuDetachedBeforeHand();
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,27 @@ dcgmReturn_t DcgmCoreProxy::GetGpuIds(int activeOnly, std::vector<unsigned int> 
     }
 
     return ret;
+}
+
+DcgmEntityStatus_t DcgmCoreProxy::GetGpuStatus(unsigned int gpuId)
+{
+    dcgmCoreGetGpuStatus_v1 cgg = {};
+
+    initializeCoreHeader(cgg.header, DcgmCoreReqIdGetGpuStatus, dcgmCoreGetGpuStatus_version1, sizeof(cgg));
+
+    cgg.gpuId = gpuId;
+    // coverity[overrun-buffer-val]
+    dcgmReturn_t ret = m_coreCallbacks.postfunc(&cgg.header, m_coreCallbacks.poster);
+
+    if (ret == DCGM_ST_OK)
+    {
+        return cgg.status;
+    }
+    else
+    {
+        log_error("Error '{}' while getting GPU status for GPU id {}", errorString(ret), gpuId);
+    }
+    return DcgmEntityStatusUnknown;
 }
 
 bool DcgmCoreProxy::AreAllGpuIdsSameSku(std::vector<unsigned int> &gpuIds) const
@@ -641,11 +662,14 @@ dcgmReturn_t DcgmCoreProxy::SetValue(int gpuId, unsigned short fieldId, dcgmcm_s
     return ret;
 }
 
-dcgmReturn_t DcgmCoreProxy::GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities) const
+dcgmReturn_t DcgmCoreProxy::GetGroupEntities(unsigned int groupId,
+                                             EntityListOption option,
+                                             std::vector<dcgmGroupEntityPair_t> &entities) const
 {
     std::unique_ptr<dcgmCoreGetGroupEntities_t> gge = std::make_unique<dcgmCoreGetGroupEntities_t>();
     memset(gge.get(), 0, sizeof(*gge));
     gge->request.connectionId = 0;
+    gge->request.activeOnly   = (option == EntityListOption::ActiveOnly);
     gge->request.groupId      = groupId;
 
     initializeCoreHeader(gge->header, DcgmCoreReqIdGMGetGroupEntities, dcgmCoreGetGroupEntities_version, sizeof(*gge));
@@ -704,11 +728,13 @@ dcgmReturn_t DcgmCoreProxy::AreAllTheSameSku(dcgm_connection_id_t connectionId,
 
 dcgmReturn_t DcgmCoreProxy::GetGroupGpuIds(dcgm_connection_id_t connectionId,
                                            unsigned int groupId,
+                                           EntityListOption option,
                                            std::vector<unsigned int> &gpuIds) const
 {
     dcgmCoreGetGroupGpuIds_t ggg = {};
     ggg.request.connectionId     = connectionId;
     ggg.request.groupId          = groupId;
+    ggg.request.activeOnly       = (option == EntityListOption::ActiveOnly);
 
     initializeCoreHeader(ggg.header, DcgmCoreReqIdGMGetGroupGpuIds, dcgmCoreGetGroupGpuIds_version, sizeof(ggg));
 

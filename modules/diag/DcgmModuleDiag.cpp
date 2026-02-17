@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -469,7 +469,7 @@ inline dcgmReturn_t DcgmModuleDiag::ProcessRun(dcgm_module_command_header_t *mod
 /*****************************************************************************/
 dcgmReturn_t DcgmModuleDiag::ProcessStop(dcgm_diag_msg_stop_t * /* msg */)
 {
-    return mpDiagManager->StopRunningDiag();
+    return mpDiagManager->StopRunningDiag("Stopped running diagnostic due to stop command triggered");
 }
 
 /*****************************************************************************/
@@ -495,6 +495,14 @@ dcgmReturn_t DcgmModuleDiag::ProcessCoreMessage(dcgm_module_command_header_t *mo
 
         case DCGM_CORE_SR_CLIENT_DISCONNECT:
             mpDiagManager->OnConnectionRemove(((dcgm_core_msg_client_disconnect_t *)moduleCommand)->connectionId);
+            break;
+
+        case DCGM_CORE_SR_ATTACH_GPUS:
+            mpDiagManager->OnAttachDetachGpus(true);
+            break;
+
+        case DCGM_CORE_SR_DETACH_GPUS:
+            mpDiagManager->OnAttachDetachGpus(false);
             break;
 
         default:

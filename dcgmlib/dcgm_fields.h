@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -318,6 +318,13 @@ typedef unsigned int dcgm_field_eid_t;
  * CUDA 11.1 = 11100
  */
 #define DCGM_FI_CUDA_DRIVER_VERSION 5
+
+/**
+ * GPU bind/unbind event notification
+ * Values: SystemReinitializing=1, SystemReinitializationCompleted=2
+ * @note Recommended watch frequency: 1 second
+ */
+#define DCGM_FI_BIND_UNBIND_EVENT 6
 
 /**
  * Name of the GPU device
@@ -1184,7 +1191,13 @@ typedef unsigned int dcgm_field_eid_t;
  */
 #define DCGM_FI_DEV_DIAG_STATUS 362
 
-/* Values from 363-380 reserved for future use */
+/**
+ * Result of the nccl-tests test
+ * Refers to a `int64_t` storing a value drawn from `dcgmError_t` enumeration
+ */
+#define DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT 363
+
+/* Values from 364-380 reserved for future use */
 
 /**
  * Historical max available spare memory rows per memory bank
@@ -1795,7 +1808,7 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_MAX_VGPU_FIELDS DCGM_FI_LAST_VGPU_FIELD_ID - DCGM_FI_FIRST_VGPU_FIELD_ID
 
 /**
- * Infiniband GUID string (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+ * Infiniband GUID string with format 0xXXXXXXXXXXXXXXXX for the specified GPU.
  */
 #define DCGM_FI_DEV_PLATFORM_INFINIBAND_GUID 571
 
@@ -2908,6 +2921,11 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS 1219
 
 /**
+ * NVLink ECC Data Error Counter total for all Links
+ */
+#define DCGM_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL 1220
+
+/**
  * First field id of ConnectX
  */
 #define DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID 1300
@@ -3306,11 +3324,42 @@ typedef unsigned int dcgm_field_eid_t;
 #define DCGM_FI_IMEX_DAEMON_STATUS 1503
 
 /**
+ * 1504 to 1506 entries reserved for power IMEX fields
+ */
+
+/**
+ * Unrepairable memory flag indicating if memory has unrepairable errors
+ * 1=yes, 0=no
+ */
+#define DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG 1507
+
+/**
+ * NVLink State (see NVML_FI_DEV_NVLINK_GET_STATE for return values)
+ * This field expects a dcgm_link_t entity to specify the GPU and link index.
+ * Use DCGM_FE_LINK entity group when accessing this field.
+ */
+#define DCGM_FI_DEV_NVLINK_GET_STATE 1508
+
+/**
+ * InfiniBand Port Counter: Port Transmit Wait
+ * (see NVML_PRM_COUNTER_ID_PPCNT_PORTCOUNTERS_PORT_XMIT_WAIT for details)
+ * This field expects a dcgm_link_t entity to specify the GPU and link index.
+ * Use DCGM_FE_LINK entity group when accessing this field.
+ */
+#define DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT 1509
+
+/* Values from 1510-1522 reserved for future use */
+
+/**
+ * GPU Recovery Action (see nvmlDeviceGpuRecoveryAction_t for return values)
+ */
+#define DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION 1523
+
+/**
  * 1 greater than maximum fields above. This is the 1 greater
  * than the maximum field id that could be allocated.
  */
-#define DCGM_FI_MAX_FIELDS (DCGM_FI_IMEX_DAEMON_STATUS + 1)
-
+#define DCGM_FI_MAX_FIELDS (DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION + 1)
 
 /** @} */
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,7 @@ const std::string SW_SUBTEST_PERMS("Permissions and OS Blocks");
 const std::string SW_SUBTEST_PERSISTENCE("Persistence Mode");
 const std::string SW_SUBTEST_ENV("Environment Variables");
 const std::string SW_SUBTEST_PAGE_RETIREMENT("Page Retirement/Row Remap");
+const std::string SW_SUBTEST_MEMORY_HEALTH("Memory Health");
 const std::string SW_SUBTEST_SRAM_THRESHOLD("SRAM Threshold Count");
 const std::string SW_SUBTEST_GRAPHICS("Graphics Processes");
 const std::string SW_SUBTEST_INFOROM("Inforom");
@@ -193,6 +194,10 @@ void Software::Go(std::string const &testName,
     {
         checkPageRetirement();
         checkRowRemapping();
+    }
+    else if (testParameters.GetString(SW_STR_DO_TEST) == "memory_health")
+    {
+        checkUnrepairableMemory();
     }
     else if (testParameters.GetString(SW_STR_DO_TEST) == "inforom")
         checkInforom();
@@ -1003,6 +1008,66 @@ void Software::checkFabricManager()
             LogAndSetFMError(gpuId, (dcgmFabricManagerStatus_t)fmStatusVal.value.i64);
         }
     }
+}
+
+int Software::checkUnrepairableMemory()
+{
+    dcgmFieldValue_v2 unrepairableFlagValue;
+    dcgmReturn_t ret;
+
+    /* Flags to pass to dcgmRecorder.GetCurrentFieldValue. Get live data since we're not watching the fields ahead of
+     * time */
+    unsigned int flags = DCGM_FV_FLAG_LIVE_DATA;
+
+    setSubtestName(SW_SUBTEST_MEMORY_HEALTH);
+
+    if (UsingFakeGpus(GetSoftwareTestName()))
+    {
+        /* fake gpus don't support live data */
+        flags = 0;
+    }
+
+    auto const &gpuList = m_tests.at(GetSoftwareTestName()).GetGpuList();
+    for (auto const gpuId : gpuList)
+    {
+        // Check for unrepairable memory flag
+        ret = m_dcgmRecorder.GetCurrentFieldValue(
+            gpuId, DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG, unrepairableFlagValue, flags);
+        if (ret != DCGM_ST_OK)
+        {
+            log_error("Failed to read unrepairable memory flag for GPU {} with error {}", gpuId, ret);
+
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "memory_unrepairable_flag", gpuId);
+            addError(d);
+            SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
+            continue;
+        }
+
+        if (unrepairableFlagValue.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(unrepairableFlagValue.value.i64))
+        {
+            log_warning(
+                "gpuId {} returned status {}, value {} for DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG. Skipping this check.",
+                gpuId,
+                unrepairableFlagValue.status,
+                unrepairableFlagValue.value.i64);
+        }
+        else if (unrepairableFlagValue.value.i64 != 0)
+        {
+            log_error(
+                "Unrepairable memory (DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG) flag is set for GPU {} with value {}.",
+                gpuId,
+                unrepairableFlagValue.value.i64);
+
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FAULTY_MEMORY, d, unrepairableFlagValue.value.i64, gpuId);
+            addError(d);
+            SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
+            continue;
+        }
+    }
+
+    return 0;
 }
 
 void Software::LogAndSetFMError(unsigned int gpuId, dcgmFabricManagerStatus_t status)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -299,20 +299,13 @@ dcgmReturn_t DcgmRecorder::GetFieldValuesSince(dcgm_field_entity_group_t /*entit
 std::string DcgmRecorder::GetWatchedFieldsAsJson(Json::Value &jv, long long ts)
 {
     std::string errStr;
-    dcgmReturn_t ret = DCGM_ST_OK;
 
-    // Make sure we have all of our values queried
-    for (size_t i = 0; i < m_gpuIds.size(); i++)
+    if (!m_gpuIds.empty() && !m_fieldIds.empty())
     {
-        for (size_t j = 0; j < m_fieldIds.size(); j++)
+        if (auto ret = GetFieldValuesSince(DCGM_FE_GPU, 0, 0, ts, true); ret != DCGM_ST_OK)
         {
-            ret = GetFieldValuesSince(DCGM_FE_GPU, m_gpuIds[i], m_fieldIds[j], ts, true);
-
-            if (ret != DCGM_ST_OK)
-            {
-                GetErrorString(ret, errStr);
-                return errStr;
-            }
+            GetErrorString(ret, errStr);
+            return errStr;
         }
     }
 

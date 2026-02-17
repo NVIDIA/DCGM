@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -389,4 +389,4 @@ void InitLogToHostengine(const DcgmLoggingSeverity_t severity);
 void LoggingSetHostEngineComponentName(const std::string &componentName);
 int RouteLogToConsoleLogger(loggerCategory_t category);
 
-using fmt::v10::enums::format_as;
+using fmt::v12::enums::format_as;

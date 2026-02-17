@@ -1,0 +1,4 @@
+corrosion https://github.com/corrosion-rs/corrosion/archive/refs/tags/v0.5.2.tar.gz 2510d4d0484fc12a6b429244b283515fda650b52ea74fbfdcc141298b452b20e2bef800b8f8a573a2bf509f4147ecb2d68e795cbd86cc8edd092f57ccff8b86b
+rustc https://static.rust-lang.org/dist/2025-09-18/rust-1.90.0-x86_64-unknown-linux-gnu.tar.xz bc1e7181cfefc630074e7019bacdca0fd159932b3011accb12e97c17023b6832b865de26e7b3b106cb595fe78b518cff397b6e50c9e1a56f7ce0c47f1a6a7c25
+rust-src https://static.rust-lang.org/dist/2025-09-18/rust-src-1.90.0.tar.xz 88dd1a5f1a69ab9e4586fee4a31d7dea51a664ac32b501cab771739b8127eb4ac873d2353e819ef057734522c1bcd64d664bda3d1ff957b1448b4653be766638
+rust-std-aarch64-linux-gnu https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-aarch64-unknown-linux-gnu.tar.xz 0396ab769566975a8bd4a2c276699c9cd4f026d32aa37c9cd7e21e5decbce7c6d1acb5a800069652fe01826fd16dc4dbd2f1921ee0c5be1f57dc69f5bb425fc0

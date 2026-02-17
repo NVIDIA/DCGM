@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,7 +176,7 @@ template <>
 struct fmt::formatter<FixedSizeString> : fmt::formatter<std::string_view>
 {
     template <typename FormatContext>
-    auto format(FixedSizeString const &value, FormatContext &ctx)
+    auto format(FixedSizeString const &value, FormatContext &ctx) const
     {
         if (value.origin.length() <= value.maxLength)
         {
@@ -392,7 +392,7 @@ void PrintMetricsRow(dcgmi_entity_pair_t const &entity,
     using namespace fmt::literals;
     fmt::print("{entityPair:{colWidth}}",
                "entityPair"_a = fmt::format("{} {}", entity.entityGroupId, entity.entityId),
-               "colWidth"_a   = widths[0]);
+               "colWidth"_a   = widths[0] + PADDING);
 
     size_t valuesIdx = 0;
 
@@ -745,14 +745,14 @@ void DeviceMonitor::SetHeaderForOutput(unsigned short fieldIds[], unsigned int c
     fmt::memory_buffer unitBuffer;
     headBuffer.reserve(512);
     unitBuffer.reserve(512);
-    constexpr int firstFieldWidth = 11;
+    constexpr int firstFieldWidth = 14;
 
     /*
      * #Entity sName   sName    sName
      * ID
      */
-    fmt::format_to(std::back_inserter(headBuffer), "{:<{}}", "#Entity", firstFieldWidth);
-    fmt::format_to(std::back_inserter(unitBuffer), "{:<{}}", "ID", firstFieldWidth);
+    fmt::format_to(std::back_inserter(headBuffer), "{:<{}}", "#Entity", firstFieldWidth + PADDING);
+    fmt::format_to(std::back_inserter(unitBuffer), "{:<{}}", "ID", firstFieldWidth + PADDING);
 
     m_widthArray[0] = firstFieldWidth;
 

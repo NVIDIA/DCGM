@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,12 @@
 #include <dcgm_agent.h>
 #include <sstream>
 
+#define TEST_DCGMCACHEMANAGER
 #include <DcgmCacheManager.h>
+#undef TEST_DCGMCACHEMANAGER
 #include <Defer.hpp>
+#include <UnitTestHelpers.h>
+#include <dcgm_fields.h>
 
 #if defined(NV_VMWARE)
 /* No. of iterations corresponding to different sample set of vgpuIds */
@@ -325,5 +329,69 @@ TEST_CASE("CacheManger::GetFMStatusFromStruct")
         {
             CHECK(fmError == (uint64_t)series[i].resultFMError);
         }
+    }
+}
+
+TEST_CASE("DcgmCacheManager::UpdateAllFields")
+{
+    auto restoreEnv = WithNvmlInjectionSkuFile("H200.yaml");
+    if (!restoreEnv)
+    {
+        SKIP("Sku file not found: H200.yaml");
+    }
+
+    DcgmFieldsInit();
+
+    auto ret = nvmlInit_v2();
+    REQUIRE(ret == NVML_SUCCESS);
+    DcgmNs::Defer defer([&] { nvmlShutdown(); });
+
+    DcgmCacheManager cacheManager;
+    /* Initialize in manual mode */
+    cacheManager.Init(1, 14400.0, true);
+    cacheManager.Start();
+
+    unsigned int constexpr gpuId = 0;
+    // field from dedicated API
+    unsigned short constexpr fieldIdUUID = DCGM_FI_DEV_UUID;
+    // field from nvmlDeviceGetFieldValues
+    unsigned short constexpr fieldIdECCCurrent       = DCGM_FI_DEV_ECC_CURRENT;
+    std::array<unsigned short, 2> constexpr fieldIds = { fieldIdUUID, fieldIdECCCurrent };
+    DcgmWatcher watcher(DcgmWatcherTypeClient, 5566);
+
+    for (auto fieldId : fieldIds)
+    {
+        bool wereFirstWatcher = false;
+        auto ret              = cacheManager.AddFieldWatch(
+            DCGM_FE_GPU, gpuId, fieldId, 0, 14400.0, 2, watcher, false, false, wereFirstWatcher);
+        REQUIRE(ret == DCGM_ST_OK);
+    }
+
+    SECTION("watchInfo->isWatched == false case")
+    {
+        for (auto fieldId : fieldIds)
+        {
+            auto ret = cacheManager.RemoveFieldWatch(DCGM_FE_GPU, gpuId, fieldId, 0, watcher);
+            REQUIRE(ret == DCGM_ST_OK);
+        }
+        REQUIRE(cacheManager.UpdateAllFields(1) == DCGM_ST_OK);
+    }
+
+    SECTION("Watched")
+    {
+        REQUIRE(cacheManager.UpdateAllFields(1) == DCGM_ST_OK);
+
+        dcgmcm_sample_t sample {};
+
+        REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldIdUUID, &sample, nullptr) == DCGM_ST_OK);
+        REQUIRE(sample.val.str != nullptr);
+        // The UUID of GPU 0 is 26a0ce63-ce32-b34e-acf2-5a0273328ee5 in H200.yaml
+        REQUIRE(std::string_view(sample.val.str) == "GPU-26a0ce63-ce32-b34e-acf2-5a0273328ee5");
+        REQUIRE(cacheManager.FreeSamples(&sample, 1, fieldIdUUID) == DCGM_ST_OK);
+
+        std::memset(&sample, 0, sizeof(sample));
+        REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldIdECCCurrent, &sample, nullptr) == DCGM_ST_OK);
+        REQUIRE(sample.val.i64 == 1);
+        REQUIRE(cacheManager.FreeSamples(&sample, 1, fieldIdECCCurrent) == DCGM_ST_OK);
     }
 }

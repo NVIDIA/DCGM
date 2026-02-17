@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,14 +17,17 @@ import logging
 import sys
 
 ###############################################################################
+
+
 def create_parser(
-        publish_port = 8000,
-        interval = 10,
-        name = 'the monitoring tool', # Replace with 'prometheus', 'telegraf', etc.
-        field_ids = None,
-        log_file = None,
-        log_level = 'INFO',
-        dcgm_hostname = environ.get('DCGM_HOSTNAME') or 'localhost',
+        publish_port=8000,
+        interval=10,
+        # Replace with 'prometheus', 'telegraf', etc.
+        name='the monitoring tool',
+        field_ids=None,
+        log_file=None,
+        log_level='INFO',
+        dcgm_hostname=environ.get('DCGM_HOSTNAME') or 'localhost',
 ):
     '''
     Create a parser that defaults to sane parameters.
@@ -41,8 +44,8 @@ def create_parser(
     parser.add_argument('-i', '--interval', dest='interval', type=int, default=interval,
                         help='How often the client should retrieve new values from DCGM in seconds. Default={}.'.format(interval))
     parser.add_argument('-f', '--field-ids', dest='field_ids', type=str, default=field_ids,
-                        help='Comma-separated list of field IDs that should be retrieved from DCGM. '+
-                             'The full list of available field IDs can be obtained from dcgm_fields.h, dcgm_fields.py, '+
+                        help='Comma-separated list of field IDs that should be retrieved from DCGM. ' +
+                             'The full list of available field IDs can be obtained from dcgm_fields.h, dcgm_fields.py, ' +
                              'or running \'dcgmi dmon -l\'.')
     parser.add_argument('--log-file', dest='logfile', type=str, default=log_file,
                         help='A path to a log file for recording what information is being sent to {}'.format(name))
@@ -62,16 +65,21 @@ def create_parser(
 
     return parser
 
+
 def add_custom_argument(parser, *args, **kwargs):
     parser.add_argument(*args, **kwargs)
 
 ###############################################################################
+
+
 def add_target_host_argument(name, parser, default_target='localhost'):
     parser.add_argument('-t', '--publish-hostname', dest='publish_hostname',
                         type=str, default=default_target,
                         help='The hostname at which the client will publish the readings to {}'.format(name))
 
 ###############################################################################
+
+
 def run_parser(parser):
     '''
     Run a parser created using create_parser
@@ -79,6 +87,8 @@ def run_parser(parser):
     return parser.parse_args()
 
 ###############################################################################
+
+
 def get_field_ids(args):
     # This indicates the user supplied a string, so we should override the
     # default
@@ -91,6 +101,8 @@ def get_field_ids(args):
         return args.field_ids
 
 ###############################################################################
+
+
 def get_log_level(args):
     levelStr = args.loglevel.upper()
     if levelStr == '0' or levelStr == 'CRITICAL':
@@ -104,12 +116,15 @@ def get_log_level(args):
     elif levelStr == '4' or levelStr == 'DEBUG':
         numeric_log_level = logging.DEBUG
     else:
-        print("Could not understand the specified --log-level '%s'" % (args.loglevel))
+        print("Could not understand the specified --log-level '%s'" %
+              (args.loglevel))
         args.print_help()
         sys.exit(2)
     return numeric_log_level
 
 ###############################################################################
+
+
 def parse_command_line(name, default_port, add_target_host=False):
     # Fields we accept raw from the CLI
     FIELDS_AS_IS = ['publish_port', 'interval', 'logfile', 'publish_hostname']

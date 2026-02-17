@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,6 +124,24 @@ public:
     std::string GetSystemErr() const;
 
     unsigned int GetVersion() const;
+
+    /**
+     * Add a detached/inaccessible GPU to all tests in the response
+     *
+     * This method adds the GPU to all tests with NOT_RUN result and error messages.
+     *
+     * @param[in] gpuId - GPU ID to add
+     * @param[in] status - GPU status (detached / inaccessible)
+     * @param[in] isFail - If true, update PASS test results to FAIL; if false, leave test results unchanged
+     * @param[in] skuDeviceId - PCI device ID string (formatted hex, e.g., "2335")
+     * @param[in] serialNum - GPU serial number string
+     * @return DCGM_ST_OK on success, error code otherwise
+     */
+    dcgmReturn_t AddGpuStatusToAllTests(unsigned int gpuId,
+                                        DcgmEntityStatus_t status,
+                                        std::string const &skuDeviceId,
+                                        std::string const &serialNum,
+                                        bool isFail);
 
 #ifndef __DIAG_UNIT_TESTING__
 private:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,6 +106,52 @@ constexpr auto NVLINK_ERROR_FIELD_IDS_BLACKWELL_OR_NEWER
                                       DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS,
                                       DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT,
                                       DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT });
+
+namespace
+{
+
+dcgmReturn_t ValidGpuId(dcgmHandle_t pDcgmHandle, unsigned int gpuId)
+{
+    std::array<unsigned int, DCGM_MAX_NUM_DEVICES> supportedGpuIds = { 0 };
+    int supportedCount                                             = 0;
+    auto ret = dcgmGetAllSupportedDevices(pDcgmHandle, supportedGpuIds.data(), &supportedCount);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("Failed to get all supported devices, ret: {}", ret);
+        return ret;
+    }
+
+    auto supportedGpuIdsSpan
+        = std::span(supportedGpuIds.begin(), std::min(static_cast<int>(DCGM_MAX_NUM_DEVICES), supportedCount));
+    bool inSupportedList
+        = std::find(supportedGpuIdsSpan.begin(), supportedGpuIdsSpan.end(), gpuId) != supportedGpuIdsSpan.end();
+    if (inSupportedList)
+    {
+        return DCGM_ST_OK;
+    }
+
+    std::array<unsigned int, DCGM_MAX_NUM_DEVICES> allGpuIds = { 0 };
+    int allGpusCount                                         = 0;
+    ret = dcgmGetAllDevices(pDcgmHandle, allGpuIds.data(), &allGpusCount);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("Failed to get all devices, ret: {}", ret);
+        return ret;
+    }
+
+    auto allGpuIdsSpan = std::span(allGpuIds.begin(), std::min(static_cast<int>(DCGM_MAX_NUM_DEVICES), allGpusCount));
+    // dcgmGetAllDevices will return all GPUs, i.e., includes detached GPUs. If queried GPU does not
+    // list, it means it is a bad parameter. Otherwise, it is a valid GPU but detached.
+    bool inAllList = std::find(allGpuIdsSpan.begin(), allGpuIdsSpan.end(), gpuId) != allGpuIdsSpan.end();
+    if (!inAllList)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    return DCGM_ST_GPU_IS_LOST;
+}
+
+} //namespace
+
 
 /************************************************************************************/
 Nvlink::Nvlink()
@@ -226,6 +272,12 @@ std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
 
 dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, unsigned int gpuId, bool json)
 {
+    if (auto ret = ValidGpuId(mNvcmHandle, gpuId); ret != DCGM_ST_OK)
+    {
+        std::cout << "GPU ID " << gpuId << " is not valid, return: " << errorString(ret) << std::endl;
+        return ret;
+    }
+
     dcgmReturn_t result = DCGM_ST_OK;
 
     // Get chip architecture

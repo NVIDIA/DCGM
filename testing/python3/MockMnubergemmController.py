@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ class MockMnubergemmController:
     """
     Controller class to manage mock mnubergemm behavior and output
     """
+
     def __init__(self, mockPath, mockNvidiaSmiPath):
         self.mockPath = mockPath
         self.mockNvidiaSmiPath = mockNvidiaSmiPath
@@ -29,7 +30,7 @@ class MockMnubergemmController:
         self.config = None
         self.envFile = "/tmp/multinode_env.sh"
         self.counter_file = "/tmp/nvidia_smi_call_count"
-        
+
     def setup_localhost_mock_environment(self, config):
         # Set the environment variables
         self.originalEnv = os.environ.copy()
@@ -46,7 +47,8 @@ class MockMnubergemmController:
         test_nodes = config['test_nodes']
 
         # Remove localhost from test nodes
-        test_nodes = [node for node in test_nodes if node.get("ip", "") != "localhost"]
+        test_nodes = [node for node in test_nodes if node.get(
+            "ip", "") != "localhost"]
         if not test_nodes:
             raise ValueError("No test nodes specified")
 
@@ -60,14 +62,17 @@ class MockMnubergemmController:
             # 1. Check/update mpirun and set DCGM_MNDIAG_MPIRUN_PATH
             self._check_and_update_mpirun_path(ssh_cmd, ip, env_lines)
 
-            # 2. Generate and copy mock mnubergemm binary to /tmp/mock_mnubergemm on remote nodes and set env 
-            self._generate_mock_mnubergemm_remote(ssh_cmd, config, node, username, ip, env_lines)
+            # 2. Generate and copy mock mnubergemm binary to /tmp/mock_mnubergemm on remote nodes and set env
+            self._generate_mock_mnubergemm_remote(
+                ssh_cmd, config, node, username, ip, env_lines)
 
             # 3. Generate and copy mock nvidia-smi on remote nodes
-            self._generate_mock_nvidia_smi_remote(ssh_cmd, username, ip, env_lines)
+            self._generate_mock_nvidia_smi_remote(
+                ssh_cmd, username, ip, env_lines)
 
             # 4. Add SKU and Save env file into the remote node
-            env_lines.append(f"export DCGM_MNDIAG_SUPPORTED_SKUS={node['sku']} ")
+            env_lines.append(
+                f"export DCGM_MNDIAG_SUPPORTED_SKUS={node['sku']} ")
             self._save_env_file(username, ip, env_lines)
 
             # 5. Run hostengine on the remote node
@@ -91,7 +96,8 @@ class MockMnubergemmController:
 
     def cleanup_multinode_mock_environment(self, config):
         test_nodes = config['test_nodes']
-        test_nodes = [node for node in test_nodes if node.get("ip", "") != "localhost"]
+        test_nodes = [node for node in test_nodes if node.get(
+            "ip", "") != "localhost"]
 
         for node in test_nodes:
             username = node["username"]
@@ -101,7 +107,7 @@ class MockMnubergemmController:
             # Remove env variable lines from env file
             envs = (
                 'DCGM_MNDIAG_MPIRUN_PATH',
-                'DCGM_MNDIAG_MNUBERGEMM_PATH', 
+                'DCGM_MNDIAG_MNUBERGEMM_PATH',
                 'DCGM_MNDIAG_SUPPORTED_SKUS')
             command = ';'.join((f'/{env}/d' for env in envs))
             os.system(f"""{ssh_cmd} 'sed -i "{command}" {self.envFile}'""")
@@ -132,15 +138,16 @@ class MockMnubergemmController:
                 if len(msgs) > 0:  # Only if there are error messages
                     key = f"{node['ip']}:{entityId}"
                     error_entities[key] = msgs
-                    
+
         return error_entities
 
     def get_driver_versions(self, config):
         driver_versions = set()
-        
+
         # Get driver version for head node (localhost)
         try:
-            result = os.popen("nvidia-smi -i 0 --query-gpu=driver_version --format=csv,noheader").read().strip()
+            result = os.popen(
+                "nvidia-smi -i 0 --query-gpu=driver_version --format=csv,noheader").read().strip()
             if result:
                 driver_versions.add(result)
         except Exception as e:
@@ -152,13 +159,15 @@ class MockMnubergemmController:
                 username = node["username"]
                 ip = node["ip"]
                 ssh_cmd = f"ssh {username}@{ip}"
-                
+
                 # Run nvidia-smi on remote node
-                result = os.popen(f"{ssh_cmd} 'nvidia-smi -i 0 --query-gpu=driver_version --format=csv,noheader'").read().strip()
+                result = os.popen(
+                    f"{ssh_cmd} 'nvidia-smi -i 0 --query-gpu=driver_version --format=csv,noheader'").read().strip()
                 if result:
                     driver_versions.add(result)
             except Exception as e:
-                logger.error(f"Failed to get driver version for node {ip}: {e}")
+                logger.error(
+                    f"Failed to get driver version for node {ip}: {e}")
 
         return driver_versions
 
@@ -199,20 +208,21 @@ sleep $time_to_run
         """Create the mock shell script."""
         try:
             # Sanitize lines to prevent shell injection
-            safe_lines = [line.replace('"', r'\"').replace('`', r'\`').replace('$', r'\$') 
-                         for line in lines]
-            
+            safe_lines = [line.replace('"', r'\"').replace('`', r'\`').replace('$', r'\$')
+                          for line in lines]
+
             echo_commands = '\n'.join(f'echo "{line}"' for line in safe_lines)
             script_content = self._get_bash_script_template().format(echo_commands=echo_commands)
-            
+
             with open(self.mockPath, 'w') as f:
                 f.write(script_content)
-                
+
             # Make the script executable
             os.chmod(self.mockPath, 0o755)
-            
+
         except IOError as e:
-            raise RuntimeError(f"Failed to create mock script at {self.mockPath}: {e}")
+            raise RuntimeError(
+                f"Failed to create mock script at {self.mockPath}: {e}")
 
     def _set_output(self):
         """
@@ -227,11 +237,13 @@ sleep $time_to_run
             # Info lines
             for entityId, info_msgs in gpu_required_info.items():
                 for msg in info_msgs:
-                    lines.append(f"MNUB [I] G: {entityId} {host} L: {entityId} {msg}")
+                    lines.append(
+                        f"MNUB [I] G: {entityId} {host} L: {entityId} {msg}")
             # Error lines
             for entityId, error_msgs in gpu_required_error.items():
                 for msg in error_msgs:
-                    lines.append(f"MNUB [E] G: {entityId} {host} L: {entityId} T:N {msg}")
+                    lines.append(
+                        f"MNUB [E] G: {entityId} {host} L: {entityId} T:N {msg}")
 
         # Create the mock script using the template approach
         self._create_mock_script(lines)
@@ -242,7 +254,7 @@ sleep $time_to_run
         Create temporary mock nvidia-smi script that outputs hardcoded process info
         Uses a counter file to track number of calls and return different outputs
         """
-        
+
         # Create mock nvidia-smi script with counter-based output
         mock_script_content = f'''#!/bin/bash
 # Mock nvidia-smi for DCGM tests
@@ -279,13 +291,14 @@ else
     exit 127
 fi
 '''
-        
+
         # Write the script
         with open(self.mockNvidiaSmiPath, 'w') as f:
             f.write(mock_script_content)
-        
+
         # Make it executable
-        os.chmod(self.mockNvidiaSmiPath, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+        os.chmod(self.mockNvidiaSmiPath, stat.S_IRWXU | stat.S_IRGRP |
+                 stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
 
     # ----------------
     def _restore_nvidia_smi(self):
@@ -304,7 +317,7 @@ fi
                 paths = os.environ['PATH'].split(':')
                 paths = [p for p in paths if p != self.mockNvidiaSmiPath]
                 os.environ['PATH'] = ':'.join(paths)
-                
+
             # Clean up the attributes
             delattr(self, 'mockNvidiaSmiPath')
 
@@ -317,7 +330,8 @@ fi
             raise RuntimeError(f"Failed to find hostengine binary on {ip}")
 
         # Execute
-        os.system(f"{ssh_cmd} 'source {self.envFile} && {hostengine_path} --log-level debug'")
+        os.system(
+            f"{ssh_cmd} 'source {self.envFile} && {hostengine_path} --log-level debug'")
 
     # ----------------
     def _save_env_file(self, username, ip, env_lines):
@@ -337,14 +351,16 @@ fi
 
         os.system(f"{ssh_cmd} 'rm -f {self.mockPath}'")
         os.system(f"scp {self.mockPath} {username}@{ip}:{self.mockPath}")
-        
+
         # Check if mock mnubergemm file exists
         check_out_cmd = f"{ssh_cmd} 'test -f {self.mockPath} && echo OK || echo FAIL'"
         out_check_result = os.popen(check_out_cmd).read().strip()
         if out_check_result != "OK":
-            raise RuntimeError(f"Failed to create mock mnubergemm file on {username}@{ip}:{self.mockPath}")
+            raise RuntimeError(
+                f"Failed to create mock mnubergemm file on {username}@{ip}:{self.mockPath}")
 
-        env_lines.append(f"export DCGM_MNDIAG_MNUBERGEMM_PATH={self.mockPath} ")
+        env_lines.append(
+            f"export DCGM_MNDIAG_MNUBERGEMM_PATH={self.mockPath} ")
         os.remove(self.mockPath)
 
     # ----------------
@@ -353,7 +369,7 @@ fi
         mpirun_path = os.popen(mpirun_path_cmd).read().strip().split('\n')[-1]
         if not mpirun_path:
             test_utils.skip_test(f"Failed to find mpirun on {ip}")
-        
+
         env_lines.append(f"export DCGM_MNDIAG_MPIRUN_PATH={mpirun_path} ")
 
     # ----------------
@@ -361,9 +377,11 @@ fi
         self._generate_mock_nvidia_smi_local()
 
         # Copy mock nvidia-smi to remote node
-        os.system(f"scp {self.mockNvidiaSmiPath} {username}@{ip}:{self.mockNvidiaSmiPath}")
+        os.system(
+            f"scp {self.mockNvidiaSmiPath} {username}@{ip}:{self.mockNvidiaSmiPath}")
 
         # Make it executable on remote node
         os.system(f"{ssh_cmd} 'chmod +x {self.mockNvidiaSmiPath}'")
 
-        env_lines.append(f"export PATH={os.path.dirname(self.mockNvidiaSmiPath)}:$PATH")
+        env_lines.append(
+            f"export PATH={os.path.dirname(self.mockNvidiaSmiPath)}:$PATH")

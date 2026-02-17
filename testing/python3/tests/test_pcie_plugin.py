@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,35 +29,36 @@ import test_utils
 def test_pcie_libnuma_error_handling(handle, gpuIds):
     """
     Test PCIe diagnostic libnuma error handling.
-    
+
     - Run PCIe test
     - If no libnuma related error messages in stderr, we are good
     - If there are libnuma related error messages, verify they contain our solution string
     """
     testGpuId = gpuIds[0]
     testName = "pcie"
-    
+
     # Run PCIe diagnostic
     dd = DcgmDiag.DcgmDiag(
-        gpuIds=[testGpuId], 
+        gpuIds=[testGpuId],
         testNamesStr=testName,
         paramsStr="pcie.test_duration=5;pcie.is_allowed=true;pcie.test_with_gemm=false",
         version=dcgm_structs.dcgmRunDiag_version10
     )
-    
+
     response = test_utils.diag_execute_wrapper(dd, handle)
 
     if response.numErrors > 0:
         for i in range(response.numErrors):
             error = response.errors[i]
-            error_msg = error.msg.decode('utf-8') if isinstance(error.msg, bytes) else str(error.msg)
-            
+            error_msg = error.msg.decode(
+                'utf-8') if isinstance(error.msg, bytes) else str(error.msg)
+
             # Check if this is a libnuma-related error
             if "libnuma" in error_msg.lower():
                 # Verify the error contains our solution message
                 expected_solution = "Install the libnuma1 package to resolve this issue"
                 assert expected_solution in error_msg, \
                     f"Libnuma error found but missing solution message. Error: {error_msg}"
-    
+
     # If no libnuma errors found, test passes (normal case)
     # If libnuma errors found, they must contain our solution message (verified above)

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,13 +19,14 @@ import test_utils
 import logger
 import option_parser
 
+
 class TestDcgmDiagUnittestsApp(app_runner.AppRunner):
     paths = {
-            "Linux_32bit": "./apps/x86/testdiag",
-            "Linux_64bit": "./apps/amd64/testdiag",
-            "Linux_aarch64": "./apps/aarch64/testdiag",
-            "Windows_64bit": "./apps/amd64/testdiag.exe"
-            }
+        "Linux_32bit": "./apps/x86/testdiag",
+        "Linux_64bit": "./apps/amd64/testdiag",
+        "Linux_aarch64": "./apps/aarch64/testdiag",
+        "Windows_64bit": "./apps/amd64/testdiag.exe"
+    }
 
     def __init__(self, args=None):
         path = TestDcgmDiagUnittestsApp.paths[utils.platform_identifier]

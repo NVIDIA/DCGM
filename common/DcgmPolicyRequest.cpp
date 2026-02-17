@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,8 @@
 #include "dcgm_structs.h"
 
 /*****************************************************************************/
-DcgmPolicyRequest::DcgmPolicyRequest(fpRecvUpdates callback, uint64_t userData, std::mutex &cbMutex)
+DcgmPolicyRequest::DcgmPolicyRequest(fpRecvUpdates callback, uint64_t userData)
     : DcgmRequest(0)
-    , mCbMutex(cbMutex)
 {
     mIsAckRecvd = false;
     mCallback   = callback;
@@ -83,9 +82,6 @@ int DcgmPolicyRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
     fpRecvUpdates callback = mCallback;
 
     Unlock();
-
-    /* Grab a callback mutex to prevent users from unregistering callback while we are handling them. */
-    std::lock_guard<std::mutex> guard(mCbMutex);
 
     /* Call the callback if it is present */
     if (callback)

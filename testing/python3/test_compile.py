@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import logger
 from importlib import import_module
 
 # global
-script_directory = os.path.dirname(__file__) 
+script_directory = os.path.dirname(__file__)
 test_directory = "/tests"
 compiled_file_name = "test_compiled_all.py"
 
@@ -36,19 +36,23 @@ with open(file_path, "r") as file:
 files_to_not_parse = json_data["modules_to_run_independent"]
 test_funcs_to_not_parse = json_data["tests_to_run_independent"]
 
+
 def get_file_name():
     return compiled_file_name
 
-def find_files(path, mask = "*", skipdirs=None, recurse=True):
+
+def find_files(path, mask="*", skipdirs=None, recurse=True):
     skipdirs = skipdirs or []
     if recurse:
         for root, dirnames, filenames in os.walk(path):
             if skipdirs is not None:
-                [dirnames.remove(skip) for skip in skipdirs if skip in dirnames]  # don't visit directories in skipdirs list
+                # don't visit directories in skipdirs list
+                [dirnames.remove(skip)
+                 for skip in skipdirs if skip in dirnames]
             for filename in fnmatch.filter(filenames, mask):
                 yield os.path.abspath(os.path.join(root, filename))
     else:
-        #Just list files inside "path"
+        # Just list files inside "path"
         filenames = os.listdir(path)
         for filename in fnmatch.filter(filenames, mask):
             yield os.path.abspath(os.path.join(path, filename))
@@ -62,6 +66,8 @@ def find_files(path, mask = "*", skipdirs=None, recurse=True):
 # Returns:
 #    unwrapped function.
 #
+
+
 def unwrap(func):
     if not hasattr(func, '__wrapped__'):
         return func
@@ -85,18 +91,17 @@ def unwrap(func):
 # functions is returned. Each function tuple consists of the original source
 # file name of the function, the function name, and the function itself.
 #
+
+
 def get_all_functions(test_file_names):
-    decorators_map = {} # indexed by decorator sequence
-    amortized_decorators_map = {} # indexed by amortized decorator function name
-    decorator_index = 0;
+    decorators_map = {}  # indexed by decorator sequence
+    amortized_decorators_map = {}  # indexed by amortized decorator function name
+    decorator_index = 0
 
     for file in test_file_names:
         # getting file name and path
-        file_path = script_directory + "/" + file + ".py" 
+        file_path = script_directory + "/" + file + ".py"
         file_name = file.split("/")[-1]
-
-        if file_name in files_to_not_parse:
-            continue
 
         # open each file and read it
         with open(file_path, 'r') as f:
@@ -108,7 +113,7 @@ def get_all_functions(test_file_names):
 
         # Build an index of line number to file offset
 
-        line_map=[]
+        line_map = []
         line_start = True
 
         for i in range(len(data)):
@@ -130,7 +135,7 @@ def get_all_functions(test_file_names):
 
                 function_name = node.name
 
-                if function_name in test_funcs_to_not_parse:
+                if file_name in files_to_not_parse or function_name in test_funcs_to_not_parse:
                     decorator_tuple = ()
                 else:
                     decorators = []
@@ -157,7 +162,8 @@ def get_all_functions(test_file_names):
                             if last_lineno >= 0:
                                 # This does not remove trailing comments on the
                                 # decorator, but they do not matter.
-                                decoratorCall = data[line_map[last_lineno - 1] + last_col_offset - 1 : line_map[decorator.lineno - 1] + decorator.col_offset - 1].strip()
+                                decoratorCall = data[line_map[last_lineno - 1] + last_col_offset -
+                                                     1: line_map[decorator.lineno - 1] + decorator.col_offset - 1].strip()
                                 decorators.append(decoratorCall)
 
                             last_lineno = decorator.lineno
@@ -169,21 +175,24 @@ def get_all_functions(test_file_names):
                         if last_lineno >= node_lineno:
                             node_lineno = last_lineno + 1
                             node_col_offset = 0
-                            
-                        decoratorCall = data[line_map[last_lineno - 1] + last_col_offset - 1 : line_map[node_lineno - 1] + node_col_offset].strip()
+
+                        decoratorCall = data[line_map[last_lineno - 1] + last_col_offset -
+                                             1: line_map[node_lineno - 1] + node_col_offset].strip()
                         decorators.append(decoratorCall)
-                        
+
                     decorator_tuple = tuple(decorators)
 
                 if decorator_tuple in decorators_map:
                     amortized_decorator_name = decorators_map[decorator_tuple]
                 else:
-                    amortized_decorator_name = "test_custom_function_"+ str(decorator_index)
+                    amortized_decorator_name = "test_custom_function_" + \
+                        str(decorator_index)
                     # map decorator tuple to amortized decorator name
                     decorators_map[decorator_tuple] = amortized_decorator_name
 
                     # map amortized decorator name to functions
-                    amortized_decorators_map[amortized_decorator_name] = [decorator_tuple, []]
+                    amortized_decorators_map[amortized_decorator_name] = [
+                        decorator_tuple, []]
                     decorator_index += 1
 
                 module_name = file.replace("/", ".")
@@ -195,7 +204,8 @@ def get_all_functions(test_file_names):
                         # Skip tests that don't match provided filter test regex
                         continue
 
-                amortized_decorators_map[amortized_decorator_name][1].append([file, function_name])
+                amortized_decorators_map[amortized_decorator_name][1].append(
+                    [file, function_name])
 
     logger.info("Tests compiled.")
 
@@ -208,6 +218,8 @@ def get_all_functions(test_file_names):
 #    amortized_decorators_map : map of amortized function names to decorators
 # and list of function tuples using them.
 #
+
+
 def generate_function_calls(amortized_decorators_map):
     file_content = ""
 
@@ -251,16 +263,19 @@ def generate_function_calls(amortized_decorators_map):
 
     return file_content
 
+
 def run_compilation():
     # Get all test file names
     logger.debug("getting all test names")
-    test_files = find_files(script_directory + test_directory, mask = "test*.py", recurse=True)
+    test_files = find_files(
+        script_directory + test_directory, mask="test*.py", recurse=True)
 
     # Filter test file names.
     test_file_names = []
     for fname in test_files:
         if compiled_file_name.split(".")[0] not in fname:
-            test_file_names.append(os.path.splitext(os.path.relpath(fname, script_directory))[0].replace(os.path.sep, "/"))
+            test_file_names.append(os.path.splitext(os.path.relpath(
+                fname, script_directory))[0].replace(os.path.sep, "/"))
 
     # Sort test file names.
     test_file_names.sort()
@@ -270,7 +285,8 @@ def run_compilation():
 
     # Get imports.
     for test_file_name in test_file_names:
-        new_file_content += "import {}\n".format(test_file_name.replace("/", "."))
+        new_file_content += "import {}\n".format(
+            test_file_name.replace("/", "."))
 
     new_file_content += "\n"
 
@@ -279,11 +295,21 @@ def run_compilation():
     logger.debug("getting decorators and test functions")
     amortized_decorators_map = get_all_functions(test_file_names)
 
-    # Add imports that decorator requiresments require.
+    # Add imports that decorator requirements require.
     new_file_content += "import os\n\n"                    # import utilities
 
+    # Add imports that test helper loading requires.
+    new_file_content += "import importlib\n\n"             # import utilities
+    new_file_content += "import sys\n\n"                   # import utilities
+
+    test_helper_dir = "test_helpers"
+
+    for filename in os.listdir(test_helper_dir):
+        if filename.endswith('.py') and filename != '__init__.py':
+            new_file_content += f"import {test_helper_dir}.{filename[:-3]}\n"
+
     # Add imports that we require.
-    new_file_content += "import test_utils\n"              # import utilities
+    new_file_content += "\nimport test_utils\n"            # import utilities
     new_file_content += "import dcgm_structs\n\n"          # import structs
     new_file_content += "from _test_helpers import *\n"    # import helpers
 
@@ -292,7 +318,8 @@ def run_compilation():
     new_file_content += "from test_globals import *\n\n"   # import test globals
 
     # Generate Amortized Decorator test calls.
-    new_file_content += generate_function_calls(amortized_decorators_map) + "\n"
+    new_file_content += generate_function_calls(
+        amortized_decorators_map) + "\n"
 
     # Write the compiled file.
     logger.debug("writing new file")
@@ -302,6 +329,7 @@ def run_compilation():
     logger.debug(f"Compiled file [{compiled_file_name}] generated")
 
     return compiled_file_name
+
 
 if __name__ == '__main__':
     run_compilation()

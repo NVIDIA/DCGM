@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,7 +56,10 @@ class FieldReader(DcgmReader):
                 self.passed = True
                 return
 
+
 STANDALONE_DENYLIST_SCRIPT_NAME = "denylist_recommendations.py"
+
+
 def createDenylistApp(numGpus=None, numSwitches=None, testNames=None, instantaneous=False):
     args = ["./%s" % STANDALONE_DENYLIST_SCRIPT_NAME]
     if numGpus == None or numSwitches == None:
@@ -79,8 +82,10 @@ def createDenylistApp(numGpus=None, numSwitches=None, testNames=None, instantane
     return AppRunner(sys.executable, args)
 
 
-## Helper for verifying inserted values
+# Helper for verifying inserted values
 STANDALONE_VALUE_VERIFICATION_SCRIPT_NAME = "verify_field_value.py"
+
+
 def verify_field_value(gpuId, fieldId, expectedValue, maxWait=2, checkInterval=0.1, numMatches=3):
     """
     Verify that DCGM sees the expected value for the specified field ID. Waits a maximum of maxWait seconds to see
@@ -93,7 +98,8 @@ def verify_field_value(gpuId, fieldId, expectedValue, maxWait=2, checkInterval=0
     Returns True on successful verifcation and False otherwise.
     """
     interval_in_usec = int(checkInterval * 1000000)
-    fr = FieldReader(expectedValue, numMatches, fieldIds=[fieldId], updateFrequency=interval_in_usec, gpuIds=[gpuId])
+    fr = FieldReader(expectedValue, numMatches, fieldIds=[
+                     fieldId], updateFrequency=interval_in_usec, gpuIds=[gpuId])
 
     start = time.time()
     while (time.time() - start) < maxWait:
@@ -103,11 +109,14 @@ def verify_field_value(gpuId, fieldId, expectedValue, maxWait=2, checkInterval=0
         time.sleep(checkInterval)
 
     # If we were unable to see the expected value, log how many times we did see it before failing
-    logger.info("Saw expected value %s (for field %s) %s times" % (expectedValue, fieldId, fr.numMatchesSeen))
+    logger.info("Saw expected value %s (for field %s) %s times" %
+                (expectedValue, fieldId, fr.numMatchesSeen))
     return False
 
 # Verifies that the NVVS process is running. This is used to make tests more deterministic instead of sleeping
 # and hoping that the NVVS process has started at the end of the sleep
+
+
 def check_nvvs_process(want_running, delay=0.5, attempts=20):
     """
     Checks status of nvvs process.
@@ -118,10 +127,11 @@ def check_nvvs_process(want_running, delay=0.5, attempts=20):
     debug_output = ''
     while retry_count < attempts:
         retry_count += 1
-        time.sleep(delay) # delay for a bit before trying again
+        time.sleep(delay)  # delay for a bit before trying again
         try:
             # If pgrep is run via a shell, there will be extraneous output caused by the shell command itself
-            debug_output = subprocess.check_output(["pgrep", "-l", "-f", "apps/nvvs/nvvs"])
+            debug_output = subprocess.check_output(
+                ["pgrep", "-l", "-f", "apps/nvvs/nvvs"])
             if want_running:
                 return True, debug_output
         except subprocess.CalledProcessError:

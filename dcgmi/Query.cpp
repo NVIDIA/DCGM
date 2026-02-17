@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,18 +20,23 @@
 
 #include "Query.h"
 #include "CommandOutputController.h"
+#include "DcgmStringHelpers.h"
 #include "DcgmiOutput.h"
 #include "EntityListHelpers.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
 #include "dcgmi_common.h"
+#include <cassert>
 #include <ctype.h>
+#include <dcgm_structs_internal.h>
 #include <iostream>
 #include <map>
+#include <ranges>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string.h>
+#include <string_view>
 
 
 /**************************************************************************************/
@@ -159,7 +164,59 @@ dcgmReturn_t Query::HelperDisplayDiscoveredCpus(dcgmHandle_t dcgmHandle)
 }
 
 /********************************************************************************/
-dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
+auto HelperGetFilteredGpuStatuses(dcgmHandle_t dcgmHandle,
+                                  std::vector<dcgm_field_eid_t> const &entityIds,
+                                  bool showAll) noexcept
+{
+    assert(std::ranges::is_sorted(entityIds));
+
+    using StatusPair_t = std::pair<dcgm_field_eid_t, DcgmEntityStatus_t>;
+
+    auto const getGpuStatus = [dcgmHandle](dcgm_field_eid_t entityId) -> StatusPair_t {
+        DcgmEntityStatus_t gpuStatus = DcgmEntityStatusUnknown;
+        dcgmGetGpuStatus(dcgmHandle, entityId, &gpuStatus);
+        return { entityId, gpuStatus };
+    };
+
+    auto const isOk = [](StatusPair_t const &pair) {
+        return pair.second == DcgmEntityStatusOk;
+    };
+    auto const isNotFake = [](StatusPair_t const &pair) {
+        return pair.second != DcgmEntityStatusFake;
+    };
+
+    return entityIds | std::views::transform(getGpuStatus) | std::views::filter(showAll ? +isNotFake : +isOk);
+}
+
+/********************************************************************************/
+void HelperPopulateGpuDeviceOutput(DcgmiOutput &out,
+                                   dcgm_field_eid_t gpuId,
+                                   DcgmEntityStatus_t status,
+                                   dcgmDeviceAttributes_t const &attributes,
+                                   bool showAll)
+{
+    std::string const entityId = std::to_string(gpuId);
+
+    out[entityId][c_gpuId] = gpuId;
+
+    bool const showCachedSuffix = (status != DcgmEntityStatusOk && status != DcgmEntityStatusFake);
+
+    // When showing all GPUs, display status for non-OK statuses
+    if (showAll && status != DcgmEntityStatusOk)
+    {
+        out[entityId][c_info].setOrAppend(fmt::format("Status: {}", DcgmNs::DcgmEntityStatusToString(status)));
+    }
+
+    // Display device information
+    out[entityId][c_info].setOrAppend(
+        fmt::format("{}: {}{}", c_name, attributes.identifiers.deviceName, showCachedSuffix ? " (last known)" : ""));
+    out[entityId][c_info].setOrAppend(
+        fmt::format("{}: {}{}", c_busId, attributes.identifiers.pciBusId, showCachedSuffix ? " (last known)" : ""));
+    out[entityId][c_info].setOrAppend(fmt::format("{}: {}", c_deviceUuid, attributes.identifiers.uuid));
+}
+
+/********************************************************************************/
+dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle, bool showAll)
 {
     dcgmReturn_t result;
     dcgmDeviceAttributes_t stDeviceAttributes;
@@ -189,32 +246,45 @@ dcgmReturn_t Query::DisplayDiscoveredDevices(dcgmHandle_t dcgmHandle)
             return result;
         }
 
-        std::cout << entityIds.size() << " GPU" << (entityIds.size() == 1 ? "" : "s") << " found." << std::endl;
-        for (unsigned int i = 0; i < entityIds.size(); i++)
+        // Get total count for the note message
+        std::size_t const totalGpuCount = entityIds.size();
+
+        // Sort entity IDs for consistent output ordering
+        std::ranges::sort(entityIds);
+
+        // Get filtered GPU statuses as lazy view
+        auto filteredGpus = HelperGetFilteredGpuStatuses(dcgmHandle, entityIds, showAll);
+
+        // Iterate and count as we go
+        std::size_t filteredCount = 0;
+        for (auto const &[gpuId, finalStatus] : filteredGpus)
         {
+            ++filteredCount;
+
             stDeviceAttributes.version = dcgmDeviceAttributes_version;
-            result                     = dcgmGetDeviceAttributes(dcgmHandle, entityIds[i], &stDeviceAttributes);
-
-            entityId = std::to_string(entityIds[i]);
-
-            out[entityId][c_gpuId] = entityIds[i];
+            result                     = dcgmGetDeviceAttributes(dcgmHandle, gpuId, &stDeviceAttributes);
 
             if (DCGM_ST_OK != result)
             {
+                entityId               = std::to_string(gpuId);
+                out[entityId][c_gpuId] = gpuId;
                 out[entityId][c_info].setOrAppend("Error: Cannot get device attributes for GPU.");
-                out[entityId][c_info].setOrAppend(std::string("Return: ") + errorString(result));
-                log_error("Error getting device attributes with GPU ID: {}. Return: {}", entityIds[i], result);
+                out[entityId][c_info].setOrAppend(fmt::format("Return: {}", errorString(result)));
+                log_error("Error getting device attributes with GPU ID: {}. Return: {}", gpuId, result);
             }
             else
             {
-                out[entityId][c_info].setOrAppend(std::string(c_name) + ": "
-                                                  + stDeviceAttributes.identifiers.deviceName);
-                out[entityId][c_info].setOrAppend(std::string(c_busId) + ": "
-                                                  + stDeviceAttributes.identifiers.pciBusId);
-                out[entityId][c_info].setOrAppend(std::string(c_deviceUuid) + ": "
-                                                  + stDeviceAttributes.identifiers.uuid);
+                HelperPopulateGpuDeviceOutput(out, gpuId, finalStatus, stDeviceAttributes, showAll);
             }
         }
+
+        fmt::print("{} GPU{} found ({}).\n", filteredCount, filteredCount == 1 ? "" : "s", showAll ? "All" : "Active");
+
+        if (!showAll && filteredCount != totalGpuCount)
+        {
+            std::cout << "Note: Use -a flag to show all GPUs, including those that are not active." << std::endl;
+        }
+
         std::cout << out.str();
     }
 
@@ -1204,6 +1274,11 @@ dcgmReturn_t QueryGroupInfo::DoExecuteConnected()
 
 /*****************************************************************************/
 QueryDeviceList::QueryDeviceList(std::string hostname)
+    : QueryDeviceList(std::move(hostname), false)
+{}
+
+QueryDeviceList::QueryDeviceList(std::string hostname, bool showAll)
+    : m_showAll(showAll)
 {
     m_hostName = std::move(hostname);
 }
@@ -1211,7 +1286,7 @@ QueryDeviceList::QueryDeviceList(std::string hostname)
 /*****************************************************************************/
 dcgmReturn_t QueryDeviceList::DoExecuteConnected()
 {
-    return queryObj.DisplayDiscoveredDevices(m_dcgmHandle);
+    return queryObj.DisplayDiscoveredDevices(m_dcgmHandle, m_showAll);
 }
 
 /*****************************************************************************

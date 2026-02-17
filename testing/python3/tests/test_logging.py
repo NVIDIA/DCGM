@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import test_utils
 import apps
 import time
 
+
 @test_utils.run_only_on_linux()
 @test_utils.run_only_on_bare_metal()
 @test_utils.run_with_logging_on()
@@ -28,7 +29,8 @@ def test_logging_env_var():
     """
 
     if test_utils.loggingLevel != 'DEBUG':
-        test_utils.skip_test("Detected logLevel != DEBUG. This test requires DEBUG. Likely cause: --eris option")
+        test_utils.skip_test(
+            "Detected logLevel != DEBUG. This test requires DEBUG. Likely cause: --eris option")
 
     passed = False
 
@@ -43,7 +45,8 @@ def test_logging_env_var():
         with closing(open(nvhost_engine.dcgm_trace_fname, encoding='utf-8')) as f:
             # pylint: disable=no-member
             contents = f.read()
-            logger.debug("Read %d bytes from %s" % (len(contents), nvhost_engine.dcgm_trace_fname))
+            logger.debug("Read %d bytes from %s" %
+                         (len(contents), nvhost_engine.dcgm_trace_fname))
             # This is checking two things:
             #   - that we are logging to the file specified in ENV
             #   - that we are setting severity according to ENV (DEBUG)
@@ -64,6 +67,7 @@ def test_logging_env_var():
 
     assert passed, errorString
 
+
 @test_utils.run_with_logging_on()
 def test_logging_modules():
     """
@@ -71,7 +75,8 @@ def test_logging_modules():
     """
 
     if test_utils.loggingLevel != 'DEBUG':
-        test_utils.skip_test("Detected logLevel != DEBUG. This test requires DEBUG. Likely cause: --eris option")
+        test_utils.skip_test(
+            "Detected logLevel != DEBUG. This test requires DEBUG. Likely cause: --eris option")
 
     PASSED = True
     FAILED = False
@@ -88,7 +93,8 @@ def test_logging_modules():
         with closing(open(nvhost_engine.dcgm_trace_fname, encoding="utf-8")) as f:
             # pylint: disable=no-member
             contents = f.read()
-            logger.debug("Read %d bytes from %s" % (len(contents), nvhost_engine.dcgm_trace_fname))
+            logger.debug("Read %d bytes from %s" %
+                         (len(contents), nvhost_engine.dcgm_trace_fname))
 
             # NVSwitch module is loaded on startup. So we check for records from that module
             test_string = "Initialized logging for module 1"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "DcgmUtilities.h"
+#include "Defer.hpp"
 #include "FileSystemOperator.h"
 #include "HangDetect.h"
 #include "HangDetectHandler.h"
@@ -132,63 +133,47 @@ class HangMethod
 public:
     virtual ~HangMethod() = default;
 
-    /**
-     * Execute the hang method
-     *
-     * @returns true if method was set up successfully, false otherwise
-     */
-    virtual bool Execute() = 0;
-
-    /**
-     * Clean up any resources used by the hang method
-     */
-    virtual void Cleanup()
-    {}
+    virtual bool Execute()      = 0;
+    virtual bool InitiateHang() = 0;
+    virtual void ReleaseHang()  = 0;
 };
 
-/**
- * Mutex-based hang method that creates a deadlock using a mutex
- */
 class MutexHangMethod : public HangMethod
 {
 public:
     bool Execute() override
     {
-        m_mutex.lock();
-        // coverity[double_lock]: Intentionally causing deadlock here.
+        m_ready.wait();
         m_mutex.lock();
         return true;
     }
 
-    void Cleanup() override
+    bool InitiateHang() override
     {
-        m_mutex.unlock();
-        // coverity[double_unlock]: Intentionally clearing double lock here as the lock was locked twice.
+        m_mutex.lock();
+        m_ready.count_down();
+        return true;
+    }
+
+    void ReleaseHang() override
+    {
         m_mutex.unlock();
     }
 
 private:
     std::mutex m_mutex;
+    std::latch m_ready { 1 };
 };
 
-/**
- * HangChar device-based hang method
- */
 class HangCharMethod : public HangMethod
 {
 public:
     bool Execute() override
     {
-        // Configure hangchar
-        if (!ConfigureHangchar(HangcharOption::Timeout, 5) || !ConfigureHangchar(HangcharOption::Enable, 1))
-        {
-            return false;
-        }
-
+        m_ready.wait();
         std::ifstream device(HANGCHAR_DEVICE);
         if (!device)
         {
-            // Wait briefly and retry once
             std::this_thread::sleep_for(RETRY_DELAY);
             device.open(HANGCHAR_DEVICE);
             if (!device)
@@ -197,17 +182,29 @@ public:
             }
         }
 
-        // Try to read from device - this will hang
         char buffer[1];
         device.read(buffer, 1);
         return true;
     }
 
-    void Cleanup() override
+    bool InitiateHang() override
+    {
+        bool success = ConfigureHangchar(HangcharOption::Timeout, 5) && ConfigureHangchar(HangcharOption::Enable, 1);
+        if (success)
+        {
+            m_ready.count_down();
+        }
+        return success;
+    }
+
+    void ReleaseHang() override
     {
         ConfigureHangchar(HangcharOption::Enable, 0);
         ConfigureHangchar(HangcharOption::Timeout, 0);
     }
+
+private:
+    std::latch m_ready { 1 };
 };
 
 /**
@@ -467,6 +464,7 @@ TEST_CASE("HangDetectWorkflow::Process Monitoring")
 
         // Create and execute hang method
         MutexHangMethod hangMethod;
+        hangMethod.InitiateHang();
         if (!hangMethod.Execute())
         {
             _exit(1);
@@ -585,22 +583,17 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Thread Monitoring"
             testTid = gettid();
             pthread_setname_np(pthread_self(), "test");
             threadStarted.count_down();
-
-            // Wait for registration before starting test behavior
             threadsRegistered.wait();
             hangMethod->Execute();
         });
 
-        // Wait for threads to get their IDs
         threadStarted.wait();
         REQUIRE(controlTid != -1);
         REQUIRE(testTid != -1);
 
-        // Register threads and verify initial state
         auto result = m_detector.RegisterTask(getpid(), controlTid);
         REQUIRE(result == DCGM_ST_OK);
 
-        // Verify control thread fingerprint was stored
         auto controlHungResult = m_detector.IsHung(getpid(), controlTid);
         REQUIRE(controlHungResult.has_value());
         INFO(fmt::format("Initial control thread hung state: {}", controlHungResult.value()));
@@ -608,12 +601,15 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Thread Monitoring"
         result = m_detector.RegisterTask(getpid(), testTid);
         REQUIRE(result == DCGM_ST_OK);
 
-        // Verify test thread fingerprint was stored
         auto testHungResult = m_detector.IsHung(getpid(), testTid);
         REQUIRE(testHungResult.has_value());
         INFO(fmt::format("Initial test thread hung state: {}", testHungResult.value()));
 
-        // Allow threads to proceed with test behavior
+        if (!hangMethod->InitiateHang())
+        {
+            FAIL("Failed to initiate hang method");
+        }
+
         threadsRegistered.count_down();
 
         // Start monitoring
@@ -634,15 +630,12 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Thread Monitoring"
         auto const testExpired    = m_monitor.IsExpired(getpid(), testTid);
         auto const controlExpired = m_monitor.IsExpired(getpid(), controlTid);
 
-        // Control thread should still be running
         REQUIRE(controlExpired == DCGM_ST_OK);
-        // Test thread should be hung
         REQUIRE(testExpired == DCGM_ST_TIMEOUT);
 
-        // Cleanup
         m_monitor.StopMonitoring();
-        hangMethod->Cleanup();
         shouldStop = true;
+        hangMethod->ReleaseHang();
     };
 
     SECTION("Using Mutex Deadlock")
@@ -661,74 +654,50 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Process State Filt
 {
     SECTION("Userspace hang filtering with MutexHangMethod")
     {
-        // Test that userspace hangs (mutex deadlock) are NOT reported when reportUserspaceHangs = false
         TestHangDetectHandler handler;
         m_monitor.SetHangDetectedHandler(&handler);
-        m_monitor.SetReportUserspaceHangs(false); // Only report kernel-space hangs
+        m_monitor.SetReportUserspaceHangs(false);
 
         {
             std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
-            g_hangReportState = HangReportState {}; // Reset global state
+            g_hangReportState = HangReportState {};
         }
 
+        auto method   = std::make_unique<MutexHangMethod>();
         pid_t testTid = -1;
         std::latch threadStarted(1);
-        std::latch hangStarted(1);
-        std::latch threadRegistered(1);
 
-        // Create a thread that will hang with mutex deadlock (userspace hang)
         std::jthread testThread([&]() {
             testTid = gettid();
             threadStarted.count_down();
             pthread_setname_np(pthread_self(), "mutex_test");
-
-            // Wait briefly to ensure registration happens first
-            threadRegistered.wait();
-
-            // Create mutex deadlock (userspace hang - should NOT be reported)
-            std::mutex m;
-            m.lock();
-            hangStarted.count_down();
-            // coverity[double_lock]: Intentionally causing deadlock for testing
-            m.lock(); // This will hang the thread in userspace
+            method->Execute();
         });
 
-        // Wait for thread to get its ID
+        auto cleanup = DcgmNs::Defer([&]() {
+            m_monitor.StopMonitoring();
+            method->ReleaseHang();
+        });
+
         threadStarted.wait();
         REQUIRE(testTid != -1);
 
-        // Register the thread for monitoring
-        auto result = m_detector.RegisterTask(getpid(), testTid);
-        REQUIRE(result == DCGM_ST_OK);
-        threadRegistered.count_down();
+        REQUIRE(m_detector.RegisterTask(getpid(), testTid) == DCGM_ST_OK);
 
-        // Start monitoring
+        method->InitiateHang();
+
         REQUIRE(m_monitor.StartMonitoring() == DCGM_ST_OK);
-        hangStarted.wait();
 
-        // Wait longer than expiry time to ensure hang would be detected
         std::this_thread::sleep_for(WAIT_TIMEOUT_MEDIUM);
 
-        // Should NOT get any hang reports for userspace hang when reportUserspaceHangs = false
         {
             std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
             REQUIRE(g_hangReportState.reports.size() == 0);
-        }
-
-        // Cleanup
-        m_monitor.StopMonitoring();
-
-        // Force thread termination since it's deadlocked
-        if (testThread.joinable())
-        {
-            pthread_cancel(testThread.native_handle());
-            testThread.detach();
         }
     }
 
     SECTION("Kernel-space hang detection with HangCharMethod")
     {
-        // Test that kernel-space hangs (hangchar) ARE reported when reportUserspaceHangs = false
         std::string skip_reason;
         if (!VerifyHangcharAvailable(skip_reason))
         {
@@ -737,11 +706,11 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Process State Filt
 
         TestHangDetectHandler handler;
         m_monitor.SetHangDetectedHandler(&handler);
-        m_monitor.SetReportUserspaceHangs(false); // Only report kernel-space hangs
+        m_monitor.SetReportUserspaceHangs(false);
 
         {
             std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
-            g_hangReportState = HangReportState {}; // Reset global state
+            g_hangReportState = HangReportState {};
         }
 
         pid_t testTid = -1;
@@ -749,13 +718,10 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Process State Filt
         std::latch hangStarted(1);
         std::latch threadRegistered(1);
 
-        // Create a thread that will hang with hangchar (kernel-space hang)
         std::jthread testThread([&]() {
             testTid = gettid();
             threadStarted.count_down();
             pthread_setname_np(pthread_self(), "hangchar_test");
-
-            // Wait longer to ensure registration and initial fingerprint capture happens first
             threadRegistered.wait();
 
             // Configure hangchar for kernel-space hang
@@ -775,27 +741,18 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Process State Filt
             }
         });
 
-        // Wait for thread to get its ID
         threadStarted.wait();
         REQUIRE(testTid != -1);
 
-        // Register the thread for monitoring BEFORE it starts hanging
-        auto result = m_detector.RegisterTask(getpid(), testTid);
-        REQUIRE(result == DCGM_ST_OK);
+        REQUIRE(m_detector.RegisterTask(getpid(), testTid) == DCGM_ST_OK);
         threadRegistered.count_down();
 
-        // Start monitoring to establish baseline fingerprint
         REQUIRE(m_monitor.StartMonitoring() == DCGM_ST_OK);
 
-        // Wait a bit for initial fingerprint to be captured
         std::this_thread::sleep_for(SLEEP_MEDIUM);
 
-        // Now wait for the thread to start hanging
         hangStarted.wait();
 
-        // Wait for hang to be detected and reported
-        // Use longer timeout for hangchar as it may take time to enter 'D' state
-        // Follow the same pattern as other successful tests
         bool hangReported = WaitFor(
             [&]() -> bool {
                 std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
@@ -804,12 +761,10 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Process State Filt
             },
             WAIT_TIMEOUT_EXTENDED);
 
-        // Always show debug information to understand what's happening
         INFO("Thread ID: " << testTid);
         INFO("Hang reported: " << hangReported);
         INFO("Monitor expiry status: " << m_monitor.IsExpired(getpid(), testTid));
 
-        // Check if thread is actually hung
         try
         {
             auto hungResult = m_detector.IsHung(getpid(), testTid);
@@ -859,9 +814,8 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Process State Filt
 
         // Cleanup
         m_monitor.StopMonitoring();
-
-        // Disable hangchar to release the hung thread
         ConfigureHangchar(HangcharOption::Enable, 0);
+        ConfigureHangchar(HangcharOption::Timeout, 0);
 
         if (testThread.joinable())
         {
@@ -871,49 +825,39 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Process State Filt
 
     SECTION("Default behavior reports all hangs")
     {
-        // Test that default behavior (reportUserspaceHangs = true) reports both types
         TestHangDetectHandler handler;
         m_monitor.SetHangDetectedHandler(&handler);
-        // Don't call SetReportUserspaceHangs - should default to true
 
         {
             std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
-            g_hangReportState = HangReportState {}; // Reset global state
+            g_hangReportState = HangReportState {};
         }
 
+        auto method   = std::make_unique<MutexHangMethod>();
         pid_t testTid = -1;
         std::latch threadStarted(1);
-        std::latch threadRegistered(1);
 
-        // Create a thread that will hang with mutex deadlock (userspace hang)
         std::jthread testThread([&]() {
             testTid = gettid();
             threadStarted.count_down();
             pthread_setname_np(pthread_self(), "default_test");
-
-            // Wait briefly to ensure registration happens first
-            threadRegistered.wait();
-
-            // Create mutex deadlock (userspace hang - should be reported with default behavior)
-            std::mutex m;
-            m.lock();
-            // coverity[double_lock]: Intentionally causing deadlock for testing
-            m.lock(); // This will hang the thread in userspace
+            method->Execute();
         });
 
-        // Wait for thread to get its ID
+        auto cleanup = DcgmNs::Defer([&]() {
+            m_monitor.StopMonitoring();
+            method->ReleaseHang();
+        });
+
         threadStarted.wait();
         REQUIRE(testTid != -1);
 
-        // Register the thread for monitoring
-        auto result = m_detector.RegisterTask(getpid(), testTid);
-        REQUIRE(result == DCGM_ST_OK);
-        threadRegistered.count_down();
+        REQUIRE(m_detector.RegisterTask(getpid(), testTid) == DCGM_ST_OK);
 
-        // Start monitoring
+        method->InitiateHang();
+
         REQUIRE(m_monitor.StartMonitoring() == DCGM_ST_OK);
 
-        // Wait for hang to be detected and reported
         bool hangReported = WaitFor(
             []() -> bool {
                 std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
@@ -921,21 +865,10 @@ TEST_CASE_METHOD(HangDetectWorkflowTest, "HangDetectWorkflow::Process State Filt
             },
             WAIT_TIMEOUT_LONG);
 
-        // SHOULD get a hang report for userspace hang with default behavior
         REQUIRE(hangReported);
         {
             std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
             REQUIRE(g_hangReportState.reports.size() == 1);
-        }
-
-        // Cleanup
-        m_monitor.StopMonitoring();
-
-        // Force thread termination since it's deadlocked
-        if (testThread.joinable())
-        {
-            pthread_cancel(testThread.native_handle());
-            testThread.detach();
         }
     }
 }
@@ -953,44 +886,69 @@ TEST_CASE("HangDetectWorkflow::Reporting with Real Hangs")
         g_hangReportState = HangReportState {};
     }
 
-    // Lifetime block for worker jthread
-    {
-        REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
-        auto method = std::make_unique<MutexHangMethod>();
+    REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
+    auto method = std::make_unique<MutexHangMethod>();
 
-        // Get worker thread ID atomically
-        pid_t workerTid = -1;
-        std::latch threadStarted(1);
+    pid_t workerTid = -1;
+    std::latch threadStarted(1);
 
-        std::jthread worker([&]() {
-            workerTid = gettid(); // Store the worker's thread ID
-            threadStarted.count_down();
-            method->Execute();
-        });
+    std::jthread worker([&]() {
+        workerTid = gettid();
+        threadStarted.count_down();
+        method->Execute();
+    });
 
-        // Wait for worker to get its thread ID
-        threadStarted.wait();
-        REQUIRE(workerTid != -1);
-
-        // Register the worker thread (not main thread)
-        REQUIRE(detector.RegisterTask(getpid(), workerTid) == DCGM_ST_OK);
-
-        // Wait for hang report to be generated
-        REQUIRE(WaitFor(
-            [&]() {
-                {
-                    std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
-                    return !g_hangReportState.reports.empty();
-                }
-            },
-            WAIT_TIMEOUT_LONG));
-
-        REQUIRE(monitor.IsExpired(getpid(), workerTid) == DCGM_ST_TIMEOUT);
-
-        // Cleanup
+    auto cleanup = DcgmNs::Defer([&]() {
         monitor.StopMonitoring();
-        method->Cleanup();
+        method->ReleaseHang();
+    });
+
+    threadStarted.wait();
+    REQUIRE(workerTid != -1);
+
+    REQUIRE(detector.RegisterTask(getpid(), workerTid) == DCGM_ST_OK);
+
+    method->InitiateHang();
+
+    // Wait for thread to be detected as expired
+    bool isExpired
+        = WaitFor([&]() { return monitor.IsExpired(getpid(), workerTid) == DCGM_ST_TIMEOUT; }, WAIT_TIMEOUT_LONG);
+
+    auto expiredStatus = monitor.IsExpired(getpid(), workerTid);
+    INFO("IsExpired after wait: " << (isExpired ? "YES" : "NO"));
+    INFO("IsExpired status code: " << expiredStatus);
+
+    // Check if thread is actually hung
+    auto hungResult = detector.IsHung(getpid(), workerTid);
+    if (hungResult.has_value())
+    {
+        INFO("IsHung check: " << (hungResult.value() ? "YES" : "NO"));
     }
+    else
+    {
+        INFO("IsHung check failed with error: " << hungResult.error());
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
+        INFO("Report count after IsExpired: " << g_hangReportState.reports.size());
+    }
+
+    // Wait for hang report to be generated
+    bool reportReceived = WaitFor(
+        [&]() {
+            std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
+            return !g_hangReportState.reports.empty();
+        },
+        WAIT_TIMEOUT_LONG);
+
+    {
+        std::lock_guard<std::mutex> lock(g_hangReportStateMutex);
+        INFO("Report count after WaitFor: " << g_hangReportState.reports.size());
+    }
+
+    REQUIRE(reportReceived);
+    REQUIRE(monitor.IsExpired(getpid(), workerTid) == DCGM_ST_TIMEOUT);
 }
 
 TEST_CASE("HangDetectWorkflow::TaskContextManager")

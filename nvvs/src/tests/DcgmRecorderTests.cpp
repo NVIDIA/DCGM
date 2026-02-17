@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,18 @@
  */
 #include "DcgmDiagUnitTestCommon.h"
 #include <DcgmRecorder.h>
+#include <Defer.hpp>
 #include <NvvsCommon.h>
 #include <catch2/catch_all.hpp>
 #include <fstream>
 #include <unistd.h>
 #include <yaml-cpp/yaml.h>
 
-static long long g_timestamp         = 0;
-static dcgmReturn_t g_watchFieldsRet = DCGM_ST_OK;
-static dcgmFieldGrp_t g_fieldGroupId = 0;
-static dcgmGpuGrp_t g_groupId        = 0;
+static long long g_timestamp            = 0;
+static dcgmReturn_t g_watchFieldsRet    = DCGM_ST_OK;
+static dcgmReturn_t g_getValuesSinceRet = DCGM_ST_OK;
+static dcgmFieldGrp_t g_fieldGroupId    = 0;
+static dcgmGpuGrp_t g_groupId           = 0;
 
 class WrapperDcgmRecorder : protected DcgmRecorder
 {
@@ -246,6 +248,21 @@ dcgmReturn_t dcgmWatchFields(dcgmHandle_t /* pDcgmHandle */,
     return g_watchFieldsRet;
 }
 
+dcgmReturn_t dcgmGetValuesSince(dcgmHandle_t /* pDcgmHandle */,
+                                dcgmGpuGrp_t /* groupId */,
+                                dcgmFieldGrp_t /* fieldGroupId */,
+                                long long /* sinceTimestamp */,
+                                long long *nextSinceTimestamp,
+                                dcgmFieldValueEnumeration_f /* enumCB */,
+                                void * /* userData */)
+{
+    if (nextSinceTimestamp != nullptr)
+    {
+        *nextSinceTimestamp = g_timestamp + 1;
+    }
+    return g_getValuesSinceRet;
+}
+
 SCENARIO("AddWatches")
 {
     DcgmRecorder dr((dcgmHandle_t)1);
@@ -263,6 +280,52 @@ SCENARIO("AddWatches")
     g_fieldGroupId   = 1;
     g_watchFieldsRet = DCGM_ST_GPU_IS_LOST;
     CHECK(dr.AddWatches(fieldIds, gpuIds, false, "field_group1", "group1", 300.0) == DCGM_ST_GPU_IS_LOST);
+}
+
+SCENARIO("DcgmRecorder::WriteToFile with field watch errors")
+{
+    dcgmHandle_t handle = (dcgmHandle_t)1;
+    DcgmRecorder dr(handle);
+    std::vector<unsigned short> fieldIds = { DCGM_FI_DEV_GPU_TEMP, DCGM_FI_DEV_POWER_USAGE };
+    std::vector<unsigned int> gpuIds     = { 0 };
+
+    std::string jsonFileName = createTmpFile("json");
+    DcgmNs::Defer cleanup([&jsonFileName]() { CHECK(unlink(jsonFileName.c_str()) == 0); });
+
+    g_groupId        = 1;
+    g_fieldGroupId   = 1;
+    g_watchFieldsRet = DCGM_ST_OK;
+
+    REQUIRE(dr.AddWatches(fieldIds, gpuIds, false, "test_field_group", "test_group", 300.0) == DCGM_ST_OK);
+
+    SECTION("fields not watched")
+    {
+        g_getValuesSinceRet = DCGM_ST_NOT_WATCHED;
+    }
+
+    SECTION("no data available")
+    {
+        g_getValuesSinceRet = DCGM_ST_NO_DATA;
+    }
+
+    SECTION("GPU lost")
+    {
+        g_getValuesSinceRet = DCGM_ST_GPU_IS_LOST;
+    }
+
+    dr.WriteToFile(jsonFileName, NVVS_LOGFILE_TYPE_JSON, 0);
+
+    std::ifstream fileStream(jsonFileName);
+    std::string content((std::istreambuf_iterator<char>(fileStream)), std::istreambuf_iterator<char>());
+
+    CHECK_FALSE(content.empty());
+
+    Json::Value json;
+    Json::CharReaderBuilder builder;
+    std::istringstream stream(content);
+    std::string errs;
+    Json::parseFromStream(builder, stream, &json, &errs);
+    CHECK(json.isNull());
 }
 
 void WrapperDcgmRecorder::WrapperFormatFieldViolationError(DcgmError &d,

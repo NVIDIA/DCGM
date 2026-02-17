@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ struct HostEngineCommandLine::Impl
     std::string m_hostEngineSockPath;        /*!< Host engine Unix domain socket path */
     std::string m_logLevel;                  /*!< Logging level string */
     std::string m_hostEngineBindInterfaceIp; /*!< IP address to bind to. "" = all interfaces */
+    std::string m_hostEngineVsockCid;        /*!< Vsock CID to bind to. "" = any */
     std::string m_logFileName;               /*!< Log file name */
     std::string m_pidFilePath;               /*!< PID filename to use to prevent more than one nv-hostengine daemon
                                                   instance from running */
@@ -45,12 +46,12 @@ struct HostEngineCommandLine::Impl
 
     std::set<dcgmModuleId_t> m_denylistModules; /*!< Modules to add to the denylist */
 
-    std::uint16_t m_hostEnginePort; /*!< Host engine port number */
-
-    bool m_isHostEngineConnTCP; /*!< Flag to indicate that connection is TCP */
-    bool m_isTermHostEngine;    /*!< Terminate Daemon */
-    bool m_shouldDaemonize;     /*!< Has the user requested that we do not daemonize? 1=yes. 0=no */
-    bool m_isLogRotate;         /*!< Rotate log file */
+    std::uint16_t m_hostEnginePort; /*!< Host engine TCP port number */
+    bool m_isHostEngineConnTCP;     /*!< Flag to indicate that connection is TCP */
+    bool m_isHostEngineConnVsock;   /*!< Flag to indicate that connection is Vsock */
+    bool m_isTermHostEngine;        /*!< Terminate Daemon */
+    bool m_shouldDaemonize;         /*!< Has the user requested that we do not daemonize? 1=yes. 0=no */
+    bool m_isLogRotate;             /*!< Rotate log file */
 };
 
 void HostEngineCommandLine::ImplDeleter::operator()(HostEngineCommandLine::Impl *ptr) const
@@ -63,9 +64,20 @@ std::string const &HostEngineCommandLine::GetUnixSocketPath() const
     return m_pimpl->m_hostEngineSockPath;
 }
 
-bool HostEngineCommandLine::IsConnectionTcp() const
+dcgmConnectionType_t HostEngineCommandLine::GetConnectionType() const
 {
-    return m_pimpl->m_isHostEngineConnTCP;
+    if (m_pimpl->m_isHostEngineConnTCP)
+    {
+        return DcgmConnectionTypeTcp;
+    }
+    else if (m_pimpl->m_isHostEngineConnVsock)
+    {
+        return DcgmConnectionTypeVsock;
+    }
+    else
+    {
+        return DcgmConnectionTypeDomainSocket;
+    }
 }
 
 bool HostEngineCommandLine::ShouldTerminate() const
@@ -86,6 +98,11 @@ bool HostEngineCommandLine::ShouldDaemonize() const
 std::string const &HostEngineCommandLine::GetBindInterface() const
 {
     return m_pimpl->m_hostEngineBindInterfaceIp;
+}
+
+std::string const &HostEngineCommandLine::GetVsockCid() const
+{
+    return m_pimpl->m_hostEngineVsockCid;
 }
 
 std::string const &HostEngineCommandLine::GetPidFilePath() const
@@ -393,6 +410,15 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
                                                /*typedesc*/ "IP_ADDRESS",
                                                cmdLine);
 
+        auto vsockCidArg = OptionalValueArg<std::string>("c",
+                                                         "vsock-cid",
+                                                         "Specify the Vsock CID that the host engine should listen on."
+                                                         "\n\tDefault: bind to any CID.",
+                                                         /*req*/ false,
+                                                         /*default*/ "",
+                                                         /*typedesc*/ "CID",
+                                                         cmdLine);
+
         auto pidFileArg = ValueArg<std::string>("",
                                                 "pid",
                                                 "Specify the PID filename nv-hostengine should use"
@@ -467,14 +493,29 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
 
         cmdLine.parse(argc, argv);
 
+        if (domainSockArg.isSet() && vsockCidArg.isSet())
+        {
+            throw std::runtime_error("Cannot specify both Unix domain socket and Vsock CID options.");
+        }
+        else if (bindIpArg.isSet() && vsockCidArg.isSet())
+        {
+            throw std::runtime_error("Cannot specify both TCP interface and Vsock CID options.");
+        }
+        else if (bindIpArg.isSet() && domainSockArg.isSet())
+        {
+            throw std::runtime_error("Cannot specify both TCP interface and Unix domain socket options.");
+        }
+
         impl->m_hostEngineSockPath        = domainSockArg.getValue();
         impl->m_logLevel                  = logLevelArg.getValue();
         impl->m_hostEngineBindInterfaceIp = ParseBindIp(bindIpArg.getValue());
+        impl->m_hostEngineVsockCid        = vsockCidArg.getValue();
         impl->m_logFileName               = logFileArg.getValue();
         impl->m_pidFilePath               = pidFileArg.getValue();
         impl->m_denylistModules           = ParseDenylist(denylistArg.getValue());
         impl->m_hostEnginePort            = portArg.getValue();
-        impl->m_isHostEngineConnTCP       = not domainSockArg.isSet();
+        impl->m_isHostEngineConnTCP       = not domainSockArg.isSet() && not vsockCidArg.isSet();
+        impl->m_isHostEngineConnVsock     = vsockCidArg.isSet();
         impl->m_isTermHostEngine          = termArg.getValue();
         impl->m_shouldDaemonize           = not daemonizeArg.getValue();
         impl->m_isLogRotate               = logRotateArg.getValue();

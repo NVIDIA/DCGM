@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <cerrno>
 #include <csignal>
@@ -790,9 +791,7 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
         DCGM_LOG_ERROR << "epoll_create1 failed. errno " << err;
         return err;
     }
-    auto cleanupEpollFd = DcgmNs::Defer { [&]() {
-        close(epollFd);
-    } };
+    auto cleanupEpollFd = DcgmNs::Defer { [&]() { close(epollFd); } };
 
     struct epoll_event event = {};
 

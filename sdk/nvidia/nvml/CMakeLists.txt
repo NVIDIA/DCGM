@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ target_sources(
     common/timelib.c
     common/timeseries.c
     common/logging.c
+    common/NvmlRecursiveSharedMutex.cpp
 )
 
 target_link_libraries(sdk_nvml_loader PUBLIC sdk_nvml_interface)
@@ -63,3 +64,5 @@ target_sources(
 )
 target_compile_definitions(sdk_nvml_loader PUBLIC -DNVML_STATIC_IMPORT=1)
 target_compile_definitions(sdk_nvml_loader PRIVATE -D__NVML_API_VERSION_INTERNAL)
+
+add_subdirectory(common)
