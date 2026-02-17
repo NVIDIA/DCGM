@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,13 @@ extern "C" {
 #define _DCGM_CASSERT_SYMBOL(line, msg)       _DCGM_CASSERT_SYMBOL_INNER(line, msg)
 #define DCGM_CASSERT(expression, msg) \
     __attribute__((unused)) typedef char _DCGM_CASSERT_SYMBOL(__LINE__, msg)[((expression) ? 1 : -1)]
+
+/**
+ * We have bitmasks of DcgmModuleIds that are limited to the size of an unsigned
+ * int, so we ensure there aren't too many.
+ */
+DCGM_CASSERT(sizeof(uint32_t) == 4, uint32_t_not_4_bytes);
+DCGM_CASSERT((DcgmModuleIdCount <= 8 * sizeof(uint32_t)), Too_many_Dcgm_Module_Ids);
 
 /**
  * Max length of the DCGM string field
@@ -412,20 +419,6 @@ typedef enum dcgmGpuBrandType_enum
     // Keep this last
     DCGM_GPU_BRAND_COUNT
 } dcgmGpuBrandType_t;
-
-/*****************************************************************************/
-typedef enum dcgmEntityStatusType_enum
-{
-    DcgmEntityStatusUnknown = 0,  /* Entity has not been referenced yet */
-    DcgmEntityStatusOk,           /* Entity is known and OK */
-    DcgmEntityStatusUnsupported,  /* Entity is unsupported by DCGM */
-    DcgmEntityStatusInaccessible, /* Entity is inaccessible, usually due to cgroups */
-    DcgmEntityStatusLost,         /* Entity has been lost. Usually set from NVML
-                                   returning NVML_ERROR_GPU_IS_LOST */
-    DcgmEntityStatusFake,         /* Entity is a fake, injection-only entity for testing */
-    DcgmEntityStatusDisabled,     /* Don't collect values from this GPU */
-    DcgmEntityStatusDetached      /* Entity is detached, not good for any uses */
-} DcgmEntityStatus_t;
 
 /**
  * Making these internal so that client apps must be explicit with struct versions.
@@ -846,6 +839,16 @@ typedef struct
 
 typedef struct
 {
+    uint32_t moduleMask; //!< IN/OUT: mask of modules to mark reloadable (IN) / modules loaded (OUT)
+    unsigned int cmdRet; //!< OUT: Error code generated
+} dcgmMsgModulesReloadable_v1;
+
+#define dcgmMsgModulesReloadable_version1 MAKE_DCGM_VERSION(dcgmMsgModulesReloadable_v1, 1)
+#define dcgmMsgModulesReloadable_version  dcgmMsgModulesReloadable_version1
+typedef dcgmMsgModulesReloadable_v1 dcgmMsgModulesReloadable_t;
+
+typedef struct
+{
     dcgmModuleGetStatuses_t st; //!< IN/OUT: module status
     unsigned int cmdRet;        //!< OUT: Error code generated
 } dcgmMsgModuleStatus_v1;
@@ -1069,7 +1072,28 @@ typedef struct EndTLV_s
     TLVBase base; //!< Named base TLV header
 } EndTLV;
 
+typedef enum
+{
+    DcgmConnectionTypeDomainSocket = 0,
+    DcgmConnectionTypeTcp          = 1,
+    DcgmConnectionTypeVsock        = 2,
+} dcgmConnectionType_t;
+
 /** @} */
+
+/**
+ * Version 1 of dcgmMsgEmptyCache_t
+ */
+typedef struct
+{
+    unsigned int version; //!< IN: Version number. Use dcgmEmptyCache_version
+    unsigned int cmdRet;  //!< OUT: Error code generated
+} dcgmMsgEmptyCache_v1;
+
+#define dcgmMsgEmptyCache_version1 MAKE_DCGM_VERSION(dcgmMsgEmptyCache_v1, 1)
+#define dcgmMsgEmptyCache_version  dcgmMsgEmptyCache_version1
+
+typedef dcgmMsgEmptyCache_v1 dcgmMsgEmptyCache_t;
 
 /**
  * Verify that DCGM definitions that are copies of NVML ones match up with their NVML counterparts
@@ -1173,7 +1197,10 @@ DCGM_CASSERT(dcgmChildProcessParams_version1 == (long)0x01000040, 1);
 DCGM_CASSERT(dcgmChildProcessStatus_version1 == (long)0x01000014, 1);
 DCGM_CASSERT(dcgmLink_version1 == (long)0x01000004, 1);
 DCGM_CASSERT(dcgmWorkloadPowerProfile_version == (long)0x01000038, 1);
+DCGM_CASSERT(dcgmConnectV3Params_version1 == (long)0x0100000C, 1);
 DCGM_CASSERT(dcgmEnvVarInfo_version1 == (long)0x01000208, 1);
+DCGM_CASSERT(dcgmMsgEmptyCache_version1 == (long)0x1000008, 1);
+DCGM_CASSERT(dcgmMsgModulesReloadable_version1 == (long)0x01000008, 1);
 
 #ifndef DCGM_ARRAY_CAPACITY
 #ifdef __cplusplus

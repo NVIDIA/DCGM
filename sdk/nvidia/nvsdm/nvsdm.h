@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -186,16 +186,16 @@ typedef enum
  */
 typedef enum
 {
-    NVSDM_PORT_TELEM_CTR_RCV_PKTS                                                          = 1,
-    NVSDM_PORT_TELEM_CTR_RCV_DATA                                                          = 2,
+    NVSDM_PORT_TELEM_CTR_RCV_PKTS                                                          = 1,     //!< 32b counter; see \p NVSDM_PORT_TELEM_CTR_EXT_RCV_PKTS for 64b version
+    NVSDM_PORT_TELEM_CTR_RCV_DATA                                                          = 2,     //!< 32b counter; see \p NVSDM_PORT_TELEM_CTR_EXT_RCV_DATA for 64b version
     NVSDM_PORT_TELEM_CTR_MCAST_RCV_PKTS                                                    = 3,
     NVSDM_PORT_TELEM_CTR_UCAST_RCV_PKTS                                                    = 4,
     NVSDM_PORT_TELEM_CTR_MFRMD_PKTS                                                        = 5,
     NVSDM_PORT_TELEM_CTR_VL15_DROPPED                                                      = 6,
     NVSDM_PORT_TELEM_CTR_RCV_ERR                                                           = 7,
-    NVSDM_PORT_TELEM_CTR_XMIT_PKTS                                                         = 8,
+    NVSDM_PORT_TELEM_CTR_XMIT_PKTS                                                         = 8,     //!< 32b counter; see \p NVSDM_PORT_TELEM_CTR_EXT_XMIT_PKTS for 64b version
     //NVSDM_PORT_TELEM_CTR_XMIT_PKTS_VL15                                                  = 9,
-    NVSDM_PORT_TELEM_CTR_XMIT_DATA                                                         = 10,
+    NVSDM_PORT_TELEM_CTR_XMIT_DATA                                                         = 10,    //!< 32b counter; see \p NVSDM_PORT_TELEM_CTR_EXT_XMIT_DATA for 64b version
     //NVSDM_PORT_TELEM_CTR_XMIT_DATA_VL15                                                  = 11,
     NVSDM_PORT_TELEM_CTR_UCAST_XMIT_PKTS                                                   = 12,
     NVSDM_PORT_TELEM_CTR_MCAST_XMIT_PKTS                                                   = 13,
@@ -321,7 +321,13 @@ typedef enum
     /* Group 0x26 Counters */
     NVSDM_PORT_TELEM_CTR_GRP_X26_RQ_GENERAL_ERROR                                          = 120,
 
-    NVSDM_PORT_TELEM_CTR_MAX                                                               = NVSDM_PORT_TELEM_CTR_GRP_X26_RQ_GENERAL_ERROR,
+    /* Extended port telemetry counters */
+    NVSDM_PORT_TELEM_CTR_EXT_XMIT_DATA                                                     = 121,    //!< 64b counter; see \p NVSDM_PORT_TELEM_CTR_XMIT_DATA for 32b version
+    NVSDM_PORT_TELEM_CTR_EXT_RCV_DATA                                                      = 122,    //!< 64b counter; see \p NVSDM_PORT_TELEM_CTR_RCV_DATA for 32b version
+    NVSDM_PORT_TELEM_CTR_EXT_XMIT_PKTS                                                     = 123,    //!< 64b counter; see \p NVSDM_PORT_TELEM_CTR_XMIT_PKTS for 32b version
+    NVSDM_PORT_TELEM_CTR_EXT_RCV_PKTS                                                      = 124,    //!< 64b counter; see \p NVSDM_PORT_TELEM_CTR_RCV_PKTS for 32b version
+
+    NVSDM_PORT_TELEM_CTR_MAX                                                               = NVSDM_PORT_TELEM_CTR_EXT_RCV_PKTS,
 
     NVSDM_PORT_TELEM_CTR_NONE                                                              = 9999,
 } nvsdmPortTelemCounter_t;

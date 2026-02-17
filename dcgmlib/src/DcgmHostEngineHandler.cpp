@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 #include <dcgm_nvswitch_structs.h>
 #include <dcgm_profiling_structs.h>
 #include <dcgm_structs.h>
+#include <dcgm_structs_internal.h>
 #include <dcgm_sysmon_structs.h>
 #include <dcgm_util.h>
 
@@ -80,7 +81,7 @@ dcgmReturn_t DcgmHostEngineHandler::TranslateBitmapToGpuVector(uint64_t gpuBitma
 
         if (ret == DCGM_ST_OK)
         {
-            ret = mpGroupManager->GetGroupGpuIds(0, gId, gpuIds);
+            ret = mpGroupManager->GetGroupGpuIds(0, gId, DcgmGroupOption::ActiveOnly, gpuIds);
         }
     }
     else
@@ -182,7 +183,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperSelectGpusByTopology(uint32_t numGpus,
 {
     std::vector<unsigned int> gpuIds;
 
-    if (!m_nvmlLoaded)
+    if (!m_nvmlLoaded.load(std::memory_order_acquire))
     {
         log_debug("Cannot select GPUs by topology: NVML is not loaded");
         return DCGM_ST_NVML_NOT_LOADED;
@@ -493,7 +494,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
     std::vector<dcgmGroupEntityPair_t> entities;
     std::vector<unsigned int> dcgmGpuIds;
 
-    if (!m_nvmlLoaded)
+    if (!m_nvmlLoaded.load(std::memory_order_acquire))
     {
         log_debug("Cannot get topology: NVML is not loaded");
         return DCGM_ST_NVML_NOT_LOADED;
@@ -513,7 +514,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
         return dcgmReturn;
     }
 
-    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -617,7 +618,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
         return dcgmReturn;
     }
 
-    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -832,6 +833,181 @@ unsigned int DcgmHostEngineHandler::GetHostEngineHealth() const
     return m_hostengineHealth;
 }
 
+void DcgmHostEngineHandler::UnloadModules(bool notLoad, uint32_t *loadingMask, uint32_t *unloadedMask)
+{
+    uint32_t infoMask = loadingMask ? *loadingMask : 0; // mask to unload
+
+    uint32_t runningMask = 1; // running mask to check to mark loaded
+    uint32_t loadedMask  = 0; // return mask of modules loaded
+    uint32_t unloadMask  = 0; // return mask of modules unloaded
+
+    /**
+     * We never set the core module to mark not loaded unless we are actually
+     * unloading as part of shutdown (in which case this mask is ignored.
+     */
+
+    infoMask &= ~(1 << DcgmModuleIdCore);
+
+    bool resumeCore         = false;
+    bool markCoreReloadable = false;
+
+    /* Free sub-modules */
+    for (auto &m_module : m_modules)
+    {
+        /**
+         * If we are resetting to reloadable, and not unloaded, we must leave
+         * the core module alone. Unloaded is used as a state part of shutdown,
+         * from which we can't recover. Reloadable returns the module to a
+         * state of never having been loaded, with the exception of actually
+         * being loaded and possibly having running threads. This is used to
+         * support the test framework module loading and denylisting tests.
+         *
+         * Reloadable modules can be loaded (as if they were never loaded --
+         * this is a noop), and denylisted (as well as actually unloaded at
+         * termination). When marked reloadable, paused modules are resumed,
+         * and, if necessary, the core module is resumed. This is because
+         * when a module is first loaded, it is not paused.
+         *
+         * If a reloadable module is denylisted, it can NOT be loaded again,
+         * though it may be running background threads. It CAN be unloadad at
+         * shutdown.
+         *
+         * This may result in some modules paused, and others not, if
+         * reloadability is being used to support the test framework. Usually,
+         * either all loaded modules are running or paused, and not a mix.
+         */
+        if (m_module.status == DcgmModuleStatusLoaded)
+        {
+            loadedMask |= runningMask;
+        }
+
+        /**
+         * If the mask bit is clear, we don't mark the module not loaded.
+         */
+        if (!(runningMask & infoMask))
+        {
+            if (notLoad)
+            {
+                runningMask <<= 1;
+
+                continue;
+            }
+        }
+
+        if (!notLoad) /* we actually unload */
+        {
+            /**
+             * At this point we are free to mark the module unloaded, and
+             * possibly actually unload it.
+             */
+
+            if ((m_module.ptr != nullptr) && (m_module.freeCB != nullptr))
+            {
+                m_module.freeCB(m_module.ptr);
+            }
+
+            m_module.ptr     = nullptr;
+            m_module.allocCB = nullptr;
+            m_module.freeCB  = nullptr;
+            m_module.msgCB   = nullptr;
+        }
+
+        if (!notLoad)
+        {
+            m_module.status = DcgmModuleStatusUnloaded;
+        }
+        else if (m_module.ptr == nullptr)
+        {
+            m_module.status = DcgmModuleStatusNotLoaded;
+        }
+        else
+        {
+            switch (m_module.status)
+            {
+                case DcgmModuleStatusLoaded:
+                case DcgmModuleStatusDenylisted:
+                    m_module.status = DcgmModuleStatusReloadable;
+                    break;
+
+                case DcgmModuleStatusPaused:
+                    if (m_module.id == DcgmModuleIdCore)
+                    {
+                        markCoreReloadable = true;
+                    }
+                    else
+                    {
+                        ResumeModule(m_module.id);
+                        resumeCore      = true;
+                        m_module.status = DcgmModuleStatusReloadable;
+                    }
+                    break;
+
+                case DcgmModuleStatusNotLoaded:
+                case DcgmModuleStatusFailed:
+                case DcgmModuleStatusUnloaded:
+                case DcgmModuleStatusReloadable:
+                    break;
+            }
+        }
+
+        unloadMask |= runningMask;
+        runningMask <<= 1;
+    }
+
+    /**
+     * If we resumed a module to make it reloadable, we must also ensure the
+     * Core module is not paused.
+     */
+    if (resumeCore && (m_modules[DcgmModuleIdCore].status == DcgmModuleStatusPaused))
+    {
+        ResumeModule(DcgmModuleIdCore);
+
+        if (markCoreReloadable)
+        {
+            m_modules[DcgmModuleIdCore].status = DcgmModuleStatusReloadable;
+        }
+    }
+
+    if (loadingMask)
+    {
+        *loadingMask = loadedMask;
+    }
+
+    if (unloadedMask)
+    {
+        *unloadedMask = unloadMask;
+    }
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHostEngineHandler::HelperModulesReloadable(dcgmMsgModulesReloadable_v1 &info)
+{
+    uint32_t unloaded;
+    uint32_t infoMask = info.moduleMask;
+
+    {
+        auto lock = Lock();
+
+        UnloadModules(true, &info.moduleMask, &unloaded);
+    }
+
+    uint32_t runningMask = 1;
+
+    for (auto &m_module : m_modules)
+    {
+        if (unloaded & runningMask)
+        {
+            DCGM_LOG_DEBUG << "Marking hostengine module " << m_module.id << " Reloadable";
+        }
+
+        runningMask <<= 1;
+    }
+
+    DCGM_LOG_DEBUG << "Returning loaded mask " << info.moduleMask << " for info mask" << infoMask;
+
+    return DCGM_ST_OK;
+}
+
 /*****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::HelperModuleDenylist(dcgmModuleId_t moduleId)
 {
@@ -849,6 +1025,15 @@ dcgmReturn_t DcgmHostEngineHandler::HelperModuleDenylist(dcgmModuleId_t moduleId
     {
         case DcgmModuleStatusNotLoaded:
             break; /* Will be added to the denylist below */
+
+        case DcgmModuleStatusReloadable:
+            /*
+             * When actually unloading modules, state is not checked, so the
+             * module instance WILL be destructed.
+             */
+            DCGM_LOG_DEBUG << "Module ID " << moduleId
+                           << " is reloadable so denylisting will not stop running threads.";
+            break;
 
         case DcgmModuleStatusDenylisted:
             DCGM_LOG_DEBUG << "Module ID " << moduleId << " is already on the denylist.";
@@ -1002,7 +1187,7 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int 
                                                                    int msgLength,
                                                                    dcgmReturn_t status)
 {
-    watchedRequests_t::iterator requestIt;
+    std::shared_ptr<DcgmRequest> request;
 
     /* Embedded client */
     if (requestId == DCGM_REQUEST_ID_NONE)
@@ -1011,14 +1196,20 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int 
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    auto lock = Lock();
-
-    requestIt = m_watchedRequests.find(requestId);
-    if (requestIt == m_watchedRequests.end())
     {
-        log_error("SendRawMessageToEmbeddedClient unable to find requestId {}", requestId);
-        return DCGM_ST_BADPARAM;
+        std::lock_guard<std::mutex> lock(m_watchedRequestsMutex);
+
+        auto requestIt = m_watchedRequests.find(requestId);
+        if (requestIt == m_watchedRequests.end())
+        {
+            log_error("SendRawMessageToEmbeddedClient unable to find requestId {}", requestId);
+            return DCGM_ST_BADPARAM;
+        }
+
+        /* Get a shared_ptr copy to keep the request alive after releasing the lock */
+        request = requestIt->second;
     }
+    /* m_watchedRequestsMutex released here. The shared_ptr keeps the request alive. */
 
     /* ProcessMessage is expecting an allocated message */
     std::unique_ptr<DcgmMessage> msg = std::make_unique<DcgmMessage>();
@@ -1029,7 +1220,7 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int 
     msgBytes->resize(msgLength);
     memcpy(msgBytes->data(), msgData, msgLength);
 
-    requestIt->second->ProcessMessage(std::move(msg));
+    request->ProcessMessage(std::move(msg));
     return DCGM_ST_OK;
 }
 
@@ -1093,8 +1284,34 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommand(dcgm_module_command_hea
         return DCGM_ST_BADPARAM;
     }
 
+    /**
+     * Is the module denylisted?
+     *
+     * This is possible even with a module ptr if it was loaded, then marked
+     * reloadable and finally denylisted. It is still loaded and possibly
+     * running an existing thread, but can't be reloaded. However, because it
+     * has a module ptr field the following tests will result in acting as if
+     * it still loaded. So, we have to check for the denylisted case.
+     */
+
+    if (m_modules[moduleCommand->moduleId].status == DcgmModuleStatusDenylisted)
+    {
+        log_error("Module id: {} is denylisted, acting not loaded.", moduleCommand->moduleId);
+
+        return DCGM_ST_MODULE_NOT_LOADED;
+    }
+
     /* Is the module loaded? */
     if (m_modules[moduleCommand->moduleId].ptr == nullptr)
+    {
+        dcgmReturn = LoadModule(moduleCommand->moduleId);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            return dcgmReturn;
+        }
+    }
+
+    if (m_modules[moduleCommand->moduleId].status == DcgmModuleStatusReloadable)
     {
         dcgmReturn = LoadModule(moduleCommand->moduleId);
         if (dcgmReturn != DCGM_ST_OK)
@@ -1154,6 +1371,42 @@ void DcgmHostEngineHandler::OnConnectionRemove(dcgm_connection_id_t connectionId
     }
 
     ClearPersistAfterDisconnect(connectionId);
+}
+
+void DcgmHostEngineHandler::DetachGpusFromModules()
+{
+    dcgm_core_msg_detach_gpus_v1 msg {};
+    msg.header.length     = sizeof(msg);
+    msg.header.version    = dcgm_core_msg_detach_gpus_version;
+    msg.header.subCommand = DCGM_CORE_SR_DETACH_GPUS;
+
+    auto locked    = Lock();
+    m_gpusDetached = true;
+    for (auto &&[idx, module] : m_modules | std::views::enumerate)
+    {
+        if (module.ptr != nullptr)
+        {
+            SendModuleMessage((dcgmModuleId_t)idx, (dcgm_module_command_header_t *)&msg);
+        }
+    }
+}
+
+void DcgmHostEngineHandler::AttachGpusToModules()
+{
+    dcgm_core_msg_attach_gpus_v1 msg {};
+    msg.header.length     = sizeof(msg);
+    msg.header.version    = dcgm_core_msg_attach_gpus_version;
+    msg.header.subCommand = DCGM_CORE_SR_ATTACH_GPUS;
+
+    auto locked    = Lock();
+    m_gpusDetached = false;
+    for (auto &&[idx, module] : m_modules | std::views::enumerate)
+    {
+        if (module.ptr != nullptr)
+        {
+            SendModuleMessage((dcgmModuleId_t)idx, (dcgm_module_command_header_t *)&msg);
+        }
+    }
 }
 
 /*****************************************************************************/
@@ -1276,7 +1529,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     dcgmReturn_t dcgmReturn;
     DcgmWatcher watcher(DcgmWatcherTypeHostEngine, DCGM_CONNECTION_ID_NONE);
 
-    if (m_nvmlLoaded == false)
+    if (!m_nvmlLoaded.load(std::memory_order_acquire))
     {
         log_debug("Not watching host engine fields because NVML is not loaded.");
         return DCGM_ST_OK;
@@ -1504,30 +1757,47 @@ static void nvHostEngineMigCallback(unsigned int gpuId, void *userData)
     hostEngineHandler->OnMigUpdates(gpuId);
 }
 
-void DcgmHostEngineHandler::ShutdownNvml()
+void DcgmHostEngineHandler::ShutdownNvml() noexcept
 {
-    if (!m_nvmlLoaded)
+    try
     {
-        return;
-    }
+        if (!m_nvmlLoaded.load(std::memory_order_acquire))
+        {
+            return;
+        }
 
-    if (m_usingInjectionNvml)
-    {
+        if (m_usingInjectionNvml)
+        {
 #ifdef INJECTION_LIBRARY_AVAILABLE
-        if (NVML_SUCCESS != nvmlShutdown())
-        {
-            log_error("Error: Failed to shutdown injection NVML");
-        }
+            if (NVML_SUCCESS != nvmlShutdown())
+            {
+                log_error("Error: Failed to shutdown injection NVML");
+            }
+            else
+            {
+                m_nvmlLoaded.store(false, std::memory_order_release);
+            }
 #endif
-    }
-    else
-    {
-        if (NVML_SUCCESS != nvmlShutdown())
-        {
-            /* we used to throw an exception here, which would crash the host engine on shutdown.
-               Just log an error and continue our shutdown. */
-            log_error("Error: Failed to ShutDown NVML");
         }
+        else
+        {
+            if (NVML_SUCCESS != nvmlShutdown())
+            {
+                /* we used to throw an exception here, which would crash the host engine on shutdown.
+                Just log an error and continue our shutdown. */
+                log_error("Error: Failed to ShutDown NVML");
+            }
+            else
+            {
+                m_nvmlLoaded.store(false, std::memory_order_release);
+            }
+        }
+    }
+    catch (const std::logic_error &e)
+    {
+        /* The application is hereafter in an undefined state. As above, we could throw an exception or
+           abruptly terminate, but we'll just log an error and continue to shutdown. */
+        log_error("Failed to shutdown NVML: failed to acquire exclusive lock for NVML: {}", e.what());
     }
 }
 
@@ -1545,7 +1815,7 @@ void DcgmHostEngineHandler::LoadNvml()
         }
         else
         {
-            m_nvmlLoaded = true;
+            m_nvmlLoaded.store(true, std::memory_order_release);
         }
         log_info("Using injected NVML");
     }
@@ -1553,16 +1823,415 @@ void DcgmHostEngineHandler::LoadNvml()
 
     if (m_usingInjectionNvml == false)
     {
-        if (NVML_SUCCESS != nvmlInit_v2())
+        auto ret = nvmlInitWithFlags(NVML_INIT_FLAG_NO_GPUS | NVML_INIT_FLAG_FORCE_INIT);
+        if (NVML_SUCCESS != ret)
         {
-            log_error("Cannot load NVML; DCGM will proceed without managing GPUs.");
-            m_nvmlLoaded = false;
+            log_error("Cannot load NVML; DCGM will proceed without managing GPUs. ret: {}", ret);
+            m_nvmlLoaded.store(false, std::memory_order_release);
         }
         else
         {
-            m_nvmlLoaded = true;
+            m_nvmlLoaded.store(true, std::memory_order_release);
         }
     }
+}
+
+DcgmNvmlSystemEventThread::DcgmNvmlSystemEventThread(DcgmHostEngineHandler &hostEngineHandler)
+    : m_hostEngineHandler(hostEngineHandler)
+{
+    if (m_hostEngineHandler.IsNvmlLoaded())
+    {
+        throw std::runtime_error("NVML is already loaded, nvmlInitWithFlags should be the first call to init nvml.");
+    }
+    SetThreadName("sysev_thread");
+
+    if (Init() != DCGM_ST_OK)
+    {
+        log_info("Failed to initialize NVML system event thread");
+        return;
+    }
+}
+
+dcgmReturn_t DcgmNvmlSystemEventThread::Init()
+{
+    if (m_threadReadyToGo)
+    {
+        return DCGM_ST_OK;
+    }
+
+    if (!m_nvmlInitialized)
+    {
+        log_info("Initializing NVML with NVML_INIT_FLAG_NO_GPUS and NVML_INIT_FLAG_NO_ATTACH flags.");
+        auto ret = nvmlInitWithFlags(NVML_INIT_FLAG_NO_GPUS | NVML_INIT_FLAG_NO_ATTACH);
+        if (ret != NVML_SUCCESS)
+        {
+            log_error("Failed to initialize NVML: {}", ret);
+            return DcgmNs::Utils::NvmlReturnToDcgmReturn(ret);
+        }
+        // On driver versions less than 590.37, we need to initialize NVML only with NVML_INIT_FLAG_NO_GPUS. Otherwise,
+        // the nvmlDeviceGetCount API will return 0 count for devices and no NVML_INIT_FLAG_FORCE_INIT flag can be
+        // used.
+        char driverVersionBuf[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE] = {};
+        ret = nvmlSystemGetDriverVersion(driverVersionBuf, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE);
+        if (ret != NVML_SUCCESS)
+        {
+            log_error("Failed to get driver version: {}", ret);
+            return DcgmNs::Utils::NvmlReturnToDcgmReturn(ret);
+        }
+        log_debug("Driver version read from NVML: {}", driverVersionBuf);
+        std::string_view driverVersionStr(driverVersionBuf);
+        auto dotPos = driverVersionStr.find(".");
+        if (dotPos == std::string_view::npos)
+        {
+            log_error("Driver version {} is not in the expected format.", driverVersionStr);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+        std::string_view majorDriverVersionStr = driverVersionStr.substr(0, dotPos);
+        std::string_view minorDriverVersionStr = driverVersionStr.substr(dotPos + 1);
+        auto majorDriverVersion                = DcgmNs::StrToUint32(majorDriverVersionStr);
+        auto minorDriverVersion                = DcgmNs::StrToUint32(minorDriverVersionStr);
+
+        if (majorDriverVersion.is_error() || minorDriverVersion.is_error())
+        {
+            log_error("Failed to parse driver version: {}", driverVersionStr);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        std::uint32_t constexpr majorDriverVersion590 = 590;
+        std::uint32_t constexpr minorDriverVersion37  = 37;
+        log_debug("Driver version: {}", driverVersionStr);
+        if (*majorDriverVersion < majorDriverVersion590
+            || (*majorDriverVersion == majorDriverVersion590 && *minorDriverVersion < minorDriverVersion37))
+        {
+            log_debug("Driver version {} is less than 590.37, initializing NVML with NVML_INIT_FLAG_NO_GPUS only.",
+                      driverVersionStr);
+            log_debug("Re-initializing NVML with NVML_INIT_FLAG_NO_GPUS only");
+            nvmlShutdown();
+            ret = nvmlInitWithFlags(NVML_INIT_FLAG_NO_GPUS);
+            if (ret != NVML_SUCCESS)
+            {
+                log_error("Failed to initialize NVML: {}", ret);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(ret);
+            }
+        }
+        log_info("NVML initialized successfully");
+        m_nvmlInitialized = true;
+    }
+    DcgmNs::Defer rollBack([this] {
+        if (!Shutdown())
+        {
+            log_error("Failed to shutdown NVML system event thread");
+        }
+    });
+
+    if (!m_eventSetCreated)
+    {
+        nvmlSystemEventSetCreateRequest_t createRequest = {};
+        createRequest.version                           = nvmlSystemEventSetCreateRequest_v1;
+        auto ret                                        = nvmlSystemEventSetCreate(&createRequest);
+        if (ret != NVML_SUCCESS)
+        {
+            if (ret != NVML_ERROR_FUNCTION_NOT_FOUND)
+            {
+                log_error("Failed to create NVML system event set: {}", ret);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(ret);
+            }
+            else
+            {
+                log_info("NVML system event set is not supported, skipping");
+                return DCGM_ST_NOT_SUPPORTED;
+            }
+        }
+        m_eventSetCreated = true;
+        m_eventSet        = createRequest.set;
+    }
+
+    nvmlSystemRegisterEventRequest_t registerEvent;
+    registerEvent.version    = nvmlSystemRegisterEventRequest_v1;
+    registerEvent.eventTypes = nvmlSystemEventTypeGpuDriverBind | nvmlSystemEventTypeGpuDriverUnbind;
+    registerEvent.set        = m_eventSet;
+    auto ret                 = nvmlSystemRegisterEvents(&registerEvent);
+    if (ret != NVML_SUCCESS)
+    {
+        log_error("Failed to register NVML system event: {}", ret);
+        return DcgmNs::Utils::NvmlReturnToDcgmReturn(ret);
+    }
+    m_threadReadyToGo = true;
+    rollBack.Disarm();
+    return DCGM_ST_OK;
+}
+
+DcgmNvmlSystemEventThread::~DcgmNvmlSystemEventThread()
+{
+    if (!Shutdown())
+    {
+        log_error("Failed to shutdown NVML system event thread");
+    }
+}
+
+bool DcgmNvmlSystemEventThread::Shutdown()
+{
+    bool success = true;
+
+    if (m_eventSetCreated)
+    {
+        nvmlSystemEventSetFreeRequest_t freeRequest = {};
+        freeRequest.version                         = nvmlSystemEventSetFreeRequest_v1;
+        freeRequest.set                             = m_eventSet;
+        auto ret                                    = nvmlSystemEventSetFree(&freeRequest);
+        if (ret != NVML_SUCCESS)
+        {
+            log_error("Failed to free NVML system event set: {}", ret);
+            success = false;
+        }
+        m_eventSetCreated = false;
+    }
+
+    if (m_nvmlInitialized)
+    {
+        auto ret = nvmlShutdown();
+        if (ret != NVML_SUCCESS)
+        {
+            log_error("Failed to shutdown NVML: {}", ret);
+            success = false;
+        }
+        m_nvmlInitialized = false;
+    }
+
+    m_threadReadyToGo = false;
+    m_eventSet        = nvmlSystemEventSet_t {};
+    return success;
+}
+
+dcgmReturn_t DcgmNvmlSystemEventThread::WaitSystemEvent()
+{
+    if (!m_threadReadyToGo || (m_cacheManager && m_cacheManager->ShouldSkipDriverCalls()))
+    {
+        return DCGM_ST_PENDING;
+    }
+    nvmlSystemEventSetWaitRequest_t request = {};
+    request.version                         = nvmlSystemEventSetWaitRequest_v1;
+    request.timeoutms                       = 1000;
+    request.set                             = m_eventSet;
+    std::array<nvmlSystemEventData_v1_t, 2> dataArr;
+    request.dataSize = dataArr.size();
+    request.data     = dataArr.data();
+    auto ret         = nvmlSystemEventSetWait(&request);
+    if (ret == NVML_ERROR_TIMEOUT)
+    {
+        return DCGM_ST_OK;
+    }
+
+    if (ret != NVML_SUCCESS && ret != NVML_ERROR_INSUFFICIENT_SIZE)
+    {
+        log_error("Failed to wait for NVML system event: {}", ret);
+        return DCGM_ST_NVML_ERROR;
+    }
+
+    if (ret == NVML_ERROR_INSUFFICIENT_SIZE)
+    {
+        // Try our best effort to purge the queue to avoid "ghost" events.
+        const unsigned int maxAttempts = 32;
+        for (unsigned int i = 0; i < maxAttempts; i++)
+        {
+            std::vector<nvmlSystemEventData_v1_t> eventBuf(request.numEvent);
+            request.dataSize = eventBuf.size();
+            request.data     = eventBuf.data();
+            ret              = nvmlSystemEventSetWait(&request);
+            if (ret == NVML_ERROR_TIMEOUT || ret == NVML_SUCCESS)
+            {
+                break;
+            }
+            if (ret == NVML_ERROR_INSUFFICIENT_SIZE)
+            {
+                continue;
+            }
+            if (ret != NVML_SUCCESS)
+            {
+                // even we failed to purge the queue, we should continue to process the event.
+                // and hope that the next nvmlSystemEventSetWait will be processed correctly.
+                log_error("Failed to purge NVML system event queue: {}", ret);
+                break;
+            }
+        }
+    }
+
+    // We need to use the following steps to handle the bind / unbind event.
+    //
+    // 1. DcgmCacheManager::UninitializeNvmlEventSet (this includes nvmlEventSetFree)
+    // 2. DcgmHostEngineHandler::ShutdownNvml (this includes nvmlShutdown)
+    // 3. DcgmNvmlSystemEventThread::Shutdown (this includes nvmlShutdown)
+    // 4. DcgmNvmlSystemEventThread::Init (this includes nvmlSystemRegisterEvents)
+    // 5. DcgmHostEngineHandler::LoadNvml (this includes nvmlInit_v2)
+    //
+    // After step 1 to 3, the driver is detached from the system. These 3 steps are implemented in DetachDriverImpl.
+    // After step 4 to 5, the driver is attached to the system. These 2 steps are implemented in AttachDriverImpl.
+    //
+    // Note that, we must do DcgmNvmlSystemEventThread::Init before DcgmHostEngineHandler::LoadNvml. This is because we
+    // must ensure that nvmlSystemRegisterEvents is called before the normal nvml init. This way, we can avoid a
+    // potential race conditions when events occur during nvml re-initialization.
+    log_info("bind / unbind event received.");
+    if (auto ret = DetachDriverImpl(); ret != DCGM_ST_OK)
+    {
+        log_error("Failed to detach driver: {}", ret);
+        return ret;
+    }
+    if (auto ret = AttachDriverImpl(); ret != DCGM_ST_OK)
+    {
+        log_error("Failed to attach driver: {}", ret);
+        return ret;
+    }
+    return DCGM_ST_OK;
+}
+
+std::optional<std::shared_future<dcgmReturn_t>> DcgmNvmlSystemEventThread::DetachDriver()
+{
+    return Enqueue(DcgmNs::make_task([this] { return DetachDriverImpl(); }));
+}
+
+dcgmReturn_t DcgmNvmlSystemEventThread::DetachDriverImpl()
+{
+    if (m_cacheManager)
+    {
+        m_cacheManager->RecordBindUnbindEvent(DcgmBUEventStateSystemReinitializing);
+    }
+    if (m_hostEngineHandler.IsNvmlLoaded())
+    {
+        m_hostEngineHandler.DetachGpusFromModules();
+        if (m_cacheManager)
+        {
+            auto task = m_cacheManager->DetachDriver();
+            if (!task.has_value())
+            {
+                log_error("Failed to create task for detach driver");
+                return DCGM_ST_GENERIC_ERROR;
+            }
+            if (auto ret = task->get(); ret != DCGM_ST_OK)
+            {
+                log_error("Failed to process detach driver: {}", ret);
+                return ret;
+            }
+        }
+    }
+
+    if (m_hostEngineHandler.IsNvmlLoaded())
+    {
+        m_hostEngineHandler.ShutdownNvml();
+    }
+    // We must shut down the NVML system event thread regardless of whether NVML is loaded, as it is initialized even if
+    // `nvmlInit_v2` fails (e.g., due to no GPU).
+    if (!Shutdown())
+    {
+        log_error("Failed to shutdown NVML system event thread");
+        return DCGM_ST_GENERIC_ERROR;
+    }
+    return DCGM_ST_OK;
+}
+
+std::optional<std::shared_future<dcgmReturn_t>> DcgmNvmlSystemEventThread::AttachDriver()
+{
+    return Enqueue(DcgmNs::make_task([this] { return AttachDriverImpl(); }));
+}
+
+dcgmReturn_t DcgmNvmlSystemEventThread::AttachDriverImpl()
+{
+    auto ret = Init();
+    if (ret != DCGM_ST_OK)
+    {
+        if (ret != DCGM_ST_NOT_SUPPORTED)
+        {
+            log_error("Failed to initialize NVML system event thread: {}", ret);
+        }
+        else
+        {
+            log_info("Skipping listening to NVML system events since it's not supported.");
+        }
+        m_threadReadyToGo = false;
+    }
+
+    if (m_hostEngineHandler.IsNvmlLoaded())
+    {
+        log_info("NVML is already loaded, skipping attach driver");
+        return DCGM_ST_OK;
+    }
+
+    m_hostEngineHandler.LoadNvml();
+    if (m_cacheManager)
+    {
+        auto task = m_cacheManager->AttachDriver();
+        if (!task.has_value())
+        {
+            log_error("Failed to create task for attach driver");
+            return DCGM_ST_GENERIC_ERROR;
+        }
+        if (auto ret = task->get(); ret != DCGM_ST_OK)
+        {
+            log_error("Failed to process attach driver: {}", ret);
+            return ret;
+        }
+    }
+    if (m_groupManager)
+    {
+        if (auto ret = m_groupManager->AttachGpus(); ret != DCGM_ST_OK)
+        {
+            log_error("Failed to attach GPUs to group manager, ret: {}", ret);
+            return ret;
+        }
+    }
+    m_hostEngineHandler.AttachGpusToModules();
+    if (m_cacheManager)
+    {
+        m_cacheManager->RecordBindUnbindEvent(DcgmBUEventStateSystemReinitializationCompleted);
+    }
+    return DCGM_ST_OK;
+}
+
+void DcgmNvmlSystemEventThread::run(void)
+{
+    log_info("DcgmNvmlSystemEventThread started");
+
+    if (m_monitor)
+    {
+        m_monitor->AddMonitoredTask(getpid(), m_tid);
+    }
+
+    // go back to wait system event immediately if there is no task to run.
+    SetRunInterval(std::chrono::milliseconds(0));
+    while (!ShouldStop())
+    {
+        if (auto ret = WaitSystemEvent(); ret != DCGM_ST_OK)
+        {
+            if (ret != DCGM_ST_PENDING)
+            {
+                log_error("Failed to wait for NVML system event: {}", ret);
+            }
+            else
+            {
+                log_debug("Failed to wait for NVML system event: pending");
+            }
+            Sleep(1000000);
+        }
+        if (TaskRunner::Run(true) != TaskRunner::RunResult::Ok)
+        {
+            break;
+        }
+    }
+
+    if (m_monitor)
+    {
+        m_monitor->RemoveMonitoredTask(getpid(), m_tid);
+    }
+    log_info("DcgmNvmlSystemEventThread ended");
+}
+
+void DcgmNvmlSystemEventThread::SetCacheManager(DcgmCacheManager *cacheManager)
+{
+    m_cacheManager = cacheManager;
+}
+
+void DcgmNvmlSystemEventThread::SetGroupManager(DcgmGroupManager *groupManager)
+{
+    m_groupManager = groupManager;
 }
 
 /*****************************************************************************/
@@ -1616,7 +2285,6 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     : m_communicator()
     , m_hostengineHealth(0)
     , m_usingInjectionNvml(false)
-    , m_nvmlLoaded(false)
 {
     int ret;
     dcgmReturn_t dcgmRet;
@@ -1663,9 +2331,11 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
         throw std::runtime_error("Failed to apply module denylist.");
     }
 
+    m_nvmlSystemEventThread = std::make_unique<DcgmNvmlSystemEventThread>(*this);
+
     LoadNvml();
 
-    if (m_nvmlLoaded)
+    if (m_nvmlLoaded.load(std::memory_order_acquire))
     {
         char driverVersion[80];
         nvmlSystemGetDriverVersion(driverVersion, 80);
@@ -1685,7 +2355,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     }
 
     unsigned int nvmlDeviceCount = 0;
-    if (m_nvmlLoaded)
+    if (m_nvmlLoaded.load(std::memory_order_acquire))
     {
         nvmlReturn_t nvmlSt = nvmlDeviceGetCount_v2(&nvmlDeviceCount);
         if (nvmlSt != NVML_SUCCESS)
@@ -1702,6 +2372,8 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     }
 
     mpCacheManager = new DcgmCacheManager();
+    m_nvmlSystemEventThread->SetCacheManager(mpCacheManager);
+    m_nvmlSystemEventThread->SetHangDetectMonitor(m_monitor.get());
     mModuleCoreObj.Initialize(mpCacheManager);
 
     mpCacheManager->SetHangDetectMonitor(m_monitor.get());
@@ -1710,7 +2382,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
 
     if (params.opMode == DCGM_OPERATION_MODE_AUTO)
     {
-        ret = mpCacheManager->Init(0, 86400.0, m_nvmlLoaded);
+        ret = mpCacheManager->Init(0, 86400.0, m_nvmlLoaded.load(std::memory_order_acquire));
         if (ret != 0)
         {
             std::stringstream ss;
@@ -1720,7 +2392,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     }
     else
     {
-        ret = mpCacheManager->Init(1, 14400.0, m_nvmlLoaded);
+        ret = mpCacheManager->Init(1, 14400.0, m_nvmlLoaded.load(std::memory_order_acquire));
         if (ret != 0)
         {
             std::stringstream ss;
@@ -1754,6 +2426,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     /* Initialize the group manager before we add our default watches */
     mpGroupManager = new DcgmGroupManager(mpCacheManager, false);
     mpGroupManager->SubscribeForGroupEvents(HostEngineOnGroupEventCB, this);
+    m_nvmlSystemEventThread->SetGroupManager(mpGroupManager);
     mModuleCoreObj.SetGroupManager(mpGroupManager);
 
     mpFieldGroupManager = new DcgmFieldGroupManager();
@@ -1800,6 +2473,12 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
         ss << "CacheManager UpdateAllFields. Error: " << ret;
         throw std::runtime_error(ss.str());
     }
+
+    ret = m_nvmlSystemEventThread->Start();
+    if (ret != 0)
+    {
+        log_error("NVML System Event Thread Start Failed. Error: {}", ret);
+    }
 }
 
 /*****************************************************************************
@@ -1823,26 +2502,18 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
         DCGM_LOG_ERROR << "Unknown exception caught in DcgmHostEngineHandler::~DcgmHostEngineHandler()";
     }
 
-    auto lock = Lock();
-
-    /* Free sub-modules before we unload core modules */
-    for (auto &m_module : m_modules)
+    if (auto ret = m_nvmlSystemEventThread->StopAndWait(45000); ret != 0)
     {
-        if ((m_module.ptr != nullptr) && (m_module.freeCB != nullptr))
-        {
-            m_module.freeCB(m_module.ptr);
-            m_module.ptr = nullptr;
-        }
-
-        m_module.allocCB = nullptr;
-        m_module.freeCB  = nullptr;
-        m_module.msgCB   = nullptr;
-        m_module.status  = DcgmModuleStatusUnloaded;
-
-        /* wait until after ~CacheManager() to close the modules */
+        log_error("Failed to stop NVML system event thread: {}", ret);
     }
-    Unlock(std::move(lock));
 
+    auto lock = Lock();
+    /**
+     * Free sub-modules before we unload core modules.
+     *
+     * Wait until after ~CacheManager() to close the modules.
+     */
+    UnloadModules();
     deleteNotNull(mpCacheManager);
     deleteNotNull(mpFieldGroupManager);
 
@@ -1904,6 +2575,14 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
         return DCGM_ST_BADPARAM;
     }
 
+    /* Is the module marked reloadable */
+    if (m_modules[moduleId].status == DcgmModuleStatusReloadable)
+    {
+        m_modules[moduleId].status = DcgmModuleStatusLoaded;
+
+        /* We fall through to make sure it is loaded. */
+    }
+
     /* Is the module already loaded? */
     if (m_modules[moduleId].ptr != nullptr)
     {
@@ -1936,6 +2615,13 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     }
 
     /* Try to load the library */
+
+    // If GPUs are detached, we abort module initialization
+    if (m_gpusDetached.load(std::memory_order_acquire))
+    {
+        log_error("GPUs are detached, module {} cannot be loaded", moduleId);
+        return DCGM_ST_GPUS_DETACHED;
+    }
 
     {
         /* Lock hostengine logging severity to avoid module severity falling out
@@ -2001,8 +2687,8 @@ dcgmReturn_t DcgmHostEngineHandler::LoadModule(dcgmModuleId_t moduleId)
     {
         /*
          * If the DCGM was paused, we instantly pause any loaded module.
-         * If pausing the module fails, we unload the module as it's dangerous to leave in a loaded and running state
-         * when the rest of the DCGM is supposed to be paused.
+         * If pausing the module fails, we unload the module as it's dangerous to leave in a loaded and running
+         * state when the rest of the DCGM is supposed to be paused.
          */
         if (m_modules[DcgmModuleIdCore].status == DcgmModuleStatusPaused)
         {
@@ -2042,8 +2728,8 @@ void DcgmHostEngineHandler::Unlock(DcgmLockGuard /*guard*/)
      * The DcgmLockGuard is not copyable and the only way to call this function is not move previously acquired lock
      * into this function like Unlock(std::move(lock));
      *
-     * This functionality is needed to allow releasing a lock inside a scope earlier than the lock drops out of scope
-     * and destroyed automatically.
+     * This functionality is needed to allow releasing a lock inside a scope earlier than the lock drops out of
+     * scope and destroyed automatically.
      */
 }
 
@@ -2338,7 +3024,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     dcgmStatSummaryInt32_t blankSummary32 = { DCGM_INT32_BLANK, DCGM_INT32_BLANK, DCGM_INT32_BLANK };
     dcgmStatSummaryInt64_t blankSummary64 = { DCGM_INT64_BLANK, DCGM_INT64_BLANK, DCGM_INT64_BLANK };
 
-    if (!m_nvmlLoaded)
+    if (!m_nvmlLoaded.load(std::memory_order_acquire))
     {
         log_debug("Cannot get process stats: NVML is not loaded");
         return DCGM_ST_NVML_NOT_LOADED;
@@ -2367,7 +3053,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
     }
 
     /* Resolve the groupId -> entities[] -> gpuIds[] */
-    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -3002,7 +3688,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
     }
 
     /* Resolve the groupId -> entities[] -> gpuIds[] */
-    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -3771,7 +4457,7 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
     dcgm_sysmon_msg_watch_fields_t sysmonMsg = {};
     dcgmReturn_t retSt                       = DCGM_ST_OK;
 
-    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -3784,6 +4470,12 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
         log_error("Got {} from mpFieldGroupManager->GetFieldGroupFields()", (int)dcgmReturn);
         return dcgmReturn;
     }
+
+    // Remove detached entities
+    DcgmNs::Utils::EraseIf(entities, [this](const dcgmGroupEntityPair_t &entity) {
+        auto status = mpCacheManager->GetEntityStatus(entity.entityGroupId, entity.entityId);
+        return status == DcgmEntityStatusDetached || status == DcgmEntityStatusInaccessible;
+    });
 
     log_debug("Got {} entities and {} fields", (int)entities.size(), (int)fieldIds.size());
 
@@ -3822,6 +4514,17 @@ dcgmReturn_t DcgmHostEngineHandler::WatchFieldGroup(unsigned int groupId,
                 shouldUpdateAllFields = true;
             }
         }
+    }
+
+    for (auto const field : fieldIds)
+    {
+        mpCacheManager->AddMetaGroupWatchedField(groupId == mpGroupManager->GetAllGpusGroup() ? DCGM_GROUP_ALL_GPUS
+                                                                                              : groupId,
+                                                 field,
+                                                 monitorIntervalUsec,
+                                                 maxSampleAge,
+                                                 maxKeepSamples,
+                                                 watcher);
     }
 
     if (shouldUpdateAllFields)
@@ -3919,7 +4622,7 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
     std::vector<unsigned short> profFieldIds;
     dcgm_sysmon_msg_watch_fields_t sysmonMsg = {};
 
-    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, entities);
+    dcgmReturn = mpGroupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
@@ -3932,6 +4635,12 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
         log_error("Got {} from mpFieldGroupManager->GetFieldGroupFields()", (int)dcgmReturn);
         return dcgmReturn;
     }
+
+    // Remove detached entities
+    DcgmNs::Utils::EraseIf(entities, [this](const dcgmGroupEntityPair_t &entity) {
+        auto status = mpCacheManager->GetEntityStatus(entity.entityGroupId, entity.entityId);
+        return status == DcgmEntityStatusDetached || status == DcgmEntityStatusInaccessible;
+    });
 
     log_debug("Got {} entities and {} fields", (int)entities.size(), (int)fieldIds.size());
 
@@ -3952,6 +4661,12 @@ dcgmReturn_t DcgmHostEngineHandler::UnwatchFieldGroup(unsigned int groupId,
                 /* Keep going so we don't leave watches active */
             }
         }
+    }
+
+    for (auto const field : fieldIds)
+    {
+        mpCacheManager->RemoveMetaGroupWatchedField(
+            groupId == mpGroupManager->GetAllGpusGroup() ? DCGM_GROUP_ALL_GPUS : groupId, field, watcher);
     }
 
     /* Send a module command to the profiling module to unwatch any fieldIds */
@@ -4099,7 +4814,7 @@ dcgmReturn_t DcgmHostEngineHandler::AddRequestWatcher(std::unique_ptr<DcgmReques
         return DCGM_ST_BADPARAM;
     }
 
-    auto lock = Lock();
+    std::lock_guard<std::mutex> lock(m_watchedRequestsMutex);
 
     m_nextWatchedRequestId++;
 
@@ -4114,10 +4829,11 @@ dcgmReturn_t DcgmHostEngineHandler::AddRequestWatcher(std::unique_ptr<DcgmReques
     request->SetRequestId(m_nextWatchedRequestId);
     requestId = m_nextWatchedRequestId;
 
-    m_watchedRequests[m_nextWatchedRequestId] = std::move(request);
+    m_watchedRequests[m_nextWatchedRequestId] = std::shared_ptr<DcgmRequest>(std::move(request));
 
-    /* Log while we still have the lock */
-    DCGM_LOG_DEBUG << "Assigned requestId " << m_nextWatchedRequestId << " to request " << std::hex << request.get();
+    /* Log while we still have the lock. */
+    DCGM_LOG_DEBUG << "Assigned requestId " << m_nextWatchedRequestId << " to request " << std::hex
+                   << m_watchedRequests[m_nextWatchedRequestId].get();
 
     return DCGM_ST_OK;
 }
@@ -4127,18 +4843,23 @@ void DcgmHostEngineHandler::NotifyRequestOfCompletion(dcgm_connection_id_t conne
 {
     if (connectionId == DCGM_CONNECTION_ID_NONE)
     {
-        /* Local request. Just remove our object */
-        auto lock = Lock();
+        /* Local request. Remove from map with scoped lock. */
+        std::shared_ptr<DcgmRequest> removedRequest;
+        {
+            std::lock_guard<std::mutex> lock(m_watchedRequestsMutex);
 
-        watchedRequests_t::iterator it = m_watchedRequests.find(requestId);
-        if (it == m_watchedRequests.end())
-        {
-            log_error("Unable to find requestId {}", requestId);
-        }
-        else
-        {
-            m_watchedRequests.erase(it);
-            log_debug("Removed requestId {}", requestId);
+            watchedRequests_t::iterator it = m_watchedRequests.find(requestId);
+            if (it == m_watchedRequests.end())
+            {
+                log_error("Unable to find requestId {}", requestId);
+            }
+            else
+            {
+                /* Move the shared_ptr out so destruction happens after lock release */
+                removedRequest = std::move(it->second);
+                m_watchedRequests.erase(it);
+                log_debug("Removed requestId {}", requestId);
+            }
         }
         return;
     }
@@ -4155,7 +4876,7 @@ dcgmReturn_t DcgmHostEngineHandler::RemoveAllTrackedRequests()
 {
     log_debug("Entering RemoveAllTrackedRequests");
 
-    auto lock = Lock();
+    std::lock_guard<std::mutex> lock(m_watchedRequestsMutex);
     m_watchedRequests.clear();
 
     return DCGM_ST_OK;
@@ -4168,32 +4889,68 @@ dcgmReturn_t DcgmHostEngineHandler::RemoveAllTrackedRequests()
  *****************************************************************************/
 dcgmReturn_t DcgmHostEngineHandler::RunServer(unsigned short portNumber,
                                               char const *socketPath,
-                                              unsigned int isConnectionTCP)
+                                              dcgmConnectionType_t connectionType)
 {
     dcgmReturn_t dcgmReturn;
 
-    if (isConnectionTCP)
+    switch (connectionType)
     {
-        DcgmIpcTcpServerParams_t tcpParams {};
-        tcpParams.bindIPAddress = socketPath;
-        tcpParams.port          = portNumber;
-        dcgmReturn              = m_dcgmIpc->Init(tcpParams,
-                                     std::nullopt,
-                                     DcgmHostEngineHandler::StaticProcessMessage,
-                                     this,
-                                     DcgmHostEngineHandler::StaticProcessDisconnect,
-                                     this);
-    }
-    else
-    {
-        DcgmIpcDomainServerParams_t domainParams {};
-        domainParams.domainSocketPath = socketPath;
-        dcgmReturn                    = m_dcgmIpc->Init(std::nullopt,
-                                     domainParams,
-                                     DcgmHostEngineHandler::StaticProcessMessage,
-                                     this,
-                                     DcgmHostEngineHandler::StaticProcessDisconnect,
-                                     this);
+        case DcgmConnectionTypeDomainSocket:
+        {
+            DcgmIpcDomainServerParams_t domainParams {};
+            domainParams.domainSocketPath = socketPath;
+            dcgmReturn                    = m_dcgmIpc->Init(domainParams,
+                                         DcgmHostEngineHandler::StaticProcessMessage,
+                                         this,
+                                         DcgmHostEngineHandler::StaticProcessDisconnect,
+                                         this);
+            break;
+        }
+        case DcgmConnectionTypeTcp:
+        {
+            DcgmIpcTcpServerParams_t tcpParams {};
+            tcpParams.bindIPAddress = socketPath;
+            tcpParams.port          = portNumber;
+            dcgmReturn              = m_dcgmIpc->Init(tcpParams,
+                                         DcgmHostEngineHandler::StaticProcessMessage,
+                                         this,
+                                         DcgmHostEngineHandler::StaticProcessDisconnect,
+                                         this);
+            break;
+        }
+        case DcgmConnectionTypeVsock:
+        {
+            DcgmIpcVsockServerParams_t vsockParams {};
+            vsockParams.port = portNumber;
+            if (socketPath == nullptr || socketPath[0] == '\0')
+            {
+                vsockParams.bindAny = true;
+            }
+            else
+            {
+                std::string_view vsockPath(socketPath);
+                unsigned int cid   = 0;
+                auto [ptr, result] = std::from_chars(vsockPath.data(), vsockPath.data() + vsockPath.size(), cid);
+                if (result != std::errc())
+                {
+                    auto error = std::make_error_code(result);
+                    log_error(
+                        "Invalid vsock path: ({}){}. Provided value: {}", error.value(), error.message(), socketPath);
+                    return DCGM_ST_BADPARAM;
+                }
+                vsockParams.cid = cid;
+            }
+            dcgmReturn = m_dcgmIpc->Init(vsockParams,
+                                         DcgmHostEngineHandler::StaticProcessMessage,
+                                         this,
+                                         DcgmHostEngineHandler::StaticProcessDisconnect,
+                                         this);
+            break;
+        }
+        default:
+            log_error("Invalid connection type {}", std::to_underlying(connectionType));
+            dcgmReturn = DCGM_ST_BADPARAM;
+            break;
     }
 
     if (dcgmReturn != DCGM_ST_OK)
@@ -4401,10 +5158,12 @@ dcgmReturn_t DcgmHostEngineHandler::PauseModule(dcgmModuleId_t moduleId)
 {
     auto &module = m_modules[moduleId];
 
-    if (module.status != DcgmModuleStatusLoaded)
+    if ((module.status != DcgmModuleStatusLoaded) && (module.status != DcgmModuleStatusReloadable))
     {
         return DCGM_ST_OK;
     }
+
+    module.status = DcgmModuleStatusLoaded; /* If it was reloadable. */
 
     dcgm_core_msg_pause_resume_v1 msg;
     memset(&msg, 0, sizeof(msg));
@@ -4547,6 +5306,33 @@ dcgmReturn_t DcgmHostEngineHandler::ChildProcessGetDataChannelHandle(ChildProces
 dcgmReturn_t DcgmHostEngineHandler::ChildProcessManagerReset()
 {
     return m_childProcessManager.Reset();
+}
+
+bool DcgmHostEngineHandler::IsNvmlLoaded() const
+{
+    return m_nvmlLoaded.load(std::memory_order_acquire);
+}
+
+dcgmReturn_t DcgmHostEngineHandler::AttachDriver()
+{
+    auto task = m_nvmlSystemEventThread->AttachDriver();
+    if (!task.has_value())
+    {
+        log_error("Failed to attach driver");
+        return DCGM_ST_GENERIC_ERROR;
+    }
+    return task->get();
+}
+
+dcgmReturn_t DcgmHostEngineHandler::DetachDriver()
+{
+    auto task = m_nvmlSystemEventThread->DetachDriver();
+    if (!task.has_value())
+    {
+        log_error("Failed to detach driver");
+        return DCGM_ST_GENERIC_ERROR;
+    }
+    return task->get();
 }
 
 void DcgmHostEngineHandler::InitializeHangDetection()

@@ -1,5 +1,5 @@
 /*
- * Copyright 1993-2025 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2026 NVIDIA Corporation.  All rights reserved.
  *
  * NOTICE TO USER:
  *
@@ -96,9 +96,9 @@ extern "C" {
  * Deprecation definition.
  */
 #if defined _WINDOWS
-   #define DEPRECATED(ver) __declspec(deprecated)
+   #define NVML_DEPRECATED(ver) __declspec(deprecated)
 #else
-   #define DEPRECATED(ver) __attribute__((deprecated))
+   #define NVML_DEPRECATED(ver) __attribute__((deprecated))
 #endif
 
     #define NVML_MCDM_SUPPORT
@@ -233,6 +233,19 @@ typedef struct nvmlEccErrorCounts_st
     unsigned long long deviceMemory; //!< Device memory errors
     unsigned long long registerFile; //!< Register file errors
 } nvmlEccErrorCounts_t;
+
+/**
+ * Unrepairable memory status for a device
+ */
+typedef struct
+{
+    unsigned int version;                //!< Structure version
+    unsigned int bUnrepairableMemory;    //!< Flag indicating if unrepairable memory is present. 1=yes, 0=no
+} nvmlUnrepairableMemoryStatus_v1_t;
+
+typedef nvmlUnrepairableMemoryStatus_v1_t nvmlUnrepairableMemoryStatus_t;
+
+#define nvmlUnrepairableMemoryStatus_v1 NVML_STRUCT_VERSION(UnrepairableMemoryStatus, 1)
 
 /**
  * Utilization information for a device.
@@ -3211,13 +3224,69 @@ typedef struct {
     nvmlGpuFabricState_t state;                                 //!< Current state of GPU registration process
 } nvmlGpuFabricInfo_t;
 
-#define NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_NOT_SUPPORTED 0
-#define NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE          1
-#define NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_FALSE         2
+/**
+ * Fabric Degraded BW
+ */
+#define NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_NOT_SUPPORTED 0 //!< Fabric Health Mask: Degraded Bandwidth not supported
+#define NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE          1 //!< Fabric Health Mask: Bandwidth degraded
+#define NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_FALSE         2 //!< Fabric Health Mask: Bandwidth not degraded
 
-#define NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_DEGRADED_BW 0
-#define NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_DEGRADED_BW 0x11
+#define NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_DEGRADED_BW 0         //!< Fabric Health Mask Bit Shift for Degraded Bandwidth
+#define NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_DEGRADED_BW 0x3       //!< Fabric Health Mask Width for Degraded Bandwidth
+ 
+/**
+ * Fabric Route Recovery
+ */
+#define NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_NOT_SUPPORTED 0 //!< Fabric Health Mask: Route Recovery not supported
+#define NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_TRUE          1 //!< Fabric Health Mask: Route Recovery in progress
+#define NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_FALSE         2 //!< Fabric Health Mask: Route Recovery not in progress
 
+#define NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_RECOVERY 2         //!< Fabric Health Mask Bit Shift for Route Recovery
+#define NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_ROUTE_RECOVERY 0x3       //!< Fabric Health Mask Width for Route Recovery
+
+/**
+ * Nvlink Fabric Route Unhealthy
+ */
+#define NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_NOT_SUPPORTED 0 //!< Fabric Health Mask: Route Unhealthy not supported
+#define NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_TRUE          1 //!< Fabric Health Mask: Route is unhealthy
+#define NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_FALSE         2 //!< Fabric Health Mask: Route is healthy
+
+#define NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_UNHEALTHY 4         //!< Fabric Health Mask Bit Shift for Route Unhealthy
+#define NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_ROUTE_UNHEALTHY 0x3       //!< Fabric Health Mask Width for Route Unhealthy
+
+/**
+ * Fabric Access Timeout Recovery
+ */
+#define NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_NOT_SUPPORTED 0 //!< Fabric Health Mask: Access Timeout Recovery not supported
+#define NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_TRUE          1 //!< Fabric Health Mask: Access Timeout Recovery in progress
+#define NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_FALSE         2 //!< Fabric Health Mask: Access Timeout Recovery not in progress
+
+#define NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ACCESS_TIMEOUT_RECOVERY 6         //!< Fabric Health Mask Bit Shift for Access Timeout Recovery
+#define NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_ACCESS_TIMEOUT_RECOVERY 0x3       //!< Fabric Health Mask Width for Access Timeout Recovery
+
+/**
+ * Fabric Incorrect Configuration
+ */
+#define NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_NOT_SUPPORTED        0 //!< Fabric Health Mask: Incorrect Configuration not supported
+#define NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_NONE                 1 //!< Fabric Health Mask: Correct Configuration
+#define NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_INCORRECT_SYSGUID    2 //!< Fabric Health Mask: Incorrect Configuration - SysGUID
+#define NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_INCORRECT_CHASSIS_SN 3 //!< Fabric Health Mask: Incorrect Configuration - Chassis Serial Number
+#define NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_NO_PARTITION         4 //!< Fabric Health Mask: Incorrect Configuration - No Partition
+#define NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_INSUFFICIENT_NVLINKS 5 //!< Fabric Health Mask: Incorrect Configuration - Insufficient Nvlinks
+#define NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_INCOMPATIBLE_GPU_FW  6 //!< Fabric Health Mask: Incorrect Configuration - Incompatible GPU Firmware
+#define NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_INVALID_LOCATION     7 //!< Fabric Health Mask: Incorrect Configuration - Invalid Location
+
+#define NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_INCORRECT_CONFIGURATION 8                //!< Fabric Health Mask Bit Shift for Incorrect Configuration
+#define NVML_GPU_FABRIC_HEALTH_MASK_WIDTH_INCORRECT_CONFIGURATION 0xf              //!< Fabric Health Mask Width for Incorrect Configuration
+
+/**
+ * Fabric Health
+ */
+#define NVML_GPU_FABRIC_HEALTH_SUMMARY_NOT_SUPPORTED 0    //!< Fabric Health Summary: Not supported
+#define NVML_GPU_FABRIC_HEALTH_SUMMARY_HEALTHY 1          //!< Fabric Health Summary: Healthy
+#define NVML_GPU_FABRIC_HEALTH_SUMMARY_UNHEALTHY 2        //!< Fabric Health Summary: Unhealthy
+#define NVML_GPU_FABRIC_HEALTH_SUMMARY_LIMITED_CAPACITY 3 //!< Fabric Health Summary: Limited Capacity
+ 
 /**
  * GPU Fabric Health Status Mask for various fields can be obtained
  * using the below macro.
@@ -3225,7 +3294,7 @@ typedef struct {
  */
 #define NVML_GPU_FABRIC_HEALTH_GET(var, type)             \
     (((var) >> NVML_GPU_FABRIC_HEALTH_MASK_SHIFT##type) & \
-     (NVML_GPU_FABRIC_HEALTH_MASK_WIDTH##type))
+    (NVML_GPU_FABRIC_HEALTH_MASK_WIDTH##type)) //!< Macro to get GPU fabric health status.
 
 /**
  * GPU Fabric Health Status Mask for various fields can be tested
@@ -3234,7 +3303,7 @@ typedef struct {
  */
 #define NVML_GPU_FABRIC_HEALTH_TEST(var, type, val) \
     (NVML_GPU_FABRIC_HEALTH_GET(var, type) ==       \
-     NVML_GPU_FABRIC_HEALTH_MASK##type##val)
+    NVML_GPU_FABRIC_HEALTH_MASK##type##val) //!< Macro to test GPU fabric health status.
 
 /**
 * GPU Fabric information (v2).
@@ -3271,8 +3340,9 @@ typedef nvmlGpuFabricInfo_v2_t nvmlGpuFabricInfoV_t;
  */
 /***************************************************************************************************/
 
-#define NVML_INIT_FLAG_NO_GPUS      1   //!< Don't fail nvmlInit() when no GPUs are found
-#define NVML_INIT_FLAG_NO_ATTACH    2   //!< Don't attach GPUs
+#define NVML_INIT_FLAG_NO_GPUS      (1 << 0)   //!< Don't fail nvmlInit() when no GPUs are found
+#define NVML_INIT_FLAG_NO_ATTACH    (1 << 1)   //!< Don't attach GPUs
+#define NVML_INIT_FLAG_FORCE_INIT   (1 << 2)   //!< Force GPU initialization when a previous nvmlInit was called with NO_GPUS and NO_ATTACH flags
 
 /**
  * Initialize NVML, but don't initialize any GPUs yet.
@@ -6811,6 +6881,22 @@ nvmlReturn_t DECLDIR nvmlDeviceGetPowerSource(nvmlDevice_t device, nvmlPowerSour
  *
  */
 nvmlReturn_t DECLDIR nvmlDeviceGetMemoryBusWidth(nvmlDevice_t device, unsigned int *busWidth);
+
+/**
+ * Gets the device's unrepairable memory flag
+ *
+ * @param device                               The identifier of the target device
+ * @param unrepairableMemoryStatus             Reference in which to return the unrepairable memory status
+ *
+ * @return
+ *         - \ref NVML_SUCCESS                 if the unrepairable memory flag is successfully retrieved
+ *         - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+ *         - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, or \a unrepairableMemoryStatus is NULL
+ *         - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
+ *         - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+ *
+ */
+nvmlReturn_t DECLDIR nvmlDeviceGetUnrepairableMemoryFlag(nvmlDevice_t device, nvmlUnrepairableMemoryStatus_t *unrepairableMemoryStatus);
 
 /**
  * Gets the device's PCIE Max Link speed in MBPS
@@ -10941,6 +11027,93 @@ typedef struct
  */
 nvmlReturn_t DECLDIR nvmlDeviceReadWritePRM_v1(nvmlDevice_t device, nvmlPRMTLV_v1_t *buffer);
 
+/**
+ * PRM Counter IDs
+ */
+typedef enum
+{
+    NVML_PRM_COUNTER_ID_NONE = 0,
+    /* Physical Layer Counters (PPCNT group 0x12) */
+    NVML_PRM_COUNTER_ID_PPCNT_PHYSICAL_LAYER_CTRS_LINK_DOWN_EVENTS = 1,
+    NVML_PRM_COUNTER_ID_PPCNT_PHYSICAL_LAYER_CTRS_SUCCESSFUL_RECOVERY_EVENTS = 2,
+    /* Recovery counters (PPCNT group 0x1A) */
+    NVML_PRM_COUNTER_ID_PPCNT_RECOVERY_CTRS_TOTAL_SUCCESSFUL_RECOVERY_EVENTS = 101,
+    NVML_PRM_COUNTER_ID_PPCNT_RECOVERY_CTRS_TIME_SINCE_LAST_RECOVERY = 102,
+    NVML_PRM_COUNTER_ID_PPCNT_RECOVERY_CTRS_TIME_BETWEEN_LAST_TWO_RECOVERIES = 103,
+    /* Infiniband PortCounters Attribute (PPCNT group 0x20) */
+    NVML_PRM_COUNTER_ID_PPCNT_PORTCOUNTERS_PORT_XMIT_WAIT = 201,
+    /* PLR counters (PPCNT group 0x22) */
+    NVML_PRM_COUNTER_ID_PPCNT_PLR_RCV_CODES = 301,
+    NVML_PRM_COUNTER_ID_PPCNT_PLR_RCV_CODE_ERR = 302,
+    NVML_PRM_COUNTER_ID_PPCNT_PLR_RCV_UNCORRECTABLE_CODE = 303,
+    NVML_PRM_COUNTER_ID_PPCNT_PLR_XMIT_CODES = 304,
+    NVML_PRM_COUNTER_ID_PPCNT_PLR_XMIT_RETRY_CODES = 305,
+    NVML_PRM_COUNTER_ID_PPCNT_PLR_XMIT_RETRY_EVENTS = 306,
+    NVML_PRM_COUNTER_ID_PPCNT_PLR_SYNC_EVENTS = 307,
+    /* PPRM counters */
+    NVML_PRM_COUNTER_ID_PPRM_OPER_RECOVERY = 1001,
+} nvmlPRMCounterId_t;
+
+/**
+ * PRM counter input values
+ */
+typedef struct
+{
+    unsigned int localPort;                 //!< Local port number
+} nvmlPRMCounterInput_v1_t;
+
+/**
+ * PRM Counter Value Structure
+ */
+typedef struct
+{
+    nvmlReturn_t status;                    //!< Status of the PRM counter read
+    nvmlValueType_t outputType;             //!< Output value type
+    nvmlValue_t outputValue;                //!< Output value
+} nvmlPRMCounterValue_v1_t;
+
+/**
+ * PRM Counter Structure v1
+ */
+typedef struct
+{
+    unsigned int counterId;                 //!< Counter ID, one of \ref nvmlPRMCounterId_t
+    /* Input data */
+    nvmlPRMCounterInput_v1_t inData;        //!< PRM input values
+    /* Output counter value */
+    nvmlPRMCounterValue_v1_t counterValue;  //!< Counter value
+} nvmlPRMCounter_v1_t;
+
+/**
+ * PRM Counter List Structure v1
+ */
+typedef struct
+{
+    unsigned int numCounters;               //!< Number of counters
+    nvmlPRMCounter_v1_t *counters;          //!< Pointer to array of PRM counters
+} nvmlPRMCounterList_v1_t;
+
+/**
+ * Read a list of GPU PRM Counters.
+ *
+ * %BLACKWELL_OR_NEWER%
+ *
+ * Supported on Linux only.
+ *
+ * @param device                                    Identifer of target GPU device
+ * @param counterList                               Structure holding the input parameters as well as the retrieved counter values
+ *
+ * @return
+ *        - \ref NVML_SUCCESS                           on success
+ *        - \ref NVML_ERROR_INVALID_ARGUMENT            if \p device is invalid or \p counterList is NULL
+ *        - \ref NVML_ERROR_NO_PERMISSION               if user does not have permission to perform this operation
+ *        - \ref NVML_ERROR_NOT_SUPPORTED               if this feature is not supported by the device
+ *        - \ref NVML_ERROR_UNKNOWN                     on any other error
+ */
+nvmlReturn_t DECLDIR nvmlDeviceReadPRMCounters_v1(nvmlDevice_t device, nvmlPRMCounterList_v1_t *counterList);
+
+/** @} */
+
 /***************************************************************************************************/
 /** @defgroup nvmlMultiInstanceGPU Multi Instance GPU Management
  * This chapter describes NVML operations that are associated with Multi Instance GPU management.
@@ -12450,7 +12623,7 @@ nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileGetCurrentProfiles(nvmlDevice
  *         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
  *         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error
  */
-DEPRECATED(13.1) nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice_t device,
+NVML_DEPRECATED(13.1) nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileSetRequestedProfiles(nvmlDevice_t device,
                                                                         nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles);
 /**
  * @deprecated Use \ref nvmlDeviceWorkloadPowerProfileUpdateProfiles_v1 instead
@@ -12476,7 +12649,7 @@ DEPRECATED(13.1) nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileSetRequested
  *         - \ref NVML_ERROR_ARGUMENT_VERSION_MISMATCH If the provided version is invalid/unsupported
  *         - \ref NVML_ERROR_UNKNOWN                   On any unexpected error
  */
-DEPRECATED(13.1) nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice_t device,
+NVML_DEPRECATED(13.1) nvmlReturn_t DECLDIR nvmlDeviceWorkloadPowerProfileClearRequestedProfiles(nvmlDevice_t device,
                                                                           nvmlWorkloadPowerProfileRequestedProfiles_t *requestedProfiles);
 
 /**

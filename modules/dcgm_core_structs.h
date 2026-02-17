@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,9 +92,13 @@
 #define DCGM_CORE_SR_RESOURCE_FREE                          69 /* Free resources for a module */
 #define DCGM_CORE_SR_GET_GPU_CHIP_ARCHITECTURE              70 /* Get simplified GPU chip architecture */
 #define DCGM_CORE_SR_GET_NVLINK_P2P_STATUS                  71 /* Get p2p status of nvlink */
-// 72 RESERVED
-// 73 RESERVED
-#define DCGM_CORE_SR_HOSTENGINE_ENV_VAR_INFO 74 /* Get hostengine environment variable info */
+#define DCGM_CORE_SR_DETACH_GPUS                            72 /* Preserve all GPUs info and detach GPUs from this module */
+#define DCGM_CORE_SR_ATTACH_GPUS                            73 /* Attach GPUs to this module and restore preserved GPUs info */
+#define DCGM_CORE_SR_HOSTENGINE_ENV_VAR_INFO                74 /* Get hostengine environment variable info */
+#define DCGM_CORE_SR_ATTACH_DRIVER                          75 /* Attach driver to the DCGM */
+#define DCGM_CORE_SR_DETACH_DRIVER                          76 /* Detach driver from the DCGM */
+#define DCGM_CORE_SR_EMPTY_CACHE                            77 /* Empty Cache Mmanager cache */
+#define DCGM_CORE_SR_MARK_MODULES_RELOADABLE                78 /* Mark modules reloadable */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -632,6 +636,17 @@ typedef dcgm_core_msg_module_denylist_v1 dcgm_core_msg_module_denylist_t;
 typedef struct
 {
     dcgm_module_command_header_t header;
+    dcgmMsgModulesReloadable_v1 info;
+} dcgm_core_msg_modules_reloadable_v1;
+
+#define dcgm_core_msg_modules_reloadable_version1 MAKE_DCGM_VERSION(dcgm_core_msg_modules_reloadable_v1, 1)
+#define dcgm_core_msg_modules_reloadable_version  dcgm_core_msg_modules_reloadable_version1
+
+typedef dcgm_core_msg_modules_reloadable_v1 dcgm_core_msg_modules_reloadable_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header;
     dcgmMsgModuleStatus_v1 info;
 } dcgm_core_msg_module_status_v1;
 
@@ -807,6 +822,7 @@ typedef struct
 #define dcgm_core_msg_remove_restore_nvml_injected_gpu_version dcgm_core_msg_remove_restore_nvml_injected_gpu_version1
 
 typedef dcgm_core_msg_remove_restore_nvml_injected_gpu_v1 dcgm_core_msg_remove_restore_nvml_injected_gpu_t;
+#endif
 
 typedef struct
 {
@@ -820,7 +836,31 @@ typedef struct
 
 typedef dcgm_core_msg_nvswitch_get_backend_v1 dcgm_core_msg_nvswitch_get_backend_t;
 
-#endif
+/**
+ * Subrequest DCGM_CORE_SR_DETACH_GPUS
+ */
+typedef struct dcgm_core_msg_detach_gpus_v1
+{
+    dcgm_module_command_header_t header; /* Command header */
+} dcgm_core_msg_detach_gpus_v1;
+
+#define dcgm_core_msg_detach_gpus_version1 MAKE_DCGM_VERSION(dcgm_core_msg_detach_gpus_v1, 1)
+#define dcgm_core_msg_detach_gpus_version  dcgm_core_msg_detach_gpus_version1
+
+typedef dcgm_core_msg_detach_gpus_v1 dcgm_core_msg_detach_gpus_t;
+
+/**
+ * Subrequest DCGM_CORE_SR_ATTACH_GPUS
+ */
+typedef struct dcgm_core_msg_attach_gpus_v1
+{
+    dcgm_module_command_header_t header; /* Command header */
+} dcgm_core_msg_attach_gpus_v1;
+
+#define dcgm_core_msg_attach_gpus_version1 MAKE_DCGM_VERSION(dcgm_core_msg_attach_gpus_v1, 1)
+#define dcgm_core_msg_attach_gpus_version  dcgm_core_msg_attach_gpus_version1
+
+typedef dcgm_core_msg_attach_gpus_v1 dcgm_core_msg_attach_gpus_t;
 
 typedef struct
 {
@@ -831,6 +871,43 @@ typedef struct
 #define dcgm_core_msg_diag_send_heartbeat_version  dcgm_core_msg_diag_send_heartbeat_version1
 
 typedef dcgm_core_msg_diag_send_heartbeat_v1 dcgm_core_msg_diag_send_heartbeat_t;
+
+/**
+ * Subrequest DCGM_CORE_SR_ATTACH_DRIVER
+ */
+typedef struct dcgm_core_msg_attach_driver_v1
+{
+    dcgm_module_command_header_t header; /* Command header */
+} dcgm_core_msg_attach_driver_v1;
+
+#define dcgm_core_msg_attach_driver_version1 MAKE_DCGM_VERSION(dcgm_core_msg_attach_driver_v1, 1)
+#define dcgm_core_msg_attach_driver_version  dcgm_core_msg_attach_driver_version1
+
+typedef dcgm_core_msg_attach_driver_v1 dcgm_core_msg_attach_driver_t;
+
+/**
+ * Subrequest DCGM_CORE_SR_DETACH_DRIVER
+ */
+typedef struct dcgm_core_msg_detach_driver_v1
+{
+    dcgm_module_command_header_t header; /* Command header */
+} dcgm_core_msg_detach_driver_v1;
+
+#define dcgm_core_msg_detach_driver_version1 MAKE_DCGM_VERSION(dcgm_core_msg_detach_driver_v1, 1)
+#define dcgm_core_msg_detach_driver_version  dcgm_core_msg_detach_driver_version1
+
+typedef dcgm_core_msg_detach_driver_v1 dcgm_core_msg_detach_driver_t;
+
+typedef struct
+{
+    dcgm_module_command_header_t header; /* Command header */
+    dcgmMsgEmptyCache_t ec;              /* message data (return field) */
+} dcgm_core_msg_empty_cache_v1;
+
+#define dcgm_core_msg_empty_cache_version1 MAKE_DCGM_VERSION(dcgm_core_msg_empty_cache_v1, 1)
+#define dcgm_core_msg_empty_cache_version  dcgm_core_msg_empty_cache_version1
+
+typedef dcgm_core_msg_empty_cache_v1 dcgm_core_msg_empty_cache_t;
 
 DCGM_CASSERT(dcgm_core_msg_client_disconnect_version1 == (long)0x100001c, 1);
 DCGM_CASSERT(dcgm_core_msg_logging_changed_version1 == (long)0x1000018, 1);
@@ -880,8 +957,14 @@ DCGM_CASSERT(dcgm_core_msg_fieldgroup_get_all_version == (long)0x1008428, 1);
 DCGM_CASSERT(dcgm_core_msg_get_gpu_instance_hierarchy_version == (long)0x1011f24, 1);
 DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version1 == (long)0x1000578, 1);
 DCGM_CASSERT(dcgm_core_msg_get_metric_groups_version == (long)0x1000578, 1);
-DCGM_CASSERT(dcgm_core_msg_hostengine_env_var_version1 == (long)0x1000220, 1);
 DCGM_CASSERT(dcgm_core_msg_diag_send_heartbeat_version1 == (long)0x1000018, 1);
+DCGM_CASSERT(dcgm_core_msg_detach_gpus_version1 == (long)0x1000018, 1);
+DCGM_CASSERT(dcgm_core_msg_attach_gpus_version1 == (long)0x1000018, 1);
+DCGM_CASSERT(dcgm_core_msg_hostengine_env_var_version1 == (long)0x1000220, 1);
+DCGM_CASSERT(dcgm_core_msg_detach_driver_version1 == (long)0x1000018, 1);
+DCGM_CASSERT(dcgm_core_msg_attach_driver_version1 == (long)0x1000018, 1);
+DCGM_CASSERT(dcgm_core_msg_empty_cache_version1 == (long)0x1000020, 1);
+DCGM_CASSERT(dcgm_core_msg_modules_reloadable_version1 == (long)0x1000020, 1);
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
 DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_version2 == (long)0x201e370, 2);

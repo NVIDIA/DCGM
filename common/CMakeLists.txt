@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -57,10 +57,14 @@ add_subdirectory(RemoteConn)
 target_sources(dcgm_common PRIVATE
     CpuHelpers.cpp
     DcgmError.h
+    DcgmChildProcessManager.hpp
+    DcgmChildProcessManager.cpp
     DcgmFvBuffer.cpp
     DcgmFvBuffer.h
     DcgmGPUHardwareLimits.h
     DcgmGroupEntityPairHelpers.h
+    DcgmLib.cpp
+    DcgmLib.h
     DcgmPolicyRequest.cpp
     DcgmPolicyRequest.h
     DcgmRequest.cpp
@@ -94,16 +98,15 @@ target_sources(dcgm_common PRIVATE
     LsHw.h
     MigIdParser.cpp
     MigIdParser.hpp
+    PermissionCheck.cpp
+    PermissionCheck.hpp
     Semaphore.hpp
     Task.hpp
     TaskRunner.hpp
-    gettid.cpp
     ThreadSafeQueue.hpp
     TimeLib.cpp
-    DcgmLib.cpp
-    DcgmLib.h
-    DcgmChildProcessManager.hpp
-    DcgmChildProcessManager.cpp)
+    UriParser.cpp
+    gettid.cpp)
 
 target_link_libraries(dcgm_common PUBLIC
     jsoncpp_static

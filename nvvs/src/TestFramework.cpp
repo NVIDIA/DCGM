@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -143,7 +143,6 @@ TestFramework::TestFramework()
     , m_testCategories()
     , dlList()
     , skipRest(false)
-    , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
     , m_completedTests(0)
@@ -160,7 +159,6 @@ TestFramework::TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySets
     , m_testCategories()
     , dlList()
     , skipRest(false)
-    , m_nvvsBinaryMode(0)
     , m_nvvsOwnerUid(0)
     , m_nvvsOwnerGid(0)
     , m_completedTests(0)
@@ -239,9 +237,8 @@ std::string TestFramework::GetPluginBaseDir()
         throw std::runtime_error(errBuf.str());
     }
 
-    m_nvvsBinaryMode = statBuf.st_mode;
-    m_nvvsOwnerUid   = statBuf.st_uid;
-    m_nvvsOwnerGid   = statBuf.st_gid;
+    m_nvvsOwnerUid = statBuf.st_uid;
+    m_nvvsOwnerGid = statBuf.st_gid;
 
     if (nvvsCommon.pluginPath.size() == 0)
     {
@@ -432,49 +429,50 @@ void TestFramework::LoadLibrary(const char *libraryPath, const char *libraryName
 /*****************************************************************************/
 bool TestFramework::PluginPermissionsMatch(const std::string &pluginDir, const std::string &plugin)
 {
-    bool match = false;
-    struct stat statBuf;
+    bool loadingPermitted = true;
 
-    if (stat(plugin.c_str(), &statBuf))
+    if (struct stat statBuf; stat(plugin.c_str(), &statBuf))
     {
-        log_error("Not loading plugin '{}' in dir '{}' because I cannot stat the file : '{}'",
-                  plugin,
-                  pluginDir,
-                  strerror(errno));
-    }
-    else if (m_nvvsBinaryMode != statBuf.st_mode)
-    {
-        log_error("Not loading plugin '{}' in dir '{}' because its permissions '{:o}' do not match "
-                  "the diagnostic's : '{:o}'",
-                  plugin,
-                  pluginDir,
-                  statBuf.st_mode,
-                  m_nvvsBinaryMode);
-    }
-    else if (m_nvvsOwnerUid != statBuf.st_uid)
-    {
-        log_error("Not loading plugin '{}' in dir '{}' because its owner uid '{}' does not match "
-                  "the diagnostic's : '{}'",
-                  plugin,
-                  pluginDir,
-                  statBuf.st_uid,
-                  m_nvvsOwnerUid);
-    }
-    else if (m_nvvsOwnerGid != statBuf.st_gid)
-    {
-        log_error("Not loading plugin '{}' in dir '{}' because its owner gid '{:o}' does not match "
-                  "the diagnostic's : '{:o}'",
-                  plugin,
-                  pluginDir,
-                  statBuf.st_gid,
-                  m_nvvsOwnerGid);
+        log_warning("Failed to stat '{}' file: '{}'", plugin, strerror(errno));
+        loadingPermitted = false;
     }
     else
     {
-        match = true;
+        if (statBuf.st_uid != m_nvvsOwnerUid)
+        {
+            log_info("'nvvs' file UID: {:o}", m_nvvsOwnerUid);
+            log_info("'{}' file UID: {:o}", plugin, statBuf.st_uid);
+            log_warning("'nvvs' executable and '{}' file do not share a UID", plugin);
+            loadingPermitted = false;
+        }
+
+        if (statBuf.st_gid != m_nvvsOwnerGid)
+        {
+            log_info("'nvvs' file GID: {:o}", m_nvvsOwnerGid);
+            log_info("'{}' file GID: {:o}", plugin, statBuf.st_gid);
+            log_warning("'nvvs' executable and '{}' file do not share a GID", plugin);
+            loadingPermitted = false;
+        }
+
+        if (statBuf.st_mode & S_IWGRP)
+        {
+            log_warning("'{}' file is group writable", plugin);
+            loadingPermitted = false;
+        }
+
+        if (statBuf.st_mode & S_IWOTH)
+        {
+            log_warning("'{}' file is world writable", plugin);
+            loadingPermitted = false;
+        }
     }
 
-    return match;
+    if (!loadingPermitted)
+    {
+        log_warning("Refusing to load plugin '{}/{}'", pluginDir, plugin);
+    }
+
+    return loadingPermitted;
 }
 
 std::optional<std::string> TestFramework::GetPluginUsingDriverDir()

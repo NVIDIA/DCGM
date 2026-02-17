@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,15 +17,20 @@ from _test_helpers import KeywordizeLastArgument
 
 from common import dcgm_client_main as m
 
+
 @maybemock.patch('builtins.exit')
 @KeywordizeLastArgument("mock_exit")
-def test_exit_handler(mock_exit):
+def test_exit_handler(**kwargs):
     m.exit_handler(None, None)
-    mock_exit.assert_called()
+    kwargs["mock_exit"].assert_called()
+
 
 @maybemock.patch('signal.signal')
 @KeywordizeLastArgument("mock_signal")
-def test_initialize_signal_handlers(mock_signal):
+def test_initialize_signal_handlers(**kwargs):
     m.initialize_signal_handlers()
-    assert mock_signal.mock_calls[0][1] == (signal.SIGINT, m.exit_handler)
-    assert mock_signal.mock_calls[1][1] == (signal.SIGTERM, m.exit_handler)
+
+    assert kwargs["mock_signal"].mock_calls[0][1] == (
+        signal.SIGINT, m.exit_handler)
+    assert kwargs["mock_signal"].mock_calls[1][1] == (
+        signal.SIGTERM, m.exit_handler)

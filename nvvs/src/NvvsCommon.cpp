@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -235,6 +235,8 @@ std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex)
             return std::string(EUD_PLUGIN_NAME);
         case DCGM_NVBANDWIDTH_INDEX:
             return std::string(NVBANDWIDTH_PLUGIN_NAME);
+        case DCGM_NCCL_TESTS_INDEX:
+            return std::string(NCCL_TESTS_PLUGIN_NAME);
         default:
             return std::string("Unknown");
     }

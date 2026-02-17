@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <bw_checker/BwCheckerMain.h>
 #include <cuda_runtime.h>
 #include <dcgm_fields.h>
+#include <fmt/ranges.h>
 #include <timelib.h>
 
 #include <algorithm>
@@ -2580,7 +2581,19 @@ bool bg_check_error_conditions(BusGrind *bg,
     std::vector<unsigned short> fieldIds;
     std::vector<dcgmTimeseriesInfo_t> failureThresholds;
 
+    bool isGemmEnabled = (static_cast<suiteNames_enum>(bg->m_testParameters->GetDouble(PS_SUITE_LEVEL))
+                          >= NVVS_SUITE_PRODUCTION_TESTING)
+                         || bg->m_testParameters->GetBoolFromString(PCIE_STR_TEST_WITH_GEMM);
+
     fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
+
+    // Only check correctable errors if GEMM is not enabled (GEMM test has its own comprehensive AER checking via
+    // CheckPassFailSingleGpu())
+    if (!isGemmEnabled)
+    {
+        fieldIds.push_back(DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS);
+    }
+
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS);
     fieldIds.push_back(DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS);
@@ -2597,9 +2610,18 @@ bool bg_check_error_conditions(BusGrind *bg,
     dt.val.i64 = static_cast<uint64_t>(bg->m_testParameters->GetDouble(PCIE_STR_MAX_PCIE_REPLAYS));
     failureThresholds.push_back(dt);
 
-    // Every field after the first one counts as a failure if even one happens
-    dt.val.i64 = 0;
-    for (size_t i = 1; i < fieldIds.size(); ++i)
+    // Record the maximum allowed correctable errors (only if not GEMM)
+    if (!isGemmEnabled)
+    {
+        dt.val.i64 = static_cast<uint64_t>(
+            std::max(0.0, bg->m_testParameters->GetDouble(PCIE_STR_MAX_PCIE_CORRECTABLE_ERRORS)));
+        failureThresholds.push_back(dt);
+    }
+
+    // Every field after the replay counter and correctable errors counts as a failure if even one happens
+    size_t const thresholdFieldsCount = failureThresholds.size();
+    dt.val.i64                        = 0;
+    for (size_t i = thresholdFieldsCount; i < fieldIds.size(); ++i)
     {
         failureThresholds.push_back(dt);
     }

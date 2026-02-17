@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "DcgmGpuInstance.h"
+#include "NvmlTaskRunner.hpp"
 
 #include <DcgmLogging.h>
 
@@ -22,7 +23,7 @@
 DcgmGpuInstance::DcgmGpuInstance(DcgmNs::Mig::GpuInstanceId dcgmInstanceId,
                                  unsigned int nvmlInstanceId,
                                  DcgmNs::Mig::GpuInstanceProfileId profileId,
-                                 nvmlGpuInstance_t const &instance,
+                                 SafeGpuInstance const &instance,
                                  nvmlGpuInstancePlacement_t const &placement,
                                  nvmlGpuInstanceProfileInfo_t const &profileInfo,
                                  unsigned int sliceProfile)
@@ -133,7 +134,7 @@ DcgmNs::Mig::GpuInstanceProfileId const &DcgmGpuInstance::GetProfileId() const
 }
 
 /*****************************************************************************/
-nvmlGpuInstance_t DcgmGpuInstance::GetInstanceHandle() const
+SafeGpuInstance DcgmGpuInstance::GetInstanceHandle() const
 {
     return m_instance;
 }
@@ -252,13 +253,14 @@ std::string DcgmGpuInstance::DeriveGpuInstanceName(std::string const &ciName)
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGpuInstance::StoreMigDeviceHandle(unsigned int nvmlComputeInstanceId, nvmlDevice_t migDevice)
+dcgmReturn_t DcgmGpuInstance::StoreMigDeviceHandle(unsigned int nvmlComputeInstanceId, SafeNvmlHandle migDevice)
 {
     for (auto &computeInstance : m_computeInstances)
     {
         if (computeInstance.nvmlComputeInstanceId.id == nvmlComputeInstanceId)
         {
-            computeInstance.migDevice = migDevice;
+            computeInstance.migDevice         = migDevice.nvmlDevice;
+            computeInstance.safeMigNvmlHandle = migDevice;
             return DCGM_ST_OK;
         }
     }
@@ -267,16 +269,16 @@ dcgmReturn_t DcgmGpuInstance::StoreMigDeviceHandle(unsigned int nvmlComputeInsta
 }
 
 /*****************************************************************************/
-nvmlDevice_t DcgmGpuInstance::GetMigDeviceHandle(unsigned int dcgmComputeInstanceId) const
+SafeNvmlHandle DcgmGpuInstance::GetMigDeviceHandle(unsigned int dcgmComputeInstanceId) const
 {
     for (auto const &computeInstance : m_computeInstances)
     {
         if (computeInstance.dcgmComputeInstanceId.id == dcgmComputeInstanceId
             || dcgmComputeInstanceId == DCGM_MAX_COMPUTE_INSTANCES)
         {
-            return computeInstance.migDevice;
+            return computeInstance.safeMigNvmlHandle;
         }
     }
 
-    return nullptr;
+    return SafeNvmlHandle { nullptr, 0, 0 };
 }

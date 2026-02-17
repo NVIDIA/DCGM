@@ -1,5 +1,5 @@
 #[[
-Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights
+Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights
 reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,9 @@ macro(install_license)
     file(COPY_FILE
         "${CPACK_RESOURCE_FILE_LICENSE}"
         "${PREFIX}/usr/share/doc/${PACKAGE_NAME}/copyright")
+
+    file(CHMOD "${PREFIX}/usr/share/doc/${PACKAGE_NAME}/copyright"
+         FILE_PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
 endmacro()
 
 if (NOT CPACK_DEB_COMPONENT_INSTALL)

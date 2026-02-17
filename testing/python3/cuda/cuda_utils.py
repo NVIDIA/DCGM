@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,9 +15,13 @@ import ctypes
 import dcgm_structs
 import test_utils
 
-## Device structures
+# Device structures
+
+
 class struct_c_CUdevice(ctypes.Structure):
-    pass # opaque handle
+    pass  # opaque handle
+
+
 c_CUdevice = ctypes.POINTER(struct_c_CUdevice)
 
 # constants
@@ -27,6 +31,8 @@ CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID = 34
 CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID = 50
 
 _cudaLib = None
+
+
 def _loadCuda():
     global _cudaLib
     if _cudaLib is None:
@@ -34,9 +40,11 @@ def _loadCuda():
         cuInitFn = getattr(_cudaLib, "cuInit")
         assert CUDA_SUCCESS == cuInitFn(ctypes.c_uint(0))
 
+
 def _unloadCuda():
     global _cudaLib
     _cudaLib = None
+
 
 def cuDeviceGetCount():
     global _cudaLib
@@ -47,14 +55,17 @@ def cuDeviceGetCount():
     _unloadCuda()
     return c_count.value
 
+
 def cuDeviceGet(idx):
     global _cudaLib
     _loadCuda()
     cuDeviceGetFn = getattr(_cudaLib, "cuDeviceGet")
     c_dev = c_CUdevice()
-    assert CUDA_SUCCESS == cuDeviceGetFn(ctypes.byref(c_dev), ctypes.c_uint(idx))
+    assert CUDA_SUCCESS == cuDeviceGetFn(
+        ctypes.byref(c_dev), ctypes.c_uint(idx))
     _unloadCuda()
     return c_dev
+
 
 def cuDeviceGetBusId(c_dev):
     global _cudaLib
@@ -64,11 +75,10 @@ def cuDeviceGetBusId(c_dev):
     c_bus = ctypes.c_uint()
     c_device = ctypes.c_uint()
     assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(c_domain),
-        ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID), c_dev)
+                                                  ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID), c_dev)
     assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(c_bus),
-        ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_BUS_ID), c_dev)
+                                                  ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_BUS_ID), c_dev)
     assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(c_device),
-        ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID), c_dev)
+                                                  ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID), c_dev)
     _unloadCuda()
     return "%04x:%02x:%02x.0" % (c_domain.value, c_bus.value, c_device.value)
-

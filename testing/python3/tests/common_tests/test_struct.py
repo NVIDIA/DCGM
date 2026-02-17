@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,13 @@
 # limitations under the License.
 from common.Struct import Struct
 
+
 def test_struct():
     s = Struct(field='field')
-    assert s.field == 'field' # pylint: disable=no-member
+    assert s.field == 'field'  # pylint: disable=no-member
 
     try:
-        i = s.notfield # pylint: disable=no-member
-        assert False # notfield should not exist
+        i = s.notfield  # pylint: disable=no-member
+        assert False  # notfield should not exist
     except:
         pass

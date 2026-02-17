@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 # limitations under the License.
 import re
 import sys
+
 
 def VerifyAllowlistParameterRanges(allowlistFile):
     pattern = r"(?P<value>[\d\.]+), (?P<min>[\d\.]+), (?P<max>[\d\.]+)"
@@ -29,16 +30,19 @@ def VerifyAllowlistParameterRanges(allowlistFile):
             max_val = float(match.group('max'))
             if val < min_val or val > max_val:
                 errorCount += 1
-                print("Line %s: invalid range or value: %s" % (i+1, line.rstrip()))
-    
+                print("Line %s: invalid range or value: %s" %
+                      (i + 1, line.rstrip()))
+
     if errorCount:
         print("Errors found. Please fix errors before committing.")
         sys.exit(1)
     print("Success!")
 
+
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         print("Script called with args: %s" % (sys.argv[1:]))
-        print("Invalid arguments. Script should be called with path to allowlist file only.")
+        print(
+            "Invalid arguments. Script should be called with path to allowlist file only.")
         sys.exit(1)
     VerifyAllowlistParameterRanges(sys.argv[1])

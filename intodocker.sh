@@ -25,7 +25,7 @@ fi
 # Architecture suffix will be appended to the image name
 # -x86_64 for x86_64
 # -aarch64 for aarch64
-DCGM_DOCKER_IMAGE=${DCGM_DOCKER_IMAGE:-dcgmbuild}
+DCGM_DOCKER_IMAGE=${DCGM_DOCKER_IMAGE:-dcgm/dcgmbuild}
 
 function usage() {
     echo "Handling DCGM docker build image

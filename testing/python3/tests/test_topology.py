@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import os
 import pprint
 import DcgmSystem
 
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_all_supported_gpus()
 @test_utils.run_only_with_nvml()
@@ -39,23 +40,25 @@ def test_dcgm_topology_device_standalone(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetDefaultGroup()
-    gpuIds = groupObj.GetGpuIds() #Use just the GPUs in our group
+    gpuIds = groupObj.GetGpuIds()  # Use just the GPUs in our group
 
     if len(gpuIds) < 2:
         test_utils.skip_test("Needs >= 2 GPUs")
 
     topologyInfo = systemObj.discovery.GetGpuTopology(gpuIds[0])
 
-    assert (topologyInfo.numGpus == len(gpuIds) - 1), "Expected %d, received numGpus = %d" % (len(gpuIds) - 1, topologyInfo.numGpus)
+    assert (topologyInfo.numGpus == len(gpuIds) -
+            1), "Expected %d, received numGpus = %d" % (len(gpuIds) - 1, topologyInfo.numGpus)
 
     affinity = False
-    
+
     for bitmapIndex in range(dcgm_structs.DCGM_AFFINITY_BITMASK_ARRAY_SIZE):
         if (topologyInfo.cpuAffinityMask[bitmapIndex] != 0):
-            affinity = True;
+            affinity = True
             break
 
     assert (affinity == True), "GPU 0 should have *some* affinity"
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_all_supported_gpus()
@@ -64,7 +67,7 @@ def test_dcgm_topology_group_single_gpu_standalone(handle, gpuIds):
     """
     Verifies that the topology get for a group works for a single GPU
     """
-    #Topology will work for a one-GPU group if there are > 1 GPUs on the system
+    # Topology will work for a one-GPU group if there are > 1 GPUs on the system
     if len(gpuIds) < 2:
         test_utils.skip_test("Needs >= 2 GPUs")
 
@@ -72,13 +75,16 @@ def test_dcgm_topology_group_single_gpu_standalone(handle, gpuIds):
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetEmptyGroup("test1")
     groupObj.AddGpu(gpuIds[0])
-    gpuIds = groupObj.GetGpuIds() #Use just the GPUs in our group
+    gpuIds = groupObj.GetGpuIds()  # Use just the GPUs in our group
 
     topologyInfo = groupObj.discovery.GetTopology()
 
-    assert (topologyInfo.numaOptimalFlag > 0), "with a single GPU, numa is by default optimal"
-    assert (topologyInfo.slowestPath == 0), "with a single GPU, slowest path shouldn't be set"
-    
+    assert (topologyInfo.numaOptimalFlag >
+            0), "with a single GPU, numa is by default optimal"
+    assert (topologyInfo.slowestPath ==
+            0), "with a single GPU, slowest path shouldn't be set"
+
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_all_supported_gpus()
 def test_dcgm_topology_device_nvlink_standalone(handle, gpuIds):
@@ -88,7 +94,7 @@ def test_dcgm_topology_device_nvlink_standalone(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetDefaultGroup()
-    gpuIds = groupObj.GetGpuIds() #Use just the GPUs in our group
+    gpuIds = groupObj.GetGpuIds()  # Use just the GPUs in our group
 
     if len(gpuIds) < 2:
         test_utils.skip_test("Needs >= 2 GPUs")
@@ -98,7 +104,9 @@ def test_dcgm_topology_device_nvlink_standalone(handle, gpuIds):
     if topologyInfo.gpuPaths[0].localNvLinkIds == 0:
         test_utils.skip_test("Needs NVLINK support")
 
-    assert ((topologyInfo.gpuPaths[0].path & 0xFFFFFF00) > 0), "No NVLINK state set when localNvLinkIds is > 0"
+    assert ((topologyInfo.gpuPaths[0].path & 0xFFFFFF00) >
+            0), "No NVLINK state set when localNvLinkIds is > 0"
+
 
 def helper_test_select_gpus_by_topology(handle, gpuIds):
     '''
@@ -121,10 +129,12 @@ def helper_test_select_gpus_by_topology(handle, gpuIds):
     # Ignore the health since we don't know if this system is healthy or not
     hints = dcgm_structs.DCGM_TOPO_HINT_F_IGNOREHEALTH
 
-    selectedMask = dcgm_agent.dcgmSelectGpusByTopology(handle, inputList, numGpus, hints)
+    selectedMask = dcgm_agent.dcgmSelectGpusByTopology(
+        handle, inputList, numGpus, hints)
     sysSelectedMask = discover.SelectGpusByTopology(inputList, numGpus, hints)
 
-    assert (selectedMask.value == inputList), "Expected %s but got %s" % (str(inputList), str(selectedMask))
+    assert (selectedMask.value == inputList), "Expected %s but got %s" % (
+        str(inputList), str(selectedMask))
     assert (sysSelectedMask.value == selectedMask.value)
 
     if len(gpuIds) > 2:
@@ -134,12 +144,16 @@ def helper_test_select_gpus_by_topology(handle, gpuIds):
         for gpuId in gpuIds:
             intputList = inputList & (~gpuBits[gpuId])
 
-            selectedMask = dcgm_agent.dcgmSelectGpusByTopology(handle, inputList, numGpus, hints)
-            sysSelectedMask = discover.SelectGpusByTopology(inputList, numGpus, hints)
+            selectedMask = dcgm_agent.dcgmSelectGpusByTopology(
+                handle, inputList, numGpus, hints)
+            sysSelectedMask = discover.SelectGpusByTopology(
+                inputList, numGpus, hints)
 
-            assert ((selectedMask.value & inputList) == selectedMask.value), "Selected a GPU outside of the input list"
+            assert ((selectedMask.value & inputList) ==
+                    selectedMask.value), "Selected a GPU outside of the input list"
             assert (sysSelectedMask.value == selectedMask.value)
             intputList = inputList | (gpuBits[gpuId])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_all_supported_gpus()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 #ifndef DCGMCONFIGMANAGER_H
 #define DCGMCONFIGMANAGER_H
 
-#include "DcgmMutex.h"
 #include "DcgmSettings.h"
 #include "dcgm_agent.h"
 #include "dcgm_config_structs.h"
@@ -28,8 +27,8 @@
 #include <iostream>
 #include <string>
 
-
 #include <DcgmModule.h>
+#include <DcgmMutex.h>
 
 /* Helper class for aggregating request statuses of variable sizes without excessive copies */
 class DcgmConfigManagerStatusList
@@ -125,6 +124,16 @@ public:
      *****************************************************************************/
     dcgmReturn_t SetWorkloadPowerProfile(dcgmWorkloadPowerProfile_t *workloadPowerProfile);
 
+    /*****************************************************************************
+     * Helper method to attach GPUs. This method will set the preserved config for each active GPU.
+     *****************************************************************************/
+    dcgmReturn_t AttachGpus();
+
+    /*****************************************************************************
+     * Helper method to detach GPUs. This method will clear the GPUs from the alive entities set.
+     *****************************************************************************/
+    dcgmReturn_t DetachGpus();
+
 protected:
     /*****************************************************************************
      * Helper method to get target workload power profiles
@@ -145,7 +154,6 @@ protected:
                                                 dcgmWorkloadPowerProfile_t const &workloadPowerProfile,
                                                 unsigned int (&mergedWorkloadPowerProfiles)[N],
                                                 dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles);
-
 
 private:
     /*****************************************************************************
@@ -218,6 +226,12 @@ private:
      *****************************************************************************/
     dcgmReturn_t SetConfigGpu(unsigned int gpuId, dcgmConfig_t *setConfig, DcgmConfigManagerStatusList *statusList);
 
+    /*****************************************************************************
+     * Helper method to initialize the alive entities set, this should be called in the constructor and will throw an
+     * exception if it fails
+     *****************************************************************************/
+    void InitAliveEntities();
+
     /* Array of currently-active target configs. These can be null, so you may have to alloc them */
     dcgmConfig_t *m_activeConfig[DCGM_MAX_NUM_DEVICES];
 
@@ -225,6 +239,9 @@ private:
     unsigned int mClocksConfigured;
 
     DcgmMutex *m_mutex; /* Lock used for accessing default config data structure */
+
+    /* Set of alive entities (e.g., attached GPUs) */
+    std::unordered_set<dcgmGroupEntityPair_t> m_aliveEntities;
 };
 
 #endif /* DCGMCONFIGMANAGER_H */

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,41 +23,19 @@ if [[ ${DEBUG_BUILD_SCRIPT:-} -eq 1 ]]; then
     set -v          # to see actual lines and not just side effects
 fi
 
-###################
-#### Arguments ####
-###################
-
-ARCHITECTURES=("x86_64" "aarch64")
-if [[ $# -gt 0 ]]; then
-    ARCHITECTURES=("$@")
-fi
-
-####################
-#### Versioning ####
-####################
+[[ $# -eq 0 ]] || export ARCHITECTURES="$(IFS=,; echo "$*")"
 
 GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null)
+
 if [[ $? -eq 0 ]]
 then
-  if ! git diff-index --exit-code --quiet HEAD
-  then
-    GIT_COMMIT+='-dirty'
-  fi
+    if ! git diff-index --exit-code --quiet HEAD
+    then
+        GIT_COMMIT+='-dirty'
+    fi
+
+    export GIT_COMMIT
+    export GIT_REFERENCE="$(git rev-parse --abbrev-ref HEAD)"
 fi
 
-###############
-#### Logic ####
-###############
-
-export BASE_IMAGE=${BASE_IMAGE:-ubuntu:24.04}
-export GIT_COMMIT
-export TAG=${TAG:=latest}
-
-docker compose build dcgm-common-host-software
-for ARCHITECTURE in "${ARCHITECTURES[@]}"
-do
-  docker compose build dcgm-toolchain-$ARCHITECTURE
-  docker compose build dcgmbuild-$ARCHITECTURE
-done
-
-docker image rm dcgm/common-host-software:$TAG
+docker buildx bake

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,6 @@
 
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -103,6 +101,7 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     tp->AddString(PCIE_STR_IS_ALLOWED, "False");
 
     tp->AddDouble(PCIE_STR_MAX_PCIE_REPLAYS, 80.0);
+    tp->AddDouble(PCIE_STR_MAX_PCIE_CORRECTABLE_ERRORS, 0.0);
     tp->AddDouble(PCIE_STR_MAX_NVLINK_RECOVERY_ERRORS, 0.0);
 
     tp->AddDouble(PCIE_STR_MAX_MEMORY_CLOCK, 0.0);
@@ -276,7 +275,7 @@ void BusGrind::Go(std::string const &testName,
         return;
     }
 
-    if (m_testParameters->GetDouble(PS_SUITE_LEVEL) >= (double)NVVS_SUITE_PRODUCTION_TESTING
+    if (static_cast<suiteNames_enum>(m_testParameters->GetDouble(PS_SUITE_LEVEL)) >= NVVS_SUITE_PRODUCTION_TESTING
         || m_testParameters->GetBoolFromString(PCIE_STR_TEST_WITH_GEMM))
     {
         log_info("Running PCIe tests with GEMM enabled");
@@ -587,70 +586,26 @@ int BusGrind::CudaInit(void)
     return 0;
 }
 
-unsigned long extractTotalErrCor(std::string fileName)
+uint64_t getPciCorrectedErrorCount(DcgmRecorder &recorder, unsigned int gpuId)
 {
-    std::string line, key, value;
-    std::ifstream aerFile(fileName);
+    dcgmFieldValue_v2 fieldValue = {};
 
-    if (aerFile.is_open())
+    if (auto ret = recorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS, fieldValue, 0);
+        ret != DCGM_ST_OK)
     {
-        while (getline(aerFile, line))
-        {
-            size_t pos = line.find(" ");
-            key        = line.substr(0, pos);
-            value      = line.substr(pos + 1);
-            if (key == "TOTAL_ERR_COR")
-            {
-                log_debug("Extracted TOTAL_ERR_COR {} from {}", value, fileName);
-                aerFile.close();
-                return stoi(value);
-            }
-        }
-        aerFile.close();
-    }
-    else
-    {
-        log_warning("Could not open {} to determine PCIe correctable errors", fileName);
-    }
-
-    return 0;
-}
-
-std::string convertPciBusID(std::string pci_bus_id)
-{
-    using namespace std;
-
-    stringstream ss(pci_bus_id);
-    string segment;
-    getline(ss, segment, ':');
-    int domain = stoi(segment, nullptr, 16);
-    getline(ss, segment, ':');
-    int bus = stoi(segment, nullptr, 16);
-    getline(ss, segment, '.');
-    int device = stoi(segment, nullptr, 16);
-    getline(ss, segment, ':');
-    int function = stoi(segment, nullptr, 16);
-    ostringstream oss;
-    oss << setw(4) << std::hex << setfill('0') << domain << ":" << setw(2) << std::hex << setfill('0') << bus << ":"
-        << setw(2) << std::hex << setfill('0') << device << "." << function;
-    return oss.str();
-}
-
-unsigned long getPciCorrectedErrorCount(DcgmRecorder &recorder, unsigned int gpuId)
-{
-    dcgmReturn_t st;
-    dcgmDeviceAttributes_t attrs = {};
-
-    st = recorder.GetDeviceAttributes(gpuId, attrs);
-    if (st != DCGM_ST_OK)
-    {
+        log_warning(
+            "GPU {} cannot read PCIE correctable error count from DCGM: {}. Returning 0.", gpuId, errorString(ret));
         return 0;
     }
 
-    std::string devStr   = convertPciBusID(std::string(attrs.identifiers.pciBusId));
-    std::string fileName = "/sys/bus/pci/devices/" + devStr + "/aer_dev_correctable";
+    // Field is blank/uninitialized
+    if (DCGM_INT64_IS_BLANK(fieldValue.value.i64))
+    {
+        log_debug("GPU {} PCIE correctable error count is blank. Returning 0.", gpuId);
+        return 0;
+    }
 
-    return extractTotalErrCor(std::move(fileName));
+    return static_cast<uint64_t>(fieldValue.value.i64);
 }
 
 int BusGrind::GetAERThresholdRate(SmPerfDevice *gpu)
@@ -1202,7 +1157,7 @@ int SmPerfWorker::DoOneMatrixMultiplication(float *floatAlpha,
 
 void SmPerfWorker::recordPciCorrErrorCount()
 {
-    unsigned long correctedErrorCount = getPciCorrectedErrorCount(m_dcgmRecorder, m_device->gpuId);
+    uint64_t correctedErrorCount = getPciCorrectedErrorCount(m_dcgmRecorder, m_device->gpuId);
 
     m_plugin.SetGpuStat(
         m_plugin.GetPcieTestName(), m_device->gpuId, PCI_CORR_ERR_COUNT, (long long)correctedErrorCount);

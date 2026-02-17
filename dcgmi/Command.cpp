@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +47,7 @@ Command::~Command()
 /*****************************************************************************/
 dcgmReturn_t Command::Connect(void)
 {
-    dcgmConnectV2Params_t connectParams;
-    const char *hostNameStr  = m_hostName.c_str();
-    bool isUnixSocketAddress = false;
+    dcgmConnectV3Params_t connectParams;
 
     /* For now, do a global init of DCGM on the start of a command. We can change this later to
      * only connect to the remote host engine from within the command object
@@ -63,19 +61,12 @@ dcgmReturn_t Command::Connect(void)
         return result;
     }
 
-    hostNameStr = dcgmi_parse_hostname_string(hostNameStr, &isUnixSocketAddress, !m_silent);
-    if (!hostNameStr)
-    {
-        return DCGM_ST_BADPARAM; /* Don't need to print here. The function above already did */
-    }
-
     memset(&connectParams, 0, sizeof(connectParams));
-    connectParams.version                = dcgmConnectV2Params_version;
+    connectParams.version                = dcgmConnectV3Params_version;
     connectParams.persistAfterDisconnect = m_persistAfterDisconnect;
-    connectParams.addressIsUnixSocket    = isUnixSocketAddress ? 1 : 0;
     connectParams.timeoutMs              = m_timeout;
 
-    result = dcgmConnect_v2(hostNameStr, &connectParams, &m_dcgmHandle);
+    result = dcgmConnect_v3(m_hostName.c_str(), &connectParams, &m_dcgmHandle);
     if (DCGM_ST_OK != result)
     {
         if (m_silent == false)

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import subprocess
-import signal, os
+import signal
+import os
 import pydcgm
 import dcgm_structs
 import threading
@@ -51,7 +52,8 @@ defaultFieldIds = [
     dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL,
     dcgm_fields.DCGM_FI_DEV_PCIE_TX_THROUGHPUT,
     dcgm_fields.DCGM_FI_DEV_PCIE_RX_THROUGHPUT
-    ]
+]
+
 
 def entity_group_id_to_string(entityGroupId):
     if entityGroupId == dcgm_fields.DCGM_FE_GPU:
@@ -69,6 +71,7 @@ def entity_group_id_to_string(entityGroupId):
     else:
         return ''
 
+
 class DcgmReader(object):
     ###########################################################################
     '''
@@ -81,9 +84,10 @@ class DcgmReader(object):
     fieldTag : the string representation of the field id
     val : the value class that comes from DCGM (v.value is the value for the field)
     '''
+
     def CustomFieldHandler(self, gpuId, fieldId, fieldTag, val):
         print("GPU %s field %s=%s" % (str(gpuId), fieldTag, str(val.value)))
-                    
+
     ###########################################################################
     '''
     This function can be implemented as a callback in the class that inherits from DcgmReader
@@ -96,8 +100,10 @@ class DcgmReader(object):
     fieldTag : the string representation of the field id
     val : the value class that comes from DCGM (v.value is the value for the field)
     '''
+
     def CustomFieldHandler_v2(self, entityGroupId, entityId, fieldId, fieldTag, val):
-        print("%s %s field %s=%s" % (entity_group_id_to_string(entityGroupId), str(entityId), fieldTag, str(val.value)))
+        print("%s %s field %s=%s" % (entity_group_id_to_string(
+            entityGroupId), str(entityId), fieldTag, str(val.value)))
 
     ###########################################################################
     '''
@@ -107,7 +113,8 @@ class DcgmReader(object):
     @params:
     fvs : Data in the format entityGroupId -> entityId -> values (dictionary of dictionaries)
     '''
-    def CustomDataHandler_v2(self,fvs):
+
+    def CustomDataHandler_v2(self, fvs):
         for entityGroupId in list(fvs.keys()):
             entityGroup = fvs[entityGroupId]
 
@@ -124,7 +131,8 @@ class DcgmReader(object):
 
                     fieldTag = self.m_fieldIdToInfo[fieldId].tag
 
-                    self.CustomFieldHandler_v2(entityGroupId, entityId, fieldId, fieldTag, val)
+                    self.CustomFieldHandler_v2(
+                        entityGroupId, entityId, fieldId, fieldTag, val)
 
     ###########################################################################
     '''
@@ -134,6 +142,7 @@ class DcgmReader(object):
     @params:
     fvs : Dictionary with gpuID as key and values as Value
     '''
+
     def CustomDataHandler(self, fvs):
         for gpuId in list(fvs.keys()):
             gpuFv = fvs[gpuId]
@@ -176,13 +185,14 @@ class DcgmReader(object):
     ignoreBlank     : Filter out BLANK values. Default True, but can be set
                       False to get data for all requested fieldId.
     '''
+
     def __init__(self, hostname='localhost', fieldIds=None, updateFrequency=10000000,
                  maxKeepAge=3600.0, ignoreList=None, fieldGroupName='dcgm_fieldgroupData', gpuIds=None,
                  entities=None, fieldIntervalMap=None, ignoreBlank=True):
         fieldIds = fieldIds or defaultFieldIds
         ignoreList = ignoreList or []
         self.m_dcgmHostName = hostname
-        self.m_updateFreq = updateFrequency # default / redundant
+        self.m_updateFreq = updateFrequency  # default / redundant
 
         self.m_fieldGroupName = fieldGroupName
         self.m_fieldGroup = None
@@ -194,21 +204,22 @@ class DcgmReader(object):
             self.m_publishFields[self.m_updateFreq] = fieldIds
 
         self.m_ignoreBlank = ignoreBlank
-            
+
         self.m_requestedGpuIds = gpuIds
         self.m_requestedEntities = entities
 
-        self.m_dcgmIgnoreFields = ignoreList #Fields not to publish
+        self.m_dcgmIgnoreFields = ignoreList  # Fields not to publish
         self.m_maxKeepAge = maxKeepAge
         self.m_dcgmHandle = None
         self.m_dcgmSystem = None
         self.m_dcgmGroup = None
         self.m_closeHandle = False
 
-        self.m_gpuIdToBusId = {} #GpuID => PCI-E busId string
-        self.m_gpuIdToUUId = {} # FieldId => dcgm_fields.dcgm_field_meta_t
-        self.m_fieldIdToInfo = {} #FieldId => dcgm_fields.dcgm_field_meta_t
-        self.m_lock = threading.Lock() #DCGM connection start-up/shutdown is not thread safe. Just lock pessimistically
+        self.m_gpuIdToBusId = {}  # GpuID => PCI-E busId string
+        self.m_gpuIdToUUId = {}  # FieldId => dcgm_fields.dcgm_field_meta_t
+        self.m_fieldIdToInfo = {}  # FieldId => dcgm_fields.dcgm_field_meta_t
+        # DCGM connection start-up/shutdown is not thread safe. Just lock pessimistically
+        self.m_lock = threading.Lock()
         self.m_debug = False
 
         # For GetAllSinceLastCall* calls. We cache the value for these objects
@@ -231,6 +242,7 @@ class DcgmReader(object):
     block. In this case, nothing more is needed since the constructor should've
     been called.
     '''
+
     def __enter__(self):
         return self
 
@@ -238,6 +250,7 @@ class DcgmReader(object):
     '''
     Define the cleanup
     '''
+
     def __exit__(self, type, value, traceback):
         self.Shutdown()
 
@@ -246,6 +259,7 @@ class DcgmReader(object):
     This function intializes DCGM from the specified directory and connects to
     the host engine.
     '''
+
     def InitWrapped(self, path=None):
         dcgm_structs._dcgmInit(libDcgmPath=path)
         self.Reconnect()
@@ -255,6 +269,7 @@ class DcgmReader(object):
     This function tries to connect to hostengine and calls initwrapped to initialize
     the dcgm.
     '''
+
     def Init(self, libpath=None):
         with self.m_lock:
             try:
@@ -268,16 +283,17 @@ class DcgmReader(object):
     Delete the DCGM group, DCGM system and DCGM handle and clear the attributes
     on shutdown.
     '''
+
     def SetDisconnected(self):
-        #Force destructors since DCGM currently doesn't support more than one client connection per process
+        # Force destructors since DCGM currently doesn't support more than one client connection per process
         if self.m_dcgmGroup is not None:
-            del(self.m_dcgmGroup)
+            del (self.m_dcgmGroup)
             self.m_dcgmGroup = None
         if self.m_dcgmSystem is not None:
-            del(self.m_dcgmSystem)
+            del (self.m_dcgmSystem)
             self.m_dcgmSystem = None
         if self.m_dcgmHandle is not None:
-            del(self.m_dcgmHandle)
+            del (self.m_dcgmHandle)
             self.m_dcgmHandle = None
 
     ##########################################################################
@@ -285,6 +301,7 @@ class DcgmReader(object):
     This function calls the SetDisconnected function which disconnects from
     DCGM and clears DCGM handle and DCGM group.
     '''
+
     def Shutdown(self):
         with self.m_lock:
             if self.m_closeHandle == True:
@@ -294,12 +311,14 @@ class DcgmReader(object):
     '''
     Turns debugging output on
     '''
+
     def AddDebugOutput(self):
         self.m_debug = True
 
     ############################################################################
     '''
     '''
+
     def InitializeFromHandle(self):
         self.m_dcgmSystem = self.m_dcgmHandle.GetSystem()
 
@@ -309,23 +328,26 @@ class DcgmReader(object):
             groupName = "dcgmreader_%d" % os.getpid()
 
             if self.m_requestedGpuIds:
-                self.m_dcgmGroup = self.m_dcgmSystem.GetGroupWithGpuIds(groupName, self.m_requestedGpuIds)
+                self.m_dcgmGroup = self.m_dcgmSystem.GetGroupWithGpuIds(
+                    groupName, self.m_requestedGpuIds)
                 if self.m_requestedEntities:
                     for entity in self.m_requestedEntities:
-                        self.m_dcgmGroup.AddEntity(entity.entityGroupId, entity.entityId)
+                        self.m_dcgmGroup.AddEntity(
+                            entity.entityGroupId, entity.entityId)
             else:
-                self.m_dcgmGroup = self.m_dcgmSystem.GetGroupWithEntities(groupName, self.m_requestedEntities)
+                self.m_dcgmGroup = self.m_dcgmSystem.GetGroupWithEntities(
+                    groupName, self.m_requestedEntities)
 
         self.SetupGpuIdBusMappings()
         self.SetupGpuIdUUIdMappings()
         self.GetFieldMetadata()
         self.AddFieldWatches()
 
-
     ############################################################################
     '''
     Has DcgmReader use but not own a handle. Currently for the unit tests.
     '''
+
     def SetHandle(self, handle):
         self.m_dcgmHandle = pydcgm.DcgmHandle(handle)
         self.InitializeFromHandle()
@@ -337,13 +359,18 @@ class DcgmReader(object):
     gpuIds to BusID, set the meta data of the field ids and adds watches to the
     field Ids mentioned in the idToWatch list.
     '''
+
     def Reconnect(self):
         if self.m_dcgmHandle is not None:
             return
 
         self.LogDebug("Connection handle is None. Trying to reconnect")
 
-        self.m_dcgmHandle = pydcgm.DcgmHandle(None, self.m_dcgmHostName, dcgm_structs.DCGM_OPERATION_MODE_AUTO)
+        self.m_dcgmHandle = pydcgm.DcgmHandle(None,
+                                              ipAddress=self.m_dcgmHostName,
+                                              opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO
+                                              )
+
         self.m_closeHandle = True
 
         self.LogDebug("Connected to nv-hostengine")
@@ -355,6 +382,7 @@ class DcgmReader(object):
     Populate the g_gpuIdToBusId map. This map contains mapping from
     gpuID to the BusID.
     '''
+
     def SetupGpuIdBusMappings(self):
         self.m_gpuIdToBusId = {}
 
@@ -368,20 +396,22 @@ class DcgmReader(object):
     Add watches to the fields which are passed in init function in idToWatch
     list. It also updates the field values for the first time.
     '''
+
     def AddFieldWatches(self):
-        maxKeepSamples = 0 #No limit. Handled by m_maxKeepAge
+        maxKeepSamples = 0  # No limit. Handled by m_maxKeepAge
         for interval, fieldGroup in self.m_fieldGroups.items():
             self.LogDebug("AddWatchFields: interval = " + str(interval) + "\n")
-            self.m_dcgmGroup.samples.WatchFields(fieldGroup, interval, self.m_maxKeepAge, maxKeepSamples)
+            self.m_dcgmGroup.samples.WatchFields(
+                fieldGroup, interval, self.m_maxKeepAge, maxKeepSamples)
         self.m_dcgmSystem.UpdateAllFields(1)
         self.LogDebug("AddWatchFields exit\n")
-
 
     ###########################################################################
     '''
     If the groupID already exists, we delete that group and create a new fieldgroup with
     the fields mentioned in idToWatch. Then information of each field is acquired from its id.
     '''
+
     def GetFieldMetadata(self):
         self.m_fieldIdToInfo = {}
         self.m_fieldGroups = {}
@@ -399,38 +429,47 @@ class DcgmReader(object):
 
             intervalIndex += 1
             fieldGroupName = self.m_fieldGroupName + "_" + str(intervalIndex)
-            findByNameId = self.m_dcgmSystem.GetFieldGroupIdByName(fieldGroupName)
+            findByNameId = self.m_dcgmSystem.GetFieldGroupIdByName(
+                fieldGroupName)
             self.LogDebug("fieldGroupName: " + fieldGroupName + "\n")
 
             # Remove our field group if it exists already
             if findByNameId is not None:
-                self.LogDebug("fieldGroupId: " + str(findByNameId.value)  + "\n")
-                delFieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle=self.m_dcgmHandle, fieldGroupId=findByNameId)
+                self.LogDebug("fieldGroupId: " +
+                              str(findByNameId.value) + "\n")
+                delFieldGroup = pydcgm.DcgmFieldGroup(
+                    dcgmHandle=self.m_dcgmHandle, fieldGroupId=findByNameId)
                 delFieldGroup.Delete()
-                del(delFieldGroup)
+                del (delFieldGroup)
 
-            self.m_fieldGroups[interval] = pydcgm.DcgmFieldGroup(self.m_dcgmHandle, fieldGroupName, fieldIds)
+            self.m_fieldGroups[interval] = pydcgm.DcgmFieldGroup(
+                self.m_dcgmHandle, fieldGroupName, fieldIds)
 
             for fieldId in fieldIds:
                 if fieldId not in allFieldIds:
                     allFieldIds += [fieldId]
-                    
-                self.m_fieldIdToInfo[fieldId] = self.m_dcgmSystem.fields.GetFieldById(fieldId)
+
+                self.m_fieldIdToInfo[fieldId] = self.m_dcgmSystem.fields.GetFieldById(
+                    fieldId)
                 if self.m_fieldIdToInfo[fieldId] == 0 or self.m_fieldIdToInfo[fieldId] == None:
-                    self.LogError("Cannot get field tag for field id %d. Please check dcgm_fields to see if it is valid." % (fieldId))
-                    raise dcgm_structs.DCGMError(dcgm_structs.DCGM_ST_UNKNOWN_FIELD)
+                    self.LogError(
+                        "Cannot get field tag for field id %d. Please check dcgm_fields to see if it is valid." % (fieldId))
+                    raise dcgm_structs.DCGMError(
+                        dcgm_structs.DCGM_ST_UNKNOWN_FIELD)
         # Initialize a field group of ALL fields.
         fieldGroupName = self.m_fieldGroupName
         findByNameId = self.m_dcgmSystem.GetFieldGroupIdByName(fieldGroupName)
 
         # Remove our field group if it exists already
         if findByNameId is not None:
-            delFieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle=self.m_dcgmHandle, fieldGroupId=findByNameId)
+            delFieldGroup = pydcgm.DcgmFieldGroup(
+                dcgmHandle=self.m_dcgmHandle, fieldGroupId=findByNameId)
             delFieldGroup.Delete()
-            del(delFieldGroup)
+            del (delFieldGroup)
 
         if len(allFieldIds) > 0:
-            self.m_fieldGroup = pydcgm.DcgmFieldGroup(self.m_dcgmHandle, fieldGroupName, allFieldIds)
+            self.m_fieldGroup = pydcgm.DcgmFieldGroup(
+                self.m_dcgmHandle, fieldGroupName, allFieldIds)
 
     ###########################################################################
     '''
@@ -441,19 +480,22 @@ class DcgmReader(object):
     values for each field. This dictionary contains fieldInfo for each field id
     requested to be watched.
     '''
+
     def Process(self):
         with self.m_lock:
             try:
                 self.Reconnect()
 
                 # The first call just clears the collection set.
-                
+
                 if not self.m_requestedEntities:
-                    self.dfvc = self.m_dcgmGroup.samples.GetAllSinceLastCall(self.dfvc, self.m_fieldGroup)
+                    self.dfvc = self.m_dcgmGroup.samples.GetAllSinceLastCall(
+                        self.dfvc, self.m_fieldGroup)
                     self.CustomDataHandler(self.dfvc.values)
                     self.dfvc.EmptyValues()
                 else:
-                    self.dfvec = self.m_dcgmGroup.samples.GetAllSinceLastCall_v2(self.dfvec, self.m_fieldGroup)
+                    self.dfvec = self.m_dcgmGroup.samples.GetAllSinceLastCall_v2(
+                        self.dfvec, self.m_fieldGroup)
                     self.CustomDataHandler_v2(self.dfvec.values)
                     self.dfvec.EmptyValues()
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
@@ -472,7 +514,6 @@ class DcgmReader(object):
     def LogError(self, msg):
         logging.error(msg)
 
-
     ###########################################################################
     '''
     This function gets each value as a dictionary of dictionaries. The dictionary
@@ -480,15 +521,18 @@ class DcgmReader(object):
     field value dictionary is the field name mapped to the value or the field
     id mapped to value depending on the parameter mapById.
     '''
+
     def GetLatestGpuValuesAsDict(self, mapById):
         systemDictionary = {}
 
         with self.m_lock:
             try:
                 self.Reconnect()
-                fvs = self.m_dcgmGroup.samples.GetLatest(self.m_fieldGroup).values
+                fvs = self.m_dcgmGroup.samples.GetLatest(
+                    self.m_fieldGroup).values
                 for gpuId in list(fvs.keys()):
-                    systemDictionary[gpuId] = {} # initialize the gpu's dictionary
+                    # initialize the gpu's dictionary
+                    systemDictionary[gpuId] = {}
                     gpuFv = fvs[gpuId]
 
                     for fieldId in list(gpuFv.keys()):
@@ -503,7 +547,8 @@ class DcgmReader(object):
                         else:
                             systemDictionary[gpuId][fieldId] = val.value
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
-                self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
+                self.LogError(
+                    "Can't connection to nv-hostengine. Please verify that it is running.")
                 self.SetDisconnected()
 
         return systemDictionary
@@ -516,15 +561,18 @@ class DcgmReader(object):
     field value dictionary is the field name mapped to the value or the field
     id mapped to value depending on the parameter mapById.
     '''
+
     def GetLatestEntityValuesAsDict(self, mapById):
         systemDictionary = {}
 
         with self.m_lock:
             try:
                 self.Reconnect()
-                egfvs = self.m_dcgmGroup.samples.GetLatest_v2(self.m_fieldGroup).values
+                egfvs = self.m_dcgmGroup.samples.GetLatest_v2(
+                    self.m_fieldGroup).values
                 for entityGroupId in list(egfvs.keys()):
-                    systemDictionary[entityGroupId] = {} # initialize the entity group's dictionary
+                    # initialize the entity group's dictionary
+                    systemDictionary[entityGroupId] = {}
                     efvs = egfvs[entityGroupId]
 
                     for entityId in list(efvs.keys()):
@@ -543,7 +591,8 @@ class DcgmReader(object):
                             else:
                                 systemDictionary[entityGroupId][entityId][fieldId] = val.value
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
-                self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
+                self.LogError(
+                    "Can't connection to nv-hostengine. Please verify that it is running.")
                 self.SetDisconnected()
 
         return systemDictionary
@@ -557,6 +606,7 @@ class DcgmReader(object):
     parameter mapById. The list of values are the values for each field since
     the last retrieval.
     '''
+
     def GetAllGpuValuesAsDictSinceLastCall(self, mapById):
         systemDictionary = {}
 
@@ -564,10 +614,12 @@ class DcgmReader(object):
             try:
                 self.Reconnect()
                 report = self.fvs is not None
-                self.fvs = self.m_dcgmGroup.samples.GetAllSinceLastCall(self.fvs, self.m_fieldGroup)
+                self.fvs = self.m_dcgmGroup.samples.GetAllSinceLastCall(
+                    self.fvs, self.m_fieldGroup)
                 if report:
                     for gpuId in list(self.fvs.values.keys()):
-                        systemDictionary[gpuId] = {} # initialize the gpu's dictionary
+                        # initialize the gpu's dictionary
+                        systemDictionary[gpuId] = {}
                         gpuFv = self.fvs.values[gpuId]
 
                         for fieldId in list(gpuFv.keys()):
@@ -579,14 +631,17 @@ class DcgmReader(object):
                                     fieldTag = self.m_fieldIdToInfo[fieldId].tag
                                     if not fieldTag in systemDictionary[gpuId]:
                                         systemDictionary[gpuId][fieldTag] = []
-                                
-                                    systemDictionary[gpuId][fieldTag].append(val)
+
+                                    systemDictionary[gpuId][fieldTag].append(
+                                        val)
                                 else:
                                     if not fieldId in systemDictionary[gpuId]:
                                         systemDictionary[gpuId][fieldId] = []
-                                    systemDictionary[gpuId][fieldId].append(val)
+                                    systemDictionary[gpuId][fieldId].append(
+                                        val)
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
-                self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
+                self.LogError(
+                    "Can't connection to nv-hostengine. Please verify that it is running.")
                 self.SetDisconnected()
 
         if self.fvs is not None:
@@ -604,6 +659,7 @@ class DcgmReader(object):
 
     The list of values are the values for each field since the last retrieval.
     '''
+
     def GetAllEntityValuesAsDictSinceLastCall(self, mapById):
         systemDictionary = {}
 
@@ -611,7 +667,8 @@ class DcgmReader(object):
             try:
                 self.Reconnect()
                 report = self.egfvs is not None
-                self.egfvs = self.m_dcgmGroup.samples.GetAllSinceLastCall_v2(self.egfvs, self.m_fieldGroup)
+                self.egfvs = self.m_dcgmGroup.samples.GetAllSinceLastCall_v2(
+                    self.egfvs, self.m_fieldGroup)
                 if report:
                     for entityGroupId in list(self.egfvs.values.keys()):
                         systemDictionary[entityGroupId] = {}
@@ -629,15 +686,20 @@ class DcgmReader(object):
                                 if mapById == False:
                                     fieldTag = self.m_fieldIdToInfo[fieldId].tag
                                     if not fieldTag in systemDictionary[entityGroupId][entityId]:
-                                        systemDictionary[entityGroupId][entityId][fieldTag] = []
-                                
-                                    systemDictionary[entityGroupId][entityId][fieldTag].append(val)
+                                        systemDictionary[entityGroupId][entityId][fieldTag] = [
+                                        ]
+
+                                    systemDictionary[entityGroupId][entityId][fieldTag].append(
+                                        val)
                                 else:
                                     if not fieldId in systemDictionary[entityGroupId][entityId]:
-                                        systemDictionary[entityGroupId][entityId][fieldId] = []
-                                    systemDictionary[entityGroupId][entityId][fieldId].append(val)
+                                        systemDictionary[entityGroupId][entityId][fieldId] = [
+                                        ]
+                                    systemDictionary[entityGroupId][entityId][fieldId].append(
+                                        val)
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
-                self.LogError("Can't connection to nv-hostengine. Please verify that it is running.")
+                self.LogError(
+                    "Can't connection to nv-hostengine. Please verify that it is running.")
                 self.SetDisconnected()
 
         if self.egfvs is not None:
@@ -684,4 +746,3 @@ class DcgmReader(object):
     ###########################################################################
     def GetAllEntityValuesAsFieldNameDictSinceLastCall(self):
         return self.GetAllEntityValuesAsDictSinceLastCall(False)
-    

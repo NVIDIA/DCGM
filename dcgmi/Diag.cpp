@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -152,7 +152,16 @@ void InstallSigHandlers()
     SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGTERM, Term, handle_signal_during_diag);
 }
 
-std::optional<std::string> GetEudTestVersion(std::string_view testName, dcgmDiagResponse_v12 const &diagResponse)
+namespace
+{
+struct EudTestVersion
+{
+    std::optional<std::string> version;
+    std::optional<std::string> eudPackageVersion;
+};
+} //namespace
+
+EudTestVersion GetEudTestVersion(std::string_view testName, dcgmDiagResponse_v12 const &diagResponse)
 {
     dcgmDiagTestAuxData_v1 const *auxData = nullptr;
 
@@ -167,27 +176,35 @@ std::optional<std::string> GetEudTestVersion(std::string_view testName, dcgmDiag
 
     if (auxData == nullptr)
     {
-        return std::nullopt;
+        return {};
     }
 
     if (auxData->version != dcgmDiagTestAuxData_version || auxData->data[0] == '\0')
     {
-        return std::nullopt;
+        return {};
     }
 
     Json::Value json;
     Json::Reader reader;
 
-    bool parsingSuccessful = reader.parse(auxData->data, json);
-    if (!parsingSuccessful)
+    if (bool parsingSuccessful = reader.parse(auxData->data, json); !parsingSuccessful)
     {
-        return std::nullopt;
+        return {};
     }
-    if (!json.isMember("version") || !json["version"].isString())
+
+    EudTestVersion result {};
+
+    if (json.isMember("version") && json["version"].isString())
     {
-        return std::nullopt;
+        result.version = json["version"].asString();
     }
-    return json["version"].asString();
+
+    if (json.isMember("eudPackageVersion") && json["eudPackageVersion"].isString())
+    {
+        result.eudPackageVersion = json["eudPackageVersion"].asString();
+    }
+
+    return result;
 }
 
 /*****************************************************************************
@@ -797,18 +814,30 @@ void Diag::HelperDisplayEudTestsVersion(dcgmDiagResponse_v12 const &response) co
     cmdView.setDisplayStencil(DIAG_DATA);
 
     auto gpuEudVersion = GetEudTestVersion(EUD_PLUGIN_NAME, response);
-    if (gpuEudVersion.has_value())
+    if (gpuEudVersion.version.has_value())
     {
         cmdView.addDisplayParameter(DATA_NAME_TAG, "EUD Test Version");
-        cmdView.addDisplayParameter(DATA_INFO_TAG, *gpuEudVersion);
+        cmdView.addDisplayParameter(DATA_INFO_TAG, *gpuEudVersion.version);
+        cmdView.display();
+    }
+    if (gpuEudVersion.eudPackageVersion.has_value())
+    {
+        cmdView.addDisplayParameter(DATA_NAME_TAG, "EUD Package Version");
+        cmdView.addDisplayParameter(DATA_INFO_TAG, *gpuEudVersion.eudPackageVersion);
         cmdView.display();
     }
 
     auto cpuEudVersion = GetEudTestVersion(CPU_EUD_TEST_NAME, response);
-    if (cpuEudVersion.has_value())
+    if (cpuEudVersion.version.has_value())
     {
         cmdView.addDisplayParameter(DATA_NAME_TAG, "CPU EUD Test Version");
-        cmdView.addDisplayParameter(DATA_INFO_TAG, *cpuEudVersion);
+        cmdView.addDisplayParameter(DATA_INFO_TAG, *cpuEudVersion.version);
+        cmdView.display();
+    }
+    if (cpuEudVersion.eudPackageVersion.has_value())
+    {
+        cmdView.addDisplayParameter(DATA_NAME_TAG, "CPU EUD Package Version");
+        cmdView.addDisplayParameter(DATA_INFO_TAG, *cpuEudVersion.eudPackageVersion);
         cmdView.display();
     }
 }
@@ -870,7 +899,7 @@ std::string const Diag::HelperDisplayDiagResult(dcgmDiagResult_t val, displayDia
         case DCGM_DIAG_RESULT_FAIL:
             return "Fail";
         case DCGM_DIAG_RESULT_NOT_RUN:
-            [[fallthrough]];
+            return "Not Run";
         default:
             return "";
     }
@@ -1082,11 +1111,13 @@ void Diag::HelperDisplayEntityResults(CommandOutputController &view,
 /******************************************************************************/
 /**
  * Adds `result` to `testEntry` and returns true, or returns false if this gpu didn't run the test.
+ * @param includeAllErrors If true, include all test errors regardless of entity (for test summary)
  */
 bool Diag::HelperJsonAddResult(dcgmDiagResponse_v12 const &response,
                                dcgmDiagTestRun_v2 const &test,
                                dcgmDiagEntityResult_v1 const &result,
-                               Json::Value &resultEntry)
+                               Json::Value &resultEntry,
+                               bool includeAllErrors)
 {
     // Don't record an entry for tests that weren't run
     if (result.result == DCGM_DIAG_RESULT_NOT_RUN)
@@ -1107,14 +1138,15 @@ bool Diag::HelperJsonAddResult(dcgmDiagResponse_v12 const &response,
     // Report errors associated with this result
     {
         unsigned int resErrIdx = 0;
-        for (unsigned int errIdx : std::span(test.errorIndices,
-                                             std::min(static_cast<unsigned int>(test.numErrors),
-                                                      static_cast<unsigned int>(std::size(test.errorIndices))))
-                                       | std::views::filter([&response, &result](unsigned int const errIdx) {
-                                             return errIdx < response.numErrors
-                                                    && errIdx < static_cast<unsigned int>(std::size(response.errors))
-                                                    && response.errors[errIdx].entity == result.entity;
-                                         }))
+        for (unsigned int errIdx :
+             std::span(test.errorIndices,
+                       std::min(static_cast<unsigned int>(test.numErrors),
+                                static_cast<unsigned int>(std::size(test.errorIndices))))
+                 | std::views::filter([&response, &result, includeAllErrors](unsigned int const errIdx) {
+                       return errIdx < response.numErrors
+                              && errIdx < static_cast<unsigned int>(std::size(response.errors))
+                              && (includeAllErrors || response.errors[errIdx].entity == result.entity);
+                   }))
         {
             dcgmDiagError_v1 const &error = response.errors[errIdx];
             Json::Value errorEntry;
@@ -1211,15 +1243,23 @@ void Diag::HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v12 const
 void Diag::HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v12 const &response)
 {
     auto gpuEudVersion = GetEudTestVersion(EUD_PLUGIN_NAME, response);
-    if (gpuEudVersion.has_value())
+    if (gpuEudVersion.version.has_value())
     {
-        output[NVVS_METADATA]["EUD Test Version"] = *gpuEudVersion;
+        output[NVVS_METADATA]["EUD Test Version"] = *gpuEudVersion.version;
+    }
+    if (gpuEudVersion.eudPackageVersion.has_value())
+    {
+        output[NVVS_METADATA]["EUD Package Version"] = *gpuEudVersion.eudPackageVersion;
     }
 
     auto cpuEudVersion = GetEudTestVersion(CPU_EUD_TEST_NAME, response);
-    if (cpuEudVersion.has_value())
+    if (cpuEudVersion.version.has_value())
     {
-        output[NVVS_METADATA]["CPU EUD Test Version"] = *cpuEudVersion;
+        output[NVVS_METADATA]["CPU EUD Test Version"] = *cpuEudVersion.version;
+    }
+    if (cpuEudVersion.eudPackageVersion.has_value())
+    {
+        output[NVVS_METADATA]["CPU EUD Package Version"] = *cpuEudVersion.eudPackageVersion;
     }
 
     if (response.dcgmVersion[0] != '\0')
@@ -1246,7 +1286,7 @@ void Diag::HelperJsonAddTestSummary(Json::Value &category,
     dcgmDiagEntityResult_v1 overallResult = { .entity = { DCGM_FE_NONE, 0 }, .result = test.result, .testId = 0 };
     Json::Value testSummary;
 
-    if (HelperJsonAddResult(response, test, overallResult, testSummary))
+    if (HelperJsonAddResult(response, test, overallResult, testSummary, true))
     {
         category[NVVS_TESTS][testIndex][NVVS_TEST_SUMMARY] = std::move(testSummary);
     }

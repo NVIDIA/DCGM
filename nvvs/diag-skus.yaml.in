@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -3813,6 +3813,8 @@ skus:
     # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows 5808333. Multiply by .75 to get 4356249
@@ -3854,6 +3856,8 @@ skus:
     # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows 5821666. Multiply by .75 to get 4366249
@@ -3897,6 +3901,8 @@ skus:
       l1cache_size_kb_per_sm: 192.0
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows 3410833. Multiply by .75 to get 2558124
@@ -3941,6 +3947,8 @@ skus:
       l1cache_size_kb_per_sm: 192.0
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows 3470000. Multiply by .75 to get 2602500
@@ -4100,6 +4108,8 @@ skus:
     # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows 5430000. Multiply by .75 to get 4072500
@@ -4198,6 +4208,7 @@ skus:
       use_dgemm: false
       cuda_streams_per_gpu: 16
       ops_per_requeue: 16
+      enable_fp16_gemm: true
     targeted_stress:
       is_allowed: true
       use_dgemm: false
@@ -4221,6 +4232,8 @@ skus:
       l1cache_size_kb_per_sm: 192.0
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows (6.02e+03 GiB/sec) 6164480 Multiply by .75 to get 4623360.0
@@ -4266,6 +4279,8 @@ skus:
     # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows 6030GB or 6030000. Multiply by .75 to get 4522500
@@ -4313,6 +4328,8 @@ skus:
     # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows 6030GB or 6030000. Multiply by .75 to get 4522500
@@ -4410,6 +4427,8 @@ skus:
     # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
     diagnostic:
       is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
     memory_bandwidth:
       is_allowed: true
       # dcgmproftester -t 1005 shows 7928GB or 7928000. Multiply by .75 to get 5946000
@@ -4420,3 +4439,48 @@ skus:
       is_allowed: true
     memtest:
       num_chunks: 8
+  - name: GB203
+    # Subsystem is 21f4
+    id: 2c3a
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 164.00
+      use_dgemv: true
+      use_dgemm: false
+      ops_per_requeue: 2
+      cuda_streams_per_gpu: 24
+      enable_fp16_gemm: true
+      fp64_gemm_ratio: 0.6
+      fp16_gemm_ratio: 0.4
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 15780
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~21041 Multiply by .75 to get 15780
+      target_stress: 15780
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 739000. Multiply by .75 to get 554250
+      minimum_bandwidth: 554250
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,16 +21,16 @@ dcgmHandle = pydcgm.DcgmHandle(ipAddress="127.0.0.1")
 dcgmSystem = dcgmHandle.GetSystem()
 dcgmGroup = dcgmSystem.GetDefaultGroup()
 
-#Discover which fieldIds are valid
+# Discover which fieldIds are valid
 g_fieldTags = {}
 for fieldId in range(1, dcgm_fields.DCGM_FI_MAX_FIELDS):
     fieldMeta = dcgm_fields.DcgmFieldGetById(fieldId)
     if fieldMeta is None:
         continue
-    
+
     g_fieldTags[fieldId] = fieldMeta.tag
 
-#print("Found field tags: " + str(g_fieldTags))
+# print("Found field tags: " + str(g_fieldTags))
 
 fieldIds = sorted(g_fieldTags.keys())
 
@@ -51,19 +51,20 @@ while True:
         for fieldId in fieldIds:
             watchInfo = None
             try:
-                watchInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
+                watchInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
+                    dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
             except:
                 pass
-            
+
             if watchInfo is None:
                 continue
-            
+
             nowTs = int(time.time() * 1000000)
             oneMinuteAgoTs = nowTs - 60000000
 
             if watchInfo.newestTimestamp < oneMinuteAgoTs:
                 continue
-            
+
             perUpdate = 0
             if watchInfo.fetchCount > 0:
                 perUpdate = watchInfo.execTimeUsec / watchInfo.fetchCount
@@ -78,12 +79,13 @@ while True:
             if fieldId not in watchIntervalByFieldId:
                 watchIntervalByFieldId[fieldId] = watchInfo.monitorIntervalUsec
             else:
-                watchIntervalByFieldId[fieldId] = max(watchInfo.monitorIntervalUsec, watchIntervalByFieldId[fieldId])
+                watchIntervalByFieldId[fieldId] = max(
+                    watchInfo.monitorIntervalUsec, watchIntervalByFieldId[fieldId])
 
-            #print("gpuId %d, fieldId %d (%s). lastUpdate: %f s, execTime %d, fetchCount %d, perUpdate: %d" % 
-            #      (gpuId, fieldId, g_fieldTags[fieldId], lastUpdateSec, 
+            # print("gpuId %d, fieldId %d (%s). lastUpdate: %f s, execTime %d, fetchCount %d, perUpdate: %d" %
+            #      (gpuId, fieldId, g_fieldTags[fieldId], lastUpdateSec,
             #      watchInfo.execTimeUsec, watchInfo.fetchCount, perUpdate))
-    
+
     totalDriverTime = 0
     for fieldId in list(driverTimeByFieldId.keys()):
         numGpus = len(driverTimeByFieldId[fieldId])
@@ -91,11 +93,9 @@ while True:
         totalDriverTime += fieldDriverTime
         driverTimeAvg = fieldDriverTime / numGpus
         print(("fieldId %d (%s), numGpus %u, driverTimePerUpdate %d usec, watchInterval %d usec" %
-             (fieldId, g_fieldTags[fieldId], numGpus, driverTimeAvg, watchIntervalByFieldId[fieldId])))
-    
+               (fieldId, g_fieldTags[fieldId], numGpus, driverTimeAvg, watchIntervalByFieldId[fieldId])))
+
     print(("Total Driver Time: %d usec" % totalDriverTime))
     print("")
 
     time.sleep(5.0)
-
-

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-## {{{ http://code.activestate.com/recipes/577479/ (r1)
+# {{{ http://code.activestate.com/recipes/577479/ (r1)
 from collections import namedtuple
 from functools import wraps
 import ctypes
@@ -40,6 +40,7 @@ from subprocess import check_output
 
 _CacheInfo = namedtuple("CacheInfo", "hits misses maxsize currsize")
 
+
 def cache():
     """Memorizing cache decorator.
 
@@ -51,7 +52,7 @@ def cache():
     """
 
     def decorating_function(user_function,
-                tuple=tuple, sorted=sorted, len=len, KeyError=KeyError):
+                            tuple=tuple, sorted=sorted, len=len, KeyError=KeyError):
 
         cache = dict()
         hits_misses = [0, 0]
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     def fib(n):
         if n < 2:
             return 1
-        return fib(n-1) + fib(n-2)
+        return fib(n - 1) + fib(n - 2)
 
     from random import shuffle
     inputs = list(range(30))
@@ -103,24 +104,28 @@ if __name__ == '__main__':
     results = sorted(fib(n) for n in inputs)
     print(results)
     print((fib.cache_info()))
-        
+
     expected_output = '''[1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 
          233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 
          46368, 75025, 121393, 196418, 317811, 514229, 832040]
          CacheInfo(hits=56, misses=30, maxsize=None, currsize=30)
     '''
-## end of http://code.activestate.com/recipes/577479/ }}}
+# end of http://code.activestate.com/recipes/577479/ }}}
 
 # Log an exception message before raising it.
+
+
 def logException(msg):
-    logger.error("Exception. " + msg);
+    logger.error("Exception. " + msg)
     raise Exception(msg)
+
 
 def is_root():
     if is_linux():
         return os.geteuid() == 0
     else:
         return ctypes.windll.shell32.IsUserAnAdmin()
+
 
 def is_real_user_root():
     """
@@ -135,43 +140,51 @@ def is_real_user_root():
 
 
 _UserInfo = namedtuple("UserInfo", "uid, gid, name")
+
+
 @cache()
 def get_user_idinfo(username):
     from pwd import getpwnam
     info = getpwnam(username)
     return _UserInfo(info.pw_uid, info.pw_gid, info.pw_name)
 
+
 @cache()
 def get_name_by_uid(uid):
     from pwd import getpwuid
     return getpwuid(uid).pw_name
 
+
 script_dir = os.path.realpath(sys.path[0])
 
-def find_files(path = script_dir, mask = "*", skipdirs=None, recurse=True, test_file_name="", skip_file_name=""):
+
+def find_files(path=script_dir, mask="*", skipdirs=None, recurse=True, test_file_name="", skip_file_name=""):
     skipdirs = skipdirs or []
-    #Recurse subdirectories?
+    # Recurse subdirectories?
     if recurse:
         for root, dirnames, filenames in os.walk(path):
             if skipdirs is not None:
-                [dirnames.remove(skip) for skip in skipdirs if skip in dirnames]  # don't visit directories in skipdirs list
+                # don't visit directories in skipdirs list
+                [dirnames.remove(skip)
+                 for skip in skipdirs if skip in dirnames]
             for filename in fnmatch.filter(filenames, mask):
                 if test_file_name != "":
-                    if test_file_name==filename:
+                    if test_file_name == filename:
                         yield os.path.abspath(os.path.join(root, filename))
                 else:
                     if filename != skip_file_name:
                         yield os.path.abspath(os.path.join(root, filename))
     else:
-        #Just list files inside "path"
+        # Just list files inside "path"
         filenames = os.listdir(path)
         for filename in fnmatch.filter(filenames, mask):
             if test_file_name != "":
-                if test_file_name==filename:
+                if test_file_name == filename:
                     yield os.path.abspath(os.path.join(root, filename))
             else:
                 if filename != skip_file_name:
                     yield os.path.abspath(os.path.join(root, filename))
+
 
 def which(name):
     """
@@ -183,6 +196,7 @@ def which(name):
         # TODO on windows os.system pops (for a brief moment) cmd console
         # this function should be reimplemented so that it wouldn't happen
         return 0 == os.system('where "%s" &> NUL' % name)
+
 
 """
 stores string representing current platform
@@ -197,22 +211,29 @@ treats VMkernel platform as Linux
 
 current_os = platform.system()
 if current_os == "VMkernel":
-    current_os = "Linux" # Treat VMkernel as normal Linux.
+    current_os = "Linux"  # Treat VMkernel as normal Linux.
+
 
 def is_windows(os=current_os):
     return os == "Windows"
+
+
 def is_linux(os=current_os):
-    return os  == "Linux"
+    return os == "Linux"
+
 
 def is_cuda_supported_system():
     # CUDA is supported everywhere except in virtualization environments
     return is_bare_metal_system()
 
+
 def is_healthmon_supported_system():
     return is_linux() and is_cuda_supported_system()
 
+
 def is_esx_hypervisor_system():
     return platform.system() == "VMkernel"
+
 
 def is_microsoft_hyper_v():
 
@@ -222,9 +243,10 @@ def is_microsoft_hyper_v():
         pass
         return False
 
-    if is_root():        
-        if os.path.isfile(dmi.strip()):    
-            systemType = check_output(["dmidecode", "-s", "system-product-name"])
+    if is_root():
+        if os.path.isfile(dmi.strip()):
+            systemType = check_output(
+                ["dmidecode", "-s", "system-product-name"])
             if systemType.strip() == "Virtual Machine":
                 return True
         else:
@@ -234,19 +256,23 @@ def is_microsoft_hyper_v():
 
 # Util method to check if QEMU VM is running
 # DGX-2 VM uses QEMU
+
+
 def is_qemu_vm():
     """
     Returns True if QEMU VM is running on the system()
     """
 
     cmd = 'lshw -c system | grep QEMU | wc -l'
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
 
     if int(out) > 0:
         return True
     else:
         return False
+
 
 def is_bare_metal_system():
     if is_esx_hypervisor_system():
@@ -260,28 +286,35 @@ def is_bare_metal_system():
     else:
         return True
 
+
 def is_64bit():
     if os.name == 'nt':
         if platform.uname()[4] == 'AMD64':
             return True
     return platform.architecture()[0] == "64bit"
-     
+
+
 def is_32bit():
     if os.name == 'nt':
         if platform.uname()[4] == 'x86':
-            return True            
+            return True
     return platform.architecture()[0] == "32bit"
-    
+
+
 def is_system_64bit():
     return platform.machine() in ["x86_64", "AMD64"]
+
 
 # 32-bit Python on 64-bit Windows reports incorrect architecture, therefore not using platform.architecture() directly
 platform_identifier = current_os + "_" + ("64bit" if is_64bit() else "32bit")
 if platform.machine() == "aarch64":
     platform_identifier = "Linux_aarch64"
-assert platform_identifier in ["Linux_32bit", "Linux_64bit", "Windows_64bit", "Linux_aarch64"], "Result %s is not of expected platform" % platform_identifier
+assert platform_identifier in ["Linux_32bit", "Linux_64bit", "Windows_64bit",
+                               "Linux_aarch64"], "Result %s is not of expected platform" % platform_identifier
 
 valid_file_name_characters = "-_.() " + string.ascii_letters + string.digits
+
+
 def string_to_valid_file_name(s):
     """
     Replaces invalid characters from string and replaces with dot '.'
@@ -295,33 +328,35 @@ def string_to_valid_file_name(s):
             result.append(".")
     return "".join(result)
 
+
 def gen_diff(left, right):
     import difflib
     s = difflib.SequenceMatcher(None, left, right)
     for tag, i1, i2, j1, j2 in s.get_opcodes():
         if tag == "equal":
-            for k in range(i1,i2):
+            for k in range(i1, i2):
                 l = left[k]
-                r = right[k-i1+j1]
-                yield (" ", l, r) 
+                r = right[k - i1 + j1]
+                yield (" ", l, r)
         elif tag == "insert":
-            for k in range(j1,j2):
+            for k in range(j1, j2):
                 r = right[k]
-                yield ("+", "", r) 
+                yield ("+", "", r)
         elif tag == "delete":
-            for k in range(i1,i2):
+            for k in range(i1, i2):
                 l = left[k]
                 yield ("-", l, "")
         elif tag == "replace":
-            for k in range(i1,i2):
+            for k in range(i1, i2):
                 l = left[k]
-                r = right[k-i1+j1]
+                r = right[k - i1 + j1]
                 # difflib combines blocks for some reason and returns "replace" tag
                 # for lines that are the same. Let's fix that
-                if l == r: 
-                    yield (" ", l ,r)
+                if l == r:
+                    yield (" ", l, r)
                 else:
-                    yield ("|", l ,r)
+                    yield ("|", l, r)
+
 
 def plural_s(val):
     """
@@ -333,12 +368,14 @@ def plural_s(val):
         return "s"
     return ""
 
+
 def chunks(l, n):
     """
     returns list of list of length n.
     E.g. chunks([1, 2, 3, 4, 5], 2) returns [[1, 2],  [3, 4], [5]]
     """
-    return [l[i:i+n] for i in range(0, len(l), n)]
+    return [l[i:i + n] for i in range(0, len(l), n)]
+
 
 def format_dev_sub_dev_id(pciIdPair):
     """
@@ -347,11 +384,14 @@ def format_dev_sub_dev_id(pciIdPair):
     if pciIdPair[1] is None:
         return "(0x%08X, None)" % pciIdPair[0]
     return "(0x%08X, 0x%08X)" % pciIdPair
-        
+
+
 # permission of:      other                         owner                         group
 stat_everyone_read_write = stat.S_IROTH | stat.S_IWOTH | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP
 
 # Exit if the current (effective) user can't create a file in the base test directory
+
+
 def verify_file_permissions(user):
 
     # Not a complete check, but enough to verify absolute path permission issues
@@ -368,6 +408,8 @@ def verify_file_permissions(user):
 
 # Exit if either the current user, or specified non-root user appear to lack sufficient
 # file system permissions for the test framework
+
+
 def verify_user_file_permissions():
     import test_utils
 
@@ -386,6 +428,8 @@ def verify_user_file_permissions():
             verify_file_permissions(user)
 
 # Exit if 'localhost' does not resolve to 127.0.0.1
+
+
 def verify_localhost_dns():
     try:
         host_ip = socket.gethostbyname("localhost")
@@ -396,16 +440,19 @@ def verify_localhost_dns():
         print("localhost does not resolve to 127.0.0.1")
         sys.exit(1)
 
-## Util method to check if the mps server is running in the background
+# Util method to check if the mps server is running in the background
+
+
 def is_mps_server_running():
     """
     Returns True if MPS server is running on the system
     """
 
     if is_linux():
-        ## MPS server is only supported on Linux.
+        # MPS server is only supported on Linux.
         cmd = 'ps -aux | grep nvidia-cuda | tr -s " " | cut -d " " -f 11'
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = p.communicate()
         if b"nvidia-cuda-mps-server" in out.rstrip():
             return True
@@ -414,8 +461,9 @@ def is_mps_server_running():
         else:
             return False
     else:
-        ## MPS server is not supported on Windows. Return False for Windows
+        # MPS server is not supported on Windows. Return False for Windows
         return False
+
 
 def shorten_path(path, shorten_to_levels=2):
     '''
@@ -425,6 +473,7 @@ def shorten_path(path, shorten_to_levels=2):
     path = os.path.normpath(path)
     shortened_paths = path.split(os.sep)[-shorten_to_levels:]
     return os.path.join(*shortened_paths)
+
 
 def create_dir(path):
     '''
@@ -438,6 +487,7 @@ def create_dir(path):
         if not os.path.isdir(path):
             raise
 
+
 def wait_for_pid_to_die(pid):
     '''This function returns once the pid no longer exists'''
     while True:
@@ -446,22 +496,28 @@ def wait_for_pid_to_die(pid):
         except OSError:
             break
 
+
 def verify_dcgm_service_not_active():
     cmd = 'systemctl is-active --quiet dcgm'
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     if p.returncode == 0:
         logException("Tests cannot run because the DCGM service is active")
 
     cmd = 'systemctl is-active --quiet nvidia-dcgm'
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     if p.returncode == 0:
-        logException("Tests cannot run because the Nvidia DCGM service is active")
+        logException(
+            "Tests cannot run because the Nvidia DCGM service is active")
+
 
 def verify_nvidia_fabricmanager_service_active_if_needed():
     cmd = "find /dev -regextype egrep -regex '/dev/nvidia-nvswitch[0-9]+'"
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, _ = p.communicate()
     out = out_buf.decode('utf-8')
     if not "nvswitch" in out.rstrip():
@@ -469,23 +525,28 @@ def verify_nvidia_fabricmanager_service_active_if_needed():
 
     # Fabricmanager must be running if there are nvswitch devices.
     cmd = 'systemctl status nvidia-fabricmanager'
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, _ = p.communicate()
     out = out_buf.decode('utf-8')
     if not "running" in out.rstrip():
-        logException("Tests cannot run because the Nvidia Fabricmanager service is not active on systems with nvswitches")
+        logException(
+            "Tests cannot run because the Nvidia Fabricmanager service is not active on systems with nvswitches")
 
     # Check for version mismatch
     cmd = "/usr/bin/dmesg | /usr/bin/grep -F 'nvidia-nvswitch: Version mismatch' | /usr/bin/tail -1"
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, _ = p.communicate()
     if out_buf:
         out_buf = out_buf.decode('utf-8')
         errmsg = f'Tests cannot run because dmesg contains this problem: "{out_buf}".'
         if option_parser.options.ignore_dmesg_checks:
-            logger.warning(f'{errmsg} Resolve the problem and retry before filing a bug report. (Ignored by user request).')
+            logger.warning(
+                f'{errmsg} Resolve the problem and retry before filing a bug report. (Ignored by user request).')
         else:
             logException(f'{errmsg} Resolve the problem before proceeding.')
+
 
 def checkDmesgForProblems():
     if not option_parser.options.dvssc_testing:
@@ -515,12 +576,14 @@ def checkDmesgForProblems():
 
     def check_display_limit():
         if display_limit <= 0:
-            logger.info("Maximum problems displayed. Further potential problems may be present and not displayed here.")
+            logger.info(
+                "Maximum problems displayed. Further potential problems may be present and not displayed here.")
 
     # Read up to `history_len` lines from dmesg. This could use a time-based search or starting with the most recent driver load.
     history_len = 25000
     cmd = f"/usr/bin/dmesg | /usr/bin/tail -{int(history_len)}"
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, _ = p.communicate(timeout=15)
     if not out_buf:
         logger.debug('No output from dmesg')
@@ -530,9 +593,11 @@ def checkDmesgForProblems():
     import re
     if option_parser.options.dvssc_testing:
         warn_pattern = re.compile('|'.join(warn_on_these))
-        abort_pattern = re.compile('|'.join(abort_on_these_if_dvssc + abort_on_these))
+        abort_pattern = re.compile(
+            '|'.join(abort_on_these_if_dvssc + abort_on_these))
     else:
-        warn_pattern = re.compile('|'.join(warn_on_these + abort_on_these_if_dvssc))
+        warn_pattern = re.compile(
+            '|'.join(warn_on_these + abort_on_these_if_dvssc))
         abort_pattern = re.compile('|'.join(abort_on_these))
 
     # Don't spam output on a messy system. Print the first few messages, then stop. Abort still means abort.
@@ -544,43 +609,51 @@ def checkDmesgForProblems():
             if not warn_pattern.search(abort_match.string):
                 if ignore_problems:
                     if display_limit > 0:
-                        logger.warning(f'Potential problem found in dmesg: "{abort_match.string}". ({ignore_reason}).')
+                        logger.warning(
+                            f'Potential problem found in dmesg: "{abort_match.string}". ({ignore_reason}).')
                         display_limit -= 1
                         check_display_limit()
                 else:
-                    logException(f'Tests cannot run because dmesg contains this problem: \'{abort_match.string}\'. ' \
+                    logException(f'Tests cannot run because dmesg contains this problem: \'{abort_match.string}\'. '
                                  'Resolve the problem before proceeding.')
             elif display_limit > 0:
-                logger.warning(f'Potential problem found in dmesg: "{abort_match.string}". (Ignored as it is believed to be non-fatal).')
+                logger.warning(
+                    f'Potential problem found in dmesg: "{abort_match.string}". (Ignored as it is believed to be non-fatal).')
                 display_limit -= 1
                 check_display_limit()
         else:
             warn_match = warn_pattern.search(line)
             if warn_match and display_limit > 0:
-                logger.warning(f'Potential problem found in dmesg: "{warn_match.string}".')
+                logger.warning(
+                    f'Potential problem found in dmesg: "{warn_match.string}".')
                 display_limit -= 1
                 check_display_limit()
 
+
 def checkProcesses():
     process_list = \
-    [
-        'nv-hostengine',
-        'nvvs'
-    ]
+        [
+            'nv-hostengine',
+            'nvvs'
+        ]
 
     for procname in process_list:
         if option_parser.options.use_running_hostengine and procname == 'nv-hostengine':
             continue
         cmd = f'/usr/bin/pidof {procname}'
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(
+            cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out_buf, _ = p.communicate(timeout=5)
         if out_buf:
             out_buf = out_buf.decode('utf-8')
             errmsg = f'Tests cannot run because one or more potentially conflicting process \'{procname}\' is running with pid(s): {out_buf}.\n'
             if option_parser.options.ignore_conflicting_procs:
-                logger.warning(f'{errmsg} Remove the conflicting processes and retry before filing a bug report. (Ignored by user request).')
+                logger.warning(
+                    f'{errmsg} Remove the conflicting processes and retry before filing a bug report. (Ignored by user request).')
             else:
-                logException(f'{errmsg} Remove the conflicting processes before proceeding.')
+                logException(
+                    f'{errmsg} Remove the conflicting processes before proceeding.')
+
 
 def checkSystemLoad():
     try:
@@ -588,7 +661,8 @@ def checkSystemLoad():
         warnAt = 0.85 * nproc
         failAt = 1.0 * nproc
     except:
-        logger.warning("Unable to get system cpu count, host CPU load not checked")
+        logger.warning(
+            "Unable to get system cpu count, host CPU load not checked")
         return
 
     try:
@@ -596,16 +670,20 @@ def checkSystemLoad():
         if max(load1, load5) > failAt:
             errmsg = f'Tests cannot run because load average exceeds {failAt}.'
             if option_parser.options.ignore_loadavg_checks:
-                logger.warning(f'{errmsg} Terminate other disruptive processes and retry before filing a bug report. (Ignored by user request).')
+                logger.warning(
+                    f'{errmsg} Terminate other disruptive processes and retry before filing a bug report. (Ignored by user request).')
             else:
-                logException(f'{errmsg} Terminate other disruptive processes before proceeding.')
+                logException(
+                    f'{errmsg} Terminate other disruptive processes before proceeding.')
         elif max(load1, load5) > warnAt:
             errmsg = f'Load average exceeds {warnAt}. Terminate other disruptive processes and retry before filing a bug report.'
             logger.warning(errmsg)
 
     except OSError:
-        logger.warning('Unable to retrieve load average, host CPU load not checked')
+        logger.warning(
+            'Unable to retrieve load average, host CPU load not checked')
         return
+
 
 def checkMemoryPressure():
     failAtMem = 0.95
@@ -658,18 +736,20 @@ def checkMemoryPressure():
                 if memTotal and memAvail and swapTotal and swapFree:
                     break
     except IOError as e:
-        logger.warning(f'Unable to read \'/proc/meminfo\': {e}: skipping memory and swap utilization check')
+        logger.warning(
+            f'Unable to read \'/proc/meminfo\': {e}: skipping memory and swap utilization check')
         return
 
     memUsed = (memTotal - memAvail) / memTotal
     if memUsed > failAtMem:
-        msg = f"Tests cannot run because memory available memory is {round(memUsed * 100.0),1}%."
+        msg = f"Tests cannot run because memory available memory is {round(memUsed * 100.0), 1}%."
         if option_parser.options.ignore_mem_checks:
-            logger.warning(f'{msg} Resolve memory pressure and retry before filing a bug report. (Ignored by user request).')
+            logger.warning(
+                f'{msg} Resolve memory pressure and retry before filing a bug report. (Ignored by user request).')
         else:
             logException(f'{msg} Resolve memory pressure before proceeding.')
     if memUsed > warnAtMem:
-        logger.Warning(f'Available memory is {round(memUsed * 100.0, 1)}%. Resolve memory pressure and ' \
+        logger.Warning(f'Available memory is {round(memUsed * 100.0, 1)}%. Resolve memory pressure and '
                        'retry before filing a bug report.')
 
     if swapTotal > 0:
@@ -677,35 +757,41 @@ def checkMemoryPressure():
         if swapUsed > failAtSwap:
             msg = f'Tests cannot run because available swap is {round(swapUsed * 100.0, 1)}%.'
             if option_parser.options.ignore_mem_checks:
-                logger.warning(f'{msg} Resolve memory pressure and retry before filing a bug report. (Ignored by user request).')
+                logger.warning(
+                    f'{msg} Resolve memory pressure and retry before filing a bug report. (Ignored by user request).')
             else:
-                logException(f'{msg} Resolve memory pressure before proceeding.')
+                logException(
+                    f'{msg} Resolve memory pressure before proceeding.')
         if swapUsed > warnAtSwap:
-            logger.Warning(f'Available swap is {round(swapUsed * 100.0, 1)}%. Resolve memory pressure and ' \
+            logger.Warning(f'Available swap is {round(swapUsed * 100.0, 1)}%. Resolve memory pressure and '
                            'retry before filing a bug report.')
+
 
 def verifyEcosystem():
     if option_parser.options.filter_tests:
-        logger.warning("filter_tests has been selected, skipping preflight checks.")
+        logger.warning(
+            "filter_tests has been selected, skipping preflight checks.")
         return
     checkSystemLoad()
     checkMemoryPressure()
     checkProcesses()
     checkDmesgForProblems()
 
+
 def find_process_using_hostengine_port():
     cmd = 'lsof -i -P -n | grep -Fw 5555'
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, err_buf = p.communicate()
     out = out_buf.decode('utf-8')
     err = err_buf.decode('utf-8')
     if len(out) == 0:
         # Nothing is using that port, we are good
         return None
-    
+
     he = "nv-hostengine"
     process_name = None
-    
+
     lines = out.split('\n')
     for line in lines:
         info = line.split()
@@ -713,7 +799,7 @@ def find_process_using_hostengine_port():
             continue
 
         if info[-1] != '(LISTEN)':
-            continue # not listening, ignore
+            continue  # not listening, ignore
 
         process_name = info[0]
         pid = int(info[1])
@@ -724,22 +810,26 @@ def find_process_using_hostengine_port():
 
     if process_name:
         # We have some other process using port 5555
-        msg = "Process %s with pid %d is listening to port 5555. Cannot run tests." % (process_name, pid)
+        msg = "Process %s with pid %d is listening to port 5555. Cannot run tests." % (
+            process_name, pid)
         logException(msg)
+
 
 '''
 Attempt to clean up zombie or accidentally left-open processes using port 5555
 '''
+
+
 def verify_hostengine_port_is_usable():
     pid = find_process_using_hostengine_port()
     if not pid:
         # no hostengine process, move on with life
         return
-    
+
     verify_dcgm_service_not_active()
     os.kill(pid, signal.SIGKILL)
 
-    return 
+    return
 
 
 def get_testing_framework_library_path():
@@ -761,10 +851,13 @@ def get_testing_framework_library_path():
 
     return './apps/%s/' % _get_arch_string()
 
+
 """
     Makes sure we can locate nvvs and dcgmi. If not, exit with an error.
     If so, set NVVS_BIN_PATH appropriately and return the path to dcgmi
 """
+
+
 def verify_binary_locations():
     nvvs_location = "%s/apps/nvvs/nvvs" % os.getcwd()
     if not os.path.isfile(nvvs_location):
@@ -776,7 +869,8 @@ def verify_binary_locations():
     print(("Setting NVVS_BIN_PATH to %s" % nvvs_location))
     os.environ["NVVS_BIN_PATH"] = nvvs_location
 
-    dcgmi_location = os.path.join(get_testing_framework_library_path(), "dcgmi")
+    dcgmi_location = os.path.join(
+        get_testing_framework_library_path(), "dcgmi")
 
     if not os.path.isfile(dcgmi_location):
         print(("dcgmi is NOT installed in: %s\n" % dcgmi_location))

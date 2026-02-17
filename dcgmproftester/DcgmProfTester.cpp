@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@
 #include <cmath>
 #include <csignal>
 #include <cstdint>
+#include <fmt/ranges.h>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -262,7 +263,7 @@ dcgmReturn_t DcgmProfTester::DcgmInit(void)
     dcgmReturn_t dcgmReturn = dcgmInit();
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cout << "dcgmInit() returned " << std::to_underlying(dcgmReturn) << ".";
+        std::cerr << "dcgmInit() returned " << std::to_underlying(dcgmReturn) << "." << std::endl;
 
         return dcgmReturn;
     }
@@ -270,7 +271,7 @@ dcgmReturn_t DcgmProfTester::DcgmInit(void)
     dcgmReturn = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &m_dcgmHandle);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cout << "dcgmStartEmbedded() returned " << std::to_underlying(dcgmReturn) << ".";
+        std::cerr << "dcgmStartEmbedded() returned " << std::to_underlying(dcgmReturn) << "." << std::endl;
 
         return dcgmReturn;
     }
@@ -457,7 +458,7 @@ dcgmReturn_t DcgmProfTester::Init(int argc, char *argv[])
     dcgmReturn = ParseCommandLine(argc, argv);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        std::cout << "Command line parsing failed.";
+        std::cerr << "Command line parsing failed." << std::endl;
 
         return dcgmReturn;
     }
@@ -1176,7 +1177,7 @@ int main(int argc, char **argv)
         sa.sa_flags = 0;
         if (sigaction(SIGCHLD, &sa, 0) == -1)
         {
-            std::cout << "Could not ignore SIGCHLD from worker threads.";
+            std::cerr << "Could not ignore SIGCHLD from worker threads." << std::endl;
 
             return DCGM_ST_GENERIC_ERROR;
         }
@@ -1184,7 +1185,7 @@ int main(int argc, char **argv)
         dcgmReturn = dpt->Init(argc, argv);
         if (dcgmReturn)
         {
-            std::cout << "Error " << std::to_underlying(dcgmReturn) << " from Init(). Exiting.";
+            std::cerr << "Error " << std::to_underlying(dcgmReturn) << " from Init(). Exiting." << std::endl;
 
             return dcgmReturn;
         }
@@ -1192,7 +1193,7 @@ int main(int argc, char **argv)
         auto maxwellPascalVoltaGpus = dpt->GetMaxwellPascalVoltaArchGpus();
         if (!maxwellPascalVoltaGpus.has_value())
         {
-            std::cout << "Error [" << maxwellPascalVoltaGpus.error()
+            std::cerr << "Error [" << maxwellPascalVoltaGpus.error()
                       << "] from taking GPUs with Maxwell, Pascal, or Volta architecture. Exiting." << std::endl;
             return DCGM_ST_GENERIC_ERROR;
         }
@@ -1201,7 +1202,7 @@ int main(int argc, char **argv)
         auto cuResult  = cuDriverGetVersion(&cudaLoaded);
         if (cuResult != CUDA_SUCCESS)
         {
-            std::cout << "Unable to validate Cuda version. cuDriverGetVersion returned " << std::to_underlying(cuResult)
+            std::cerr << "Unable to validate Cuda version. cuDriverGetVersion returned " << std::to_underlying(cuResult)
                       << "." << std::endl;
             return DCGM_ST_GENERIC_ERROR;
         }
@@ -1218,8 +1219,8 @@ int main(int argc, char **argv)
                     "CUDA 13.0 drops support for everything that is < 7.5 SM Cuda Compatibility. These older SKUs need to run a 12.9-linked application. "
                      "The following GPUs are affected: {}",
                     gpus);
-                std::cout << msg << std::endl;
-                std::cout << "Please use dcgmproftester12 instead." << std::endl;
+                std::cerr << msg << std::endl;
+                std::cerr << "Please use dcgmproftester12 instead." << std::endl;
                 return DCGM_ST_VER_MISMATCH;
             }
         }
@@ -1232,7 +1233,7 @@ int main(int argc, char **argv)
         {
             if (majorCudaVersionLoaded != CUDA_VERSION_USED)
             {
-                std::cout << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
+                std::cerr << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
                           << ". Installed Cuda version is " << majorCudaVersionLoaded << "." << std::endl;
                 return DCGM_ST_VER_MISMATCH;
             }

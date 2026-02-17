@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import dcgm_fields
 import argparse
 import sys
 
+
 def create_fake_gpus(handle, gpuCount):
     cfe = dcgm_structs_internal.c_dcgmCreateFakeEntities_v2()
     cfe.numToCreate = 0
@@ -35,6 +36,7 @@ def create_fake_gpus(handle, gpuCount):
             fakeGpuList.append(updated.entityList[i].entity.entityId)
 
     return fakeGpuList
+
 
 def create_fake_gpu_instances(handle, gpuIds, instanceCount):
     cfe = dcgm_structs_internal.c_dcgmCreateFakeEntities_v2()
@@ -53,9 +55,11 @@ def create_fake_gpu_instances(handle, gpuIds, instanceCount):
         updated = dcgm_agent_internal.dcgmCreateFakeEntities(handle, cfe)
         for i in range(0, updated.numToCreate):
             if updated.entityList[i].entity.entityGroupId == dcgm_fields.DCGM_FE_GPU_I:
-                fakeInstanceMap[updated.entityList[i].entity.entityId] = updated.entityList[i].parent.entityId
+                fakeInstanceMap[updated.entityList[i]
+                                .entity.entityId] = updated.entityList[i].parent.entityId
 
     return fakeInstanceMap
+
 
 def create_fake_compute_instances(handle, parentIds, ciCount):
     fakeCIMap = {}
@@ -78,14 +82,15 @@ def create_fake_compute_instances(handle, parentIds, ciCount):
 
     return fakeCIMap
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-g', '--gpu-count', type=int, default=1, dest='gpuCount',
-            help='Specify the number of fake GPUs to create')
+                        help='Specify the number of fake GPUs to create')
     parser.add_argument('-i', '--gpu-instance-count', type=int, default=2, dest='gpuInstanceCount',
-            help='Specify the number of fake GPU instances to create')
+                        help='Specify the number of fake GPU instances to create')
     parser.add_argument('-c', '--compute-instance-count', type=int, default=2, dest='ciCount',
-            help='Specify the number of fake compute instances to create')
+                        help='Specify the number of fake compute instances to create')
     args = parser.parse_args()
 
     if args.gpuCount < 1:
@@ -96,15 +101,22 @@ def main():
         print("GPU instance count must be greater than 1 if compute instance count is greater than 1")
         sys.exit(1)
 
-    handle = pydcgm.DcgmHandle(None, "localhost", dcgm_structs.DCGM_OPERATION_MODE_AUTO)
+    handle = pydcgm.DcgmHandle(None,
+                               ipAddress="localhost",
+                               opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO
+                               )
+
     gpuIds = create_fake_gpus(handle.handle, args.gpuCount)
     if args.gpuInstanceCount > 0:
-        instanceMap = create_fake_gpu_instances(handle.handle, gpuIds, args.gpuInstanceCount)
+        instanceMap = create_fake_gpu_instances(
+            handle.handle, gpuIds, args.gpuInstanceCount)
         if args.ciCount > 0:
-            create_fake_compute_instances(handle.handle, list(instanceMap.keys()), args.ciCount)
+            create_fake_compute_instances(
+                handle.handle, list(instanceMap.keys()), args.ciCount)
 
-    print("Created {} fake GPUs, {} fake GPU instances, and {} fake compute instances".format(args.gpuCount, args.gpuInstanceCount, args.ciCount))
+    print("Created {} fake GPUs, {} fake GPU instances, and {} fake compute instances".format(
+        args.gpuCount, args.gpuInstanceCount, args.ciCount))
+
 
 if __name__ == "__main__":
     main()
-

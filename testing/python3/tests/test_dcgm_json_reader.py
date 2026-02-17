@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,9 +27,12 @@ import sys
 from common.Struct import Struct
 from DcgmJsonReader import DcgmJsonReader
 
+
 def create_fv(key, values):
-    fv_values = [Struct(fieldId=key, value=val) for val in values] # Struct(values=values)
+    fv_values = [Struct(fieldId=key, value=val)
+                 for val in values]  # Struct(values=values)
     return {key: Struct(values=fv_values)}
+
 
 def test_convert_field_id_to_tag():
     fieldTagMap = {
@@ -41,7 +44,9 @@ def test_convert_field_id_to_tag():
     dr = DcgmJsonReader()
     dr.m_fieldIdToInfo = fieldTagMap
     for key in list(fieldTagMap.keys()):
-        assert (dr.ConvertFieldIdToTag(key) == fieldTagMap[key].tag) # pylint: disable=no-member
+        assert (dr.ConvertFieldIdToTag(key) ==
+                fieldTagMap[key].tag)  # pylint: disable=no-member
+
 
 def test_prepare_json():
     obj = {
@@ -59,8 +64,9 @@ def test_prepare_json():
     for gpuId in gpuUuidMap:
         outJson = dr.PrepareJson(gpuId, obj)
         outObj = loads(outJson)
-        assert(outObj['star wars'] == 'overrated')
-        assert(outObj['gpu_uuid'] == gpuUuidMap[gpuId])
+        assert (outObj['star wars'] == 'overrated')
+        assert (outObj['gpu_uuid'] == gpuUuidMap[gpuId])
+
 
 def test_custom_data_handler():
     namespace = Struct(called=False, result=None)
@@ -87,6 +93,7 @@ def test_custom_data_handler():
     dr.CustomDataHandler(fvs)
     assert namespace.called
     assert expected == namespace.result
+
 
 @maybemock.patch.multiple('logging', info=maybemock.DEFAULT, warning=maybemock.DEFAULT)
 def test_json_reader_custom_json_handler(info, warning):

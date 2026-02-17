@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,12 +25,12 @@
 
 DEV_MODE_MSG = "Manual test for verifying plugin output. Use developer mode to enable."
 
-# The sample scripts can potentially take a long time to run since they perform 
+# The sample scripts can potentially take a long time to run since they perform
 # a health check.
 SAMPLE_SCRIPT_TIMEOUT = 120.0
 
 DCGM_SKIP_SYSMON_HARDWARE_CHECK = "DCGM_SKIP_SYSMON_HARDWARE_CHECK"
 
-# duration to gather data for when we limit the record count for DCGM to store  
+# duration to gather data for when we limit the record count for DCGM to store
 # This time needs to be long enough for memory usage to level off.
 BOUNDED_TEST_DURATION = 40

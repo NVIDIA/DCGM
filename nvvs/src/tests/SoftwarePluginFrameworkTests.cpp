@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,6 +39,18 @@ public:
     std::vector<Gpu> m_gpuStorage;
     std::vector<Gpu *> m_visibleGpus;
     std::vector<int> m_gpuIds;
+    static constexpr std::array<std::string_view, 12> m_testNameVec = { "CUDA Main Library",
+                                                                        "Denylist",
+                                                                        "Environmental Variables",
+                                                                        "Fabric Manager",
+                                                                        "Graphics Processes",
+                                                                        "Inforom",
+                                                                        "Memory Health",
+                                                                        "NVML Library",
+                                                                        "Page Retirement/Row Remap",
+                                                                        "Permissions and OS-related Blocks",
+                                                                        "Persistence Mode",
+                                                                        "SRAM Threshold Count" };
 
     // methods
     WrapperSoftwareTestFramework(EntitySet &entitySet);
@@ -136,22 +148,11 @@ TEST_CASE("Test 1 - Software object creation with Output obj")
     // ---------------
     // check the test map
     std::map<std::string, std::string> testMap = softwareObj.WrapperGetTestNameMap();
-    std::vector<std::string> testNameVec       = { "CUDA Main Library",
-                                                   "Denylist",
-                                                   "Environmental Variables",
-                                                   "Fabric Manager",
-                                                   "Graphics Processes",
-                                                   "Inforom",
-                                                   "NVML Library",
-                                                   "Page Retirement/Row Remap",
-                                                   "Permissions and OS-related Blocks",
-                                                   "Persistence Mode",
-                                                   "SRAM Threshold Count" };
     int i                                      = 0;
 
     for (auto &pair : testMap)
     {
-        REQUIRE(pair.first == testNameVec[i]);
+        REQUIRE(pair.first == std::string(softwareObj.m_testNameVec[i]));
         i++;
     }
 
@@ -173,22 +174,10 @@ TEST_CASE("Test 2 - Init Test Name Map")
 
     // ---------------
     std::map<std::string, std::string> testMap = softwareObjLocal.WrapperGetTestNameMap();
-    std::vector<std::string> testNameVec       = { "CUDA Main Library",
-                                                   "Denylist",
-                                                   "Environmental Variables",
-                                                   "Fabric Manager",
-                                                   "Graphics Processes",
-                                                   "Inforom",
-                                                   "NVML Library",
-                                                   "Page Retirement/Row Remap",
-                                                   "Permissions and OS-related Blocks",
-                                                   "Persistence Mode",
-                                                   "SRAM Threshold Count" };
-
-    int i = 0;
+    int i                                      = 0;
     for (auto &it : testMap)
     {
-        REQUIRE(it.first == testNameVec[i]);
+        REQUIRE(it.first == std::string(softwareObjLocal.m_testNameVec[i]));
         i++;
     }
 
@@ -206,19 +195,6 @@ TEST_CASE("Test 3 - Init Test Parameters Map")
 
     std::map<std::string, std::string> testMap                            = softwareObjLocal.WrapperGetTestNameMap();
     std::map<std::string, std::unique_ptr<TestParameters>> const &tempMap = softwareObjLocal.WrapperGetTestParamMap();
-    std::vector<std::string> testNameVec                                  = { "CUDA Main Library",
-                                                                              "Denylist",
-                                                                              "Environmental Variables",
-                                                                              "Fabric Manager",
-                                                                              "Graphics Processes",
-                                                                              "Inforom",
-                                                                              "NVML Library",
-                                                                              "Page Retirement/Row Remap",
-                                                                              "Permissions and OS-related Blocks",
-                                                                              "Persistence Mode",
-                                                                              "SRAM Threshold Count" };
-
-
     std::vector<std::string> testNameArray;
     std::vector<std::string> tpNameArray;
 
@@ -227,7 +203,7 @@ TEST_CASE("Test 3 - Init Test Parameters Map")
     int i = 0;
     for (auto &pair : tempMap)
     {
-        testNameArray.push_back(testMap[testNameVec[i]]);
+        testNameArray.push_back(testMap[std::string(softwareObjLocal.m_testNameVec[i])]);
         tpNameArray.push_back(pair.second->GetString(SW_STR_DO_TEST));
         i++;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #define QUERY_H_
 
 #include "Command.h"
+#include <DcgmiOutput.h>
+#include <dcgm_structs_internal.h>
 #include <utility>
 #include <vector>
 
@@ -34,8 +36,11 @@ public:
     /*****************************************************************************
      * This method is used to display the GPUs on the host-engine represented
      * by the DCGM handle
+     *
+     * @param[in] mNvcmHandle DCGM handle
+     * @param[in] showAll     If true, display all GPUs with status. If false, only show active GPUs
      *****************************************************************************/
-    dcgmReturn_t DisplayDiscoveredDevices(dcgmHandle_t mNvcmHandle);
+    dcgmReturn_t DisplayDiscoveredDevices(dcgmHandle_t mNvcmHandle, bool showAll);
 
     /*****************************************************************************
      * This method is used to display GPU info for the specified device on the
@@ -167,12 +172,14 @@ class QueryDeviceList : public Command
 {
 public:
     QueryDeviceList(std::string hostname);
+    QueryDeviceList(std::string hostname, bool showAll);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
 
 private:
     Query queryObj;
+    bool m_showAll;
 };
 
 class QueryHierarchyInfo : public Command
@@ -196,6 +203,15 @@ std::vector<std::pair<uint32_t, uint32_t>> HelperGetCpuRangesFromBitmask(uint64_
  * Helper method to convert the CPU ranges
  *****************************************************************************/
 std::string HelperBuildCpuListFromRanges(std::vector<std::pair<uint32_t, uint32_t>> ranges);
+
+/*****************************************************************************
+ * Populates GPU device information into the output structure
+ *****************************************************************************/
+void HelperPopulateGpuDeviceOutput(DcgmiOutput &out,
+                                   dcgm_field_eid_t gpuId,
+                                   DcgmEntityStatus_t status,
+                                   dcgmDeviceAttributes_t const &attributes,
+                                   bool showAll);
 
 std::string FormatMigHierarchy(dcgmMigHierarchy_v2 &hierarchy);
 

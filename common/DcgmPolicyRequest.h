@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 class DcgmPolicyRequest : public DcgmRequest
 {
 public:
-    DcgmPolicyRequest(fpRecvUpdates callback, uint64_t userData, std::mutex &cbMutex);
+    DcgmPolicyRequest(fpRecvUpdates callback, uint64_t userData);
     virtual ~DcgmPolicyRequest();
     int ProcessMessage(std::unique_ptr<DcgmMessage> msg) override;
 
@@ -31,7 +31,6 @@ private:
     bool mIsAckRecvd;
     fpRecvUpdates mCallback;
     uint64_t mUserData;
-    std::mutex &mCbMutex;
 };
 
 #endif /* DCGMPOLICYREQUEST_H */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,14 @@
  */
 
 #include "DcgmConfigManager.h"
+#include "dcgm_structs.h"
 
 #include <DcgmLogging.h>
 
 #include <dcgm_nvml.h>
 #include <nvcmvalue.h>
 
+#include <fmt/ranges.h>
 #include <sstream>
 
 namespace
@@ -55,9 +57,10 @@ DcgmConfigManager::DcgmConfigManager(dcgmCoreCallbacks_t &dcc)
 {
     mClocksConfigured = 0;
 
-    m_mutex = new DcgmMutex(0);
-
+    std::unique_ptr<DcgmMutex> tmpMutex = std::make_unique<DcgmMutex>(0);
     memset(m_activeConfig, 0, sizeof(m_activeConfig));
+    InitAliveEntities();
+    m_mutex = tmpMutex.release();
 }
 
 /*****************************************************************************/
@@ -65,23 +68,50 @@ DcgmConfigManager::~DcgmConfigManager()
 {
     int i;
 
-    /* Cleanup Data structures */
-    dcgm_mutex_lock(m_mutex);
-
+    dcgmConfig_t *configToFree[DCGM_MAX_NUM_DEVICES];
+    {
+        /* Cleanup Data structures */
+        DcgmLockGuard lockGuard(m_mutex);
+        for (i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
+        {
+            if (m_activeConfig[i])
+            {
+                configToFree[i]   = m_activeConfig[i];
+                m_activeConfig[i] = nullptr;
+            }
+            else
+            {
+                configToFree[i] = nullptr;
+            }
+        }
+    }
     for (i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
     {
-        if (m_activeConfig[i])
+        if (configToFree[i])
         {
-            free(m_activeConfig[i]);
-            m_activeConfig[i] = 0;
+            free(configToFree[i]);
         }
     }
 
-    dcgm_mutex_unlock(m_mutex);
-
     // coverity[double_unlock] - This is a false positive. The DcgmMutex destructor checks the mutex state
     delete m_mutex;
-    m_mutex = 0;
+    m_mutex = nullptr;
+}
+
+void DcgmConfigManager::InitAliveEntities()
+{
+    std::vector<unsigned int> gpuIds;
+    int constexpr activeOnly = 1;
+    auto ret                 = mpCoreProxy.GetGpuIds(activeOnly, gpuIds);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("Failed to get GPU IDs, ret: {}", ret);
+        throw std::runtime_error(fmt::format("Failed to get GPU IDs, ret: {}", ret));
+    }
+    for (auto gpuId : gpuIds)
+    {
+        m_aliveEntities.insert({ DCGM_FE_GPU, gpuId });
+    }
 }
 
 /*****************************************************************************/
@@ -117,13 +147,19 @@ dcgmReturn_t DcgmConfigManager::HelperSetEccMode(unsigned int gpuId,
     valueToSet.val.i64 = setConfig->eccMode;
 
     dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_ECC_PENDING, &valueToSet);
-    if (dcgmRet != DCGM_ST_OK)
+    switch (dcgmRet)
     {
-        log_error("Got error {} while setting ECC to {} for gpuId {}", dcgmRet, setConfig->eccMode, gpuId);
-        return dcgmRet;
+        case DCGM_ST_OK:
+            log_debug("Successfully set ECC to {} for gpuId {}", setConfig->eccMode, gpuId);
+            *pIsResetNeeded = true;
+            break;
+        case DCGM_ST_GPU_IS_LOST:
+            log_debug("GPU is lost while setting ECC to {} for gpuId {}", setConfig->eccMode, gpuId);
+            return dcgmRet;
+        default:
+            log_error("Got error {} while setting ECC to {} for gpuId {}", dcgmRet, setConfig->eccMode, gpuId);
+            return dcgmRet;
     }
-
-    *pIsResetNeeded = true;
     return DCGM_ST_OK;
 }
 
@@ -143,12 +179,19 @@ dcgmReturn_t DcgmConfigManager::HelperSetPowerLimit(unsigned int gpuId, dcgmConf
     value.val.d = setConfig->powerLimit.val;
 
     dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, &value);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        log_error("Error in setting power limit for GPU ID: {} Error: {}", gpuId, (int)dcgmRet);
-        return dcgmRet;
+        case DCGM_ST_OK:
+            log_debug("Successfully set power limit: {} for gpuId {}", setConfig->powerLimit.val, gpuId);
+            break;
+        case DCGM_ST_GPU_IS_LOST:
+            log_debug("GPU is lost while setting power limit: {} for gpuId {}", setConfig->powerLimit.val, gpuId);
+            return dcgmRet;
+        default:
+            log_error(
+                "Got error {} while setting power limit: {} for gpuId {}", dcgmRet, setConfig->powerLimit.val, gpuId);
+            return dcgmRet;
     }
-
     return DCGM_ST_OK;
 }
 
@@ -182,14 +225,21 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
 
         /* Set the clock. 0-0 implies Reset */
         dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_APP_MEM_CLOCK, &value);
-        if (DCGM_ST_OK != dcgmRet)
+        switch (dcgmRet)
         {
-            log_error("Can't set fixed clocks {}, {} for GPU Id {}. Error: {}",
-                      targetMemClock,
-                      targetSmClock,
-                      gpuId,
-                      dcgmRet);
-            return dcgmRet;
+            case DCGM_ST_OK:
+                log_debug("Successfully set reset clocks for GPU Id {}", gpuId);
+                break;
+            case DCGM_ST_GPU_IS_LOST:
+                log_debug("GPU is lost while setting reset clocks for GPU Id {}", gpuId);
+                return dcgmRet;
+            default:
+                log_error("Can't set fixed clocks {}, {} for GPU Id {}. Error: {}",
+                          targetMemClock,
+                          targetSmClock,
+                          gpuId,
+                          dcgmRet);
+                return dcgmRet;
         }
 
         /* Reenable auto boosted clocks when app clocks are disabled */
@@ -202,10 +252,19 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
             log_debug("Got NOT_SUPPORTED when setting auto boost for gpuId {}", gpuId);
             /* Return success below */
         }
+        else if (dcgmRet == DCGM_ST_GPU_IS_LOST)
+        {
+            log_debug("GPU is lost while setting auto boost for gpuId {}", gpuId);
+            return dcgmRet;
+        }
         else if (DCGM_ST_OK != dcgmRet)
         {
             log_error("Can't set Auto-boost for GPU Id {}. Error: {}", gpuId, dcgmRet);
             return dcgmRet;
+        }
+        else
+        {
+            log_debug("Successfully set Auto-boost for GPU Id {}", gpuId);
         }
 
         return DCGM_ST_OK;
@@ -216,11 +275,22 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
     value.val.i64  = nvcmvalue_int32_to_int64(targetMemClock);
     value.val2.i64 = nvcmvalue_int32_to_int64(targetSmClock);
     dcgmRet        = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_APP_MEM_CLOCK, &value);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        log_error(
-            "Can't set fixed clocks {}, {} for GPU Id {}. Error: {}", targetMemClock, targetSmClock, gpuId, dcgmRet);
-        return dcgmRet;
+        case DCGM_ST_OK:
+            log_debug("Successfully set fixed clocks {}, {} for GPU Id {}", targetMemClock, targetSmClock, gpuId);
+            break;
+        case DCGM_ST_GPU_IS_LOST:
+            log_debug(
+                "GPU is lost while setting fixed clocks {}, {} for GPU Id {}", targetMemClock, targetSmClock, gpuId);
+            return dcgmRet;
+        default:
+            log_error("Can't set fixed clocks {}, {} for GPU Id {}. Error: {}",
+                      targetMemClock,
+                      targetSmClock,
+                      gpuId,
+                      dcgmRet);
+            return dcgmRet;
     }
 
     /* Disable auto boosted clocks when app clocks are set */
@@ -233,10 +303,19 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
         log_debug("Got NOT_SUPPORTED when setting auto boost for gpuId {}", gpuId);
         /* Return success below */
     }
+    else if (dcgmRet == DCGM_ST_GPU_IS_LOST)
+    {
+        log_debug("GPU is lost while setting auto boost for gpuId {}", gpuId);
+        return dcgmRet;
+    }
     else if (DCGM_ST_OK != dcgmRet)
     {
         log_error("Can't set Auto-boost for GPU Id {}. Error: {}", gpuId, dcgmRet);
         return dcgmRet;
+    }
+    else
+    {
+        log_debug("Successfully disable auto boosted clocks for GPU Id {}", gpuId);
     }
 
     return DCGM_ST_OK;
@@ -258,10 +337,17 @@ dcgmReturn_t DcgmConfigManager::HelperSetComputeMode(unsigned int gpuId, dcgmCon
     value.val.i64 = config->computeMode;
 
     dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_COMPUTE_MODE, &value);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        log_error("Failed to set compute mode for GPU ID: {} Error: {}", gpuId, dcgmRet);
-        return dcgmRet;
+        case DCGM_ST_OK:
+            log_debug("Successfully set compute mode {} for GPU Id {}", config->computeMode, gpuId);
+            break;
+        case DCGM_ST_GPU_IS_LOST:
+            log_debug("GPU is lost while setting compute mode {} for GPU Id {}", config->computeMode, gpuId);
+            return dcgmRet;
+        default:
+            log_error("Failed to set compute mode for GPU ID: {} Error: {}", gpuId, dcgmRet);
+            return dcgmRet;
     }
 
     return DCGM_ST_OK;
@@ -359,10 +445,24 @@ dcgmReturn_t DcgmConfigManager::HelperSetWorkloadPowerProfiles(
               newCmWorkloadPowerProfiles.action,
               DcgmNs::Utils::HelperDisplayPowerBitmask(newCmWorkloadPowerProfiles.profileMask));
     dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &value);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        log_error("Failed to set requested workload power profile for GPU ID: {} Error: {}", gpuId, dcgmRet);
-        return dcgmRet;
+        case DCGM_ST_OK:
+            log_debug("Successfully set requested workload power profile for GPU ID: {} with action {} and mask {}",
+                      gpuId,
+                      newCmWorkloadPowerProfiles.action,
+                      DcgmNs::Utils::HelperDisplayPowerBitmask(newCmWorkloadPowerProfiles.profileMask));
+            break;
+        case DCGM_ST_GPU_IS_LOST:
+            log_debug(
+                "GPU is lost while setting requested workload power profile for GPU ID: {} with action {} and mask {}",
+                gpuId,
+                newCmWorkloadPowerProfiles.action,
+                DcgmNs::Utils::HelperDisplayPowerBitmask(newCmWorkloadPowerProfiles.profileMask));
+            return dcgmRet;
+        default:
+            log_error("Failed to set requested workload power profile for GPU ID: {} Error: {}", gpuId, dcgmRet);
+            return dcgmRet;
     }
 
     return DCGM_ST_OK;
@@ -392,24 +492,29 @@ static void dcmBlankConfig(dcgmConfig_t *config, unsigned int gpuId)
 /*****************************************************************************/
 dcgmConfig_t *DcgmConfigManager::HelperGetTargetConfig(unsigned int gpuId)
 {
-    dcgmConfig_t *retVal = 0;
+    dcgmConfig_t *retVal = nullptr;
+    dcgmConfig_t *newRec = (dcgmConfig_t *)malloc(sizeof(dcgmConfig_t));
 
-    dcgmMutexReturn_t mutexSt = dcgm_mutex_lock_me(m_mutex);
-
-    retVal = m_activeConfig[gpuId];
-
-    if (!retVal)
     {
-        retVal = (dcgmConfig_t *)malloc(sizeof(dcgmConfig_t));
-        dcmBlankConfig(retVal, gpuId);
+        DcgmLockGuard lockGuard(m_mutex);
 
-        /* Activate our blank record */
-        m_activeConfig[gpuId] = retVal;
+        if (m_activeConfig[gpuId] != nullptr)
+        {
+            retVal = m_activeConfig[gpuId];
+        }
+        else
+        {
+            /* Activate our blank record. */
+            dcmBlankConfig(newRec, gpuId);
+            m_activeConfig[gpuId] = newRec;
+            retVal                = newRec;
+        }
     }
 
-    if (mutexSt != DCGM_MUTEX_ST_LOCKEDBYME)
-        dcgm_mutex_unlock(m_mutex);
-
+    if (retVal != newRec && newRec != nullptr)
+    {
+        free(newRec);
+    }
     return retVal;
 }
 
@@ -493,6 +598,12 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
     dcgmReturn_t dcgmRet;
     dcgmConfig_t currentConfig;
 
+    if (!m_aliveEntities.contains({ DCGM_FE_GPU, gpuId }))
+    {
+        statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_GPU_IS_LOST);
+        return DCGM_ST_GPU_IS_LOST;
+    }
+
     if (!setConfig)
     {
         statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
@@ -523,17 +634,25 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
     /* Set Ecc Mode */
     bool isResetNeeded = false;
     dcgmRet            = HelperSetEccMode(gpuId, setConfig, &currentConfig, &isResetNeeded);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_CURRENT, dcgmRet);
-
-        if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+        // Treat GPU is lost as success and update the active config, since it will be re-applied when the GPU is
+        // re-attached.
+        case DCGM_ST_OK:
+        case DCGM_ST_GPU_IS_LOST:
             HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_ECC_CURRENT, setConfig);
-    }
-    else
-    {
-        HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_ECC_CURRENT, setConfig);
+            break;
+        default:
+        {
+            multiPropertyRetCode++;
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_CURRENT, dcgmRet);
+
+            if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+            {
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_ECC_CURRENT, setConfig);
+            }
+        }
+        break;
     }
 
     /* Check if GPU reset is needed after GPU reset */
@@ -547,47 +666,67 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
 
     /* Set Power Limit */
     dcgmRet = HelperSetPowerLimit(gpuId, setConfig);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, dcgmRet);
-
-        if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+        // Treat GPU is lost as success and update the active config, since it will be re-applied when the GPU is
+        // re-attached.
+        case DCGM_ST_OK:
+        case DCGM_ST_GPU_IS_LOST:
             HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, setConfig);
-    }
-    else
-    {
-        HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, setConfig);
+            break;
+        default:
+        {
+            multiPropertyRetCode++;
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, dcgmRet);
+
+            if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+            {
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, setConfig);
+            }
+        }
+        break;
     }
 
     /* Set Perf States */
     dcgmRet = HelperSetPerfState(gpuId, setConfig);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_APP_SM_CLOCK, dcgmRet);
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_APP_MEM_CLOCK, dcgmRet);
-
-        if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+        // Treat GPU is lost as success and update the active config, since it will be re-applied when the GPU is
+        // re-attached.
+        case DCGM_ST_OK:
+        case DCGM_ST_GPU_IS_LOST:
             HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_APP_SM_CLOCK, setConfig);
-    }
-    else
-    {
-        HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_APP_SM_CLOCK, setConfig);
+            break;
+        default:
+        {
+            multiPropertyRetCode++;
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_APP_SM_CLOCK, dcgmRet);
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_APP_MEM_CLOCK, dcgmRet);
+
+            if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_APP_SM_CLOCK, setConfig);
+        }
+        break;
     }
 
     dcgmRet = HelperSetComputeMode(gpuId, setConfig);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_COMPUTE_MODE, dcgmRet);
-
-        if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+        // Treat GPU is lost as success and update the active config, since it will be re-applied when the GPU is
+        // re-attached.
+        case DCGM_ST_OK:
+        case DCGM_ST_GPU_IS_LOST:
             HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_COMPUTE_MODE, setConfig);
-    }
-    else
-    {
-        HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_COMPUTE_MODE, setConfig);
+            break;
+        default:
+        {
+            multiPropertyRetCode++;
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_COMPUTE_MODE, dcgmRet);
+
+            if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_COMPUTE_MODE, setConfig);
+        }
+        break;
     }
 
     /* Set Workload Power Profiles */
@@ -602,25 +741,31 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
                                    needsMerge,
                                    newCmWorkloadPowerProfiles);
     dcgmRet = HelperSetWorkloadPowerProfiles(gpuId, newCmWorkloadPowerProfiles);
-    if (DCGM_ST_OK != dcgmRet)
+    switch (dcgmRet)
     {
-        multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, dcgmRet);
-
-        if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
-        {
+        // Treat GPU is lost as success and update the active config, since it will be re-applied when the GPU is
+        // re-attached.
+        case DCGM_ST_OK:
+        case DCGM_ST_GPU_IS_LOST:
             if (needsMerge)
             {
                 HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &mergeConfig);
             }
-        }
-    }
-    else
-    {
-        if (needsMerge)
+            break;
+        default:
         {
-            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &mergeConfig);
+            multiPropertyRetCode++;
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, dcgmRet);
+
+            if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
+            {
+                if (needsMerge)
+                {
+                    HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &mergeConfig);
+                }
+            }
         }
+        break;
     }
 
     /* If any of the operation failed. Return it as specific error if all errors are the same */
@@ -660,6 +805,14 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
     {
         log_error("Got error {} from GetMultipleLatestLiveSamples()", dcgmReturn);
         return dcgmReturn;
+    }
+
+    {
+        DcgmLockGuard lockGuard(m_mutex);
+        if (!m_aliveEntities.contains({ DCGM_FE_GPU, gpuId }))
+        {
+            return DCGM_ST_GPU_IS_LOST;
+        }
     }
 
     config->gpuId = gpuId;
@@ -734,7 +887,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
     }
 
     /* Get group's gpu ids */
-    dcgmReturn = mpCoreProxy.GetGroupGpuIds(0, groupId, gpuIds);
+    dcgmReturn = mpCoreProxy.GetGroupGpuIds(0, groupId, EntityListOption::ActiveOnly, gpuIds);
     if (dcgmReturn != DCGM_ST_OK)
     {
         /* Implies Invalid group ID */
@@ -795,16 +948,13 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
         return DCGM_ST_REQUIRES_ROOT;
     }
 
-    dcgmReturn = mpCoreProxy.GetGroupGpuIds(0, groupId, gpuIds);
+    dcgmReturn = mpCoreProxy.GetGroupGpuIds(0, groupId, EntityListOption::ActiveOnly, gpuIds);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetAllGroupIds", (int)dcgmReturn);
         statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
         return dcgmReturn;
     }
-
-    /* Acquire the lock for the remainder of the function */
-    DcgmLockGuard lockGuard(m_mutex);
 
     /* Get number of gpus from thr group */
     if (!gpuIds.size())
@@ -815,24 +965,42 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
         return DCGM_ST_BADPARAM;
     }
 
+    std::vector<unsigned int> unexpectedGpus;
+    unexpectedGpus.reserve(gpuIds.size());
     multiRetCode = DCGM_ST_OK;
-
-    *numConfigs = 0;
-    for (index = 0; index < gpuIds.size(); index++)
     {
-        unsigned int gpuId         = gpuIds[index];
-        dcgmConfig_t *activeConfig = HelperGetTargetConfig(gpuId);
+        /* Acquire the lock for the remainder of the function */
+        DcgmLockGuard lockGuard(m_mutex);
 
-        if (!activeConfig)
+        *numConfigs = 0;
+        for (index = 0; index < gpuIds.size(); index++)
         {
-            log_error("Unexpected NULL config for gpuId {}. OOM?", gpuId);
-            statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_MEMORY);
-            multiRetCode = DCGM_ST_MEMORY;
-            continue;
-        }
+            unsigned int gpuId         = gpuIds[index];
+            dcgmConfig_t *activeConfig = HelperGetTargetConfig(gpuId);
 
-        memcpy(&configs[*numConfigs], activeConfig, sizeof(configs[0]));
-        (*numConfigs)++;
+            if (!m_aliveEntities.contains({ DCGM_FE_GPU, gpuId }))
+            {
+                statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_GPU_IS_LOST);
+                multiRetCode = DCGM_ST_GPU_IS_LOST;
+                continue;
+            }
+
+            if (!activeConfig)
+            {
+                unexpectedGpus.push_back(gpuId);
+                statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_MEMORY);
+                multiRetCode = DCGM_ST_MEMORY;
+                continue;
+            }
+
+            memcpy(&configs[*numConfigs], activeConfig, sizeof(configs[0]));
+            (*numConfigs)++;
+        }
+    }
+
+    if (!unexpectedGpus.empty())
+    {
+        log_error("Unexpected NULL config for gpuIds: {}", fmt::join(unexpectedGpus, ", "));
     }
 
     return multiRetCode;
@@ -861,7 +1029,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     {
         log_error("Unable to get the current configuration for gpuId {}. st {}", gpuId, dcgmReturn);
         statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, dcgmReturn);
-        return DCGM_ST_GENERIC_ERROR;
+        return dcgmReturn;
     }
 
     /* Set Ecc Mode */
@@ -953,11 +1121,18 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGpu(unsigned int gpuId, DcgmConfigM
     }
 
     /* Get the lock for the remainder of this call */
-    DcgmLockGuard lockGuard(m_mutex);
+    std::unique_ptr<DcgmLockGuard> lockGuard = std::make_unique<DcgmLockGuard>(m_mutex);
+
+    if (!m_aliveEntities.contains({ DCGM_FE_GPU, gpuId }))
+    {
+        statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_GPU_IS_LOST);
+        return DCGM_ST_GPU_IS_LOST;
+    }
 
     dcgmRet = HelperEnforceConfig(gpuId, statusList);
     if (DCGM_ST_OK != dcgmRet)
     {
+        lockGuard.reset(nullptr);
         log_error("Failed to enforce configuration for the GPU Id: {}. Error: {}", gpuId, dcgmRet);
         return dcgmRet;
     }
@@ -1032,6 +1207,11 @@ dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles(
 dcgmReturn_t DcgmConfigManager::HelperSetWorkloadPowerProfileGpu(unsigned int gpuId,
                                                                  dcgmWorkloadPowerProfile_t *workloadPowerProfile)
 {
+    if (!m_aliveEntities.contains({ DCGM_FE_GPU, gpuId }))
+    {
+        return DCGM_ST_GPU_IS_LOST;
+    }
+
     dcgmReturn_t dcgmRet = DCGM_ST_OK;
     dcgmcmWorkloadPowerProfile_t newCmWorkloadPowerProfiles {};
     dcgmConfig_t newConfig {};
@@ -1079,7 +1259,7 @@ dcgmReturn_t DcgmConfigManager::SetWorkloadPowerProfile(dcgmWorkloadPowerProfile
     }
 
     /* GroupId was already validated by the caller */
-    dcgmReturn = mpCoreProxy.GetGroupEntities(workloadPowerProfile->groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(workloadPowerProfile->groupId, EntityListOption::ActiveOnly, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_debug("GetGroupEntities returned {} for groupId {}", dcgmReturn, workloadPowerProfile->groupId);
@@ -1102,29 +1282,40 @@ dcgmReturn_t DcgmConfigManager::SetWorkloadPowerProfile(dcgmWorkloadPowerProfile
         return DCGM_ST_NOT_CONFIGURED;
     }
 
-    /* Acquire the lock for the remainder of the function */
-    DcgmLockGuard lockGuard(m_mutex);
+
+    /* For deferred logging */
+    std::vector<std::pair<dcgm_field_eid_t, dcgmReturn_t>> failedSetWorkloadPowerProfile;
+    failedSetWorkloadPowerProfile.reserve(gpuIds.size());
 
     /* Loop through the group to set configuration for each GPU */
     unsigned int errorCount   = 0;
     unsigned int maxNumErrors = static_cast<unsigned int>(gpuIds.size());
     std::unique_ptr<dcgm_config_status_t[]> statuses(new dcgm_config_status_t[maxNumErrors]);
-
     DcgmConfigManagerStatusList statusList(maxNumErrors, &errorCount, statuses.get());
-    for (auto gpuId : gpuIds)
     {
-        dcgmReturn = HelperSetWorkloadPowerProfileGpu(gpuId, workloadPowerProfile);
-        if (DCGM_ST_OK != dcgmReturn)
+        /* Acquire the lock for the remainder of the function */
+        DcgmLockGuard lockGuard(m_mutex);
+        for (auto gpuId : gpuIds)
         {
-            log_error("SetWorkloadPowerProfile failed with {} for gpuId {}", dcgmReturn, gpuId);
-            statusList.AddStatus(gpuId, DCGM_FI_UNKNOWN, dcgmReturn);
+            dcgmReturn = HelperSetWorkloadPowerProfileGpu(gpuId, workloadPowerProfile);
+            if (DCGM_ST_OK != dcgmReturn)
+            {
+                failedSetWorkloadPowerProfile.push_back({ gpuId, dcgmReturn });
+                statusList.AddStatus(gpuId, DCGM_FI_UNKNOWN, dcgmReturn);
+            }
         }
     }
+
+    /* Deferred logging */
+    for (auto const &[gpuId, ret] : failedSetWorkloadPowerProfile)
+    {
+        log_error("Failed to set workload power profile for gpuId {}. Error: {}", gpuId, ret);
+    }
+
     if (errorCount > 0)
     {
         return GetConsistentErrorCode(&statusList);
     }
-
     return DCGM_ST_OK;
 }
 
@@ -1163,9 +1354,8 @@ dcgmReturn_t DcgmConfigManager::SetConfig(unsigned int groupId,
     std::vector<unsigned int> gpuIds;
     unsigned int index;
 
-
     /* GroupId was already validated by the caller */
-    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_debug("GetGroupEntities returned {} for groupId {}", dcgmReturn, groupId);
@@ -1190,38 +1380,56 @@ dcgmReturn_t DcgmConfigManager::SetConfig(unsigned int groupId,
         return DCGM_ST_NOT_CONFIGURED;
     }
 
-    /* Acquire the lock for the remainder of the function */
-    DcgmLockGuard lockGuard(m_mutex);
+    /* For deferred logging */
+    std::pair<std::size_t, unsigned int> powerLimitDivided = { -1U, 0 };
+    std::vector<std::pair<dcgm_field_eid_t, dcgmReturn_t>> failedSetConfig;
+    failedSetConfig.reserve(gpuIds.size());
 
     int grpRetCode = 0;
 
-    /* Check if group level power budget is specified */
-    if (!DCGM_INT32_IS_BLANK(setConfig->powerLimit.val))
     {
-        if (setConfig->powerLimit.type == DCGM_CONFIG_POWER_BUDGET_GROUP)
-        {
-            setConfig->powerLimit.type = DCGM_CONFIG_POWER_CAP_INDIVIDUAL;
-            setConfig->powerLimit.val /= gpuIds.size();
-            log_debug("Divided our group power limit by {}. is now {}", (int)gpuIds.size(), setConfig->powerLimit.val);
-        }
-    }
+        /* Acquire the lock for the remainder of the function */
+        DcgmLockGuard lockGuard(m_mutex);
 
-    /* Loop through the group to set configuration for each GPU */
-    for (index = 0; index < gpuIds.size(); index++)
-    {
-        unsigned int gpuId = gpuIds[index];
-        dcgmReturn         = SetConfigGpu(gpuId, setConfig, statusList);
+        /* Check if group level power budget is specified */
+        if (!DCGM_INT32_IS_BLANK(setConfig->powerLimit.val))
+        {
+            if (setConfig->powerLimit.type == DCGM_CONFIG_POWER_BUDGET_GROUP)
+            {
+                setConfig->powerLimit.type = DCGM_CONFIG_POWER_CAP_INDIVIDUAL;
+                setConfig->powerLimit.val /= gpuIds.size();
+                powerLimitDivided = { gpuIds.size(), setConfig->powerLimit.val };
+            }
+        }
+
+        /* Loop through the group to set configuration for each GPU */
+        for (index = 0; index < gpuIds.size(); index++)
+        {
+            unsigned int gpuId = gpuIds[index];
+            dcgmReturn         = SetConfigGpu(gpuId, setConfig, statusList);
+            if (DCGM_ST_OK != dcgmReturn)
+            {
+                failedSetConfig.push_back({ gpuId, dcgmReturn });
+                grpRetCode++;
+            }
+        }
+
+        /* Special handling for sync boost */
+        dcgmReturn = SetSyncBoost(&gpuIds[0], gpuIds.size(), setConfig, statusList);
         if (DCGM_ST_OK != dcgmReturn)
         {
-            log_error("SetConfig failed with {} for gpuId {}", dcgmReturn, gpuId);
             grpRetCode++;
         }
     }
 
-    /* Special handling for sync boost */
-    dcgmReturn = SetSyncBoost(&gpuIds[0], gpuIds.size(), setConfig, statusList);
-    if (DCGM_ST_OK != dcgmReturn)
-        grpRetCode++;
+    if (powerLimitDivided.first != -1U)
+    {
+        log_debug("Divided our group power limit by {}. is now {}", powerLimitDivided.first, powerLimitDivided.second);
+    }
+    for (auto const &[gpuId, ret] : failedSetConfig)
+    {
+        log_error("Failed to set config for gpuId {}. Error: {}", gpuId, ret);
+    }
 
     /* If any of the operation failed. Return specific error if consistent */
     if (grpRetCode)
@@ -1244,10 +1452,10 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGroup(unsigned int groupId, DcgmCon
 
     /* The caller already verified and updated the groupId */
 
-    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, entities);
+    dcgmReturn = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
-        log_error("Error {} from GetGroupGpuIds()", (int)dcgmReturn);
+        log_error("Error {} from GetGroupEntities()", (int)dcgmReturn);
         return dcgmReturn;
     }
 
@@ -1278,7 +1486,9 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGroup(unsigned int groupId, DcgmCon
         gpuId      = gpuIds[index];
         dcgmReturn = EnforceConfigGpu(gpuId, statusList);
         if (DCGM_ST_OK != dcgmReturn)
+        {
             grpRetCode++;
+        }
     }
 
     if (0 == grpRetCode)
@@ -1303,3 +1513,114 @@ template dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles<DCGM_POW
     dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles);
 
 /*****************************************************************************/
+
+dcgmReturn_t DcgmConfigManager::AttachGpus()
+{
+    unsigned int groupId = DCGM_GROUP_ALL_GPUS;
+    if (auto ret = mpCoreProxy.VerifyAndUpdateGroupId(&groupId); DCGM_ST_OK != ret)
+    {
+        log_error("Error: Bad group id parameter {}, ret: {}", groupId, ret);
+        return ret;
+    }
+
+    std::vector<dcgmGroupEntityPair_t> entities;
+    if (auto ret = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities); ret != DCGM_ST_OK)
+    {
+        log_error("GetGroupEntities returned {} for all gpus group.", ret);
+        return ret;
+    }
+
+    unsigned int errorCount   = 0;
+    unsigned int maxNumErrors = static_cast<unsigned int>(entities.size());
+    std::vector<dcgm_config_status_t> statuses(maxNumErrors);
+
+    /* For deferred logging */
+    std::vector<dcgm_field_eid_t> skippedNoConfig;
+    skippedNoConfig.reserve(entities.size());
+    std::vector<dcgm_field_eid_t> resetConfig;
+    resetConfig.reserve(entities.size());
+    std::vector<std::pair<dcgm_field_eid_t, dcgmReturn_t>> failedReset;
+    failedReset.reserve(entities.size());
+
+    dcgmConfig_t *configToFree[DCGM_MAX_NUM_DEVICES] = { nullptr };
+    DcgmConfigManagerStatusList statusList(maxNumErrors, &errorCount, statuses.data());
+    {
+        DcgmLockGuard lockGuard(m_mutex);
+        for (auto const &[entityGroupId, entityId] : entities)
+        {
+            if (entityGroupId != DCGM_FE_GPU || entityId >= DCGM_MAX_NUM_DEVICES)
+            {
+                continue;
+            }
+
+            m_aliveEntities.insert({ DCGM_FE_GPU, entityId });
+            if (m_activeConfig[entityId] == nullptr)
+            {
+                skippedNoConfig.push_back(entityId);
+                continue;
+            }
+
+            auto ret = HelperEnforceConfig(entityId, &statusList);
+            if (DCGM_ST_OK != ret)
+            {
+                failedReset.push_back({ entityId, ret });
+            }
+            else
+            {
+                resetConfig.push_back(entityId);
+            }
+        }
+
+        // Remove configurations for GPUs that are not reattached, preventing them from being applied in the future.
+        for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
+        {
+            configToFree[i] = nullptr;
+            if (m_activeConfig[i] == nullptr)
+            {
+                continue;
+            }
+            if (!m_aliveEntities.contains({ DCGM_FE_GPU, i }))
+            {
+                configToFree[i]   = m_activeConfig[i];
+                m_activeConfig[i] = nullptr;
+            }
+        }
+    }
+
+    /* Deferred logging */
+    for (auto const &gpuId : skippedNoConfig)
+    {
+        log_debug("GPU id {} has not set config, skipping", gpuId);
+    }
+    for (auto const &[gpuId, ret] : failedReset)
+    {
+        log_error("Error: Failed to reset config for GPU id {}, ret: {}", gpuId, ret);
+    }
+    for (auto const &gpuId : resetConfig)
+    {
+        log_debug("Reset config for GPU id {}", gpuId);
+    }
+
+    for (unsigned int i = 0; i < DCGM_MAX_NUM_DEVICES; i++)
+    {
+        if (configToFree[i])
+        {
+            free(configToFree[i]);
+        }
+    }
+
+    if (errorCount > 0)
+    {
+        return GetConsistentErrorCode(&statusList);
+    }
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmConfigManager::DetachGpus()
+{
+    DcgmLockGuard lockGuard(m_mutex);
+    // Clear the GPUs from the alive entities set so that the following operations can be correctly blocked due to GPU
+    // is lost.
+    std::erase_if(m_aliveEntities, [](auto const &entity) { return entity.entityGroupId == DCGM_FE_GPU; });
+    return DCGM_ST_OK;
+}

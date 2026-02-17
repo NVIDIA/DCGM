@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,16 +17,18 @@ import os
 import utils
 import test_utils
 
+
 class RunNVpex2(app_runner.AppRunner):
     """ Runs the nvpex2 app to inject errors during nvswitch testing """
-    
+
     paths = {
-            "Linux_64bit": "./apps/nvpex2/nvpex2",
-            "Linux_aarch64": "./apps/nvpex2/nvpex2",
-            }
+        "Linux_64bit": "./apps/nvpex2/nvpex2",
+        "Linux_aarch64": "./apps/nvpex2/nvpex2",
+    }
 
     def __init__(self, args=None):
-        path = os.path.join(utils.script_dir, RunNVpex2.paths[utils.platform_identifier])
+        path = os.path.join(
+            utils.script_dir, RunNVpex2.paths[utils.platform_identifier])
         super(RunNVpex2, self).__init__(path, args)
 
     def start(self):

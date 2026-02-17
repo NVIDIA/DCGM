@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,22 +22,24 @@ CUDA_IMAGE = "nvcr.io/nvidia/cuda:10.2-devel-ubuntu18.04"
 """
 This function gets the template defined for each build script
 """
+
+
 def getBuildScriptTemplate(arch, cuFileName, buildPTXName, buildHeaderName, addPythonLine=0, pythonLineArg="", compute=""):
     pythonLine = ""
-    if addPythonLine==1:
+    if addPythonLine == 1:
         if pythonLineArg != "":
             pythonLine = pythonLineArg.lstrip()
         else:
             pythonLine = "python find_ptx_symbols.py"
 
     computeValue = ""
-    if compute!="":
+    if compute != "":
         computeValue = "--gpu-architecture " + compute
 
     buildScriptContent = """
 #!/bin/bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -70,10 +72,13 @@ docker run \\
 
     return buildScriptContent
 
+
 ###################################
 """
 returns all the paths for given extension
 """
+
+
 def getPaths(rootDir, extension):
     cuDir = []
     folderName = rootDir.split("/")[-1]
@@ -84,19 +89,25 @@ def getPaths(rootDir, extension):
                 cuDir.append(folderName + "/" + os.path.relpath(root, rootDir))
     return cuDir
 
+
 ###################################
 """
 return the cuda filename given in a directory
 """
+
+
 def getCuFileName(dir):
     files = os.listdir(dir)
     filteredFiles = [file for file in files if file.endswith(".cu")]
     return filteredFiles[0]
-    
+
+
 ###################################
 """
 returns the path of the build script given in a directory
 """
+
+
 def getPathOfBuildScript(dir):
     path = ""
 
@@ -106,14 +117,17 @@ def getPathOfBuildScript(dir):
     # Search for .sh file with "build" in its name
     for file in files:
         if file.endswith(".sh") and "build" in file:
-             path = os.path.join(dir, file)
+            path = os.path.join(dir, file)
 
     return path
+
 
 ###################################
 """
 check if the dictionary has empty values and if yes add default values
 """
+
+
 def checkAndUpdateToDefault(parsedDic, cuFileName, arch):
     if "arch" not in parsedDic.keys():
         parsedDic["arch"] = arch
@@ -126,15 +140,18 @@ def checkAndUpdateToDefault(parsedDic, cuFileName, arch):
     if "compute" not in parsedDic.keys():
         parsedDic["compute"] = ""
 
+
 ###################################
 """
 reformat existing build script for uniformity 
 """
+
+
 def reformatBuildScript(path, cuFileName, arch):
 
     bin2cExists = 0
     addPythonLine = 0
-    
+
     with open(path, "r") as file:
         lines = [line.rstrip() for line in file.readlines()]
 
@@ -146,7 +163,7 @@ def reformatBuildScript(path, cuFileName, arch):
         if not line.startswith("#"):
             if "nvcc" in line:
                 curLine = line.split(" ")
-                
+
                 # get the arch value, ptx filname and .cu filename
                 for l in curLine:
                     if "arch=" in l and "arch" not in parsedDic.keys():
@@ -159,22 +176,22 @@ def reformatBuildScript(path, cuFileName, arch):
                         parsedDic["cu"] = l
                     elif "compute" in l.lower() and "compute" not in parsedDic.keys():
                         parsedDic["compute"] = l.split("=")[-1]
-                
+
             elif "bin2c" in line:
                 # get the .h file
                 curLine = line.split(" ")
                 headerName = [word for word in curLine if ".h" in word]
 
-                # handle if header file not parsed correctly or if the name not found in the existing script 
+                # handle if header file not parsed correctly or if the name not found in the existing script
                 if len(headerName) != 0:
                     headerName = headerName[0]
                     if not headerName.endswith(".h"):
                         headerName = headerName[:headerName.rfind(".")]
                     else:
                         headerName = headerName[:-2]
-                else: 
+                else:
                     headerName = parsedDic["cu"] + "_ptx_string"
-                
+
                 parsedDic["header"] = headerName
                 bin2cExists = 1
 
@@ -190,12 +207,13 @@ def reformatBuildScript(path, cuFileName, arch):
     checkAndUpdateToDefault(parsedDic, cuFileName, arch)
 
     # get the content from template
-    buildScriptContent = getBuildScriptTemplate(parsedDic["arch"], parsedDic["cu"], parsedDic["ptx"], parsedDic["header"], addPythonLine, parsedDic["pythonLine"])
+    buildScriptContent = getBuildScriptTemplate(
+        parsedDic["arch"], parsedDic["cu"], parsedDic["ptx"], parsedDic["header"], addPythonLine, parsedDic["pythonLine"])
 
     # update the script
     with open(path, 'w') as buildScriptFile:
         buildScriptFile.write(buildScriptContent)
-    
+
     return parsedDic["ptx"], parsedDic["header"], addPythonLine
 
 
@@ -203,21 +221,25 @@ def reformatBuildScript(path, cuFileName, arch):
 """
 check if ptx and header exists
 """
+
+
 def filesExists(dir, filename):
     value = os.path.exists(os.path.join(dir, filename))
     return value
 
 
 ###################################
-def generatePTXFile(dir, arch, cuFileName, ptxFileName): 
+def generatePTXFile(dir, arch, cuFileName, ptxFileName):
     # get initial dir
     initialDir = os.getcwd()
 
     # change dir to current dir
     os.chdir(dir)
 
-    command = "docker run --rm -v \"$(pwd)\":/work -w /work {0} /bin/bash -c  '/usr/local/cuda/bin/nvcc -ptx -m64 -arch={1} -o {2} {3}' ".format(CUDA_IMAGE, arch, ptxFileName, cuFileName)
-    result = subprocess.run(command, shell=True, check=False, stderr=subprocess.PIPE)
+    command = "docker run --rm -v \"$(pwd)\":/work -w /work {0} /bin/bash -c  '/usr/local/cuda/bin/nvcc -ptx -m64 -arch={1} -o {2} {3}' ".format(
+        CUDA_IMAGE, arch, ptxFileName, cuFileName)
+    result = subprocess.run(command, shell=True,
+                            check=False, stderr=subprocess.PIPE)
 
     # change back to original dir
     os.chdir(initialDir)
@@ -240,8 +262,10 @@ def generateHeaderFile(dir, ptxFileName, headerFileName):
     # change dir to current dir
     os.chdir(dir)
 
-    command = "/usr/local/cuda/bin/bin2c {0} --padd 0 --name {1} > {1}.h; chmod a+w {1}.h".format(ptxFileName, headerFileName)
-    result = subprocess.run(command, shell=True, check=False, stderr=subprocess.PIPE)
+    command = "/usr/local/cuda/bin/bin2c {0} --padd 0 --name {1} > {1}.h; chmod a+w {1}.h".format(
+        ptxFileName, headerFileName)
+    result = subprocess.run(command, shell=True,
+                            check=False, stderr=subprocess.PIPE)
 
     # change back to original dir
     os.chdir(initialDir)
@@ -254,10 +278,13 @@ def generateHeaderFile(dir, ptxFileName, headerFileName):
         print(result.stderr.decode("utf-8"))
         return 1
 
+
 ###################################
 """
 generate new build scripts
 """
+
+
 def generateBuildScripts(dir, cuFileName, arch="sm_30"):
     pathOfBuildScript = ""
 
@@ -267,7 +294,8 @@ def generateBuildScripts(dir, cuFileName, arch="sm_30"):
     buildHeaderName = cuFileName[:-3] + "_ptx_string"
 
     # get the code template
-    buildScriptContent = getBuildScriptTemplate(arch, cuFileName, buildPTXName, buildHeaderName)
+    buildScriptContent = getBuildScriptTemplate(
+        arch, cuFileName, buildPTXName, buildHeaderName)
 
     # get the path of for the build script
     pathOfBuildScript = os.path.join(dir, buildScriptName)
@@ -278,13 +306,16 @@ def generateBuildScripts(dir, cuFileName, arch="sm_30"):
 
     return pathOfBuildScript, buildPTXName, buildHeaderName
 
+
 ###################################
 """
 run given .sh file
 """
+
+
 def runBuildScript(dir, filePath, buildPTXName, buildHeaderName):
     generatedPaths = {
-        "ptx":"",
+        "ptx": "",
         "header": ""
     }
 
@@ -304,8 +335,8 @@ def runBuildScript(dir, filePath, buildPTXName, buildHeaderName):
     # change back to original dir
     os.chdir(initialDir)
 
-    # script executed successfully 
-    if result.returncode == 0 and result.stderr==b'':
+    # script executed successfully
+    if result.returncode == 0 and result.stderr == b'':
         # get the ptx file and header file paths
         files = os.listdir(dir)
         for file in files:
@@ -316,14 +347,16 @@ def runBuildScript(dir, filePath, buildPTXName, buildHeaderName):
     else:
         print(result.stderr)
         print("\n######################### Build failed due to compilation error ##########################")
-        
 
     return generatedPaths
-    
+
+
 ###################################
 """
 parse the generate ptx file and extract values
 """
+
+
 def parsePTXFile(ptxFilePath):
     # read the file
     ptxFp = open(ptxFilePath, "rt")
@@ -336,17 +369,21 @@ def parsePTXFile(ptxFilePath):
 
         lineParts = line.split()
         funcName = lineParts[2][0:-1]
-        parsedValue.append("const char *%s_func_name = \"%s\";\n" % (funcName, funcName))
-    
+        parsedValue.append(
+            "const char *%s_func_name = \"%s\";\n" % (funcName, funcName))
+
     # close the file
     ptxFp.close()
 
     return parsedValue
 
+
 ###################################
 """
 update the generated header file with the values from the parsed ptx
 """
+
+
 def updateHeaderFile(parsedValue, headerFilePath):
     # open the header file
     headerFp = open(headerFilePath, "at")
@@ -356,13 +393,16 @@ def updateHeaderFile(parsedValue, headerFilePath):
     for value in parsedValue:
         headerFp.write(value)
 
-    # close the file 
+    # close the file
     headerFp.close()
+
 
 ###################################
 """
 generate a py file which can be used independently to parse ptx file and update header
 """
+
+
 def createPythonParserForPtxFile(dir, buildPTXName, buildHeaderName):
     fileName = FIND_PTX_FILENAME
 
@@ -384,15 +424,18 @@ for line in ptxFp.readlines():
 
     outFp.write("const char *%s_func_name = \\"%s\\";\\n" % (funcName, funcName))
     """.format(buildPTXName, buildHeaderName)
-    
+
     # open the file in write mode
     with open(dir + "/" + fileName, "w") as f:
         f.write(code)
+
 
 ###################################
 """
 update the python run cmd in build script
 """
+
+
 def updateBuildScript(path):
     newLine = "python find_ptx_symbols.py"
     try:
@@ -406,10 +449,13 @@ def updateBuildScript(path):
     except Exception as e:
         print(f"An error occurred: {e}")
 
+
 ###################################
 """
 main function to iterate and check all build scripts
 """
+
+
 def normaliseAllFolders():
     # local vars
     cuDir = []
@@ -422,7 +468,7 @@ def normaliseAllFolders():
         cuFileName = ""
         buildPresent = 0
         generatedPaths = {
-            "ptx":"",
+            "ptx": "",
             "header": ""
         }
 
@@ -442,7 +488,8 @@ def normaliseAllFolders():
         if (getPathOfBuildScript(dir) == ""):
             # if build.sh not present, generate it
             print("2) Build script does not exist, generating it")
-            pathOfBuild, buildPTXName, buildHeaderName = generateBuildScripts(dir, cuFileName, arch)
+            pathOfBuild, buildPTXName, buildHeaderName = generateBuildScripts(
+                dir, cuFileName, arch)
             print("Generated script path: " + pathOfBuild)
 
         else:
@@ -451,29 +498,31 @@ def normaliseAllFolders():
             pathOfBuild = getPathOfBuildScript(dir)
 
             # parse the build script file, compare with the template and reparse it
-            buildPTXName, buildHeaderName, pythonAdded = reformatBuildScript(pathOfBuild, cuFileName, arch)
+            buildPTXName, buildHeaderName, pythonAdded = reformatBuildScript(
+                pathOfBuild, cuFileName, arch)
             print("Script path: " + pathOfBuild)
 
-        # check if .ptx and .h do not exist 
+        # check if .ptx and .h do not exist
         print("3)")
-        if not filesExists(dir, buildPTXName) and filesExists(dir, buildHeaderName+".h"):
+        if not filesExists(dir, buildPTXName) and filesExists(dir, buildHeaderName + ".h"):
             # generate .ptx file
             successRun = generatePTXFile(dir, arch, cuFileName, buildPTXName)
             if successRun == 0:
                 generatedPaths["ptx"] = dir + "/" + buildPTXName
                 generatedPaths["header"] = dir + "/" + buildHeaderName + ".h"
 
-        elif filesExists(dir, buildPTXName) and not filesExists(dir, buildHeaderName+".h"):
+        elif filesExists(dir, buildPTXName) and not filesExists(dir, buildHeaderName + ".h"):
             # generate .h file
             successRun = generateHeaderFile(dir, buildPTXName, buildHeaderName)
             if successRun == 0:
                 generatedPaths["ptx"] = dir + "/" + buildPTXName
                 generatedPaths["header"] = dir + "/" + buildHeaderName + ".h"
 
-        elif not filesExists(dir, buildPTXName) and not filesExists(dir, buildHeaderName+".h"):
+        elif not filesExists(dir, buildPTXName) and not filesExists(dir, buildHeaderName + ".h"):
             # run the build.sh and generate .ptx file and .h file
             print("Running the build file")
-            generatedPaths = runBuildScript(dir, pathOfBuild, buildPTXName, buildHeaderName)
+            generatedPaths = runBuildScript(
+                dir, pathOfBuild, buildPTXName, buildHeaderName)
 
         else:
             print("PTX Path: " + dir + "/" + buildPTXName)
@@ -499,6 +548,6 @@ def normaliseAllFolders():
         print("################################################################################################")
     print("Done!")
 
-    
+
 if __name__ == '__main__':
     normaliseAllFolders()

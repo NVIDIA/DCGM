@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ DEFAULT_FLUENTD_PORT = 24225
 # In order to use this client, Fluentd needs to accept json over udp.
 # The default port is 24225
 
+
 class DcgmFluentd(DcgmJsonReader):
     ###########################################################################
     def __init__(self, publish_hostname, publish_port, **kwargs):
@@ -39,5 +40,6 @@ class DcgmFluentd(DcgmJsonReader):
     def CustomJsonHandler(self, outJson):
         self.SendToFluentd(outJson)
 
-if __name__ == '__main__': # pragma: no cover
+
+if __name__ == '__main__':  # pragma: no cover
     main(DcgmFluentd, FLUENTD_NAME, DEFAULT_FLUENTD_PORT, add_target_host=True)

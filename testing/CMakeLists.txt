@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -92,6 +92,12 @@ install(
         PATTERN ".coveragerc"
         PATTERN "LICENSE.txt"
         PATTERN "pylintrc")
+
+install(
+    DIRECTORY python3/mocks/
+    DESTINATION "${DCGM_TESTS_INSTALL_DIR}/mocks"
+    COMPONENT Tests
+    FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     install(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,4 +56,22 @@ dcgmReturn_t DcgmiSettingsSetLoggingSeverity::DoExecuteConnected()
         = (DcgmLoggingSeverity_t)LoggingSeverityFromString(mTargetSeverity.c_str(), DcgmLoggingSeverityWarning);
 
     return dcgmHostengineSetLoggingSeverity(m_dcgmHandle, &logging);
+}
+
+DcgmiSettingsAttachDetachDriver::DcgmiSettingsAttachDetachDriver(std::string hostname, bool attach)
+{
+    m_hostName = std::move(hostname);
+    m_attach   = attach;
+}
+
+dcgmReturn_t DcgmiSettingsAttachDetachDriver::DoExecuteConnected()
+{
+    if (m_attach)
+    {
+        return dcgmAttachDriver(m_dcgmHandle);
+    }
+    else
+    {
+        return dcgmDetachDriver(m_dcgmHandle);
+    }
 }

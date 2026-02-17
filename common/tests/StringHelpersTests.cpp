@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,5 +183,70 @@ TEST_CASE("Trim")
         std::string largeString(10000, ' ');
         largeString.insert(5000, "content");
         REQUIRE(Trim(largeString) == "content");
+    }
+}
+
+TEST_CASE("StrToUint32")
+{
+    using namespace DcgmNs;
+    auto result = StrToUint32("1234");
+    REQUIRE(!result.is_error());
+    REQUIRE(*result == 1234);
+
+    result = StrToUint32("1234a");
+    REQUIRE(!result.is_error());
+    REQUIRE(*result == 1234);
+
+    result = StrToUint32("a1234");
+    REQUIRE(result.is_error());
+
+    result = StrToUint32("");
+    REQUIRE(result.is_error());
+
+    // Test overflow
+    result = StrToUint32("5000000000");
+    REQUIRE(result.is_error());
+
+    result = StrToUint32("1234.56");
+    REQUIRE(!result.is_error());
+    REQUIRE(*result == 1234);
+
+    std::string longString(1000000, '1');
+    result = StrToUint32(longString);
+    REQUIRE(result.is_error());
+
+    result = StrToUint32("-1234");
+    REQUIRE(result.is_error());
+
+    result = StrToUint32("capoo");
+    REQUIRE(result.is_error());
+
+    char charWithEmbeddedNull[6] = { '1', '2', '3', '4', '\0', '5' };
+    result                       = StrToUint32(charWithEmbeddedNull);
+    REQUIRE(!result.is_error());
+    REQUIRE(*result == 1234);
+}
+
+TEST_CASE("DcgmEntityStatusToString")
+{
+    using namespace DcgmNs;
+
+    SECTION("All known status values return correct strings")
+    {
+        REQUIRE(DcgmEntityStatusToString(DcgmEntityStatusUnknown) == "UNKNOWN");
+        REQUIRE(DcgmEntityStatusToString(DcgmEntityStatusOk) == "OK");
+        REQUIRE(DcgmEntityStatusToString(DcgmEntityStatusUnsupported) == "UNSUPPORTED");
+        REQUIRE(DcgmEntityStatusToString(DcgmEntityStatusInaccessible) == "INACCESSIBLE");
+        REQUIRE(DcgmEntityStatusToString(DcgmEntityStatusLost) == "LOST");
+        REQUIRE(DcgmEntityStatusToString(DcgmEntityStatusFake) == "FAKE");
+        REQUIRE(DcgmEntityStatusToString(DcgmEntityStatusDisabled) == "DISABLED");
+        REQUIRE(DcgmEntityStatusToString(DcgmEntityStatusDetached) == "DETACHED");
+    }
+
+    SECTION("Unknown/invalid status values return UNKNOWN")
+    {
+        // Cast an invalid enum value to test default case
+        auto invalidStatus = static_cast<DcgmEntityStatus_t>(999);
+        REQUIRE(DcgmEntityStatusToString(invalidStatus) == "UNKNOWN");
     }
 }

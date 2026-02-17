@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -213,6 +213,11 @@ public:
     int GetCudaVersion()
     {
         return m_manager.GetCudaVersion();
+    }
+
+    std::vector<pid_t> FindSshZombieProcesses(std::filesystem::path const &procPath)
+    {
+        return m_manager.FindSshZombieProcesses(procPath);
     }
 
     /**
@@ -446,6 +451,98 @@ private:
     int m_mockCudaVersion   = 0;
     int m_systemCudaVersion = 0;
     std::string m_mockPath {};
+};
+
+/**
+ * Simple RAII helper for managing mock /proc directories
+ *
+ * Automatically creates and cleans up mock /proc directory structures.
+ * The directory is cleaned up when the object goes out of scope.
+ */
+class MockProcDirectory
+{
+public:
+    MockProcDirectory(std::filesystem::path path)
+        : m_path(MakeUniquePath(std::move(path)))
+    {
+        CleanupMockProcDirectory();
+
+        std::error_code ec;
+        if (!std::filesystem::create_directories(m_path, ec) && ec)
+        {
+            FAIL("Failed to create mock proc directory: " << m_path << " - Error: " << ec.message());
+        }
+    }
+
+    ~MockProcDirectory()
+    {
+        CleanupMockProcDirectory();
+    }
+
+    MockProcDirectory(MockProcDirectory const &)            = delete;
+    MockProcDirectory &operator=(MockProcDirectory const &) = delete;
+    MockProcDirectory(MockProcDirectory &&)                 = delete;
+    MockProcDirectory &operator=(MockProcDirectory &&)      = delete;
+
+    std::filesystem::path const &GetPath() const
+    {
+        return m_path;
+    }
+
+    void CreateTestDirectory(std::filesystem::path const &path) const
+    {
+        std::error_code ec;
+        if (!std::filesystem::create_directories(path, ec) && ec)
+        {
+            FAIL("Failed to create test directory '" << path << "': " << ec.message());
+        }
+    }
+
+    void CreateProcesses(std::vector<std::tuple<pid_t, std::string, char, pid_t>> const &processes)
+    {
+        for (auto const &[pid, comm, state, ppid] : processes)
+        {
+            auto pidDir = m_path / std::to_string(pid);
+            CreateTestDirectory(pidDir);
+
+            auto statFile = pidDir / "stat";
+            std::ofstream out(statFile);
+            if (!out)
+            {
+                FAIL("Failed to create mock stat file: " << statFile);
+            }
+
+            out << pid << " " << comm << " " << state << " " << ppid << " 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n";
+            out.close();
+        }
+    }
+
+private:
+    static std::filesystem::path MakeUniquePath(std::filesystem::path basePath)
+    {
+        auto now       = std::chrono::system_clock::now();
+        auto timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
+        auto pid       = getpid();
+
+        std::string uniqueSuffix = fmt::format("_{}_{}", timestamp, pid);
+        return basePath.string() + uniqueSuffix;
+    }
+
+    void CleanupMockProcDirectory()
+    {
+        std::error_code ec;
+        if (std::filesystem::exists(m_path, ec) && !ec)
+        {
+            std::filesystem::remove_all(m_path, ec);
+            if (ec)
+            {
+                // Log but don't fail - cleanup is best-effort
+                WARN("Failed to cleanup mock proc directory: " << m_path << " - Error: " << ec.message());
+            }
+        }
+    }
+
+    std::filesystem::path m_path;
 };
 
 // Helper to save and restore environment variable
@@ -1736,8 +1833,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
             auto connInfoOpt = GetDcgmApi()->GetConnectionInfo(handle);
             REQUIRE(connInfoOpt.has_value());
             auto const &connInfo = connInfoOpt.value();
-            REQUIRE(connInfo.ipAddress == "127.0.0.1:12345"); // Port is included in the address
-            REQUIRE(connInfo.params.addressIsUnixSocket == 0);
+            REQUIRE(connInfo.connectionString == "tcp://127.0.0.1:12345"); // Port is included in the address
         }
     }
 
@@ -1793,8 +1889,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
             auto connInfoOpt = GetDcgmApi()->GetConnectionInfo(handle);
             REQUIRE(connInfoOpt.has_value());
             auto const &connInfo = connInfoOpt.value();
-            REQUIRE(connInfo.ipAddress == "/tmp/local_socket");
-            REQUIRE(connInfo.params.addressIsUnixSocket == 1);
+            REQUIRE(connInfo.connectionString == "unix:///tmp/local_socket");
         }
     }
 
@@ -1883,27 +1978,27 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         int udsCount = 0;
 
         // Check first connection
-        if (connInfo1.params.addressIsUnixSocket == 1)
+        if (connInfo1.connectionString.starts_with("unix://"))
         {
             udsCount++;
-            REQUIRE(connInfo1.ipAddress == "/tmp/local_socket");
+            REQUIRE(connInfo1.connectionString == "unix:///tmp/local_socket");
         }
         else
         {
             tcpCount++;
-            REQUIRE(connInfo1.ipAddress == "127.0.0.1:12345"); // Port is included in the address
+            REQUIRE(connInfo1.connectionString == "tcp://127.0.0.1:12345"); // Port is included in the address
         }
 
         // Check second connection
-        if (connInfo2.params.addressIsUnixSocket == 1)
+        if (connInfo2.connectionString.starts_with("unix://"))
         {
             udsCount++;
-            REQUIRE(connInfo2.ipAddress == "/tmp/local_socket");
+            REQUIRE(connInfo2.connectionString == "unix:///tmp/local_socket");
         }
         else
         {
             tcpCount++;
-            REQUIRE(connInfo2.ipAddress == "127.0.0.1:12345"); // Port is included in the address
+            REQUIRE(connInfo2.connectionString == "tcp://127.0.0.1:12345"); // Port is included in the address
         }
 
         // Verify we have one of each type
@@ -3652,5 +3747,134 @@ TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests")
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
+    }
+}
+
+TEST_CASE_METHOD(MnDiagManagerTests, "FindSshZombieProcesses Tests [mndiag]")
+{
+    pid_t ourPid = getpid();
+
+    SECTION("Should find ssh zombie processes and filter out all other processes (zombie, not zombie, etc.)")
+    {
+        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_ssh_zombies");
+
+        mockProc.CreateProcesses({ { 1234, "(ssh)", 'Z', ourPid },
+                                   { 1235, "(sshd)", 'Z', ourPid },
+                                   { 1236, "(ssh-agent)", 'Z', ourPid },
+                                   { 1237, "(bash)", 'Z', ourPid },
+                                   { 1238, "(ssh)", 'S', ourPid } });
+
+        auto result = FindSshZombieProcesses(mockProc.GetPath());
+
+        REQUIRE(result.size() == 3);
+        CHECK(std::find(result.begin(), result.end(), 1234) != result.end());
+        CHECK(std::find(result.begin(), result.end(), 1235) != result.end());
+        CHECK(std::find(result.begin(), result.end(), 1236) != result.end());
+    }
+
+    SECTION("Should filter out zombie processes with wrong parent PID")
+    {
+        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_wrong_ppid");
+
+        pid_t wrongPpid = ourPid + 1000;
+
+        mockProc.CreateProcesses(
+            { { 1234, "(ssh)", 'Z', wrongPpid }, { 1235, "(ssh)", 'Z', 1 }, { 1236, "(ssh)", 'Z', ourPid } });
+
+        auto result = FindSshZombieProcesses(mockProc.GetPath());
+
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == 1236);
+    }
+
+    SECTION("Should handle empty proc directory")
+    {
+        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_empty");
+
+        auto result = FindSshZombieProcesses(mockProc.GetPath());
+
+        CHECK(result.empty());
+    }
+
+    SECTION("Should handle malformed, missing, and empty stat files")
+    {
+        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_stat_errors");
+
+        // Create a directory with malformed stat file (invalid format)
+        auto pidDir1 = mockProc.GetPath() / "1234";
+        mockProc.CreateTestDirectory(pidDir1);
+        std::ofstream(pidDir1 / "stat") << "malformed data\n";
+
+        // Create a PID directory without stat file (missing)
+        mockProc.CreateTestDirectory(mockProc.GetPath() / "1236");
+
+        // Create a directory with empty stat file
+        auto pidDir3 = mockProc.GetPath() / "9999";
+        mockProc.CreateTestDirectory(pidDir3);
+        std::ofstream(pidDir3 / "stat"); // Empty file, no content written
+
+        // Create valid SSH zombie processes
+        mockProc.CreateProcesses({ { 1235, "(ssh)", 'Z', ourPid }, { 8888, "(sshd)", 'Z', ourPid } });
+
+        auto result = FindSshZombieProcesses(mockProc.GetPath());
+
+        // Should skip malformed, missing, and empty stat files, return only valid ones
+        REQUIRE(result.size() == 2);
+        CHECK(std::find(result.begin(), result.end(), 1235) != result.end());
+        CHECK(std::find(result.begin(), result.end(), 8888) != result.end());
+    }
+
+    SECTION("Should skip non-directory entries and directories with non-numeric names")
+    {
+        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_non_dirs");
+
+        // Create a valid SSH zombie process
+        mockProc.CreateProcesses({ { 5678, "(ssh)", 'Z', ourPid } });
+
+        // Create non-directory entries (files)
+        std::ofstream(mockProc.GetPath() / "cmdline") << "dummy\n";
+        std::ofstream(mockProc.GetPath() / "stat") << "dummy\n";
+
+        // Create directories (common in /proc)
+        mockProc.CreateTestDirectory(mockProc.GetPath() / "self");
+        mockProc.CreateTestDirectory(mockProc.GetPath() / "thread-self");
+        mockProc.CreateTestDirectory(mockProc.GetPath() / "net");
+        mockProc.CreateTestDirectory(mockProc.GetPath() / "sys");
+        mockProc.CreateTestDirectory(mockProc.GetPath() / "abc123"); // Partial digits
+
+        auto result = FindSshZombieProcesses(mockProc.GetPath());
+
+        // Should only find the valid SSH zombie, skip all directories
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == 5678);
+    }
+
+    SECTION("Should skip PIDs 0 and 1 (init and kernel)")
+    {
+        MockProcDirectory mockProc(std::filesystem::temp_directory_path() / "test_proc_special_pids");
+
+        // Try to create SSH zombies for special PIDs (should be filtered out by implementation)
+        mockProc.CreateProcesses(
+            { { 0, "(ssh)", 'Z', ourPid }, { 1, "(ssh)", 'Z', ourPid }, { 2, "(ssh)", 'Z', ourPid } });
+
+        auto result = FindSshZombieProcesses(mockProc.GetPath());
+
+        // Should skip PID 0 and 1, but find PID 2
+        REQUIRE(result.size() == 1);
+        CHECK(result[0] == 2);
+    }
+
+    SECTION("Should gracefully handle exceptions from filesystem operations")
+    {
+        // Test with non-existent directory to trigger exception
+        auto nonExistentPath = std::filesystem::temp_directory_path() / "non_existent_proc_dir_xyz123";
+
+        // Ensure the directory doesn't exist
+        std::error_code ec;
+        std::filesystem::remove_all(nonExistentPath, ec);
+
+        auto result = FindSshZombieProcesses(nonExistentPath);
+
+        CHECK(result.empty());
     }
 }

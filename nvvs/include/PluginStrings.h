@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,6 +105,9 @@
 
 /* The maximum number of recovery errors that can happen before it's considered an error */
 #define PCIE_STR_MAX_NVLINK_RECOVERY_ERRORS "max_nvlink_recovery_errors"
+
+/* The maximum number of PCIe correctable errors that can happen before it's considered an error */
+#define PCIE_STR_MAX_PCIE_CORRECTABLE_ERRORS "max_pcie_correctable_errors"
 
 #define PCIE_STR_MAX_MEMORY_CLOCK                                                              \
     "max_memory_clock" /* Maximum memory clock in MHZ to use when locking                      \
@@ -319,6 +322,14 @@ is less than this percentage, the test will be skipped */
 #define DIAGNOSTIC_STR_PRECISION           "precision"       /* The precision to use: half, single, or double */
 #define DIAGNOSTIC_STR_GFLOPS_TOLERANCE_PCNT \
     "gflops_tolerance_pcnt" /* % of mean below which gflops are treated as errors */
+#define DIAGNOSTIC_STR_ALWAYS_USE_TENSOR \
+    "always_use_tensor" /* instruct the test to use tensor if possible for the entire test. */
+#define DIAGNOSTIC_STR_TOLERANCE_PCNT \
+    "tolerance_pcnt" /* % of mean below which all tolerance variables are treated as errors */
+#define DIAGNOSTIC_STR_CLOCKS_TOLERANCE_PCNT \
+    "clocks_tolerance_pcnt" /* % of mean below which clock speed is treated as an error */
+#define DIAGNOSTIC_STR_POWER_TOLERANCE_PCNT \
+    "power_tolerance_pcnt" /* % of mean below which power usage is treated as an error */
 
 /****************************************************************************
  * CONTEXT CREATE PLUGIN
@@ -447,6 +458,14 @@ is less than this percentage, the test will be skipped */
  * SOFTWARE PLUGIN
  *****************************************************************************/
 #define SW_ERR_FAIL 0x0000000000000001ULL
+
+/******************************************************************************
+ * NCCL TESTS PLUGIN
+ *****************************************************************************/
+#define NCCL_TESTS_PLUGIN_NAME     "nccl_tests"
+#define NCCL_TESTS_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
+
+#define NCCL_TESTS_STR_IS_ALLOWED "is_allowed" /* Is the NCCL tests plugin allowed to run? */
 
 /******************************************************************************
  * COMMON TO ALL PLUGINS

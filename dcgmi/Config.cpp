@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,12 +97,14 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
     for (i = 0; i < stNvcmGroupInfo->count; i++)
     {
         pNvcmCurrentConfig[i].version = dcgmConfig_version;
+        pNvcmCurrentConfig[i].gpuId   = DCGM_INT32_BLANK;
     }
 
     pNvcmTargetConfig = new dcgmConfig_t[stNvcmGroupInfo->count];
     for (i = 0; i < stNvcmGroupInfo->count; i++)
     {
         pNvcmTargetConfig[i].version = dcgmConfig_version;
+        pNvcmTargetConfig[i].gpuId   = DCGM_INT32_BLANK;
     }
 
     result = dcgmConfigGet(
@@ -115,6 +117,12 @@ dcgmReturn_t Config::RunGetConfig(dcgmHandle_t pNvcmHandle, bool verbose, bool j
 
     for (i = 0; i < stNvcmGroupInfo->count; i++)
     {
+        // Not filled by the host engine.
+        if (pNvcmCurrentConfig[i].gpuId == DCGM_INT32_BLANK || pNvcmTargetConfig[i].gpuId == DCGM_INT32_BLANK)
+        {
+            continue;
+        }
+
         DcgmiOutputColumns outColumns;
         DcgmiOutputJson outJson;
         DcgmiOutput &out = json ? (DcgmiOutput &)outJson : (DcgmiOutput &)outColumns;

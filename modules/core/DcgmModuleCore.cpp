@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 #include "DcgmModuleCore.h"
 #include "../profiling/dcgm_profiling_structs.h"
 #include "DcgmLogging.h"
+#include "dcgm_structs.h"
+#include "dcgm_structs_internal.h"
 #include "nvswitch/dcgm_nvswitch_structs.h"
 #include <DcgmGroupManager.h>
 #include <DcgmHostEngineHandler.h>
@@ -23,7 +25,6 @@
 #include <DcgmUtilities.h>
 #include <DcgmVersion.hpp>
 #include <fmt/format.h>
-#include <sstream>
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
 #include <nvml_injection.h>
@@ -152,6 +153,9 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
                 dcgmReturn
                     = ProcessGetCacheManagerFieldInfo(*(dcgm_core_msg_get_cache_manager_field_info_t *)moduleCommand);
                 break;
+            case DCGM_CORE_SR_EMPTY_CACHE:
+                dcgmReturn = ProcessEmptyCache(*(dcgm_core_msg_empty_cache_t *)moduleCommand);
+                break;
             case DCGM_CORE_SR_WATCH_FIELDS:
                 dcgmReturn = ProcessWatchFields(*(dcgm_core_msg_watch_fields_t *)moduleCommand);
                 break;
@@ -202,6 +206,9 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
             case DCGM_CORE_SR_MODULE_DENYLIST:
                 dcgmReturn = ProcessModuleDenylist(*(dcgm_core_msg_module_denylist_t *)moduleCommand);
                 break;
+            case DCGM_CORE_SR_MARK_MODULES_RELOADABLE:
+                dcgmReturn = ProcessModulesReloadable(*(dcgm_core_msg_modules_reloadable_t *)moduleCommand);
+                break;
             case DCGM_CORE_SR_MODULE_STATUS:
                 dcgmReturn = ProcessModuleStatus(*(dcgm_core_msg_module_status_t *)moduleCommand);
                 break;
@@ -241,6 +248,14 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
 
             case DCGM_CORE_SR_HOSTENGINE_ENV_VAR_INFO:
                 dcgmReturn = ProcessHostengineEnvVarInfo(*(dcgm_core_msg_hostengine_env_var_t *)moduleCommand);
+                break;
+
+            case DCGM_CORE_SR_ATTACH_DRIVER:
+                dcgmReturn = ProcessAttachDriver(*(dcgm_core_msg_attach_driver_t *)moduleCommand);
+                break;
+
+            case DCGM_CORE_SR_DETACH_DRIVER:
+                dcgmReturn = ProcessDetachDriver(*(dcgm_core_msg_detach_driver_t *)moduleCommand);
                 break;
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
@@ -536,7 +551,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGroupGetInfo(dcgm_core_msg_group_get_info_t 
     std::string groupName = m_groupManager->GetGroupName(connectionId, groupId);
     SafeCopyTo(msg.gi.groupInfo.groupName, groupName.c_str());
 
-    ret = m_groupManager->GetGroupEntities(groupId, entities);
+    ret = m_groupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
     if (ret != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "Error: Bad group id parameter";
@@ -702,7 +717,7 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV1(dcgm_core_msg_enti
             return DCGM_ST_OK;
         }
 
-        ret = m_groupManager->GetGroupEntities(groupId, entities);
+        ret = m_groupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
         if (ret != DCGM_ST_OK)
         {
             DCGM_LOG_ERROR << "Got ret " << ret << " from GetGroupEntities. groupId " << msg.ev.groupId;
@@ -829,7 +844,7 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_enti
             return DCGM_ST_OK;
         }
 
-        ret = m_groupManager->GetGroupEntities(groupId, entities);
+        ret = m_groupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
         if (ret != DCGM_ST_OK)
         {
             DCGM_LOG_ERROR << "Got ret " << ret << " from GetGroupEntities. groupId " << msg.ev.groupId;
@@ -962,7 +977,7 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV3(dcgm_core_msg_enti
             return DCGM_ST_OK;
         }
 
-        ret = m_groupManager->GetGroupEntities(groupId, entities);
+        ret = m_groupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
         if (ret != DCGM_ST_OK)
         {
             DCGM_LOG_ERROR << "Got ret " << ret << " from GetGroupEntities. groupId " << msg.ev.groupId;
@@ -1400,7 +1415,9 @@ dcgmReturn_t DcgmModuleCore::ProcessInjectFieldValue(dcgm_core_msg_inject_field_
     if (msg.iv.fieldValue.version != dcgmInjectFieldValue_version)
     {
         DCGM_LOG_ERROR << "Struct version mismatch";
-        return DCGM_ST_VER_MISMATCH;
+        msg.iv.cmdRet = DCGM_ST_VER_MISMATCH;
+
+        return DCGM_ST_OK;
     }
 
     fieldMeta = DcgmFieldGetById(msg.iv.fieldValue.fieldId);
@@ -1481,6 +1498,34 @@ dcgmReturn_t DcgmModuleCore::ProcessGetCacheManagerFieldInfo(dcgm_core_msg_get_c
     }
 
     msg.fi.cmdRet = m_cacheManager->GetCacheManagerFieldInfo(&msg.fi.fieldInfo);
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessEmptyCache(dcgm_core_msg_empty_cache_t &msg)
+{
+    if (m_cacheManager == nullptr)
+    {
+        DCGM_LOG_ERROR << "m_cacheManager not initialized.";
+        return DCGM_ST_UNINITIALIZED;
+    }
+
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_empty_cache_version1);
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    if (msg.ec.version != dcgmMsgEmptyCache_version)
+    {
+        DCGM_LOG_ERROR << "Struct version mismatch";
+        msg.ec.cmdRet = DCGM_ST_VER_MISMATCH;
+
+        return DCGM_ST_OK;
+    }
+
+    msg.ec.cmdRet = m_cacheManager->EmptyCache();
 
     return DCGM_ST_OK;
 }
@@ -1969,6 +2014,24 @@ dcgmReturn_t DcgmModuleCore::ProcessModuleDenylist(dcgm_core_msg_module_denylist
     return DCGM_ST_OK;
 }
 
+/**
+ * This processes a request to mark modules as reloadable.
+ */
+dcgmReturn_t DcgmModuleCore::ProcessModulesReloadable(dcgm_core_msg_modules_reloadable_t &msg)
+{
+    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_modules_reloadable_version);
+
+    if (ret != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return ret;
+    }
+
+    msg.info.cmdRet = DcgmHostEngineHandler::Instance()->HelperModulesReloadable(msg.info);
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmModuleCore::ProcessModuleStatus(dcgm_core_msg_module_status_t &msg)
 {
     dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_module_status_version);
@@ -2160,7 +2223,9 @@ dcgmReturn_t DcgmModuleCore::ProcessNvmlInjectFieldValue(dcgm_core_msg_nvml_inje
     if (msg.iv.fieldValue.version != dcgmInjectFieldValue_version)
     {
         DCGM_LOG_ERROR << "Struct version mismatch";
-        return DCGM_ST_VER_MISMATCH;
+        msg.iv.cmdRet = DCGM_ST_VER_MISMATCH;
+
+        return DCGM_ST_OK;
     }
 
     fieldMeta = DcgmFieldGetById(msg.iv.fieldValue.fieldId);
@@ -2592,7 +2657,6 @@ dcgmReturn_t DcgmModuleCore::ProcessNvswitchGetBackend(dcgm_core_msg_nvswitch_ge
     return ret;
 }
 
-
 dcgmReturn_t DcgmModuleCore::ProcessHostengineEnvVarInfo(dcgm_core_msg_hostengine_env_var_t &msg)
 {
     dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_hostengine_env_var_version);
@@ -2642,4 +2706,38 @@ dcgmReturn_t DcgmModuleCore::ProcessHostengineEnvVarInfo(dcgm_core_msg_hostengin
     SafeCopyTo(msg.envVarInfo.envVarValue, envValue);
     msg.envVarInfo.ret = DCGM_ST_OK;
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessAttachDriver(dcgm_core_msg_attach_driver_t &msg)
+{
+    if (auto const ret = CheckVersion(&msg.header, dcgm_core_msg_attach_driver_version); ret != DCGM_ST_OK)
+    {
+        log_error("Version mismatch");
+        return ret;
+    }
+
+    auto *hostEngineHandler = DcgmHostEngineHandler::Instance();
+    if (!hostEngineHandler)
+    {
+        log_error("Cannot attach driver because hostEngineHandler is not initialized");
+        return DCGM_ST_UNINITIALIZED;
+    }
+    return hostEngineHandler->AttachDriver();
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessDetachDriver(dcgm_core_msg_detach_driver_t &msg)
+{
+    if (auto const ret = CheckVersion(&msg.header, dcgm_core_msg_detach_driver_version); ret != DCGM_ST_OK)
+    {
+        log_error("Version mismatch");
+        return ret;
+    }
+
+    auto *hostEngineHandler = DcgmHostEngineHandler::Instance();
+    if (!hostEngineHandler)
+    {
+        log_error("Cannot detach driver because hostEngineHandler is not initialized");
+        return DCGM_ST_UNINITIALIZED;
+    }
+    return hostEngineHandler->DetachDriver();
 }

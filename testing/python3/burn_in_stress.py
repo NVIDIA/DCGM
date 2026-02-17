@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -57,6 +57,7 @@ TOTAL_TEST_WAIVED = 0
 TOTAL_TEST_COUNT = 0
 TOTAL_TEST_CYCLES = 0
 
+
 def get_dcgmi_bin_directory():
     """
     Function to return the directory where dcgmi is expected
@@ -77,6 +78,7 @@ def get_dcgmi_bin_directory():
 
     return path
 
+
 def get_dcgmi_bin_path():
     """
     Function to figure out what dcgmi binary to use based on the platform
@@ -85,7 +87,9 @@ def get_dcgmi_bin_path():
     # Including future supported architectures
     return get_dcgmi_bin_directory() + "/dcgmi"
 
+
 dcgmi_absolute_path = os.path.join(script_dir, get_dcgmi_bin_path())
+
 
 def get_newest_field_group_id(dcgmSystem):
     field_group_id = ""
@@ -94,7 +98,7 @@ def get_newest_field_group_id(dcgmSystem):
     maxFieldGroupName = ""
 
     fieldGroups = dcgmSystem.GetAllFieldGroups()
-    
+
     assert fieldGroups.numFieldGroups > 0
 
     for idx in range(0, fieldGroups.numFieldGroups):
@@ -103,8 +107,10 @@ def get_newest_field_group_id(dcgmSystem):
             maxFieldGroupId = fieldGroup.fieldGroupId
             maxFieldGroupName = fieldGroup.fieldGroupName
 
-    print("Most recent field group is ID %d, name %s" % (maxFieldGroupId, maxFieldGroupName))
+    print("Most recent field group is ID %d, name %s" %
+          (maxFieldGroupId, maxFieldGroupName))
     return maxFieldGroupId
+
 
 def updateTestResults(result):
     """
@@ -127,6 +133,7 @@ def updateTestResults(result):
         TOTAL_TEST_COUNT += 1
     elif "CYCLE" in result:
         TOTAL_TEST_CYCLES += 1
+
 
 def getTestSummary():
     """
@@ -185,6 +192,8 @@ def setupEnvironment():
         sys.exit(1)
 
 # class to enable printing different colors for terminal output
+
+
 class bcolors:
     PURPLE = '\033[95m'     # purple
     BLUE = '\033[94m'        # blue
@@ -208,7 +217,8 @@ class Logger(object):
         import socket
         self.terminal = sys.stdout
         self.timestamp = str(time.strftime('%Y-%m-%d'))
-        self.logName = "DCGM-BURN-IN_%s_%s.log" % (socket.gethostname(), self.timestamp)
+        self.logName = "DCGM-BURN-IN_%s_%s.log" % (
+            socket.gethostname(), self.timestamp)
 
         # Early attempt to clean up the old log file
         if os.path.exists(self.logName):
@@ -232,7 +242,7 @@ class RunHostEngine(apps.NvHostEngineApp):
     def __init__(self, writeDebugFile=False):
         self.timestamp = str(time.strftime('%Y-%m-%d'))
         self.memlog = "HOST_ENGINE_MEMORY_USAGE_%s.log" % self.timestamp
-        self.cpulog = "HOST_ENGINE_CPU_USAGE_%s.log" %  self.timestamp
+        self.cpulog = "HOST_ENGINE_CPU_USAGE_%s.log" % self.timestamp
         super(RunHostEngine, self).__init__()
         self.writeDebugFile = writeDebugFile
 
@@ -253,19 +263,21 @@ class RunHostEngine(apps.NvHostEngineApp):
                 fp = open(filename)
                 lines = fp.readlines()
             except IOError as e:
-                print("Unable to read process file for pid %d: %d msg=%s fn=%s" % (pid, e.errno, e.message, e.filename))
+                print("Unable to read process file for pid %d: %d msg=%s fn=%s" % (
+                    pid, e.errno, e.message, e.filename))
                 time.sleep(loopTime)
                 continue
 
             for line in lines:
                 if "VmPeak" in line:
-                    vmem.append(float(line.split()[1])/1024)
+                    vmem.append(float(line.split()[1]) / 1024)
 
                 if "VmRSS" in line:
-                    rmem.append(float(line.split()[1])/1024)
+                    rmem.append(float(line.split()[1]) / 1024)
 
             if len(vmem) < 1 or len(rmem) < 1:
-                print("VmPeak or VmRSS not found in %d lines of %s" % (len(lines), filename))
+                print("VmPeak or VmRSS not found in %d lines of %s" %
+                      (len(lines), filename))
                 time.sleep(loopTime)
                 continue
 
@@ -278,9 +290,12 @@ class RunHostEngine(apps.NvHostEngineApp):
             resident_avg = sum(rmem) / len(rmem)
 
             hm.write("%s\n" % time.asctime())
-            hm.write("Virtual Memory info in MB, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (virtual_min, virtual_max, virtual_avg))
-            hm.write("Resident Memory info in MB, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (resident_min, resident_max, resident_avg))
-            hm.write("\n.........................................................\n\n")
+            hm.write("Virtual Memory info in MB, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (
+                virtual_min, virtual_max, virtual_avg))
+            hm.write("Resident Memory info in MB, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (
+                resident_min, resident_max, resident_avg))
+            hm.write(
+                "\n.........................................................\n\n")
             time.sleep(loopTime)
 
         hm.close()
@@ -295,7 +310,8 @@ class RunHostEngine(apps.NvHostEngineApp):
 
         timeout_start = time.time()
         while time.time() < timeout_start + float(timeout):
-            cmd = check_output(shlex.split("ps -p %d -o %%cpu" % pid)).decode('utf-8')
+            cmd = check_output(shlex.split(
+                "ps -p %d -o %%cpu" % pid)).decode('utf-8')
             cpu.append(float(cmd.split("\n")[1]))
             time.sleep(3)
 
@@ -304,8 +320,10 @@ class RunHostEngine(apps.NvHostEngineApp):
             cpu_avg = sum(cpu) / len(cpu)
 
             hc.write("%s\n" % time.asctime())
-            hc.write("CPU %% used for HostEngine, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (cpu_min, cpu_max, cpu_avg))
-            hc.write("\n.........................................................\n\n")
+            hc.write("CPU %% used for HostEngine, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (
+                cpu_min, cpu_max, cpu_avg))
+            hc.write(
+                "\n.........................................................\n\n")
         hc.close()
 
 
@@ -316,6 +334,7 @@ class BurnInHandle(object):
     hostEngineIp is the IP address of the running host engine. None=start embedded.
     burnInCfg is the parsed command-line parameters. Note that we're not using the IP address from these
     """
+
     def __init__(self, hostEngineIp, burnInCfg):
         self.dcgmHandle = None
         self.dcgmSystem = None
@@ -324,12 +343,13 @@ class BurnInHandle(object):
         self.Connect()
 
     def Connect(self):
-        self.dcgmHandle = pydcgm.DcgmHandle(ipAddress=self.hostEngineIp, opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO)
+        self.dcgmHandle = pydcgm.DcgmHandle(
+            ipAddress=self.hostEngineIp, opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO)
         self.dcgmSystem = self.dcgmHandle.GetSystem()
 
     def __del__(self):
         if self.dcgmSystem is not None:
-            del(self.dcgmSystem)
+            del (self.dcgmSystem)
             self.dcgmSystem = None
         if self.dcgmHandle is not None:
             # DcgmHandle.__del__() is called when the garbage collector happens to be collecting the objects,
@@ -338,7 +358,7 @@ class BurnInHandle(object):
             # This is a temporary fix for the issue that the embedded host engine is not properly closed and can cause
             # the CHILD_SUBREAPER (Set by the embedded host engine) not being reset.
             self.dcgmHandle.Shutdown()
-            del(self.dcgmHandle)
+            del (self.dcgmHandle)
             self.dcgmHandle = None
 
     def GetGpuIds(self):
@@ -349,14 +369,15 @@ class BurnInHandle(object):
         dcgmGroup = self.dcgmSystem.GetDefaultGroup()
         groupGpuIds = dcgmGroup.GetGpuIds()
 
-        assert len(groupGpuIds) > 0, "DCGM doesn't see any enabled GPUs. Set __DCGM_WL_BYPASS=1 in your environment to bypass DCGM's allowlist"
+        assert len(
+            groupGpuIds) > 0, "DCGM doesn't see any enabled GPUs. Set __DCGM_WL_BYPASS=1 in your environment to bypass DCGM's allowlist"
 
         # See if the user provided the GPU IDs they care about. If so, return those
         if len(self.burnInCfg.onlyGpuIds) < 1:
             return groupGpuIds
 
         for gpuId in self.burnInCfg.onlyGpuIds:
-            assert(gpuId in groupGpuIds), "User-specified GPU ID %d is not known by the system. System GPU IDs: %s" % (gpuId, str(groupGpuIds))
+            assert (gpuId in groupGpuIds), "User-specified GPU ID %d is not known by the system. System GPU IDs: %s" % (gpuId, str(groupGpuIds))
 
         return self.burnInCfg.onlyGpuIds
 
@@ -392,16 +413,19 @@ class BurnInHandle(object):
 
         Returns a dcgmFieldValue_v1 instance
         '''
-        dcgm_agent_internal.dcgmWatchFieldValue(self.dcgmHandle.handle, gpuId, fieldId, 60000000, 3600.0, 0)
+        dcgm_agent_internal.dcgmWatchFieldValue(
+            self.dcgmHandle.handle, gpuId, fieldId, 60000000, 3600.0, 0)
         self.dcgmSystem.UpdateAllFields(1)
-        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(self.dcgmHandle.handle, gpuId, [fieldId, ])
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+            self.dcgmHandle.handle, gpuId, [fieldId, ])
         return values[0]
 
     def GpuSupportsEcc(self, gpuId):
         '''
         Returns whether (True) or not (False) a gpu supports ECC
         '''
-        value = self.GetValueForFieldId(gpuId, dcgm_fields.DCGM_FI_DEV_ECC_CURRENT)
+        value = self.GetValueForFieldId(
+            gpuId, dcgm_fields.DCGM_FI_DEV_ECC_CURRENT)
         if dcgmvalue.DCGM_INT64_IS_BLANK(value.value.i64):
             return False
         else:
@@ -414,7 +438,8 @@ class BurnInHandle(object):
         In the above example, gpu0 and gpu1 are the same sku, and gpu2 and gpu3 are the same sku
         '''
         gpuIds = self.GetGpuIds()
-        listBySku = test_utils.group_gpu_ids_by_sku(self.dcgmHandle.handle, gpuIds)
+        listBySku = test_utils.group_gpu_ids_by_sku(
+            self.dcgmHandle.handle, gpuIds)
         return listBySku
 
 
@@ -436,15 +461,18 @@ class RunCudaCtxCreate:
 
         for deviceAttrib in deviceAttribs:
             busId = deviceAttrib.identifiers.pciBusId
-            assert len(busId) > 0, ("Failed to get busId for device %d" % deviceAttrib.identifiers.gpuId)
-            args = ["--ctxCreate", busId, "--busyGpu", busId, str(self.runTimeSeconds * 1000)]
+            assert len(busId) > 0, ("Failed to get busId for device %d" %
+                                    deviceAttrib.identifiers.gpuId)
+            args = ["--ctxCreate", busId, "--busyGpu",
+                    busId, str(self.runTimeSeconds * 1000)]
             app = apps.CudaCtxCreateAdvancedApp(args)
             app.busId = busId
             self._apps.append(app)
 
     def start(self):
         for app in self._apps:
-            print("Generating Cuda Workload for GPU %s " % app.busId + " at %s \n" % time.asctime())
+            print("Generating Cuda Workload for GPU %s " %
+                  app.busId + " at %s \n" % time.asctime())
             app.start(timeout=self.timeoutSeconds)
 
     def wait(self):
@@ -480,7 +508,7 @@ class GroupsOperationsHelper:
 
     def __safe_checkcall(self, args):
         try:
-            check_call([self.dcgmi_path]+args)
+            check_call([self.dcgmi_path] + args)
         except CalledProcessError:
             pass
         return True
@@ -488,7 +516,7 @@ class GroupsOperationsHelper:
     def __safe_checkoutput(self, args):
         rc = None
         try:
-            rc = check_output([self.dcgmi_path]+args)
+            rc = check_output([self.dcgmi_path] + args)
         except CalledProcessError:
             pass
         return rc
@@ -498,7 +526,8 @@ class GroupsOperationsHelper:
             groupName = "Group"
         args = ["group", "--host", self.host_ip, "-c", groupName]
         output = self.__safe_checkoutput(args)
-        self.group_id = int(output.strip().split()[-1]) if output is not None else -1
+        self.group_id = int(output.strip().split()
+                            [-1]) if output is not None else -1
 
         for gpuId in gpuIds:
             self.add_device(gpuId)
@@ -511,18 +540,21 @@ class GroupsOperationsHelper:
 
     def get_group_info(self):
         assert self.group_id is not None
-        args = ["group", "--host", self.host_ip, "-g", str(self.group_id), "-i"]
+        args = ["group", "--host", self.host_ip,
+                "-g", str(self.group_id), "-i"]
         return self.__safe_checkcall(args)
 
     def add_device(self, gpuId):
         assert self.group_id is not None
-        args = ["group", "--host", self.host_ip, "-g", str(self.group_id), "-a", str(gpuId)]
+        args = ["group", "--host", self.host_ip, "-g",
+                str(self.group_id), "-a", str(gpuId)]
         return self.__safe_checkcall(args)
 
     def remove_device(self, gpuId):
         assert self.group_id is not None
 
-        args = ["group", "--host", self.host_ip, "-g", str(self.group_id), "-r", str(gpuId)]
+        args = ["group", "--host", self.host_ip, "-g",
+                str(self.group_id), "-r", str(gpuId)]
         return self.__safe_checkcall(args)
 
     def delete_group(self):
@@ -542,10 +574,9 @@ class GroupTests:
 
         print("The hostEngine IP is %s\n" % self.host_ip)
 
-
     def test1_create_group(self, gpuIds):
         """ Test to create groups using the subsystem groups """
-        #Intentionally create the group as empty so that test5_add_device_to_group doesn't fail
+        # Intentionally create the group as empty so that test5_add_device_to_group doesn't fail
         self.group_id = self.groups_op.create_group(None, [])
         print("Creating a default test group: %s" % self.group_id)
         return self.group_id > 0
@@ -561,7 +592,8 @@ class GroupTests:
     def test3_get_group_info(self, gpuIds):
         """ Test to get info about exiting groups using the subsystem groups """
 
-        args = ["group", "--host", self.host_ip, "-g", str(self.group_id), "-i"]
+        args = ["group", "--host", self.host_ip,
+                "-g", str(self.group_id), "-i"]
         print("Showing info about the test group: %s" % args)
 
         return args
@@ -570,14 +602,16 @@ class GroupTests:
         """ Test to remove a GPU from a group using the subsystem groups """
 
         # Removes a GPU from the test group
-        args = ["group", "--host", self.host_ip, "-g", str(self.group_id), "-r", str(gpuIds[0])]
+        args = ["group", "--host", self.host_ip, "-g",
+                str(self.group_id), "-r", str(gpuIds[0])]
         print("Removing GPU %s from the test group: %s" % (gpuIds[0], args))
 
         return args
 
     def test4_add_device_to_group(self, gpuIds):
         """ Test to add a GPU to a groups using the subsystem groups """
-        args = ["group", "--host", self.host_ip, "-g", str(self.group_id), "-a", str(gpuIds[0])]
+        args = ["group", "--host", self.host_ip, "-g",
+                str(self.group_id), "-a", str(gpuIds[0])]
         print("Adding GPU %s to the test group: %s" % (gpuIds[0], args))
 
         return args
@@ -606,7 +640,8 @@ class ConfigTests:
     def _set_compute_mode_helper(self, gpuIds, comp):
         """ Test --set compute mode values on "config" subsystem """
 
-        args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--set", "-c", comp]
+        args = ["config", "--host", self.host_ip, "-g",
+                str(self.group_id), "--set", "-c", comp]
         print("Setting different compute modes: %s" % args)
         return args
 
@@ -628,7 +663,8 @@ class ConfigTests:
         Helper function to get power limit for the device
         """
 
-        deviceAttrib = self.burnInHandle.dcgmSystem.discovery.GetGpuAttributes(gpuIds[0])
+        deviceAttrib = self.burnInHandle.dcgmSystem.discovery.GetGpuAttributes(
+            gpuIds[0])
         if pLimitType == DEFAULT_POWER_LIMIT:
             pwrLimit = str(deviceAttrib.powerLimits.defaultPowerLimit)
         elif pLimitType == MAX_POWER_LIMIT:
@@ -641,7 +677,8 @@ class ConfigTests:
     def _set_power_limit_helper(self, kind, pwr):
         """ Test --set power limit values on "config" subsystem """
 
-        args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--set", "-P", pwr]
+        args = ["config", "--host", self.host_ip, "-g",
+                str(self.group_id), "--set", "-P", pwr]
         print("Setting %s power limit for devices: %s" % (kind, args))
         return args
 
@@ -651,11 +688,14 @@ class ConfigTests:
         defPowerLimit = self.get_power_power_limit(DEFAULT_POWER_LIMIT, gpuIds)
         minPowerLimit = self.get_power_power_limit(MIN_POWER_LIMIT, gpuIds)
         if defPowerLimit == minPowerLimit:
-            print("Only the default power limit is available for this device, skipping minimum power limit test")
-            RunDcgmi.print_test_footer(inspect.currentframe().f_code.co_name, "SKIPPED", bcolors.PURPLE)
+            print(
+                "Only the default power limit is available for this device, skipping minimum power limit test")
+            RunDcgmi.print_test_footer(
+                inspect.currentframe().f_code.co_name, "SKIPPED", bcolors.PURPLE)
             return ""
         else:
-            minPowerLimit = int(minPowerLimit) + 1  # +1 to address fractions lost in data type conversion
+            # +1 to address fractions lost in data type conversion
+            minPowerLimit = int(minPowerLimit) + 1
 
         return self._set_power_limit_helper("minimum", str(minPowerLimit))
 
@@ -663,7 +703,8 @@ class ConfigTests:
 
         defPowerLimit = self.get_power_power_limit(DEFAULT_POWER_LIMIT, gpuIds)
         maxPowerLimit = self.get_power_power_limit(MAX_POWER_LIMIT, gpuIds)
-        maxPowerLimit = int(maxPowerLimit) - 1  # -1 to address fractions lost in data type conversion
+        # -1 to address fractions lost in data type conversion
+        maxPowerLimit = int(maxPowerLimit) - 1
 
         return self._set_power_limit_helper("maximum", str(maxPowerLimit))
 
@@ -674,41 +715,43 @@ class ConfigTests:
     def _set_application_clocks_helper(self, mem, sm):
         """ Test --set application clocks on "config" subsystem """
 
-        args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--set", "-a", "%s,%s" % (mem, sm)]
+        args = ["config", "--host", self.host_ip, "-g",
+                str(self.group_id), "--set", "-a", "%s,%s" % (mem, sm)]
         print("Setting application clocks values for \"mem,proc\": %s" % args)
         return args
 
     # Runs and tries to set the application clocks to 900W
     def test6_set_application_clocks_values(self, gpuIds):
-        deviceAttrib = self.burnInHandle.dcgmSystem.discovery.GetGpuAttributes(gpuIds[0])
+        deviceAttrib = self.burnInHandle.dcgmSystem.discovery.GetGpuAttributes(
+            gpuIds[0])
         sm_clk = str(deviceAttrib.clockSets.clockSet[0].smClock)
         mem_clk = str(deviceAttrib.clockSets.clockSet[0].memClock)
 
         return self._set_application_clocks_helper(mem_clk, sm_clk)
 
-
     def test7_enforce_values(self, gpuIds):
         """ Test on "config" subsystem using the "enforce" operation """
 
         # Trying to enforce previous "--set" configurations for each device
-        args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--enforce"]
+        args = ["config", "--host", self.host_ip,
+                "-g", str(self.group_id), "--enforce"]
         print("Trying to enforce last configuration used via \"--set\": %s" % args)
         time.sleep(1)
 
         return args
 
-
     def _set_sync_boost_helper(self, gpuIds, val):
         """ Test --set syncboost on "config" subsystem """
 
-        args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--set", "-s", val]
+        args = ["config", "--host", self.host_ip, "-g",
+                str(self.group_id), "--set", "-s", val]
         print("Enable/Disable syncboost feature on device: %s" % args)
         return args
 
-    #These tests aren't valid as long as we're running on one GPU at a time
-    #Runs and tries to enable and disable sync_boost
-    #def test8_set_sync_boost_value_0(self, dev): return self._set_sync_boost_helper(dev, "0")
-    #def test8_set_sync_boost_value_1(self, dev): return self._set_sync_boost_helper(dev, "1")
+    # These tests aren't valid as long as we're running on one GPU at a time
+    # Runs and tries to enable and disable sync_boost
+    # def test8_set_sync_boost_value_0(self, dev): return self._set_sync_boost_helper(dev, "0")
+    # def test8_set_sync_boost_value_1(self, dev): return self._set_sync_boost_helper(dev, "1")
 
     def _set_ecc_helper(self, gpuIds, val):
         """ Test --set ecc on "config" subsystem """
@@ -716,10 +759,12 @@ class ConfigTests:
         for gpuId in gpuIds:
             if not self.burnInHandle.GpuSupportsEcc(gpuId):
                 print("Skipping ECC tests for GPU %d that doesn't support ECC" % gpuId)
-                RunDcgmi.print_test_footer("ECC tests", "SKIPPED", bcolors.PURPLE)
+                RunDcgmi.print_test_footer(
+                    "ECC tests", "SKIPPED", bcolors.PURPLE)
                 return ""
 
-        args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--set", "-e", val]
+        args = ["config", "--host", self.host_ip, "-g",
+                str(self.group_id), "--set", "-e", val]
         print("Enable/Disable ecc on device: %s" % args)
         return args
 
@@ -727,11 +772,11 @@ class ConfigTests:
     # def test9_set_ecc_value_0(self, gpuIds): return self._set_ecc_helper(gpuIds, "0")
     # def test9_set_ecc_value_1(self, gpuIds): return self._set_ecc_helper(gpuIds, "1")
 
-
     def test11_get_values(self, gpuIds):
         """ Test getting values on "config" subsystem using the get operation """
 
-        args = ["config", "--host", self.host_ip, "-g", str(self.group_id), "--get"]
+        args = ["config", "--host", self.host_ip,
+                "-g", str(self.group_id), "--get"]
         print("Getting subsystem \"config\" information for a group: %s" % args)
         time.sleep(1)
         return args
@@ -767,20 +812,29 @@ class DiscoveryTests():
     def _discovery_device_info_helper(self, gpuIds, flag):
         """ Test to get discovery info for device per feature """
 
-        args = ["discovery", "--host", self.host_ip, "-g", str(self.group_id), "-i", flag]
+        args = ["discovery", "--host", self.host_ip,
+                "-g", str(self.group_id), "-i", flag]
         print("Querying info in group: %s" % args)
 
         return args
 
-    def test3_discovery_device_info_a(self, gpuIds): return self._discovery_device_info_helper(gpuIds, "a")
-    def test3_discovery_device_info_p(self, gpuIds): return self._discovery_device_info_helper(gpuIds, "t")
-    def test3_discovery_device_info_t(self, gpuIds): return self._discovery_device_info_helper(gpuIds, "p")
-    def test3_discovery_device_info_c(self, gpuIds): return self._discovery_device_info_helper(gpuIds, "c")
+    def test3_discovery_device_info_a(
+        self, gpuIds): return self._discovery_device_info_helper(gpuIds, "a")
+
+    def test3_discovery_device_info_p(
+        self, gpuIds): return self._discovery_device_info_helper(gpuIds, "t")
+
+    def test3_discovery_device_info_t(
+        self, gpuIds): return self._discovery_device_info_helper(gpuIds, "p")
+
+    def test3_discovery_device_info_c(
+        self, gpuIds): return self._discovery_device_info_helper(gpuIds, "c")
 
     def test4_discovery_device(self, gpuIds):
         """ Test to discovery info of each GPU """
 
-        args = ["discovery", "--host", self.host_ip, "--gpuid", str(gpuIds[0]), "-i", "aptc"]
+        args = ["discovery", "--host", self.host_ip,
+                "--gpuid", str(gpuIds[0]), "-i", "aptc"]
         print("Querying info for GPU %s: %s" % (gpuIds[0], args))
         return args
 
@@ -805,26 +859,38 @@ class HealthTests:
         self.group_id = self.groups_op.create_group(None, gpuIds)
         return self.group_id > 1
 
-
     def _set_health_watches_helper(self, gpuIds, flag):
         """ Test to set health watches """
 
-        args = ["health", "--host", self.host_ip, "-g", str(self.group_id), "--set", flag]
+        args = ["health", "--host", self.host_ip,
+                "-g", str(self.group_id), "--set", flag]
         print("Setting health watch %s: %s" % (flag, args))
 
         return args
 
-    def test2_health_set_watches_t(self, gpuIds): return self._set_health_watches_helper(gpuIds, "a")
-    def test2_health_set_watches_p(self, gpuIds): return self._set_health_watches_helper(gpuIds, "p")
-    def test2_health_set_watches_m(self, gpuIds): return self._set_health_watches_helper(gpuIds, "m")
-    def test2_health_set_watches_a(self, gpuIds): return self._set_health_watches_helper(gpuIds, "t")
-    def test2_health_set_watches_i(self, gpuIds): return self._set_health_watches_helper(gpuIds, "i")
-    def test2_health_set_watches_n(self, gpuIds): return self._set_health_watches_helper(gpuIds, "n")
+    def test2_health_set_watches_t(
+        self, gpuIds): return self._set_health_watches_helper(gpuIds, "a")
+
+    def test2_health_set_watches_p(
+        self, gpuIds): return self._set_health_watches_helper(gpuIds, "p")
+
+    def test2_health_set_watches_m(
+        self, gpuIds): return self._set_health_watches_helper(gpuIds, "m")
+
+    def test2_health_set_watches_a(
+        self, gpuIds): return self._set_health_watches_helper(gpuIds, "t")
+
+    def test2_health_set_watches_i(
+        self, gpuIds): return self._set_health_watches_helper(gpuIds, "i")
+
+    def test2_health_set_watches_n(
+        self, gpuIds): return self._set_health_watches_helper(gpuIds, "n")
 
     def test3_heath_fetch_watchers_status(self, gpuIds):
         """ Test to fetch watcher list """
 
-        args = ["health", "--host", self.host_ip, "-g", str(self.group_id), "--fetch"]
+        args = ["health", "--host", self.host_ip,
+                "-g", str(self.group_id), "--fetch"]
         print("Fetching Health Watches: %s" % args)
 
         return args
@@ -832,7 +898,8 @@ class HealthTests:
     def test4_health_check(self, gpuIds):
         """ Test to check the overall health """
 
-        args = ["health", "--host", self.host_ip, "-g", str(self.group_id), "--check"]
+        args = ["health", "--host", self.host_ip,
+                "-g", str(self.group_id), "--check"]
         print("Checking overall health: %s" % args)
 
         return args
@@ -840,7 +907,8 @@ class HealthTests:
     def test5_health_clear_watches(self, gpuIds):
         """ Test to clear all watches """
 
-        args = ["health", "--host", self.host_ip, "-g", str(self.group_id), "--clear"]
+        args = ["health", "--host", self.host_ip,
+                "-g", str(self.group_id), "--clear"]
         print("Clearing all Health Watches: %s" % args)
 
         return args
@@ -868,15 +936,20 @@ class DiagnosticsTests:
 
     def _set_diag_helper(self, gpuIds, flag):
         """ Test to run diag tests """
-        args = ["diag", "--host", self.host_ip, "-g", str(self.group_id), "--run", flag]
+        args = ["diag", "--host", self.host_ip,
+                "-g", str(self.group_id), "--run", flag]
         print("Running Diagnostic Test : %s" % args)
 
         return args
 
-    def test2_diag1_short(self, gpuIds): return self._set_diag_helper(gpuIds, "1")
-    def test2_diag2_medium(self, gpuIds): return self._set_diag_helper(gpuIds, "2")
-    def test2_diag3_long(self, gpuIds): return self._set_diag_helper(gpuIds, "3")
+    def test2_diag1_short(
+        self, gpuIds): return self._set_diag_helper(gpuIds, "1")
 
+    def test2_diag2_medium(
+        self, gpuIds): return self._set_diag_helper(gpuIds, "2")
+
+    def test2_diag3_long(
+        self, gpuIds): return self._set_diag_helper(gpuIds, "3")
 
     def test3_delete_group(self, gpuIds):
         """ Removes group used for testing """
@@ -899,7 +972,6 @@ class TopologyTests:
         self.group_id = self.groups_op.create_group(None, gpuIds)
         return self.group_id > 1
 
-
     def test2_query_topology_by_groupId(self, gpuIds):
         """ Test to read topology by group id """
 
@@ -913,7 +985,6 @@ class TopologyTests:
         args = ["topo", "--host", self.host_ip, "--gpuid", str(gpuIds[0])]
         print("Reading topology by GPU Id %s: %s" % (gpuIds[0], args))
         return args
-
 
     def test4_delete_group(self, dev):
         """ Removes group used for testing """
@@ -930,7 +1001,6 @@ class PolicyTests:
 
         self.host_ip = get_host_ip(self.burnInHandle.burnInCfg)
 
-
     def test1_create_group(self, gpuIds):
         """ Creates a group for testing the subsystem policy """
         self.group_id = self.groups_op.create_group(None, gpuIds)
@@ -939,7 +1009,8 @@ class PolicyTests:
     def test2_get_current_policy_violation_by_groupId(self, gpuIds):
         """ Get the current violation policy by group id """
 
-        args = ["policy", "--host", self.host_ip, "-g", str(self.group_id), "--get"]
+        args = ["policy", "--host", self.host_ip,
+                "-g", str(self.group_id), "--get"]
         print("Getting current violation policy list: %s " % args)
 
         return args
@@ -947,42 +1018,47 @@ class PolicyTests:
     def test3_set_pcierrors_policy_violation(self, gpuIds):
         """ Set the policy violation by group id """
 
-        actions = ["0","1"] # 0->None, 1->GPU Reset
-        validations = ["0","1","2","3"] # 0->None, 1-> NVVS(short), 2-> NVVS(medium), 3-> NVVS(long)
+        actions = ["0", "1"]  # 0->None, 1->GPU Reset
+        # 0->None, 1-> NVVS(short), 2-> NVVS(medium), 3-> NVVS(long)
+        validations = ["0", "1", "2", "3"]
 
         for action in actions:
             for val in validations:
-                args = ["policy", "--host", self.host_ip, "-g", str(self.group_id), \
-                          "--set", "%s,%s" % (action,val), "-p"]
-                print("Setting PCI errors sviolation policy list action %s, validation %s: %s " % (action, val, args))
+                args = ["policy", "--host", self.host_ip, "-g", str(self.group_id),
+                        "--set", "%s,%s" % (action, val), "-p"]
+                print("Setting PCI errors sviolation policy list action %s, validation %s: %s " % (
+                    action, val, args))
 
         return args
 
     def test4_set_eccerrors_policy_violation(self, gpuIds):
         """ Set the policy violation by group id """
 
-        actions = ["0","1"] # 0->None, 1->GPU Reset
-        validations = ["0","1","2","3"] # 0->None, 1-> NVVS(short), 2-> NVVS(medium), 3-> NVVS(long)
+        actions = ["0", "1"]  # 0->None, 1->GPU Reset
+        # 0->None, 1-> NVVS(short), 2-> NVVS(medium), 3-> NVVS(long)
+        validations = ["0", "1", "2", "3"]
 
         for action in actions:
             for val in validations:
-                args = ["policy", "--host", self.host_ip, "-g", str(self.group_id), \
-                          "--set", "%s,%s" % (action,val), "-e"]
-                print("Setting ECC errors violation policy list action %s, validation %s: %s " % (action, val, args))
+                args = ["policy", "--host", self.host_ip, "-g", str(self.group_id),
+                        "--set", "%s,%s" % (action, val), "-e"]
+                print("Setting ECC errors violation policy list action %s, validation %s: %s " % (
+                    action, val, args))
 
         return args
-
 
     def test5_set_power_temperature_values_policy(self, gpuIds):
         """ Get the violation policy for all devices at once """
 
-        deviceAttrib = self.burnInHandle.dcgmSystem.discovery.GetGpuAttributes(gpuIds[0])
+        deviceAttrib = self.burnInHandle.dcgmSystem.discovery.GetGpuAttributes(
+            gpuIds[0])
 
         max_temp = str(deviceAttrib.thermalSettings.slowdownTemp)
         max_pwr = str(deviceAttrib.powerLimits.maxPowerLimit)
         max_pages = str(60)
 
-        args = ["policy", "--host", self.host_ip, "-g", str(self.group_id), "--set", "1,1", "-T", max_temp, "-P", max_pwr, "-M", max_pages]
+        args = ["policy", "--host", self.host_ip, "-g",
+                str(self.group_id), "--set", "1,1", "-T", max_temp, "-P", max_pwr, "-M", max_pages]
         print("Setting max power and max temperature for policy list: %s " % args)
 
         return args
@@ -990,7 +1066,8 @@ class PolicyTests:
     def test6_get_detailed_policy_violation(self, gpuIds):
         """ Get the violation policy for all devices at once """
 
-        args = ["policy", "--host", self.host_ip, "-g", str(self.group_id), "--get", "-v"]
+        args = ["policy", "--host", self.host_ip,
+                "-g", str(self.group_id), "--get", "-v"]
         print("Getting detailed violation policy list: %s " % args)
 
         return args
@@ -998,11 +1075,11 @@ class PolicyTests:
     def test7_clear__policy_values(self, gpuIds):
         """ Get the violation policy for all devices at once """
 
-        args = ["policy", "--host", self.host_ip, "-g", str(self.group_id), "--clear"]
+        args = ["policy", "--host", self.host_ip,
+                "-g", str(self.group_id), "--clear"]
         print("Clearing settings for policy list: %s " % args)
 
         return args
-
 
     def test8_delete_group(self, gpuIds):
         """ Removes group used for testing """
@@ -1030,7 +1107,8 @@ class ProcessStatsTests:
     def test2_enable_system_watches(self, gpuIds):
         """ Enable watches for process stats """
 
-        args = ["stats", "--host", self.host_ip, "-g", str(self.group_id), "--enable"]
+        args = ["stats", "--host", self.host_ip,
+                "-g", str(self.group_id), "--enable"]
         print("Enabling system watches for process stats: %s" % args)
 
         return args
@@ -1039,7 +1117,8 @@ class ProcessStatsTests:
     def test3_get_pid_stats(self, gpuIds):
         """ Gets the process stats using the stats subsystem """
 
-        app = RunCudaCtxCreate(self.gpuIds, self.burnInHandle, runTimeSeconds=10, timeoutSeconds=(20 * len(gpuIds)))
+        app = RunCudaCtxCreate(self.gpuIds, self.burnInHandle,
+                               runTimeSeconds=10, timeoutSeconds=(20 * len(gpuIds)))
         app.start()
 
         pids = app.getpids()
@@ -1047,7 +1126,8 @@ class ProcessStatsTests:
             stats_msg = "--> Generating Data for Process Stats -  PID %d <--" % pid
             updateTestResults("CYCLE")
             print(bcolors.PURPLE + stats_msg + bcolors.ENDC)
-            args = ["stats", "--host", self.host_ip, "-g", str(self.group_id), "--pid", str(pid), "-v"]
+            args = ["stats", "--host", self.host_ip, "-g",
+                    str(self.group_id), "--pid", str(pid), "-v"]
             print("Collecting process stats information: %s" % args)
             sys.stdout.flush()
 
@@ -1060,7 +1140,8 @@ class ProcessStatsTests:
     def test4_disable_system_watches(self, gpuIds):
         """ Enable watches for process stats """
 
-        args = ["stats", "--host", self.host_ip, "-g", str(self.group_id), "--disable"]
+        args = ["stats", "--host", self.host_ip,
+                "-g", str(self.group_id), "--disable"]
         print("Disabling system watches for process stats: %s" % args)
 
         return args
@@ -1088,20 +1169,24 @@ class NvlinkTests:
     def test2_check_nvlink_status(self, gpuIds):
         """ Gets the nvlink error counts for various links and GPUs on the system  """
 
-        args = ["nvlink", "--host", self.host_ip, "-g", str(self.group_id), "-s"]
+        args = ["nvlink", "--host", self.host_ip,
+                "-g", str(self.group_id), "-s"]
         print("Reporting current nvlink status")
         return args
 
     def test3_query_nvlink_errors(self, gpuIds):
         for gpuId in gpuIds:
             args = ["nvlink", "--host", self.host_ip, "-g", str(gpuId), "-e"]
-            print("Running queries to get errors for various nvlinks on the system: %s" % args)
+            print(
+                "Running queries to get errors for various nvlinks on the system: %s" % args)
         return args
 
     def test4_query_nvlink_errors_json_output(self, gpuIds):
         for gpuId in gpuIds:
-            args = ["nvlink", "--host", self.host_ip, "-g", str(gpuId), "-e", "-j"]
-            print("Running queries to get errors for various nvlinks on the system in Json format: %s" % args)
+            args = ["nvlink", "--host", self.host_ip,
+                    "-g", str(gpuId), "-e", "-j"]
+            print(
+                "Running queries to get errors for various nvlinks on the system in Json format: %s" % args)
         return args
 
     def test5_delete_group(self, gpuIds):
@@ -1143,23 +1228,25 @@ class FieldGroupsTests():
         return self.group_id > 1
 
     def test2_create_fieldgroup(self, gpuIds):
-        # Get the field IDs of all of the field groups that exist so far. This is assumed to be the default groups 
+        # Get the field IDs of all of the field groups that exist so far. This is assumed to be the default groups
         # DCGM_INTERNAL_30SEC, HOURLY, JOB...etc.
         allFieldIds = []
-        
+
         fieldGroups = self.dcgmSystem.GetAllFieldGroups()
         for fieldGroup in fieldGroups.fieldGroups[:fieldGroups.numFieldGroups]:
             allFieldIds.extend(fieldGroup.fieldIds[:fieldGroup.numFieldIds])
 
-        print("Found %d fieldIds in %d field groups" % (len(allFieldIds), fieldGroups.numFieldGroups))
+        print("Found %d fieldIds in %d field groups" %
+              (len(allFieldIds), fieldGroups.numFieldGroups))
 
-        #Make sure we only use as many as what the API can handle
+        # Make sure we only use as many as what the API can handle
         if len(allFieldIds) > dcgm_structs.DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP:
-            allFieldIds = allFieldIds[:dcgm_structs.DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP-1]
+            allFieldIds = allFieldIds[:dcgm_structs.DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP - 1]
 
-        allFieldsStr = ",".join(map(str,allFieldIds))
+        allFieldsStr = ",".join(map(str, allFieldIds))
         fieldGroupName = "testFg_%d" % self.numFieldGroupsAdded
-        args = ["fieldgroup", "--host", self.host_ip, "-c", fieldGroupName, "-f", "%s" % allFieldsStr]
+        args = ["fieldgroup", "--host", self.host_ip, "-c",
+                fieldGroupName, "-f", "%s" % allFieldsStr]
         self.numFieldGroupsAdded += 1
         print("Creating a field groups: %s" % args)
         return args
@@ -1176,13 +1263,15 @@ class FieldGroupsTests():
 
     def test5_get_fieldgroup_info(self, gpuIds):
         fieldGroupId = get_newest_field_group_id(self.dcgmSystem)
-        args = ["fieldgroup", "--host", self.host_ip, "-i", "-g", "%d" % fieldGroupId]
+        args = ["fieldgroup", "--host", self.host_ip,
+                "-i", "-g", "%d" % fieldGroupId]
         print("Listing field ID information: %s" % args)
         return args
 
     def test6_delete_fieldgroup(self, gpuIds):
         fieldGroupId = get_newest_field_group_id(self.dcgmSystem)
-        args = ["fieldgroup", "--host", self.host_ip, "-d", "-g", "%d" % fieldGroupId]
+        args = ["fieldgroup", "--host", self.host_ip,
+                "-d", "-g", "%d" % fieldGroupId]
         print("Deleting a field group: %s" % args)
         return args
 
@@ -1245,28 +1334,35 @@ class DmonTests:
 
         print_header = False
 
-        fieldIdsStr = "%d,%d" % (dcgm_fields.DCGM_FI_DEV_SM_CLOCK, dcgm_fields.DCGM_FI_DEV_MEM_CLOCK)
+        fieldIdsStr = "%d,%d" % (
+            dcgm_fields.DCGM_FI_DEV_SM_CLOCK, dcgm_fields.DCGM_FI_DEV_MEM_CLOCK)
 
         for gpuId in gpuIds:
-            cmd = "%s dmon --host %s -i %s -e %s -c 10 -d 100" % (dcgmi_absolute_path, self.host_ip, str(gpuId), fieldIdsStr)
+            cmd = "%s dmon --host %s -i %s -e %s -c 10 -d 100" % (
+                dcgmi_absolute_path, self.host_ip, str(gpuId), fieldIdsStr)
 
             if print_header:
-                RunDcgmi.print_test_header(inspect.currentframe().f_code.co_name)
-            print("Running dmon on a single GPU with field ids %s: %s" % (fieldIdsStr, shlex.split(cmd)))
+                RunDcgmi.print_test_header(
+                    inspect.currentframe().f_code.co_name)
+            print("Running dmon on a single GPU with field ids %s: %s" %
+                  (fieldIdsStr, shlex.split(cmd)))
 
             try:
                 check_output(cmd, shell=True)
-                RunDcgmi.print_test_footer(inspect.currentframe().f_code.co_name, "PASSED", bcolors.BLUE)
+                RunDcgmi.print_test_footer(
+                    inspect.currentframe().f_code.co_name, "PASSED", bcolors.BLUE)
                 updateTestResults("PASSED")
                 updateTestResults("COUNT")
             except CalledProcessError:
                 print("Failed to get dmon data for GPU %s " % str(gpuId))
-                RunDcgmi.print_test_footer(inspect.currentframe().f_code.co_name, "FAILED", bcolors.RED)
+                RunDcgmi.print_test_footer(
+                    inspect.currentframe().f_code.co_name, "FAILED", bcolors.RED)
                 updateTestResults("FAILED")
                 updateTestResults("COUNT")
             except Exception:
                 print("Unexpected exception %s " % str(gpuId))
-                RunDcgmi.print_test_footer(inspect.currentframe().f_code.co_name, "FAILED", bcolors.RED)
+                RunDcgmi.print_test_footer(
+                    inspect.currentframe().f_code.co_name, "FAILED", bcolors.RED)
                 updateTestResults("FAILED")
                 updateTestResults("COUNT")
 
@@ -1275,25 +1371,29 @@ class DmonTests:
         return ""
 
     def test4_dmon_field_group_dcgm_internal_30sec(self, gpuIds):
-        args = ["dmon", "--host", self.host_ip, "-f", "1", "-c", "10", "-d", "100"]
+        args = ["dmon", "--host", self.host_ip,
+                "-f", "1", "-c", "10", "-d", "100"]
         print("Running dmon on a group to monitor data on field group DCGM_INTERNAL_30SEC:  %s" % args)
         return args
 
     def test5_dmon_field_group_dcgm_internal_hourly(self, gpuIds):
         "dcgmi dmon -f 3 -c 10 -d 100"
-        args = ["dmon", "--host", self.host_ip, "-f", "2", "-c", "10", "-d", "100"]
+        args = ["dmon", "--host", self.host_ip,
+                "-f", "2", "-c", "10", "-d", "100"]
         print("Running dmon on a group to monitor data on field group DCGM_INTERNAL_HOURLY:  %s" % args)
         return args
 
     def test6_dmon_field_group_dcgm_internal_job(self, gpuIds):
         "dcgmi dmon -f 3 -c 10 -d 100"
-        args = ["dmon", "--host", self.host_ip, "-f", "3", "-c", "10", "-d", "100"]
+        args = ["dmon", "--host", self.host_ip,
+                "-f", "3", "-c", "10", "-d", "100"]
         print("Running dmon on a group to monitor data on field group DCGM_INTERNAL_JOB:  %s" % args)
         return args
 
     def test5_delete_group(self, gpuIds):
         """ Removes group used for testing """
         return self.groups_op.delete_group()
+
 
 def IsDiagTest(testname):
     if testname == 'test2_diag1_short':
@@ -1304,6 +1404,7 @@ def IsDiagTest(testname):
         return 3
 
     return 0
+
 
 class RunDcgmi():
     """
@@ -1322,8 +1423,8 @@ class RunDcgmi():
         "Timeout",
         "DCGM Shared Library Not Found",
         "Function Not Found",
-        "(null)", # e.g. from printing %s from null ptr
-        ]
+        "(null)",  # e.g. from printing %s from null ptr
+    ]
 
     def __init__(self, burnInHandle):
         self.burnInHandle = burnInHandle
@@ -1332,7 +1433,8 @@ class RunDcgmi():
         self.timestamp = str(time.strftime('%Y-%m-%d'))
         self._timer = None              # to implement timeout
         self._subprocess = None
-        self._retvalue = None           # stored return code or string when the app was terminated
+        # stored return code or string when the app was terminated
+        self._retvalue = None
         self._lock = threading.Lock()   # to implement thread safe timeout/terminate
         self.log = open('DCGMI-CLIENT_%s.log' % self.timestamp, 'a+')
         self.stdout_lines = []
@@ -1358,7 +1460,7 @@ class RunDcgmi():
             sorted(filter(lambda x:x[0].startswith("test"), inspect.getmembers(obj)) -> Filters and sorts each members from the class that startswith "test"
             key=lambda x:int(x[0][4:x[0].find('_')])) -> key modifies the object to compare the items by their integer value found after the "_"
         """
-        return sorted([x for x in inspect.getmembers(obj) if x[0].startswith("test")], key=lambda x:int(x[0][4:x[0].find('_')]))
+        return sorted([x for x in inspect.getmembers(obj) if x[0].startswith("test")], key=lambda x: int(x[0][4:x[0].find('_')]))
 
     def get_group_tests(self):
         return self._get_sorted_tests(self.group_tests)
@@ -1407,11 +1509,12 @@ class RunDcgmi():
     @staticmethod
     def print_test_footer(testName, statusText, color):
         print("Test %s end time: %s" % (testName, datetime.datetime.now()))
-        #Don't include colors for eris
+        # Don't include colors for eris
         if option_parser.options.dvssc_testing or option_parser.options.eris:
             print(("&&&& " + statusText + " " + testName + "\n"))
         else:
-            print(color + "&&&& " + statusText + " " + testName + bcolors.ENDC + "\n")
+            print(color + "&&&& " + statusText +
+                  " " + testName + bcolors.ENDC + "\n")
 
     def start(self, timeout=None, server=None):
         """
@@ -1421,13 +1524,13 @@ class RunDcgmi():
 
         # checks if the file has executable permission
         if os.path.exists(self.dcgmi_path):
-            assert os.access(self.dcgmi_path, os.X_OK), "Application binary %s is not executable! Make sure that the testing archive has been correctly extracted." % (self.dcgmi_path)
+            assert os.access(self.dcgmi_path, os.X_OK), "Application binary %s is not executable! Make sure that the testing archive has been correctly extracted." % (
+                self.dcgmi_path)
 
         timeout_start = time.time()
         while time.time() < timeout_start + timeout:
             # Gets gpuId list
             gpuIdLists = self.burnInHandle.GetGpuIdsGroupedBySku()
-
 
             # Starts a process to run dcgmi
             for gpuIds in gpuIdLists:
@@ -1435,20 +1538,20 @@ class RunDcgmi():
 
                 # Creates a list of lists from the return of each function
                 all_tests = [
-                                self.get_group_tests(),
-                                self.get_config_tests(),
-                                self.get_discovery_tests(),
-                                self.get_health_tests(),
-                                self.get_stats_tests(),
-                                self.get_topo_tests(),
-                                self.get_policy_tests(),
-                                self.get_nvlink_tests(),
-                                self.get_introspection_tests(),
-                                self.get_fieldgroups_tests(),
-                                self.get_modules_tests(),
-                                self.get_dmon_tests(),
-                                self.get_diag_tests()
-                            ]
+                    self.get_group_tests(),
+                    self.get_config_tests(),
+                    self.get_discovery_tests(),
+                    self.get_health_tests(),
+                    self.get_stats_tests(),
+                    self.get_topo_tests(),
+                    self.get_policy_tests(),
+                    self.get_nvlink_tests(),
+                    self.get_introspection_tests(),
+                    self.get_fieldgroups_tests(),
+                    self.get_modules_tests(),
+                    self.get_dmon_tests(),
+                    self.get_diag_tests()
+                ]
                 if not self.burnInHandle.burnInCfg.eud:
                     all_tests.pop()
 
@@ -1462,7 +1565,8 @@ class RunDcgmi():
                             if exec_test is None:
                                 # The test was not run (likely prevented by
                                 # decorator).
-                                RunDcgmi.print_test_footer(testName, "SKIPPED", bcolors.PURPLE)
+                                RunDcgmi.print_test_footer(
+                                    testName, "SKIPPED", bcolors.PURPLE)
                                 continue
 
                             if type(exec_test) == str:
@@ -1471,10 +1575,12 @@ class RunDcgmi():
 
                             if type(exec_test) == bool:
                                 if exec_test:
-                                    RunDcgmi.print_test_footer(testName, "PASSED", bcolors.BLUE)
+                                    RunDcgmi.print_test_footer(
+                                        testName, "PASSED", bcolors.BLUE)
                                     updateTestResults("PASSED")
                                 else:
-                                    RunDcgmi.print_test_footer(testName, "FAILED", bcolors.RED)
+                                    RunDcgmi.print_test_footer(
+                                        testName, "FAILED", bcolors.RED)
                                     updateTestResults("FAILED")
 
                                 updateTestResults("COUNT")
@@ -1493,7 +1599,8 @@ class RunDcgmi():
                                 paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
                                 paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
 
-                                dd = DcgmiDiag.DcgmiDiag(dcgmiPrefix=get_dcgmi_bin_directory(), runMode=diagTest, gpuIds=gpuIds, paramsStr=paramsStr)
+                                dd = DcgmiDiag.DcgmiDiag(dcgmiPrefix=get_dcgmi_bin_directory(
+                                ), runMode=diagTest, gpuIds=gpuIds, paramsStr=paramsStr)
                                 diagPassed = not dd.Run()
                                 if dd.failed_list:
                                     """
@@ -1504,62 +1611,72 @@ class RunDcgmi():
                                     logCooling = False
                                     for failure in dd.failed_list:
                                         if failure.m_fieldId == dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS:
-                                            logCooling = True;
+                                            logCooling = True
                                         else:
                                             diagPassed = False
 
                                     if logCooling:
-                                        self.log.write("Please check cooling on this machine.")
+                                        self.log.write(
+                                            "Please check cooling on this machine.")
 
                                 nsc.m_shutdownFlag.set()
                                 nsc.join()
                                 reasons = nsc.GetAnyThermalClocksEventReasons()
                                 if len(reasons):
-                                    self.log.write("Ignoring diagnostic failure due to thermal clocks event.")
+                                    self.log.write(
+                                        "Ignoring diagnostic failure due to thermal clocks event.")
                                     for reason in reasons:
-                                        self.log.write("Found thermal clocks event: %s" % str(reason))
+                                        self.log.write(
+                                            "Found thermal clocks event: %s" % str(reason))
                                     diagPassed = True
 
                                 fout.write(str(dd.lastStdout))
                                 fout.write(str(dd.lastStderr))
                                 rc = dd.diagRet
                             else:
-                                self._subprocess = Popen([self.dcgmi_path]+exec_test, stdout=fout, stderr=fout)
+                                self._subprocess = Popen(
+                                    [self.dcgmi_path] + exec_test, stdout=fout, stderr=fout)
                                 self._subprocess.wait()
                                 rc = self._subprocess.returncode
 
-                            #DCGM returns an undeflowed int8 as the status. So -3 is returned as 253. Convert it to the negative value
+                            # DCGM returns an undeflowed int8 as the status. So -3 is returned as 253. Convert it to the negative value
                             if rc != 0:
                                 rc -= 256
                             print("Got rc %d" % rc)
 
                             if rc == 0:
-                                RunDcgmi.print_test_footer(testName, "PASSED", bcolors.BLUE)
+                                RunDcgmi.print_test_footer(
+                                    testName, "PASSED", bcolors.BLUE)
                                 updateTestResults("PASSED")
                                 updateTestResults("COUNT")
                             elif rc == dcgm_structs.DCGM_ST_NOT_SUPPORTED:
-                                RunDcgmi.print_test_footer(testName, "WAIVED", bcolors.YELLOW)
+                                RunDcgmi.print_test_footer(
+                                    testName, "WAIVED", bcolors.YELLOW)
                                 updateTestResults("WAIVED")
                                 updateTestResults("COUNT")
                             elif diagPassed == True:
                                 # If we reach here, it means the diag detected a problem we consider legitimate.
                                 # Mark this test as waived instead of failed
-                                RunDcgmi.print_test_footer(testName, "WAIVED", bcolors.YELLOW)
-                                print("Waiving test due to errors we believe to be legitimate detected by the diagnostic")
+                                RunDcgmi.print_test_footer(
+                                    testName, "WAIVED", bcolors.YELLOW)
+                                print(
+                                    "Waiving test due to errors we believe to be legitimate detected by the diagnostic")
                                 if dd is not None:
                                     dd.PrintFailures()
                                 updateTestResults("WAIVED")
                                 updateTestResults("COUNT")
                             else:
-                                RunDcgmi.print_test_footer(testName, "FAILED", bcolors.RED)
+                                RunDcgmi.print_test_footer(
+                                    testName, "FAILED", bcolors.RED)
                                 if dd is not None:
                                     dd.PrintFailures()
                                 updateTestResults("FAILED")
                                 updateTestResults("COUNT")
                         except test_utils.TestSkipped as err:
-                                RunDcgmi.print_test_footer(testName, "SKIPPED", bcolors.PURPLE)
-                                print(err)
-                                updateTestResults("SKIPPED")
+                            RunDcgmi.print_test_footer(
+                                testName, "SKIPPED", bcolors.PURPLE)
+                            print(err)
+                            updateTestResults("SKIPPED")
 
         return ("\n".join(self.stdout_lines), self._subprocess.returncode), str(gpuIds)
 
@@ -1571,7 +1688,6 @@ class RunDcgmi():
             self.wait()
             return self._retvalue
 
-
     def _process_finish(self):
         # if still alive, kill process
         if self._subprocess.returncode is None:
@@ -1581,17 +1697,19 @@ class RunDcgmi():
         # Check if child process has terminated.
         if self._subprocess.returncode is not None:
             if self._subprocess.returncode == 0:
-                message = ("PASSED - DCGMI is running normally, returned %d\n" % self._subprocess.returncode)
+                message = ("PASSED - DCGMI is running normally, returned %d\n" %
+                           self._subprocess.returncode)
                 self.log.writelines(message)
             else:
-                message = ("FAILED - DCGMI failed with returned non-zero %s \n") % self._subprocess.returncode
+                message = (
+                    "FAILED - DCGMI failed with returned non-zero %s \n") % self._subprocess.returncode
                 self.log.writelines(message)
-
 
         # Verify that dcgmi doesn't print any strings that should never be printed on a working system
         stdout = "\n".join(self.stdout_lines)
         for forbidden_text in RunDcgmi.forbidden_strings:
-            assert stdout.find(forbidden_text) == -1, "dcgmi printed \"%s\", this should never happen!" % forbidden_text
+            assert stdout.find(
+                forbidden_text) == -1, "dcgmi printed \"%s\", this should never happen!" % forbidden_text
 
         return self._retvalue
 
@@ -1615,7 +1733,7 @@ class RunDcgmi():
         Function called by timeout routine. Kills the app in a thread safe way.
 
         """
-        with self._lock: # set ._retvalue in thread safe way. Make sure that app wasn't terminated already
+        with self._lock:  # set ._retvalue in thread safe way. Make sure that app wasn't terminated already
             if self._retvalue is not None:
                 return self._retvalue
 
@@ -1625,14 +1743,18 @@ class RunDcgmi():
             return self._retvalue
 
 # Start host egine on headnode
+
+
 def run_local_host_engine(burnInCfg):
 
-    #Starting HostEngine
+    # Starting HostEngine
     host_engine = RunHostEngine(burnInCfg.writeHostEngineDebugFile)
-    host_engine.start(int(burnInCfg.runtime)+5)
+    host_engine.start(int(burnInCfg.runtime) + 5)
     try:
-        _thread.start_new_thread(lambda: host_engine.mem_usage(burnInCfg.runtime), ())
-        _thread.start_new_thread(lambda: host_engine.cpu_usage(burnInCfg.runtime), ())
+        _thread.start_new_thread(
+            lambda: host_engine.mem_usage(burnInCfg.runtime), ())
+        _thread.start_new_thread(
+            lambda: host_engine.cpu_usage(burnInCfg.runtime), ())
     except:
         print("Error: unable to create thread")
     time.sleep(1)
@@ -1640,11 +1762,14 @@ def run_local_host_engine(burnInCfg):
     return host_engine
 
 # Start cuda workload
+
+
 def run_cuda_workload(burnInCfg):
     burnInHandle = BurnInHandle(burnInCfg.ip, burnInCfg)
 
-    #Creates cuda workload
-    cuda_workload = RunCudaCtxCreate(None, burnInHandle, int(burnInCfg.runtime)+4, timeoutSeconds=10)
+    # Creates cuda workload
+    cuda_workload = RunCudaCtxCreate(None, burnInHandle, int(
+        burnInCfg.runtime) + 4, timeoutSeconds=10)
     cuda_workload.start()
     print("\nGenerating Cuda Workload on Clients...\n")
     cuda_workload.wait()
@@ -1654,10 +1779,12 @@ def run_cuda_workload(burnInCfg):
 def run_dcgmi_client(burnInCfg):
     burnInHandle = BurnInHandle(burnInCfg.ip, burnInCfg)
     dcgmi_client = RunDcgmi(burnInHandle)
-    dcgmi_client.start(int(burnInCfg.runtime)+1, burnInCfg.srv)
+    dcgmi_client.start(int(burnInCfg.runtime) + 1, burnInCfg.srv)
     time.sleep(2)
 
 # Copy packages to test nodes
+
+
 def copy_files_to_targets(ip):
 
     # Gets current user name
@@ -1667,8 +1794,9 @@ def copy_files_to_targets(ip):
     print("Creating burning-package.tar.gz package...")
     time.sleep(2)
     package = "burning-package.tar.gz"
-    abscwd=os.path.abspath(os.getcwd())
-    os.system("tar zcvf /tmp/%s -C %s testing" % (package, os.path.dirname(abscwd)))
+    abscwd = os.path.abspath(os.getcwd())
+    os.system("tar zcvf /tmp/%s -C %s testing" %
+              (package, os.path.dirname(abscwd)))
 
     print("\n...................................................\n")
     print("Copying package to test systems... %s" % ip)
@@ -1679,10 +1807,12 @@ def copy_files_to_targets(ip):
         time.sleep(1)
 
         # Unpacking package on remote nodes
-        os.system("ssh " + user + "@" +  address + " tar zxf " + package)
+        os.system("ssh " + user + "@" + address + " tar zxf " + package)
         time.sleep(1)
 
 # Run the tests on the remote nodes
+
+
 def run_remote(runtime, address, srv, nodes):
 
     # Gets current user name
@@ -1691,10 +1821,13 @@ def run_remote(runtime, address, srv, nodes):
     py_cmd = sys.executable + " burn_in_stress.py"
 
     # Run the tests on remote systems
-    cmd="ssh %s@%s \"MODULEPATH=%s;cd testing; LD_LIBRARY_PATH=~/testing %s -t %s -s %s \"" % (user, address, os.environ["MODULEPATH"], py_cmd, runtime, srv)
+    cmd = "ssh %s@%s \"MODULEPATH=%s;cd testing; LD_LIBRARY_PATH=~/testing %s -t %s -s %s \"" % (
+        user, address, os.environ["MODULEPATH"], py_cmd, runtime, srv)
     return Popen(cmd.split())
 
 # Run the tests on the local (single) node
+
+
 def run_tests(burnInCfg):
 
     color = bcolors()
@@ -1712,10 +1845,11 @@ def run_tests(burnInCfg):
         sys.exit(1)
     else:
         for gpuId in gpuIds:
-            print("The available devices are: " + color.BOLD + "GPU %d" % gpuId + color.ENDC)
+            print("The available devices are: " +
+                  color.BOLD + "GPU %d" % gpuId + color.ENDC)
 
     # Disconnect from embedded host engine
-    del(burnInHandle)
+    del (burnInHandle)
     burnInHandle = None
 
     start_timestamp = time.asctime()
@@ -1723,10 +1857,12 @@ def run_tests(burnInCfg):
     if not test_utils.is_hostengine_running():
         # Starting HostEngine
         host_engine = RunHostEngine(burnInCfg.writeHostEngineDebugFile)
-        host_engine.start(int(burnInCfg.runtime)+5)
+        host_engine.start(int(burnInCfg.runtime) + 5)
         try:
-            _thread.start_new_thread(lambda: host_engine.mem_usage(burnInCfg.runtime), ())
-            _thread.start_new_thread(lambda: host_engine.cpu_usage(burnInCfg.runtime), ())
+            _thread.start_new_thread(
+                lambda: host_engine.mem_usage(burnInCfg.runtime), ())
+            _thread.start_new_thread(
+                lambda: host_engine.cpu_usage(burnInCfg.runtime), ())
         except:
             print("Error: unable to create thread")
         time.sleep(1)
@@ -1737,7 +1873,7 @@ def run_tests(burnInCfg):
     burnInHandle = BurnInHandle("127.0.0.1", burnInCfg)
     dcgmi_client = RunDcgmi(burnInHandle)
     time.sleep(2)
-    dcgmi_client.start(int(burnInCfg.runtime)+1)
+    dcgmi_client.start(int(burnInCfg.runtime) + 1)
     time.sleep(2)
 
     print("\nStart timestamp: %s" % start_timestamp)
@@ -1749,9 +1885,10 @@ def run_tests(burnInCfg):
         host_engine.terminate()
         host_engine.validate()
 
-    #Disconnect from host engine
-    del(burnInHandle)
+    # Disconnect from host engine
+    del (burnInHandle)
     burnInHandle = None
+
 
 def validate_ip(s):
     # Function to validate ip addresses
@@ -1769,19 +1906,22 @@ def validate_ip(s):
     return True
 
 # Class for holding global configuration information for this test module
+
+
 class BurnInGlobalConfig:
     def __init__(self):
-        self.remote = False  #Are we connecting to a remote server? True = Yes. False = No
-        self.eud = True      #Should we run the EUD? True = Yes
-        self.runtime = 0     #How long to run the tests in seconds
-        self.onlyGpuIds = [] #Only GPU IDs this framework should run on
-        self.dvssc_testing = False    #Display color on output
+        self.remote = False  # Are we connecting to a remote server? True = Yes. False = No
+        self.eud = True  # Should we run the EUD? True = Yes
+        self.runtime = 0  # How long to run the tests in seconds
+        self.onlyGpuIds = []  # Only GPU IDs this framework should run on
+        self.dvssc_testing = False  # Display color on output
 
-        #Undocumented globals I'm pulling out of the global namespace for sanity's sake
+        # Undocumented globals I'm pulling out of the global namespace for sanity's sake
         self.srv = None
         self.ip = None
         self.nodes = []
         self.server = []
+
 
 def parseCommandLine():
     burnInCfg = BurnInGlobalConfig()
@@ -1797,15 +1937,23 @@ def parseCommandLine():
 
     # Parsing arguments
     parser = argparse.ArgumentParser(description="BURN-IN STRESS TEST")
-    parser.add_argument("-t", "--runtime", required=True, help="Number of seconds to keep the test running")
-    #nargs="+" means no args or any number of arguments
-    parser.add_argument("-a", "--address", nargs="+", help="One or more IP addresses separated by spaces where DCGMI Clients will run on ")
-    parser.add_argument("-n", "--nodesfile", help="File with list of IP address or hostnames where DCGMI Clients will run on")
-    parser.add_argument("-s", "--server", help="Server IP address where DCGM HostEngines will running on")
-    parser.add_argument("-ne", "--noeud",  action="store_true", help="Runs without the EUD Diagnostics test")
-    parser.add_argument("-i", "--indexes", nargs=1, help="One or more GPU IDs to run the burn-in tests on, separated by commas. These come from 'dcgmi discovery -l'")
-    parser.add_argument("-d", "--debug", action="store_true", help="Write debug logs from nv-hostengine")
-    parser.add_argument("-D", "--dvssc-testing", action="store_true", help="DVSCC Testing disable colors in output")
+    parser.add_argument("-t", "--runtime", required=True,
+                        help="Number of seconds to keep the test running")
+    # nargs="+" means no args or any number of arguments
+    parser.add_argument("-a", "--address", nargs="+",
+                        help="One or more IP addresses separated by spaces where DCGMI Clients will run on ")
+    parser.add_argument(
+        "-n", "--nodesfile", help="File with list of IP address or hostnames where DCGMI Clients will run on")
+    parser.add_argument(
+        "-s", "--server", help="Server IP address where DCGM HostEngines will running on")
+    parser.add_argument("-ne", "--noeud", action="store_true",
+                        help="Runs without the EUD Diagnostics test")
+    parser.add_argument("-i", "--indexes", nargs=1,
+                        help="One or more GPU IDs to run the burn-in tests on, separated by commas. These come from 'dcgmi discovery -l'")
+    parser.add_argument("-d", "--debug", action="store_true",
+                        help="Write debug logs from nv-hostengine")
+    parser.add_argument("-D", "--dvssc-testing", action="store_true",
+                        help="DVSCC Testing disable colors in output")
 
     args = parser.parse_args()
 
@@ -1826,7 +1974,8 @@ def parseCommandLine():
             print(color.YELLOW + " ##### DCGM BURN-IN STRESS TEST ##### " + color.ENDC)
             print("...................................................\n")
         else:
-            print(color.RED + "\nPlease enter a decimal number for the time option.\n" + color.ENDC)
+            print(
+                color.RED + "\nPlease enter a decimal number for the time option.\n" + color.ENDC)
             sys.exit(1)
 
     # Runs without EUD tests
@@ -1842,7 +1991,8 @@ def parseCommandLine():
         if validate_ip(burnInCfg.srv):
             burnInCfg.server.append(burnInCfg.srv)
         else:
-            print(color.RED + "\n%s is invalid. Please enter a valid IP address.\n" + color.ENDC)
+            print(
+                color.RED + "\n%s is invalid. Please enter a valid IP address.\n" + color.ENDC)
             sys.exit(1)
 
     # Parsing IP address arguments
@@ -1861,10 +2011,12 @@ def parseCommandLine():
             if validate_ip(add):
                 burnInCfg.ip.append(add)
             else:
-                print(color.RED + "\nFailed to validate IP Address %s\n" % add + color.ENDC)
+                print(color.RED + "\nFailed to validate IP Address %s\n" %
+                      add + color.ENDC)
                 sys.exit(1)
 
-        print(color.PURPLE + "IP address to run on: %s " % str(burnInCfg.ip) + color.ENDC)
+        print(color.PURPLE + "IP address to run on: %s " %
+              str(burnInCfg.ip) + color.ENDC)
         print("\n...................................................\n")
 
     else:
@@ -1877,20 +2029,23 @@ def parseCommandLine():
             location = os.path.abspath(os.path.join(args.nodesfile))
 
             if os.path.exists(location):
-                print(color.PURPLE + "Nodes list file used \"%s\"\n" % str(location).split() + color.ENDC)
+                print(color.PURPLE + "Nodes list file used \"%s\"\n" %
+                      str(location).split() + color.ENDC)
 
                 # Reads the node list file and removes newlines from each line
                 f = open(location, 'r')
                 for lines in f.readlines():
                     burnInCfg.nodes.append(lines[:-1])
-            print(color.PURPLE + "IP address to run on: %s " % burnInCfg.nodes + color.ENDC)
+            print(color.PURPLE + "IP address to run on: %s " %
+                  burnInCfg.nodes + color.ENDC)
             print("\n...................................................\n")
 
     if args.indexes:
         burnInCfg.onlyGpuIds = []
         for gpuId in args.indexes[0].split(','):
             if not gpuId.isdigit():
-                print(color.RED + "GPU ID '%s' must be a number" % gpuId + color.ENDC)
+                print(color.RED + "GPU ID '%s' must be a number" %
+                      gpuId + color.ENDC)
                 sys.exit(1)
             burnInCfg.onlyGpuIds.append(int(gpuId))
 
@@ -1908,6 +2063,7 @@ def cleanup():
     '''
     apps.AppRunner.clean_all()
 
+
 def main_wrapped():
     # Initialize the framework's option parser so we can use framework classes
     option_parser.initialize_as_stub()
@@ -1915,12 +2071,12 @@ def main_wrapped():
     if not utils.is_root():
         sys.exit("\nOnly root can run this script\n")
 
-    #Parse the command line
+    # Parse the command line
     burnInCfg = parseCommandLine()
 
     setupEnvironment()
 
-    #initialize the DCGM library globally ONCE
+    # initialize the DCGM library globally ONCE
     try:
         dcgm_structs._dcgmInit(utils.get_testing_framework_library_path())
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_LIBRARY_NOT_FOUND):
@@ -1929,20 +2085,22 @@ def main_wrapped():
 
     if not burnInCfg.remote:
         run_tests(burnInCfg)
-    elif len(burnInCfg.ip)==0:
+    elif len(burnInCfg.ip) == 0:
         run_cuda_workload(burnInCfg)
         run_dcgmi_client(burnInCfg)
     else:
         copy_files_to_targets(burnInCfg.ip)
         run_local_host_engine(burnInCfg)
-        remotes=[]
+        remotes = []
         for address in burnInCfg.ip:
-            remotes.append(run_remote(burnInCfg.runtime, address, burnInCfg.srv, burnInCfg.nodes))
+            remotes.append(run_remote(burnInCfg.runtime, address,
+                           burnInCfg.srv, burnInCfg.nodes))
 
         for remote in remotes:
             remote.wait()
 
     getTestSummary()
+
 
 def main():
     try:
@@ -1952,6 +2110,7 @@ def main():
         raise
     finally:
         cleanup()
+
 
 if __name__ == "__main__":
     main()

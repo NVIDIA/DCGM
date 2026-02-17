@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,23 +25,27 @@ import dcgm_nvml
 from _test_helpers import skip_test_if_no_dcgm_nvml
 from dcgm_structs import dcgmExceptionClass
 
+
 def helper_get_blank_dcgm_config_for_workload_power_profiles():
     config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
     config_values.version = dcgm_structs.dcgmDeviceConfig_version2
-    config_values.gpuId   = dcgmvalue.DCGM_INT32_BLANK
-    config_values.mEccMode =    dcgmvalue.DCGM_INT32_BLANK
-    config_values.mPerfState.syncBoost  =   dcgmvalue.DCGM_INT32_BLANK
-    config_values.mPerfState.targetClocks.memClock  =   dcgmvalue.DCGM_INT32_BLANK
-    config_values.mPerfState.targetClocks.smClock =   dcgmvalue.DCGM_INT32_BLANK
+    config_values.gpuId = dcgmvalue.DCGM_INT32_BLANK
+    config_values.mEccMode = dcgmvalue.DCGM_INT32_BLANK
+    config_values.mPerfState.syncBoost = dcgmvalue.DCGM_INT32_BLANK
+    config_values.mPerfState.targetClocks.memClock = dcgmvalue.DCGM_INT32_BLANK
+    config_values.mPerfState.targetClocks.smClock = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
 
     return config_values
 
+
 def helper_verify_target_config(groupObj, expectedMask):
     # Get the target configuration
-    getConfigValues = groupObj.config.Get(dcgm_structs.DCGM_CONFIG_TARGET_STATE)
-    assert len(getConfigValues) > 0, "Failed to get configuration using dcgmConfigGet"
+    getConfigValues = groupObj.config.Get(
+        dcgm_structs.DCGM_CONFIG_TARGET_STATE)
+    assert len(
+        getConfigValues) > 0, "Failed to get configuration using dcgmConfigGet"
     numGpuIds = len(groupObj.GetGpuIds())
 
     # Verify that the target power profile matches the new mask.
@@ -50,10 +54,13 @@ def helper_verify_target_config(groupObj, expectedMask):
             assert getConfigValues[gpuId].mWorkloadPowerProfiles[bitmapIndex] == expectedMask[bitmapIndex], \
                 f"Workload power profile at index {bitmapIndex} is {getConfigValues[gpuId].mWorkloadPowerProfiles[bitmapIndex]}, expected {expectedMask[bitmapIndex]}"
 
+
 def helper_verify_current_config(groupObj, expectedMask):
     # Get the current configuration
-    getConfigValues = groupObj.config.Get(dcgm_structs.DCGM_CONFIG_CURRENT_STATE)
-    assert len(getConfigValues) > 0, "Failed to get configuration using dcgmConfigGet"
+    getConfigValues = groupObj.config.Get(
+        dcgm_structs.DCGM_CONFIG_CURRENT_STATE)
+    assert len(
+        getConfigValues) > 0, "Failed to get configuration using dcgmConfigGet"
     numGpuIds = len(groupObj.GetGpuIds())
 
     # Verify that the current power profile matches the expected mask.
@@ -69,6 +76,7 @@ def helper_initialize_config(initialMask):
         setConfigValues.mWorkloadPowerProfiles[bitmapIndex] = initialMask[bitmapIndex]
     return setConfigValues
 
+
 def helper_set_workload_power_profiles_with_new_nvml_api(handle, gpuIds, setMechanism):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
@@ -76,10 +84,12 @@ def helper_set_workload_power_profiles_with_new_nvml_api(handle, gpuIds, setMech
     groupId = groupObj.GetId()
 
     # First get the target configuration and verify the initial state in DCGM is all blanks.
-    blankMask = [dcgmvalue.DCGM_INT32_BLANK] * dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE
+    blankMask = [dcgmvalue.DCGM_INT32_BLANK] * \
+        dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE
     helper_verify_target_config(groupObj, blankMask)
 
-    workloadPowerProfiles = [0] * dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE
+    workloadPowerProfiles = [0] * \
+        dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE
 
     setInjectedRet = nvml_injection.c_injectNvmlRet_t()
     setInjectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
@@ -91,13 +101,14 @@ def helper_set_workload_power_profiles_with_new_nvml_api(handle, gpuIds, setMech
     setInjectedRet.values[0].value.WorkloadPowerProfileUpdateProfiles_v1.updateProfilesMask = nvmlMask255
     setInjectedRet.valueCount = 1
     for gpuId in gpuIds:
-        dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, setInjectedRet)
+        dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, setInjectedRet)
 
     # Before setting the config, current GPU config is read from NVML using WorkloadPowerProfileGetCurrentProfiles.
     # WorkloadPowerProfileGetCurrentProfiles is not injected here, and will return an error, which is
     # translated to a mask of blanks in the current config. This works for the initial configuration.
     if setMechanism == "dcgmConfigSet":
-         # Initialize the new config to all blanks and update only the workload power profiles to all 0s.
+        # Initialize the new config to all blanks and update only the workload power profiles to all 0s.
         setConfigValues = helper_get_blank_dcgm_config_for_workload_power_profiles()
         for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
             setConfigValues.mWorkloadPowerProfiles[bitmapIndex] = workloadPowerProfiles[bitmapIndex]
@@ -107,7 +118,8 @@ def helper_set_workload_power_profiles_with_new_nvml_api(handle, gpuIds, setMech
         workloadPowerProfile.version = dcgm_structs.dcgmWorkloadPowerProfile_version
         workloadPowerProfile.groupId = groupId
         workloadPowerProfile.profileMask = (ctypes.c_uint * len(mask))(*mask)
-        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(handle, workloadPowerProfile)
+        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(
+            handle, workloadPowerProfile)
 
     # Inject the current GPU config and verify that it is read correctly, along with the saved target config in DCGM.
     getInjectedRet = nvml_injection.c_injectNvmlRet_t()
@@ -116,7 +128,8 @@ def helper_set_workload_power_profiles_with_new_nvml_api(handle, gpuIds, setMech
     getInjectedRet.values[0].value.WorkloadPowerProfileCurrentProfiles.requestedProfilesMask = nvmlMask255
     getInjectedRet.valueCount = 1
     for gpuId in gpuIds:
-        dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileGetCurrentProfiles", None, 0, getInjectedRet)
+        dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "WorkloadPowerProfileGetCurrentProfiles", None, 0, getInjectedRet)
 
     helper_verify_current_config(groupObj, workloadPowerProfiles)
 
@@ -132,12 +145,15 @@ def helper_set_workload_power_profiles_with_new_nvml_api(handle, gpuIds, setMech
             setConfigValues.mWorkloadPowerProfiles[bitmapIndex] = newMask[bitmapIndex]
         groupObj.config.Set(setConfigValues)
     elif setMechanism == "dcgmConfigSetWorkloadPowerProfile":
-        workloadPowerProfile.profileMask = (ctypes.c_uint * len(newMask))(*newMask)
-        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(handle, workloadPowerProfile)
+        workloadPowerProfile.profileMask = (
+            ctypes.c_uint * len(newMask))(*newMask)
+        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(
+            handle, workloadPowerProfile)
 
     helper_verify_target_config(groupObj, newMask)
 
     groupObj.Delete()
+
 
 def helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, setMechanism):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -146,7 +162,8 @@ def helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, setMech
     groupId = groupObj.GetId()
 
     # First get the target configuration and verify the initial state in DCGM is all blanks.
-    blankMask = [dcgmvalue.DCGM_INT32_BLANK] * dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE
+    blankMask = [dcgmvalue.DCGM_INT32_BLANK] * \
+        dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE
     helper_verify_target_config(groupObj, blankMask)
 
     # Initialize the new config to all blanks and update only the workload power profiles to all 0s.
@@ -158,7 +175,8 @@ def helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, setMech
     updateProfileInjectedRet = nvml_injection.c_injectNvmlRet_t()
     updateProfileInjectedRet.nvmlRet = dcgm_nvml.NVML_ERROR_NOT_SUPPORTED
     for gpuId in gpuIds:
-        dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, updateProfileInjectedRet)
+        dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, updateProfileInjectedRet)
 
     # Inject a NVML_SUCCESS return value for WorkloadPowerProfileClearRequestedProfiles.
     # Clear profiles will be called with dcgmConfigSet because all profiles are set to 0.
@@ -168,21 +186,24 @@ def helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, setMech
     mask = [0, 0, 0, 0, 0, 0, 0, 0]
     nvmlMask255 = dcgm_nvml.c_nvmlMask255_t()
     nvmlMask255.mask = (ctypes.c_uint * len(mask))(*mask)
-    clearRequestedProfileInjectedRet.values[0].value.WorkloadPowerProfileRequestedProfiles.requestedProfilesMask = nvmlMask255 # irrelevant. Just needs to be set.
+    # irrelevant. Just needs to be set.
+    clearRequestedProfileInjectedRet.values[0].value.WorkloadPowerProfileRequestedProfiles.requestedProfilesMask = nvmlMask255
     clearRequestedProfileInjectedRet.valueCount = 1
 
     for gpuId in gpuIds:
-        dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileClearRequestedProfiles", None, 0, clearRequestedProfileInjectedRet)
+        dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "WorkloadPowerProfileClearRequestedProfiles", None, 0, clearRequestedProfileInjectedRet)
         # Inject a NVML_SUCCESS return value for WorkloadPowerProfileSetRequestedProfiles.
         # This will be called with dcgmConfigSetWorkloadPowerProfile.
         setRequestedProfileInjectedRet = clearRequestedProfileInjectedRet
-        dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileSetRequestedProfiles", None, 0, setRequestedProfileInjectedRet)
+        dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "WorkloadPowerProfileSetRequestedProfiles", None, 0, setRequestedProfileInjectedRet)
 
     # Before setting the config, current GPU config is read from NVML using WorkloadPowerProfileGetCurrentProfiles.
     # WorkloadPowerProfileGetCurrentProfiles is not injected here, and will return an error, which is
     # translated to a mask of blanks in the current config. This works for the initial configuration.
     if setMechanism == "dcgmConfigSet":
-         # Initialize the new config to all blanks and update only the workload power profiles to all 0s.
+        # Initialize the new config to all blanks and update only the workload power profiles to all 0s.
         setConfigValues = helper_get_blank_dcgm_config_for_workload_power_profiles()
         for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
             setConfigValues.mWorkloadPowerProfiles[bitmapIndex] = zeroMask[bitmapIndex]
@@ -192,7 +213,8 @@ def helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, setMech
         workloadPowerProfile.version = dcgm_structs.dcgmWorkloadPowerProfile_version
         workloadPowerProfile.groupId = groupId
         workloadPowerProfile.profileMask = (ctypes.c_uint * len(mask))(*mask)
-        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(handle, workloadPowerProfile)
+        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(
+            handle, workloadPowerProfile)
 
     # Inject the current GPU config and verify that it is read correctly
     getInjectedRet = nvml_injection.c_injectNvmlRet_t()
@@ -201,7 +223,8 @@ def helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, setMech
     getInjectedRet.values[0].value.WorkloadPowerProfileCurrentProfiles.requestedProfilesMask = nvmlMask255
     getInjectedRet.valueCount = 1
     for gpuId in gpuIds:
-        dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileGetCurrentProfiles", None, 0, getInjectedRet)
+        dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "WorkloadPowerProfileGetCurrentProfiles", None, 0, getInjectedRet)
 
     helper_verify_current_config(groupObj, zeroMask)
 
@@ -220,12 +243,15 @@ def helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, setMech
             setConfigValues.mWorkloadPowerProfiles[bitmapIndex] = newMask[bitmapIndex]
         groupObj.config.Set(setConfigValues)
     elif setMechanism == "dcgmConfigSetWorkloadPowerProfile":
-        workloadPowerProfile.profileMask = (ctypes.c_uint * len(newMask))(*newMask)
-        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(handle, workloadPowerProfile)
+        workloadPowerProfile.profileMask = (
+            ctypes.c_uint * len(newMask))(*newMask)
+        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(
+            handle, workloadPowerProfile)
 
     helper_verify_target_config(groupObj, newMask)
 
     groupObj.Delete()
+
 
 def helper_set_workload_power_profiles_error_with_new_nvml_api(handle, gpuIds, setMechanism):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -252,9 +278,11 @@ def helper_set_workload_power_profiles_error_with_new_nvml_api(handle, gpuIds, s
     errorGpuId = gpuIds[-1]
     for gpuId in gpuIds:
         if gpuId == errorGpuId:
-            dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, setInjectedRetError)
+            dcgm_agent_internal.dcgmInjectNvmlDevice(
+                handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, setInjectedRetError)
         else:
-            dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, setInjectedRet)
+            dcgm_agent_internal.dcgmInjectNvmlDevice(
+                handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, setInjectedRet)
 
     if setMechanism == "dcgmConfigSet":
         with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_ERROR)):
@@ -263,11 +291,14 @@ def helper_set_workload_power_profiles_error_with_new_nvml_api(handle, gpuIds, s
         workloadPowerProfile = dcgm_structs.c_dcgmWorkloadPowerProfile_t()
         workloadPowerProfile.version = dcgm_structs.dcgmWorkloadPowerProfile_version
         workloadPowerProfile.groupId = groupId
-        workloadPowerProfile.profileMask = (ctypes.c_uint * len(newMask))(*newMask)
+        workloadPowerProfile.profileMask = (
+            ctypes.c_uint * len(newMask))(*newMask)
         with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_ERROR)):
-            dcgm_agent.dcgmConfigSetWorkloadPowerProfile(handle, workloadPowerProfile)
+            dcgm_agent.dcgmConfigSetWorkloadPowerProfile(
+                handle, workloadPowerProfile)
 
     groupObj.Delete()
+
 
 def helper_set_workload_power_profiles_error_with_old_nvml_api(handle, gpuIds, setMechanism):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -284,7 +315,8 @@ def helper_set_workload_power_profiles_error_with_old_nvml_api(handle, gpuIds, s
     updateProfileInjectedRet = nvml_injection.c_injectNvmlRet_t()
     updateProfileInjectedRet.nvmlRet = dcgm_nvml.NVML_ERROR_NOT_SUPPORTED
     for gpuId in gpuIds:
-        dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, updateProfileInjectedRet)
+        dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, updateProfileInjectedRet)
 
     setRequestedProfileInjectedRet = nvml_injection.c_injectNvmlRet_t()
     setRequestedProfileInjectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
@@ -301,9 +333,11 @@ def helper_set_workload_power_profiles_error_with_old_nvml_api(handle, gpuIds, s
     errorGpuId = gpuIds[-1]
     for gpuId in gpuIds:
         if gpuId == errorGpuId:
-            dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileSetRequestedProfiles", None, 0, setRequestedProfileInjectedRetError)
+            dcgm_agent_internal.dcgmInjectNvmlDevice(
+                handle, gpuId, "WorkloadPowerProfileSetRequestedProfiles", None, 0, setRequestedProfileInjectedRetError)
         else:
-            dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileSetRequestedProfiles", None, 0, setRequestedProfileInjectedRet)
+            dcgm_agent_internal.dcgmInjectNvmlDevice(
+                handle, gpuId, "WorkloadPowerProfileSetRequestedProfiles", None, 0, setRequestedProfileInjectedRet)
 
     if setMechanism == "dcgmConfigSet":
         with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_ERROR)):
@@ -312,11 +346,14 @@ def helper_set_workload_power_profiles_error_with_old_nvml_api(handle, gpuIds, s
         workloadPowerProfile = dcgm_structs.c_dcgmWorkloadPowerProfile_t()
         workloadPowerProfile.version = dcgm_structs.dcgmWorkloadPowerProfile_version
         workloadPowerProfile.groupId = groupId
-        workloadPowerProfile.profileMask = (ctypes.c_uint * len(newMask))(*newMask)
+        workloadPowerProfile.profileMask = (
+            ctypes.c_uint * len(newMask))(*newMask)
         with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_ERROR)):
-            dcgm_agent.dcgmConfigSetWorkloadPowerProfile(handle, workloadPowerProfile)
+            dcgm_agent.dcgmConfigSetWorkloadPowerProfile(
+                handle, workloadPowerProfile)
 
     groupObj.Delete()
+
 
 def helper_verify_profile_merged_with_target_config(handle, gpuIds, setMechanism):
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -325,7 +362,8 @@ def helper_verify_profile_merged_with_target_config(handle, gpuIds, setMechanism
     groupId = groupObj.GetId()
 
     # First get the target configuration and verify the initial state in DCGM is all blanks.
-    blankMask = [dcgmvalue.DCGM_INT32_BLANK] * dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE
+    blankMask = [dcgmvalue.DCGM_INT32_BLANK] * \
+        dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE
     helper_verify_target_config(groupObj, blankMask)
 
     # Inject current config with a different mask. This is to establish a difference in target config and current config.
@@ -338,7 +376,8 @@ def helper_verify_profile_merged_with_target_config(handle, gpuIds, setMechanism
     getInjectedRet.values[0].value.WorkloadPowerProfileCurrentProfiles.requestedProfilesMask = nvmlMask255
     getInjectedRet.valueCount = 1
     for gpuId in gpuIds:
-        dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileGetCurrentProfiles", None, 0, getInjectedRet)
+        dcgm_agent_internal.dcgmInjectNvmlDevice(
+            handle, gpuId, "WorkloadPowerProfileGetCurrentProfiles", None, 0, getInjectedRet)
 
     if setMechanism == "dcgmConfigSet":
         setConfigValues = helper_get_blank_dcgm_config_for_workload_power_profiles()
@@ -353,17 +392,20 @@ def helper_verify_profile_merged_with_target_config(handle, gpuIds, setMechanism
         setInjectedRet.values[0].value.WorkloadPowerProfileUpdateProfiles_v1.updateProfilesMask = nvmlMask255
         setInjectedRet.valueCount = 1
         for gpuId in gpuIds:
-            dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, setInjectedRet)
+            dcgm_agent_internal.dcgmInjectNvmlDevice(
+                handle, gpuId, "WorkloadPowerProfileUpdateProfiles", None, 0, setInjectedRet)
 
         workloadPowerProfile = dcgm_structs.c_dcgmWorkloadPowerProfile_t()
         workloadPowerProfile.version = dcgm_structs.dcgmWorkloadPowerProfile_version
         workloadPowerProfile.groupId = groupId
         workloadPowerProfile.profileMask = (ctypes.c_uint * len(mask))(*mask)
-        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(handle, workloadPowerProfile)
+        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(
+            handle, workloadPowerProfile)
 
     helper_verify_target_config(groupObj, mask)
 
     groupObj.Delete()
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -375,7 +417,9 @@ def test_dcgm_config_set_workload_power_profiles_with_new_nvml_api(handle, gpuId
     and that the target config is set correctly.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_set_workload_power_profiles_with_new_nvml_api(handle, gpuIds, "dcgmConfigSet")
+    helper_set_workload_power_profiles_with_new_nvml_api(
+        handle, gpuIds, "dcgmConfigSet")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -387,7 +431,9 @@ def test_dcgm_config_set_workload_power_profiles_with_old_nvml_api(handle, gpuId
     and that the target config is set correctly.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, "dcgmConfigSet")
+    helper_set_workload_power_profiles_with_old_nvml_api(
+        handle, gpuIds, "dcgmConfigSet")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -399,7 +445,9 @@ def test_dcgm_set_workload_power_profiles_api_with_new_nvml_api(handle, gpuIds):
     and that the target config is set correctly.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_set_workload_power_profiles_with_new_nvml_api(handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+    helper_set_workload_power_profiles_with_new_nvml_api(
+        handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -411,7 +459,9 @@ def test_dcgm_set_workload_power_profiles_api_with_old_nvml_api(handle, gpuIds):
     and that the target config is set correctly.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_set_workload_power_profiles_with_old_nvml_api(handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+    helper_set_workload_power_profiles_with_old_nvml_api(
+        handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -422,7 +472,9 @@ def test_dcgm_config_set_workload_power_profiles_error_with_old_nvml_api(handle,
     Verifies that when one of the GPUs returns an error, the error is propagated back.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_set_workload_power_profiles_error_with_old_nvml_api(handle, gpuIds, "dcgmConfigSet")
+    helper_set_workload_power_profiles_error_with_old_nvml_api(
+        handle, gpuIds, "dcgmConfigSet")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -433,7 +485,9 @@ def test_dcgm_set_workload_power_profiles_error_with_old_nvml_api(handle, gpuIds
     Verifies that when one of the GPUs returns an error, the error is propagated back.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_set_workload_power_profiles_error_with_old_nvml_api(handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+    helper_set_workload_power_profiles_error_with_old_nvml_api(
+        handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -444,7 +498,9 @@ def test_dcgm_config_set_workload_power_profiles_error_with_new_nvml_api(handle,
     Verifies that when one of the GPUs returns an error, the error is propagated back.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_set_workload_power_profiles_error_with_new_nvml_api(handle, gpuIds, "dcgmConfigSet")
+    helper_set_workload_power_profiles_error_with_new_nvml_api(
+        handle, gpuIds, "dcgmConfigSet")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -455,7 +511,9 @@ def test_dcgm_set_workload_power_profiles_error_with_new_nvml_api(handle, gpuIds
     Verifies that when one of the GPUs returns an error, the error is propagated back.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_set_workload_power_profiles_error_with_new_nvml_api(handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+    helper_set_workload_power_profiles_error_with_new_nvml_api(
+        handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -471,7 +529,9 @@ def test_dcgm_set_workload_power_profiles_with_new_nvml_api_invalid_group_id(han
     workloadPowerProfile.groupId = 5
     workloadPowerProfile.profileMask = (ctypes.c_uint * len(newMask))(*newMask)
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_CONFIGURED)):
-        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(handle, workloadPowerProfile)
+        dcgm_agent.dcgmConfigSetWorkloadPowerProfile(
+            handle, workloadPowerProfile)
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -482,7 +542,9 @@ def test_dcgm_set_config_verify_profile_merged_with_target_config(handle, gpuIds
     Verifies that the profile is merged with the target config correctly.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_verify_profile_merged_with_target_config(handle, gpuIds, "dcgmConfigSet")
+    helper_verify_profile_merged_with_target_config(
+        handle, gpuIds, "dcgmConfigSet")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -493,4 +555,5 @@ def test_dcgm_set_workload_power_profile_verify_profile_merged_with_target_confi
     Verifies that the profile is merged with the target config correctly.
     """
     gpuIds = [gpuIds[0], gpuIds[1]]
-    helper_verify_profile_merged_with_target_config(handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")
+    helper_verify_profile_merged_with_target_config(
+        handle, gpuIds, "dcgmConfigSetWorkloadPowerProfile")

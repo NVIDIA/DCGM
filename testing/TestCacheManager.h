@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,10 @@ private:
     int TestMultipleWatchersMaxAge();
     int TestGetLatestSampleNoData();
     int TestGetLatestSampleNoDataFvBuffer();
+    /*
+     * Invoke cache manager methods in multiple threads to test for race conditions and deadlocks.
+     */
+    int TestPublicMethodRaceAndDeadlock();
 
     // Helper functions for field group testing
     int TestSingleFieldNoDataSample(unsigned short fieldId, DcgmCacheManager &cacheManager);
@@ -129,6 +133,34 @@ private:
      *
      */
     timelib64_t GetAverageSampleFrequency(dcgmcm_sample_t *samples, int Nsamples);
+
+    /*************************************************************************/
+    /*
+     * Helper to get random GPU field IDs
+     *
+     */
+    std::vector<unsigned short> GetRandomGpuFieldIds(int numFieldIds) const;
+
+    /*************************************************************************/
+    /*
+     * Helper to get random GPU entities
+     *
+     */
+    std::vector<dcgmGroupEntityPair_t> GetRandomGpuEntities(int numEntities) const;
+
+    /*************************************************************************/
+    /*
+     * Helper to check if all entities are in the OK status
+     */
+    int CheckAllEntityStatusesAreOk(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities);
+
+    /*************************************************************************/
+    /*
+     * Helper to check if all fields are watched
+     */
+    int CheckFieldsAreWatched(DcgmCacheManager &cacheManager,
+                              std::vector<unsigned short> const &fieldIds,
+                              std::vector<bool> const &watchedFields);
 
     /*************************************************************************/
 };

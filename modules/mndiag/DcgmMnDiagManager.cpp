@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1474,7 +1474,7 @@ void DcgmMnDiagManager::ReapOrphanedSshProcesses()
 }
 
 /****************************************************************************/
-std::vector<pid_t> DcgmMnDiagManager::FindSshZombieProcesses()
+std::vector<pid_t> DcgmMnDiagManager::FindSshZombieProcesses(std::filesystem::path const &procPath)
 {
     std::vector<pid_t> sshZombies;
 
@@ -1484,7 +1484,7 @@ std::vector<pid_t> DcgmMnDiagManager::FindSshZombieProcesses()
         // and whose parent is our process (nv-hostengine)
         pid_t ourPid = getpid();
 
-        for (const auto &entry : std::filesystem::directory_iterator("/proc"))
+        for (auto const &entry : std::filesystem::directory_iterator(procPath))
         {
             if (!entry.is_directory())
                 continue;
@@ -1848,36 +1848,25 @@ ConnectionParams DcgmMnDiagManager::ParseConnectionParams(std::string const &hos
 
 dcgmReturn_t DcgmMnDiagManager::CreateDcgmConnection(ConnectionParams const &params, dcgmHandle_t &handle)
 {
-    dcgmConnectV2Params_v2 connectParams;
+    std::string connectionString;
+    dcgmConnectV3Params_t connectParams;
     memset(&connectParams, 0, sizeof(connectParams));
-    connectParams.version = dcgmConnectV2Params_version2;
-
-    std::string address;
+    connectParams.version = dcgmConnectV3Params_version;
 
     if (params.isUnixSocket)
     {
-        connectParams.addressIsUnixSocket = 1;
-        address                           = std::get<std::string>(params.localAddress);
+        connectionString = fmt::format("unix://{}", std::get<std::string>(params.localAddress));
     }
     else
     {
-        connectParams.addressIsUnixSocket = 0;
-        uint16_t localPort                = std::get<uint16_t>(params.localAddress);
-        address                           = fmt::format("127.0.0.1:{}", localPort);
+        connectionString = fmt::format("tcp://127.0.0.1:{}", std::get<uint16_t>(params.localAddress));
     }
 
-    dcgmReturn_t dcgmResult = m_dcgmApi->Connect_v2(address.c_str(), &connectParams, &handle);
+    dcgmReturn_t dcgmResult = m_dcgmApi->Connect_v3(connectionString.c_str(), &connectParams, &handle);
 
     if (dcgmResult != DCGM_ST_OK)
     {
-        if (params.isUnixSocket)
-        {
-            log_error("Failed to connect to remote DCGM through UDS {} for host {}", address, params.hostname);
-        }
-        else
-        {
-            log_error("Failed to connect to remote DCGM {} from {}", address, params.hostname);
-        }
+        log_error("Failed to connect to remote DCGM {} from {}", connectionString, params.hostname);
     }
 
     return dcgmResult;

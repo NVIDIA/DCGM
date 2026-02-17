@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 
 #define DCGM_INIT_UUID
 #include "dcgm_agent.h"
-#include "dcgm_test_apis.h"
 
 #include <cerrno>
 #include <chrono>
@@ -523,15 +522,22 @@ int main(int argc, char **argv)
 
     InstallCtrlHandler();
 
-    /* Should we start in TCP mode? */
-    if (cmdLine.IsConnectionTcp())
+    switch (cmdLine.GetConnectionType())
     {
-        ret = dcgmEngineRun(cmdLine.GetPort(), cmdLine.GetBindInterface().c_str(), cmdLine.IsConnectionTcp() ? 1 : 0);
-    }
-    else
-    {
-        /* Start in unix domain socket mode */
-        ret = dcgmEngineRun(cmdLine.GetPort(), cmdLine.GetUnixSocketPath().c_str(), cmdLine.IsConnectionTcp() ? 1 : 0);
+        case DcgmConnectionTypeDomainSocket:
+            ret = dcgmEngineRun(cmdLine.GetPort(), cmdLine.GetUnixSocketPath().c_str(), DcgmConnectionTypeDomainSocket);
+            break;
+        case DcgmConnectionTypeTcp:
+            ret = dcgmEngineRun(cmdLine.GetPort(), cmdLine.GetBindInterface().c_str(), DcgmConnectionTypeTcp);
+            break;
+        case DcgmConnectionTypeVsock:
+            ret = dcgmEngineRun(cmdLine.GetPort(), cmdLine.GetVsockCid().c_str(), DcgmConnectionTypeVsock);
+            break;
+        default:
+            syslog(
+                LOG_NOTICE, "Error: Invalid connection type used to start hostengine: %d", cmdLine.GetConnectionType());
+            ret = DCGM_ST_BADPARAM;
+            break;
     }
 
     if (DCGM_ST_OK != ret)
@@ -541,25 +547,23 @@ int main(int argc, char **argv)
         return cleanup(dcgmHandle, -1, parentPid);
     }
 
+    auto version = DcgmNs::DcgmBuildInfo().GetVersion();
+    switch (cmdLine.GetConnectionType())
     {
-        auto version = DcgmNs::DcgmBuildInfo().GetVersion();
-        if (cmdLine.IsConnectionTcp())
-        {
-            printf("Started host engine version %.*s using port number: %u \n",
-                   (int)version.size(),
-                   version.data(),
-                   cmdLine.GetPort());
-
-            fflush(stdout);
-        }
-        else
-        {
-            printf("Started host engine version %.*s using socket path: %s \n",
-                   (int)version.size(),
-                   version.data(),
-                   cmdLine.GetUnixSocketPath().c_str());
-        }
+        case DcgmConnectionTypeDomainSocket:
+            fmt::println("Started host engine version {} using socket path: {}", version, cmdLine.GetUnixSocketPath());
+            break;
+        case DcgmConnectionTypeTcp:
+            fmt::println("Started host engine version {} using port number: {}", version, cmdLine.GetPort());
+            break;
+        case DcgmConnectionTypeVsock:
+            fmt::println("Started host engine version {} using vsock CID:PORT: {}:{}",
+                         version,
+                         cmdLine.GetVsockCid().empty() ? "any" : cmdLine.GetVsockCid(),
+                         cmdLine.GetPort());
+            break;
     }
+    fflush(stdout);
 
     if (cmdLine.ShouldDaemonize())
     {

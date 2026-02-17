@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -474,7 +474,7 @@ public:
         cuSt = cuMemAllocHost_v2(&m_hostMem, m_bufferSize);
         if (cuSt)
         {
-            using fmt::v10::enums::format_as;
+            using fmt::v12::enums::format_as;
             std::string s = fmt::format("cuMemAllocHost returned {}", cuSt);
             throw std::runtime_error(s);
         }

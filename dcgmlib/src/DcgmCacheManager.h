@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,11 +35,16 @@
 #include "timelib.h"
 #include "timeseries.h"
 
+#include <DcgmStringHelpers.h>
 #include <DcgmTaskRunner.h>
+#include <Defer.hpp>
+#include <NvmlRecursiveSharedMutex.h>
+#include <NvmlTaskRunner.hpp>
 
 #include <bitset>
 #include <condition_variable>
 #include <dcgm_nvml.h>
+#include <list>
 #include <map>
 #include <set>
 #include <string>
@@ -152,10 +157,19 @@ typedef struct dcgmcm_watch_info_t
     dcgm_field_eid_t practicalEntityId;               /* the entity id where data should be pulled */
 } dcgmcm_watch_info_t, *dcgmcm_watch_info_p;
 
+struct DcgmWatchedFieldInfo
+{
+    unsigned short fieldId;          /* Field ID */
+    timelib64_t monitorIntervalUsec; /* How often this field should be sampled */
+    double maxSampleAge;             /* How long to keep samples for in seconds. */
+    int maxKeepSamples;              /* Maximum number of samples to keep. */
+    DcgmWatcher watcher;             /* Who is watching this field? */
+};
+
 /*****************************************************************************/
 typedef struct dcgmcm_vgpu_info_t
 {
-    nvmlVgpuInstance_t vgpuId;       /* vGPU Instance ID */
+    SafeVgpuInstance vgpuId;         /* vGPU Instance ID */
     bool found;                      /* Flag to denote that the vGPU instance is
                                            still active */
     struct dcgmcm_vgpu_info_t *next; /* Pointer to the next node in the list */
@@ -168,15 +182,15 @@ typedef struct dcgmcm_gpu_info_t
 {
     dcgmcm_gpu_info_t()
     {
-        gpuId      = 0;
-        status     = DcgmEntityStatusUnknown;
-        nvmlIndex  = 0;
-        nvmlDevice = nullptr;
+        gpuId  = 0;
+        status = DcgmEntityStatusUnknown;
         memset(uuid, 0, sizeof(uuid));
+        memset(serial, 0, sizeof(serial));
         brand = DCGM_GPU_BRAND_UNKNOWN;
         memset(&pciInfo, 0, sizeof(pciInfo));
         arch               = DCGM_CHIP_ARCH_UNKNOWN;
         virtualizationMode = DCGM_GPU_VIRTUALIZATION_MODE_NONE;
+        memset(deviceName, 0, sizeof(deviceName));
         memset(&vgpuList, 0, sizeof(vgpuList));
         memset(nvLinkLinkState, DcgmNvLinkLinkStateNotSupported, sizeof(nvLinkLinkState));
         numNvLinks = 0;
@@ -185,11 +199,11 @@ typedef struct dcgmcm_gpu_info_t
     dcgmcm_gpu_info_t(dcgmcm_gpu_info_t const &other)
         : gpuId(other.gpuId)
         , status(other.status)
-        , nvmlIndex(other.nvmlIndex)
-        , nvmlDevice(other.nvmlDevice)
+        , safeNvmlHandle(other.safeNvmlHandle)
         , brand(other.brand)
         , arch(other.arch)
         , virtualizationMode(other.virtualizationMode)
+        , supportGpm(other.supportGpm)
         , migEnabled(false)
         , ccMode(0)
         , maxGpcs(other.maxGpcs)
@@ -198,9 +212,11 @@ typedef struct dcgmcm_gpu_info_t
         , ciCount(other.ciCount)
     {
         memcpy(uuid, other.uuid, sizeof(uuid));
+        memcpy(serial, other.serial, sizeof(serial));
         memcpy(&pciInfo, &other.pciInfo, sizeof(pciInfo));
         memcpy(&vgpuList, &other.vgpuList, sizeof(vgpuList));
         memcpy(nvLinkLinkState, other.nvLinkLinkState, sizeof(nvLinkLinkState));
+        SafeCopyTo(deviceName, other.deviceName);
     }
 
     dcgmcm_gpu_info_t &operator=(dcgmcm_gpu_info_t const &other)
@@ -209,20 +225,22 @@ typedef struct dcgmcm_gpu_info_t
         {
             gpuId              = other.gpuId;
             status             = other.status;
-            nvmlIndex          = other.nvmlIndex;
-            nvmlDevice         = other.nvmlDevice;
+            safeNvmlHandle     = other.safeNvmlHandle;
             brand              = other.brand;
             arch               = other.arch;
             virtualizationMode = other.virtualizationMode;
+            supportGpm         = other.supportGpm;
             migEnabled         = other.migEnabled;
             ccMode             = other.ccMode;
             maxGpcs            = other.maxGpcs;
             usedGpcs           = other.usedGpcs;
             numNvLinks         = other.numNvLinks;
             memcpy(uuid, other.uuid, sizeof(uuid));
+            memcpy(serial, other.serial, sizeof(serial));
             memcpy(&pciInfo, &other.pciInfo, sizeof(pciInfo));
             memcpy(&vgpuList, &other.vgpuList, sizeof(vgpuList));
             memcpy(nvLinkLinkState, other.nvLinkLinkState, sizeof(nvLinkLinkState));
+            SafeCopyTo(deviceName, other.deviceName);
             instances = other.instances;
             ciCount   = other.ciCount;
         }
@@ -233,13 +251,15 @@ typedef struct dcgmcm_gpu_info_t
     DcgmEntityStatus_t status; /* Status of this GPU */
 
     /* Cached NVML fields */
-    unsigned int nvmlIndex;                         /* NVML index */
-    nvmlDevice_t nvmlDevice;                        /* NVML handle. This is currently a static pointer. ok to cache*/
+    SafeNvmlHandle safeNvmlHandle;                  /* Safe NVML handle */
     char uuid[128];                                 /* UUID */
+    char serial[NVML_DEVICE_SERIAL_BUFFER_SIZE];    /* Serial Number */
     dcgmGpuBrandType_t brand;                       /* Brand */
     nvmlPciInfo_t pciInfo;                          /* PCI Info */
     dcgmChipArchitecture_t arch;                    /* chip architecture */
     dcgmGpuVirtualizationMode_t virtualizationMode; /* Virtualization mode */
+    char deviceName[NVML_DEVICE_NAME_BUFFER_SIZE];  /* Device name (cached) */
+    bool supportGpm       = false;                  /*!< does the device support GPM */
     bool migEnabled       = false;                  /*!< is the device in MIG mode */
     unsigned int ccMode   = 0;                      /* confidential computing mode */
     unsigned int maxGpcs  = 0; /*!< max number of Compute Instances that could be created on the device */
@@ -267,9 +287,11 @@ typedef struct dcgmcm_gpu_info_cached_t
     dcgmGpuBrandType_t brand;                       /* Brand */
     unsigned int nvmlIndex;                         /* NVML index */
     char uuid[128];                                 /* UUID */
+    char serial[NVML_DEVICE_SERIAL_BUFFER_SIZE];    /* Serial Number */
     nvmlPciInfo_t pciInfo;                          /* PCI Info */
     dcgmChipArchitecture_t arch;                    /* chip architecture */
     dcgmGpuVirtualizationMode_t virtualizationMode; /* Virtualization mode */
+    char deviceName[NVML_DEVICE_NAME_BUFFER_SIZE];  /* Device name */
     /* if you add fields to this, make sure they're handled in
        DcgmCacheManager::GetAllGpuInfo */
 } dcgmcm_gpu_info_cached_t, *dcgmcm_gpu_info_cached_p;
@@ -470,6 +492,12 @@ typedef struct
     unsigned int profileMask[DCGM_POWER_PROFILE_ARRAY_SIZE]; //!< Bitmask of workload power profiles to update
 } dcgmcmWorkloadPowerProfile_t;
 
+typedef struct
+{
+    unsigned int gpuId;
+    SafeNvmlHandle safeNvmlHandle;
+} dcgmcm_gpu_handle_t;
+
 /*****************************************************************************/
 class DcgmCacheManager; /* Forward declare the cache manager so it can be
                            used by DcgmCacheManagerEventThread */
@@ -515,6 +543,7 @@ public:
      *                    by calling UpdateAllFields()
      * maxSampleAge   IN: Maximum time in seconds to keep a sample within this
      *                    module.
+     * nvmlLoaded     IN: Whether NVML is loaded.
      *
      * Returns 0 on Success
      *        <0 on error
@@ -711,7 +740,7 @@ public:
 
     /*************************************************************************/
     /*
-     * Pause or resume field sampling for a given GPU or all GPUs
+     * Pause or resume field sampling for all GPUs
      *
      * If pausing, this function blocks until the pause has been confirmed by
      * the sampling loop so that the sampling loop doesn't get unexpected errors
@@ -724,8 +753,6 @@ public:
      *
      *
      */
-    dcgmReturn_t PauseGpu(unsigned int gpuId);
-    dcgmReturn_t ResumeGpu(unsigned int gpuId);
     dcgmReturn_t Pause();
     dcgmReturn_t Resume();
 
@@ -1076,29 +1103,6 @@ public:
 
     /*****************************************************************************/
     /*
-     * AppendSamples is called from Fabric Manager to add switch statistics and
-     * error notifications. It is implemented as a separate method from
-     * InjectSamples, in case the two functionalities need to diverge in future.
-     * For now, AppendSamples just invokes InjectSamples.
-     *
-     * entityGroupId IN: Which entity group to inject the value for
-     * entityId      IN: ID of the entity to inject (GPU ID for GPUs)
-     * dcgmFieldId   IN: Which DCGM field to inject the value for
-     * samples       IN: Array of samples to inject
-     * Nsamples      IN: Number of samples that are contained in samples[]
-     *
-     * Returns 0 on success
-     *        <0 on error. See DCGM_ST_? #defines
-     *
-     */
-    dcgmReturn_t AppendSamples(dcgm_field_entity_group_t entityGroupId,
-                               dcgm_field_eid_t entityId,
-                               unsigned short dcgmFieldId,
-                               dcgmcm_sample_p samples,
-                               int Nsamples);
-
-    /*****************************************************************************/
-    /*
      * AppendSamples is called from DCGM modules to batch-publish metrics into
      * the cache manager.
      *
@@ -1145,18 +1149,6 @@ public:
 
     /*************************************************************************/
     /*
-     * Do the actual work of updating all fields, looking to see if the fields
-     * should be updated. Call this from the DcgmCacheThread.
-     *
-     * threadCtx           IO: Update thread context
-     * earliestNextUpdate OUT: Timestamp in usec since 1970 of the next time
-     *                         any stat should be updated (minimum timestamp)
-     *
-     */
-    dcgmReturn_t ActuallyUpdateAllFields(dcgmcm_update_thread_t &threadCtx, timelib64_t *earliestNextUpdate);
-
-    /*************************************************************************/
-    /*
      * Populate a cache manager field info structure
      *
      * fieldInfo  IN,OUT: Structure to populate. fieldInfo->gpuId and fieldInfo->fieldId
@@ -1178,7 +1170,7 @@ public:
      * Populate a dcgmMigHierarchy_v2 response with pairings of GPUs, GPU Instances,
      * and compute instances to display the hierarchy
      */
-    dcgmReturn_t PopulateMigHierarchy(dcgmMigHierarchy_v2 &migHierarchy) const;
+    dcgmReturn_t PopulateMigHierarchy(dcgmMigHierarchy_v2 &migHierarchy);
 
     /*************************************************************************/
     /*
@@ -1210,7 +1202,7 @@ public:
      * Returns NVML index on success. < 0 on failure (DCGMCM_ST_? #define)
      *
      */
-    int GpuIdToNvmlIndex(unsigned int gpuId);
+    std::optional<int> GpuIdToNvmlIndex(unsigned int gpuId);
 
     /*************************************************************************/
     /*
@@ -1219,7 +1211,7 @@ public:
      * Returns gpuId
      *
      */
-    unsigned int NvmlIndexToGpuId(int nvmlIndex);
+    std::optional<unsigned int> NvmlIndexToGpuId(int nvmlIndex);
 
     /*************************************************************************/
     /*
@@ -1331,41 +1323,6 @@ public:
 
     /*************************************************************************/
     /*
-     * Add field watches for the given vGPU instance
-     *
-     */
-    void WatchVgpuFields(nvmlVgpuInstance_t vgpuId);
-
-    /*************************************************************************/
-    /*
-     * Remove all field watches and clear the cache for the given vGPU instance
-     *
-     */
-    dcgmReturn_t UnwatchVgpuFields(nvmlVgpuInstance_t vgpuId);
-
-    /*************************************************************************/
-    /*
-     * Manage the dynamic addition/removal of the vGPUs.
-     * Active vGPU instance (linked) list is maintained per GPU within the function depending on addition of
-     * new vGPU instance or removal of any running vGPU instance.
-     * Also vgpuIndex is mapped to the vGPU instances running within range specified for the nvmlIndex.
-     * First element of vgpuInstanceIds array passed as input must hold the count of vGPU instances running.
-     *
-     * Note that index 0 of vgpuInstanceIds is ignored
-     *
-     * Returns 0 if OK
-     *        <0 DCGM_ST_? on module error
-     */
-    dcgmReturn_t ManageVgpuList(unsigned int gpuId, nvmlVgpuInstance_t *vgpuInstanceIds);
-
-    /*************************************************************************/
-    /*
-     * Get and store the affinity information from NVML for this box
-     */
-    dcgmReturn_t CacheTopologyAffinity(dcgmcm_update_thread_t &threadCtx, timelib64_t now, timelib64_t expireTime);
-
-    /*************************************************************************/
-    /*
      * From gpuIds, select numGpus of those which are the topologically best fit for each other, writing that
      * information into outputGpus as a bitmask.
      *
@@ -1373,58 +1330,6 @@ public:
      *        <0 DCGM_ST_* on module error
      */
     dcgmReturn_t SelectGpusByTopology(std::vector<unsigned int> &gpuIds, uint32_t numGpus, uint64_t &outputGpus);
-
-    /*************************************************************************/
-    /*
-     * Fill the passed in affinity struct with the affinity information for this node.
-     *
-     * Returns 0 if OK
-     *         DCGM_ST_* on module error
-     */
-    dcgmReturn_t PopulateCpuAffinity(dcgmAffinity_t &affinity);
-
-    /*************************************************************************/
-    /*
-     * Return a topology struct populated with the information on the NVLink for
-     * this system.
-     *
-     * Returns a pointer to the populated topology object
-     *         NULL on error
-     */
-    dcgmTopology_t *GetNvLinkTopologyInformation();
-
-    /*************************************************************************/
-    /*
-     * Cache the topology information relevant to NvLink for this host.
-     *
-     * Returns 0 if ok
-     *         DCGM_ST_* on module error
-     */
-    dcgmReturn_t CacheTopologyNvLink(dcgmcm_update_thread_t &threadCtx, timelib64_t now, timelib64_t expireTime);
-
-    /*************************************************************************/
-    /*
-     * Get the cache manager's list of valid field IDs.
-     *
-     * includeModulePublished IN: Should we include fields that are module-published in this list?
-     *
-     */
-    void GetValidFieldIds(std::vector<unsigned short> &validFieldIds, bool includeModulePublished = true);
-
-    /*************************************************************************/
-    /*
-     * Get a copy of the watch info for a given entity for a given field into watchInfo.
-     * This is useful for testing purposes. This information is a snapshot of what the cache manager
-     * has internally for the entity.
-     *
-     * Returns: DCGM_ST_OK on success.
-     *          DCGM_ST_NO_DATA if the watch object cannot be found.
-     *
-     */
-    dcgmReturn_t GetEntityWatchInfoSnapshot(dcgm_field_entity_group_t entityGroupId,
-                                            dcgm_field_eid_t entityId,
-                                            unsigned int fieldId,
-                                            dcgmcm_watch_info_p watchInfo);
 
     /*************************************************************************/
     /*
@@ -1440,101 +1345,6 @@ public:
      *
      */
     void EventThreadMain(DcgmCacheManagerEventThread *eventThread);
-
-    /*************************************************************************/
-    /*
-     * Find all GPUs in the system and set their state appropriately in this
-     * object.
-     *
-     * RETURNS: DCGM_ST_OK on success
-     *          DCGM_ST_GENERIC_ERROR on NVML error
-     */
-    dcgmReturn_t AttachGpus(void);
-
-    /*************************************************************************/
-    /*
-     * Find all GPU instances and compute instacnes in the system and set their state appropriately in this
-     * object.
-     *
-     * RETURNS: DCGM_ST_OK on success
-     *          DCGM_ST_GENERIC_ERROR on NVML error
-     */
-    dcgmReturn_t InitializeGpuInstances(dcgmcm_gpu_info_t &gpuInfo);
-
-    /*************************************************************************/
-    /**
-     * Clear Mig Information for this GPU
-     *
-     * @param gpuInfo - the struct representing the GPU being cleared
-     */
-    void ClearGpuMigInfo(dcgmcm_gpu_info_t &gpuInfo);
-
-    /*************************************************************************/
-    /*
-     * Adds the newly detected GPU list to our internal list by matching UUIDs
-     */
-    void MergeNewlyDetectedGpuList(dcgmcm_gpu_info_p detectedGpus, int count);
-
-    /*************************************************************************/
-    /*
-     * Detach from all GPUs in the system and set their state appropriately.
-     *
-     * RETURNS: DCGM_ST_OK on success
-     *          DCGM_ST_GENERIC_ERROR on NVML error
-     */
-    dcgmReturn_t DetachGpus(void);
-
-    /*************************************************************************/
-    /*
-     * Gets the index of the GPU with a matching gpuId from m_gpus.
-     *
-     * RETURNS: the index if found
-     *          -1 if no matching GPU was found
-     */
-    int FindGpuIdsIndex(unsigned int gpuId);
-
-    /*************************************************************************/
-    /**
-     * Gets the GPU id for this entity - used to ensure that we are
-     * NOTE: only public for unit testing
-     *
-     */
-    dcgmReturn_t GetGpuId(unsigned int entityGroupId, unsigned int entityId, unsigned int &gpuId);
-
-    /*************************************************************************/
-    /**
-     * Returns true if the specified device has MIG mode enabled.
-     *
-     * @param gpuIndex - the index of the GPU
-     * @return true if the specified device has MIG mode enabled, false otherwise
-     */
-    bool IsGpuMigEnabled(unsigned int gpuIndex);
-
-    /*************************************************************************/
-    /**
-     * Returns true if any GPU has MIG mode enabled
-     *
-     * @return true if any GPU has MIG mode enabled
-     */
-    bool IsMigEnabledAnywhere();
-
-    /**
-     * Notifies subscribers (if any) that MIG has been reconfigured
-     * (public for unit tests)
-     */
-    /*************************************************************************/
-    void NotifyMigUpdateSubscribers(unsigned int gpuId);
-
-    /**
-     * Generates the appropriate value for CUDA_VISIBLE_DEVICES for the specified
-     * device
-     * (public for unit tests only)
-     */
-    /*************************************************************************/
-    void GenerateCudaVisibleDevicesValue(unsigned int gpuId,
-                                         unsigned int entityGroupId,
-                                         unsigned int entityId,
-                                         std::stringstream &valbuf);
 
     /*************************************************************************/
 
@@ -1664,7 +1474,13 @@ public:
                                   timelib64_t timestamp,
                                   timelib64_t oldestKeepTimestamp);
 
-    nvmlDevice_t GetNvmlDeviceFromEntityId(dcgm_field_eid_t entityId) const;
+    /*
+     * Filter a list of entities to only include those that are active
+     *
+     * @param entities[in] Array of entities to filter. Only entities that are active will be included in the output.
+     * @return A new vector of entities that are active
+     */
+    std::vector<dcgmGroupEntityPair_t> FilterActiveEntities(std::vector<dcgmGroupEntityPair_t> const &entities) const;
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
     dcgmReturn_t InjectNvmlGpu(dcgm_field_eid_t gpuId,
@@ -1697,26 +1513,6 @@ public:
                                       const dcgmFieldValue_v1 &value,
                                       dcgm_field_meta_p fieldMeta);
 
-    /*
-     * Inspects the nvmlGpuFabricInfoV_t struct to find fabric manager and error (if any)
-     *
-     * @param gpuFabricInfo (I) - the struct returned from NVML
-     * @param status        (O) - the status of the fabric manager
-     * @param fmError       (O) - the error reported. This is set to a blank value unless the fabric manager has
-     * finished coming up
-     *
-     * @return DCGM_ST_BADPARAM if a status couldn't be read from gpuFabricInfo, else DCGM_ST_OK
-     */
-    static dcgmReturn_t GetFMStatusFromStruct(nvmlGpuFabricInfoV_t const &gpuFabricInfo,
-                                              dcgmFabricManagerStatus_t &status,
-                                              uint64_t &fmError);
-
-    dcgmReturn_t ReadFabricManagerStatusField(dcgmcm_update_thread_t &threadCtx,
-                                              nvmlDevice_t nvmlDevice,
-                                              dcgm_field_meta_p fieldMeta,
-                                              timelib64_t now,
-                                              timelib64_t expireTime);
-
     /*************************************************************************/
     /*
      * Use NVML functions to determine the P2P NVLink status for a ALL GPUs
@@ -1742,6 +1538,43 @@ public:
      *          DCGM_ST_? #define on error.
      */
     dcgmReturn_t GetCudaVersion(int &cudaVersion);
+
+    /*************************************************************************/
+    /*
+     * Create a task to detach driver as bind / unbind nvml system event(s) received.
+     */
+    std::optional<std::shared_future<dcgmReturn_t>> DetachDriver();
+
+    /*************************************************************************/
+    /*
+     * Create a task to attach driver as bind / unbind nvml system event(s) received.
+     */
+    std::optional<std::shared_future<dcgmReturn_t>> AttachDriver();
+
+    bool ShouldSkipDriverCalls() const;
+
+    /*************************************************************************/
+    /*
+     * Add a field to the meta group watched fields list
+     */
+    void AddMetaGroupWatchedField(dcgmGpuGrp_t groupId,
+                                  unsigned short fieldId,
+                                  timelib64_t monitorIntervalUsec,
+                                  double maxSampleAge,
+                                  int maxKeepSamples,
+                                  DcgmWatcher watcher);
+
+    /*************************************************************************/
+    /*
+     * Remove a field from the meta group watched fields list
+     */
+    void RemoveMetaGroupWatchedField(dcgmGpuGrp_t groupId, unsigned short fieldId, DcgmWatcher watcher);
+
+    /*************************************************************************/
+    /*
+     * Record the GPU bind / unbind event
+     */
+    void RecordBindUnbindEvent(dcgmBindUnbindEventState_t state);
 
 #ifndef TEST_DCGMCACHEMANAGER
 private:
@@ -1771,13 +1604,9 @@ private:
     unsigned int m_numComputeInstances;                         // Number of total compute instances created
     std::array<dcgmcm_gpu_info_t, DCGM_MAX_NUM_DEVICES> m_gpus; /* All of the GPUs we know about, indexed by gpuId */
 
-    bool m_nvmlInitted; /* Tracks whether or not NVML has been initialized. since NVML keeps a count
-                           of initializations, we don't want to double initialize or we won't be able
-                           to detach and attach to GPUs correctly. */
-
     std::vector<nvmlExcludedDeviceInfo_t> m_gpuExcludeList; /* Array of GPUs that have been excluded by the driver */
 
-    DcgmMutex *m_mutex;                     /* Lock used for protecting data structures within this class */
+    DcgmMutex *m_mutex;                     /* Lock used for protecting data structures within this class. */
     unsigned int m_inDriverCount;           // Count of threads currently in driver calls
     unsigned int m_waitForDriverClearCount; // Count of threads waiting for the driver to be clear
 
@@ -1835,7 +1664,7 @@ private:
     std::unique_ptr<dcgmcm_update_thread_t>
         m_updateThreadCtx; /* Thread context for the update thread (our TaskRunner) under the run() method */
 
-    bool m_nvmlLoaded; /* true if NVML was successfully loaded */
+    std::atomic<bool> m_nvmlLoaded; /* true if NVML was successfully loaded */
 
     /*
      * UUIDs of GPUs in m_gpus[] whose status have been set to DcgmEntityStatusLost
@@ -1850,18 +1679,27 @@ private:
      */
     std::atomic<bool> m_skipDriverCalls;
 
+    std::unique_ptr<NvmlTaskRunner> m_nvmlDriver; /* NVML driver that is used to invoke NVML functions */
+
     /*************************************************************************/
     /*
      * Build vector of gpu info for topology functions.
      */
     std::vector<dcgm_topology_helper_t> GetTopologyHelper(bool includeLinkStatus = false);
 
+    /*
+     * List of fields that are being watched by the meta group (e.g., DCGM_GROUP_ALL_GPUS).
+     * This is used to track the fields that are being watched by the meta group so that
+     * we can re-watch the fields when a new GPU is attached.
+     */
+    std::unordered_map<dcgmGpuGrp_t, std::list<DcgmWatchedFieldInfo>> m_metaGroupWatchedFields;
+
     /*************************************************************************/
     /*
      * Helper function for DCGM_FI_DEV_FB_* fields.
      */
     void ReadAndCacheFBMemoryInfo(unsigned int gpuId,
-                                  nvmlDevice_t nvmlDevice,
+                                  SafeNvmlHandle safeNvmlDevice,
                                   dcgmcm_update_thread_t &threadCtx,
                                   dcgmcm_watch_info_p watchInfo,
                                   timelib64_t expireTime,
@@ -1898,6 +1736,8 @@ private:
     /*
      * Helper function to enforce the quota for a watchInfo's time series.
      *
+     * @note This function must be called with the cache manager mutex locked.
+     *
      * watchInfo           IO: Watch info to check + modify
      * timestamp           IN: Current timestamp
      * oldestKeepTimestamp IN: Oldest timestamp to leave in the time series.
@@ -1918,6 +1758,8 @@ private:
     /*************************************************************************/
     /*
      * Allocate the timeSeries part of a watchInfo
+     *
+     * @note This function must be called with the cache manager mutex locked.
      *
      * Returns: DCGM_ST_OK on success
      *          Any other DCGM_ST_? on error
@@ -1977,6 +1819,7 @@ private:
     /*
      * Tell the cache manager to update its NvLink link state for a given gpuId
      *
+     * NOTE: This function assumes the cache manager is already locked.
      */
     dcgmReturn_t UpdateNvLinkLinkState(unsigned int gpuId);
 
@@ -2015,23 +1858,9 @@ private:
 
     /*************************************************************************/
     /*
-     * Get the next watch_info structure that is valid for a given nvmlIndex
-     *
-     * This method is useful for iterating over all watched fields of a GPU
-     *
-     * Pass *validFieldIndex as 0 on the first call
-     *
-     * RETURNS: Pointer to watch info structure on success
-     *          NULL if we've reached the end of the watches for this nvmlIndex
-     *
-     */
-    dcgmcm_watch_info_p GetNextEntityWatchInfo(dcgm_field_entity_group_t entityGroupId,
-                                               dcgm_field_eid_t entityId,
-                                               unsigned int *validFieldIndex);
-
-    /*************************************************************************/
-    /*
      * Check to see if an accounting PID has already been cached at a given timestamp
+     *
+     * @note This function must be called with the cache manager mutex locked.
      *
      * RETURNS: 1 if PID has been cached
      *          0 if not
@@ -2041,6 +1870,8 @@ private:
     /*************************************************************************/
     /*
      * Mark a PID as having been cached
+     *
+     * @note This function must be called with the cache manager mutex locked.
      *
      * RETURNS: 0 if OK
      *         <0 on error. See DCGM_ST_? enumerations for details.
@@ -2153,7 +1984,7 @@ private:
     bool IsModulePushedFieldId(unsigned int fieldId);
 
     dcgmReturn_t AppendDeviceSupportedClocks(dcgmcm_update_thread_t &threadCtx,
-                                             nvmlDevice_t nvmlDevice,
+                                             SafeNvmlHandle nvmlDevice,
                                              timelib64_t timestamp,
                                              timelib64_t oldestKeepTimestamp);
 
@@ -2166,19 +1997,19 @@ private:
     /*************************************************************************/
     /* Helper methods to cache individual metrics */
     void ReadAndCacheNvLinkBandwidth(dcgmcm_update_thread_t &threadCtx,
-                                     nvmlDevice_t nvmlDevice,
+                                     SafeNvmlHandle nvmlDevice,
                                      unsigned int scopeId,
                                      DcgmcmDirection_t directon,
                                      timelib64_t expireTime);
 
     void ReadAndCacheNvLinkData(dcgmcm_update_thread_t &threadCtx,
                                 nvmlNvLinkErrorCounter_t fieldId,
-                                nvmlDevice_t nvmlDevice,
+                                SafeNvmlHandle safeNvmlDevice,
                                 unsigned int scopeId,
                                 timelib64_t expireTime);
 
     void ReadAndCacheErrorCounts(dcgmcm_update_thread_t &threadCtx,
-                                 nvmlDevice_t nvmlDevice,
+                                 SafeNvmlHandle nvmlDevice,
                                  nvmlMemoryErrorType_t errorType,
                                  nvmlEccCounterType_t counterType,
                                  nvmlMemoryLocation_t locationType,
@@ -2272,49 +2103,10 @@ private:
     /*
      * Read the GPU exclusion list from the driver an cache it into m_gpuExclusionList
      *
+     * @note This function must be called with the cache manager mutex locked.
+     *
      */
     dcgmReturn_t ReadAndCacheGpuExclusionList(void);
-
-    /*************************************************************************/
-    /*
-     * Signifies a thread has entered the driver
-     * NOTE: m_mutex must be locked before calling
-     *
-     * Checked by attaching and detaching to make sure unloading and loading NVML is ok
-     */
-    void MarkEnteredDriver();
-
-    /*************************************************************************/
-    /*
-     * Signifies a thread has returned from the driver
-     * NOTE: m_mutex must be locked before calling
-     *
-     * Checked by attaching and detaching to make sure unloading and loading NVML is ok
-     */
-    void MarkReturnedFromDriver();
-
-    /*************************************************************************/
-    /*
-     * Tracks whether it's okay to enter the driver or proceed as though no one
-     * is in the driver.
-     *
-     * @see AttachGpus(), DetachGpus(), MarkEnteredDriver()
-     */
-    void SynchronizeDriverEntries(unsigned int &countToWaitFor, unsigned int &waitingEntries, bool entering);
-
-    /*****************************************************************************/
-    /*
-     * Simple wrapper for SynchronizeDriverEntries(); waits for nothing to be
-     * using the driver
-     */
-    void WaitForThreadsToExitDriver();
-
-    /*****************************************************************************/
-    /*
-     * Simple wrapper for SynchronizeDriverEntries(); waits for the driver to be
-     * okay to use again after detaching
-     */
-    void WaitForDriverToBeReady();
 
     /*************************************************************************/
     /*
@@ -2324,6 +2116,12 @@ private:
                               unsigned char fieldType,
                               nvmlReturn_t err,
                               timelib64_t expireTime);
+
+    /*************************************************************************/
+    /*
+     * Inserts an blank value into field.
+     */
+    void InsertBlankValue(dcgmcm_update_thread_t &threadCtx, unsigned char fieldType, timelib64_t expireTime);
 
     /*************************************************************************/
     /*
@@ -2343,7 +2141,7 @@ private:
      * from the compute capability if the chip arch API is not implemented in
      * NVML
      */
-    dcgmReturn_t HelperGetLiveChipArch(nvmlDevice_t nvmlDevice, dcgmChipArchitecture_t &arch);
+    dcgmReturn_t HelperGetLiveChipArch(SafeNvmlHandle safeNvmlHandle, dcgmChipArchitecture_t &arch);
 
 
     /*************************************************************************/
@@ -2386,11 +2184,16 @@ private:
     void InitializeNvLinkCount(dcgmcm_gpu_info_t &gpuInfo);
 
     /*************************************************************************/
+    /*
+     * @note This function must be called with the cache manager mutex locked.
+     */
     dcgmReturn_t SetPracticalEntityInfo(dcgmcm_watch_info_t &watchInfo) const;
 
     /*************************************************************************/
     /*
      * Retrieves an NVML device handle for a compute instance associated with the specified entity
+     *
+     * @note This function must be called with the cache manager mutex locked.
      *
      * @param gpuId         - the ID for the GPU
      * @param entityId      - the entity ID for the
@@ -2398,13 +2201,15 @@ private:
      *
      * @return nullptr if no GPU instance is found, the handle otherwise
      */
-    nvmlDevice_t GetComputeInstanceNvmlDevice(unsigned int gpuId,
-                                              dcgm_field_entity_group_t entityGroupId,
-                                              unsigned int entityId);
+    SafeNvmlHandle GetComputeInstanceNvmlDevice(unsigned int gpuId,
+                                                dcgm_field_entity_group_t entityGroupId,
+                                                unsigned int entityId);
 
     /*************************************************************************/
     /*
      * Iterates over the compute instances for this GPU and stores the NVML handles for them
+     *
+     * @note This function must be called with the cache manager mutex locked.
      *
      * @param gpuInfo - the GPU we are working on
      */
@@ -2413,6 +2218,8 @@ private:
     /*************************************************************************/
     /*
      * Finds the MIG device with the specified index for this GPU and stores it
+     *
+     * @note This function must be called with the cache manager mutex locked.
      *
      * @param gpuInfo - the GPU we are working on
      * @param ciIndex - the index of the compute instance we're working on
@@ -2423,13 +2230,15 @@ private:
     /*
      * Stores the NVML mig device handle for the specified device if it can be found
      *
+     * @note This function must be called with the cache manager mutex locked.
+     *
      * @param gpuInfo               - the GPU we're working on
      * @param migDevice             - the NVML mig device handle
      * @param nvmlGpuInstanceId     - the NVML id for the GPU instance
      * @param nvmlComputeInstanceId - the NVML id for the compute instance
      */
     void StoreDeviceHandle(dcgmcm_gpu_info_t &gpuInfo,
-                           nvmlDevice_t migDevice,
+                           SafeNvmlHandle safeMigNvmlHandle,
                            unsigned int nvmlGpuInstanceId,
                            unsigned int nvmlComputeInstanceId);
 
@@ -2454,18 +2263,60 @@ private:
      * Read the platform info fields using the nvmlDeviceGetPlatformInfo() API.
      */
     dcgmReturn_t ReadPlatformInfoFields(dcgmcm_update_thread_t &threadCtx,
-                                        nvmlDevice_t nvmlDevice,
+                                        SafeNvmlHandle nvmlDevice,
                                         dcgm_field_meta_p fieldMeta,
                                         timelib64_t now,
                                         timelib64_t expireTime);
 
     dcgmReturn_t ReadAndCacheNvLinkBer(dcgmcm_update_thread_t &threadCtx,
-                                       nvmlDevice_t const nvmlDevice,
+                                       SafeNvmlHandle const nvmlDevice,
                                        unsigned short const fieldId,
                                        timelib64_t const expireTime);
 
+
+    /**
+     * Read and cache NvLink fields for a specific link entity
+     *
+     * Routes to appropriate handler based on field type.
+     *
+     * @param[in] threadCtx Thread context
+     * @param[in] fieldMeta Field metadata containing field ID and entity information
+     * @return DCGM_ST_OK on success, error code on failure
+     */
+    dcgmReturn_t ReadAndCacheNvLinkFields(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+
+    /**
+     * Read and cache NvLink PRM data for a specific link
+     *
+     * This function reads PRM data for NvLink using NVML's nvmlDeviceReadWritePRM_v1 API.
+     *
+     * @param[in] threadCtx Thread context
+     * @param[in] fieldMeta Field metadata containing field ID and entity information
+     * @return DCGM_ST_OK on success, error code on failure
+     */
     dcgmReturn_t ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
 
+    /**
+     * Read and cache the state of the NVLink links for a given GPU
+     *
+     * @param[in] threadCtx Thread context
+     * @param[in] fieldMeta Field metadata containing field ID and entity information
+     * @return DCGM_ST_OK on success, error code on failure
+     */
+    dcgmReturn_t ReadAndCacheNvLinkState(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+
+    /**
+     * Read and cache PRM counter values using the counter-based API
+     *
+     * @param[in] threadCtx Thread context
+     * @param[in] fieldMeta Field metadata containing field ID and entity information
+     * @return DCGM_ST_OK on success, error code on failure
+     */
+    dcgmReturn_t ReadAndCacheNvLinkPrmCounters(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+
+    /*
+     * @note This function must be called with the cache manager mutex locked.
+     */
     void CachePrmField(dcgmcm_update_thread_t const &threadCtx,
                        dcgm_field_eid_t linkEntityId,
                        unsigned short fieldId,
@@ -2478,7 +2329,10 @@ private:
      * Use NVML functions to determine the P2P NVLink status for a given GPU
      * to all other GPUs.
      */
-    dcgmReturn_t CreateNvlinkP2PStatusBitmap(nvmlDevice_t nvmlDevice, long long &p2pBitmap, nvmlReturn_t &nvmlReturn);
+    dcgmReturn_t CreateNvlinkP2PStatusBitmap(SafeNvmlHandle nvmlDevice,
+                                             unsigned int sourceGpuId,
+                                             long long &p2pBitmap,
+                                             nvmlReturn_t &nvmlReturn);
 
 
     /*************************************************************************/
@@ -2486,9 +2340,328 @@ private:
      * Use NVML functions to determine the P2P NVLink status for a given GPU
      * to all other GPUs and return the full status for each link, not just
      * a good/bad bitmap.
+     *
+     * @note This function must be called with the cache manager mutex locked.
      */
-    dcgmReturn_t CreateNvlinkP2PStatus(nvmlDevice_t nvmlDevice,
+    dcgmReturn_t CreateNvlinkP2PStatus(SafeNvmlHandle nvmlDevice,
                                        dcgmNvLinkGpuP2PStatus_t linkStatus[DCGM_MAX_NUM_DEVICES]);
 
-    dcgmReturn_t SetWorkloadPowerProfile(nvmlDevice_t nvmlDevice, dcgmcm_sample_t const &value);
+    dcgmReturn_t SetWorkloadPowerProfile(SafeNvmlHandle nvmlDevice, dcgmcm_sample_t const &value);
+
+    /*************************************************************************/
+    /*
+     * Detach driver as bind / unbind nvml system event(s) received.
+     */
+    dcgmReturn_t DetachDriverImpl();
+
+    /*************************************************************************/
+    /*
+     * Attach driver as bind / unbind nvml system event(s) received.
+     */
+    dcgmReturn_t AttachDriverImpl();
+
+    /*************************************************************************/
+    /*
+     * Watch the meta group fields for new attached GPUs
+     */
+    void WatchMetaGroupFieldsForNewAttachedGpus();
+
+    /*************************************************************************/
+    /*
+     * Handle a client disconnecting from the host engine in task runner
+     */
+    void OnConnectionRemoveImpl(dcgm_connection_id_t connectionId);
+
+    /*************************************************************************/
+    /*
+     * Set the value for a given field on a given GPU
+     */
+    dcgmReturn_t SetValueImpl(int gpuId, unsigned short dcgmFieldId, dcgmcm_sample_p value);
+
+    /*************************************************************************/
+    /*
+     * From gpuIds, select numGpus of those which are the topologically best fit for each other, writing that
+     * information into outputGpus as a bitmask.
+     *
+     * Returns 0 if OK
+     *        <0 DCGM_ST_* on module error
+     */
+    dcgmReturn_t SelectGpusByTopologyImpl(std::vector<unsigned int> &gpuIds, uint32_t numGpus, uint64_t &outputGpus);
+
+    /*************************************************************************/
+    /*
+     * Pause field sampling for the given GPU
+     *
+     * @note This function must be called with the cache manager mutex locked.
+     *
+     * @param gpuId - the ID of the GPU to pause
+     * @return bool to indicate if the GPU was paused, or an error code on failure
+     */
+    DcgmResult<bool> PauseGpu(unsigned int gpuId);
+
+    /*************************************************************************/
+    /*
+     * Resume field sampling for the given GPU
+     *
+     * @note This function must be called with the cache manager mutex locked.
+     *
+     * @param gpuId - the ID of the GPU to resume
+     * @return bool to indicate if the GPU was resumed, or an error code on failure
+     */
+    DcgmResult<bool> ResumeGpu(unsigned int gpuId);
+
+    /*************************************************************************/
+    /*
+     * Do the actual work of updating all fields, looking to see if the fields
+     * should be updated. Call this from the DcgmCacheThread.
+     *
+     * @note This function must be called with the cache manager mutex locked.
+     *
+     * threadCtx           IO: Update thread context
+     * earliestNextUpdate OUT: Timestamp in usec since 1970 of the next time
+     *                         any stat should be updated (minimum timestamp)
+     *
+     */
+    dcgmReturn_t ActuallyUpdateAllFields(dcgmcm_update_thread_t &threadCtx, timelib64_t *earliestNextUpdate);
+
+    /*************************************************************************/
+    /*
+     * Add field watches for the given vGPU instance
+     *
+     */
+    void WatchVgpuFields(nvmlVgpuInstance_t vgpuId);
+
+    /*************************************************************************/
+    /*
+     * Remove all field watches and clear the cache for the given vGPU instance
+     *
+     */
+    dcgmReturn_t UnwatchVgpuFields(nvmlVgpuInstance_t vgpuId);
+
+    /*************************************************************************/
+    /*
+     * Manage the dynamic addition/removal of the vGPUs.
+     * Active vGPU instance (linked) list is maintained per GPU within the function depending on addition of
+     * new vGPU instance or removal of any running vGPU instance.
+     * Also vgpuIndex is mapped to the vGPU instances running within range specified for the nvmlIndex.
+     * First element of vgpuInstanceIds array passed as input must hold the count of vGPU instances running.
+     *
+     * Note that index 0 of vgpuInstanceIds is ignored
+     *
+     * Returns 0 if OK
+     *        <0 DCGM_ST_? on module error
+     */
+    dcgmReturn_t ManageVgpuList(unsigned int gpuId, SafeVgpuInstance *vgpuInstanceIds);
+
+    /*************************************************************************/
+    /*
+     * Get and store the affinity information from NVML for this box
+     */
+    dcgmReturn_t CacheTopologyAffinity(dcgmcm_update_thread_t &threadCtx, timelib64_t now, timelib64_t expireTime);
+
+    /*************************************************************************/
+    /*
+     * Fill the passed in affinity struct with the affinity information for this node.
+     *
+     * Returns 0 if OK
+     *         DCGM_ST_* on module error
+     */
+    dcgmReturn_t PopulateCpuAffinity(dcgmAffinity_t &affinity);
+
+    /*************************************************************************/
+    /*
+     * Return a topology struct populated with the information on the NVLink for
+     * this system.
+     *
+     * Returns a pointer to the populated topology object
+     *         NULL on error
+     */
+    dcgmTopology_t *GetNvLinkTopologyInformation();
+
+    /*************************************************************************/
+    /*
+     * Cache the topology information relevant to NvLink for this host.
+     *
+     * Returns 0 if ok
+     *         DCGM_ST_* on module error
+     */
+    dcgmReturn_t CacheTopologyNvLink(dcgmcm_update_thread_t &threadCtx, timelib64_t now, timelib64_t expireTime);
+
+    /*************************************************************************/
+    /*
+     * Get the cache manager's list of valid field IDs.
+     *
+     * @note This function must be called with the cache manager mutex locked.
+     *
+     * includeModulePublished IN: Should we include fields that are module-published in this list?
+     *
+     */
+    void GetValidFieldIds(std::vector<unsigned short> &validFieldIds, bool includeModulePublished = true);
+
+    /*************************************************************************/
+    /*
+     * Get a copy of the watch info for a given entity for a given field into watchInfo.
+     * This is useful for testing purposes. This information is a snapshot of what the cache manager
+     * has internally for the entity.
+     *
+     * Returns: DCGM_ST_OK on success.
+     *          DCGM_ST_NO_DATA if the watch object cannot be found.
+     *
+     */
+    dcgmReturn_t GetEntityWatchInfoSnapshot(dcgm_field_entity_group_t entityGroupId,
+                                            dcgm_field_eid_t entityId,
+                                            unsigned int fieldId,
+                                            dcgmcm_watch_info_p watchInfo);
+
+    /*************************************************************************/
+    /*
+     * Find all GPUs in the system and set their state appropriately in this
+     * object.
+     *
+     * RETURNS: DCGM_ST_OK on success
+     *          DCGM_ST_GENERIC_ERROR on NVML error
+     */
+    dcgmReturn_t AttachGpus(bool nvmlLoaded);
+
+    /*************************************************************************/
+    /*
+     * Find all GPU instances and compute instacnes in the system and set their state appropriately in this
+     * object.
+     *
+     * @note This function must be called with the cache manager mutex locked.
+     *
+     * RETURNS: DCGM_ST_OK on success
+     *          DCGM_ST_GENERIC_ERROR on NVML error
+     */
+    dcgmReturn_t InitializeGpuInstances(dcgmcm_gpu_info_t &gpuInfo);
+
+    /*************************************************************************/
+    /**
+     * Clear Mig Information for this GPU
+     *
+     * @note This function must be called with the cache manager mutex locked.
+     *
+     * @param gpuInfo - the struct representing the GPU being cleared
+     */
+    void ClearGpuMigInfo(dcgmcm_gpu_info_t &gpuInfo);
+
+    /*************************************************************************/
+    /*
+     * Adds the newly detected GPU list to our internal list by matching UUIDs
+     *
+     * @note This function must be called with the cache manager mutex locked.
+     *
+     */
+    void MergeNewlyDetectedGpuList(dcgmcm_gpu_info_p detectedGpus, int count);
+
+    /*************************************************************************/
+    /**
+     * Returns true if the specified device has MIG mode enabled.
+     *
+     * @param gpuIndex - the index of the GPU
+     * @return true if the specified device has MIG mode enabled, false otherwise
+     */
+    bool IsGpuMigEnabled(unsigned int gpuIndex);
+
+    /*************************************************************************/
+    /**
+     * Returns true if any GPU has MIG mode enabled
+     *
+     * @return true if any GPU has MIG mode enabled
+     */
+    bool IsMigEnabledAnywhere();
+
+    /**
+     * Notifies subscribers (if any) that MIG has been reconfigured
+     * (public for unit tests)
+     */
+    /*************************************************************************/
+    void NotifyMigUpdateSubscribers(unsigned int gpuId);
+
+    /**
+     * Generates the appropriate value for CUDA_VISIBLE_DEVICES for the specified
+     * device
+     * (public for unit tests only)
+     */
+    /*************************************************************************/
+    void GenerateCudaVisibleDevicesValue(unsigned int gpuId,
+                                         unsigned int entityGroupId,
+                                         unsigned int entityId,
+                                         std::stringstream &valbuf);
+
+    /*
+     * Inspects the nvmlGpuFabricInfoV_t struct to find fabric manager and error (if any)
+     *
+     * @param gpuFabricInfo (I) - the struct returned from NVML
+     * @param status        (O) - the status of the fabric manager
+     * @param fmError       (O) - the error reported. This is set to a blank value unless the fabric manager has
+     * finished coming up
+     *
+     * @return DCGM_ST_BADPARAM if a status couldn't be read from gpuFabricInfo, else DCGM_ST_OK
+     */
+    static dcgmReturn_t GetFMStatusFromStruct(nvmlGpuFabricInfoV_t const &gpuFabricInfo,
+                                              dcgmFabricManagerStatus_t &status,
+                                              uint64_t &fmError);
+
+    dcgmReturn_t ReadFabricManagerStatusField(dcgmcm_update_thread_t &threadCtx,
+                                              SafeNvmlHandle nvmlDevice,
+                                              dcgm_field_meta_p fieldMeta,
+                                              timelib64_t now,
+                                              timelib64_t expireTime);
+
+    /*************************************************************************/
+    /**
+     * Gets the GPU id for this entity
+     *
+     * @note This function must be called with the cache manager mutex locked.
+     *
+     * @param entityGroupId - the group ID of the entity
+     * @param entityId - the ID of the entity
+     * @param gpuId - out parameter to store the GPU ID
+     * @return DCGM_ST_OK on success, error code on failure
+     */
+    dcgmReturn_t GetGpuId(unsigned int entityGroupId, unsigned int entityId, unsigned int &gpuId);
+
+    /*************************************************************************/
+    /**
+     * Get the SafeVgpuInstance for a given vgpuId
+     */
+    std::optional<SafeVgpuInstance> GetSafeVgpuInstance(nvmlVgpuInstance_t vgpuId);
+
+    nvmlDevice_t GetNvmlDeviceFromEntityId(dcgm_field_eid_t entityId) const;
+
+    /*************************************************************************/
+    /**
+     * Append a string value to the cache manager with a locked lock guard.
+     * This function will unlock the lock guard and then append the value.
+     *
+     * @param guard - the lock guard
+     * @param threadCtx - the thread context
+     * @param value - the value to append
+     * @param timestamp - the timestamp
+     * @param oldestKeepTimestamp - the oldest keep timestamp
+     */
+    void UnlockAndAppendEntityString(std::unique_ptr<DcgmLockGuard> guard,
+                                     dcgmcm_update_thread_t &threadCtx,
+                                     std::string const value /*intentional copy*/,
+                                     timelib64_t timestamp,
+                                     timelib64_t oldestKeepTimestamp);
+
+    /*************************************************************************/
+    /**
+     * Get the active GPU handles.
+     *
+     * @return a vector of dcgmcm_gpu_handle_t
+     */
+    std::vector<dcgmcm_gpu_handle_t> GetActiveGpuHandles();
+
+    /*************************************************************************/
+    /**
+     * Get the SafeNvmlHandle for a given GPU ID. This function will lock the cache manager mutex to check the GPU
+     * status. If the GPU is detached, the function will return an error code.
+     *
+     * @param gpuId - the ID of the GPU
+     * @return the SafeNvmlHandle for the GPU, or an error code on failure
+     */
+    DcgmResult<SafeNvmlHandle> GetSafeNvmlHandle(unsigned int gpuId);
 };

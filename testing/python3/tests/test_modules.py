@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,31 @@ import utils
 import dcgm_agent
 import os
 
+# This checks if the module status is loaded.
+# It asserts if not.
+
+
+def check_loaded(status):
+    assert (status == dcgm_structs.DcgmModuleStatusLoaded), "%d != %d" % (
+        status, dcgm_structs.DcgmModuleStatusLoaded)
+
+# This checks if the module status is not loaded.
+# It asserts if not.
+
+
+def check_not_loaded(status):
+    assert (status == dcgm_structs.DcgmModuleStatusNotLoaded), "%d != %d" % (
+        status, dcgm_structs.DcgmModuleStatusNotLoaded)
+
+# This checks if the module status is not loaded or marked reloadable.
+# It asserts if not.
+
+
+def check_not_loaded_or_reloadable(status):
+    assert (status == dcgm_structs.DcgmModuleStatusNotLoaded) or (status == dcgm_structs.DcgmModuleStatusReloadable), "%d != %d or %d " % (
+        status, dcgm_structs.DcgmModuleStatusNotLoaded, dcgm_structs.DcgmModuleStatusReloadable)
+
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_get_statuses(handle):
     '''
@@ -28,17 +53,20 @@ def test_dcgm_modules_get_statuses(handle):
     dcgmSystem = dcgmHandle.GetSystem()
     ms = dcgmSystem.modules.GetStatuses()
 
-    assert ms.numStatuses == dcgm_structs.DcgmModuleIdCount, "%d != %d" % (ms.numStatuses, dcgm_structs.DcgmModuleIdCount)
-    assert ms.statuses[0].id == dcgm_structs.DcgmModuleIdCore, "%d != %d" % (ms.statuses[0].id, dcgm_structs.DcgmModuleIdCore)
-    assert ms.statuses[0].status == dcgm_structs.DcgmModuleStatusLoaded, "%d != %d" % (ms.statuses[0].status, dcgm_structs.DcgmModuleStatusLoaded)
+    assert ms.numStatuses == dcgm_structs.DcgmModuleIdCount, "%d != %d" % (
+        ms.numStatuses, dcgm_structs.DcgmModuleIdCount)
+    assert ms.statuses[0].id == dcgm_structs.DcgmModuleIdCore, "%d != %d" % (
+        ms.statuses[0].id, dcgm_structs.DcgmModuleIdCore)
+    check_loaded(ms.statuses[0].status)
 
     for i in range(1, ms.numStatuses):
-        #.id == index
+        # .id == index
         assert ms.statuses[i].id == i, "%d != %d" % (ms.statuses[i].id, i)
-        #Assert all non-core modules aren't loaded besides NvSwitch. This one can be loaded
-        #because creating default groups causes a RPC to the NvSwitch manager
+        # Assert all non-core modules aren't loaded besides NvSwitch. This one can be loaded
+        # because creating default groups causes a RPC to the NvSwitch manager
         if ms.statuses[i].id != dcgm_structs.DcgmModuleIdNvSwitch:
-            assert ms.statuses[i].status == dcgm_structs.DcgmModuleStatusNotLoaded, "%d != %d" % (ms.statuses[i].status, dcgm_structs.DcgmModuleStatusNotLoaded)
+            check_not_loaded_or_reloadable(ms.statuses[i].status)
+
 
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_modules_in_use_introspection(handle):
@@ -49,14 +77,14 @@ def test_dcgm_modules_in_use_introspection(handle):
     dcgmSystem = dcgmHandle.GetSystem()
     moduleId = dcgm_structs.DcgmModuleIdIntrospect
 
-    #Lazy load the introspection module
+    # Lazy load the introspection module
     bytesUsed = dcgmSystem.introspect.memory.GetForHostengine().bytesUsed
 
-    #Make sure the module was loaded
+    # Make sure the module was loaded
     ms = dcgmSystem.modules.GetStatuses()
-    assert ms.statuses[moduleId].status == dcgm_structs.DcgmModuleStatusLoaded, "%d != %d" % (ms.statuses[moduleId].status, dcgm_structs.DcgmModuleStatusLoaded)
-    
-    #Make sure we can't add the module to the denylist after it's loaded
+    check_loaded(ms.statuses[moduleId].status)
+
+    # Make sure we can't add the module to the denylist after it's loaded
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE)):
         dcgmSystem.modules.Denylist(moduleId)
 
@@ -69,10 +97,10 @@ def test_dcgm_modules_denylist_introspection(handle):
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     moduleId = dcgm_structs.DcgmModuleIdIntrospect
-    
+
     dcgmSystem.modules.Denylist(moduleId)
 
-    #Try to lazy load the introspection module which is on the denylist
+    # Try to lazy load the introspection module which is on the denylist
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED)):
         bytesUsed = dcgmSystem.introspect.memory.GetForHostengine().bytesUsed
 
@@ -87,14 +115,14 @@ def test_dcgm_modules_in_use_health(handle):
     dcgmGroup = dcgmSystem.GetDefaultGroup()
     moduleId = dcgm_structs.DcgmModuleIdHealth
 
-    #Lazy load the health module
+    # Lazy load the health module
     dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_ALL)
 
-    #Make sure the module was loaded
+    # Make sure the module was loaded
     ms = dcgmSystem.modules.GetStatuses()
-    assert ms.statuses[moduleId].status == dcgm_structs.DcgmModuleStatusLoaded, "%d != %d" % (ms.statuses[moduleId].status, dcgm_structs.DcgmModuleStatusLoaded)
-    
-    #Make sure we can't add the module to the denylist after it's loaded
+    check_loaded(ms.statuses[moduleId].status)
+
+    # Make sure we can't add the module to the denylist after it's loaded
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_IN_USE)):
         dcgmSystem.modules.Denylist(moduleId)
 
@@ -108,10 +136,10 @@ def test_dcgm_modules_denylist_health(handle):
     dcgmSystem = dcgmHandle.GetSystem()
     dcgmGroup = dcgmSystem.GetDefaultGroup()
     moduleId = dcgm_structs.DcgmModuleIdHealth
-    
+
     dcgmSystem.modules.Denylist(moduleId)
 
-    #Try to lazy load the introspection module which is on the denylist
+    # Try to lazy load the introspection module which is on the denylist
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED)):
         dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_ALL)
 
@@ -127,11 +155,10 @@ def test_dcgm_modules_paused(handle):
     dcgmGroup = dcgmSystem.GetDefaultGroup()
     moduleId = dcgm_structs.DcgmModuleIdHealth
 
-    # First make sure the module is not loaded
+    # First make sure the module is not loaded or reloadable
     ms = dcgmSystem.modules.GetStatuses()
     status = ms.statuses[moduleId].status
-    assert status == dcgm_structs.DcgmModuleStatusNotLoaded, "{} != {}".format(status,
-                                                                               dcgm_structs.DcgmModuleStatusNotLoaded)
+    check_not_loaded_or_reloadable(status)
 
     dcgmSystem.PauseTelemetryForDiag()
 
@@ -149,8 +176,7 @@ def test_dcgm_modules_paused(handle):
     # Make sure the module was resumed
     ms = dcgmSystem.modules.GetStatuses()
     status = ms.statuses[moduleId].status
-    assert status == dcgm_structs.DcgmModuleStatusLoaded, "{} != {}".format(status,
-                                                                            dcgm_structs.DcgmModuleStatusLoaded)
+    check_loaded(status)
 
 
 @test_utils.run_only_if_checking_libraries()
@@ -159,14 +185,12 @@ def test_dcgm_library_existence():
         'libdcgmmoduleconfig.so.4',
         'libdcgmmodulehealth.so.4',
         'libdcgmmodulenvswitch.so.4',
-        'libdcgmmoduleprofiling.so.4',
         'libdcgm_cublas_proxy11.so.4',
         'libdcgmmodulediag.so.4',
         'libdcgmmodulemndiag.so.4',
         'libdcgmmoduleintrospect.so.4',
         'libdcgmmodulepolicy.so.4',
         'libdcgmmodulevgpu.so.4',
-        'libnvperf_dcgm_host.so',
     ]
 
     name_to_found = {}
@@ -182,4 +206,5 @@ def test_dcgm_library_existence():
             name_to_found[filename] = True
 
     for name in name_to_found:
-        assert name_to_found[name] == True, "Didn't find required library '%s' in library path '%s'" % (name, lib_path)
+        assert name_to_found[name] == True, "Didn't find required library '%s' in library path '%s'" % (
+            name, lib_path)

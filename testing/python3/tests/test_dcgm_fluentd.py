@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@ from socket import socket, AF_INET, SOCK_DGRAM
 
 from common.Struct import Struct
 from dcgm_fluentd import DcgmFluentd
+
 
 def test_send_to_fluentd():
     # Can't create a proper closure in Python, so we create an object which acts
@@ -37,17 +38,18 @@ def test_send_to_fluentd():
 
     dr.SendToFluentd('message')
 
-    assert(namespace.message == 'message')
-    assert(namespace.dest == ('FAKE_HOST', 101010))
+    assert (namespace.message == 'message')
+    assert (namespace.dest == ('FAKE_HOST', 101010))
+
 
 def test_fluentd_custom_json_handler():
     namespace = Struct(arg=None)
 
     def MySendToFluentd(json):
-        namespace.arg = json # pylint: disable=no-member
+        namespace.arg = json  # pylint: disable=no-member
 
     dr = DcgmFluentd('FAKE_HOST', 101010)
     dr.SendToFluentd = MySendToFluentd
 
     dr.CustomJsonHandler('value')
-    assert namespace.arg == 'value' # pylint: disable=no-member
+    assert namespace.arg == 'value'  # pylint: disable=no-member

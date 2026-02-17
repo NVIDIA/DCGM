@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include "TestDcgmConnections.h"
 #include "DcgmThread.h"
 #include "dcgm_agent.h"
+#include "dcgm_structs_internal.h"
 #include "dcgm_test_apis.h"
 #include "timelib.h"
 #include <DcgmIpc.h>
@@ -137,7 +138,7 @@ int TestDcgmConnections::TestIpcSocketPair(void)
 
     TestIpcSocketPair_t tisp;
 
-    dcgmReturn = dcgmIpc.Init(std::nullopt, std::nullopt, TispProcessMessage, &tisp, TispProcessDisconnect, &tisp);
+    dcgmReturn = dcgmIpc.Init(std::nullopt, TispProcessMessage, &tisp, TispProcessDisconnect, &tisp);
     if (dcgmReturn != DCGM_ST_OK)
     {
         std::cerr << "Got " << std::to_underlying(dcgmReturn) << " from dcgmIpc.Init()\n";
@@ -475,7 +476,7 @@ int TestDcgmConnections::TestThrash(void)
     timelib32_t startTime = timelib_secSince1970();
     timelib32_t duration  = 10;
 
-    dcgmReturn = dcgmEngineRun(5555, hostname, 1);
+    dcgmReturn = dcgmEngineRun(5555, hostname, DcgmConnectionTypeTcp);
     if (dcgmReturn != DCGM_ST_OK)
     {
         fprintf(stderr, "dcgmEngineRun returned %d\n", dcgmReturn);

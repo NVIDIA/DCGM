@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 #include <csignal>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <latch>
 #include <thread>
 
@@ -260,9 +261,9 @@ TEST_CASE("ChildProcess GetStdErrBuffer blocks on stderr reads when indicated - 
     auto ioContext = IoContext();
     auto proc
         = ChildProcessBuilder {}.SetExecutable("./childprocesstesttool").AddArg("sleep").AddArg("1").Build(ioContext);
+    auto time1 = std::chrono::system_clock::now();
     proc.Run();
     fmt::memory_buffer errBuf;
-    auto time1 = std::chrono::system_clock::now();
     proc.GetStdErrBuffer(errBuf, true);
     auto time2 = std::chrono::system_clock::now();
     REQUIRE(time2 - time1 >= std::chrono::seconds(1));

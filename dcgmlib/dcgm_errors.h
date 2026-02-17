@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,7 +159,16 @@ typedef enum dcgmError_enum
     DCGM_FR_SRAM_THRESHOLD                 = 118, //!< 118 indicates SRAM Threshold Count exceeded
     DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD = 119, //!< 119 indicates effective BER threshold exceeded
     DCGM_FR_FALLEN_OFF_BUS                 = 120, //!< 120 GPU has fallen off the bus
-    DCGM_FR_ERROR_SENTINEL                 = 121, //!< 120 MUST BE THE LAST ERROR CODE
+    DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD    = 121, //!< 121 indicates symbol BER threshold exceeded
+    DCGM_FR_IMEX_UNHEALTHY                 = 122, //!< 122 IMEX domain or daemon status is unhealthy
+    DCGM_FR_FABRIC_PROBE_STATE             = 123, //!< 123 Fabric probe state error
+    DCGM_FR_BINARY_PERMISSIONS             = 124, //!< 124 Binary permissions are incorrect
+    DCGM_FR_GPU_RECOVERY_RESET             = 125, //!< 125 GPU requires reset to recover from a fault
+    DCGM_FR_GPU_RECOVERY_REBOOT            = 126, //!< 126 Node requires reboot due to GPU fault
+    DCGM_FR_GPU_RECOVERY_DRAIN_P2P         = 127, //!< 127 Peer-to-peer traffic must be drained
+    DCGM_FR_GPU_RECOVERY_DRAIN_RESET       = 128, //!< 128 GPU operating at reduced capacity, drain and reset required
+    DCGM_FR_NCCL_ERROR                     = 129, //!< 129 Detected a NCCL error
+    DCGM_FR_ERROR_SENTINEL                 = 130, //!< 130 MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -408,6 +417,8 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 // effective BER, gpu id
 #define DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD_MSG \
     "Detected effective BER %.2e exceeds minimum threshold on GPU %u's NVLink."
+// symbol BER, gpu id
+#define DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD_MSG "Detected symbol BER %.2e exceeds minimum threshold on GPU %u's NVLink."
 // gpu id, power limit, power reached
 #define DCGM_FR_ENFORCED_POWER_LIMIT_MSG                               \
     "Enforced power limit on GPU %u set to %.1f, which is too low to " \
@@ -481,8 +492,24 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_NAN_VALUE_MSG                       "Found %lld NaN-value memory elements on GPU %u"
 #define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_MSG \
     "Fabric Manager (Cluster UUID: %s, Clique ID: %ld, Health Mask: %#lx): %s."
-#define DCGM_FR_TEST_SKIPPED_MSG   "Test %s was skipped."
-#define DCGM_FR_FALLEN_OFF_BUS_MSG "GPU %d has fallen off the bus"
+#define DCGM_FR_TEST_SKIPPED_MSG       "Test %s was skipped."
+#define DCGM_FR_FALLEN_OFF_BUS_MSG     "GPU %d has fallen off the bus"
+#define DCGM_FR_IMEX_UNHEALTHY_MSG     "IMEX %s status is %s (%s)"
+#define DCGM_FR_FABRIC_PROBE_STATE_MSG "GPU %u: Fabric State is %s (%lld)."
+#define DCGM_FR_BINARY_PERMISSIONS_MSG "" /* See message inplace */
+// gpu id, recovery action value
+#define DCGM_FR_GPU_RECOVERY_RESET_MSG \
+    "GPU %u requires a reset to recover from a fault. Recovery action: %ld (GPU_RESET)."
+// gpu id, recovery action value
+#define DCGM_FR_GPU_RECOVERY_REBOOT_MSG \
+    "GPU %u fault may have left the OS in an inconsistent state. Recovery action: %ld (NODE_REBOOT)."
+// gpu id, recovery action value
+#define DCGM_FR_GPU_RECOVERY_DRAIN_P2P_MSG \
+    "GPU %u requires peer-to-peer traffic to be quiesced. Recovery action: %ld (DRAIN_P2P)."
+// gpu id, recovery action value
+#define DCGM_FR_GPU_RECOVERY_DRAIN_RESET_MSG \
+    "GPU %u operating at reduced capacity due to a fault. Recovery action: %ld (DRAIN_AND_RESET)."
+#define DCGM_FR_NCCL_ERROR_MSG     "Detected NCCL error: %s Recovery action: %ld (DRAIN_AND_RESET)."
 #define DCGM_FR_ERROR_SENTINEL_MSG "" /* See message inplace */
 
 /*
@@ -657,8 +684,20 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR_NEXT  DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT
 #define DCGM_FR_TEST_SKIPPED_NEXT                   ""
 #define DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD_NEXT TRIAGE_RUN_FIELD_DIAG_MSG
+#define DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD_NEXT    TRIAGE_RUN_FIELD_DIAG_MSG
 #define DCGM_FR_FALLEN_OFF_BUS_NEXT \
     "Please re-seat the GPU, check for thermal and power issues, and verify that there is no outstanding bug against your driver or BIOS versions. If the issue persists, please run a field diagnostic on the GPU."
+#define DCGM_FR_IMEX_UNHEALTHY_NEXT \
+    "Check IMEX installation, configuration, domain and daemon status, and network connectivity."
+#define DCGM_FR_FABRIC_PROBE_STATE_NEXT  DCGM_FR_CUDA_FM_NOT_INITIALIZED_NEXT
+#define DCGM_FR_BINARY_PERMISSIONS_NEXT  "" /* See message inplace */
+#define DCGM_FR_GPU_RECOVERY_RESET_NEXT  "Terminate all GPU processes and reset the GPU."
+#define DCGM_FR_GPU_RECOVERY_REBOOT_NEXT "Reboot the operating system to restore a consistent state."
+#define DCGM_FR_GPU_RECOVERY_DRAIN_P2P_NEXT \
+    "Terminate GPU processes conducting peer-to-peer traffic and disable UVM persistence mode. Check GPU health status again after draining."
+#define DCGM_FR_GPU_RECOVERY_DRAIN_RESET_NEXT \
+    "Do not schedule new work on this GPU. Reset the GPU after existing work has drained."
+#define DCGM_FR_NCCL_ERROR_NEXT     "Attempt to reset the GPUs and reboot the machines if that fails."
 #define DCGM_FR_ERROR_SENTINEL_NEXT "" /* See message inplace */
 
 #ifdef __cplusplus

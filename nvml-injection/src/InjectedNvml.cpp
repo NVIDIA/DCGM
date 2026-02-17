@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -297,6 +297,26 @@ bool VgpuInstanceUtilizationParser(const std::string &key, const YAML::Node &nod
     return true;
 }
 
+// We have a time frame that InjectedNvml will be freed during handling the bind/unbind event.
+// So we need to record the bind/unbind gpus in a global variable.
+// These 2 variables are used to record the bind/unbind gpus that are recorded but have not been handled.
+// The reason that we have to defer the handling is that we need to keep the device count before nvml re-init.
+// i.e., when we receive the event that includes bind/unbind GPUs, we will wait till the next time nvmlInit to
+// restore/remove the GPUs.
+std::vector<std::string> g_bindGpus;
+std::vector<std::string> g_unbindGpus;
+// We have a time frame that InjectedNvml will be freed during handling the bind/unbind event.
+// To emulate the behavior that GPUs are detached, we have to keep the last round removed gpus.
+// This is for the case that, some GPUs are removed and user does a nvml re-init.
+std::vector<std::string> g_lastRoundRemovedGpus;
+
+// To emulate GPU detachment before host engine initialization, we check an environment variable during the first call
+// to `nvmlInit_v2`. Subsequent calls rely on `g_lastRoundRemovedGpus`. This flag indicates that the environment
+// variable has been checked. This is to handle the scenario where `nvmlDeviceGetCount` returns fewer GPUs than
+// specified in the YAML file, allowing for testing the increase in the number of GPUs (`m_gpus`) in the
+// cache manager during the next attachment event.
+bool g_GpuDetachedBeforehandHandled = false;
+
 } //namespace
 
 InjectedNvml *InjectedNvml::m_injectedNvmlInstance = nullptr;
@@ -324,6 +344,10 @@ InjectedNvml::InjectedNvml()
 
 InjectedNvml::~InjectedNvml()
 {
+    for (auto const &[uuid, _] : m_removedGpus)
+    {
+        g_lastRoundRemovedGpus.push_back(uuid);
+    }
     for (auto &[_, ah] : m_vgpuInstances)
     {
         ah.Clear();
@@ -910,7 +934,7 @@ bool InjectedNvml::GpuInstanceInfoParser(const std::string &key,
     auto *info            = reinterpret_cast<nvmlGpuInstanceInfo_t *>(malloc(sizeof(nvmlGpuInstanceInfo_t)));
     info->device          = m_uuidToDevice[node[ReturnValue]["device"].as<std::string>()]->GetIdentifier();
     info->id              = node[ReturnValue]["id"].as<unsigned int>();
-    info->profileId       = node[ReturnValue]["id"].as<unsigned int>();
+    info->profileId       = node[ReturnValue]["profileId"].as<unsigned int>();
     info->placement.size  = node[ReturnValue]["placement"]["size"].as<unsigned int>();
     info->placement.start = node[ReturnValue]["placement"]["start"].as<unsigned int>();
     ah.SetAttribute(key, NvmlFuncReturn(ret, info));
@@ -956,7 +980,7 @@ bool InjectedNvml::ComputeInstanceInfoParser(const std::string &key,
     info->device          = m_uuidToDevice[node[ReturnValue]["device"].as<std::string>()]->GetIdentifier();
     info->gpuInstance     = gpuInstance;
     info->id              = node[ReturnValue]["id"].as<unsigned int>();
-    info->profileId       = node[ReturnValue]["id"].as<unsigned int>();
+    info->profileId       = node[ReturnValue]["profileId"].as<unsigned int>();
     info->placement.size  = node[ReturnValue]["placement"]["size"].as<unsigned int>();
     info->placement.start = node[ReturnValue]["placement"]["start"].as<unsigned int>();
     ah.SetAttribute(key, NvmlFuncReturn(ret, info));
@@ -2384,9 +2408,14 @@ void InjectedNvml::SetupDefaultEnv()
     SimpleDeviceCreate(INJECTION_INDEX_KEY, indexArg);
 }
 
-nvmlReturn_t InjectedNvml::RemoveGpu(std::string const &uuid)
+nvmlReturn_t InjectedNvml::RemoveGpu(std::string const &uuid, bool lock)
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
+    std::unique_lock<std::mutex> guard(m_mutex, std::defer_lock);
+    if (lock)
+    {
+        guard.lock();
+    }
+
     if (!m_uuidToDevice.contains(uuid))
     {
         NVML_LOG_ERR("Provided uuid [%s] does not exist.", uuid.c_str());
@@ -2431,9 +2460,14 @@ nvmlReturn_t InjectedNvml::RemoveGpu(std::string const &uuid)
     return NVML_SUCCESS;
 }
 
-nvmlReturn_t InjectedNvml::RestoreGpu(std::string const &uuid)
+nvmlReturn_t InjectedNvml::RestoreGpu(std::string const &uuid, bool lock)
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
+    std::unique_lock<std::mutex> guard(m_mutex, std::defer_lock);
+    if (lock)
+    {
+        guard.lock();
+    }
+
     if (!m_removedGpus.contains(uuid))
     {
         NVML_LOG_ERR("Provided uuid [%s] does not exist.", uuid.c_str());
@@ -2467,18 +2501,66 @@ void InjectedNvml::SetFileSystemOp(std::unique_ptr<FileSystemOperator> fsOp)
     m_fileSystemOp = std::move(fsOp);
 }
 
+void InjectedNvml::HandleGpuDetachedBeforeHand()
+{
+    auto env = std::getenv("DCGM_NVML_INJECTION_GPU_DETACHED_BEFORE_HAND");
+    if (env == nullptr)
+    {
+        return;
+    }
+
+    std::vector<unsigned int> affectedGpus;
+    std::stringstream ss(env);
+    std::string flag;
+    while (std::getline(ss, flag, ','))
+    {
+        try
+        {
+            affectedGpus.push_back(std::stoi(flag));
+        }
+        catch (const std::exception &e)
+        {
+            NVML_LOG_ERR("failed to convert [%s] to unsigned int, reason [%s]", flag.c_str(), e.what());
+        }
+    }
+
+    for (auto const &gpu : affectedGpus)
+    {
+        if (gpu >= m_indexToDevice.size())
+        {
+            NVML_LOG_ERR("gpu index [%u] is out of range", gpu);
+            continue;
+        }
+        auto const &ah = m_indexToDevice[gpu];
+        g_lastRoundRemovedGpus.push_back(
+            ah->GetAttribute(INJECTION_UUID_KEY).GetCompoundValue().AsInjectionArgument().AsString());
+    }
+}
+
 void InjectedNvml::HandleBindUnbindEvent()
 {
-    for (auto const &uuid : m_bindGpus)
+    std::lock_guard<std::mutex> guard(m_mutex);
+    if (!g_GpuDetachedBeforehandHandled)
     {
-        RestoreGpu(uuid);
+        HandleGpuDetachedBeforeHand();
+        g_GpuDetachedBeforehandHandled = true;
     }
-    for (auto const &uuid : m_unbindGpus)
+    for (auto const &uuid : g_lastRoundRemovedGpus)
     {
-        RemoveGpu(uuid);
+        RemoveGpu(uuid, false);
     }
-    m_bindGpus.clear();
-    m_unbindGpus.clear();
+    g_lastRoundRemovedGpus.clear();
+
+    for (auto const &uuid : g_bindGpus)
+    {
+        RestoreGpu(uuid, false);
+    }
+    for (auto const &uuid : g_unbindGpus)
+    {
+        RemoveGpu(uuid, false);
+    }
+    g_bindGpus.clear();
+    g_unbindGpus.clear();
 }
 
 nvmlReturn_t InjectedNvml::nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequest_t *request)
@@ -2530,10 +2612,9 @@ nvmlReturn_t InjectedNvml::nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequ
         return NVML_ERROR_TIMEOUT;
     }
 
-    bool insufficientSize = false;
-    request->numEvent     = 0;
+    request->numEvent = 0;
 
-    std::lock_guard<std::mutex> guard(m_mutex);
+    std::unique_lock<std::mutex> lock(m_mutex);
     if ((m_registeredEventTypes & nvmlSystemEventTypeGpuDriverBind) && root["bind"])
     {
         for (auto const &uuid : root["bind"])
@@ -2545,16 +2626,23 @@ nvmlReturn_t InjectedNvml::nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequ
                 continue;
             }
 
-            if (request->dataSize == request->numEvent)
+            // the previous round has already unbind this GPU.
+            auto unbindIt = std::find(g_unbindGpus.begin(), g_unbindGpus.end(), uuidStr);
+            if (unbindIt != g_unbindGpus.end())
             {
-                insufficientSize = true;
+                continue;
+            }
+
+            if (request->dataSize <= request->numEvent)
+            {
+                request->numEvent += 1;
                 continue;
             }
             request->data[request->numEvent].eventType = nvmlSystemEventTypeGpuDriverBind;
             // this gpu was unbound before, so we don't know its index
             request->data[request->numEvent].gpuId = UINT32_MAX;
             request->numEvent += 1;
-            m_bindGpus.push_back(uuidStr);
+            g_bindGpus.push_back(uuidStr);
         }
     }
 
@@ -2570,10 +2658,18 @@ nvmlReturn_t InjectedNvml::nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequ
             {
                 continue;
             }
-            attrHolder = &*deviceIt->second;
-            if (request->dataSize == request->numEvent)
+
+            // the previous round has already bind this GPU.
+            auto bindIt = std::find(g_bindGpus.begin(), g_bindGpus.end(), uuidStr);
+            if (bindIt != g_bindGpus.end())
             {
-                insufficientSize = true;
+                continue;
+            }
+
+            attrHolder = &*deviceIt->second;
+            if (request->dataSize <= request->numEvent)
+            {
+                request->numEvent += 1;
                 continue;
             }
             request->data[request->numEvent].eventType = nvmlSystemEventTypeGpuDriverUnbind;
@@ -2581,19 +2677,20 @@ nvmlReturn_t InjectedNvml::nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequ
                 = attrHolder->GetAttribute(INJECTION_INDEX_KEY).GetCompoundValue().AsInjectionArgument().AsUInt();
             request->data[request->numEvent].gpuId = index;
             request->numEvent += 1;
-            m_unbindGpus.push_back(uuidStr);
+            g_unbindGpus.push_back(uuidStr);
         }
     }
 
     if (request->numEvent == 0)
     {
+        lock.unlock();
         std::this_thread::sleep_for(std::chrono::milliseconds(request->timeoutms));
         return NVML_ERROR_TIMEOUT;
     }
 
     // prevent future nvmlInit_v2 calls
     SetAllowAttach(false);
-    if (insufficientSize)
+    if (request->dataSize < request->numEvent)
     {
         return NVML_ERROR_INSUFFICIENT_SIZE;
     }

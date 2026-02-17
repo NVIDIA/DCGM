@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <expected>
 #include <map>
 #include <pthread.h>
 #include <string>
@@ -456,6 +457,24 @@ public:
      * @return DCGM_ST_OK on success, appropriate error code otherwise
      */
     dcgmReturn_t HangDetectUnregisterProcess(pid_t const pid);
+
+    /********************************************************************/
+    /**
+     * Launch an external executable and capture its output.
+     *
+     * Handles process management, hang detection, output capture, and error reporting.
+     * The executable's output is written to a log file and optionally returned.
+     * Output is populated whenever the process runs, regardless of exit code.
+     *
+     * @param[in] testName Name of the test
+     * @param[in] execArgv Argument vector for the executable
+     * @param[out] output Optional output string to store the output of the executable.
+     *
+     * @return Exit code on success, or dcgmReturn_t error on internal failure (fork, read, signal)
+     */
+    std::expected<int, dcgmReturn_t> LaunchExecutable(std::string const &testName,
+                                                      std::vector<std::string> const &execArgv,
+                                                      std::string *output = nullptr);
 
     /***************************PRIVATE**********************************/
 private:

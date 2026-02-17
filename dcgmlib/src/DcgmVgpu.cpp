@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "DcgmVgpu.hpp"
+#include "NvmlTaskRunner.hpp"
 
 #include <DcgmCMUtils.h>
 #include <DcgmStringHelpers.h>
@@ -60,7 +61,8 @@ static std::string_view ConvertNvmlLicenseExpiryStatusToString(unsigned int lice
 }
 
 dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
-                                      nvmlDevice_t nvmlDevice,
+                                      NvmlTaskRunner &nvmlDriver,
+                                      SafeNvmlHandle safeNvmlDevice,
                                       dcgmcm_update_thread_t &threadCtx,
                                       dcgmcm_watch_info_p watchInfo,
                                       timelib64_t now,
@@ -78,7 +80,7 @@ dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
         return DCGM_ST_MEMORY;
     }
 
-    nvmlReturn = nvmlDeviceGetFBCSessions(nvmlDevice, &sessionCount, NULL);
+    nvmlReturn = nvmlDriver.NvmlDeviceGetFBCSessions(safeNvmlDevice, &sessionCount, NULL);
     if (watchInfo)
         watchInfo->lastStatus = nvmlReturn;
 
@@ -100,7 +102,7 @@ dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
         return DCGM_ST_MEMORY;
     }
 
-    nvmlReturn = nvmlDeviceGetFBCSessions(nvmlDevice, &sessionCount, sessionInfo);
+    nvmlReturn = nvmlDriver.NvmlDeviceGetFBCSessions(safeNvmlDevice, &sessionCount, sessionInfo);
     if (watchInfo)
         watchInfo->lastStatus = nvmlReturn;
     if (nvmlReturn != NVML_SUCCESS)
@@ -145,7 +147,8 @@ dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
 }
 
 dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
-                                            nvmlVgpuInstance_t vgpuId,
+                                            NvmlTaskRunner &nvmlDriver,
+                                            SafeVgpuInstance vgpuId,
                                             dcgmcm_update_thread_t &threadCtx,
                                             dcgmcm_watch_info_p watchInfo,
                                             timelib64_t now,
@@ -163,7 +166,7 @@ dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
         return DCGM_ST_MEMORY;
     }
 
-    nvmlReturn = nvmlVgpuInstanceGetFBCSessions(vgpuId, &sessionCount, NULL);
+    nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetFBCSessions(vgpuId, &sessionCount, NULL);
     if (watchInfo)
         watchInfo->lastStatus = nvmlReturn;
 
@@ -185,12 +188,13 @@ dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
         return DCGM_ST_MEMORY;
     }
 
-    nvmlReturn = nvmlVgpuInstanceGetFBCSessions(vgpuId, &sessionCount, sessionInfo);
+    nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetFBCSessions(vgpuId, &sessionCount, sessionInfo);
     if (watchInfo)
         watchInfo->lastStatus = nvmlReturn;
     if (nvmlReturn != NVML_SUCCESS)
     {
-        log_error("nvmlVgpuInstanceGetFBCSessions failed with status {} for vgpuId {}", (int)nvmlReturn, vgpuId);
+        log_error(
+            "nvmlVgpuInstanceGetFBCSessions failed with status {} for vgpuId {}", (int)nvmlReturn, vgpuId.vgpuInstance);
         free(sessionInfo);
         free(vgpuFbcSessions);
         return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
@@ -232,7 +236,8 @@ dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
 /*****************************************************************************/
 dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                                           dcgmcm_update_thread_t &threadCtx,
-                                          nvmlVgpuInstance_t vgpuId,
+                                          NvmlTaskRunner &nvmlDriver,
+                                          SafeVgpuInstance vgpuId,
                                           dcgm_field_meta_p fieldMeta)
 {
     timelib64_t now, expireTime;
@@ -266,7 +271,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             unsigned int bufferSize = DCGM_DEVICE_UUID_BUFFER_SIZE;
             nvmlVgpuVmIdType_t vmIdType;
 
-            nvmlReturn = nvmlVgpuInstanceGetVmID(vgpuId, buffer, bufferSize, &vmIdType);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetVmID(vgpuId, buffer, bufferSize, &vmIdType);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
             if (nvmlReturn != NVML_SUCCESS)
@@ -325,10 +330,12 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
         {
             unsigned int vgpuTypeId = 0;
 
-            nvmlReturn = nvmlVgpuInstanceGetType(vgpuId, &vgpuTypeId);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetType(vgpuId, &vgpuTypeId);
             if (nvmlReturn != NVML_SUCCESS)
             {
-                log_error("nvmlVgpuInstanceGetType failed with status {} for vgpuId {}", (int)nvmlReturn, vgpuId);
+                log_error("nvmlVgpuInstanceGetType failed with status {} for vgpuId {}",
+                          (int)nvmlReturn,
+                          vgpuId.vgpuInstance);
                 cm.AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
@@ -341,12 +348,14 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             char buffer[DCGM_DEVICE_UUID_BUFFER_SIZE];
             unsigned int bufferSize = DCGM_DEVICE_UUID_BUFFER_SIZE;
 
-            nvmlReturn = nvmlVgpuInstanceGetUUID(vgpuId, buffer, bufferSize);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetUUID(vgpuId, buffer, bufferSize);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
             if (nvmlReturn != NVML_SUCCESS)
             {
-                log_error("nvmlVgpuInstanceGetUUID failed with status {} for vgpuId {}", (int)nvmlReturn, vgpuId);
+                log_error("nvmlVgpuInstanceGetUUID failed with status {} for vgpuId {}",
+                          (int)nvmlReturn,
+                          vgpuId.vgpuInstance);
                 cm.AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
@@ -359,13 +368,14 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             char buffer[DCGM_DEVICE_UUID_BUFFER_SIZE];
             unsigned int bufferSize = DCGM_DEVICE_UUID_BUFFER_SIZE;
 
-            nvmlReturn = nvmlVgpuInstanceGetVmDriverVersion(vgpuId, buffer, bufferSize);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetVmDriverVersion(vgpuId, buffer, bufferSize);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
             if (nvmlReturn != NVML_SUCCESS)
             {
-                log_error(
-                    "nvmlVgpuInstanceGetVmDriverVersion failed with status {} for vgpuId {}", (int)nvmlReturn, vgpuId);
+                log_error("nvmlVgpuInstanceGetVmDriverVersion failed with status {} for vgpuId {}",
+                          (int)nvmlReturn,
+                          vgpuId.vgpuInstance);
                 cm.AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
@@ -379,8 +389,8 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                         = cm.UpdateFieldWatch(watchInfo, 900000000, 900.0, 1, DcgmWatcher(DcgmWatcherTypeCacheManager));
                     if (DCGM_ST_OK != status)
                     {
-                        DCGM_LOG_ERROR << "UpdateFieldWatch failed for vgpuId " << vgpuId << " and fieldId "
-                                       << fieldMeta->fieldId;
+                        DCGM_LOG_ERROR << "UpdateFieldWatch failed for vgpuId " << vgpuId.vgpuInstance
+                                       << " and fieldId " << fieldMeta->fieldId;
                         return status;
                     }
                 }
@@ -394,12 +404,14 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
         {
             unsigned long long fbUsage;
 
-            nvmlReturn = nvmlVgpuInstanceGetFbUsage(vgpuId, &fbUsage);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetFbUsage(vgpuId, &fbUsage);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
             if (NVML_SUCCESS != nvmlReturn)
             {
-                log_error("nvmlVgpuInstanceGetFbUsage failed with status {} for vgpuId {}", (int)nvmlReturn, vgpuId);
+                log_error("nvmlVgpuInstanceGetFbUsage failed with status {} for vgpuId {}",
+                          (int)nvmlReturn,
+                          vgpuId.vgpuInstance);
                 cm.AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
@@ -414,7 +426,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             char licenseState[NVML_GRID_LICENSE_BUFFER_SIZE]  = { 0 };
             char licenseExpiry[NVML_GRID_LICENSE_BUFFER_SIZE] = { 0 };
 
-            nvmlReturn = nvmlVgpuInstanceGetLicenseInfo_v2(vgpuId, &licenseInfo);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetLicenseInfo_v2(vgpuId, &licenseInfo);
             if (watchInfo != nullptr)
             {
                 watchInfo->lastStatus = nvmlReturn;
@@ -424,9 +436,9 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                 if (nvmlReturn != NVML_ERROR_DRIVER_NOT_LOADED)
                 {
                     log_error("nvmlVgpuInstanceGetLicenseInfo_v2 for vgpuId {} failed with error: ({}) {}",
-                              vgpuId,
+                              vgpuId.vgpuInstance,
                               nvmlReturn,
-                              nvmlErrorString(nvmlReturn));
+                              nvmlDriver.NvmlErrorString(nvmlReturn));
                 }
                 SafeCopyTo(licenseState, (char const *)"Not Available");
                 cm.AppendEntityString(threadCtx, licenseState, now, expireTime);
@@ -470,7 +482,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                     if (DCGM_ST_OK != status)
                     {
                         log_error("UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
-                                  vgpuId,
+                                  vgpuId.vgpuInstance,
                                   fieldMeta->fieldId,
                                   status,
                                   errorString(status));
@@ -491,7 +503,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                     if (DCGM_ST_OK != status)
                     {
                         log_error("UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
-                                  vgpuId,
+                                  vgpuId.vgpuInstance,
                                   fieldMeta->fieldId,
                                   status,
                                   errorString(status));
@@ -508,7 +520,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
         {
             unsigned int frameRateLimit;
 
-            nvmlReturn = nvmlVgpuInstanceGetFrameRateLimit(vgpuId, &frameRateLimit);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetFrameRateLimit(vgpuId, &frameRateLimit);
             if (watchInfo != nullptr)
             {
                 watchInfo->lastStatus = nvmlReturn;
@@ -519,9 +531,9 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                 if (nvmlReturn != NVML_ERROR_NOT_SUPPORTED)
                 {
                     log_error("nvmlVgpuInstanceGetFrameRateLimit for vgpuId {} failed with error: ({}) {}",
-                              vgpuId,
+                              vgpuId.vgpuInstance,
                               nvmlReturn,
-                              nvmlErrorString(nvmlReturn));
+                              nvmlDriver.NvmlErrorString(nvmlReturn));
                 }
                 cm.AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
@@ -535,7 +547,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             char vgpuPciId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
             unsigned int length = NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE;
 
-            nvmlReturn = nvmlVgpuInstanceGetGpuPciId(vgpuId, vgpuPciId, &length);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetGpuPciId(vgpuId, vgpuPciId, &length);
             if (watchInfo != nullptr)
             {
                 watchInfo->lastStatus = nvmlReturn;
@@ -543,9 +555,9 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             if (NVML_SUCCESS != nvmlReturn && NVML_ERROR_DRIVER_NOT_LOADED != nvmlReturn)
             {
                 DCGM_LOG_ERROR << fmt::format("nvmlVgpuInstanceGetGpuPciId for vgpuId {} failed with error: ({}) {}",
-                                              vgpuId,
+                                              vgpuId.vgpuInstance,
                                               nvmlReturn,
-                                              nvmlErrorString(nvmlReturn));
+                                              nvmlDriver.NvmlErrorString(nvmlReturn));
                 cm.AppendEntityString(threadCtx, NvmlErrorToStringValue(nvmlReturn), now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
@@ -559,7 +571,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                 if (DCGM_ST_OK != status)
                 {
                     DCGM_LOG_ERROR << fmt::format("UpdateFieldWatch failed for vgpuId {} and fieldId {}. Error: ({}){}",
-                                                  vgpuId,
+                                                  vgpuId.vgpuInstance,
                                                   fieldMeta->fieldId,
                                                   status,
                                                   errorString(status));
@@ -576,7 +588,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             dcgmDeviceEncStats_t vgpuEncStats;
             vgpuEncStats.version = dcgmDeviceEncStats_version;
 
-            nvmlReturn = nvmlVgpuInstanceGetEncoderStats(
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetEncoderStats(
                 vgpuId, &vgpuEncStats.sessionCount, &vgpuEncStats.averageFps, &vgpuEncStats.averageLatency);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
@@ -596,7 +608,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             std::unique_ptr<nvmlEncoderSessionInfo_t[]> sessionInfo;
             unsigned int sessionCount = 0;
 
-            nvmlReturn = nvmlVgpuInstanceGetEncoderSessions(vgpuId, &sessionCount, nullptr);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetEncoderSessions(vgpuId, &sessionCount, nullptr);
             if (watchInfo != nullptr)
             {
                 watchInfo->lastStatus = nvmlReturn;
@@ -619,7 +631,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
 
             if (sessionCount != 0)
             {
-                nvmlReturn = nvmlVgpuInstanceGetEncoderSessions(vgpuId, &sessionCount, sessionInfo.get());
+                nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetEncoderSessions(vgpuId, &sessionCount, sessionInfo.get());
                 if (watchInfo != nullptr)
                 {
                     watchInfo->lastStatus = nvmlReturn;
@@ -628,9 +640,9 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                 {
                     DCGM_LOG_ERROR << fmt::format(
                         "nvmlVgpuInstanceGetEncoderSessions failed for vgpuId {} with status ({}){}",
-                        vgpuId,
+                        vgpuId.vgpuInstance,
                         nvmlReturn,
-                        nvmlErrorString(nvmlReturn));
+                        nvmlDriver.NvmlErrorString(nvmlReturn));
                     return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
                 }
             }
@@ -666,12 +678,14 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             dcgmDeviceFbcStats_t vgpuFbcStats;
             nvmlFBCStats_t fbcStats;
 
-            nvmlReturn = nvmlVgpuInstanceGetFBCStats(vgpuId, &fbcStats);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetFBCStats(vgpuId, &fbcStats);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
             if (NVML_SUCCESS != nvmlReturn)
             {
-                log_error("nvmlVgpuInstanceGetFBCStats failed with status {} for vgpuId {}", (int)nvmlReturn, vgpuId);
+                log_error("nvmlVgpuInstanceGetFBCStats failed with status {} for vgpuId {}",
+                          (int)nvmlReturn,
+                          vgpuId.vgpuInstance);
                 memset(&vgpuFbcStats, 0, sizeof(vgpuFbcStats));
                 cm.AppendEntityBlob(threadCtx, &vgpuFbcStats, (int)(sizeof(vgpuFbcStats)), now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
@@ -688,7 +702,8 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
 
         case DCGM_FI_DEV_VGPU_FBC_SESSIONS_INFO:
         {
-            dcgmReturn_t status = GetVgpuInstanceFBCSessionsInfo(cm, vgpuId, threadCtx, watchInfo, now, expireTime);
+            dcgmReturn_t status
+                = GetVgpuInstanceFBCSessionsInfo(cm, nvmlDriver, vgpuId, threadCtx, watchInfo, now, expireTime);
             if (DCGM_ST_OK != status)
                 return status;
             break;
@@ -698,7 +713,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
         {
             unsigned int gpuInstanceId = INVALID_GPU_INSTANCE_ID;
 
-            nvmlReturn = nvmlVgpuInstanceGetGpuInstanceId(vgpuId, &gpuInstanceId);
+            nvmlReturn = nvmlDriver.NvmlVgpuInstanceGetGpuInstanceId(vgpuId, &gpuInstanceId);
             if (watchInfo != nullptr)
             {
                 watchInfo->lastStatus = nvmlReturn;
@@ -707,9 +722,9 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
             {
                 DCGM_LOG_ERROR << fmt::format(
                     "nvmlVgpuInstanceGetGpuInstanceId for vgpuId {} failed with error: ({}) {}",
-                    vgpuId,
+                    vgpuId.vgpuInstance,
                     nvmlReturn,
-                    nvmlErrorString(nvmlReturn));
+                    nvmlDriver.NvmlErrorString(nvmlReturn));
                 cm.AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }

@@ -13,6 +13,7 @@
         nvmlResetFuncCallCount;
         nvmlRemoveGpu;
         nvmlRestoreGpu;
+        *WithNvmlInjectionSkuFile*;
         nvmlDeviceGetClockInfo;
         nvmlDeviceGetMaxClockInfo;
         nvmlDeviceGetComputeMode;
@@ -55,13 +56,11 @@
         nvmlDeviceGetPersistenceMode;
         nvmlDeviceSetPersistenceMode;
         nvmlDeviceGetBAR1MemoryInfo;
+        nvmlDeviceGetUnrepairableMemoryFlag;
         nvmlDeviceGetViolationStatus;
         nvmlDeviceGetPowerState;
         nvmlDeviceGetPerformanceState;
         nvmlDeviceGetPowerUsage;
-        nvmlDeviceGetPowerMode;
-        nvmlDeviceGetSupportedPowerModes;
-        nvmlDeviceSetPowerMode;
         nvmlDeviceGetTotalEnergyConsumption;
         nvmlDeviceGetPowerManagementMode;
         nvmlDeviceGetPowerManagementLimit;

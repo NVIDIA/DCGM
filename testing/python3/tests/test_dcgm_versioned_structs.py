@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 # dcgmGetDeviceAttributes
 # dcgmGetPidInfo - Bug found
 # dcgmGroupGetInfo
-# dcgmHealthCheck 
+# dcgmHealthCheck
 # dcgmIntrospectGetHostengineCpuUtilization
 # dcgmIntrospectGetHostengineMemoryUsage
 # dcgmJobGetStats
@@ -53,6 +53,7 @@ from dcgm_structs import dcgmExceptionClass
 # Provides access to functions from dcgm_agent_internal
 dcgmFP = dcgm_structs._dcgmGetFunctionPointer
 
+
 def vtDcgmConnect_v2(ip_address, connectParams, versionTest):
     connectParams = dcgm_structs.c_dcgmConnectV2Params_v1()
     connectParams.version = dcgm_structs.make_dcgm_version(connectParams, 1)
@@ -64,25 +65,26 @@ def vtDcgmConnect_v2(ip_address, connectParams, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return dcgm_handle
 
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_connect_validate(handle, gpuIds):
-
     """
     Validates structure version
     """
     fieldGroupFieldIds = [dcgm_fields.DCGM_FI_DEV_GPU_TEMP, ]
     connectParams = dcgm_structs.c_dcgmConnectV2Params_v1()
     connectParams.persistAfterDisconnect = 0
-    
+
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmConnect_v2('localhost', connectParams, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         ret = vtDcgmConnect_v2('localhost', connectParams, versionTest)
-        
+
+
 def vtDcgmGetDeviceAttributes(dcgm_handle, gpuId, versionTest):
     fn = dcgmFP("dcgmGetDeviceAttributes")
     device_values = dcgm_structs.c_dcgmDeviceAttributes_deprecated_v1()
@@ -94,6 +96,7 @@ def vtDcgmGetDeviceAttributes(dcgm_handle, gpuId, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return device_values
 
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
@@ -104,20 +107,21 @@ def test_dcgm_get_device_attributes_validate(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetEmptyGroup("test1")
-    ## Add first GPU to the group
+    # Add first GPU to the group
     groupObj.AddGpu(gpuIds[0])
-    gpuIds = groupObj.GetGpuIds() #Only reference GPUs we are testing against
+    gpuIds = groupObj.GetGpuIds()  # Only reference GPUs we are testing against
 
-    #Make sure the device attributes and config fields have updated
+    # Make sure the device attributes and config fields have updated
     systemObj.UpdateAllFields(1)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmGetDeviceAttributes(handle, gpuIds[0], versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random invalid version
+        versionTest = 50  # random invalid version
         ret = vtDcgmGetDeviceAttributes(handle, gpuIds[0], versionTest)
+
 
 def vtDcgmGroupGetInfo(dcgm_handle, group_id, versionTest):
     fn = dcgmFP("dcgmGroupGetInfo")
@@ -130,28 +134,31 @@ def vtDcgmGroupGetInfo(dcgm_handle, group_id, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return device_values
 
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_group_get_info_validate(handle):
-
     """
     Validates structure version
     """
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
-    
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmGroupGetInfo(handle, groupId, versionTest)
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         ret = vtDcgmGroupGetInfo(handle, groupId, versionTest)
+
 
 def vtDcgmFieldGroupGetInfo(dcgm_handle, fieldGroupId, versionTest):
-    
+
     c_fieldGroupInfo = dcgm_structs.c_dcgmFieldGroupInfo_v1()
-    c_fieldGroupInfo.version = dcgm_structs.make_dcgm_version(c_fieldGroupInfo, 1)
+    c_fieldGroupInfo.version = dcgm_structs.make_dcgm_version(
+        c_fieldGroupInfo, 1)
     logger.debug("Structure version: %d" % c_fieldGroupInfo.version)
 
     c_fieldGroupInfo.version = versionTest
@@ -161,23 +168,27 @@ def vtDcgmFieldGroupGetInfo(dcgm_handle, fieldGroupId, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return c_fieldGroupInfo
 
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_field_group_get_info_validate(handle):
-
     """
     Validates structure version
     """
-    fieldIds = [dcgm_fields.DCGM_FI_DRIVER_VERSION, dcgm_fields.DCGM_FI_DEV_NAME, dcgm_fields.DCGM_FI_DEV_BRAND]
+    fieldIds = [dcgm_fields.DCGM_FI_DRIVER_VERSION,
+                dcgm_fields.DCGM_FI_DEV_NAME, dcgm_fields.DCGM_FI_DEV_BRAND]
     handle = pydcgm.DcgmHandle(handle)
     fieldGroup = pydcgm.DcgmFieldGroup(handle, "mygroup", fieldIds)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmFieldGroupGetInfo(handle.handle, fieldGroup.fieldGroupId, versionTest)
+        versionTest = 0  # invalid version
+        ret = vtDcgmFieldGroupGetInfo(
+            handle.handle, fieldGroup.fieldGroupId, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmFieldGroupGetInfo(handle.handle, fieldGroup.fieldGroupId, versionTest)
+        versionTest = 50  # random number version
+        ret = vtDcgmFieldGroupGetInfo(
+            handle.handle, fieldGroup.fieldGroupId, versionTest)
+
 
 def vtDcgmFieldGroupGetAll(dcgm_handle, versionTest):
     c_allGroupInfo = dcgm_structs.c_dcgmAllFieldGroup_v1()
@@ -190,25 +201,27 @@ def vtDcgmFieldGroupGetAll(dcgm_handle, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return c_allGroupInfo
 
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_nvml()
 def test_dcgm_field_group_get_all_validate(handle):
-
     """
     Validates structure version
     """
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert len(gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
-    
+    assert len(
+        gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
+
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         vtDcgmFieldGroupGetAll(handle, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         vtDcgmFieldGroupGetAll(handle, versionTest)
+
 
 def vtDcgmConfigSet(dcgm_handle, group_id, configToSet, status_handle, versionTest):
     fn = dcgmFP("dcgmConfigSet")
@@ -220,23 +233,28 @@ def vtDcgmConfigSet(dcgm_handle, group_id, configToSet, status_handle, versionTe
     dcgm_structs._dcgmCheckReturn(ret)
     return ret
 
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_config_set_validate(handle):
     """
     Validates structure version
     """
-    
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
     status_handle = dcgm_agent.dcgmStatusCreate()
     config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmConfigSet(handle,groupId,config_values, status_handle, versionTest)
+        versionTest = 0  # invalid version
+        ret = vtDcgmConfigSet(handle, groupId, config_values,
+                              status_handle, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random invalid version
-        ret = vtDcgmConfigSet(handle,groupId,config_values, status_handle, versionTest)
+        versionTest = 50  # random invalid version
+        ret = vtDcgmConfigSet(handle, groupId, config_values,
+                              status_handle, versionTest)
+
 
 def vtDcgmConfigGet(dcgm_handle, group_id, reqCfgType, count, status_handle, versionTest):
     fn = dcgmFP("dcgmConfigGet")
@@ -247,33 +265,39 @@ def vtDcgmConfigGet(dcgm_handle, group_id, reqCfgType, count, status_handle, ver
     for index in range(0, count):
         c_config_values[index].version = versionTest
 
-    ret = fn(dcgm_handle, group_id, reqCfgType, count, c_config_values, status_handle)
+    ret = fn(dcgm_handle, group_id, reqCfgType,
+             count, c_config_values, status_handle)
     dcgm_structs._dcgmCheckReturn(ret)
     return list(c_config_values[0:count])
+
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_config_get_validate(handle, gpuIds):
-
     """
     Validates structure version
     """
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert len(gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
-    
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+    assert len(
+        gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
+
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
     groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId)
     status_handle = dcgm_agent.dcgmStatusCreate()
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle, versionTest)
+        versionTest = 0  # invalid version
+        ret = vtDcgmConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+                              groupInfo.count, status_handle, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle, versionTest)
+        versionTest = 50  # random number version
+        ret = vtDcgmConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+                              groupInfo.count, status_handle, versionTest)
+
 
 def vtDcgmPolicyGet(dcgm_handle, group_id, count, status_handle, versionTest):
     fn = dcgmFP("dcgmPolicyGet")
@@ -296,31 +320,36 @@ def vtDcgmPolicyGet(dcgm_handle, group_id, count, status_handle, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return c_policy_values[0:count]
 
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_nvml()
 def test_dcgm_policy_get_validate(handle):
-    
     """
     Validates structure version
     """
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert len(gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
-    
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+    assert len(
+        gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
+
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
     status_handle = dcgm_agent.dcgmStatusCreate()
     count = 1
 
     diagLevel = dcgm_structs.DCGM_DIAG_LVL_SHORT
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmPolicyGet(handle, groupId, count, status_handle, versionTest)
+        versionTest = 0  # invalid version
+        ret = vtDcgmPolicyGet(handle, groupId, count,
+                              status_handle, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmPolicyGet(handle, groupId, count, status_handle, versionTest)
+        versionTest = 50  # random number version
+        ret = vtDcgmPolicyGet(handle, groupId, count,
+                              status_handle, versionTest)
+
 
 def vtDcgmHealthCheck(dcgm_handle, groupId, versionTest):
     c_results = dcgm_structs.c_dcgmHealthResponse_v5()
@@ -333,23 +362,25 @@ def vtDcgmHealthCheck(dcgm_handle, groupId, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return c_results
 
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_health_check_validate(handle):
-
     """
     Validates structure version
     """
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
-    
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmHealthCheck(handle, groupId, versionTest)
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         ret = vtDcgmHealthCheck(handle, groupId, versionTest)
+
 
 def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
     response = dcgm_structs.c_dcgmDiagResponse_v12()
@@ -367,10 +398,11 @@ def vtDcgmActionValidate_v2(dcgm_handle, runDiagInfo, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return response
 
+
 def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
     response = dcgm_structs.c_dcgmDiagResponse_v12()
     response.version = versionTest
-    
+
     # Put the group_id and validate into a dcgmRunDiag struct
     runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
     runDiagInfo.version = versionTest
@@ -382,6 +414,7 @@ def vtDcgmActionValidate(dcgm_handle, group_id, validate, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return response
 
+
 def vtDcgmRunDiagnostic(dcgm_handle, group_id, diagLevel, versionTest):
     response = dcgm_structs.c_dcgmDiagResponse_v9()
     response.version = versionTest
@@ -390,22 +423,24 @@ def vtDcgmRunDiagnostic(dcgm_handle, group_id, diagLevel, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return response
 
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 @test_utils.run_with_max_power_limit_set()
 def test_dcgm_run_diagnostic_validate(handle, gpuIds):
-
     """
     Validates structure version
     """
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert len(gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
-    
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+    assert len(
+        gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
+
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
     groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId)
     status_handle = dcgm_agent.dcgmStatusCreate()
 
@@ -424,33 +459,37 @@ def test_dcgm_run_diagnostic_validate(handle, gpuIds):
     drd.entityIds = gpuIdStr
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmActionValidate_v2(handle, drd, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         ret = vtDcgmActionValidate_v2(handle, drd, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmActionValidate(handle, drd.groupId, drd.validate, versionTest)
+        versionTest = 0  # invalid version
+        ret = vtDcgmActionValidate(
+            handle, drd.groupId, drd.validate, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmActionValidate(handle, drd.groupId, drd.validate, versionTest)
+        versionTest = 50  # random number version
+        ret = vtDcgmActionValidate(
+            handle, drd.groupId, drd.validate, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmRunDiagnostic(handle, drd.groupId, diagLevel, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         ret = vtDcgmRunDiagnostic(handle, drd.groupId, diagLevel, versionTest)
+
 
 def vtDcgmGetPidInfo(dcgm_handle, groupId, pid, versionTest):
     fn = dcgmFP("dcgmGetPidInfo")
     pidInfo = dcgm_structs.c_dcgmPidInfo_v2()
-    pidInfo.version = dcgm_structs.make_dcgm_version(dcgm_structs.c_dcgmPidInfo_v2, 2)
+    pidInfo.version = dcgm_structs.make_dcgm_version(
+        dcgm_structs.c_dcgmPidInfo_v2, 2)
     logger.debug("Structure version: %d" % pidInfo.version)
 
     pidInfo.version = versionTest
@@ -459,6 +498,7 @@ def vtDcgmGetPidInfo(dcgm_handle, groupId, pid, versionTest):
     ret = fn(dcgm_handle, groupId, byref(pidInfo))
     dcgm_structs._dcgmCheckReturn(ret)
     return pidInfo
+
 
 def StartAppOnGpus(handle):
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
@@ -475,14 +515,15 @@ def StartAppOnGpus(handle):
     for info in gpuInfoList:
         gpuId = info[0]
         busId = info[1]
-        appTimeout = int(1000) #miliseconds
+        appTimeout = int(1000)  # miliseconds
 
-        #Start a cuda app so we have something to accounted
+        # Start a cuda app so we have something to accounted
         appParams = ["--ctxCreate", busId,
-                        "--busyGpu", busId, str(appTimeout),
-                        "--ctxDestroy", busId]
-        app = apps.CudaCtxCreateAdvancedApp(appParams, env=test_utils.get_cuda_visible_devices_env(handle, gpuId))
-        app.start(appTimeout*2)
+                     "--busyGpu", busId, str(appTimeout),
+                     "--ctxDestroy", busId]
+        app = apps.CudaCtxCreateAdvancedApp(
+            appParams, env=test_utils.get_cuda_visible_devices_env(handle, gpuId))
+        app.start(appTimeout * 2)
         pid = app.getpid()
         addedPids.append(pid)
         app.wait()
@@ -492,25 +533,27 @@ def StartAppOnGpus(handle):
 
     return addedPids
 
+
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_get_pid_info_validate(handle, gpuIds):
-
     """
     Validates structure version
     """
-    
+
     pidList = StartAppOnGpus(handle)
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
 
     for pid in pidList:
         with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-            versionTest = 0 #invalid version
+            versionTest = 0  # invalid version
             ret = vtDcgmGetPidInfo(handle, groupId, pid, versionTest)
 
         with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-            versionTest = 50 #random number version
+            versionTest = 50  # random number version
             ret = vtDcgmGetPidInfo(handle, groupId, pid, versionTest)
+
 
 def vtDcgmJobGetStats(dcgm_handle, jobid, versionTest):
     fn = dcgmFP("dcgmJobGetStats")
@@ -524,38 +567,40 @@ def vtDcgmJobGetStats(dcgm_handle, jobid, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return jobInfo
 
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_job_get_stats_validate(handle):
     """
     Validates structure version
     """
-    
+
     jobid = "1"
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmJobGetStats(handle, jobid, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         ret = vtDcgmJobGetStats(handle, jobid, versionTest)
+
 
 def vtDcgmIntrospectGetHostengineMemoryUsage(dcgm_handle, versionTest, waitIfNoData=True):
     fn = dcgmFP("dcgmIntrospectGetHostengineMemoryUsage")
-    
+
     memInfo = dcgm_structs.c_dcgmIntrospectMemory_v1()
     memInfo.version = dcgm_structs.make_dcgm_version(memInfo, 1)
     logger.debug("Structure version: %d" % memInfo.version)
 
     memInfo.version = versionTest
-    
+
     ret = fn(dcgm_handle, byref(memInfo), waitIfNoData)
     dcgm_structs._dcgmCheckReturn(ret)
     return memInfo
-    
+
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_introspect_get_hostengine_memory_usage_validate(handle):
-    
     """
     Validates structure version
     """
@@ -563,29 +608,32 @@ def test_dcgm_introspect_get_hostengine_memory_usage_validate(handle):
     waitIfNoData = True
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmIntrospectGetHostengineMemoryUsage(handle, versionTest, waitIfNoData)
+        versionTest = 0  # invalid version
+        ret = vtDcgmIntrospectGetHostengineMemoryUsage(
+            handle, versionTest, waitIfNoData)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmIntrospectGetHostengineMemoryUsage(handle, versionTest, waitIfNoData)
+        versionTest = 50  # random number version
+        ret = vtDcgmIntrospectGetHostengineMemoryUsage(
+            handle, versionTest, waitIfNoData)
 
-def vtDcgmIntrospectGetHostengineCpuUtilization(dcgm_handle, versionTest , waitIfNoData=True):
+
+def vtDcgmIntrospectGetHostengineCpuUtilization(dcgm_handle, versionTest, waitIfNoData=True):
     fn = dcgmFP("dcgmIntrospectGetHostengineCpuUtilization")
-    
+
     cpuUtil = dcgm_structs.c_dcgmIntrospectCpuUtil_v1()
     cpuUtil.version = dcgm_structs.make_dcgm_version(cpuUtil, 1)
     logger.debug("Structure version: %d" % cpuUtil.version)
 
     cpuUtil.version = versionTest
-    
+
     ret = fn(dcgm_handle, byref(cpuUtil), waitIfNoData)
     dcgm_structs._dcgmCheckReturn(ret)
     return cpuUtil
 
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_introspect_get_hostengine_cpu_utilization_validate(handle):
-    
     """
     Validates structure version
     """
@@ -593,14 +641,17 @@ def test_dcgm_introspect_get_hostengine_cpu_utilization_validate(handle):
     waitIfNoData = True
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmIntrospectGetHostengineCpuUtilization(handle, versionTest, waitIfNoData)
+        versionTest = 0  # invalid version
+        ret = vtDcgmIntrospectGetHostengineCpuUtilization(
+            handle, versionTest, waitIfNoData)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmIntrospectGetHostengineCpuUtilization(handle, versionTest, waitIfNoData)
+        versionTest = 50  # random number version
+        ret = vtDcgmIntrospectGetHostengineCpuUtilization(
+            handle, versionTest, waitIfNoData)
 
 ########### dcgm_agent_internal.py ###########
+
 
 def vtDcgmGetVgpuDeviceAttributes(dcgm_handle, gpuId, versionTest):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmGetVgpuDeviceAttributes")
@@ -613,6 +664,7 @@ def vtDcgmGetVgpuDeviceAttributes(dcgm_handle, gpuId, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return device_values
 
+
 @test_utils.run_with_standalone_host_engine(60)
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_get_vgpu_device_attributes_validate(handle, gpuIds):
@@ -621,11 +673,11 @@ def test_dcgm_get_vgpu_device_attributes_validate(handle, gpuIds):
     """
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmGetVgpuDeviceAttributes(handle, gpuIds[0], versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         ret = vtDcgmGetVgpuDeviceAttributes(handle, gpuIds[0], versionTest)
 
 
@@ -640,6 +692,7 @@ def vtDcgmGetVgpuInstanceAttributes(dcgm_handle, vgpuId, versionTest):
     dcgm_structs._dcgmCheckReturn(ret)
     return device_values
 
+
 @test_utils.run_with_standalone_host_engine(60)
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_get_vgpu_instance_attributes_validate(handle, gpuIds):
@@ -648,12 +701,13 @@ def test_dcgm_get_vgpu_instance_attributes_validate(handle, gpuIds):
     """
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
+        versionTest = 0  # invalid version
         ret = vtDcgmGetVgpuInstanceAttributes(handle, gpuIds[0], versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
+        versionTest = 50  # random number version
         ret = vtDcgmGetVgpuInstanceAttributes(handle, gpuIds[0], versionTest)
+
 
 def vtDcgmVgpuConfigSet(dcgm_handle, group_id, configToSet, status_handle, versionTest):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmVgpuConfigSet")
@@ -662,30 +716,35 @@ def vtDcgmVgpuConfigSet(dcgm_handle, group_id, configToSet, status_handle, versi
     dcgm_structs._dcgmCheckReturn(ret)
     return ret
 
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_vgpu_config_set_validate(handle):
     """
     Validates structure version
     """
-    
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
     status_handle = dcgm_agent.dcgmStatusCreate()
     config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmVgpuConfigSet(handle, groupId, config_values, status_handle, versionTest)
+        versionTest = 0  # invalid version
+        ret = vtDcgmVgpuConfigSet(
+            handle, groupId, config_values, status_handle, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random invalid version
-        ret = vtDcgmVgpuConfigSet(handle, groupId, config_values, status_handle, versionTest)
+        versionTest = 50  # random invalid version
+        ret = vtDcgmVgpuConfigSet(
+            handle, groupId, config_values, status_handle, versionTest)
+
 
 def vtDcgmVgpuConfigGet(dcgm_handle, group_id, reqCfgType, count, status_handle, versionTest):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmVgpuConfigSet")
 
     vgpu_config_values_array = count * dcgm_structs.c_dcgmDeviceVgpuConfig_v1
     c_config_values = vgpu_config_values_array()
-    
+
     vgpuConfig = dcgm_structs.c_dcgmDeviceVgpuConfig_v1()
     vgpuConfig.version = dcgm_structs.make_dcgm_version(vgpuConfig, 1)
     logger.debug("Structure version: %d" % vgpuConfig.version)
@@ -701,23 +760,26 @@ def vtDcgmVgpuConfigGet(dcgm_handle, group_id, reqCfgType, count, status_handle,
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_nvml()
 def test_dcgm_vgpu_config_get_validate(handle):
-
     """
     Validates structure version
     """
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert len(gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
-    
-    groupId = dcgm_agent.dcgmGroupCreate(handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
+    assert len(
+        gpuIdList) >= 0, "Not able to find devices on the node for embedded case"
+
+    groupId = dcgm_agent.dcgmGroupCreate(
+        handle, dcgm_structs.DCGM_GROUP_DEFAULT, "test1")
     groupInfo = dcgm_agent.dcgmGroupGetInfo(handle, groupId)
     status_handle = dcgm_agent.dcgmStatusCreate()
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 0 #invalid version
-        ret = vtDcgmVgpuConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle, versionTest)
+        versionTest = 0  # invalid version
+        ret = vtDcgmVgpuConfigGet(
+            handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle, versionTest)
 
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_VER_MISMATCH)):
-        versionTest = 50 #random number version
-        ret = vtDcgmVgpuConfigGet(handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle, versionTest)
+        versionTest = 50  # random number version
+        ret = vtDcgmVgpuConfigGet(
+            handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle, versionTest)

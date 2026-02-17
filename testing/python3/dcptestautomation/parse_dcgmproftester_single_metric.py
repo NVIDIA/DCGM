@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,13 +15,14 @@ import csv
 import argparse
 import re
 
+
 class ParseDcgmProftesterSingleMetric:
     "class for parsing a single metric"
 
     def __init__(self):
-        self.data_lines_lines = ['PcieTxBytes', 'PcieRxBytes', 'GrActivity:', 'SmActivity', \
-                                 'SmActivity:', 'SmOccupancy', 'SmOccupancy:', \
-                                 'TensorEngineUtil', 'DramUtil', 'Fp64EngineUtil', \
+        self.data_lines_lines = ['PcieTxBytes', 'PcieRxBytes', 'GrActivity:', 'SmActivity',
+                                 'SmActivity:', 'SmOccupancy', 'SmOccupancy:',
+                                 'TensorEngineUtil', 'DramUtil', 'Fp64EngineUtil',
                                  'Fp32EngineUtil', 'Fp16EngineUtil']
         self.d_cpu_count = {}
 
@@ -50,10 +51,11 @@ class ParseDcgmProftesterSingleMetric:
             return 9
 
     def parseAndWriteToCsv(self, fName, metric, gpu_index):
-        csvFileName = 'dcgmProfTester' + '_' + str(metric) + '_gpu'+ str(gpu_index) + '.csv'
+        csvFileName = 'dcgmProfTester' + '_' + \
+            str(metric) + '_gpu' + str(gpu_index) + '.csv'
         sample_num = 0
         f = open(fName, 'r+')
-        lines = f.readlines() # read all lines at once
+        lines = f.readlines()  # read all lines at once
         metric_label = self.getDataString(metric)
 
         with open(csvFileName, 'wb') as csvFile:
@@ -70,31 +72,34 @@ class ParseDcgmProftesterSingleMetric:
                     if row == [] or row[0] not in self.data_lines_lines:
                         print("Skipping non data row: " + str(row))
                     elif pattern.match(row[1]):
-                        #print ("Row[1]", row[1] + ' i[' + str(i) +']' )
+                        # print ("Row[1]", row[1] + ' i[' + str(i) +']' )
                         sample_num = sample_num + 1
                         val = float(lines[i].split()[1])
-                        dict_row = {'Sample Number': sample_num, metric_label: val}
+                        dict_row = {'Sample Number': sample_num,
+                                    metric_label: val}
                         writer.writerow(dict_row)
                     i = i + 1
                 except IndexError:
                     print("Excepting non data row: " + str(row))
-                    i = i+1
+                    i = i + 1
                     pass
                 except StopIteration:
                     pass
         print("Outside loop")
 
+
 def main(cmdArgs):
     fName = cmdArgs.fileName
     metric = cmdArgs.metric
     gpu_index = cmdArgs.gpu_index
-    #parse and output the data
+    # parse and output the data
     po = ParseDcgmProftesterSingleMetric()
     po.parseAndWriteToCsv(fName, metric, gpu_index)
 
 
 def parseCommandLine():
-    parser = argparse.ArgumentParser(description="Parse logs from dcgmLogs into a csv")
+    parser = argparse.ArgumentParser(
+        description="Parse logs from dcgmLogs into a csv")
     parser.add_argument("-f", "--fileName", required=True, help="fielName of the \
                         file to be parsed and outputted to csv")
     parser.add_argument("-m", "--metric", required=True, help="metric for which the data is being \
@@ -103,6 +108,7 @@ def parseCommandLine():
                         the data is being analyzed")
     args = parser.parse_args()
     return args
+
 
 if __name__ == "__main__":
     cmdArgs = parseCommandLine()

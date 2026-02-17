@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,16 +18,18 @@ import utils
 # it could take up to 360 seconds on dgx-2
 P2P_BANDWIDTH_TIMEOUT_SECS = 360
 
+
 class RunP2Pbandwidth(app_runner.AppRunner):
     """ Runs the p2pb_bandwidth binary to generate traffic between Gpus using nvswitch """
 
     paths = {
-            "Linux_64bit": "./apps/p2p_bandwidth/p2p_bandwidth",
-            "Linux_aarch64": "./apps/p2p_bandwidth/p2p_bandwidth",
-            }
+        "Linux_64bit": "./apps/p2p_bandwidth/p2p_bandwidth",
+        "Linux_aarch64": "./apps/p2p_bandwidth/p2p_bandwidth",
+    }
 
     def __init__(self, args):
-        path = os.path.join(utils.script_dir, RunP2Pbandwidth.paths[utils.platform_identifier])
+        path = os.path.join(
+            utils.script_dir, RunP2Pbandwidth.paths[utils.platform_identifier])
         super(RunP2Pbandwidth, self).__init__(path, args)
 
     def start(self):

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1616,6 +1616,16 @@ private:
                 if (m_value.UnitPtr != nullptr)
                 {
                     std::memcpy(m_value.UnitPtr, other.m_value.UnitPtr, allocateNum * sizeof(*other.m_value.UnitPtr));
+                }
+                break;
+            }
+            case INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.UnrepairableMemoryStatusPtr = static_cast<nvmlUnrepairableMemoryStatus_t *>(malloc(allocateNum * sizeof(*other.m_value.UnrepairableMemoryStatusPtr)));
+                if (m_value.UnrepairableMemoryStatusPtr != nullptr)
+                {
+                    std::memcpy(m_value.UnrepairableMemoryStatusPtr, other.m_value.UnrepairableMemoryStatusPtr, allocateNum * sizeof(*other.m_value.UnrepairableMemoryStatusPtr));
                 }
                 break;
             }
@@ -6664,6 +6674,36 @@ public:
     nvmlUnit_t const &AsUnit() const
     {
         return m_value.Unit;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlUnrepairableMemoryStatus_t *UnrepairableMemoryStatusPtr, bool inHeap = false)
+        : m_type(INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UnrepairableMemoryStatusPtr = UnrepairableMemoryStatusPtr;
+    }
+    InjectionArgument(nvmlUnrepairableMemoryStatus_t UnrepairableMemoryStatus)
+        : m_type(INJECTION_UNREPAIRABLEMEMORYSTATUS)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UnrepairableMemoryStatus = UnrepairableMemoryStatus;
+    }
+    InjectionArgument(nvmlUnrepairableMemoryStatus_t *UnrepairableMemoryStatusPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.UnrepairableMemoryStatusPtr = UnrepairableMemoryStatusPtr;
+    }
+
+    nvmlUnrepairableMemoryStatus_t *AsUnrepairableMemoryStatusPtr() const
+    {
+        return m_value.UnrepairableMemoryStatusPtr;
+    }
+
+    nvmlUnrepairableMemoryStatus_t const &AsUnrepairableMemoryStatus() const
+    {
+        return m_value.UnrepairableMemoryStatus;
     }
 
     // The following snippet is generated from write_injection_argument_header

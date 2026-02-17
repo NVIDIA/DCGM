@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,8 +119,6 @@ static std::mutex g_dcgmGlobalsMutex;     /* Lock to control access to g_dcgmGlo
                                          is declared outside of g_dcgmGlobals so g_dcgmGlobals
                                          can be memset to 0 in dcgmShutdown() */
 static dcgm_globals_t g_dcgmGlobals = {}; /* Declared static so we don't export it */
-static std::mutex g_dcgmPolicyCbMutex;    /* Lock to prevent users from unregistering policy callbacks while we
-                                             are in the process of handling them. */
 
 /*****************************************************************************
  * Functions used for locking/unlocking the globals of DCGM within a process
@@ -2220,8 +2218,7 @@ dcgmReturn_t helperPolicyRegister(dcgmHandle_t dcgmHandle,
     dcgm_policy_msg_register_t msg;
 
     /* Make an ansync object. We're going to pass ownership off, so we won't have to free it */
-    std::unique_ptr<DcgmPolicyRequest> policyRequest
-        = std::make_unique<DcgmPolicyRequest>(callback, userData, g_dcgmPolicyCbMutex);
+    std::unique_ptr<DcgmPolicyRequest> policyRequest = std::make_unique<DcgmPolicyRequest>(callback, userData);
 
     memset(&msg, 0, sizeof(msg));
     msg.header.length     = sizeof(msg);
@@ -2249,17 +2246,8 @@ dcgmReturn_t helperPolicyUnregister(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupI
     msg.groupId           = groupId;
     msg.condition         = condition;
 
-    /* Prevent users from unregistering callbacks while we are in the process of handling them. */
-    if (g_dcgmPolicyCbMutex.try_lock())
-    {
-        // coverity[overrun-buffer-arg]
-        dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
-        g_dcgmPolicyCbMutex.unlock();
-    }
-    else
-    {
-        dcgmReturn = DCGM_ST_IN_USE;
-    }
+    // coverity[overrun-buffer-arg]
+    dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
 
     return dcgmReturn;
 }
@@ -3482,14 +3470,15 @@ dcgmReturn_t helperGetTopologyPci(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId
  *****************************************************************************/
 
 
-static dcgmReturn_t tsapiEngineRun(unsigned short portNumber, char const *socketPath, unsigned int isConnectionTCP)
+static dcgmReturn_t tsapiEngineRun(unsigned short portNumber, char const *socketPath, unsigned int connectionType)
 {
     if (NULL == DcgmHostEngineHandler::Instance())
     {
         return DCGM_ST_UNINITIALIZED;
     }
 
-    return (dcgmReturn_t)DcgmHostEngineHandler::Instance()->RunServer(portNumber, socketPath, isConnectionTCP);
+    return DcgmHostEngineHandler::Instance()->RunServer(
+        portNumber, socketPath, static_cast<dcgmConnectionType_t>(connectionType));
 }
 
 static dcgmReturn_t tsapiEngineGroupAddDevice(dcgmHandle_t pDcgmHandle, dcgmGpuGrp_t groupId, unsigned int gpuId)
@@ -4878,11 +4867,25 @@ static dcgmReturn_t tsapiEngineGetDeviceTopology(dcgmHandle_t pDcgmHandle,
         }
     }
 
-    if (!found) // the gpuId was illegal as ALL GPUs should have some affinity
+    if (!found) // the gpuId was illegal or detached as ALL GPUs should have some affinity
     {
-        DCGM_LOG_WARNING << "No GPU topology found for gpuId " << gpuId << " leaving blank.";
+        std::array<unsigned int, DCGM_MAX_NUM_DEVICES> gpuIds = { 0 };
+        int count                                             = 0;
+        auto ret = tsapiEngineGetAllDevices(pDcgmHandle, gpuIds.data(), &count);
+        if (ret != DCGM_ST_OK)
+        {
+            log_error("Failed to get all devices, ret: {}", ret);
+            return ret;
+        }
+        bool knownGpuId = std::find(gpuIds.begin(), gpuIds.end(), gpuId) != gpuIds.end();
+        // tsapiEngineGetAllDevices will return all GPUs, i.e., includes detached GPUs. If queried GPU is not in the
+        // list, it means it is a bad parameter. Otherwise, it is a valid GPU but detached.
+        if (!knownGpuId)
+        {
+            return DCGM_ST_BADPARAM;
+        }
+        return DCGM_ST_GPU_IS_LOST;
     }
-
     return ret;
 }
 
@@ -6030,7 +6033,7 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmConnect(const char *ipAddress, dcgmHandle_t *pD
 }
 
 /*****************************************************************************/
-dcgmReturn_t cmSendClientLogin(dcgmHandle_t dcgmHandle, dcgmConnectV2Params_t *connectParams)
+dcgmReturn_t cmSendClientLogin(dcgmHandle_t dcgmHandle, dcgmConnectV3Params_t *connectParams)
 {
     if (!connectParams)
         return DCGM_ST_BADPARAM;
@@ -6056,7 +6059,7 @@ dcgmReturn_t cmSendClientLogin(dcgmHandle_t dcgmHandle, dcgmConnectV2Params_t *c
 }
 
 /*****************************************************************************/
-dcgmReturn_t sendClientLogin(dcgmHandle_t dcgmHandle, dcgmConnectV2Params_t *connectParams)
+dcgmReturn_t sendClientLogin(dcgmHandle_t dcgmHandle, dcgmConnectV3Params_t *connectParams)
 {
     dcgmReturn_t ret;
 
@@ -6105,8 +6108,17 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmConnect_v2(const char *ipAddress,
     }
 
     /* Add connection to the client handler */
-    dcgmReturn_t status = clientHandler->GetConnHandleForHostEngine(
-        ipAddress, pDcgmHandle, connectParams->timeoutMs, connectParams->addressIsUnixSocket ? true : false);
+    std::string connectionString;
+    if (connectParams->addressIsUnixSocket)
+    {
+        connectionString = "unix://" + std::string(ipAddress);
+    }
+    else
+    {
+        connectionString = "tcp://" + std::string(ipAddress);
+    }
+    dcgmReturn_t status
+        = clientHandler->GetConnHandleForHostEngine(connectionString.c_str(), pDcgmHandle, connectParams->timeoutMs);
     dcgmapiReleaseClientHandler();
     if (DCGM_ST_OK != status)
     {
@@ -6115,6 +6127,63 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmConnect_v2(const char *ipAddress,
     }
 
     log_debug("Connected to ip {} as dcgmHandle {}", ipAddress, (void *)*pDcgmHandle);
+
+    /* Send our connection options to the host engine */
+    dcgmConnectV3Params_v1 paramsv3Copy { .version                = dcgmConnectV3Params_version,
+                                          .persistAfterDisconnect = connectParams->persistAfterDisconnect,
+                                          .timeoutMs              = connectParams->timeoutMs };
+    dcgmReturn = sendClientLogin(*pDcgmHandle, &paramsv3Copy);
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        /* Abandon the connection if we can't login */
+        log_error("Got error {} from sendClientLogin on connection {}. Abandoning connection.",
+                  (int)dcgmReturn,
+                  (void *)*pDcgmHandle);
+        return dcgmDisconnect(*pDcgmHandle);
+    }
+
+    return dcgmReturn;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DCGM_PUBLIC_API dcgmConnect_v3(const char *connectionString,
+                                            dcgmConnectV3Params_t *connectParams,
+                                            dcgmHandle_t *pDcgmHandle)
+{
+    dcgmReturn_t dcgmReturn;
+
+    if (!connectionString || !connectionString[0] || !pDcgmHandle || !connectParams)
+        return DCGM_ST_BADPARAM;
+    if (!g_dcgmGlobals.isInitialized)
+    {
+        log_error("dcgmConnect before dcgmInit()");
+        return DCGM_ST_UNINITIALIZED;
+    }
+
+    if (connectParams->version != dcgmConnectV3Params_version)
+    {
+        log_error("dcgmConnect_v3 Version mismatch {:X} != {:X}", connectParams->version, dcgmConnectV3Params_version);
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    DcgmClientHandler *clientHandler = dcgmapiAcquireClientHandler(true);
+    if (!clientHandler)
+    {
+        log_error("Unable to allocate client handler");
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    /* Add connection to the client handler */
+    dcgmReturn_t status
+        = clientHandler->GetConnHandleForHostEngine(connectionString, pDcgmHandle, connectParams->timeoutMs);
+    dcgmapiReleaseClientHandler();
+    if (DCGM_ST_OK != status)
+    {
+        log_error("GetConnHandleForHostEngine address {} returned {}", connectionString, (int)status);
+        return status;
+    }
+
+    log_debug("Connected to address {} as dcgmHandle {}", connectionString, (void *)*pDcgmHandle);
 
     /* Send our connection options to the host engine */
     dcgmReturn = sendClientLogin(*pDcgmHandle, connectParams);
@@ -6415,6 +6484,90 @@ dcgmReturn_t DCGM_PUBLIC_API tsapiDiagSendHeartbeat(dcgmHandle_t pDcgmHandle)
     msg.header.version    = dcgm_core_msg_diag_send_heartbeat_version;
 
     return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+}
+
+dcgmReturn_t DCGM_PUBLIC_API tsapiAttachDriver(dcgmHandle_t pDcgmHandle)
+{
+    dcgm_core_msg_attach_driver_t msg {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_ATTACH_DRIVER;
+    msg.header.version    = dcgm_core_msg_attach_driver_version;
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+}
+
+dcgmReturn_t DCGM_PUBLIC_API tsapiDetachDriver(dcgmHandle_t pDcgmHandle)
+{
+    dcgm_core_msg_detach_driver_t msg {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_DETACH_DRIVER;
+    msg.header.version    = dcgm_core_msg_detach_driver_version;
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+}
+
+dcgmReturn_t tsapiEmptyCache(dcgmHandle_t dcgmHandle)
+{
+    dcgm_core_msg_empty_cache_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_EMPTY_CACHE;
+    msg.header.version    = dcgm_core_msg_empty_cache_version;
+
+    msg.ec.version = dcgmMsgEmptyCache_version;
+
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        log_debug("dcgmModuleSendBlockingFixedRequest returned {}", (int)ret);
+        return ret;
+    }
+
+    return (dcgmReturn_t)msg.ec.cmdRet;
+}
+
+dcgmReturn_t tsapiMarkModulesReloadable(dcgmHandle_t dcgmHandle, dcgmModulesReloadable_v1 *info)
+{
+    if (!info)
+        return DCGM_ST_BADPARAM;
+
+    if (info->version != dcgmModulesReloadable_version)
+    {
+        log_error(
+            "dcgmMarkModulesReloadable_v1 Version mismatch {:X} != {:X}", info->version, dcgmModulesReloadable_version);
+
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    dcgm_core_msg_modules_reloadable_t msg = {};
+
+    msg.header.length     = sizeof(msg);
+    msg.header.moduleId   = DcgmModuleIdCore;
+    msg.header.subCommand = DCGM_CORE_SR_MARK_MODULES_RELOADABLE;
+    msg.header.version    = dcgm_core_msg_modules_reloadable_version;
+
+    msg.info.moduleMask = info->moduleMask;
+    msg.info.cmdRet     = DCGM_ST_OK;
+
+    dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
+
+    if (DCGM_ST_OK != ret)
+    {
+        DCGM_LOG_ERROR << "dcgmModuleSendBlockingFixedRequest returned " << ret;
+        return ret;
+    }
+
+    DCGM_LOG_DEBUG << "tsapiMarkModulesReloadable returned " << (dcgmReturn_t)msg.info.cmdRet;
+
+    info->moduleMask = msg.info.moduleMask;
+
+    return (dcgmReturn_t)msg.info.cmdRet;
 }
 
 /*****************************************************************************/

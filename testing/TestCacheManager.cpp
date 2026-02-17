@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,15 @@
 #include "TestCacheManager.h"
 #include "DcgmCacheManager.h"
 #include "DcgmTopology.hpp"
+#include "NvmlTaskRunner.hpp"
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
+#include <algorithm>
 #include <bitset>
 #include <chrono>
 #include <iostream>
+#include <latch>
+#include <random>
 #include <ranges>
 #include <stdexcept>
 #include <string>
@@ -30,6 +34,815 @@
 
 using namespace std::chrono_literals;
 using namespace DcgmNs::Utils;
+
+namespace
+{
+
+thread_local std::mt19937 rng(std::random_device {}());
+
+template <typename T>
+std::vector<T> PickN(std::vector<T> const &container, int pickSize)
+{
+    std::vector<T> output;
+    output.reserve(pickSize);
+    std::ranges::sample(container, std::back_inserter(output), pickSize, rng);
+    return output;
+}
+
+static void migCallback(unsigned int /* gpuId */, void * /* userData */)
+{
+    // Do nothing
+}
+
+void SubscribeForEvent(DcgmCacheManager &cacheManager)
+{
+    dcgmcmEventSubscription_t mig = {};
+    mig.type                      = DcgmcmEventTypeMigReconfigure;
+    mig.fn.migCb                  = migCallback;
+    mig.userData                  = nullptr;
+    cacheManager.SubscribeForEvent(mig);
+}
+
+void GetAllGpuInfo(DcgmCacheManager &cacheManager)
+{
+    std::vector<dcgmcm_gpu_info_cached_t> gpuInfo;
+    cacheManager.GetAllGpuInfo(gpuInfo);
+}
+
+void GetGpuCount(DcgmCacheManager &cacheManager)
+{
+    int activeOnly = 0;
+    cacheManager.GetGpuCount(activeOnly);
+    activeOnly = 1;
+    cacheManager.GetGpuCount(activeOnly);
+}
+
+void GetGpuIds(DcgmCacheManager &cacheManager)
+{
+    std::vector<unsigned int> gpuIds;
+    int activeOnly = 1;
+    cacheManager.GetGpuIds(activeOnly, gpuIds);
+    gpuIds.clear();
+    activeOnly = 0;
+    cacheManager.GetGpuIds(activeOnly, gpuIds);
+}
+
+void GetWorkloadPowerProfilesInfo(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    dcgmWorkloadPowerProfileProfilesInfo_v1 profilesInfo;
+    dcgmDeviceWorkloadPowerProfilesStatus_v1 profilesStatus;
+    for (auto const &entity : entities)
+    {
+        cacheManager.GetWorkloadPowerProfilesInfo(entity.entityId, &profilesInfo, &profilesStatus);
+    }
+}
+
+void GetAllEntitiesOfEntityGroup(DcgmCacheManager &cacheManager)
+{
+    std::vector<dcgmGroupEntityPair_t> entities;
+    cacheManager.GetAllEntitiesOfEntityGroup(0, DCGM_FE_GPU, entities);
+    cacheManager.GetAllEntitiesOfEntityGroup(1, DCGM_FE_GPU, entities);
+}
+
+void GetEntityStatus(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.GetEntityStatus(entity.entityGroupId, entity.entityId);
+    }
+}
+
+void GetGpuStatus(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.GetGpuStatus(entity.entityId);
+    }
+}
+
+void GetGpuBrand(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.GetGpuBrand(entity.entityId);
+    }
+}
+
+void GetGpuArch(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        dcgmChipArchitecture_t arch;
+        cacheManager.GetGpuArch(entity.entityId, arch);
+    }
+}
+
+void GetGpuExcludeList(DcgmCacheManager &cacheManager)
+{
+    std::vector<nvmlExcludedDeviceInfo_t> excludeList;
+    cacheManager.GetGpuExcludeList(excludeList);
+}
+
+// We must call pause and resume in the same function to have the state back to normal after this function returns.
+void PauseResume(DcgmCacheManager &cacheManager)
+{
+    cacheManager.Pause();
+    cacheManager.Resume();
+}
+
+void AddFieldWatch(DcgmCacheManager &cacheManager,
+                   std::vector<dcgmGroupEntityPair_t> const &entities,
+                   std::vector<unsigned short> const &fieldIds,
+                   DcgmWatcher watcher)
+{
+    for (auto const &entity : entities)
+    {
+        for (auto const &fieldId : fieldIds)
+        {
+            bool wereFirstWatcher = false;
+            timelib64_t interval  = rng() % 1000000 + 1000000;
+            double maxAge         = rng() % 86400 + 86400;
+            int maxKeepSamples    = rng() % 16 + 16;
+
+            auto fieldMeta = DcgmFieldGetById(fieldId);
+            if (!fieldMeta)
+            {
+                continue;
+            }
+            auto entityGroupId = entity.entityGroupId;
+            auto entityId      = entity.entityId;
+            if (fieldMeta->scope == DCGM_FS_GLOBAL)
+            {
+                entityGroupId = DCGM_FE_NONE;
+                entityId      = 0;
+            }
+            cacheManager.AddFieldWatch(entityGroupId,
+                                       entityId,
+                                       fieldId,
+                                       interval,
+                                       maxAge,
+                                       maxKeepSamples,
+                                       watcher,
+                                       false,
+                                       false,
+                                       wereFirstWatcher);
+        }
+    }
+}
+
+void EmptyCache(DcgmCacheManager &cacheManager,
+                std::vector<dcgmGroupEntityPair_t> const &entities,
+                std::vector<unsigned short> const &fieldIds,
+                DcgmWatcher watcher)
+{
+    cacheManager.EmptyCache();
+    AddFieldWatch(cacheManager, entities, fieldIds, watcher);
+}
+
+void UpdateFieldWatch(DcgmCacheManager &cacheManager,
+                      std::vector<dcgmGroupEntityPair_t> const &entities,
+                      std::vector<unsigned short> const &fieldIds,
+                      DcgmWatcher watcher)
+{
+    for (auto const &entity : entities)
+    {
+        for (auto const &fieldId : fieldIds)
+        {
+            timelib64_t interval = rng() % 1000000 + 1000000;
+            double maxAge        = rng() % 86400 + 86400;
+            int maxKeepSamples   = rng() % 16 + 16;
+            dcgmcm_watch_info_p watchInfo;
+            auto fieldMeta = DcgmFieldGetById(fieldId);
+            if (!fieldMeta)
+            {
+                continue;
+            }
+            if (fieldMeta->scope == DCGM_FS_GLOBAL)
+            {
+                watchInfo = cacheManager.GetGlobalWatchInfo(fieldId, 0);
+            }
+            else
+            {
+                watchInfo = cacheManager.GetEntityWatchInfo(entity.entityGroupId, entity.entityId, fieldId, 0);
+            }
+
+            if (!watchInfo)
+            {
+                continue;
+            }
+            cacheManager.UpdateFieldWatch(watchInfo, interval, maxAge, maxKeepSamples, watcher);
+        }
+    }
+}
+
+void RemoveFieldWatch(DcgmCacheManager &cacheManager,
+                      std::vector<dcgmGroupEntityPair_t> const &entities,
+                      std::vector<unsigned short> const &fieldIds,
+                      DcgmWatcher watcher)
+{
+    for (auto const &entity : entities)
+    {
+        for (auto const &fieldId : fieldIds)
+        {
+            timelib64_t interval  = rng() % 1000000 + 1000000;
+            double maxAge         = rng() % 86400 + 86400;
+            int maxKeepSamples    = rng() % 16 + 16;
+            int clearCache        = rng() % 2;
+            bool wereFirstWatcher = false;
+
+            auto fieldMeta = DcgmFieldGetById(fieldId);
+            if (!fieldMeta)
+            {
+                continue;
+            }
+            auto entityGroupId = entity.entityGroupId;
+            auto entityId      = entity.entityId;
+            if (fieldMeta->scope == DCGM_FS_GLOBAL)
+            {
+                entityGroupId = DCGM_FE_NONE;
+                entityId      = 0;
+            }
+            cacheManager.RemoveFieldWatch(entityGroupId, entityId, fieldId, clearCache, watcher);
+            // Add back the watch so that the watch state is back to normal after this function returns.
+            cacheManager.AddFieldWatch(entityGroupId,
+                                       entityId,
+                                       fieldId,
+                                       interval,
+                                       maxAge,
+                                       maxKeepSamples,
+                                       watcher,
+                                       false,
+                                       false,
+                                       wereFirstWatcher);
+        }
+    }
+}
+
+void GetLatestProcessInfo(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    dcgmDevicePidAccountingStats_t pidInfo;
+    for (auto const &entity : entities)
+    {
+        int pid = 1234;
+        cacheManager.GetLatestProcessInfo(entity.entityId, pid, &pidInfo);
+    }
+}
+
+void GetUniquePidLists(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    dcgmProcessUtilInfo_t computePidInfo[DCGM_MAX_PID_INFO_NUM];
+    unsigned int otherGraphicsPids[DCGM_MAX_PID_INFO_NUM];
+    for (auto const &entity : entities)
+    {
+        for (auto field : { DCGM_FI_DEV_GRAPHICS_PIDS, DCGM_FI_DEV_COMPUTE_PIDS })
+        {
+            unsigned int numPids = DCGM_MAX_PID_INFO_NUM;
+            cacheManager.GetUniquePidLists(
+                entity.entityGroupId, entity.entityId, field, 0, computePidInfo, &numPids, 0, 1234);
+            numPids = DCGM_MAX_PID_INFO_NUM;
+            cacheManager.GetUniquePidLists(
+                entity.entityGroupId, entity.entityId, field, 0, otherGraphicsPids, &numPids, 0, 5678);
+        }
+    }
+}
+
+void GetUniquePidUtilLists(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    dcgmProcessUtilSample_t smUtil[DCGM_MAX_PID_INFO_NUM];
+
+    for (auto const &entity : entities)
+    {
+        for (auto field : { DCGM_FI_DEV_GPU_UTIL_SAMPLES, DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES })
+        {
+            unsigned int numUniqueSmSamples = DCGM_MAX_PID_INFO_NUM;
+            cacheManager.GetUniquePidUtilLists(
+                entity.entityGroupId, entity.entityId, field, 0, smUtil, &numUniqueSmSamples, 0, 1234);
+        }
+    }
+}
+
+void GetInt64SummaryData(DcgmCacheManager &cacheManager,
+                         std::vector<dcgmGroupEntityPair_t> const &entities,
+                         std::vector<unsigned short> const &fieldIds)
+{
+    int numSummaryTypes = DcgmcmSummaryTypeSize;
+    DcgmcmSummaryType_t summaryTypes[DcgmcmSummaryTypeSize];
+    for (int i = 0; i < DcgmcmSummaryTypeSize; i++)
+    {
+        summaryTypes[i] = static_cast<DcgmcmSummaryType_t>(i);
+    }
+    long long summaryValues[DcgmcmSummaryTypeSize];
+    for (auto const &entity : entities)
+    {
+        for (auto field : fieldIds)
+        {
+            cacheManager.GetInt64SummaryData(entity.entityGroupId,
+                                             entity.entityId,
+                                             field,
+                                             numSummaryTypes,
+                                             summaryTypes,
+                                             summaryValues,
+                                             0,
+                                             0,
+                                             nullptr,
+                                             nullptr);
+        }
+    }
+}
+
+void GetFp64SummaryData(DcgmCacheManager &cacheManager,
+                        std::vector<dcgmGroupEntityPair_t> const &entities,
+                        std::vector<unsigned short> const &fieldIds)
+{
+    int numSummaryTypes = DcgmcmSummaryTypeSize;
+    DcgmcmSummaryType_t summaryTypes[DcgmcmSummaryTypeSize];
+    for (int i = 0; i < DcgmcmSummaryTypeSize; i++)
+    {
+        summaryTypes[i] = static_cast<DcgmcmSummaryType_t>(i);
+    }
+    double summaryValues[DcgmcmSummaryTypeSize];
+    for (auto const &entity : entities)
+    {
+        for (auto field : fieldIds)
+        {
+            cacheManager.GetFp64SummaryData(entity.entityGroupId,
+                                            entity.entityId,
+                                            field,
+                                            numSummaryTypes,
+                                            summaryTypes,
+                                            summaryValues,
+                                            0,
+                                            0,
+                                            nullptr,
+                                            nullptr);
+        }
+    }
+}
+
+void GetSamples(DcgmCacheManager &cacheManager,
+                std::vector<dcgmGroupEntityPair_t> const &entities,
+                std::vector<unsigned short> const &fieldIds)
+{
+    DcgmFvBuffer fvBuffer;
+    dcgmcm_sample_t samples[1024] {};
+    int numSamples = 1024;
+    for (auto const &entity : entities)
+    {
+        for (auto field : fieldIds)
+        {
+            numSamples = 1024;
+            cacheManager.GetSamples(entity.entityGroupId,
+                                    entity.entityId,
+                                    field,
+                                    samples,
+                                    &numSamples,
+                                    0,
+                                    0,
+                                    DCGM_ORDER_ASCENDING,
+                                    nullptr);
+            cacheManager.FreeSamples(samples, numSamples, field);
+            numSamples = 1024;
+            cacheManager.GetSamples(entity.entityGroupId,
+                                    entity.entityId,
+                                    field,
+                                    nullptr,
+                                    &numSamples,
+                                    0,
+                                    0,
+                                    DCGM_ORDER_DESCENDING,
+                                    &fvBuffer);
+        }
+    }
+}
+
+void GetLatestSample(DcgmCacheManager &cacheManager,
+                     std::vector<dcgmGroupEntityPair_t> const &entities,
+                     std::vector<unsigned short> const &fieldIds)
+{
+    for (auto const &entity : entities)
+    {
+        for (auto field : fieldIds)
+        {
+            dcgmcm_sample_t sample {};
+            DcgmFvBuffer fvBuffer;
+
+            cacheManager.GetLatestSample(entity.entityGroupId, entity.entityId, field, &sample, nullptr);
+            cacheManager.FreeSamples(&sample, 1, field);
+            cacheManager.GetLatestSample(entity.entityGroupId, entity.entityId, field, nullptr, &fvBuffer);
+        }
+    }
+}
+
+void GetMultipleLatestSamples(DcgmCacheManager &cacheManager,
+                              std::vector<dcgmGroupEntityPair_t> &entities,
+                              std::vector<unsigned short> &fieldIds)
+{
+    DcgmFvBuffer fvBuffer;
+    cacheManager.GetMultipleLatestSamples(entities, fieldIds, &fvBuffer);
+}
+
+void AppendSamples(DcgmCacheManager &cacheManager,
+                   std::vector<dcgmGroupEntityPair_t> &entities,
+                   std::vector<unsigned short> &fieldIds)
+{
+    for (auto const &entity : entities)
+    {
+        for (auto field : fieldIds)
+        {
+            DcgmFvBuffer fvBuffer;
+            auto fieldMeta = DcgmFieldGetById(field);
+            if (!fieldMeta)
+            {
+                continue;
+            }
+            if (fieldMeta->fieldType == DCGM_FT_INT64)
+            {
+                fvBuffer.AddInt64Value(
+                    entity.entityGroupId, entity.entityId, field, 0xc8763, timelib_usecSince1970(), DCGM_ST_OK);
+            }
+            else if (fieldMeta->fieldType == DCGM_FT_DOUBLE)
+            {
+                fvBuffer.AddDoubleValue(
+                    entity.entityGroupId, entity.entityId, field, 0xc8763, timelib_usecSince1970(), DCGM_ST_OK);
+            }
+            else if (fieldMeta->fieldType == DCGM_FT_STRING)
+            {
+                fvBuffer.AddStringValue(
+                    entity.entityGroupId, entity.entityId, field, "test", timelib_usecSince1970(), DCGM_ST_OK);
+            }
+            else if (fieldMeta->fieldType == DCGM_FT_TIMESTAMP)
+            {
+                fvBuffer.AddInt64Value(entity.entityGroupId,
+                                       entity.entityId,
+                                       field,
+                                       timelib_usecSince1970(),
+                                       timelib_usecSince1970(),
+                                       DCGM_ST_OK);
+            }
+            cacheManager.AppendSamples(&fvBuffer);
+        }
+    }
+}
+
+void GetCacheManagerFieldInfo(DcgmCacheManager &cacheManager, std::vector<unsigned short> const &fieldIds)
+{
+    for (auto const &fieldId : fieldIds)
+    {
+        dcgmCacheManagerFieldInfo_v4_t fieldInfo;
+        fieldInfo.version = dcgmCacheManagerFieldInfo_version4;
+        fieldInfo.fieldId = fieldId;
+        cacheManager.GetCacheManagerFieldInfo(&fieldInfo);
+    }
+}
+
+void PopulateNvLinkLinkStatus(DcgmCacheManager &cacheManager)
+{
+    dcgmNvLinkStatus_v4 nvLinkStatus {};
+    cacheManager.PopulateNvLinkLinkStatus(nvLinkStatus);
+}
+
+void PopulateMigHierarchy(DcgmCacheManager &cacheManager)
+{
+    dcgmMigHierarchy_v2 migHierarchy {};
+    cacheManager.PopulateMigHierarchy(migHierarchy);
+}
+
+void GetEntityNvLinkLinkStatus(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        dcgmNvLinkLinkState_t linkStates[DCGM_NVLINK_MAX_LINKS_PER_GPU];
+        cacheManager.GetEntityNvLinkLinkStatus(entity.entityGroupId, entity.entityId, linkStates);
+    }
+}
+
+void GpuIdToNvmlIndex(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.GpuIdToNvmlIndex(entity.entityId);
+    }
+}
+
+void NvmlIndexToGpuId(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.NvmlIndexToGpuId(entity.entityId);
+    }
+}
+
+void IsGpuAllowlisted(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.IsGpuAllowlisted(entity.entityId);
+    }
+}
+
+void GetIsValidEntityId(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.GetIsValidEntityId(entity.entityGroupId, entity.entityId);
+    }
+}
+
+void SetGpuNvLinkLinkState(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        for (int i = 0; i < DCGM_NVLINK_MAX_LINKS_PER_GPU; i++)
+        {
+            cacheManager.SetGpuNvLinkLinkState(entity.entityId, i, DcgmNvLinkLinkStateUp);
+        }
+    }
+}
+
+void SetEntityNvLinkLinkState(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        for (int i = 0; i < DCGM_NVLINK_MAX_LINKS_PER_GPU; i++)
+        {
+            cacheManager.SetEntityNvLinkLinkState(entity.entityGroupId, entity.entityId, i, DcgmNvLinkLinkStateUp);
+        }
+    }
+}
+
+void AreAllGpuIdsSameSku(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    std::vector<unsigned int> gpuIds;
+    for (auto const &entity : entities)
+    {
+        gpuIds.push_back(entity.entityId);
+    }
+    cacheManager.AreAllGpuIdsSameSku(gpuIds);
+}
+
+void GetRuntimeStats(DcgmCacheManager &cacheManager)
+{
+    dcgmcm_runtime_stats_t stats;
+    cacheManager.GetRuntimeStats(&stats);
+}
+
+void SelectGpusByTopology(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    std::vector<unsigned int> gpuIds;
+    for (auto const &entity : entities)
+    {
+        gpuIds.push_back(entity.entityId);
+    }
+    uint64_t outputGpus = 0;
+    cacheManager.SelectGpusByTopology(gpuIds, gpuIds.size(), outputGpus);
+}
+
+void OnConnectionRemove(DcgmCacheManager &cacheManager,
+                        std::vector<dcgmGroupEntityPair_t> &entities,
+                        std::vector<unsigned short> &fieldIds)
+{
+    dcgm_connection_id_t connectionId = rng() % 0xc8763 + 1;
+    DcgmWatcher watcher(DcgmWatcherTypeClient, connectionId);
+
+    for (auto const &entity : entities)
+    {
+        for (auto const &fieldId : fieldIds)
+        {
+            bool wereFirstWatcher = false;
+            auto fieldMeta        = DcgmFieldGetById(fieldId);
+            if (!fieldMeta)
+            {
+                continue;
+            }
+            auto entityGroupId = entity.entityGroupId;
+            auto entityId      = entity.entityId;
+            if (fieldMeta->scope == DCGM_FS_GLOBAL)
+            {
+                entityGroupId = DCGM_FE_NONE;
+                entityId      = 0;
+            }
+            cacheManager.AddFieldWatch(
+                entityGroupId, entityId, fieldId, 1000000, 86400, 0, watcher, false, false, wereFirstWatcher);
+        }
+    }
+    cacheManager.OnConnectionRemove(connectionId);
+}
+
+void GetComputeInstanceEntityId(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+{
+    for (unsigned int i = 0; i < migHierarchy.count; i++)
+    {
+        cacheManager.GetComputeInstanceEntityId(
+            migHierarchy.entityList[i].entity.entityId,
+            DcgmNs::Mig::Nvml::ComputeInstanceId { migHierarchy.entityList[i].info.nvmlComputeInstanceId },
+            DcgmNs::Mig::Nvml::GpuInstanceId { migHierarchy.entityList[i].info.nvmlInstanceId });
+    }
+}
+
+void GetInstanceEntityId(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+{
+    for (unsigned int i = 0; i < migHierarchy.count; i++)
+    {
+        cacheManager.GetInstanceEntityId(
+            migHierarchy.entityList[i].entity.entityId,
+            DcgmNs::Mig::Nvml::GpuInstanceId { migHierarchy.entityList[i].info.nvmlInstanceId });
+    }
+}
+
+void GetInstanceProfile(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+{
+    for (unsigned int i = 0; i < migHierarchy.count; i++)
+    {
+        cacheManager.GetInstanceProfile(
+            migHierarchy.entityList[i].entity.entityId,
+            DcgmNs::Mig::Nvml::GpuInstanceId { migHierarchy.entityList[i].info.nvmlInstanceId });
+    }
+}
+
+void GetMigGpuPopulation(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        size_t capacityGpcs;
+        size_t usedGpcs;
+        cacheManager.GetMigGpuPopulation(entity.entityId, &capacityGpcs, &usedGpcs);
+    }
+}
+
+void GetMigInstancePopulation(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+{
+    for (unsigned int i = 0; i < migHierarchy.count; i++)
+    {
+        size_t capacityGpcs;
+        size_t usedGpcs;
+        cacheManager.GetMigInstancePopulation(
+            migHierarchy.entityList[i].entity.entityId,
+            DcgmNs::Mig::Nvml::GpuInstanceId { migHierarchy.entityList[i].info.nvmlInstanceId },
+            &capacityGpcs,
+            &usedGpcs);
+    }
+}
+
+void GetMigComputeInstancePopulation(DcgmCacheManager &cacheManager, dcgmMigHierarchy_v2 &migHierarchy)
+{
+    for (unsigned int i = 0; i < migHierarchy.count; i++)
+    {
+        size_t capacityGpcs;
+        size_t usedGpcs;
+        cacheManager.GetMigComputeInstancePopulation(
+            migHierarchy.entityList[i].entity.entityId,
+            DcgmNs::Mig::Nvml::GpuInstanceId { migHierarchy.entityList[i].info.nvmlInstanceId },
+            DcgmNs::Mig::Nvml::ComputeInstanceId { migHierarchy.entityList[i].info.nvmlComputeInstanceId },
+            &capacityGpcs,
+            &usedGpcs);
+    }
+}
+
+void GetGpuIdForEntity(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.GetGpuIdForEntity(entity.entityGroupId, entity.entityId);
+    }
+}
+
+void GetMigIndicesForEntity(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        unsigned int gpuId;
+        DcgmNs::Mig::GpuInstanceId instanceId;
+        DcgmNs::Mig::ComputeInstanceId computeInstanceId;
+        cacheManager.GetMigIndicesForEntity(entity, &gpuId, &instanceId, &computeInstanceId);
+    }
+}
+
+void GetProfModuleServicedEntities(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    auto copiedEntities = entities;
+    cacheManager.GetProfModuleServicedEntities(copiedEntities);
+}
+
+void EntityPairSupportsGpm(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        cacheManager.EntityPairSupportsGpm(entity);
+    }
+}
+
+void EntityKeySupportsGpm(DcgmCacheManager &cacheManager,
+                          std::vector<dcgmGroupEntityPair_t> &entities,
+                          std::vector<unsigned short> &fieldIds)
+{
+    for (auto const &entity : entities)
+    {
+        for (auto field : fieldIds)
+        {
+            dcgm_entity_key_t entityKey;
+            entityKey.entityGroupId = entity.entityGroupId;
+            entityKey.entityId      = entity.entityId;
+            entityKey.fieldId       = field;
+            cacheManager.EntityKeySupportsGpm(entityKey);
+        }
+    }
+}
+
+void AppendEntity(DcgmCacheManager &cacheManager,
+                  std::vector<dcgmGroupEntityPair_t> &entities,
+                  std::vector<unsigned short> &fieldIds)
+{
+    for (auto const &entity : entities)
+    {
+        for (auto field : fieldIds)
+        {
+            auto fieldMeta = DcgmFieldGetById(field);
+            if (!fieldMeta)
+            {
+                continue;
+            }
+            dcgmcm_update_thread_t threadCtx;
+            DcgmFvBuffer fvBuffer;
+            threadCtx.entityKey.entityGroupId = entity.entityGroupId;
+            threadCtx.entityKey.entityId      = entity.entityId;
+            threadCtx.entityKey.fieldId       = field;
+            threadCtx.fvBuffer                = &fvBuffer;
+            if (fieldMeta->fieldType == DCGM_FT_INT64)
+            {
+                cacheManager.AppendEntityInt64(threadCtx, 0xc8763, 0, timelib_usecSince1970(), timelib_usecSince1970());
+            }
+            else if (fieldMeta->fieldType == DCGM_FT_DOUBLE)
+            {
+                cacheManager.AppendEntityDouble(
+                    threadCtx, 0xc8763, 0, timelib_usecSince1970(), timelib_usecSince1970());
+            }
+            else if (fieldMeta->fieldType == DCGM_FT_STRING)
+            {
+                cacheManager.AppendEntityString(threadCtx, "test", timelib_usecSince1970(), timelib_usecSince1970());
+            }
+            else if (fieldMeta->fieldType == DCGM_FT_BINARY)
+            {
+                cacheManager.AppendEntityBlob(
+                    threadCtx, (void *)"test", sizeof("test"), timelib_usecSince1970(), timelib_usecSince1970());
+            }
+        }
+    }
+}
+
+void FilterActiveEntities(DcgmCacheManager &cacheManager, std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    auto _ = cacheManager.FilterActiveEntities(entities);
+}
+
+void CreateAllNvlinksP2PStatus(DcgmCacheManager &cacheManager)
+{
+    dcgmNvLinkP2PStatus_t status;
+    status.numGpus = 0;
+    cacheManager.CreateAllNvlinksP2PStatus(status);
+}
+
+void GetDriverVersion(DcgmCacheManager &cacheManager)
+{
+    cacheManager.GetDriverVersion();
+}
+
+void GetCudaVersion(DcgmCacheManager &cacheManager)
+{
+    int cudaVersion;
+    cacheManager.GetCudaVersion(cudaVersion);
+}
+
+void ShouldSkipDriverCalls(DcgmCacheManager &cacheManager)
+{
+    cacheManager.ShouldSkipDriverCalls();
+}
+
+void AddMetaGroupWatchedField(DcgmCacheManager &cacheManager,
+                              std::vector<unsigned short> &fieldIds,
+                              DcgmWatcher &watcher)
+{
+    for (auto field : fieldIds)
+    {
+        cacheManager.AddMetaGroupWatchedField(DCGM_GROUP_ALL_GPUS, field, 1000000, 86400.0, 0, watcher);
+    }
+}
+void RemoveMetaGroupWatchedField(DcgmCacheManager &cacheManager,
+                                 std::vector<unsigned short> &fieldIds,
+                                 DcgmWatcher &watcher)
+{
+    for (auto field : fieldIds)
+    {
+        cacheManager.RemoveMetaGroupWatchedField(DCGM_GROUP_ALL_GPUS, field, watcher);
+    }
+}
+
+void RecordBindUnbindEvent(DcgmCacheManager &cacheManager)
+{
+    cacheManager.RecordBindUnbindEvent(DcgmBUEventStateSystemReinitializing);
+    cacheManager.RecordBindUnbindEvent(DcgmBUEventStateSystemReinitializationCompleted);
+}
+
+} //namespace
 
 /* No. of iterations corresponding to different sample set of vgpuIds */
 #define NUM_VGPU_LISTS              5
@@ -341,17 +1154,23 @@ CLEANUP:
  * This function must be deterministic
  *
  */
-static std::vector<nvmlVgpuInstance_t> gpuIdToVgpuList(unsigned int gpuId, int numVgpus)
+static std::vector<SafeVgpuInstance> gpuIdToVgpuList(unsigned int gpuId, int numVgpus)
 {
     int i;
-    std::vector<nvmlVgpuInstance_t> retList;
+    std::vector<SafeVgpuInstance> retList;
+    SafeVgpuInstance tmp;
+    tmp.vgpuInstance = numVgpus;
+    tmp.generation   = 0;
 
     /* When calling ManageVgpuList(), the first element contains the number of elements */
-    retList.push_back((unsigned int)numVgpus);
+    retList.push_back(tmp);
 
     for (i = 0; i < numVgpus; i++)
     {
-        retList.push_back((nvmlVgpuInstance_t)(gpuId * DCGM_MAX_VGPU_INSTANCES_PER_PGPU) + i);
+        SafeVgpuInstance vgpuInstance;
+        vgpuInstance.vgpuInstance = (gpuId * DCGM_MAX_VGPU_INSTANCES_PER_PGPU) + i;
+        vgpuInstance.generation   = 0;
+        retList.push_back(vgpuInstance);
     }
     return retList;
 }
@@ -466,7 +1285,7 @@ int TestCacheManager::TestWatchesVisited()
     {
         auto vgpuIds = gpuIdToVgpuList(gpuId, numVgpus);
 
-        int st = cacheManager->ManageVgpuList(gpuId, (unsigned int *)&vgpuIds[0]);
+        int st = cacheManager->ManageVgpuList(gpuId, vgpuIds.data());
         if (st)
         {
             fprintf(stderr, "cacheManager->ManageVgpuList failed with %d", (int)st);
@@ -515,7 +1334,7 @@ int TestCacheManager::TestWatchesVisited()
             for (auto vgpuIt = vgpuIds.begin() + 1; vgpuIt != vgpuIds.end(); ++vgpuIt)
             {
                 st = cacheManager->AddFieldWatch(fieldEntityGroup,
-                                                 *vgpuIt,
+                                                 vgpuIt->vgpuInstance,
                                                  validFieldIds[j],
                                                  watchFreq,
                                                  maxSampleAge,
@@ -575,7 +1394,8 @@ int TestCacheManager::TestWatchesVisited()
 
             for (auto const vgpuId : gpuIdToVgpuList(gpuId, numVgpus) | std::views::drop(1))
             {
-                st = cacheManager->GetEntityWatchInfoSnapshot(fieldEntityGroup, vgpuId, fieldId, &watchInfo);
+                st = cacheManager->GetEntityWatchInfoSnapshot(
+                    fieldEntityGroup, vgpuId.vgpuInstance, fieldId, &watchInfo);
                 if (st)
                 {
                     fprintf(stderr, "cacheManager->GetEntityWatchInfoSnapshot() returned %d\n", st);
@@ -584,14 +1404,22 @@ int TestCacheManager::TestWatchesVisited()
 
                 if (!watchInfo.isWatched)
                 {
-                    fprintf(stderr, "gpuId %u, vgpu %u, fieldId %u was not watched.\n", gpuId, vgpuId, fieldId);
+                    fprintf(stderr,
+                            "gpuId %u, vgpu %u, fieldId %u was not watched.\n",
+                            gpuId,
+                            vgpuId.vgpuInstance,
+                            fieldId);
                     retSt = 600;
                     continue;
                 }
 
                 if (!watchInfo.lastQueriedUsec)
                 {
-                    fprintf(stderr, "gpuId %u, vgpu %u, fieldId %u has never updated.\n", gpuId, vgpuId, fieldId);
+                    fprintf(stderr,
+                            "gpuId %u, vgpu %u, fieldId %u has never updated.\n",
+                            gpuId,
+                            vgpuId.vgpuInstance,
+                            fieldId);
                     retSt = 700;
                     continue;
                 }
@@ -628,7 +1456,13 @@ int TestCacheManager::TestManageVgpuList()
     for (int i = 0; i < NUM_VGPU_LISTS; i++)
     {
         /* First element of vgpuIds array must hold the vgpuCount */
-        st = cacheManager->ManageVgpuList(gpuId, (nvmlVgpuInstance_t *)(vgpuIds + i));
+        std::vector<SafeVgpuInstance> vgpuInstances(TEST_MAX_NUM_VGPUS_PER_GPU);
+        for (int j = 0; j < TEST_MAX_NUM_VGPUS_PER_GPU; j++)
+        {
+            vgpuInstances[j].vgpuInstance = vgpuIds[i][j];
+            vgpuInstances[j].generation   = 0;
+        }
+        st = cacheManager->ManageVgpuList(gpuId, vgpuInstances.data());
         /* DCGM_ST_GENERIC_ERROR returned from cacheManager when Vgpu list for this GPU does not matches with given
          * sample set of vgpuIds. */
         if (st != DCGM_ST_OK)
@@ -1673,350 +2507,6 @@ int TestCacheManager::TestUpdatePerf()
 }
 
 /*****************************************************************************/
-int TestCacheManager::TestSimulatedAttachDetach()
-{
-    DcgmCacheManager dcm;
-    std::array<dcgmcm_gpu_info_t, DCGM_MAX_NUM_DEVICES> detected {};
-
-    for (int i = 0; i < 8; i++)
-    {
-        detected[i].status    = DcgmEntityStatusOk;
-        detected[i].gpuId     = i;
-        detected[i].nvmlIndex = i;
-        snprintf(detected[i].uuid, sizeof(detected[i].uuid), "nighteyes%d", i);
-    }
-
-    // Add the 8 GPUs to our cache manager
-    dcm.MergeNewlyDetectedGpuList(detected.data(), 8);
-
-    // Make sure they are all found
-    for (int i = 0; i < 8; i++)
-    {
-        if (dcm.GetGpuStatus(i) != DcgmEntityStatusOk)
-        {
-            fprintf(stderr, "TestSimulatedAttachDetach() GPU %d in a bad state after attaching.\n", i);
-            return 100;
-        }
-
-        int nvmlIndex = dcm.GpuIdToNvmlIndex(i);
-        if (nvmlIndex != i)
-        {
-            fprintf(
-                stderr, "TestSimulatedAttachDetach() GPU %d expected nvmlIndex %d, but found %d\n", i, nvmlIndex, i);
-            return 100;
-        }
-    }
-
-    dcm.DetachGpus();
-
-    // Make sure they are no longer found
-    for (int i = 0; i < 8; i++)
-    {
-        if (dcm.GetGpuStatus(i) != DcgmEntityStatusDetached)
-        {
-            fprintf(stderr, "TestSimulatedAttachDetach() GPU %d not in detached state after detaching.\n", i);
-            return 100;
-        }
-    }
-
-    dcm.MergeNewlyDetectedGpuList(detected.data(), 4);
-    // Make sure the first 4 are found and the last 4 are not
-    for (int i = 0; i < 4; i++)
-    {
-        if (dcm.GetGpuStatus(i) != DcgmEntityStatusOk)
-        {
-            fprintf(stderr, "TestSimulatedAttachDetach() GPU %d in a bad state after attaching.\n", i);
-            return 100;
-        }
-
-        int nvmlIndex = dcm.GpuIdToNvmlIndex(i);
-        if (nvmlIndex != i)
-        {
-            fprintf(
-                stderr, "TestSimulatedAttachDetach() GPU %d expected nvmlIndex %d, but found %d\n", i, nvmlIndex, i);
-            return 100;
-        }
-
-        if (dcm.GetGpuStatus(i + 4) != DcgmEntityStatusDetached)
-        {
-            fprintf(stderr, "TestSimulatedAttachDetach() GPU %d not in detached state after detaching.\n", i);
-            return 100;
-        }
-    }
-
-    // Add the 6th and 8th GPUs back and then check detection again
-    detected[5].nvmlIndex = 4;
-    detected[7].nvmlIndex = 5;
-    dcm.MergeNewlyDetectedGpuList(&detected[5], 1);
-    dcm.MergeNewlyDetectedGpuList(&detected[7], 1);
-    for (int i = 0; i < 4; i++)
-    {
-        if (dcm.GetGpuStatus(i) != DcgmEntityStatusOk)
-        {
-            fprintf(stderr, "TestSimulatedAttachDetach() GPU %d in a bad state after attaching.\n", i);
-            return 100;
-        }
-    }
-
-    int index = 4;
-    for (int i = 4; i < 8; i += 2)
-    {
-        if (dcm.GetGpuStatus(i + 1) != DcgmEntityStatusOk)
-        {
-            fprintf(stderr, "TestSimulatedAttachDetach() GPU %d in a bad state after attaching.\n", i + 1);
-            return 100;
-        }
-
-        int nvmlIndex = dcm.GpuIdToNvmlIndex(i + 1);
-        if (nvmlIndex != index)
-        {
-            fprintf(stderr,
-                    "TestSimulatedAttachDetach() GPU %d expected nvmlIndex %d, but found %d\n",
-                    i + 1,
-                    index,
-                    nvmlIndex);
-            return 100;
-        }
-        index++;
-
-        if (dcm.GetGpuStatus(i) != DcgmEntityStatusDetached)
-        {
-            fprintf(stderr, "TestSimulatedAttachDetach() GPU %d not in detached state after detaching.\n", i);
-            return 100;
-        }
-    }
-
-    return 0;
-}
-
-int AttachDetach(DcgmCacheManager &dcm, std::string &error)
-{
-    dcgmReturn_t ret;
-    int old_count = 0;
-    int count;
-    char buf[128];
-    timelib64_t start;
-    timelib64_t attach_diff      = 0;
-    timelib64_t detach_diff      = 0;
-    unsigned int nvmlDeviceCount = 0;
-    int numIterations            = 50;
-    double maxTestSecs           = 10.0;
-    int iteration;
-
-    for (iteration = 0; iteration < numIterations && attach_diff < maxTestSecs && detach_diff < maxTestSecs;
-         iteration++)
-    {
-        start = timelib_usecSince1970();
-        ret   = dcm.AttachGpus();
-        if (ret != DCGM_ST_OK)
-        {
-            snprintf(buf, sizeof(buf), "Error attaching to GPUs: %s.", errorString(ret));
-            error = buf;
-            return 100;
-        }
-        attach_diff += timelib_usecSince1970() - start;
-
-        count = dcm.GetGpuCount(1);
-        if (old_count == 0)
-            old_count = count;
-        else if (old_count != count)
-        {
-            snprintf(
-                buf, sizeof(buf), "Old GPU count was %d, but after attaching again new count is %d.", old_count, count);
-            error = buf;
-            return 100;
-        }
-
-        start = timelib_usecSince1970();
-        ret   = dcm.DetachGpus();
-        if (ret != DCGM_ST_OK)
-        {
-            snprintf(buf, sizeof(buf), "Error detaching from GPUs: %s.", errorString(ret));
-            error = buf;
-            return 100;
-        }
-        detach_diff += timelib_usecSince1970() - start;
-
-        count = dcm.GetGpuCount(1);
-        if (count != 0)
-        {
-            dcm.AttachGpus(); /* Don't leave NVML uninitialized. This will break later tests */
-            snprintf(buf, sizeof(buf), "After detaching, found %d GPUs instead of 0.", count);
-            error = buf;
-            return 100;
-        }
-
-        nvmlReturn_t nvmlSt = nvmlDeviceGetCount_v2(&nvmlDeviceCount);
-        if (nvmlSt != NVML_ERROR_UNINITIALIZED)
-        {
-            snprintf(buf,
-                     sizeof(buf),
-                     "Expected NVML_ERROR_UNINITIALIZED after nvmlShutdown(), but found %s",
-                     nvmlErrorString(nvmlSt));
-            return 100;
-        }
-    }
-
-    dcm.AttachGpus(); /* Don't leave NVML uninitialized. This will break later tests */
-
-    if (iteration > 0)
-    {
-        double attach_avg = attach_diff / (double)(iteration);
-        double detach_avg = detach_diff / (double)(iteration);
-        printf("Average duration in microseconds: AttachGpus() - %.2f DetachGpus() - %.2f\n", attach_avg, detach_avg);
-    }
-
-    return 0;
-}
-
-/*****************************************************************************/
-int TestCacheManager::TestAttachDetachNoWatches(void)
-{
-    DcgmCacheManager dcm;
-    std::string error;
-
-    // Must detach first so that nvmlInit_v2() is called
-    dcm.DetachGpus();
-    dcgmReturn_t ret = dcm.Init(1, 86400.0, true);
-    if (ret != DCGM_ST_OK)
-    {
-        fprintf(stderr, "TestAttachDetachNoWatches(): Error attaching to GPUs: %s.", errorString(ret));
-        return 100;
-    }
-
-    ret = dcm.DetachGpus();
-    if (ret != DCGM_ST_OK)
-    {
-        fprintf(stderr, "TestAttachDetachNoWatches(): Error detaching from GPUs: %s.", errorString(ret));
-        return 100;
-    }
-
-    int rc = AttachDetach(dcm, error);
-    if (rc != 0)
-        fprintf(stderr, "TestAttachDetachNoWatches(): %s\n", error.c_str());
-
-    return rc;
-}
-
-/*****************************************************************************/
-int TestCacheManager::TestAttachDetachWithWatches(void)
-{
-    DcgmCacheManager dcm;
-    std::string error;
-    dcgmReturn_t ret;
-    unsigned int nvmlDeviceCount = 0;
-
-    // Add watches for each GPU
-    unsigned short fieldIds[] = { DCGM_FI_DEV_XID_ERRORS,
-                                  DCGM_FI_DEV_POWER_VIOLATION,
-                                  DCGM_FI_DEV_THERMAL_VIOLATION,
-                                  DCGM_FI_DEV_SYNC_BOOST_VIOLATION,
-                                  DCGM_FI_DEV_BOARD_LIMIT_VIOLATION,
-                                  DCGM_FI_DEV_LOW_UTIL_VIOLATION,
-                                  DCGM_FI_DEV_RELIABILITY_VIOLATION,
-                                  DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION,
-                                  DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION,
-                                  DCGM_FI_DEV_FB_FREE,
-                                  DCGM_FI_DEV_FB_USED,
-                                  DCGM_FI_DEV_ECC_CURRENT,
-                                  DCGM_FI_DEV_ECC_PENDING,
-                                  DCGM_FI_DEV_ECC_SBE_VOL_TOTAL,
-                                  DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                  DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
-                                  DCGM_FI_DEV_ECC_DBE_AGG_TOTAL,
-                                  DCGM_FI_DEV_ECC_SBE_VOL_L1,
-                                  DCGM_FI_DEV_ECC_DBE_VOL_L1,
-                                  DCGM_FI_DEV_ECC_SBE_VOL_L2,
-                                  DCGM_FI_DEV_ECC_DBE_VOL_L2,
-                                  DCGM_FI_DEV_ECC_SBE_VOL_DEV,
-                                  DCGM_FI_DEV_ECC_DBE_VOL_DEV,
-                                  DCGM_FI_DEV_ECC_SBE_VOL_REG,
-                                  DCGM_FI_DEV_ECC_DBE_VOL_REG,
-                                  DCGM_FI_DEV_ECC_SBE_VOL_TEX,
-                                  DCGM_FI_DEV_ECC_DBE_VOL_TEX,
-                                  DCGM_FI_DEV_ECC_SBE_AGG_L1,
-                                  DCGM_FI_DEV_ECC_DBE_AGG_L1,
-                                  DCGM_FI_DEV_ECC_SBE_AGG_L2,
-                                  DCGM_FI_DEV_ECC_DBE_AGG_L2,
-                                  DCGM_FI_DEV_ECC_SBE_AGG_DEV,
-                                  DCGM_FI_DEV_ECC_DBE_AGG_DEV,
-                                  DCGM_FI_DEV_ECC_SBE_AGG_REG,
-                                  DCGM_FI_DEV_ECC_DBE_AGG_REG,
-                                  DCGM_FI_DEV_ECC_SBE_AGG_TEX,
-                                  DCGM_FI_DEV_ECC_DBE_AGG_TEX,
-                                  DCGM_FI_DEV_RETIRED_SBE,
-                                  DCGM_FI_DEV_RETIRED_DBE,
-                                  DCGM_FI_DEV_RETIRED_PENDING,
-                                  DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-                                  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL,
-                                  DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL,
-                                  DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
-                                  DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL,
-                                  DCGM_FI_DEV_GPU_NVLINK_ERRORS,
-                                  DCGM_FI_DEV_ENC_STATS,
-                                  DCGM_FI_DEV_FBC_STATS,
-                                  0 };
-
-    // Must detach first so we don't think nvml has been initialized
-    dcm.DetachGpus();
-    ret = dcm.Init(1, 86400.0, true);
-    if (ret != DCGM_ST_OK)
-    {
-        fprintf(stderr, "TestAttachDetachWithWatches(): Error attaching to GPUs: %s.", errorString(ret));
-        return 100;
-    }
-
-    DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
-
-
-    bool updateOnFirstWatch = false; /* we call UpdateFields() right after */
-    bool wereFirstWatcher   = false;
-
-    int count = dcm.GetGpuCount(1);
-    for (int i = 0; i < count; i++)
-    {
-        int j = 0;
-        while (fieldIds[j] != 0)
-        {
-            ret = dcm.AddFieldWatch(
-                DCGM_FE_GPU, i, fieldIds[j], 1, 86400.0, 0, watcher, false, updateOnFirstWatch, wereFirstWatcher);
-            if (ret != DCGM_ST_OK)
-                fprintf(stderr, "TestAttachDeteachWithWatches(): AddFieldWatch error: %s\n", errorString(ret));
-            j++;
-        }
-    }
-
-    ret = dcm.UpdateAllFields(1);
-    if (ret != DCGM_ST_OK)
-    {
-        fprintf(stderr, "UpdateAllFields() returned %d\n", ret);
-        return 50;
-    }
-
-    ret = dcm.DetachGpus();
-    if (ret != DCGM_ST_OK)
-    {
-        fprintf(stderr, "TestAttachDetachWithWatches(): Error detaching from GPUs: %s.", errorString(ret));
-        return 100;
-    }
-
-    nvmlReturn_t nvmlSt = nvmlDeviceGetCount_v2(&nvmlDeviceCount);
-    if (nvmlSt != NVML_ERROR_UNINITIALIZED)
-    {
-        fprintf(
-            stderr, "Expected NVML_ERROR_UNINITIALIZED after nvmlShutdown(), but found %s", nvmlErrorString(nvmlSt));
-        dcm.AttachGpus(); /* Don't leave NVML uninitialized. This will break later tests */
-        return 100;
-    }
-
-    int rc = AttachDetach(dcm, error);
-    if (rc != 0)
-        fprintf(stderr, "TestAttachDetachWithWatches(): %s\n", error.c_str());
-
-    return 0;
-}
-
-/*****************************************************************************/
 int TestCacheManager::TestAreAllGpuIdsSameSku()
 {
     std::vector<unsigned int> gpuIds;
@@ -2210,6 +2700,312 @@ int TestCacheManager::TestGetLatestSampleNoDataFvBuffer()
             fprintf(stderr, "TestSingleFieldNoDataFvBuffer failed for field %d with error %d\n", testField, result);
             return result;
         }
+    }
+
+    return 0;
+}
+
+std::vector<unsigned short> TestCacheManager::GetRandomGpuFieldIds(int numFieldIds) const
+{
+    int pickSize = std::min(numFieldIds, static_cast<int>(DCGM_FI_FIRST_NVSWITCH_FIELD_ID - 1));
+    std::vector<unsigned short> fieldIds;
+    fieldIds.reserve(DCGM_FI_FIRST_NVSWITCH_FIELD_ID);
+
+    for (int i = 1; i < DCGM_FI_FIRST_NVSWITCH_FIELD_ID; i++)
+    {
+        fieldIds.push_back(i);
+    }
+    return PickN(fieldIds, pickSize);
+}
+
+std::vector<dcgmGroupEntityPair_t> TestCacheManager::GetRandomGpuEntities(int numEntities) const
+{
+    std::vector<dcgmGroupEntityPair_t> entities;
+    int pickSize = std::min(numEntities, static_cast<int>(m_gpus.size()));
+
+    entities.reserve(m_gpus.size());
+    for (unsigned int i = 0; i < m_gpus.size(); i++)
+    {
+        entities.push_back({ DCGM_FE_GPU, m_gpus[i] });
+    }
+    return PickN(entities, pickSize);
+}
+
+int TestCacheManager::CheckAllEntityStatusesAreOk(DcgmCacheManager &cacheManager,
+                                                  std::vector<dcgmGroupEntityPair_t> const &entities)
+{
+    for (auto const &entity : entities)
+    {
+        auto status = cacheManager.GetEntityStatus(entity.entityGroupId, entity.entityId);
+        if (status != DcgmEntityStatusOk)
+        {
+            fprintf(stderr, "Entity %d is not in the OK status\n", entity.entityId);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int TestCacheManager::CheckFieldsAreWatched(DcgmCacheManager &cacheManager,
+                                            std::vector<unsigned short> const &fieldIds,
+                                            std::vector<bool> const &watchedFields)
+{
+    for (unsigned int i = 0; i < fieldIds.size(); i++)
+    {
+        dcgmCacheManagerFieldInfo_v4_t fieldInfo {};
+        fieldInfo.version = dcgmCacheManagerFieldInfo_version4;
+        fieldInfo.fieldId = fieldIds[i];
+        cacheManager.GetCacheManagerFieldInfo(&fieldInfo);
+        auto const watched = (fieldInfo.flags & DCGM_CMI_F_WATCHED) != 0;
+        if (watchedFields[i] != watched)
+        {
+            fprintf(stderr, "Field %d: watched %d but expected %d\n", fieldIds[i], watched, watchedFields[i]);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int TestCacheManager::TestPublicMethodRaceAndDeadlock()
+{
+    std::unique_ptr<DcgmCacheManager> cacheManager = createCacheManager(1);
+    if (nullptr == cacheManager)
+    {
+        fprintf(stderr, "Failed to create DcgmCacheManager\n");
+        return -1;
+    }
+
+    int const nproc = std::thread::hardware_concurrency();
+
+    // The number of threads which will randomly pick cache manager methods to call in the background.
+    // We subtract 3 because we will have main thread and 2 dedicated threads to trigger UpdateAllFields() and
+    // GetMultipleLatestLiveSamples().
+    int const numGetterThreads = std::max(1, nproc - 3);
+    // The number of times each thread will randomly pick a cache manager method to call.
+    int constexpr numGetterLoops = 1024;
+    // The number of times the dedicated threads will trigger UpdateAllFields() and GetMultipleLatestLiveSamples().
+    int constexpr numTriggerNvmlLoop = 64;
+    // The number of times the dedicated thread will trigger AttachDriver() and DetachDriver().
+    int constexpr attachDetachLoops = 64;
+
+    // random pick number from 1 to m_gpus.size()
+    int const numEntities = rng() % m_gpus.size() + 1;
+
+    std::vector<dcgmGroupEntityPair_t> entities = GetRandomGpuEntities(numEntities);
+    std::vector<unsigned short> fieldIds        = GetRandomGpuFieldIds(128);
+    DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
+
+    for (auto const &entity : entities)
+    {
+        for (auto const &fieldId : fieldIds)
+        {
+            bool wereFirstWatcher = false;
+            auto fieldMeta        = DcgmFieldGetById(fieldId);
+            if (!fieldMeta)
+            {
+                continue;
+            }
+            auto entityGroupId = entity.entityGroupId;
+            auto entityId      = entity.entityId;
+            if (fieldMeta->scope == DCGM_FS_GLOBAL)
+            {
+                entityGroupId = DCGM_FE_NONE;
+                entityId      = 0;
+            }
+            cacheManager->AddFieldWatch(
+                entityGroupId, entityId, fieldId, 1000000, 86400, 0, watcher, false, false, wereFirstWatcher);
+        }
+    }
+
+    std::vector<bool> watchedFields(fieldIds.size(), false);
+    for (size_t i = 0; i < fieldIds.size(); i++)
+    {
+        dcgmCacheManagerFieldInfo_v4_t fieldInfo {};
+        fieldInfo.version = dcgmCacheManagerFieldInfo_version4;
+        fieldInfo.fieldId = fieldIds[i];
+        cacheManager->GetCacheManagerFieldInfo(&fieldInfo);
+        watchedFields[i] = (fieldInfo.flags & DCGM_CMI_F_WATCHED) != 0;
+    }
+
+    dcgmMigHierarchy_v2 migHierarchy {};
+    cacheManager->PopulateMigHierarchy(migHierarchy);
+
+    std::vector<std::function<void()>> const getters = {
+        // Init (Skip initialization, this will not be called in multiple threads)
+        // Shutdown (Skip shutdown, this will not be called in multiple threads)
+        std::bind(&EmptyCache, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds), watcher),
+        // Start (Skip start, this will not be called in multiple threads)
+        std::bind(&SubscribeForEvent, std::ref(*cacheManager)),
+        std::bind(&GetAllGpuInfo, std::ref(*cacheManager)),
+        std::bind(&DcgmCacheManager::AreAnyGpusInHostVGPUMode, std::ref(*cacheManager)),
+        std::bind(&GetGpuCount, std::ref(*cacheManager)),
+        std::bind(&GetGpuIds, std::ref(*cacheManager)),
+        std::bind(&GetWorkloadPowerProfilesInfo, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetAllEntitiesOfEntityGroup, std::ref(*cacheManager)),
+        std::bind(&GetEntityStatus, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetGpuStatus, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetGpuBrand, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetGpuArch, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetGpuExcludeList, std::ref(*cacheManager)),
+        // run (This method is not designed to be called outside of the class)
+        std::bind(&PauseResume, std::ref(*cacheManager)),
+        // UpdateAllFields (There is another dedicated thread to call this method)
+        std::bind(&AddFieldWatch, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds), watcher),
+        std::bind(&UpdateFieldWatch, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds), watcher),
+        std::bind(&RemoveFieldWatch, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds), watcher),
+        std::bind(&GetLatestProcessInfo, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetUniquePidLists, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetUniquePidUtilLists, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetInt64SummaryData, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        std::bind(&GetFp64SummaryData, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        std::bind(&GetSamples, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        std::bind(&GetLatestSample, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        std::bind(&GetMultipleLatestSamples, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        // GetMultipleLatestLiveSamples (there is another dedicated thread to call this method)
+        // SetValue (setter)
+        std::bind(&AppendSamples, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        // InjectSamples (Skip testing API)
+        // FreeSamples (called in GetSamples and GetLatestSample tests)
+        std::bind(&GetCacheManagerFieldInfo, std::ref(*cacheManager), std::ref(fieldIds)),
+        std::bind(&PopulateNvLinkLinkStatus, std::ref(*cacheManager)),
+        std::bind(&PopulateMigHierarchy, std::ref(*cacheManager)),
+        // CreateMigEntity (setter)
+        // DeleteMigEntity (setter)
+        std::bind(&GetEntityNvLinkLinkStatus, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GpuIdToNvmlIndex, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&NvmlIndexToGpuId, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&IsGpuAllowlisted, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetIsValidEntityId, std::ref(*cacheManager), std::ref(entities)),
+        // AddFakeGpu (skip testing API)
+        // AddFakeGpu (skip testing API)
+        // AddFakeComputeInstance (skip testing API)
+        // AddFakeInstance (skip testing API)
+        std::bind(&SetGpuNvLinkLinkState, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&SetEntityNvLinkLinkState, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&AreAllGpuIdsSameSku, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetRuntimeStats, std::ref(*cacheManager)),
+        std::bind(&SelectGpusByTopology, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&OnConnectionRemove, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        // EventThreadMain (This method is not designed to be called outside of the class)
+        std::bind(&GetComputeInstanceEntityId, std::ref(*cacheManager), std::ref(migHierarchy)),
+        std::bind(&GetInstanceEntityId, std::ref(*cacheManager), std::ref(migHierarchy)),
+        std::bind(&GetInstanceProfile, std::ref(*cacheManager), std::ref(migHierarchy)),
+        std::bind(&GetMigGpuPopulation, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetMigInstancePopulation, std::ref(*cacheManager), std::ref(migHierarchy)),
+        std::bind(&GetMigComputeInstancePopulation, std::ref(*cacheManager), std::ref(migHierarchy)),
+        std::bind(&GetGpuIdForEntity, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetMigIndicesForEntity, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&GetProfModuleServicedEntities, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&EntityPairSupportsGpm, std::ref(*cacheManager), std::ref(entities)),
+        std::bind(&EntityKeySupportsGpm, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        std::bind(&AppendEntity, std::ref(*cacheManager), std::ref(entities), std::ref(fieldIds)),
+        std::bind(&FilterActiveEntities, std::ref(*cacheManager), std::ref(entities)),
+        // InjectNvmlGpu (skip testing API)
+        // InjectNvmlGpuForFollowingCalls (skip testing API)
+        // InjectedNvmlGpuReset (skip testing API)
+        // GetNvmlInjectFuncCallCount (skip testing API)
+        // ResetNvmlInjectFuncCallCount (skip testing API)
+        // RemoveNvmlInjectedGpu (skip testing API)
+        // RestoreNvmlInjectedGpu (skip testing API)
+        // CreateNvmlInjectionDevice (skip testing API)
+        // InjectNvmlFieldValue (skip testing API)
+        std::bind(&CreateAllNvlinksP2PStatus, std::ref(*cacheManager)),
+        std::bind(&GetDriverVersion, std::ref(*cacheManager)),
+        std::bind(&GetCudaVersion, std::ref(*cacheManager)),
+        std::bind(&ShouldSkipDriverCalls, std::ref(*cacheManager)),
+        std::bind(&AddMetaGroupWatchedField, std::ref(*cacheManager), std::ref(fieldIds), watcher),
+        std::bind(&RemoveMetaGroupWatchedField, std::ref(*cacheManager), std::ref(fieldIds), watcher),
+        std::bind(&RecordBindUnbindEvent, std::ref(*cacheManager)),
+    };
+
+    std::vector<std::jthread> backgroundThreads;
+    std::latch gettersStarted(numGetterThreads);
+
+    backgroundThreads.reserve(numGetterThreads);
+
+    for (int i = 0; i < numGetterThreads; i++)
+    {
+        backgroundThreads.emplace_back([&getters, &gettersStarted]() {
+            gettersStarted.count_down();
+            for (int i = 0; i < numGetterLoops; i++)
+            {
+                int index = rng() % getters.size();
+                getters[index]();
+            }
+        });
+    }
+
+    // Live samples will trigger the NVML calls. We have a dedicated thread to do this to increase the rate to find
+    // race conditions and deadlocks.
+    std::jthread getLiveSamplesThread([&cacheManager, &entities, &fieldIds]() {
+        for (int i = 0; i < numTriggerNvmlLoop; i++)
+        {
+            size_t initialCapacity = FVBUFFER_GUESS_INITIAL_CAPACITY(entities.size(), fieldIds.size());
+            DcgmFvBuffer fvBuffer(initialCapacity);
+            dcgmReturn_t ret = cacheManager->GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
+            if (ret != DCGM_ST_OK)
+            {
+                fprintf(stderr, "GetMultipleLatestLiveSamples returned %d\n", ret);
+                continue;
+            }
+        }
+    });
+
+    // UpdateAllFields will trigger the NVML calls. We have a dedicated thread to do this to increase the rate to
+    // find race conditions and deadlocks.
+    std::jthread triggerCacheUpdateThread([&cacheManager]() {
+        for (int i = 0; i < numTriggerNvmlLoop; i++)
+        {
+            cacheManager->UpdateAllFields(1);
+        }
+    });
+
+    gettersStarted.wait();
+
+    for (int i = 0; i < attachDetachLoops; i++)
+    {
+        auto task = cacheManager->DetachDriver();
+        if (!task.has_value())
+        {
+            fprintf(stderr, "Failed to detach driver\n");
+            return -1;
+        }
+        auto st = task->get();
+        if (st != DCGM_ST_OK)
+        {
+            fprintf(stderr, "Failed to detach driver\n");
+            return -1;
+        }
+        task = cacheManager->AttachDriver();
+        if (!task.has_value())
+        {
+            fprintf(stderr, "Failed to attach driver\n");
+            return -1;
+        }
+        st = task->get();
+        if (st != DCGM_ST_OK)
+        {
+            fprintf(stderr, "Failed to detach driver\n");
+            return -1;
+        }
+    }
+
+    for (int i = 0; i < numGetterThreads; i++)
+    {
+        backgroundThreads[i].join();
+    }
+
+    getLiveSamplesThread.join();
+    triggerCacheUpdateThread.join();
+
+    // Check some basic state after all threads have finished
+    if (CheckAllEntityStatusesAreOk(*cacheManager, entities) != 0)
+    {
+        return -1;
+    }
+    if (CheckFieldsAreWatched(*cacheManager, fieldIds, watchedFields) != 0)
+    {
+        return -1;
     }
 
     return 0;
@@ -2470,13 +3266,21 @@ int TestCacheManager::Run()
         CompleteTest("TestCountBasedQuota", TestCountBasedQuota(), Nfailed);
         CompleteTest("TestRecordingGlobal", TestRecordingGlobal(), Nfailed);
         CompleteTest("TestFieldValueConversion", TestFieldValueConversion(), Nfailed);
-        CompleteTest("TestSimulatedAttachDetach", TestSimulatedAttachDetach(), Nfailed);
-        CompleteTest("TestAttachDetachNoWatches", TestAttachDetachNoWatches(), Nfailed);
-        CompleteTest("TestAttachDetachWithWatches", TestAttachDetachWithWatches(), Nfailed);
         CompleteTest("TestAreAllGpuIdsSameSku", TestAreAllGpuIdsSameSku(), Nfailed);
         CompleteTest("TestMultipleWatchersMaxAge", TestMultipleWatchersMaxAge(), Nfailed);
         CompleteTest("TestGetLatestSampleNoData", TestGetLatestSampleNoData(), Nfailed);
         CompleteTest("TestGetLatestSampleNoDataFvBuffer", TestGetLatestSampleNoDataFvBuffer(), Nfailed);
+        if (std::getenv("DCGM_TEST_RACE_CONDITIONS_AND_DEADLOCKS") != nullptr)
+        {
+            // TestPublicMethodRaceAndDeadlock is not enabled by default because it takes time and also we should
+            // enable tsan and asan to catch race conditions.
+            CompleteTest("TestPublicMethodRaceAndDeadlock", TestPublicMethodRaceAndDeadlock(), Nfailed);
+        }
+        else
+        {
+            std::cout
+                << "TestPublicMethodRaceAndDeadlock is disabled. To enable it, set the DCGM_TEST_RACE_CONDITIONS_AND_DEADLOCKS environment variable.\n";
+        }
     }
     // fatal test return ocurred
     catch (const std::runtime_error &e)

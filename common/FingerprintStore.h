@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cassert>
 #include <cstdint>
 #include <fmt/format.h>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <random>
@@ -57,7 +58,7 @@ struct fmt::formatter<TaskFingerprint>
 
     // Format the TaskFingerprint
     template <typename FormatContext>
-    auto format(const TaskFingerprint &fp, FormatContext &ctx)
+    auto format(const TaskFingerprint &fp, FormatContext &ctx) const
     {
         return fmt::format_to(ctx.out(), "{:016x}{:016x}", fp[0], fp[1]);
     }

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,32 +16,94 @@
 set(CPACK_PACKAGE_CONTACT "dcgm-support <dcgm-support@nvidia.com>")
 set(CPACK_PACKAGE_VENDOR "NVIDIA Corp.")
 
-set(CPACK_COMPONENT_CORE_DESCRIPTION
-    "CUDA-version agnostic components of the NVIDIA® Datacenter GPU Management Tools")
+set(CPACK_PACKAGE_DESCRIPTION
+"This package is a component of DCGM, a userspace library and service that
+simplifies the administration of NVIDIA datacenter hardware in cluster and
+datacenter environments.
 
-set(CPACK_COMPONENT_CUDA11_DESCRIPTION
-    "NVIDIA® Datacenter GPU Management binaries supporting CUDA11 environments")
+DCGM functionality includes:
+    - Configuration management for NVIDIA GPU and NvSwitch hardware
+    - Active health diagnostics for NVIDIA GPU hardware
+    - Passive health monitoring for NVIDIA GPU and NvSwitch hardware
+    - Device-level profiling metrics for NVIDIA CPU, GPU, and NvSwitch hardware
+    - Job-level execution and performance statistic aggregation and analysis
+      for NVIDIA GPU hardware
+    - Callback registration for user-configured action and/or notification upon
+      detection of hardware faults
+")
 
-set(CPACK_COMPONENT_CUDA12_DESCRIPTION
-    "NVIDIA® Datacenter GPU Management binaries supporting CUDA12 environments")
+set(CORE_SUMMARY
+    "CUDA-version agnostic components of NVIDIA® Datacenter GPU Manager (DCGM)")
 
-set(CPACK_COMPONENT_CUDA13_DESCRIPTION
-    "NVIDIA® Datacenter GPU Management binaries supporting CUDA13 environments")
+set(CORE_DESCRIPTION
+"This package provides
+    - the core DCGM shared library (libdcgm.so.4)
+    - the standalone executable wrapper for the DCGM shared library
+      (nv-hostengine)
+    - a systemd service that manages an nv-hostengine process (nvidia-dcgm)
+    - plugins implementing various components of DCGM functionality
+")
 
-set(CPACK_COMPONENT_CUDA_ALL_DESCRIPTION
-    "NVIDIA® Datacenter GPU Management binaries for all supported CUDA environments")
+set(CUDA11_SUMMARY
+    "NVIDIA® Datacenter GPU Manager (DCGM) binaries for CUDA11 systems")
 
-set(CPACK_COMPONENT_DEVELOPMENT_DESCRIPTION
-    "Development files for the NVIDIA® Datacenter GPU Management Tools")
+set(CUDA11_DESCRIPTION
+"This package provides binaries used by DCGM active health diagnostics and
+other utilities for systems with a CUDA11 user-mode driver.")
 
-set(CPACK_COMPONENT_MULTINODE_DESCRIPTION
-    "CUDA-version agnostic binaries used in NVIDIA® Datacenter GPU Management multi-node diagnostics")
+set(CUDA12_SUMMARY
+    "NVIDIA® Datacenter GPU Manager (DCGM) binaries for CUDA12 systems")
 
-set(CPACK_COMPONENT_MULTINODE_CUDA12_DESCRIPTION
-    "NVIDIA® Datacenter GPU Management binaries used in multi-node diagnostics for CUDA12 environments")
+set(CUDA12_DESCRIPTION
+"This package provides binaries used by DCGM active health diagnostics and
+other utilities for systems with a CUDA12 user-mode driver.")
 
-set(CPACK_COMPONENT_MULTINODE_CUDA13_DESCRIPTION
-    "NVIDIA® Datacenter GPU Management binaries used in multi-node diagnostics for CUDA13 environments")
+set(CUDA13_SUMMARY
+    "NVIDIA® Datacenter GPU Manager (DCGM) binaries for CUDA13 systems")
+
+set(CUDA13_DESCRIPTION
+"This package provides binaries used by DCGM active health diagnostics and
+other utilities for systems with a CUDA13 user-mode driver.")
+
+set(CUDA_ALL_SUMMARY
+    "Metapackage for NVIDIA® Datacenter GPU Manager (DCGM) binaries")
+
+set(CUDA_ALL_DESCRIPTION
+"Install binaries for used by DCGM active health diagnostics for all
+DCGM-supported CUDA user-mode drivers.")
+
+set(DEVELOPMENT_SUMMARY
+    "Development files for NVIDIA® Datacenter GPU Manager (DCGM)")
+
+set(DEVELOPMENT_DESCRIPTION
+"This package provides
+    - C header files for the DCGM shared library (libdcgm.so.${CPACK_PACKAGE_VERSION_MAJOR})
+    - *.so symbolic links for the linker
+    - a static library of stubs allowing for lazy-loading of the DCGM shared
+      library
+    - files supporting consumption via CMake's find_package")
+
+set(MULTINODE_SUMMARY
+    "NVIDIA® Datacenter GPU Manager (DCGM) multi-node active health diagnostics")
+
+set(MULTINODE_DESCRIPTION
+"This package provides the mndiag DCGM module, which implements distributed
+active health diagnostics for assessing the health of networked clusters
+of systems using NVIDIA hardware.")
+
+set(MULTINODE_CUDA12_SUMMARY
+    "NVIDIA® Datacenter GPU Manager (DCGM) multi-node diagnostics for CUDA12 systems")
+
+set(MULTINODE_CUDA12_DESCRIPTION
+"This package provides binaries used by DCGM multi-node active health
+diagnostics for systems with a CUDA12 user-mode driver.")
+
+set(MULTINODE_CUDA13_SUMMARY
+    "NVIDIA® Datacenter GPU Manager (DCGM) multi-node diagnostics for CUDA13 systems")
+
+set(MULTINODE_CUDA13_DESCRIPTION
+"This package provides binaries used by DCGM multi-node active health
+diagnostics for systems with a CUDA13 user-mode driver.")
 
 if (CPACK_GENERATOR MATCHES "DEB")
     list(APPEND CPACK_COMPONENTS_ALL Cuda_All)
@@ -61,6 +123,7 @@ if (CPACK_GENERATOR MATCHES "DEB")
 
     set(CPACK_COMPONENTS_GROUPING "IGNORE")
     set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
+    set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
     set(CPACK_PRE_BUILD_SCRIPTS
         "${CMAKE_CURRENT_LIST_DIR}/cpack-deb-prebuild.cmake")
 
@@ -136,6 +199,11 @@ if (CPACK_GENERATOR MATCHES "DEB")
         string(CONCAT CPACK_DEBIAN_${component}_FILE_NAME
             "${CPACK_DEBIAN_${component}_PACKAGE_NAME}"
             "${SUFFIX}")
+        string(JOIN "\n" CPACK_DEBIAN_${component}_DESCRIPTION
+            "${${component}_SUMMARY}"
+            "${${component}_DESCRIPTION}"
+            ""
+            "${CPACK_PACKAGE_DESCRIPTION}")
     endforeach()
 elseif(CPACK_GENERATOR MATCHES "TGZ")
     if (CPACK_VMWARE)
@@ -211,6 +279,8 @@ elseif(CPACK_GENERATOR MATCHES "RPM")
     set(CPACK_RPM_CUDA13_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-cuda13")
     set(CPACK_RPM_DEVELOPMENT_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-devel")
     set(CPACK_RPM_MULTINODE_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode")
+    set(CPACK_RPM_MULTINODE_CUDA12_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode-cuda12")
+    set(CPACK_RPM_MULTINODE_CUDA13_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-multinode-cuda13")
     set(CPACK_RPM_PYTHON_PACKAGE_NAME "python3-${CPACK_PACKAGE_NAME}")
 
     set(CPACK_RPM_CORE_DEBUGINFO_PACKAGE TRUE)
@@ -289,6 +359,10 @@ Recommends: libnuma.so.1()(64bit)")
     foreach(component IN LISTS CPACK_COMPONENTS_ALL)
         string(TOUPPER "${component}" component)
         set(CPACK_RPM_${component}_PACKAGE_SUMMARY
-            "${CPACK_COMPONENT_${component}_DESCRIPTION}")
+            "${${component}_SUMMARY}")
+        string(JOIN "\n" CPACK_RPM_${component}_PACKAGE_DESCRIPTION
+            "${${component}_DESCRIPTION}"
+            ""
+            "${CPACK_PACKAGE_DESCRIPTION}")
     endforeach()
 endif()

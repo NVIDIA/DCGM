@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,21 +15,25 @@ from . import app_runner
 import os
 import utils
 
+
 class CudaCtxCreateApp(app_runner.AppRunner):
     """
     Creates a cuda context on a single device and waits for a return char to terminate.
 
     """
     paths = {
-            "Linux_32bit": "./apps/cuda_ctx_create/cuda_ctx_create_32bit",
-            "Linux_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit",
-            "Linux_aarch64": "./apps/cuda_ctx_create/cuda_ctx_create_aarch64",
-            "Windows_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit.exe"
-            }
+        "Linux_32bit": "./apps/cuda_ctx_create/cuda_ctx_create_32bit",
+        "Linux_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit",
+        "Linux_aarch64": "./apps/cuda_ctx_create/cuda_ctx_create_aarch64",
+        "Windows_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit.exe"
+    }
+
     def __init__(self, device):
         self.device = device
-        path = os.path.join(utils.script_dir, CudaCtxCreateApp.paths[utils.platform_identifier])
-        super(CudaCtxCreateApp, self).__init__(path, ["-i", device.busId, "--getchar"], cwd=os.path.dirname(path))
+        path = os.path.join(
+            utils.script_dir, CudaCtxCreateApp.paths[utils.platform_identifier])
+        super(CudaCtxCreateApp, self).__init__(
+            path, ["-i", device.busId, "--getchar"], cwd=os.path.dirname(path))
 
     def start(self, timeout=app_runner.default_timeout):
         """
@@ -45,6 +49,7 @@ class CudaCtxCreateApp(app_runner.AppRunner):
     def __str__(self):
         return "CudaCtxCreateApp on device " + str(self.device) + " with " + super(CudaCtxCreateApp, self).__str__()
 
+
 class CudaCtxCreateAdvancedApp(app_runner.AppRunner):
     """
     More universal version of CudaCtxCreateApp which provides access to:
@@ -56,14 +61,17 @@ class CudaCtxCreateAdvancedApp(app_runner.AppRunner):
     """
 
     paths = {
-            "Linux_32bit": "./apps/cuda_ctx_create/cuda_ctx_create_32bit",
-            "Linux_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit",
-            "Linux_aarch64": "./apps/cuda_ctx_create/cuda_ctx_create_aarch64",
-            "Windows_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit.exe"
-            }
+        "Linux_32bit": "./apps/cuda_ctx_create/cuda_ctx_create_32bit",
+        "Linux_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit",
+        "Linux_aarch64": "./apps/cuda_ctx_create/cuda_ctx_create_aarch64",
+        "Windows_64bit": "./apps/cuda_ctx_create/cuda_ctx_create_64bit.exe"
+    }
+
     def __init__(self, args, env=None):
-        path = os.path.join(utils.script_dir, CudaCtxCreateAdvancedApp.paths[utils.platform_identifier])
-        super(CudaCtxCreateAdvancedApp, self).__init__(path, args, cwd=os.path.dirname(path), env=env)
+        path = os.path.join(
+            utils.script_dir, CudaCtxCreateAdvancedApp.paths[utils.platform_identifier])
+        super(CudaCtxCreateAdvancedApp, self).__init__(
+            path, args, cwd=os.path.dirname(path), env=env)
 
     def __str__(self):
         return "CudaCtxCreateAdvancedApp with " + super(CudaCtxCreateAdvancedApp, self).__str__()

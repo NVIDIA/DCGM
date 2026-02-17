@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,7 +36,6 @@ function (add_3rd_party_library condition libName installDir)
                 "${CMAKE_CURRENT_BINARY_DIR}/${LIB_SONAME}"
                 "${CMAKE_CURRENT_BINARY_DIR}/${libName}"
             DESTINATION ${installDir}
-            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
             COMPONENT Tests
         )
     endif()

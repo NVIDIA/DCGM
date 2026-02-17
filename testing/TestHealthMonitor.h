@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "dcgm_agent.h"
 #include "dcgm_errors.h"
 #include "dcgm_structs.h"
+#include <TimeLib.hpp>
 #include <memory>
 #include <string>
 #include <vector>
@@ -52,19 +53,36 @@ private:
         dcgmError_t expectedError;
     };
 
+    // Context structure for NVLink subtest methods
+    struct NVLinkTestContext;
+
     // Test methods
     int TestHMSet();
     int TestHMCheckPCIe();
     int TestHMCheckMemSbe();
     int TestHMCheckMemDbe();
+    int TestHMCheckMemUnrepairableFlag();
+    int TestHMCheckImex();
     int TestHMCheckInforom();
     int TestHMCheckThermal();
     int TestHMCheckPower();
     int TestHMCheckNVLink();
+    int TestHMCheckNVLinkStates();
+    int SubtestHMCheckNVLinkStatesAllLinksUp(NVLinkTestContext &context);
+    int SubtestHMCheckNVLinkStatesLinkDown(NVLinkTestContext &context);
+    int SubtestHMCheckNVLinkStatesOther(NVLinkTestContext &context);
     int TestHMCheckXids();
     int TestDevastatingXids();
     int TestSubsystemXids();
     int TestXidSeverityLevels();
+    int TestHMCheckFabricManagerStatus();
+
+    /**
+     * Test that residual unhealthy state from previous tests is cleared
+     * This test enables all health watches and fails if any report non-PASS status
+     * @note XID-related incidents are excluded because XID history cannot be cleared through public API
+     */
+    int TestHMCheckResidual();
 
     dcgmReturn_t TestSingleXid(unsigned int const gpuId,
                                uint64_t const xid,
@@ -74,6 +92,25 @@ private:
                                auto const timestamp,
                                std::unique_ptr<dcgmHealthResponse_t> &response,
                                dcgmHealthSystems_t const currentSubsystem) const;
+
+    /**
+     * Helper function which tests the health of the IMEX domain
+     * @param gpuId The GPU ID
+     * @param domainStatus The status of the domain
+     * @param daemonStatus The status of the daemon
+     * @param expectedHealth The expected health
+     * @param checkIncidents Whether to check incidents
+     * @param timestamp The timestamp
+     * @param description The description
+     * @return The result of the test (DCGM_ST_OK if successful, DCGM_ST_GENERIC_ERROR if failed)
+     */
+    dcgmReturn_t ValidateImexHealth(unsigned int gpuId,
+                                    std::string_view domainStatus,
+                                    int64_t daemonStatus,
+                                    dcgmHealthWatchResults_t expectedHealth,
+                                    bool checkIncidents,
+                                    DcgmNs::Timelib::TimePoint const timestamp,
+                                    std::string_view description);
 
     std::vector<unsigned int> m_gpus; /* List of GPUs to run on, copied in Init() */
     dcgmGpuGrp_t m_gpuGroup;          /* Group consisting of the members of m_gpus */

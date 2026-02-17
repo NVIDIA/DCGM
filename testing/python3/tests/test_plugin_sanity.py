@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,10 +54,12 @@ import test_utils
 
 from test_globals import DEV_MODE_MSG
 
-### Constants
+# Constants
 OUTPUT_DIR = "./test_plugin_sanity_out"
 
-### Helpers
+# Helpers
+
+
 @test_utils.run_first()
 def test_create_output_dir():
     """
@@ -67,6 +69,7 @@ def test_create_output_dir():
         shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR)
 
+
 def log_app_output_to_file(app, filename):
     with open(filename, 'w') as f:
         for line in app.stdout_lines:
@@ -74,12 +77,14 @@ def log_app_output_to_file(app, filename):
         for line in app.stderr_lines:
             f.write(line + "\n")
 
+
 def log_app_output_to_stdout(app):
     logger.info("app output:")
     for line in app.stdout_lines:
         logger.info(line)
     for line in app.stderr_lines:
         logger.info(line)
+
 
 def copy_nvvs_log(nvvsLogFile, outputLogFile):
     """
@@ -106,18 +111,20 @@ def no_errors_run(handle, gpuIds, name, testname, parms=None):
 
     # Note: Although using the dcgmActionValidate api (via DcgmDiag.Execute()) would allow for some automatic
     # verification, we use dcgmi diag and log output to a file for easier debugging when something goes wrong.
-    args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v", "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
+    args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v",
+            "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
     if parms != None:
         args.extend(["-p", "%s" % parms])
     dcgmi = DcgmiApp(args=args)
 
-    dcgmi.start(timeout=1500) # 25min timeout
+    dcgmi.start(timeout=1500)  # 25min timeout
     logger.info("Started diag with args: %s" % args)
 
     retcode = dcgmi.wait()
     copy_nvvs_log("/tmp/nvvs.log", log_file)
     if retcode != 0:
-        logger.error("dcgmi_%s_no_err failed with retcode: %s" % (name, retcode))
+        logger.error("dcgmi_%s_no_err failed with retcode: %s" %
+                     (name, retcode))
         copy_nvvs_log("/tmp/nvvs.log", log_file)
 
     log_app_output_to_file(dcgmi, output_file)
@@ -138,12 +145,13 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
     output_file = OUTPUT_DIR + "/dcgmi_%s_with_err_%s.json" % (name, gpuIds[0])
     log_file = OUTPUT_DIR + "/nvvs_%s_with_err_%s.log" % (name, gpuIds[0])
     gpu_list = ",".join(map(str, gpuIds))
-    
-    args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v", "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
+
+    args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v",
+            "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
     if parms != None:
         args.extend(["-p", "%s" % parms])
     dcgmi = DcgmiApp(args=args)
-    
+
     field_id = dcgm_fields.DCGM_FI_DEV_GPU_TEMP
     value = 1000
     delay = 0
@@ -152,23 +160,25 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
         value = 1000
         delay = 15
 
-    dcgm_field_injection_helpers.inject_value(handle, gpuIds[0], field_id, value, delay, repeatCount=20)
+    dcgm_field_injection_helpers.inject_value(
+        handle, gpuIds[0], field_id, value, delay, repeatCount=20)
 
     start = time.time()
-    dcgmi.start(timeout=1500) # 25min timeout
+    dcgmi.start(timeout=1500)  # 25min timeout
     logger.info("Started diag with args: %s" % args)
 
     retcode = dcgmi.wait()
-    
+
     copy_nvvs_log("/tmp/nvvs.log", log_file)
     expected_retcode = ctypes.c_uint8(dcgm_structs.DCGM_ST_NVVS_ERROR).value
     if retcode != expected_retcode:
-        logger.error("Expected retcode to be %s, but retcode of dcgmi is %s" % (expected_retcode, retcode))
-    dcgmi.validate() # Validate because dcgmi returns non zero when the diag fails (expected)
+        logger.error("Expected retcode to be %s, but retcode of dcgmi is %s" % (
+            expected_retcode, retcode))
+    dcgmi.validate()  # Validate because dcgmi returns non zero when the diag fails (expected)
     log_app_output_to_file(dcgmi, output_file)
 
 
-### Tests
+# Tests
 # busgrind
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
@@ -176,6 +186,7 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
 @test_utils.for_all_same_sku_gpus()
 def test_busgrind_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "busgrind", "PCIe")
+
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
@@ -193,6 +204,7 @@ def test_busgrind_with_error(handle, gpuIds):
 def test_constant_perf_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "constant_perf", "targeted stress")
 
+
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -208,6 +220,7 @@ def test_constant_perf_with_error(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 def test_constant_power_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "constant_power", "targeted power")
+
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
@@ -232,14 +245,17 @@ def test_context_create_no_errors(handle, gpuIds):
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_gpuburn_no_errors(handle, gpuIds):
-    no_errors_run(handle, gpuIds, "gpuburn", "diagnostic", "diagnostic.test_duration=60")
+    no_errors_run(handle, gpuIds, "gpuburn", "diagnostic",
+                  "diagnostic.test_duration=60")
+
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_gpuburn_with_error(handle, gpuIds):
-    with_error_run(handle, gpuIds, "gpuburn", "diagnostic", "diagnostic.test_duration=60")
+    with_error_run(handle, gpuIds, "gpuburn", "diagnostic",
+                   "diagnostic.test_duration=60")
 
 
 # memory
@@ -261,14 +277,17 @@ def test_memory_no_errors(handle, gpuIds):
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_memory_bandwidth_no_errors(handle, gpuIds):
-    no_errors_run(handle, gpuIds, "memory_bandwidth", "memory bandwidth", "memory bandwidth.is_allowed=true")
+    no_errors_run(handle, gpuIds, "memory_bandwidth",
+                  "memory bandwidth", "memory bandwidth.is_allowed=true")
+
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_memory_bandwidth_with_error(handle, gpuIds):
-    with_error_run(handle, gpuIds, "memory_bandwidth", "memory bandwidth", "memory bandwidth.is_allowed=true")
+    with_error_run(handle, gpuIds, "memory_bandwidth",
+                   "memory bandwidth", "memory bandwidth.is_allowed=true")
 
 
 # memtest
@@ -279,6 +298,7 @@ def test_memory_bandwidth_with_error(handle, gpuIds):
 def test_memtest_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "memtest", "memtest")
 
+
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -287,27 +307,35 @@ def test_memtest_with_error(handle, gpuIds):
     with_error_run(handle, gpuIds, "memtest", "memtest")
 
 # nvbandwidth
+
+
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_nvbandwidth_no_errors(handle, gpuIds):
-    no_errors_run(handle, gpuIds, "nvbandwidth", "nvbandwidth", "nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
+    no_errors_run(handle, gpuIds, "nvbandwidth", "nvbandwidth",
+                  "nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
+
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_nvbandwidth_with_error(handle, gpuIds):
-    with_error_run(handle, gpuIds, "nvbandwidth", "nvbandwidth", "nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
+    with_error_run(handle, gpuIds, "nvbandwidth", "nvbandwidth",
+                   "nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
 
 # short
+
+
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_short_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "short", "short")
+
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
@@ -325,6 +353,7 @@ def test_short_with_error(handle, gpuIds):
 def test_medium_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "medium", "medium")
 
+
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
@@ -340,6 +369,7 @@ def test_medium_with_error(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 def test_long_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "long", "long")
+
 
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()

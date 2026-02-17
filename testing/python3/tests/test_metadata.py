@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@ import dcgm_fields
 import pydcgm
 import logger
 import test_utils
-    
+
+
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_on_architecture('amd64')
 def test_dcgm_standalone_metadata_memory_get_hostengine_sane(handle):
@@ -28,12 +29,15 @@ def test_dcgm_standalone_metadata_memory_get_hostengine_sane(handle):
     """
     handle = pydcgm.DcgmHandle(handle)
     system = pydcgm.DcgmSystem(handle)
-    
-    bytesUsed = system.introspect.memory.GetForHostengine().bytesUsed 
-    
-    logger.debug('the hostengine process is using %.2f MB' % (bytesUsed / 1024. / 1024.))
-    
-    assert(1*1024*1024 < bytesUsed < 100*1024*1024), bytesUsed        # 1MB to 100MB
+
+    bytesUsed = system.introspect.memory.GetForHostengine().bytesUsed
+
+    logger.debug('the hostengine process is using %.2f MB' %
+                 (bytesUsed / 1024. / 1024.))
+
+    assert (1 * 1024 * 1024 < bytesUsed < 100 * 1024 *
+            1024), bytesUsed        # 1MB to 100MB
+
 
 def helper_watch_fields(handle, system):
     fieldIds = [
@@ -50,12 +54,14 @@ def helper_watch_fields(handle, system):
     ]
     fieldGroupName = "my_field_group"
     updateFreq = 100000  # in usec, 0.1 sec
-    maxKeepAge = 86400.0 # in seconds, 24 hours
+    maxKeepAge = 86400.0  # in seconds, 24 hours
     maxKeepSamples = 0   # no limit
 
     fieldGroup = pydcgm.DcgmFieldGroup(handle, fieldGroupName, fieldIds)
     dcgmGroup = system.GetDefaultGroup()
-    dcgmGroup.samples.WatchFields(fieldGroup, updateFreq, maxKeepAge, maxKeepSamples)
+    dcgmGroup.samples.WatchFields(
+        fieldGroup, updateFreq, maxKeepAge, maxKeepSamples)
+
 
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_embedded_metadata_cpuutil_get_hostengine_sane(handle):
@@ -81,7 +87,8 @@ def test_dcgm_embedded_metadata_cpuutil_get_hostengine_sane(handle):
     # HostEngine lacks initial data on CPU utilization. By calling the following API and incorporating a sleep,
     # the metadata is gathered, establishing a baseline for subsequent calls to retrieve CPU utilization.
     cpuUtil = system.introspect.cpuUtil.GetForHostengine()
-    logger.debug('DCGM CPU Util before watching fields: %f' % (cpuUtil.total * cpu_count()))
+    logger.debug('DCGM CPU Util before watching fields: %f' %
+                 (cpuUtil.total * cpu_count()))
     idleStartCpuUtil = get_current_process_cpu_util()
     sleepTimeInSec = 1
     time.sleep(sleepTimeInSec)
@@ -95,7 +102,8 @@ def test_dcgm_embedded_metadata_cpuutil_get_hostengine_sane(handle):
         'Hostengine idle CPU usage too high: /proc/stat reported %.2f%% (limit: 5.0%%)' \
         % (idleCpuUtilProc * 100)
 
-    logger.debug('Idle CPU test passed - /proc/stat: %.2f%%' % (idleCpuUtilProc * 100))
+    logger.debug('Idle CPU test passed - /proc/stat: %.2f%%' %
+                 (idleCpuUtilProc * 100))
 
     # Test 2: Monitor multiple fields and record CPU utilization before and after a sleep period.
     # With an update frequency of 0.1 seconds, sleeping for one second will monitor each field 10 times.
@@ -105,7 +113,8 @@ def test_dcgm_embedded_metadata_cpuutil_get_hostengine_sane(handle):
     startTime = time.time()
     startCpuUtil = get_current_process_cpu_util()
     hostEngineCpuUtilBefore = system.introspect.cpuUtil.GetForHostengine(False)
-    time.sleep(sleepTimeInSec) # Sleep for sometime for host-engine to gather clock ticks from watchers.
+    # Sleep for sometime for host-engine to gather clock ticks from watchers.
+    time.sleep(sleepTimeInSec)
     stopTime = time.time()
     stopCpuUtil = get_current_process_cpu_util()
     hostEngineCpuUtilAfter = system.introspect.cpuUtil.GetForHostengine(False)
@@ -130,6 +139,6 @@ def test_dcgm_embedded_metadata_cpuutil_get_hostengine_sane(handle):
         % (cpuUtilrange * 100, cpuUtilAfter, overallCpuUtil, absoluteDiff)
 
     # test that user and kernel add to total (with rough float accuracy)
-    assert abs(hostEngineCpuUtilAfter.total - (hostEngineCpuUtilAfter.user + hostEngineCpuUtilAfter.kernel)) <= 4*float_info.epsilon, \
+    assert abs(hostEngineCpuUtilAfter.total - (hostEngineCpuUtilAfter.user + hostEngineCpuUtilAfter.kernel)) <= 4 * float_info.epsilon, \
         'CPU kernel and user utilization did not add up to total. Kernel: %f, User: %f, Total: %f' \
         % (hostEngineCpuUtilAfter.kernel, hostEngineCpuUtilAfter.user, hostEngineCpuUtilAfter.total)

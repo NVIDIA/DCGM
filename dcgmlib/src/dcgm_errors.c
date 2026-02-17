@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,7 @@
 #include "dcgm_structs.h"
 
 #define DCGM_ERROR_TABLE_ENTRY(errCode, severity, category) \
-    {                                                              \
-        errCode, errCode##_MSG, errCode##_NEXT, severity, category \
-    }
+    { errCode, errCode##_MSG, errCode##_NEXT, severity, category }
 
 dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_OK, DCGM_ERROR_UNKNOWN, DCGM_FR_EC_NONE),
@@ -144,6 +142,15 @@ dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_SRAM_THRESHOLD, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_MEMORY),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_NVLINK),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_FALLEN_OFF_BUS, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_OTHER),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_NVLINK),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_IMEX_UNHEALTHY, DCGM_ERROR_ISOLATE, DCGM_FR_EC_SOFTWARE_OTHER),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_FABRIC_PROBE_STATE, DCGM_ERROR_MONITOR, DCGM_FR_EC_HARDWARE_NVLINK),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_BINARY_PERMISSIONS, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_GPU_RECOVERY_RESET, DCGM_ERROR_RESET, DCGM_FR_EC_HARDWARE_OTHER),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_GPU_RECOVERY_REBOOT, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_OTHER),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_GPU_RECOVERY_DRAIN_P2P, DCGM_ERROR_RESET, DCGM_FR_EC_HARDWARE_OTHER),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_GPU_RECOVERY_DRAIN_RESET, DCGM_ERROR_RESET, DCGM_FR_EC_HARDWARE_OTHER),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NCCL_ERROR, DCGM_ERROR_RESET, DCGM_FR_EC_HARDWARE_OTHER),
 };
 
 dcgmErrorSeverity_t dcgmErrorGetPriorityByCode(unsigned int code)
@@ -314,6 +321,10 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
             return "A child process received a signal";
         case DCGM_ST_CALLER_ALREADY_STOPPED:
             return "The caller is already stopped";
+        case DCGM_ST_DIAG_STOPPED:
+            return "The DCGM Diagnostic was stopped";
+        case DCGM_ST_GPUS_DETACHED:
+            return "Cannot perform the requested operation because the GPUs are detached";
         default:
             // Wrong error codes should be handled by the caller
             return 0;

@@ -1,0 +1,5 @@
+# Exclude dotfiles, build artifacts, PerfWorks, and third-party code
+.*/**
+_out/**
+sdk/**
+

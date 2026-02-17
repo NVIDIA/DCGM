@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,12 @@ typedef struct
 } dcgmGroupRemoveCBEntry_t;
 
 /*****************************************************************************/
+
+enum class DcgmGroupOption
+{
+    ActiveOnly,
+    All,
+};
 
 class DcgmGroupInfo;
 
@@ -166,7 +172,7 @@ public:
                                        dcgm_field_eid_t entityId);
 
     /*****************************************************************************
-     * This method is used to get all of the GPU ids of a group.
+     * This method is used to get GPU ids of a group.
      *
      * This saves locking and unlocking the DcgmGroupInfo over and over again for
      * each gpu index
@@ -175,6 +181,7 @@ public:
      *
      * @param connectionId IN: Connection ID
      * @param groupId      IN  Group to get gpuIds of
+     * @param option      IN  Option to get gpuIds of
      * @param gpuIds      OUT: Vector of GPU IDs to populate (passed by reference)
      *
      * @return
@@ -183,22 +190,26 @@ public:
      */
     dcgmReturn_t GetGroupGpuIds(dcgm_connection_id_t connectionId,
                                 unsigned int groupId,
+                                DcgmGroupOption option,
                                 std::vector<unsigned int> &gpuIds);
 
     /*****************************************************************************
-     * This method is used to get all of the entities of a group
+     * This method is used to get entities of a group
      *
      * This saves locking and unlocking the DcgmGroupInfo over and over again for
      * each entity index
      *
      * @param groupId      IN  Group to get gpuIds of
+     * @param option      IN  Option to get entities of
      * @param entities    OUT: Vector of entities to populate (passed by reference)
      *
      * @return
      * DCGM_ST_OK       :   On Success
      * DCGM_ST_?        :   On Error
      */
-    dcgmReturn_t GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities);
+    dcgmReturn_t GetGroupEntities(unsigned int groupId,
+                                  DcgmGroupOption option,
+                                  std::vector<dcgmGroupEntityPair_t> &entities);
 
     /*****************************************************************************
      * Gets Name of the group
@@ -213,6 +224,7 @@ public:
 
     /*****************************************************************************
      * Are all of the GPUs in this group the same SKU?
+     * This method will only check on active GPUs.
      *
      * @param connectionId   IN: Connection ID
      * @param groupId        IN: Group to get gpuIds of
@@ -249,6 +261,16 @@ public:
      * DCGM_ST_?              : Error
      *****************************************************************************/
     dcgmReturn_t CreateDefaultGroups();
+
+
+    /*****************************************************************************
+     * The function to attach GPUs.
+     *
+     * @return
+     * DCGM_ST_OK       :   On Success
+     * DCGM_ST_?        :   On Error
+     *****************************************************************************/
+    dcgmReturn_t AttachGpus();
 
 private:
     /*****************************************************************************
@@ -358,18 +380,19 @@ public:
     dcgm_connection_id_t GetConnectionId();
 
     /*****************************************************************************
-     * This method is used to get all of the entities of a group
+     * This method is used to get entities of a group
      *
      * This saves locking and unlocking the DcgmGroupInfo over and over again for
      * each entity
      *
+     * @param option      IN  Option to get entities of
      * @param entities  OUT: Vector of entities to populate (passed by reference)
      *
      * @return
      * DCGM_ST_OK       :   On Success
      * DCGM_ST_?        :   On Error*
      */
-    dcgmReturn_t GetEntities(std::vector<dcgmGroupEntityPair_t> &entities);
+    dcgmReturn_t GetEntities(DcgmGroupOption option, std::vector<dcgmGroupEntityPair_t> &entities);
 
     /**
      * Checks that all GPUs, directly specified in the group, have the same SKU.

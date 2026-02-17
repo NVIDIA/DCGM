@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,6 +92,41 @@ dcgmReturn_t DcgmModulePolicy::ProcessClientDisconnect(dcgm_core_msg_client_disc
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmModulePolicy::ProcessAttachGpus(dcgm_core_msg_attach_gpus_t *msg)
+{
+    dcgmReturn_t dcgmReturn = CheckVersion(&msg->header, dcgm_core_msg_attach_gpus_version);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn; /* Logging handled by helper method */
+    }
+
+    if (auto ret = mpPolicyManager->AttachGpus(); ret != DCGM_ST_OK)
+    {
+        log_error("ProcessAttachGpus failed with {}", ret);
+        return ret;
+    }
+
+    return DCGM_ST_OK;
+}
+
+
+dcgmReturn_t DcgmModulePolicy::ProcessDetachGpus(dcgm_core_msg_detach_gpus_t *msg)
+{
+    dcgmReturn_t dcgmReturn = CheckVersion(&msg->header, dcgm_core_msg_detach_gpus_version);
+    if (DCGM_ST_OK != dcgmReturn)
+    {
+        return dcgmReturn; /* Logging handled by helper method */
+    }
+
+    if (auto ret = mpPolicyManager->DetachGpus(); ret != DCGM_ST_OK)
+    {
+        log_error("ProcessDetachGpus failed with {}", ret);
+        return ret;
+    }
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t DcgmModulePolicy::ProcessFieldValuesUpdated(dcgm_core_msg_field_values_updated_t *msg)
 {
     dcgmReturn_t dcgmReturn = CheckVersion(&msg->header, dcgm_core_msg_field_values_updated_version);
@@ -124,6 +159,14 @@ dcgmReturn_t DcgmModulePolicy::ProcessCoreMessage(dcgm_module_command_header_t *
 
         case DCGM_CORE_SR_CLIENT_DISCONNECT:
             retSt = ProcessClientDisconnect((dcgm_core_msg_client_disconnect_t *)moduleCommand);
+            break;
+
+        case DCGM_CORE_SR_ATTACH_GPUS:
+            retSt = ProcessAttachGpus((dcgm_core_msg_attach_gpus_t *)moduleCommand);
+            break;
+
+        case DCGM_CORE_SR_DETACH_GPUS:
+            retSt = ProcessDetachGpus((dcgm_core_msg_detach_gpus_t *)moduleCommand);
             break;
 
         case DCGM_CORE_SR_PAUSE_RESUME:

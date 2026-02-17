@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,11 +38,11 @@ public:
         return dcgmMultinodeRequest(handle, request);
     }
 
-    dcgmReturn_t Connect_v2(const char *ipAddress,
-                            dcgmConnectV2Params_t *connectParams,
+    dcgmReturn_t Connect_v3(const char *connectionString,
+                            dcgmConnectV3Params_t *connectParams,
                             dcgmHandle_t *pDcgmHandle) override
     {
-        return dcgmConnect_v2(ipAddress, connectParams, pDcgmHandle);
+        return dcgmConnect_v3(connectionString, connectParams, pDcgmHandle);
     }
 
     dcgmReturn_t Disconnect(dcgmHandle_t pDcgmHandle) override

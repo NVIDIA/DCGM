@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import test_utils
 import utils
 import logger
 
+
 class LsofApp(app_runner.AppRunner):
     """
     Allows to query processes that have some file open (e.g. device node)
@@ -28,16 +29,17 @@ class LsofApp(app_runner.AppRunner):
     """
 
     paths = {
-            "Linux_32bit": "lsof",
-            "Linux_64bit": "lsof",
-            "Linux_aarch64": "lsof",
-            }
+        "Linux_32bit": "lsof",
+        "Linux_64bit": "lsof",
+        "Linux_aarch64": "lsof",
+    }
+
     def __init__(self, fname):
         path = LsofApp.paths[utils.platform_identifier]
         self.processes = None
         self.fname = fname
         super(LsofApp, self).__init__(path, ["-F", "-V", fname])
-    
+
     def start(self, timeout=app_runner.default_timeout):
         # try to run as root, otherwise the list of processes might be incomplete
         # (e.g. it won't report processes running by other users)
@@ -48,22 +50,23 @@ class LsofApp(app_runner.AppRunner):
         super(LsofApp, self)._process_finish(stdout_buf, stderr_buf)
 
         if self.retvalue() == 1 and self.stdout_lines and self.stdout_lines[0].startswith("lsof: no file use located: "):
-            # lsof returns with error code 1 and prints message when no processes opened the file 
+            # lsof returns with error code 1 and prints message when no processes opened the file
             self.validate()
-            self._retvalue = 0 # Fake success
+            self._retvalue = 0  # Fake success
             self.processes = []
             return
 
         if self.retvalue() == 1 and self.stderr_lines and self.stderr_lines[0].endswith("No such file or directory"):
             # lsof returns with error code 1 and prints message when target file doesn't exist
             self.validate()
-            self._retvalue = 0 # Fake success
-            self.processes = [] # no file, no processes using it
+            self._retvalue = 0  # Fake success
+            self.processes = []  # no file, no processes using it
             return
 
         if self.retvalue() != 0:
-            #Print out stdout and stderr so we can see it in eris
-            logger.warning("lsof with args %s had a retval of %s. stderr:" % (self.args, str(self._retvalue)))
+            # Print out stdout and stderr so we can see it in eris
+            logger.warning("lsof with args %s had a retval of %s. stderr:" % (
+                self.args, str(self._retvalue)))
             if self.stderr_lines:
                 logger.warning(str(self.stderr_lines))
             logger.warning("stdout:")
@@ -71,7 +74,8 @@ class LsofApp(app_runner.AppRunner):
                 logger.warning(str(self.stdout_lines))
 
         assert self._retvalue == 0, "Failed to read processes that have the file opened. Read process log for more details"
-        assert len(self.stdout_lines) > 0, "Behavior of lsof changed. Returned 0 return code but stdout is empty"
+        assert len(
+            self.stdout_lines) > 0, "Behavior of lsof changed. Returned 0 return code but stdout is empty"
 
         self.processes = []
         if utils.is_esx_hypervisor_system():
@@ -85,7 +89,7 @@ class LsofApp(app_runner.AppRunner):
             last_value = [None, None]
             for line in self.stdout_lines:
                 if not line:
-                    continue # skip empty lines
+                    continue  # skip empty lines
                 tag = line[0]
                 content = line[1:]
                 if tag == "p":

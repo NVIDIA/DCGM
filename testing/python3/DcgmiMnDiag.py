@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,13 +18,16 @@ import nvidia_smi_utils
 import utils
 import test_utils
 
+
 def trimJsonText(text):
     return text[text.find('{'):text.rfind('}') + 1]
 
+
 logFile = "nvvs_diag.log"
 
+
 class DcgmiMnDiag:
-    def __init__(self, hostList=None, hostEngineAddress=None, testName=None, parameters=[], 
+    def __init__(self, hostList=None, hostEngineAddress=None, testName=None, parameters=[],
                  verbose=False, debugLevel=None, debugLogFile=None, dcgmiPrefix=""):
         self.hostList = hostList
         self.hostEngineAddress = hostEngineAddress
@@ -84,9 +87,9 @@ class DcgmiMnDiag:
     def Run(self):
         cmd = self.BuildDcgmiCommand()
         self.__RunDcgmiMnDiag__(cmd)
-    
 
     #####################################
+
     def __RunDcgmiMnDiag__(self, cmd):
         self.lastCmd = cmd
         self.lastStdout = ''
@@ -96,7 +99,8 @@ class DcgmiMnDiag:
         nsc.start()
 
         print(f"Running command: {cmd}")
-        runner = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        runner = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         (stdout_buf, stderr_buf) = runner.communicate()
         self.lastStdout = stdout_buf and stdout_buf.decode('utf-8')
         self.lastStderr = stderr_buf and stderr_buf.decode('utf-8')

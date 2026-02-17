@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 
 # loggerCategory_t
 #
-BASE_LOGGER    = 0
-SYSLOG_LOGGER  = 1
+BASE_LOGGER = 0
+SYSLOG_LOGGER = 1
 CONSOLE_LOGGER = 2
-FILE_LOGGER    = 3
+FILE_LOGGER = 3

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -293,6 +293,16 @@
  */
 #define DCGM_UNIX_SOCKET_PREFIX "unix://"
 
+/**
+ * Vsock prefix for DCGM Host Engine
+ */
+#define DCGM_VSOCK_SOCKET_PREFIX "vsock://"
+
+/**
+ * TCP socket prefix for DCGM Host Engine
+ */
+#define DCGM_TCP_SOCKET_PREFIX "tcp://"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -396,9 +406,26 @@ typedef enum dcgmReturn_enum
     DCGM_ST_FILE_IO_ERROR                   = -63, //!< A file operation failed
     DCGM_ST_CHILD_SIGNAL_RECEIVED           = -64, //!< A child process received a signal
     DCGM_ST_CALLER_ALREADY_STOPPED          = -65, //!< The caller is already stopped
+    DCGM_ST_DIAG_STOPPED                    = -66, //!< The DCGM Diagnostic was stopped
+    DCGM_ST_GPUS_DETACHED                   = -67, //!< GPUs are detached
 } dcgmReturn_t;
 
 const char *errorString(dcgmReturn_t result);
+
+/**
+ * Status of an entity (GPU, NvSwitch, etc.)
+ */
+typedef enum dcgmEntityStatusType_enum
+{
+    DcgmEntityStatusUnknown = 0,  //!< Entity has not been referenced yet
+    DcgmEntityStatusOk,           //!< Entity is known and OK
+    DcgmEntityStatusUnsupported,  //!< Entity is unsupported by DCGM
+    DcgmEntityStatusInaccessible, //!< Entity is inaccessible, usually due to cgroups
+    DcgmEntityStatusLost,         //!< Entity has been lost. Usually set from NVML returning NVML_ERROR_GPU_IS_LOST
+    DcgmEntityStatusFake,         //!< Entity is a fake, injection-only entity for testing
+    DcgmEntityStatusDisabled,     //!< Don't collect values from this GPU
+    DcgmEntityStatusDetached      //!< Entity is detached, not good for any uses
+} DcgmEntityStatus_t;
 
 /**
  * Type of GPU groups
@@ -576,6 +603,35 @@ typedef dcgmConnectV2Params_v2 dcgmConnectV2Params_t;
  * Latest version for \ref dcgmConnectV2Params_t
  */
 #define dcgmConnectV2Params_version dcgmConnectV2Params_version2
+
+/**
+ * Connection options for dcgmConnect_v3 (v1)
+ */
+typedef struct
+{
+    unsigned int version;                /*!< Version number. Use dcgmConnectV3Params_version */
+    unsigned int persistAfterDisconnect; /*!< Whether to persist DCGM state modified by this connection once the
+                                              connection is terminated. Normally, all field watches created by a
+                                              connection are removed once a connection goes away. 1 = do not clean up
+                                              after this connection. 0 = clean up after this connection */
+    unsigned int timeoutMs;              /*!< When attempting to connect to the specified host engine, how long should
+                                              we wait in milliseconds before giving up */
+} dcgmConnectV3Params_v1;
+
+/**
+ * Typedef for \ref dcgmConnectV3Params_v1
+ */
+typedef dcgmConnectV3Params_v1 dcgmConnectV3Params_t;
+
+/**
+ * Version 1 for \ref dcgmConnectV3Params_v1
+ */
+#define dcgmConnectV3Params_version1 MAKE_DCGM_VERSION(dcgmConnectV3Params_v1, 1)
+
+/**
+ * Latest version for \ref dcgmConnectV3Params_t
+ */
+#define dcgmConnectV3Params_version dcgmConnectV3Params_version1
 
 /**
  * Typedef for \ref dcgmHostengineHealth_v1
@@ -2760,9 +2816,9 @@ typedef enum dcgmPerGpuTestIndices_enum
     DCGM_PULSE_TEST_INDEX       = 8,  //!< Pulse test index
     DCGM_EUD_TEST_INDEX         = 9,  //!< EUD test index
     DCGM_NVBANDWIDTH_INDEX      = 10, //!< NVBandwidth index
+    DCGM_NCCL_TESTS_INDEX       = 11, //!< Nccl-tests index
     // Remaining tests are included for convenience but have different execution rules
     // See DCGM_PER_GPU_TEST_COUNT
-    DCGM_UNUSED2_TEST_INDEX   = 11,
     DCGM_UNUSED3_TEST_INDEX   = 12,
     DCGM_UNUSED4_TEST_INDEX   = 13,
     DCGM_UNUSED5_TEST_INDEX   = 14,
@@ -3799,7 +3855,7 @@ typedef dcgmNvLinkStatus_v4 dcgmNvLinkStatus_t;
  */
 typedef enum dcgmNvLinkGpuP2PStatus_enum
 {
-    DvgmNvLinkP2pStatusOK = 0,               //!< O.K.
+    DcgmNvLinkP2pStatusOK = 0,               //!< O.K.
     DcgmNvLinkP2pStatusChipsetNotSupported,  //!< Chipset not supported
     DcgmNvLinkP2pStatusGpuNotSupported,      //!< GPU not supported
     DcgmNvLinkP2pStatusTopologyNotSupported, //!< Topology not supported
@@ -3918,6 +3974,7 @@ typedef enum
     DcgmModuleStatusPaused     = 5, /*!< Module has been paused. This is a temporary state that will
                                          move to DcgmModuleStatusLoaded once the module is resumed.
                                          This status implies that the module is loaded. */
+    DcgmModuleStatusReloadable = 6, /* Module is reloadable. Implies it's loaded. */
 } dcgmModuleStatus_t;
 
 /**
@@ -4156,7 +4213,6 @@ typedef enum
 #define dcgmVersionInfo_version dcgmVersionInfo_version2
 typedef dcgmVersionInfo_v2 dcgmVersionInfo_t;
 
-
 typedef struct
 {
     unsigned int version;
@@ -4173,6 +4229,28 @@ typedef struct
 #define dcgmEnvVarInfo_version dcgmEnvVarInfo_version1
 typedef dcgmEnvVarInfo_v1 dcgmEnvVarInfo_t;
 
+typedef enum
+{
+    DcgmBUEventStateSystemReinitializing            = 1,
+    DcgmBUEventStateSystemReinitializationCompleted = 2,
+} dcgmBindUnbindEventState_t;
+
+/**
+ * Structure to describe the Mark Modules Reloadable request.
+ */
+typedef struct
+{
+    unsigned int version; //<! Structure version
+    uint32_t moduleMask;  //!< IN/OUT: mask of modules to mark reloadable (IN) / modules
+} dcgmModulesReloadable_v1;
+
+/**
+ * Version 1 of the dcgmMarkModulesReloadable_v1
+ */
+#define dcgmModulesReloadable_version1 MAKE_DCGM_VERSION(dcgmModulesReloadable_v1, 1)
+
+#define dcgmModulesReloadable_version dcgmModulesReloadable_version1
+typedef dcgmModulesReloadable_v1 dcgmModulesReloadable_t;
 
 /** @} */
 

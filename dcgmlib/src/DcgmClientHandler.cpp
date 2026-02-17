@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include "DcgmProtocol.h"
 #include "DcgmRequest.h"
 #include "DcgmSettings.h"
+#include "DcgmVariantHelper.hpp"
 #include "dcgm_util.h"
 #include "timelib.h"
 #include <DcgmIpc.h>
@@ -36,12 +37,8 @@ DcgmClientHandler::DcgmClientHandler()
     : m_dcgmIpc(1)
     , m_mutex(0)
 {
-    dcgmReturn_t dcgmReturn = m_dcgmIpc.Init(std::nullopt,
-                                             std::nullopt,
-                                             DcgmClientHandler::ProcessMessageStatic,
-                                             this,
-                                             DcgmClientHandler::ProcessDisconnectStatic,
-                                             this);
+    dcgmReturn_t dcgmReturn = m_dcgmIpc.Init(
+        std::nullopt, DcgmClientHandler::ProcessMessageStatic, this, DcgmClientHandler::ProcessDisconnectStatic, this);
     if (dcgmReturn != DCGM_ST_OK)
     {
         std::stringstream ss;
@@ -189,116 +186,49 @@ void DcgmClientHandler::ProcessMessageStatic(dcgm_connection_id_t connectionId,
  * helper function for trying to connect to the hostengine.  Returns 0 on success in which
  * case pDcgmHandle will be set as well.
  */
-dcgmReturn_t DcgmClientHandler::TryConnectingToHostEngine(char const identifier[],
-                                                          unsigned int portNumber,
+dcgmReturn_t DcgmClientHandler::TryConnectingToHostEngine(DcgmNs::Common::EndpointVariant const &endpoint,
                                                           dcgmHandle_t *pDcgmHandle,
-                                                          bool addressIsUnixSocket,
                                                           int connectionTimeoutMs)
 {
     dcgm_connection_id_t connectionId { DCGM_CONNECTION_ID_NONE };
-    dcgmReturn_t dcgmReturn;
+    dcgmReturn_t dcgmReturn = DCGM_ST_OK;
 
-    if (addressIsUnixSocket)
-    {
-        dcgmReturn = m_dcgmIpc.ConnectDomain(identifier, connectionId, connectionTimeoutMs);
-    }
-    else
-    {
-        dcgmReturn = m_dcgmIpc.ConnectTcp(identifier, portNumber, connectionId, connectionTimeoutMs);
-    }
+    std::visit(DcgmNs::overloaded(
+                   [&](DcgmNs::Common::UnixEndpoint const &unixEndpoint) {
+                       dcgmReturn = m_dcgmIpc.ConnectDomain(unixEndpoint.path, connectionId, connectionTimeoutMs);
+                   },
+                   [&](DcgmNs::Common::TcpEndpoint const &tcpEndpoint) {
+                       dcgmReturn = m_dcgmIpc.ConnectTcp(
+                           tcpEndpoint.host, tcpEndpoint.port, connectionId, connectionTimeoutMs);
+                   },
+                   [&](DcgmNs::Common::VsockEndpoint const &vsockEndpoint) {
+                       dcgmReturn = m_dcgmIpc.ConnectVsock(
+                           vsockEndpoint.cid, vsockEndpoint.port, connectionId, connectionTimeoutMs);
+                   }),
+               endpoint);
 
     *pDcgmHandle = (dcgmHandle_t)connectionId;
     return dcgmReturn;
 }
 
-/* For ip and port pairs, return the identifier and the port number.
-   For addressIsUnixSocket, this is a no-op. */
-dcgmReturn_t DcgmClientHandler::splitIdentifierAndPort(std::string_view identifier,
-                                                       bool const addressIsUnixSocket,
-                                                       std::vector<char> &result,
-                                                       unsigned int &portNumber)
-{
-    if (identifier.empty())
-    {
-        log_warning("Rejecting empty identifier");
-        return DCGM_ST_NO_DATA;
-    }
-
-    if (addressIsUnixSocket)
-    {
-        constexpr size_t SUN_PATH_MAX = 108;
-        if (SUN_PATH_MAX < identifier.length())
-        {
-            log_warning("Rejecting AF_UNIX identifier with excessive length {}", identifier.length());
-            return DCGM_ST_BADPARAM;
-        }
-    }
-    // Accomodate '[' ... ']' ':' port
-    else if ((2 * INET6_ADDRSTRLEN) < identifier.length())
-    {
-        log_warning("Rejecting AF_INET identifier with excessive length {}", identifier.length());
-        return DCGM_ST_BADPARAM;
-    }
-
-    // create local copy of identifier
-    std::vector<char> identifierTemp(identifier.length() + 1);
-    std::copy(identifier.begin(), identifier.end(), identifierTemp.begin());
-    identifierTemp.back() = '\0';
-
-    /* Attempt to find :port */
-    size_t pos = identifier.rfind(':');
-
-    /* If the identifier is a unix socket, a bracketed address w/no port, or no port, use the default port */
-    if (addressIsUnixSocket || identifier.back() == ']' || pos == identifier.npos)
-    {
-        portNumber = DCGM_HE_PORT_NUMBER;
-        result     = std::move(identifierTemp);
-        return DCGM_ST_OK;
-    }
-
-    /* If empty before/after the ':', address must not be valid */
-    if (pos == 0 || identifier.size() <= (pos + 1))
-    {
-        log_debug("Rejecting partial identifier '{}'", identifier);
-        return DCGM_ST_BADPARAM;
-    }
-
-    std::string_view portStr = identifier.substr(pos + 1, identifier.size() - pos - 1);
-    unsigned int foundPort   = atoi(portStr.data());
-
-    // Check if in valid range 1-65535
-    if ((foundPort <= 0) || (foundPort > 65535))
-    {
-        log_debug("Rejecting invalid port {}'", portStr);
-        return DCGM_ST_BADPARAM;
-    }
-
-    portNumber = foundPort;
-    identifierTemp.resize(pos + 1);
-    identifierTemp.back() = '\0';
-    result                = std::move(identifierTemp);
-    return DCGM_ST_OK;
-}
-
 /*****************************************************************************
  * Get Connection to the host engine corresponding to the IP address or FQDN
  *****************************************************************************/
-dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *identifier,
+dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *connectionString,
                                                            dcgmHandle_t *pDcgmHandle,
-                                                           unsigned int timeoutMs,
-                                                           bool addressIsUnixSocket)
+                                                           unsigned int timeoutMs)
 {
     if (!timeoutMs)
     {
         timeoutMs = 5000; /* 5-second default timeout */
     }
 
-    std::vector<char> identifierTemp {};
-    unsigned int portNumber = 0;
-    dcgmReturn_t st         = splitIdentifierAndPort(identifier, addressIsUnixSocket, identifierTemp, portNumber);
-
-    if (st != DCGM_ST_OK)
-        return st;
+    auto endpoint = DcgmNs::Common::ParseEndpoint(connectionString);
+    if (!endpoint.has_value())
+    {
+        log_error("failed to parse connection string {}", connectionString);
+        return DCGM_ST_BADPARAM;
+    }
 
     unsigned int attempt       = 0;
     bool connected             = false;
@@ -310,11 +240,15 @@ dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *identifie
     for (;;)
     {
         attempt++;
-        if (DCGM_ST_OK
-            == TryConnectingToHostEngine(
-                identifierTemp.data(), portNumber, pDcgmHandle, addressIsUnixSocket, timeoutMs))
+        dcgmReturn_t dcgmReturn = TryConnectingToHostEngine(*endpoint, pDcgmHandle, timeoutMs);
+        if (DCGM_ST_OK == dcgmReturn)
         {
             connected = true;
+            break;
+        }
+        else if (DCGM_ST_BADPARAM == dcgmReturn)
+        {
+            connected = false;
             break;
         }
 
@@ -324,7 +258,9 @@ dcgmReturn_t DcgmClientHandler::GetConnHandleForHostEngine(const char *identifie
             break;
         }
 
-        log_debug("failed connecting to hostengine, still going to try for {} more ms", timeoutMs - (start - now));
+        log_debug("failed connecting to hostengine, ret: {}, still going to try for {} more ms",
+                  dcgmReturn,
+                  timeoutMs - (start - now));
         usleep(WAIT_MS * 1000);
     }
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,28 +17,29 @@ import time
 import json
 from collections import OrderedDict
 
+
 class TestData:
     # -------------------------------------------------------------
     def __init__(self):
         self.dataMapFinal = OrderedDict()
         self.dataMap = OrderedDict()
         self.summary = {
-            "startTime" : "",
-            "endTime" : "",
-            "timeOfRun" : "",
-            "numberOfTestsRun" : 0,
-            "testsPassed" : 0,
-            "testsFailed" : 0,
-            "testsSkipped" : 0
+            "startTime": "",
+            "endTime": "",
+            "timeOfRun": "",
+            "numberOfTestsRun": 0,
+            "testsPassed": 0,
+            "testsFailed": 0,
+            "testsSkipped": 0
         }
 
         self.dataMapStorage = {
-            "startTime":"",
-            "endTime":"",
-            "timeOfRun":"",
-            "name":"",
+            "startTime": "",
+            "endTime": "",
+            "timeOfRun": "",
+            "name": "",
             "status": "",
-            "message":""
+            "message": ""
         }
 
         self.curModuleName = ""
@@ -55,8 +56,8 @@ class TestData:
     def addModuleName(self, moduleName):
         self.refreshClassVars()
         self.curModuleName = moduleName
-        
-        if moduleName not in self.dataMap: 
+
+        if moduleName not in self.dataMap:
             self.dataMap[moduleName] = {}
 
     # addModule
@@ -71,16 +72,16 @@ class TestData:
     #
     def addModule(self, moduleName, functionNames):
         self.addModuleName(moduleName)
-        
+
         temp = {}
         for name in functionNames:
             funcDic = {
-                "runData":list([]),
+                "runData": list([]),
                 "isMultiRun": 0,
                 "allTests": []
-                }
+            }
             temp[name] = dict(funcDic)
-        
+
         self.dataMap[moduleName] = temp
 
     # refreshClassVars
@@ -89,7 +90,7 @@ class TestData:
     def refreshClassVars(self):
         self.curModuleName = ""
         self.curFuncName = ""
-        
+
     # initFuncDict
     #
     # initialize dictionary for currently cached function.
@@ -97,7 +98,8 @@ class TestData:
     def initFuncDic(self):
         dictionary = dict(self.dataMapStorage)
         dictionary["name"] = self.curFuncName
-        self.dataMap[self.curModuleName][self.curFuncName]["runData"].append(dictionary)
+        self.dataMap[self.curModuleName][self.curFuncName]["runData"].append(
+            dictionary)
 
     # addName
     #
@@ -107,16 +109,16 @@ class TestData:
     #
     def addName(self, functionName):
         self.curFuncName = functionName
-        
+
         if self.curFuncName not in self.dataMap[self.curModuleName]:
             funcDic = {
-                "runData":list([]),
+                "runData": list([]),
                 "isMultiRun": 0,
                 "allTests": []
             }
 
             self.dataMap[self.curModuleName][self.curFuncName] = funcDic
-            
+
         self.initFuncDic()
 
     # addModuleStartTime
@@ -125,9 +127,10 @@ class TestData:
     #
     def addModuleStarttime(self):
         startTimeSeconds = time.time()
-        startTimeMicroseconds = datetime.datetime.fromtimestamp(startTimeSeconds)
+        startTimeMicroseconds = datetime.datetime.fromtimestamp(
+            startTimeSeconds)
         startTime = startTimeMicroseconds.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        
+
         self.dataMap[self.curModuleName]["startTime"] = startTime
 
     # -------------------------------------------------------------
@@ -139,10 +142,11 @@ class TestData:
         endTimeSeconds = time.time()
         endTimeMicroseconds = datetime.datetime.fromtimestamp(endTimeSeconds)
         endTime = endTimeMicroseconds.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        
+
         self.dataMap[self.curModuleName]["endTime"] = endTime
 
-        start_time = datetime.datetime.strptime(self.dataMap[self.curModuleName]["startTime"], "%Y-%m-%d %H:%M:%S.%f")
+        start_time = datetime.datetime.strptime(
+            self.dataMap[self.curModuleName]["startTime"], "%Y-%m-%d %H:%M:%S.%f")
         end_time = datetime.datetime.strptime(endTime, "%Y-%m-%d %H:%M:%S.%f")
         time_diff = end_time - start_time
         self.dataMap[self.curModuleName]["timeOfRun"] = str(time_diff)
@@ -156,16 +160,17 @@ class TestData:
     #
     #     runNumber - test run mumber (default 0)
     #
-    def addStartTime(self, runNumber = 0):
+    def addStartTime(self, runNumber=0):
         startTimeSeconds = time.time()
-        startTimeMicroseconds = datetime.datetime.fromtimestamp(startTimeSeconds)
+        startTimeMicroseconds = datetime.datetime.fromtimestamp(
+            startTimeSeconds)
         startTime = startTimeMicroseconds.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         if runNumber not in self.dataMap[self.curModuleName][self.curFuncName]["runData"]:
-            self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber] = {}
-        
-        self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["startTime"] = startTime
+            self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber] = {
+            }
 
+        self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["startTime"] = startTime
 
     # addEndTime
     #
@@ -176,17 +181,20 @@ class TestData:
     #
     #     runNumber - test run mumber (default 0)
     #
-    def addEndTime(self, runNumber = 0):
+
+    def addEndTime(self, runNumber=0):
         endTimeSeconds = time.time()
         endTimeMicroseconds = datetime.datetime.fromtimestamp(endTimeSeconds)
         endTime = endTimeMicroseconds.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        
-        self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["endTime"]= endTime
 
-        start_time = datetime.datetime.strptime(self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["startTime"], "%Y-%m-%d %H:%M:%S.%f")
+        self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["endTime"] = endTime
+
+        start_time = datetime.datetime.strptime(
+            self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["startTime"], "%Y-%m-%d %H:%M:%S.%f")
         end_time = datetime.datetime.strptime(endTime, "%Y-%m-%d %H:%M:%S.%f")
         time_diff = end_time - start_time
-        self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["timeOfRun"] = str(time_diff)
+        self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["timeOfRun"] = str(
+            time_diff)
 
     # addTestSuiteStartTime
     #
@@ -194,9 +202,10 @@ class TestData:
     #
     def addTestSuiteStartTime(self):
         startTimeSeconds = time.time()
-        startTimeMicroseconds = datetime.datetime.fromtimestamp(startTimeSeconds)
+        startTimeMicroseconds = datetime.datetime.fromtimestamp(
+            startTimeSeconds)
         startTime = startTimeMicroseconds.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        
+
         self.summary["startTime"] = startTime
 
     # addTestSuiteEndTime
@@ -208,10 +217,11 @@ class TestData:
         endTimeSeconds = time.time()
         endTimeMicroseconds = datetime.datetime.fromtimestamp(endTimeSeconds)
         endTime = endTimeMicroseconds.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        
+
         self.summary["endTime"] = endTime
 
-        start_time = datetime.datetime.strptime(self.summary["startTime"], "%Y-%m-%d %H:%M:%S.%f")
+        start_time = datetime.datetime.strptime(
+            self.summary["startTime"], "%Y-%m-%d %H:%M:%S.%f")
         end_time = datetime.datetime.strptime(endTime, "%Y-%m-%d %H:%M:%S.%f")
         time_diff = end_time - start_time
         self.summary["timeOfRun"] = str(time_diff)
@@ -233,11 +243,11 @@ class TestData:
         # incrememnt test count
         self.summary["numberOfTestsRun"] += 1
         if status == "SUCCESS":
-            self.summary["testsPassed"] +=1
+            self.summary["testsPassed"] += 1
         elif status == "FAILED":
-            self.summary["testsFailed"] +=1
+            self.summary["testsFailed"] += 1
         else:
-            self.summary["testsSkipped"] +=1
+            self.summary["testsSkipped"] += 1
 
     # addMessage
     #
@@ -259,7 +269,7 @@ class TestData:
     def deleteEntry(self, runNumber):
         self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["startTime"] = ""
         self.dataMap[self.curModuleName][self.curFuncName]["runData"][runNumber]["endTime"] = ""
-        
+
     # updateMultiRun
     #
     # Set the multirun flag on the cached module and function.
@@ -278,7 +288,8 @@ class TestData:
     #
     def addSummary(self):
         self.dataMapFinal["testSuite"] = dict(self.dataMap)
-        self.dataMapFinal = OrderedDict([("summary", self.summary)] + list(self.dataMapFinal.items()))
+        self.dataMapFinal = OrderedDict(
+            [("summary", self.summary)] + list(self.dataMapFinal.items()))
 
     # sortInDescendingOrderOfTime
     #
@@ -302,12 +313,16 @@ class TestData:
 
         # sorting tests within each module based on timeofrun
         for module in data:
-            sortedTestKeys = sorted(data[module].keys(), key=lambda x: maxTimeOfRun(data[module][x]), reverse=True)
-            mapOfSortedTests[module] = {t: data[module][t] for t in sortedTestKeys}
-            
+            sortedTestKeys = sorted(data[module].keys(), key=lambda x: maxTimeOfRun(
+                data[module][x]), reverse=True)
+            mapOfSortedTests[module] = {t: data[module][t]
+                                        for t in sortedTestKeys}
+
         # sorting each module based on longest running test
-        temp = sorted(mapOfSortedTests.keys(), key=lambda x: convertToDatetime(mapOfSortedTests[x][next(iter(mapOfSortedTests[x]))]["runData"][0]["timeOfRun"]), reverse=True)
-        mapOfSortedModules = {module: mapOfSortedTests[module] for module in temp}
+        temp = sorted(mapOfSortedTests.keys(), key=lambda x: convertToDatetime(
+            mapOfSortedTests[x][next(iter(mapOfSortedTests[x]))]["runData"][0]["timeOfRun"]), reverse=True)
+        mapOfSortedModules = {
+            module: mapOfSortedTests[module] for module in temp}
 
         return mapOfSortedModules
 
@@ -325,15 +340,15 @@ class TestData:
         if compiled:
             # saving compiled version
             with open(self.jsonFilePathCompiled, 'w') as json_file:
-                json.dump(self.dataMapFinal, json_file, indent=4) 
+                json.dump(self.dataMapFinal, json_file, indent=4)
         else:
             # saving full version
             if intermediate == 1:
                 with open(self.jsonFilePath, 'w') as json_file:
-                    json.dump(self.dataMap, json_file, indent=4) 
+                    json.dump(self.dataMap, json_file, indent=4)
             else:
                 with open(self.jsonFilePath, 'w') as json_file:
-                    json.dump(self.dataMapFinal, json_file, indent=4) 
+                    json.dump(self.dataMapFinal, json_file, indent=4)
 
     # sortDataMap
     #
@@ -343,8 +358,3 @@ class TestData:
         # sort the dictionary
         self.dataMapFinal["testSuite"] = self.sortInDescendingOrderOfTime()
         self.saveMapToJson()
-
-
-    
-
-

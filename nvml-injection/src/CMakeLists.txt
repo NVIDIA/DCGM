@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,16 @@ set_property(
 
 add_compile_definitions(NVML_NO_UNVERSIONED_FUNC_DEFS)
 
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/WithInjectionSku.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/WithInjectionSku.h"
+    @ONLY
+)
+
+# UnitTestHelpers.cpp will include the generated header (WithInjectionSku.h) in the build directory.
+# We define this variable so that other files (unit tests of nvml-injection) that want to build UnitTestHelpers.cpp can include it.
+set(UNIT_TEST_HELPERS_HEADER_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+
 target_link_libraries(
     nvmli_public
     PRIVATE
@@ -36,6 +46,7 @@ target_sources(nvmli_public
         NvmlInjectionUtil.cpp
         nvml_generated_stubs.cpp
         nvml_stubs.cpp
+        UnitTestHelpers.cpp
 )
 
 set_target_properties(nvml_injection PROPERTIES LINKER_LANGUAGE CXX)
@@ -57,5 +68,6 @@ target_link_libraries(nvml_injection PRIVATE -Wl,--version-script,${CMAKE_CURREN
 target_link_libraries(nvml_injection PRIVATE fmt::fmt)
 target_include_directories(nvml_injection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(nvml_injection PRIVATE ${YAML_INCLUDE_DIR})
+target_include_directories(nvmli_public PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 add_subdirectory(tests)

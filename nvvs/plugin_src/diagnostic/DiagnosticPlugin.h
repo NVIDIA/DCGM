@@ -1,5 +1,4 @@
-/*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+/* * Copyright (c) 2023-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +25,12 @@
 #include "PluginStrings.h"
 #include <PluginInterface.h>
 
+#include <dcgm_fields_internal.hpp>
+
 #include <cublas_proxy.hpp>
 #include <cuda.h>
 #include <fmt/format.h>
+#include <numeric>
 
 #define PERF_STAT_NAME "perf_gflops"
 
@@ -39,6 +41,7 @@
 #define USE_HALF_PRECISION(x)   (((x) & DIAG_HALF_PRECISION) != 0)
 #define USE_SINGLE_PRECISION(x) (((x) & DIAG_SINGLE_PRECISION) != 0)
 #define USE_DOUBLE_PRECISION(x) (((x) & DIAG_DOUBLE_PRECISION) != 0)
+
 
 /*****************************************************************************/
 /* Class for a single gpuburn device */
@@ -181,6 +184,11 @@ public:
 
     std::string GetDiagnosticTestName() const;
 
+    bool AlwaysUseTensor() const
+    {
+        return m_useTensorAlways;
+    }
+
 private:
     /*************************************************************************/
     /*
@@ -230,7 +238,11 @@ private:
      * Returns:
      *      A pair of double containing first: the mean and second: the min threshold
      */
-    double GetGflopsMinThreshold(const std::vector<double> &gflops, double tolerancePcnt) const;
+    double GetMinThreshold(auto const &values, double tolerancePcnt) const
+    {
+        const double mean = static_cast<double>(std::accumulate(values.begin(), values.end(), 0.0)) / values.size();
+        return (1.0 - tolerancePcnt) * mean;
+    }
 
     /*************************************************************************/
     /*
@@ -239,7 +251,16 @@ private:
      * Returns:
      *      A vector of indices referring to elements in gflops that are below the threshold value
      */
-    std::vector<size_t> GetGflopsBelowMinThreshold(const std::vector<double> &gflops, double minThresh) const;
+    std::vector<size_t> GetIndicesBelowMinThreshold(auto const &values, double minThresh) const
+    {
+        std::vector<size_t> result;
+        for (size_t i = 0; i < values.size(); i++)
+        {
+            if (values[i] < minThresh)
+                result.push_back(i);
+        }
+        return result;
+    }
 
     /*************************************************************************/
     /*
@@ -248,9 +269,149 @@ private:
      * Returns:
      *      None
      */
-    void ReportGpusBelowMinThreshold(const std::vector<double> &gflops,
+    bool ReportGpusBelowMinThreshold(auto const &values,
                                      const std::vector<size_t> &indices,
-                                     double minThresh);
+                                     double minThresh,
+                                     std::string const &name)
+    {
+        bool errorDetected = false;
+        for (size_t i : indices)
+        {
+            DcgmError d { m_device[i]->gpuId };
+            // Use DCGM_FR_GFLOPS_THRESHOLD_VIOLATION for all because we specify the name anyway
+            //  "Detected %.2f %s for GPU %u which is below the threshold %.2f"
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_GFLOPS_THRESHOLD_VIOLATION, d, (double)values[i], name.c_str(), m_device[i]->gpuId, minThresh);
+            log_error(d.GetMessage());
+            AddError(GetDiagnosticTestName(), d);
+            errorDetected = true;
+        }
+
+        return errorDetected;
+    }
+
+    /*************************************************************************/
+    /*
+     * Checks the percentage to make sure it's valid and changes it to 0.0 (ignored) if invalid.
+     *
+     * @param pcnt (I/O) - the user-specified percentage
+     * @param name (I)   - the name of the percentage we're checking
+     */
+    void CorrectTolerancePercentageIfWrong(double &pcnt, std::string_view const &name) const;
+
+    /*************************************************************************/
+    /*
+     * On multi-GPU systems, checks if any are outside the tolerable range
+     *
+     * Returns: true if we detect a failure due to performance variation, false otherwise
+     */
+    bool CheckVariationFailures(unsigned long startTime, std::vector<double> &gflops);
+
+    /*
+     * Sets the specific tolerance if it's unset and a global tolerance has been set
+     *
+     * @param name      (I) - the name of the parameter
+     * @param param     (O) - the specific tolerance percentage setting
+     * @param tolerance (I) - the global tolerance percentage setting
+     */
+    void SetToleranceIfUnset(std::string_view const &name, double &param, double tolerancePcnt);
+
+    /*
+     * Retrieves the per GPU averages for a watched field for the specifed period of time, and populates the
+     * supplied vector with one average for each GPU.
+     *
+     * @param fieldId        (I) - the field ID that should be checked
+     * @param averagesVector (O) - the vector with per-GPU average values for the field.
+     * @param startTime      (I) - the start time for this test
+     * @param endTime        (I) - the end time for this test
+     *
+     * @return DCGM_ST_OK if the averages were retrieved correctly, false otherwise
+     */
+    dcgmReturn_t GetAverages(unsigned short fieldId,
+                             auto &averagesVector,
+                             unsigned long startTime,
+                             unsigned long endTime)
+    {
+        dcgmFieldSummaryRequest_t request;
+        request.version         = dcgmFieldSummaryRequest_version1;
+        request.fieldId         = fieldId;
+        request.entityGroupId   = DCGM_FE_GPU;
+        request.summaryTypeMask = DCGM_SUMMARY_AVG;
+        request.startTime       = startTime;
+        request.endTime         = endTime;
+
+        // We can't check variance if there's only 1 GPU
+        if (m_device.size() == 1)
+        {
+            return DCGM_ST_OK;
+        }
+
+        for (auto &&device : m_device)
+        {
+            request.entityId = device->gpuId;
+            memset(&request.response, 0, sizeof(request.response));
+
+            dcgmReturn_t ret = m_dcgmRecorder.GetFieldSummary(request);
+            if (ret != DCGM_ST_OK)
+            {
+                log_error("Cannot get average for field {}: {}", fieldId, errorString(ret));
+                return ret;
+            }
+            else
+            {
+                switch (request.response.fieldType)
+                {
+                    case DCGM_FT_DOUBLE:
+                        averagesVector.emplace_back(request.response.values[0].fp64);
+                        break;
+                    case DCGM_FT_INT64:
+                        averagesVector.emplace_back(request.response.values[0].i64);
+                        break;
+                    default:
+                        log_error("Field {} has unsupported field type: {}", fieldId, request.response.fieldType);
+                        return DCGM_ST_BADPARAM;
+                }
+            }
+        }
+
+        return DCGM_ST_OK;
+    }
+
+    /*
+     * Checks the calculated averages for the field against the tolerance percentage to see if any are outside the
+     * tolerable range.
+     *
+     * @param averages      (I) - a vector of average values for the field
+     * @param tolerancePcnt (I) - a percentage variation that is considered tolerance. (0.1 means 10%)
+     * @param name          (I) - the name of the field
+     * @return true if at least one GPU exceeds the specified allowed variance
+     */
+    bool CheckAveragesForExcessiveVariation(auto &averages, double tolerancePcnt, std::string const &name)
+    {
+        if (averages.size() < 2 || tolerancePcnt <= 0.0)
+        {
+            return false;
+        }
+
+        double minThreshold = GetMinThreshold(averages, tolerancePcnt);
+        auto indices        = GetIndicesBelowMinThreshold(averages, minThreshold);
+        return ReportGpusBelowMinThreshold(averages, indices, minThreshold, name);
+    }
+
+    /*
+     * Checks a given field to see if it exceeds the allowable tolerance of mean variation.
+     *
+     * @param fieldId       (I) - the ID of the field to be checked
+     * @param tolerancePcnt (I) - the percentage of tolerance among GPU means that is considered acceptable
+     * @param startTime     (I) - the start time for the test
+     * @param endTime       (I) - the end time for the test
+     *
+     * @return true if at leat one GPU exceeds the specified allowed variance for the field
+     */
+    bool CheckToleranceForField(unsigned short fieldId,
+                                double tolerancePcnt,
+                                unsigned long startTime,
+                                unsigned long endTime);
 
     /*************************************************************************/
     /*
@@ -276,6 +437,7 @@ private:
     double m_gflopsTolerancePcnt; /* % of mean gflops below which an error is reported */
     int32_t m_precision;          /* bitmap for what precision we should use (half, single, double) */
     unsigned int m_matrixDim;     /* The dimension size of the matrix */
+    bool m_useTensorAlways;       /* true if we should always use tensor when possible */
 
     friend GpuBurnPluginTester;
 };
@@ -285,18 +447,16 @@ private:
 class GpuBurnPluginTester
 {
 public:
-    static double GetGflopsMinThreshold(const GpuBurnPlugin &gbp,
-                                        const std::vector<double> &gflops,
-                                        double tolerancePcnt)
+    static double GetMinThreshold(const GpuBurnPlugin &gbp, auto const &values, double tolerancePcnt)
     {
-        return gbp.GetGflopsMinThreshold(gflops, tolerancePcnt);
+        return gbp.GetMinThreshold(values, tolerancePcnt);
     }
 
-    static std::vector<size_t> GetGflopsBelowMinThreshold(const GpuBurnPlugin &gbp,
-                                                          const std::vector<double> &gflops,
-                                                          double minThresh)
+    static std::vector<size_t> GetIndicesBelowMinThreshold(const GpuBurnPlugin &gbp,
+                                                           auto const &values,
+                                                           double minThresh)
     {
-        return gbp.GetGflopsBelowMinThreshold(gflops, minThresh);
+        return gbp.GetIndicesBelowMinThreshold(values, minThresh);
     }
 };
 
@@ -448,6 +608,12 @@ public:
      */
     void run() override;
 
+    /*************************************************************************/
+    /*
+     * Calculate and or return the multiplier for calculating gigaflops
+     */
+    double GetGFlopsMultiplier();
+
 private:
     /*************************************************************************/
     /*
@@ -514,6 +680,7 @@ private:
     DcgmRecorder &m_dcgmRecorder;
     bool m_failEarly {};
     friend GpuBurnWorkerTester;
+    double m_gflopsMultiplier = 0.0;
 };
 /*****************************************************************************/
 /* GpuBurnWorkerTester - attorney class to facilitate testing */
@@ -525,5 +692,7 @@ public:
         return gbw.m_nElemsPerIter;
     }
 };
+
+double CalculateGFlopsMultiplier(unsigned int matrixDim);
 
 #endif // DIAGNOSTICPLUGIN_H

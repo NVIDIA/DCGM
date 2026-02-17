@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ namespace
 int nvmlPciInfoExt_tCompare(const nvmlPciInfoExt_t &a, const nvmlPciInfoExt_t &b);
 int nvmlPciInfo_tCompare(const nvmlPciInfo_t &a, const nvmlPciInfo_t &b);
 int nvmlEccErrorCounts_tCompare(const nvmlEccErrorCounts_t &a, const nvmlEccErrorCounts_t &b);
+int nvmlUnrepairableMemoryStatus_tCompare(const nvmlUnrepairableMemoryStatus_t &a, const nvmlUnrepairableMemoryStatus_t &b);
 int nvmlUtilization_tCompare(const nvmlUtilization_t &a, const nvmlUtilization_t &b);
 int nvmlMemory_tCompare(const nvmlMemory_t &a, const nvmlMemory_t &b);
 int nvmlMemory_v2_tCompare(const nvmlMemory_v2_t &a, const nvmlMemory_v2_t &b);
@@ -258,6 +259,22 @@ int nvmlEccErrorCounts_tCompare(const nvmlEccErrorCounts_t &a, const nvmlEccErro
     if (a.registerFile != b.registerFile)
     {
         return a.registerFile < b.registerFile ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlUnrepairableMemoryStatus_tCompare(const nvmlUnrepairableMemoryStatus_t &a, const nvmlUnrepairableMemoryStatus_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.bUnrepairableMemory != b.bUnrepairableMemory)
+    {
+        return a.bUnrepairableMemory < b.bUnrepairableMemory ? -1 : 1;
     }
     return 0;
 }
@@ -8192,6 +8209,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             break;
         }
         // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_UNREPAIRABLEMEMORYSTATUS:
+        {
+            if (other.m_type == INJECTION_UNREPAIRABLEMEMORYSTATUS)
+            {
+                memcpy(&m_value.UnrepairableMemoryStatus, &other.m_value.UnrepairableMemoryStatus, sizeof(*&m_value.UnrepairableMemoryStatus));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR)
+            {
+                memcpy(&m_value.UnrepairableMemoryStatus, other.m_value.UnrepairableMemoryStatusPtr, sizeof(*&m_value.UnrepairableMemoryStatus));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR:
+        {
+            if (other.m_type == INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR)
+            {
+                memcpy(m_value.UnrepairableMemoryStatusPtr, other.m_value.UnrepairableMemoryStatusPtr, sizeof(*m_value.UnrepairableMemoryStatusPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_UNREPAIRABLEMEMORYSTATUS)
+            {
+                memcpy(m_value.UnrepairableMemoryStatusPtr, &other.m_value.UnrepairableMemoryStatus, sizeof(*m_value.UnrepairableMemoryStatusPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_UTILIZATION:
         {
             if (other.m_type == INJECTION_UTILIZATION)
@@ -14117,6 +14165,29 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return memcmp(&m_value.Unit, &other.m_value.Unit, sizeof(m_value.Unit));
                     break; // NOT REACHED
                 }
+                case INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlUnrepairableMemoryStatus_tCompare(*m_value.UnrepairableMemoryStatusPtr, *other.m_value.UnrepairableMemoryStatusPtr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlUnrepairableMemoryStatus_tCompare(*m_value.UnrepairableMemoryStatusPtr, *other.m_value.UnrepairableMemoryStatusPtr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_UNREPAIRABLEMEMORYSTATUS:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlUnrepairableMemoryStatus_tCompare(m_value.UnrepairableMemoryStatus, other.m_value.UnrepairableMemoryStatus);
+                    break; // NOT REACHED
+                }
                 case INJECTION_UTILIZATION_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -16653,6 +16724,14 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.UnitPtr)
             {
                 free(m_value.UnitPtr);
+            }
+            break;
+        }
+        case INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR:
+        {
+            if (m_inHeap && m_value.UnrepairableMemoryStatusPtr)
+            {
+                free(m_value.UnrepairableMemoryStatusPtr);
             }
             break;
         }

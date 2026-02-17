@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +19,46 @@
 #include <DiagnosticPlugin.h>
 #include <PluginInterface.h>
 
+char DcgmFieldGetType(unsigned short fieldId)
+{
+    switch (fieldId)
+    {
+        case DCGM_FI_DEV_POWER_USAGE:
+            return DCGM_FT_DOUBLE;
+        case DCGM_FI_DEV_SM_CLOCK:
+            return DCGM_FT_INT64;
+        default:
+            return ' ';
+    }
+
+    return ' ';
+}
+
+std::unique_ptr<dcgmDiagPluginEntityList_v1> GetEntityList(unsigned int gpuCount, DcgmEntityStatus_t status)
+{
+    auto pEntityInfo                        = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    dcgmDiagPluginEntityList_v1 &entityInfo = *pEntityInfo;
+
+    entityInfo.numEntities = gpuCount;
+    for (unsigned int i = 0; i < gpuCount; i++)
+    {
+        entityInfo.entities[i].entity.entityId      = i;
+        entityInfo.entities[i].entity.entityGroupId = DCGM_FE_GPU;
+        entityInfo.entities[i].auxField.gpu.status  = status;
+    }
+
+    return pEntityInfo;
+}
+
+void InitializeDiagPlugin(GpuBurnPlugin &gbp, unsigned int gpuCount, DcgmEntityStatus_t status)
+{
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = GetEntityList(gpuCount, status);
+    gbp.InitializeForEntityList(gbp.GetDiagnosticTestName(), *entityList);
+}
+
 TEST_CASE("Diagnostic: SetPrecisionFromString")
 {
-    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
-
-    entityList->numEntities                      = 1;
-    entityList->entities[0].entity.entityId      = 0;
-    entityList->entities[0].entity.entityGroupId = DCGM_FE_GPU;
-    entityList->entities[0].auxField.gpu.status  = DcgmEntityStatusOk;
-
+    std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = GetEntityList(1, DcgmEntityStatusOk);
 
     GpuBurnPlugin gbp((dcgmHandle_t)0); // we don't need real values for these
     // Make sure the correct defaults are set - it has no test parameters so far
@@ -85,8 +116,8 @@ TEST_CASE("Diagnostic: GFLOPS Threshold Violation")
         GpuBurnPlugin gbp((dcgmHandle_t)0); // we don't need real values for these
 
         std::vector<double> gflops = { 600.0 };
-        double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.05);
-        auto indicesBelowThreshold = GpuBurnPluginTester::GetGflopsBelowMinThreshold(gbp, gflops, minThresh);
+        double minThresh           = GpuBurnPluginTester::GetMinThreshold(gbp, gflops, 0.05);
+        auto indicesBelowThreshold = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, gflops, minThresh);
         CHECK(indicesBelowThreshold.size() == 0);
     }
 
@@ -95,8 +126,8 @@ TEST_CASE("Diagnostic: GFLOPS Threshold Violation")
     SECTION("Value below threshold")
     {
         std::vector<double> gflops = { 600.0, 598.0, 600.0, 550.0 };
-        double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.05);
-        auto indicesBelowThreshold = GpuBurnPluginTester::GetGflopsBelowMinThreshold(gbp, gflops, minThresh);
+        double minThresh           = GpuBurnPluginTester::GetMinThreshold(gbp, gflops, 0.05);
+        auto indicesBelowThreshold = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, gflops, minThresh);
         CHECK(indicesBelowThreshold.size() > 0);
         CHECK(indicesBelowThreshold == std::vector<size_t> { 3 });
     }
@@ -104,16 +135,16 @@ TEST_CASE("Diagnostic: GFLOPS Threshold Violation")
     SECTION("All values within threshold")
     {
         std::vector<double> gflops = { 600.0, 598.0, 600.0, 550.0 };
-        double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.1);
-        auto indicesBelowThreshold = GpuBurnPluginTester::GetGflopsBelowMinThreshold(gbp, gflops, minThresh);
+        double minThresh           = GpuBurnPluginTester::GetMinThreshold(gbp, gflops, 0.1);
+        auto indicesBelowThreshold = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, gflops, minThresh);
         CHECK(indicesBelowThreshold.size() == 0);
     }
 
     SECTION("Multiple values below threshold")
     {
         std::vector<double> gflops = { 600.0, 1.0, 300.0, 550.0 };
-        double minThresh           = GpuBurnPluginTester::GetGflopsMinThreshold(gbp, gflops, 0.01);
-        auto indicesBelowThreshold = GpuBurnPluginTester::GetGflopsBelowMinThreshold(gbp, gflops, minThresh);
+        double minThresh           = GpuBurnPluginTester::GetMinThreshold(gbp, gflops, 0.01);
+        auto indicesBelowThreshold = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, gflops, minThresh);
         CHECK(indicesBelowThreshold.size() > 0);
         CHECK(indicesBelowThreshold == std::vector<size_t> { 1, 2 });
     }
@@ -122,17 +153,49 @@ TEST_CASE("Diagnostic: GFLOPS Threshold Violation")
 TEST_CASE("Diagnostic: GpuBurnDevice parameters")
 {
     GpuBurnPlugin gbp((dcgmHandle_t)0); // we don't need real values for these
-    auto pEntityInfo                        = std::make_unique<dcgmDiagPluginEntityList_v1>();
-    dcgmDiagPluginEntityList_v1 &entityInfo = *(pEntityInfo.get());
-
-    entityInfo.numEntities                      = 1;
-    entityInfo.entities[0].entity.entityId      = 0;
-    entityInfo.entities[0].entity.entityGroupId = DCGM_FE_GPU;
-
-    gbp.InitializeForEntityList(gbp.GetDiagnosticTestName(), entityInfo);
+    InitializeDiagPlugin(gbp, 1, DcgmEntityStatusOk);
 
     GpuBurnDevice gbd;
     DcgmRecorder dr;
     GpuBurnWorker gbw(&gbd, gbp, DIAG_SINGLE_PRECISION, 15.0, 2048, dr, false, 1001);
     CHECK(GpuBurnWorkerTester::GetNElemsPerIter(gbw) == (2048 * 2048));
+}
+
+TEST_CASE("Diagnostic: Calculate GFlops Multiplier")
+{
+    int matrixSizes[]     = { 2048, 4096, 6144, 8192, 0 };
+    double baseMultiplier = CalculateGFlopsMultiplier(matrixSizes[0]);
+    for (unsigned int i = 0; matrixSizes[i] != 0; i++)
+    {
+        double multiplier = CalculateGFlopsMultiplier(matrixSizes[i]);
+        CHECK(abs(multiplier - (baseMultiplier * pow(matrixSizes[i] / 2048.0, 3))) < 1.0);
+    }
+}
+
+TEST_CASE("Diagnostic: CheckAveragesForExcessiveVariation")
+{
+    GpuBurnPlugin gbp((dcgmHandle_t)0); // we don't need real values for these
+    InitializeDiagPlugin(gbp, 4, DcgmEntityStatusOk);
+
+    std::vector<unsigned long> clockAvgsGood = { 900, 900, 900, 900 };
+    std::vector<unsigned long> clockAvgsBad  = { 900, 500, 900, 900 };
+    double tolerance                         = 0.1;
+    double minThresh                         = GpuBurnPluginTester::GetMinThreshold(gbp, clockAvgsGood, tolerance);
+    auto indices = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, clockAvgsGood, minThresh);
+    CHECK(indices.size() == 0);
+    minThresh = GpuBurnPluginTester::GetMinThreshold(gbp, clockAvgsBad, tolerance);
+    indices   = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, clockAvgsBad, minThresh);
+    REQUIRE(indices.size() == 1);
+    CHECK(indices[0] == 1);
+
+    std::vector<double> powerAvgsGood = { 1350.0, 1340.0, 1400.0, 1370.0 };
+    std::vector<double> powerAvgsBad  = { 1350.0, 1340.0, 1400.0, 870.0 };
+
+    minThresh = GpuBurnPluginTester::GetMinThreshold(gbp, powerAvgsGood, tolerance);
+    indices   = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, powerAvgsGood, minThresh);
+    REQUIRE(indices.size() == 0);
+    minThresh = GpuBurnPluginTester::GetMinThreshold(gbp, powerAvgsBad, tolerance);
+    indices   = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, powerAvgsBad, minThresh);
+    REQUIRE(indices.size() == 1);
+    CHECK(indices[0] == 3);
 }

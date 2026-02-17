@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,9 @@
 #include <DcgmVariantHelper.hpp>
 #include <HangDetectMonitor.h>
 #include <arpa/inet.h>
+#include <event2/dns.h>
+#include <event2/thread.h>
+#include <linux/vm_sockets.h>
 #include <netinet/in.h>
 #include <optional>
 #include <sys/socket.h>
@@ -85,8 +88,7 @@ static void DcgmIpcEventLogCB(int severity, const char *msg)
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmIpc::Init(std::optional<DcgmIpcTcpServerParams_t> tcpParameters,
-                           std::optional<DcgmIpcDomainServerParams_t> domainParameters,
+dcgmReturn_t DcgmIpc::Init(InitParams initParams,
                            DcgmIpcProcessMessageFunc_f processMessageFunc,
                            void *processMessageData,
                            DcgmIpcProcessDisconnectFunc_f processDisconnectFunc,
@@ -121,8 +123,15 @@ dcgmReturn_t DcgmIpc::Init(std::optional<DcgmIpcTcpServerParams_t> tcpParameters
     }
 #endif
 
-    m_tcpParameters    = tcpParameters;
-    m_domainParameters = domainParameters;
+    using DcgmNs::overloaded;
+
+    if (initParams.has_value())
+    {
+        std::visit(overloaded([this](DcgmIpcTcpServerParams_t &params) { m_tcpParameters = params; },
+                              [this](DcgmIpcDomainServerParams_t &params) { m_domainParameters = params; },
+                              [this](DcgmIpcVsockServerParams_t &params) { m_vsockParameters = params; }),
+                   *initParams);
+    }
 
     m_processMessageFunc = std::move(processMessageFunc);
     m_processMessageData = processMessageData;
@@ -182,6 +191,30 @@ DcgmIpc::~DcgmIpc()
         event_free(m_domainListenEvent);
     }
 
+    if (m_vsockListenEvent != nullptr)
+    {
+        event_free(m_vsockListenEvent);
+        m_vsockListenEvent = nullptr;
+    }
+
+    if (m_domainListenSocketFd >= 0)
+    {
+        close(m_domainListenSocketFd);
+        m_domainListenSocketFd = -1;
+    }
+
+    if (m_tcpListenSocketFd >= 0)
+    {
+        close(m_tcpListenSocketFd);
+        m_tcpListenSocketFd = -1;
+    }
+
+    if (m_vsockListenSocketFd >= 0)
+    {
+        close(m_vsockListenSocketFd);
+        m_vsockListenSocketFd = -1;
+    }
+
     /* Free mpBase after any libevent workers are gone */
     if (m_dnsBase)
     {
@@ -219,6 +252,15 @@ void DcgmIpc::run()
     if (dcgmReturn != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "InitUnixListenerSocket() returned " << errorString(dcgmReturn);
+        m_state = DCGM_IPC_STATE_FAILED;
+        m_initPromise.set_value(dcgmReturn);
+        return;
+    }
+
+    dcgmReturn = InitVsockListenerSocket();
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "InitVsockListenerSocket() returned " << errorString(dcgmReturn);
         m_state = DCGM_IPC_STATE_FAILED;
         m_initPromise.set_value(dcgmReturn);
         return;
@@ -512,6 +554,90 @@ dcgmReturn_t DcgmIpc::InitUnixListenerSocket()
     return DCGM_ST_OK;
 }
 
+dcgmReturn_t DcgmIpc::InitVsockListenerSocket()
+{
+    if (!m_vsockParameters.has_value())
+    {
+        DCGM_LOG_DEBUG << "m_vsockParameters was not set.";
+        return DCGM_ST_OK;
+    }
+
+    ASSERT_IS_IPC_THREAD;
+
+    m_vsockListenSocketFd = socket(AF_VSOCK, SOCK_STREAM, 0);
+    if (m_vsockListenSocketFd < 0)
+    {
+        log_error("VSOCK socket creation failed: {}", strerror(errno));
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    int optval = 1;
+    if (setsockopt(m_vsockListenSocketFd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0)
+    {
+        log_error("VSOCK setsockopt(SO_REUSEADDR) failed: {}", strerror(errno));
+        close(m_vsockListenSocketFd);
+        m_vsockListenSocketFd = -1;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    if (SetNonBlocking(m_vsockListenSocketFd) < 0)
+    {
+        log_error("VSOCK SetNonBlocking failed: {}", strerror(errno));
+        close(m_vsockListenSocketFd);
+        m_vsockListenSocketFd = -1;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    struct sockaddr_vm addr = {};
+    addr.svm_family         = AF_VSOCK;
+    addr.svm_port           = m_vsockParameters->port;
+    if (m_vsockParameters->bindAny)
+    {
+        addr.svm_cid = VMADDR_CID_ANY;
+    }
+    else
+    {
+        addr.svm_cid = m_vsockParameters->cid;
+    }
+
+    if (bind(m_vsockListenSocketFd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0)
+    {
+        log_error("VSOCK bind failed: {}", strerror(errno));
+        close(m_vsockListenSocketFd);
+        m_vsockListenSocketFd = -1;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    if (listen(m_vsockListenSocketFd, DCGM_IPC_CONNECTION_BACKLOG) < 0)
+    {
+        log_error("VSOCK listen failed: {}", strerror(errno));
+        close(m_vsockListenSocketFd);
+        m_vsockListenSocketFd = -1;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_vsockListenEvent
+        = event_new(m_eventBase, m_vsockListenSocketFd, EV_READ | EV_PERSIST, DcgmIpc::StaticOnAccept, this);
+    if (m_vsockListenEvent == nullptr)
+    {
+        log_error("VSOCK event_new() failed for VSOCK listener");
+        close(m_vsockListenSocketFd);
+        m_vsockListenSocketFd = -1;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    if (event_add(m_vsockListenEvent, nullptr) < 0)
+    {
+        log_error("VSOCK event_add() failed for VSOCK listener");
+        close(m_vsockListenSocketFd);
+        m_vsockListenSocketFd = -1;
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    return DCGM_ST_OK;
+}
+
+
 /*****************************************************************************/
 dcgmReturn_t DcgmIpc::AddConnection(struct bufferevent *bev,
                                     dcgm_connection_id_t connectionId,
@@ -688,19 +814,17 @@ dcgmReturn_t DcgmIpc::ConnectTcp(std::string hostname,
 {
     connectionId = GetNextConnectionId();
 
-    /* Using new here because we're transferring it through a C callback. The callback will
-       assign this to a unique_ptr and then free it automatically */
-    DcgmIpcConnectTcp *connectTcp = new DcgmIpcConnectTcp(this, std::move(hostname), port, connectionId);
+    auto tcpConnect    = std::make_unique<DcgmIpcConnectTcp>(this, std::move(hostname), port, connectionId);
+    auto connectReturn = tcpConnect->m_promise.get_future();
 
-    std::future<dcgmReturn_t> connectReturn = connectTcp->m_promise.get_future();
-
-    int st = event_base_once(m_eventBase, -1, EV_TIMEOUT, DcgmIpc::ConnectTcpAsyncImplCB, connectTcp, 0);
+    int st = event_base_once(m_eventBase, -1, EV_TIMEOUT, DcgmIpc::ConnectTcpAsyncImplCB, tcpConnect.get(), 0);
     if (st)
     {
-        DCGM_LOG_ERROR << "Got error " << st << " from event_base_once";
+        log_error("Got error {} from event_base_once", st);
         return DCGM_ST_GENERIC_ERROR;
     }
 
+    tcpConnect.release();
     return WaitForConnectHelper(connectionId, connectReturn, timeoutMs);
 }
 
@@ -771,7 +895,7 @@ void DcgmIpc::ConnectDomainAsyncImpl(DcgmIpcConnectDomain &domainConnect)
     if (0 != ret)
     {
         RemoveConnectionByBev(bev);
-        DCGM_LOG_ERROR << "Failed to connect to Host engine running at IP " << domainConnect.m_path;
+        DCGM_LOG_ERROR << "Failed to connect to Host engine running at domain socket " << domainConnect.m_path;
         return;
     }
 
@@ -791,23 +915,112 @@ void DcgmIpc::ConnectDomainAsyncImplCB(evutil_socket_t, short, void *data)
 /*****************************************************************************/
 dcgmReturn_t DcgmIpc::ConnectDomain(std::string path, dcgm_connection_id_t &connectionId, unsigned int timeoutMs)
 {
-    connectionId = GetNextConnectionId();
+    connectionId       = GetNextConnectionId();
+    auto domainConnect = std::make_unique<DcgmIpcConnectDomain>(this, std::move(path), connectionId);
+    auto connectReturn = domainConnect->m_promise.get_future();
 
-    /* Using new here because we're transferring it through a C callback. The callback will
-       assign this to a unique_ptr and then free it automatically */
-    DcgmIpcConnectDomain *connectDomain = new DcgmIpcConnectDomain(this, std::move(path), connectionId);
-
-    std::future<dcgmReturn_t> connectReturn = connectDomain->m_promise.get_future();
-
-    int st = event_base_once(m_eventBase, -1, EV_TIMEOUT, DcgmIpc::ConnectDomainAsyncImplCB, connectDomain, 0);
+    int st = event_base_once(m_eventBase, -1, EV_TIMEOUT, DcgmIpc::ConnectDomainAsyncImplCB, domainConnect.get(), 0);
     if (st)
     {
-        DCGM_LOG_ERROR << "Got error " << st << " from event_base_once";
+        log_error("Got error {} from event_base_once", st);
         return DCGM_ST_GENERIC_ERROR;
     }
 
+    domainConnect.release();
     return WaitForConnectHelper(connectionId, connectReturn, timeoutMs);
 }
+
+dcgmReturn_t DcgmIpc::ConnectVsock(unsigned int cid,
+                                   unsigned short port,
+                                   dcgm_connection_id_t &connectionId,
+                                   unsigned int timeoutMs)
+{
+    connectionId      = GetNextConnectionId();
+    auto vsockConnect = std::make_unique<DcgmIpcConnectVsock>(this, cid, port, connectionId);
+    auto fut          = vsockConnect->m_promise.get_future();
+
+    int st = event_base_once(m_eventBase, -1, EV_TIMEOUT, DcgmIpc::ConnectVsockAsyncImplCB, vsockConnect.get(), 0);
+    if (st)
+    {
+        log_error("Got error {} from event_base_once", st);
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    vsockConnect.release();
+    return WaitForConnectHelper(connectionId, fut, timeoutMs);
+}
+
+void DcgmIpc::ConnectVsockAsyncImplCB(int, short, void *data)
+{
+    std::unique_ptr<DcgmIpcConnectVsock> vsockConnect(static_cast<DcgmIpcConnectVsock *>(data));
+    vsockConnect->m_ipc->ConnectVsockAsyncImpl(*vsockConnect);
+}
+
+/*****************************************************************************/
+void DcgmIpc::ConnectVsockAsyncImpl(DcgmIpcConnectVsock &vsockConnect)
+{
+    ASSERT_IS_IPC_THREAD;
+
+    DCGM_LOG_DEBUG << "Client trying to connect to " << vsockConnect.m_cid << ":" << vsockConnect.m_port;
+
+    int const fd = socket(AF_VSOCK, SOCK_STREAM, 0);
+    if (fd < 0)
+    {
+        log_error("VSOCK socket creation failed: {}", strerror(errno));
+        vsockConnect.m_promise.set_value(DCGM_ST_CONNECTION_NOT_VALID);
+        return;
+    }
+
+    if (SetNonBlocking(fd) < 0)
+    {
+        log_error("Unable to set VSOCK socket to non-blocking: {}", strerror(errno));
+        close(fd);
+        vsockConnect.m_promise.set_value(DCGM_ST_CONNECTION_NOT_VALID);
+        return;
+    }
+
+    struct sockaddr_vm vmAddr = {};
+    vmAddr.svm_family         = AF_VSOCK;
+    vmAddr.svm_cid            = vsockConnect.m_cid;
+    vmAddr.svm_port           = vsockConnect.m_port;
+
+    struct bufferevent *bev = bufferevent_socket_new(m_eventBase, fd, BEV_OPT_CLOSE_ON_FREE);
+    if (bev == nullptr)
+    {
+        log_error("VSOCK bufferevent_socket_new failed: {}", strerror(errno));
+        close(fd);
+        vsockConnect.m_promise.set_value(DCGM_ST_CONNECTION_NOT_VALID);
+        return;
+    }
+
+    // Add connection
+    dcgmReturn_t dcgmRet
+        = AddConnection(bev, vsockConnect.m_connectionId, DCGM_IPC_CS_PENDING, std::move(vsockConnect.m_promise));
+    if (dcgmRet != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Error adding VSOCK connection";
+        bufferevent_free(bev);
+        /* Not setting promise here since it's owned by AddConnection or was destructed there */
+        return;
+    }
+
+    // Set callbacks
+    bufferevent_setcb(bev, DcgmIpc::StaticReadCB, nullptr, DcgmIpc::StaticEventCB, this);
+    bufferevent_enable(bev, EV_READ | EV_WRITE);
+
+    int ret = bufferevent_socket_connect(bev, (struct sockaddr *)&vmAddr, sizeof(vmAddr));
+    if (0 != ret)
+    {
+        RemoveConnectionByBev(bev);
+        DCGM_LOG_ERROR << "Failed to connect to Host engine running at VSOCK " << vsockConnect.m_cid << ":"
+                       << vsockConnect.m_port;
+        return;
+    }
+
+    DCGM_LOG_DEBUG << "connectionId " << vsockConnect.m_connectionId << " connection in progress to "
+                   << vsockConnect.m_cid << ":" << vsockConnect.m_port;
+}
+
 
 /*****************************************************************************/
 void DcgmIpc::MonitorSocketFdAsyncImpl(DcgmIpcMonitorSocketFd &monitorSocketFd)

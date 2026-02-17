@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <DcgmGpuInstance.h>
+#include <NvmlTaskRunner.hpp>
 #include <catch2/catch_all.hpp>
 
 TEST_CASE("GpuInstance: DriveGpuInstanceName")
@@ -38,7 +39,7 @@ TEST_CASE("GpuInstance: DriveGpuInstanceName")
 
 TEST_CASE("GpuInstance: ProfileType Check")
 {
-    nvmlGpuInstance_t instance {};
+    SafeGpuInstance instance {};
     nvmlGpuInstancePlacement_t placement {};
     nvmlGpuInstanceProfileInfo_t profileInfo {};
 

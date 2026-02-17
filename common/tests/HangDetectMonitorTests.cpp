@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -538,52 +538,30 @@ TEST_CASE("HangDetectMonitor::Expiry Timing")
 
     REQUIRE(detector.AddMonitoredTask(pid, std::nullopt) == DCGM_ST_OK);
 
-    SECTION("Reports hang only after expiry time")
-    {
-        // Set process as not hung
-        detector.SetHungState(pid, std::nullopt, false);
-        REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
+    // Set process as already hung before starting monitor
+    detector.SetHungState(pid, std::nullopt, true);
+    REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
 
-        // Wait for monitor to start and verify no premature reports
-        auto const noReportsBeforeHung
-            = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() > 0; }, 100ms);
-        REQUIRE_FALSE(noReportsBeforeHung);
+    // Wait for monitor to start checking
+    auto const startResult = WaitFor([&]() { return detector.GetCheckCount(pid, std::nullopt) > 0; }, 500ms);
+    REQUIRE(startResult);
 
-        // Set process as hung and verify no immediate report
-        detector.SetHungState(pid, std::nullopt, true);
+    // Should not get immediate report prior to expiry time
+    auto const noImmediateReport = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() > 0; }, 100ms);
+    REQUIRE_FALSE(noImmediateReport);
 
-        // Should not get a report before expiry time
-        auto const noReportsBeforeExpiry
-            = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() > 0; }, 150ms);
-        REQUIRE_FALSE(noReportsBeforeExpiry);
+    // Should get exactly one report after expiry time
+    auto const oneReportAfterExpiry = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() == 1; }, 400ms);
+    REQUIRE(oneReportAfterExpiry);
 
-        // Should get exactly one report after expiry time
-        auto const oneReportAfterExpiry
-            = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() == 1; }, 100ms);
-        REQUIRE(oneReportAfterExpiry);
+    // Verify the reported duration is reasonable
+    REQUIRE(handler.GetCallbackState().GetLastDuration() < 1s);
 
-        // Should not get additional reports
-        auto const noAdditionalReports
-            = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() > 1; }, 250ms);
-        REQUIRE_FALSE(noAdditionalReports);
+    // Should not get additional reports (verifies one-shot behavior)
+    auto const noAdditionalReports = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() > 1; }, 250ms);
+    REQUIRE_FALSE(noAdditionalReports);
 
-        monitor.StopMonitoring();
-    }
-
-    SECTION("Tracks hang duration correctly")
-    {
-        detector.SetHungState(pid, std::nullopt, true);
-        REQUIRE(monitor.StartMonitoring() == DCGM_ST_OK);
-
-        // Wait for the hang report
-        auto const reportReceived = WaitFor([&]() { return handler.GetCallbackState().GetCallCount() == 1; }, 250ms);
-        REQUIRE(reportReceived);
-
-        // Verify the reported duration matches our expiry time
-        REQUIRE(handler.GetCallbackState().GetLastDuration() < 1s);
-
-        monitor.StopMonitoring();
-    }
+    monitor.StopMonitoring();
 }
 
 TEST_CASE("HangDetectMonitor::Userspace Hang Reporting")

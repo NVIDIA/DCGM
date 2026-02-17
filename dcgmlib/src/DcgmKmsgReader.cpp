@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,16 +80,14 @@ long long timeval_to_us(struct timeval ts)
 
 long long GetTimeSinceEpochFromMonoticTs(const long long timestamp)
 {
-    struct timeval now
-    {};
+    struct timeval now {};
     int ret = gettimeofday(&now, NULL);
     if (ret < 0)
     {
         log_debug("gettimeofday returned error: %s", strerror(errno));
         return timestamp;
     }
-    struct timespec boot_ts
-    {};
+    struct timespec boot_ts {};
 
 #ifdef CLOCK_BOOTTIME
     // Use CLOCK_BOOTTIME if defined because that accurately takes into
@@ -190,8 +188,7 @@ uint32_t DcgmKmsgReaderThread::GetPollInterval() const
 
 void DcgmKmsgReaderThread::run()
 {
-    struct pollfd pfds
-    {};
+    struct pollfd pfds {};
     constexpr uint32_t MAX_RECORD_SIZE = 2048; // Based on PRINTK_MESSAGE_MAX
     auto pollBlockForMs                = 0;    // return immediately if not ready
     bool errorCondition                = false;

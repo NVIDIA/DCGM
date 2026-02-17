@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -79,6 +79,12 @@ try:
             ("updateProfilesMask", c_nvmlMask255_t),
         ]
 
+    class c_nvmlUnrepairableMemoryStatus_v1_t(Structure):
+        _fields_ = [
+            ("version", c_uint),
+            ("bUnrepairableMemory", c_uint),
+        ]
+
     class c_simpleValue_t(Union):
         _fields_ = [
             ("PciInfoExtPtr", c_void_p),
@@ -87,6 +93,8 @@ try:
             ("PciInfo", nvmlPciInfo_t),
             ("EccErrorCountsPtr", c_void_p),
             ("EccErrorCounts", c_nvmlEccErrorCounts_t),
+            ("UnrepairableMemoryStatusPtr", c_void_p),
+            ("UnrepairableMemoryStatus", c_nvmlUnrepairableMemoryStatus_v1_t),
             ("UtilizationPtr", c_void_p),
             ("Utilization", c_nvmlUtilization_t),
             ("MemoryPtr", c_void_p),
@@ -166,15 +174,18 @@ try:
             ("VgpuTypeBar1InfoPtr", c_void_p),
             # ("VgpuTypeBar1Info", c_nvmlVgpuTypeBar1Info_t),
             ("VgpuInstanceUtilizationSamplePtr", c_void_p),
-            ("VgpuInstanceUtilizationSample", c_nvmlVgpuInstanceUtilizationSample_t),
+            ("VgpuInstanceUtilizationSample",
+             c_nvmlVgpuInstanceUtilizationSample_t),
             ("VgpuInstanceUtilizationInfo_v1Ptr", c_void_p),
-            ("VgpuInstanceUtilizationInfo_v1", c_nvmlVgpuInstanceUtilizationInfo_v1_t),
+            ("VgpuInstanceUtilizationInfo_v1",
+             c_nvmlVgpuInstanceUtilizationInfo_v1_t),
             ("VgpuInstancesUtilizationInfoPtr", c_void_p),
             # ("VgpuInstancesUtilizationInfo", c_nvmlVgpuInstancesUtilizationInfo_t),
             ("VgpuProcessUtilizationSamplePtr", c_void_p),
             ("VgpuProcessUtilizationSample", c_nvmlVgpuProcessUtilizationSample_t),
             ("VgpuProcessUtilizationInfo_v1Ptr", c_void_p),
-            ("VgpuProcessUtilizationInfo_v1", c_nvmlVgpuProcessUtilizationInfo_v1_t),
+            ("VgpuProcessUtilizationInfo_v1",
+             c_nvmlVgpuProcessUtilizationInfo_v1_t),
             ("VgpuProcessesUtilizationInfoPtr", c_void_p),
             # ("VgpuProcessesUtilizationInfo", c_nvmlVgpuProcessesUtilizationInfo_t),
             ("VgpuRuntimeStatePtr", c_void_p),
@@ -246,7 +257,8 @@ try:
             ("ConfComputeGpuCertificatePtr", c_void_p),
             ("ConfComputeGpuCertificate", c_nvmlConfComputeGpuCertificate_t),
             ("ConfComputeGpuAttestationReportPtr", c_void_p),
-            ("ConfComputeGpuAttestationReport", c_nvmlConfComputeGpuAttestationReport_t),
+            ("ConfComputeGpuAttestationReport",
+             c_nvmlConfComputeGpuAttestationReport_t),
             ("ConfComputeSetKeyRotationThresholdInfo_v1Ptr", c_void_p),
             # ("ConfComputeSetKeyRotationThresholdInfo_v1", c_nvmlConfComputeSetKeyRotationThresholdInfo_v1_t),
             ("ConfComputeGetKeyRotationThresholdInfo_v1Ptr", c_void_p),
@@ -292,7 +304,8 @@ try:
             ("ComputeInstanceProfileInfoPtr", c_void_p),
             ("ComputeInstanceProfileInfo", c_nvmlComputeInstanceProfileInfo_t),
             ("ComputeInstanceProfileInfo_v2Ptr", c_void_p),
-            ("ComputeInstanceProfileInfo_v2", c_nvmlComputeInstanceProfileInfo_v2_t),
+            ("ComputeInstanceProfileInfo_v2",
+             c_nvmlComputeInstanceProfileInfo_v2_t),
             ("ComputeInstanceProfileInfo_v3Ptr", c_void_p),
             # ("ComputeInstanceProfileInfo_v3", c_nvmlComputeInstanceProfileInfo_v3_t),
             ("ComputeInstanceInfoPtr", c_void_p),
@@ -310,13 +323,17 @@ try:
             ("WorkloadPowerProfileInfoPtr", c_void_p),
             ("WorkloadPowerProfileInfo", c_nvmlWorkloadPowerProfileInfo_v1_t),
             ("WorkloadPowerProfileProfilesInfoPtr", c_void_p),
-            ("WorkloadPowerProfileProfilesInfo", c_nvmlWorkloadPowerProfileProfilesInfo_v1_t),
+            ("WorkloadPowerProfileProfilesInfo",
+             c_nvmlWorkloadPowerProfileProfilesInfo_v1_t),
             ("WorkloadPowerProfileCurrentProfilesPtr", c_void_p),
-            ("WorkloadPowerProfileCurrentProfiles", c_nvmlWorkloadPowerProfileCurrentProfiles_v1_t),
+            ("WorkloadPowerProfileCurrentProfiles",
+             c_nvmlWorkloadPowerProfileCurrentProfiles_v1_t),
             ("WorkloadPowerProfileRequestedProfilesPtr", c_void_p),
-            ("WorkloadPowerProfileRequestedProfiles", c_nvmlWorkloadPowerProfileRequestedProfiles_v1_t),
+            ("WorkloadPowerProfileRequestedProfiles",
+             c_nvmlWorkloadPowerProfileRequestedProfiles_v1_t),
             ("WorkloadPowerProfileUpdateProfiles_v1Ptr", c_void_p),
-            ("WorkloadPowerProfileUpdateProfiles_v1", c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t),
+            ("WorkloadPowerProfileUpdateProfiles_v1",
+             c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t),
             ("Str", c_void_p),
             ("Char", c_char),
             ("DoublePtr", c_void_p),
@@ -798,101 +815,103 @@ try:
         INJECTION_UNITINFO_PTR = 309
         INJECTION_UNIT = 310
         INJECTION_UNIT_PTR = 311
-        INJECTION_UTILIZATION = 312
-        INJECTION_UTILIZATION_PTR = 313
-        INJECTION_VALUETYPE = 314
-        INJECTION_VALUETYPE_PTR = 315
-        INJECTION_VGPUCAPABILITY = 316
-        INJECTION_VGPUCAPABILITY_PTR = 317
-        INJECTION_VGPUDRIVERCAPABILITY = 318
-        INJECTION_VGPUDRIVERCAPABILITY_PTR = 319
-        INJECTION_VGPUGUESTINFOSTATE = 320
-        INJECTION_VGPUGUESTINFOSTATE_PTR = 321
-        INJECTION_VGPUHETEROGENEOUSMODE = 322
-        INJECTION_VGPUHETEROGENEOUSMODE_PTR = 323
-        INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1 = 324
-        INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR = 325
-        INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE = 326
-        INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR = 327
-        INJECTION_VGPUINSTANCE = 328
-        INJECTION_VGPUINSTANCE_PTR = 329
-        INJECTION_VGPUINSTANCESUTILIZATIONINFO = 330
-        INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR = 331
-        INJECTION_VGPULICENSEEXPIRY = 332
-        INJECTION_VGPULICENSEEXPIRY_PTR = 333
-        INJECTION_VGPULICENSEINFO = 334
-        INJECTION_VGPULICENSEINFO_PTR = 335
-        INJECTION_VGPUMETADATA = 336
-        INJECTION_VGPUMETADATA_PTR = 337
-        INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE = 338
-        INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR = 339
-        INJECTION_VGPUPGPUCOMPATIBILITY = 340
-        INJECTION_VGPUPGPUCOMPATIBILITY_PTR = 341
-        INJECTION_VGPUPGPUMETADATA = 342
-        INJECTION_VGPUPGPUMETADATA_PTR = 343
-        INJECTION_VGPUPLACEMENTID = 344
-        INJECTION_VGPUPLACEMENTID_PTR = 345
-        INJECTION_VGPUPLACEMENTLIST = 346
-        INJECTION_VGPUPLACEMENTLIST_PTR = 347
-        INJECTION_VGPUPLACEMENTLIST_V1 = 348
-        INJECTION_VGPUPLACEMENTLIST_V1_PTR = 349
-        INJECTION_VGPUPROCESSUTILIZATIONINFO_V1 = 350
-        INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR = 351
-        INJECTION_VGPUPROCESSUTILIZATIONSAMPLE = 352
-        INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR = 353
-        INJECTION_VGPUPROCESSESUTILIZATIONINFO = 354
-        INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR = 355
-        INJECTION_VGPURUNTIMESTATE = 356
-        INJECTION_VGPURUNTIMESTATE_PTR = 357
-        INJECTION_VGPUSCHEDULERCAPABILITIES = 358
-        INJECTION_VGPUSCHEDULERCAPABILITIES_PTR = 359
-        INJECTION_VGPUSCHEDULERGETSTATE = 360
-        INJECTION_VGPUSCHEDULERGETSTATE_PTR = 361
-        INJECTION_VGPUSCHEDULERLOGENTRY = 362
-        INJECTION_VGPUSCHEDULERLOGENTRY_PTR = 363
-        INJECTION_VGPUSCHEDULERLOG = 364
-        INJECTION_VGPUSCHEDULERLOG_PTR = 365
-        INJECTION_VGPUSCHEDULERSETSTATE = 366
-        INJECTION_VGPUSCHEDULERSETSTATE_PTR = 367
-        INJECTION_VGPUTYPEBAR1INFO = 368
-        INJECTION_VGPUTYPEBAR1INFO_PTR = 369
-        INJECTION_VGPUTYPEID = 370
-        INJECTION_VGPUTYPEID_PTR = 371
-        INJECTION_VGPUVERSION = 372
-        INJECTION_VGPUVERSION_PTR = 373
-        INJECTION_VGPUVMCOMPATIBILITY = 374
-        INJECTION_VGPUVMCOMPATIBILITY_PTR = 375
-        INJECTION_VGPUVMIDTYPE = 376
-        INJECTION_VGPUVMIDTYPE_PTR = 377
-        INJECTION_VIOLATIONTIME = 378
-        INJECTION_VIOLATIONTIME_PTR = 379
-        INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES = 380
-        INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR = 381
-        INJECTION_WORKLOADPOWERPROFILEINFO = 382
-        INJECTION_WORKLOADPOWERPROFILEINFO_PTR = 383
-        INJECTION_WORKLOADPOWERPROFILEPROFILESINFO = 384
-        INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR = 385
-        INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES = 386
-        INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR = 387
-        INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1 = 388
-        INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR = 389
-        INJECTION_SHORT = 390
-        INJECTION_SHORT_PTR = 391
-        INJECTION_UCHAR = 392
-        INJECTION_UCHAR_PTR = 393
-        INJECTION_UINT = 394
-        INJECTION_UINT_PTR = 395
-        INJECTION_ULONG = 396
-        INJECTION_ULONG_PTR = 397
-        INJECTION_ULONG_LONG = 398
-        INJECTION_ULONG_LONG_PTR = 399
-        INJECTION_USHORT = 400
-        INJECTION_USHORT_PTR = 401
-        INJECTION_STRING = 402
-        INJECTION_CONST_GPUINSTANCEPLACEMENT = 403
-        INJECTION_CONST_GPUINSTANCEPLACEMENT_PTR = 404
-        INJECTION_CONST_CHAR = 405
-        INJECTION_CONST_CHAR_PTR = 406
+        INJECTION_UNREPAIRABLEMEMORYSTATUS = 312
+        INJECTION_UNREPAIRABLEMEMORYSTATUS_PTR = 313
+        INJECTION_UTILIZATION = 314
+        INJECTION_UTILIZATION_PTR = 315
+        INJECTION_VALUETYPE = 316
+        INJECTION_VALUETYPE_PTR = 317
+        INJECTION_VGPUCAPABILITY = 318
+        INJECTION_VGPUCAPABILITY_PTR = 319
+        INJECTION_VGPUDRIVERCAPABILITY = 320
+        INJECTION_VGPUDRIVERCAPABILITY_PTR = 321
+        INJECTION_VGPUGUESTINFOSTATE = 322
+        INJECTION_VGPUGUESTINFOSTATE_PTR = 323
+        INJECTION_VGPUHETEROGENEOUSMODE = 324
+        INJECTION_VGPUHETEROGENEOUSMODE_PTR = 325
+        INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1 = 326
+        INJECTION_VGPUINSTANCEUTILIZATIONINFO_V1_PTR = 327
+        INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE = 328
+        INJECTION_VGPUINSTANCEUTILIZATIONSAMPLE_PTR = 329
+        INJECTION_VGPUINSTANCE = 330
+        INJECTION_VGPUINSTANCE_PTR = 331
+        INJECTION_VGPUINSTANCESUTILIZATIONINFO = 332
+        INJECTION_VGPUINSTANCESUTILIZATIONINFO_PTR = 333
+        INJECTION_VGPULICENSEEXPIRY = 334
+        INJECTION_VGPULICENSEEXPIRY_PTR = 335
+        INJECTION_VGPULICENSEINFO = 336
+        INJECTION_VGPULICENSEINFO_PTR = 337
+        INJECTION_VGPUMETADATA = 338
+        INJECTION_VGPUMETADATA_PTR = 339
+        INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE = 340
+        INJECTION_VGPUPGPUCOMPATIBILITYLIMITCODE_PTR = 341
+        INJECTION_VGPUPGPUCOMPATIBILITY = 342
+        INJECTION_VGPUPGPUCOMPATIBILITY_PTR = 343
+        INJECTION_VGPUPGPUMETADATA = 344
+        INJECTION_VGPUPGPUMETADATA_PTR = 345
+        INJECTION_VGPUPLACEMENTID = 346
+        INJECTION_VGPUPLACEMENTID_PTR = 347
+        INJECTION_VGPUPLACEMENTLIST = 348
+        INJECTION_VGPUPLACEMENTLIST_PTR = 349
+        INJECTION_VGPUPLACEMENTLIST_V1 = 350
+        INJECTION_VGPUPLACEMENTLIST_V1_PTR = 351
+        INJECTION_VGPUPROCESSUTILIZATIONINFO_V1 = 352
+        INJECTION_VGPUPROCESSUTILIZATIONINFO_V1_PTR = 353
+        INJECTION_VGPUPROCESSUTILIZATIONSAMPLE = 354
+        INJECTION_VGPUPROCESSUTILIZATIONSAMPLE_PTR = 355
+        INJECTION_VGPUPROCESSESUTILIZATIONINFO = 356
+        INJECTION_VGPUPROCESSESUTILIZATIONINFO_PTR = 357
+        INJECTION_VGPURUNTIMESTATE = 358
+        INJECTION_VGPURUNTIMESTATE_PTR = 359
+        INJECTION_VGPUSCHEDULERCAPABILITIES = 360
+        INJECTION_VGPUSCHEDULERCAPABILITIES_PTR = 361
+        INJECTION_VGPUSCHEDULERGETSTATE = 362
+        INJECTION_VGPUSCHEDULERGETSTATE_PTR = 363
+        INJECTION_VGPUSCHEDULERLOGENTRY = 364
+        INJECTION_VGPUSCHEDULERLOGENTRY_PTR = 365
+        INJECTION_VGPUSCHEDULERLOG = 366
+        INJECTION_VGPUSCHEDULERLOG_PTR = 367
+        INJECTION_VGPUSCHEDULERSETSTATE = 368
+        INJECTION_VGPUSCHEDULERSETSTATE_PTR = 369
+        INJECTION_VGPUTYPEBAR1INFO = 370
+        INJECTION_VGPUTYPEBAR1INFO_PTR = 371
+        INJECTION_VGPUTYPEID = 372
+        INJECTION_VGPUTYPEID_PTR = 373
+        INJECTION_VGPUVERSION = 374
+        INJECTION_VGPUVERSION_PTR = 375
+        INJECTION_VGPUVMCOMPATIBILITY = 376
+        INJECTION_VGPUVMCOMPATIBILITY_PTR = 377
+        INJECTION_VGPUVMIDTYPE = 378
+        INJECTION_VGPUVMIDTYPE_PTR = 379
+        INJECTION_VIOLATIONTIME = 380
+        INJECTION_VIOLATIONTIME_PTR = 381
+        INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES = 382
+        INJECTION_WORKLOADPOWERPROFILECURRENTPROFILES_PTR = 383
+        INJECTION_WORKLOADPOWERPROFILEINFO = 384
+        INJECTION_WORKLOADPOWERPROFILEINFO_PTR = 385
+        INJECTION_WORKLOADPOWERPROFILEPROFILESINFO = 386
+        INJECTION_WORKLOADPOWERPROFILEPROFILESINFO_PTR = 387
+        INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES = 388
+        INJECTION_WORKLOADPOWERPROFILEREQUESTEDPROFILES_PTR = 389
+        INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1 = 390
+        INJECTION_WORKLOADPOWERPROFILEUPDATEPROFILES_V1_PTR = 391
+        INJECTION_SHORT = 392
+        INJECTION_SHORT_PTR = 393
+        INJECTION_UCHAR = 394
+        INJECTION_UCHAR_PTR = 395
+        INJECTION_UINT = 396
+        INJECTION_UINT_PTR = 397
+        INJECTION_ULONG = 398
+        INJECTION_ULONG_PTR = 399
+        INJECTION_ULONG_LONG = 400
+        INJECTION_ULONG_LONG_PTR = 401
+        INJECTION_USHORT = 402
+        INJECTION_USHORT_PTR = 403
+        INJECTION_STRING = 404
+        INJECTION_CONST_GPUINSTANCEPLACEMENT = 405
+        INJECTION_CONST_GPUINSTANCEPLACEMENT_PTR = 406
+        INJECTION_CONST_CHAR = 407
+        INJECTION_CONST_CHAR_PTR = 408
 
     class c_injectNvmlVal_t(Structure):
         _fields_ = [
@@ -903,8 +922,9 @@ try:
     nvml_injection_usable = True
 
 except ModuleNotFoundError:
-    print ("No dcgm_nvml is currently present.")
+    print("No dcgm_nvml is currently present.")
     nvml_injection_usable = False
 except NameError as e:
-    print (f"dcgm_nvml is probably an older version. It is missing a definition for {str(e)}.")
+    print(
+        f"dcgm_nvml is probably an older version. It is missing a definition for {str(e)}.")
     nvml_injection_usable = False

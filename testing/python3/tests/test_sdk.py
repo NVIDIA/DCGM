@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,20 +35,21 @@ from sys import stdout
 from test_globals import SAMPLE_SCRIPT_TIMEOUT
 
 paths = {
-            "Linux_32bit": "./apps/x86/",
-            "Linux_64bit": "./apps/amd64/",
-            "Linux_aarch64": "./apps/aarch64/",
-            "Windows_64bit": "./apps/amd64/"
-            }
+    "Linux_32bit": "./apps/x86/",
+    "Linux_64bit": "./apps/amd64/",
+    "Linux_aarch64": "./apps/aarch64/",
+    "Windows_64bit": "./apps/amd64/"
+}
 
 sdk_path = paths[utils.platform_identifier]
 
 sdk_sample_scripts_path = "./sdk_samples/scripts"
 
+
 def initialize_sdk(fileName):
-    
+
     sdk_executable = sdk_path + fileName
-    
+
     if utils.is_linux():
         if os.path.exists(sdk_executable):
             # On linux, for binaries inside the package (not just commands in the path) test that they have +x
@@ -56,11 +57,13 @@ def initialize_sdk(fileName):
             assert os.access(sdk_executable, os.X_OK), \
                 "SDK binary %s is not executable! Make sure that the testing archive has been correctly extracted." \
                 % sdk_executable
-    
+
     # -f -> fast mode to shorten the test duration
-    return subprocess.Popen( [sdk_executable, '-f'], stdout=PIPE, stdin=PIPE)
-    
-@test_utils.run_only_if_mig_is_disabled() # We cannot set the compute mode when MIG is enabled
+    return subprocess.Popen([sdk_executable, '-f'], stdout=PIPE, stdin=PIPE)
+
+
+# We cannot set the compute mode when MIG is enabled
+@test_utils.run_only_if_mig_is_disabled()
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_as_root()
@@ -69,20 +72,21 @@ def test_sdk_configuration_sample_standalone(handle, gpuIds):
     """
     Test SDK configuration sample
     """
-    
+
     sdk_subprocess = initialize_sdk("configuration_sample")
-    
+
     sdk_stdout = sdk_subprocess.communicate(input=b'1\n127.0.0.1')[0]
-  
+
     ss = ""
-    
+
     for line in sdk_stdout.decode():
         ss += line
 
     assert "error" not in ss.lower(), "Error detected in SDK sample. Output: %s" % ss
-        
+
     assert sdk_subprocess.returncode == dcgm_structs.DCGM_ST_OK, "SDK sample encountered an error. Return code: %d" % sdk_subprocess.returncode
-     
+
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 def test_sdk_health_sample_standalone(handle, gpuIds):
@@ -96,18 +100,19 @@ def test_sdk_health_sample_standalone(handle, gpuIds):
         test_utils.skip_test("Test only works for gpus with same sku")
 
     sdk_subprocess = initialize_sdk("health_sample")
-     
+
     sdk_stdout = sdk_subprocess.communicate(input=b'1\n127.0.0.1')[0]
-    
+
     ss = ""
-    
+
     for line in sdk_stdout.decode():
         ss += line
-        
+
     assert "error" not in ss.lower(), "Error detected in SDK sample. Output: %s" % ss
-         
+
     assert sdk_subprocess.returncode == dcgm_structs.DCGM_ST_OK or sdk_subprocess.returncode == dcgm_structs.DCGM_ST_NO_DATA, "SDK sample encountered an error. Return code: %d" % sdk_subprocess.returncode
-     
+
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
@@ -116,17 +121,18 @@ def test_sdk_policy_sample_standalone(handle, gpuIds):
     Test SDK policy sample
     """
     sdk_subprocess = initialize_sdk("policy_sample")
-     
+
     sdk_stdout = sdk_subprocess.communicate(input=b'1\n127.0.0.1')[0]
-    
+
     ss = ""
-    
+
     for line in sdk_stdout.decode():
         ss += line
 
     assert "error" not in ss.lower(), "Error detected in SDK sample. Output: %s" % ss
-         
+
     assert sdk_subprocess.returncode == dcgm_structs.DCGM_ST_OK, "SDK sample encountered an error. Return code: %d" % sdk_subprocess.returncode
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -146,9 +152,10 @@ def test_sdk_field_value_sample_standalone(handle, gpuIds):
 
     assert "error" not in ss.lower(), "Error detected in SDK sample. Output: %s" % ss
 
-    assert sdk_subprocess.returncode == dcgm_structs.DCGM_ST_OK, "SDK sample encountered an error. Return code: %d. Output: %s" % (sdk_subprocess.returncode, ss)
+    assert sdk_subprocess.returncode == dcgm_structs.DCGM_ST_OK, "SDK sample encountered an error. Return code: %d. Output: %s" % (
+        sdk_subprocess.returncode, ss)
 
-    
+
 @test_utils.run_with_standalone_host_engine(timeout=SAMPLE_SCRIPT_TIMEOUT)
 @test_utils.run_only_as_root()
 @test_utils.run_only_with_nvml()
@@ -159,8 +166,10 @@ def test_sdk_example_script_smoke_standalone_auto(handle):
     """
     env = {'PYTHONPATH': ':'.join(sys.path)}
     script = os.path.join(sdk_sample_scripts_path, 'dcgm_example.py')
-    example = AppRunner(sys.executable, [script, '--opmode=auto', '--type=standalone'], env=env)
+    example = AppRunner(
+        sys.executable, [script, '--opmode=auto', '--type=standalone'], env=env)
     example.run(timeout=SAMPLE_SCRIPT_TIMEOUT)
+
 
 @test_utils.run_only_as_root()
 @test_utils.run_only_with_nvml()
@@ -171,8 +180,10 @@ def test_sdk_example_script_smoke_embedded_auto():
     """
     env = {'PYTHONPATH': ':'.join(sys.path)}
     script = os.path.join(sdk_sample_scripts_path, 'dcgm_example.py')
-    example = AppRunner(sys.executable, [script, '--opmode=auto', '--type=embedded'], env=env)
+    example = AppRunner(
+        sys.executable, [script, '--opmode=auto', '--type=embedded'], env=env)
     example.run(timeout=SAMPLE_SCRIPT_TIMEOUT)
+
 
 @test_utils.run_only_as_root()
 @test_utils.run_only_with_nvml()
@@ -183,8 +194,10 @@ def test_sdk_example_script_smoke_embedded_manual():
     """
     env = {'PYTHONPATH': ':'.join(sys.path)}
     script = os.path.join(sdk_sample_scripts_path, 'dcgm_example.py')
-    example = AppRunner(sys.executable, [script, '--opmode=manual', '--type=embedded'], env=env)
+    example = AppRunner(
+        sys.executable, [script, '--opmode=manual', '--type=embedded'], env=env)
     example.run(timeout=SAMPLE_SCRIPT_TIMEOUT)
+
 
 """ 
 @test_utils.run_with_standalone_host_engine(20)
@@ -243,5 +256,3 @@ def test_sdk_process_stats_sample_standalone(handle, gpuIds):
     #ctx.wait()
     #ctx.validate()
 """
-
-     

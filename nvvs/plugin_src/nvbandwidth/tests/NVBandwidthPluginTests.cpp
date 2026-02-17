@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ extern const char *verboseFullOutputWithErrors;
 
 namespace DcgmNs::Nvvs::Plugins::NVBandwidth
 {
-class WrapperNVBandwidthPlugin : protected NVBandwidthPlugin
+class WrapperNVBandwidthPlugin : public NVBandwidthPlugin
 {
 public:
     WrapperNVBandwidthPlugin(dcgmHandle_t handle)
@@ -173,5 +173,22 @@ TEST_CASE("NVBandwidthPlugin: Restore CUDA_VISIBLE_DEVICES after Go()")
     else
     {
         REQUIRE(strcmp(valueOfCudaVisibleDevices, originalValue.c_str()) == 0);
+    }
+}
+
+TEST_CASE("NVBandwidthPlugin: m_dcgmRecorderInitialized is properly initialized")
+{
+    using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
+    WrapperNVBandwidthPlugin wnvbp((dcgmHandle_t)1);
+
+    SECTION("Initialized to true after construction")
+    {
+        REQUIRE(wnvbp.m_dcgmRecorderInitialized == true);
+    }
+
+    SECTION("Set to false after Cleanup()")
+    {
+        wnvbp.Cleanup();
+        REQUIRE(wnvbp.m_dcgmRecorderInitialized == false);
     }
 }

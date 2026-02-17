@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "DcgmHostEngineHandler.h"
 #include "DcgmLogging.h"
 #include "DcgmSettings.h"
+#include "dcgm_structs.h"
 #include <fmt/format.h>
 #include <stdexcept>
 
@@ -118,6 +119,72 @@ dcgmReturn_t DcgmGroupManager::CreateDefaultGroups()
         throw std::runtime_error(error);
     }
 
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmGroupManager::AttachGpus()
+{
+    auto getLiveEntities
+        = [this](dcgm_field_entity_group_t entityGroupId, std::unordered_set<dcgmGroupEntityPair_t> &aliveEntities) {
+              int constexpr activeOnly = 1;
+              std::vector<dcgmGroupEntityPair_t> entities;
+              if (auto ret = mpCacheManager->GetAllEntitiesOfEntityGroup(activeOnly, entityGroupId, entities);
+                  ret != DCGM_ST_OK)
+              {
+                  log_error("Got error {} from GetAllEntitiesOfEntityGroup()", errorString(ret));
+                  return ret;
+              }
+              aliveEntities.insert(entities.begin(), entities.end());
+              return DCGM_ST_OK;
+          };
+
+    std::unordered_set<dcgmGroupEntityPair_t> aliveEntities;
+    std::array<dcgm_field_entity_group_t, 3> constexpr entityGroups = { DCGM_FE_GPU, DCGM_FE_GPU_I, DCGM_FE_GPU_CI };
+    for (auto const &entityGroupId : entityGroups)
+    {
+        if (auto ret = getLiveEntities(entityGroupId, aliveEntities); ret != DCGM_ST_OK)
+        {
+            log_error("Got error {} from getLiveEntities() for entityGroupId {}", errorString(ret), entityGroupId);
+            return ret;
+        }
+    }
+
+    Lock();
+    DcgmNs::Defer unlockGuard = DcgmNs::Defer([this] { Unlock(); });
+    for (auto const &groups : mGroupIdMap)
+    {
+        if (groups.first == mAllGpusGroupId || groups.first == mAllNvSwitchesGroupId)
+        {
+            continue;
+        }
+
+        std::vector<dcgmGroupEntityPair_t> entitiesInGroup;
+        if (auto ret = groups.second->GetEntities(DcgmGroupOption::All, entitiesInGroup); ret != DCGM_ST_OK)
+        {
+            unlockGuard.Trigger();
+            log_error("Got error {} from GetEntities()", errorString(ret));
+            return ret;
+        }
+
+        for (auto const &entity : entitiesInGroup)
+        {
+            switch (entity.entityGroupId)
+            {
+                case DCGM_FE_GPU:
+                case DCGM_FE_GPU_I:
+                case DCGM_FE_GPU_CI:
+                    if (aliveEntities.contains(entity))
+                    {
+                        continue;
+                    }
+                    break;
+                default:
+                    continue;
+            }
+            groups.second->RemoveEntityFromGroup(entity.entityGroupId, entity.entityId);
+        }
+    }
     return DCGM_ST_OK;
 }
 
@@ -390,7 +457,9 @@ DcgmGroupInfo *DcgmGroupManager::GetGroupById(unsigned int groupId)
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGroupManager::GetGroupEntities(unsigned int groupId, std::vector<dcgmGroupEntityPair_t> &entities)
+dcgmReturn_t DcgmGroupManager::GetGroupEntities(unsigned int groupId,
+                                                DcgmGroupOption option,
+                                                std::vector<dcgmGroupEntityPair_t> &entities)
 {
     dcgmReturn_t ret;
 
@@ -400,15 +469,19 @@ dcgmReturn_t DcgmGroupManager::GetGroupEntities(unsigned int groupId, std::vecto
     {
         dcgm_field_entity_group_t entityGroupId = DCGM_FE_GPU;
         if (groupId == mAllNvSwitchesGroupId)
+        {
             entityGroupId = DCGM_FE_SWITCH;
-
-        ret = DcgmHostEngineHandler::Instance()->GetAllEntitiesOfEntityGroup(1, entityGroupId, entities);
+        }
+        int const activeOnly = (option == DcgmGroupOption::ActiveOnly) ? 1 : 0;
+        ret = DcgmHostEngineHandler::Instance()->GetAllEntitiesOfEntityGroup(activeOnly, entityGroupId, entities);
         if (ret != DCGM_ST_OK)
         {
             log_error("GetGroupEntities Got error {} from GetAllEntitiesOfEntityGroup() for groupId {}", ret, groupId);
         }
         else
+        {
             log_debug("GetGroupEntities got {} entities for dynamic group {}", (unsigned int)entities.size(), groupId);
+        }
         Unlock();
         return ret;
     }
@@ -422,7 +495,7 @@ dcgmReturn_t DcgmGroupManager::GetGroupEntities(unsigned int groupId, std::vecto
         return DCGM_ST_NOT_CONFIGURED;
     }
 
-    ret = groupObj->GetEntities(entities);
+    ret = groupObj->GetEntities(option, entities);
     Unlock();
     return ret;
 }
@@ -430,11 +503,12 @@ dcgmReturn_t DcgmGroupManager::GetGroupEntities(unsigned int groupId, std::vecto
 /*****************************************************************************/
 dcgmReturn_t DcgmGroupManager::GetGroupGpuIds(dcgm_connection_id_t /* connectionId */,
                                               unsigned int groupId,
+                                              DcgmGroupOption option,
                                               std::vector<unsigned int> &gpuIds)
 {
     std::vector<dcgmGroupEntityPair_t>::iterator entityIter;
     std::vector<dcgmGroupEntityPair_t> entities;
-    dcgmReturn_t ret = GetGroupEntities(groupId, entities);
+    dcgmReturn_t ret = GetGroupEntities(groupId, option, entities);
     if (ret != DCGM_ST_OK)
         return ret;
 
@@ -722,19 +796,42 @@ dcgm_connection_id_t DcgmGroupInfo::GetConnectionId()
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmGroupInfo::GetEntities(std::vector<dcgmGroupEntityPair_t> &entities)
+dcgmReturn_t DcgmGroupInfo::GetEntities(DcgmGroupOption option, std::vector<dcgmGroupEntityPair_t> &entities)
 {
-    entities = mEntityList;
-    return DCGM_ST_OK;
+    switch (option)
+    {
+        case DcgmGroupOption::All:
+            entities = mEntityList;
+            return DCGM_ST_OK;
+        case DcgmGroupOption::ActiveOnly:
+            if (!mpCacheManager)
+            {
+                log_error("GetEntities: mpCacheManager is not initialized");
+                return DCGM_ST_UNINITIALIZED;
+            }
+            entities = mpCacheManager->FilterActiveEntities(mEntityList);
+            return DCGM_ST_OK;
+        default:
+            log_error("GetEntities: invalid option {}", option);
+            return DCGM_ST_BADPARAM;
+    }
 }
 
 /*****************************************************************************/
 bool DcgmGroupInfo::AreAllTheSameSku()
 {
+    std::vector<dcgmGroupEntityPair_t> activeEntities;
+    auto ret = GetEntities(DcgmGroupOption::ActiveOnly, activeEntities);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("AreAllTheSameSku: failed to get entities");
+        return false;
+    }
+
     std::unordered_set<unsigned int> uniqueGpuIds;
 
     /* Make a copy of the gpuIds. We're passing by ref to AreAllGpuIdsSameSku() */
-    for (auto const &entity : mEntityList)
+    for (auto const &entity : activeEntities)
     {
         switch (entity.entityGroupId)
         {

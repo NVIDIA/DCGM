@@ -1,6 +1,6 @@
 #include "DcgmNvsdmManager.h"
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,11 +86,11 @@ static unsigned int getNvsdmPortFieldId(unsigned int dcgmFieldId)
     {
         case DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX:
         case DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX:
-            return NVSDM_PORT_TELEM_CTR_XMIT_DATA;
+            return NVSDM_PORT_TELEM_CTR_EXT_XMIT_DATA;
 
         case DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX:
         case DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX:
-            return NVSDM_PORT_TELEM_CTR_RCV_DATA;
+            return NVSDM_PORT_TELEM_CTR_EXT_RCV_DATA;
     }
 
     return NVSDM_PORT_TELEM_CTR_NONE;
@@ -423,28 +423,29 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
 {
     unsigned int portId;
     nvsdmVal_t compositeNvsdmVal;
-    unsigned int nvsdmPortFieldId     = getNvsdmPortFieldId(fieldId);
-    param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PORT;
-    param.telemValsArray[0].telemCtr  = nvsdmPortFieldId;
-    compositeNvsdmVal.u64Val          = 0;
+    unsigned int nvsdmPortFieldId = getNvsdmPortFieldId(fieldId);
+    compositeNvsdmVal.u64Val      = 0;
 
-    for (unsigned int i = 0;
-         i < std::min(static_cast<size_t>(m_nvSwitchDevices[entityId].numOfPorts), std::size(m_nvSwitchDevices));
-         i++)
+    for (unsigned int i = 0; i < m_nvSwitchDevices[entityId].numOfPorts; i++)
     {
-        if (m_nvSwitches[entityId].nvLinkLinkState[i] != DcgmNvLinkLinkStateUp)
-        {
-            continue;
-        }
-
-        param.telemValsArray[0].val.u64Val = 0; /* Reset val before querying. */
-
         portId = m_nvSwitchDevices[entityId].portIds[i];
         if (!IsValidNvLinkId(entityId, portId))
         {
             // IsValidNvLinkId logs the error
             return DCGM_ST_BADPARAM;
         }
+
+        // Skip if link is not up
+        if (m_nvSwitchPorts[portId].state != DcgmNvLinkLinkStateUp)
+        {
+            continue;
+        }
+
+        /* Set telemetry type, counter and reset val before querying. */
+        param.telemValsArray[0].telemType  = NVSDM_TELEM_TYPE_PORT;
+        param.telemValsArray[0].telemCtr   = nvsdmPortFieldId;
+        param.telemValsArray[0].val.u64Val = 0;
+
         nvsdmRet_t ret = m_nvsdm->nvsdmPortGetTelemetryValues(m_nvSwitchPorts[portId].port, &param);
         if (ret != NVSDM_SUCCESS || param.telemValsArray[0].status != NVSDM_SUCCESS)
         {

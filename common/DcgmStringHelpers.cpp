@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 #include "DcgmStringHelpers.h"
+#include "DcgmUtilities.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <ranges>
@@ -271,6 +273,44 @@ std::string Trim(std::string_view str)
                     return std::isspace(static_cast<unsigned char>(c));
                 }).base();
     return std::string(first, last);
+}
+
+DcgmResult<std::uint32_t> StrToUint32(std::string_view str)
+{
+    std::uint32_t value = 0;
+    auto [_, ec]        = std::from_chars(str.data(), str.data() + str.size(), value);
+    if (ec != std::errc())
+    {
+        log_error("Failed to parse string {} to uint32_t.", str);
+        return std::unexpected(DCGM_ST_GENERIC_ERROR);
+    }
+    return value;
+}
+
+/*****************************************************************************/
+std::string_view DcgmEntityStatusToString(DcgmEntityStatus_t status) noexcept
+{
+    switch (status)
+    {
+        case DcgmEntityStatusUnknown:
+            return "UNKNOWN";
+        case DcgmEntityStatusOk:
+            return "OK";
+        case DcgmEntityStatusUnsupported:
+            return "UNSUPPORTED";
+        case DcgmEntityStatusInaccessible:
+            return "INACCESSIBLE";
+        case DcgmEntityStatusLost:
+            return "LOST";
+        case DcgmEntityStatusFake:
+            return "FAKE";
+        case DcgmEntityStatusDisabled:
+            return "DISABLED";
+        case DcgmEntityStatusDetached:
+            return "DETACHED";
+        default:
+            return "UNKNOWN";
+    }
 }
 
 } // namespace DcgmNs

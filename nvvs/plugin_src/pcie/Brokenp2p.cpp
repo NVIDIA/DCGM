@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -239,10 +239,11 @@ nvvsPluginResult_t Brokenp2p::RunTest()
             std::string errStr;
             bool passed = CheckPairP2pWindow(m_gpus[d1]->cudaDeviceIdx, m_gpus[d2]->cudaDeviceIdx, errStr);
 
-            dcgmError_t memoryError, writerError;
-            GetP2PError(m_bg, startTime, m_gpus[d2]->gpuId, memoryError, writerError);
             if (!passed)
             {
+                dcgmError_t memoryError, writerError;
+                GetP2PError(m_bg, startTime, m_gpus[d2]->gpuId, memoryError, writerError);
+
                 log_debug("Memory device {} and p2p writer device {} failed: \"{}\"",
                           m_gpus[d1]->gpuId,
                           m_gpus[d2]->gpuId,

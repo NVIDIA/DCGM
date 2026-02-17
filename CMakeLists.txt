@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.21.0)
 
-project(datacenter-gpu-manager-4 VERSION 4.4.2)
+project(datacenter-gpu-manager-4 VERSION 4.5.0)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF CACHE BOOL
     "Specify whether to link the target in the build tree with the INSTALL_RPATH")
@@ -75,7 +75,7 @@ endif ()
 
 option(THREAD_SANITIZER "Enable ThreadSanitizer" OFF)
 if (THREAD_SANITIZER)
-    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fsanitize=thread")
+    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fsanitize=thread -Wno-tsan")
     set(ANY_SANITIZER TRUE)
 endif ()
 
@@ -318,6 +318,7 @@ add_library(nvvs_plugins_busgrind_interface INTERFACE)
 add_library(nvvs_plugins_nvbandwidth_interface INTERFACE)
 add_library(nvvs_plugins_memtest_interface INTERFACE)
 add_library(nvvs_plugins_memory_interface INTERFACE)
+add_library(nvvs_plugins_nccl_tests_interface INTERFACE)
 add_library(nvvs_plugins_contextcreate_interface INTERFACE)
 add_library(nvvs_plugins_common_interface INTERFACE)
 add_library(public_vgpu_interface INTERFACE)
@@ -390,6 +391,8 @@ add_library(Memory_13 SHARED)
 add_library(Memtest_11 SHARED)
 add_library(Memtest_12 SHARED)
 add_library(Memtest_13 SHARED)
+add_library(NcclTests_12 SHARED)
+add_library(NcclTests_13 SHARED)
 add_library(NVBandwidth_12 SHARED)
 add_library(NVBandwidth_13 SHARED)
 add_library(Pcie_11 SHARED)
@@ -426,6 +429,8 @@ set_target_properties(
     Memtest_11
     Memtest_12
     Memtest_13
+    NcclTests_12
+    NcclTests_13
     NVBandwidth_12
     NVBandwidth_13
     Pcie_11
@@ -482,6 +487,8 @@ set_target_properties(
     Memtest_11
     Memtest_12
     Memtest_13
+    NcclTests_12
+    NcclTests_13
     NVBandwidth_12
     NVBandwidth_13
     Pcie_11
@@ -647,10 +654,6 @@ install(
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cudaless"
         COMPONENT Core
-        PERMISSIONS
-            OWNER_READ OWNER_WRITE OWNER_EXECUTE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE
         NAMELINK_SKIP
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cudaless"
@@ -668,10 +671,6 @@ install(
         TargetedStress_11
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda11"
-        PERMISSIONS
-            OWNER_READ OWNER_WRITE OWNER_EXECUTE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE
         COMPONENT Cuda11
         NAMELINK_SKIP
     RUNTIME
@@ -709,16 +708,13 @@ install(
         Diagnostic_12
         Memory_12
         Memtest_12
+        NcclTests_12
         NVBandwidth_12
         Pcie_12
         TargetedPower_12
         TargetedStress_12
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda12"
-        PERMISSIONS
-            OWNER_READ OWNER_WRITE OWNER_EXECUTE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE
         COMPONENT Cuda12
         NAMELINK_SKIP
     RUNTIME
@@ -732,16 +728,13 @@ install(
         Diagnostic_13
         Memory_13
         Memtest_13
+        NcclTests_13
         NVBandwidth_13
         Pcie_13
         TargetedPower_13
         TargetedStress_13
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda13"
-        PERMISSIONS
-            OWNER_READ OWNER_WRITE OWNER_EXECUTE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE
         COMPONENT Cuda13
         NAMELINK_SKIP
     RUNTIME
@@ -787,10 +780,6 @@ install(
     TARGETS pluginCommon
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cudaless"
-        PERMISSIONS
-            OWNER_READ OWNER_WRITE OWNER_EXECUTE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME
@@ -809,10 +798,6 @@ install(
         TargetedStress_11
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda11"
-        PERMISSIONS
-            OWNER_READ OWNER_WRITE OWNER_EXECUTE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME
@@ -827,15 +812,12 @@ install(
         Memory_12
         Memtest_12
         NVBandwidth_12
+        NcclTests_12
         Pcie_12
         TargetedPower_12
         TargetedStress_12
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda12"
-        PERMISSIONS
-            OWNER_READ OWNER_WRITE OWNER_EXECUTE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME
@@ -850,15 +832,12 @@ install(
         Memory_13
         Memtest_13
         NVBandwidth_13
+        NcclTests_13
         Pcie_13
         TargetedPower_13
         TargetedStress_13
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda13"
-        PERMISSIONS
-            OWNER_READ OWNER_WRITE OWNER_EXECUTE
-            GROUP_READ GROUP_EXECUTE
-            WORLD_READ WORLD_EXECUTE
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME

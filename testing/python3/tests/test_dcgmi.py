@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ import dcgm_internal_helpers
 import utils
 import threading
 import option_parser
-import re
 import shutil
 import string
 import time
@@ -53,6 +52,7 @@ import nvml_injection_structs
 import dcgm_nvml
 import re
 
+
 def _run_dcgmi_command(args):
     ''' run a command then return (retcode, stdout_lines, stderr_lines) '''
     dcgmi = apps.DcgmiApp(args)
@@ -61,6 +61,7 @@ def _run_dcgmi_command(args):
     retValue = dcgmi.wait()
     dcgmi.validate()
     return retValue, dcgmi.stdout_lines, dcgmi.stderr_lines
+
 
 def _is_eris_diag_inforom_failure(args, stdout_lines):
     INFOROM_FAILURE_STRING = 'nvmlDeviceValidateInforom for nvml device'
@@ -71,10 +72,12 @@ def _is_eris_diag_inforom_failure(args, stdout_lines):
         return True
     return False
 
+
 def _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines):
     if (len(stdout_lines) == 0) and (len(stderr_lines) > 0):
-        logger.error('stderr: "%s"' % (stderr_lines)) 
-    assert (len(stdout_lines) > 0), 'No output detected for args "%s"' % ' '.join(args[1:])
+        logger.error('stderr: "%s"' % (stderr_lines))
+    assert (len(stdout_lines) >
+            0), 'No output detected for args "%s"' % ' '.join(args[1:])
 
     if _is_eris_diag_inforom_failure(args, stdout_lines):
         # If we see inforom corruption, the test should not fail
@@ -85,30 +88,34 @@ def _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines):
     for line in stdout_lines:
         output = output + line + ' '
     if test_utils.is_mig_incompatible_failure(output):
-        test_utils.skip_test("Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
-    
+        test_utils.skip_test(
+            "Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
+
     if retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value:
-        logger.error('Valid test - Function returned error code: %s . Args used: "%s"' % (retValue, ' '.join(args[1:]))) 
+        logger.error('Valid test - Function returned error code: %s . Args used: "%s"' %
+                     (retValue, ' '.join(args[1:])))
         logger.error('Stdout:')
         for line in stdout_lines:
-            logger.error('\t'+line)
+            logger.error('\t' + line)
         logger.error('Stderr:')
         for line in stderr_lines:
-            logger.error('\t'+line)
+            logger.error('\t' + line)
         assert False, "See errors above."
-    
+
     errLines = _lines_with_errors(stdout_lines)
-    assert len(errLines) == 0, "Found errors in output.  Offending lines: \n%s" % '\n'.join(errLines)
-        
+    assert len(
+        errLines) == 0, "Found errors in output.  Offending lines: \n%s" % '\n'.join(errLines)
+
 
 def _assert_invalid_dcgmi_results(args, retValue, stdout_lines, stderr_lines):
     assert retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value, \
-           'Invalid test - Function returned error code: %s . Args used: "%s"' \
-           % (retValue, ', '.join(args[0:]))
-            
+        'Invalid test - Function returned error code: %s . Args used: "%s"' \
+        % (retValue, ', '.join(args[0:]))
+
     assert len(_lines_with_errors(stderr_lines + stdout_lines)) >= 1, \
-            'Function did not display error message for args "%s". Returned: %s\nstdout: %s\nstderr: %s' \
-            % (' '.join(args[1:]), retValue, '\n'.join(stdout_lines), '\n'.join(stderr_lines))
+        'Function did not display error message for args "%s". Returned: %s\nstdout: %s\nstderr: %s' \
+        % (' '.join(args[1:]), retValue, '\n'.join(stdout_lines), '\n'.join(stderr_lines))
+
 
 def _lines_with_errors(lines):
     errorLines = []
@@ -157,6 +164,7 @@ def _lines_with_errors(lines):
 
     return errorLines
 
+
 def _create_dcgmi_group(groupType=dcgm_structs.DCGM_GROUP_EMPTY):
     ''' Create an empty group and return its group ID '''
     createGroupArgs = ["group", "-c", "test_group"]
@@ -165,166 +173,251 @@ def _create_dcgmi_group(groupType=dcgm_structs.DCGM_GROUP_EMPTY):
         createGroupArgs.append('--default')
     elif groupType == dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES:
         createGroupArgs.append('--defaultnvswitches')
-    
+
     retValue, stdout_lines, stderr_lines = _run_dcgmi_command(createGroupArgs)
-    _assert_valid_dcgmi_results(createGroupArgs, retValue, stdout_lines, stderr_lines)
-    
+    _assert_valid_dcgmi_results(
+        createGroupArgs, retValue, stdout_lines, stderr_lines)
+
     # dcgmi "group -c" outputs a line like 'Successfully created group "test_group" with a group ID of 2'
     # so we capture the last word as the group ID (it doesn't seem like there's a better way)
     # convert to int so that if it's not an int, an exception is raised
     return int(stdout_lines[0].strip().split()[-1])
 
+
 def _test_valid_args(argsList):
     for args in argsList:
         retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
         _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines)
-        
+
+
 def _test_invalid_args(argsList):
     for args in argsList:
         retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
-        _assert_invalid_dcgmi_results(args, retValue, stdout_lines, stderr_lines)
+        _assert_invalid_dcgmi_results(
+            args, retValue, stdout_lines, stderr_lines)
+
 
 def _assert_valid_dcgmi_help_results(args, retValue, stdout_lines, stderr_lines):
     if (len(stdout_lines) == 0) and (len(stderr_lines) > 0):
-        logger.error('stderr: "%s"' % (stderr_lines)) 
-    assert (len(stdout_lines) > 0), 'No output detected for args "%s"' % ' '.join(args[1:])
+        logger.error('stderr: "%s"' % (stderr_lines))
+    assert (len(stdout_lines) >
+            0), 'No output detected for args "%s"' % ' '.join(args[1:])
 
     output = ''
     for line in stdout_lines:
         output = output + line + ' '
     if test_utils.is_mig_incompatible_failure(output):
-        test_utils.skip_test("Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
+        test_utils.skip_test(
+            "Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
 
     if retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value:
-        logger.error('Valid test - Function returned error code: %s . Args used: "%s"' % (retValue, ' '.join(args[1:]))) 
+        logger.error('Valid test - Function returned error code: %s . Args used: "%s"' %
+                     (retValue, ' '.join(args[1:])))
         logger.error('Stdout:')
         for line in stdout_lines:
-            logger.error('\t'+line)
+            logger.error('\t' + line)
         logger.error('Stderr:')
         for line in stderr_lines:
-            logger.error('\t'+line)
+            logger.error('\t' + line)
         assert False, "See errors above."
 
-    # expected lines in help output - 
+    # expected lines in help output -
     combined_output = ' '.join(stdout_lines + stderr_lines).lower()
     required_elements = [
-        "usage:",                                      
-        "-h",                                          
-        "--help",                                      
+        "usage:",
+        "-h",
+        "--help",
     ]
-    
+
     if len(args) > 0:
         subsystem_name = args[0].lower()
         required_elements.append(subsystem_name)
-    
+
     # Validate each required element
     missing_elements = []
     for element in required_elements:
         if element not in combined_output:
             missing_elements.append(element)
-    
-    assert len(missing_elements) == 0, f"Help output missing required elements: {missing_elements}. Full output:\n{combined_output}"
-    logger.info(f"Successfully validated dcgmi help output contains all required elements for args: {' '.join(args)}")
-        
+
+    assert len(
+        missing_elements) == 0, f"Help output missing required elements: {missing_elements}. Full output:\n{combined_output}"
+    logger.info(
+        f"Successfully validated dcgmi help output contains all required elements for args: {' '.join(args)}")
+
+
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_injection_gpus(2) #Injecting compute instances only works with live ampere or injected GPUs
+# Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpus(2)
 @test_utils.run_with_injection_gpu_instances(2)
 @test_utils.run_with_injection_gpu_compute_instances(2)
 def test_dcgmi_group(handle, gpuIds, instanceIds, ciIds):
     """
     Test DCGMI group
     """
-     
+
     DCGM_ALL_GPUS = dcgm_structs.DCGM_GROUP_ALL_GPUS
-     
-    groupId = str(_create_dcgmi_group())
-    
-    ## keep args in this order. Changing it may break the test
-    _test_valid_args([
-            ["group", "-l", ""],                            # list groups
-            ["group", "-g", groupId, "-i"],                 # get info on created group
-            ["group", "-g", groupId, "-a", str(gpuIds[0])], # add gpu to group
-            ["group", "-g", groupId, "-r", str(gpuIds[0])], # remove that gpu from the group
-            ["group", "-g", groupId, "-a", "instance:" + str(instanceIds[0])], # add instance to group
-            ["group", "-g", groupId, "-r", "instance:" + str(instanceIds[0])], # remove instance from group
-            ["group", "-g", groupId, "-a", "ci:" + str(ciIds[0])], # add CI to group
-            ["group", "-g", groupId, "-r", "ci:" + str(ciIds[0])], # remove CI from group
-            ["group", "-g", groupId, "-a", "gpu:" + str(gpuIds[0])], # add gpu to group with gpu tag
-            ["group", "-g", groupId, "-r", "gpu:" + str(gpuIds[0])], # remove that gpu from the group with gpu tag
-            ["group", "-g", groupId, "-a", "instance:" + str(instanceIds[0])], # add instance to group with instance tag
-            ["group", "-g", groupId, "-r", "instance:" + str(instanceIds[0])], # remove instance from the group with instance tag
-            ["group", "-g", groupId, "-a", "ci:" + str(instanceIds[0])], # add CI to group with compute instance tag
-            ["group", "-g", groupId, "-r", "ci:" + str(instanceIds[0])], # remove CI from the group with compute instace tag
-            # Testing Cuda/MIG formats for entity ids.
-            # Fake GPUs have GPU-00000000-0000-0000-0000-000000000000 UUID
-            ["group", "-g", groupId, "-a", "00000000-0000-0000-0000-000000000000"],  # add a GPU to the group
-            ["group", "-g", groupId, "-r", "00000000-0000-0000-0000-000000000000"],  # remove the GPU from the group
-            ["group", "-g", groupId, "-a", "GPU-00000000-0000-0000-0000-000000000000"],  # add a GPU to the group
-            ["group", "-g", groupId, "-r", "GPU-00000000-0000-0000-0000-000000000000"],  # remove the GPU from the group
-            ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000"],  # add a GPU to the group
-            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000"],  # remove the GPU from the group
-            ["group", "-g", groupId, "-a", "GPU-00000000-0000-0000-0000-000000000000/0"],  # add a GPU Instance to the group
-            ["group", "-g", groupId, "-r", "GPU-00000000-0000-0000-0000-000000000000/0"],  # remove the GPU Instance from the group
-            ["group", "-g", groupId, "-a", "GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (0, 0)],  # add a CI to the group
-            ["group", "-g", groupId, "-r", "GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (0, 0)],  # remove the CI from the group
-            ["group", "-g", groupId, "-a", "GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (1, 0)],  # add another CI to the group
-            ["group", "-g", groupId, "-r", "GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (1, 0)],  # remove the CI from the group
-            ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (0, 0)],  # add a CI to the group
-            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (0, 0)],  # remove the CI from the group
-            ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (1, 0)],  # add another CI to the group
-            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" % (1, 0)],  # remove the CI from the group
-            ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/*"],  # add all CIs for InstanceId_0
-            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/0"],  # remove CI_0
-            # This one disabled as the run_with_injection_gpu_compute_instances decorator does not inject hierarchy for now.
-            # ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/1"],  # remove CI_1
-            ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/*/0"],  # add all CI_0 for Instances 0 and 1
-            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/0"],  # remove CI_0 for Instance 0
-            ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/1/0"],  # remove CI_0 for Instance 1
-            ["group", "-g", groupId, "-a", "*"],  # add all GPUs
-            ["group", "-g", groupId, "-r", "*"],  # remove all GPUs
-            ["group", "-g", groupId, "-a", "*/*"],  # add all GPU instances
-            ["group", "-g", groupId, "-r", "*/*"],  # remove all GPU instances
-            ["group", "-g", groupId, "-a", "*/*/*"],  # add all CIs
-            ["group", "-g", groupId, "-r", "*/*/*"],  # remove all CIs
-            ["group", "-g", groupId, "-a", "*,*/*/*"],  # add all GPUs and CIs
-            ["group", "-g", groupId, "-r", "*,*/*/*"],  # remove all GPUs and CIs
-            ["group", "-d", groupId, ],                     # delete the group
-            ["group", "-g", "0", "-i"],                     # Default group can be fetched by ID as long as group IDs start at 0
-    ])
-         
-    nonExistentGroupId = str(int(groupId) + 10)
-     
+
     groupId = str(_create_dcgmi_group())
 
-    ## keep args in this order. Changing it may break the test
-    _test_invalid_args([
-            ["group", "-c", "--default"],                       # Can't create a group called --default
-            ["group", "-c", "--add"],                           # Can't create a group called --add
-            ["group", "-c", "-a"],                              # Can't create a group called -a
-            ["group", "-g", nonExistentGroupId, "-a", str(gpuIds[0])], # Can't add to a group that doesn't exist
-            ["group", "-g", groupId, "-a", "129"],              # Can't add a GPU that doesn't exist
-            ["group", "-g", groupId, "-r", "129"],              # Can't remove a GPU that doesn't exist
-            ["group", "-g", groupId, "-a", "instance:2000"],     # Can't add an instance that doesn't exist
-            ["group", "-g", groupId, "-r", "instance:2000"],     # Can't remove an instance that doesn't exist
-            ["group", "-g", groupId, "-a", "ci:2000"],           # Can't add a CI that doesn't exist
-            ["group", "-g", groupId, "-r", "ci:2000"],           # Can't remove a CI that doesn't exist
-            ["group", "-g", nonExistentGroupId, "-r", str(gpuIds[0])],  # Can't remove from a group that does't exist
-            ["group", "-g", "0", "-r", "0"],                    # Can't remove from the default group (ID 0)
-            ["group", "-g", str(DCGM_ALL_GPUS), "-r", str(gpuIds[0])], # Can't remove from the default group w/ handle
-            ["group", "-d", "0"],                               # Can't delete the default group (ID 0)
-            ["group", "-d", str(DCGM_ALL_GPUS)],                # Can't delete the default group w/ handle
-            ["group", "-d", nonExistentGroupId],                # Can't delete a group that doesnt exist
-            ["group", "-g", groupId, "-a", "11111111-1111-1111-1111-111111111111"],  # add a GPU to the group
-            ["group", "-g", groupId, "-r", "11111111-1111-1111-1111-111111111111"],  # remove the GPU from the group
-            ["group", "-g", groupId, "-a", "GPU-11111111-1111-1111-1111-111111111111"],  # add a GPU to the group
-            ["group", "-g", groupId, "-r", "GPU-11111111-1111-1111-1111-111111111111"],  # remove the GPU from the group
-            ["group", "-g", groupId, "-a", "MIG-GPU-11111111-1111-1111-1111-111111111111"],  # add a GPU to the group
-            ["group", "-g", groupId, "-r", "MIG-GPU-11111111-1111-1111-1111-111111111111"],  # remove the GPU from the group
-            ["group", "-g", groupId, "-a", "%d/%d" % (129, instanceIds[0])],  # Can't add an instance that doesn't exits
-            ["group", "-g", groupId, "-r", "%d/%d" % (129, instanceIds[0])],  # Can't remove an instance that doesn't exist
-            ["group", "-g", groupId, "-a", "%d/%d/%d" % (129, instanceIds[0], ciIds[0])],  # Can't add a CI that doesn't exist
-            ["group", "-g", groupId, "-r", "%d/%d/%d" % (129, instanceIds[0], ciIds[0])],  # Can't remove a CI that doesn't exist
+    # keep args in this order. Changing it may break the test
+    _test_valid_args([
+        ["group", "-l", ""],                            # list groups
+        # get info on created group
+        ["group", "-g", groupId, "-i"],
+        ["group", "-g", groupId, "-a", str(gpuIds[0])],  # add gpu to group
+        # remove that gpu from the group
+        ["group", "-g", groupId, "-r", str(gpuIds[0])],
+        ["group", "-g", groupId, "-a", "instance:" +
+         str(instanceIds[0])],  # add instance to group
+        ["group", "-g", groupId, "-r", "instance:" +
+         str(instanceIds[0])],  # remove instance from group
+        ["group", "-g", groupId, "-a", "ci:" +
+         str(ciIds[0])],  # add CI to group
+        ["group", "-g", groupId, "-r", "ci:" +
+         str(ciIds[0])],  # remove CI from group
+        # add gpu to group with gpu tag
+        ["group", "-g", groupId, "-a", "gpu:" + str(gpuIds[0])],
+        # remove that gpu from the group with gpu tag
+        ["group", "-g", groupId, "-r", "gpu:" + str(gpuIds[0])],
+        # add instance to group with instance tag
+        ["group", "-g", groupId, "-a", "instance:" + str(instanceIds[0])],
+        # remove instance from the group with instance tag
+        ["group", "-g", groupId, "-r", "instance:" + str(instanceIds[0])],
+        # add CI to group with compute instance tag
+        ["group", "-g", groupId, "-a", "ci:" + str(instanceIds[0])],
+        # remove CI from the group with compute instace tag
+        ["group", "-g", groupId, "-r", "ci:" + str(instanceIds[0])],
+        # Testing Cuda/MIG formats for entity ids.
+        # Fake GPUs have GPU-00000000-0000-0000-0000-000000000000 UUID
+        # add a GPU to the group
+        ["group", "-g", groupId, "-a", "00000000-0000-0000-0000-000000000000"],
+        # remove the GPU from the group
+        ["group", "-g", groupId, "-r", "00000000-0000-0000-0000-000000000000"],
+        # add a GPU to the group
+        ["group", "-g", groupId, "-a", "GPU-00000000-0000-0000-0000-000000000000"],
+        # remove the GPU from the group
+        ["group", "-g", groupId, "-r", "GPU-00000000-0000-0000-0000-000000000000"],
+        # add a GPU to the group
+        ["group", "-g", groupId, "-a",
+         "MIG-GPU-00000000-0000-0000-0000-000000000000"],
+        # remove the GPU from the group
+        ["group", "-g", groupId, "-r",
+         "MIG-GPU-00000000-0000-0000-0000-000000000000"],
+        # add a GPU Instance to the group
+        ["group", "-g", groupId, "-a",
+         "GPU-00000000-0000-0000-0000-000000000000/0"],
+        # remove the GPU Instance from the group
+        ["group", "-g", groupId, "-r",
+         "GPU-00000000-0000-0000-0000-000000000000/0"],
+        ["group", "-g", groupId, "-a", "GPU-00000000-0000-0000-0000-000000000000/%d/%d" %
+         (0, 0)],  # add a CI to the group
+        ["group", "-g", groupId, "-r", "GPU-00000000-0000-0000-0000-000000000000/%d/%d" %
+         (0, 0)],  # remove the CI from the group
+        ["group", "-g", groupId, "-a", "GPU-00000000-0000-0000-0000-000000000000/%d/%d" %
+         (1, 0)],  # add another CI to the group
+        ["group", "-g", groupId, "-r", "GPU-00000000-0000-0000-0000-000000000000/%d/%d" %
+         (1, 0)],  # remove the CI from the group
+        ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" %
+         (0, 0)],  # add a CI to the group
+        ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" %
+         (0, 0)],  # remove the CI from the group
+        ["group", "-g", groupId, "-a", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" %
+         (1, 0)],  # add another CI to the group
+        ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/%d/%d" %
+         (1, 0)],  # remove the CI from the group
+        # add all CIs for InstanceId_0
+        ["group", "-g", groupId, "-a",
+         "MIG-GPU-00000000-0000-0000-0000-000000000000/0/*"],
+        ["group", "-g", groupId, "-r",
+         "MIG-GPU-00000000-0000-0000-0000-000000000000/0/0"],  # remove CI_0
+        # This one disabled as the run_with_injection_gpu_compute_instances decorator does not inject hierarchy for now.
+        # ["group", "-g", groupId, "-r", "MIG-GPU-00000000-0000-0000-0000-000000000000/0/1"],  # remove CI_1
+        # add all CI_0 for Instances 0 and 1
+        ["group", "-g", groupId, "-a",
+         "MIG-GPU-00000000-0000-0000-0000-000000000000/*/0"],
+        # remove CI_0 for Instance 0
+        ["group", "-g", groupId, "-r",
+         "MIG-GPU-00000000-0000-0000-0000-000000000000/0/0"],
+        # remove CI_0 for Instance 1
+        ["group", "-g", groupId, "-r",
+         "MIG-GPU-00000000-0000-0000-0000-000000000000/1/0"],
+        ["group", "-g", groupId, "-a", "*"],  # add all GPUs
+        ["group", "-g", groupId, "-r", "*"],  # remove all GPUs
+        ["group", "-g", groupId, "-a", "*/*"],  # add all GPU instances
+        ["group", "-g", groupId, "-r", "*/*"],  # remove all GPU instances
+        ["group", "-g", groupId, "-a", "*/*/*"],  # add all CIs
+        ["group", "-g", groupId, "-r", "*/*/*"],  # remove all CIs
+        ["group", "-g", groupId, "-a", "*,*/*/*"],  # add all GPUs and CIs
+        ["group", "-g", groupId, "-r", "*,*/*/*"],  # remove all GPUs and CIs
+        ["group", "-d", groupId, ],                     # delete the group
+        # Default group can be fetched by ID as long as group IDs start at 0
+        ["group", "-g", "0", "-i"],
     ])
+
+    nonExistentGroupId = str(int(groupId) + 10)
+
+    groupId = str(_create_dcgmi_group())
+
+    # keep args in this order. Changing it may break the test
+    _test_invalid_args([
+        # Can't create a group called --default
+        ["group", "-c", "--default"],
+        # Can't create a group called --add
+        ["group", "-c", "--add"],
+        # Can't create a group called -a
+        ["group", "-c", "-a"],
+        # Can't add to a group that doesn't exist
+        ["group", "-g", nonExistentGroupId, "-a", str(gpuIds[0])],
+        # Can't add a GPU that doesn't exist
+        ["group", "-g", groupId, "-a", "129"],
+        # Can't remove a GPU that doesn't exist
+        ["group", "-g", groupId, "-r", "129"],
+        # Can't add an instance that doesn't exist
+        ["group", "-g", groupId, "-a", "instance:2000"],
+        # Can't remove an instance that doesn't exist
+        ["group", "-g", groupId, "-r", "instance:2000"],
+        # Can't add a CI that doesn't exist
+        ["group", "-g", groupId, "-a", "ci:2000"],
+        # Can't remove a CI that doesn't exist
+        ["group", "-g", groupId, "-r", "ci:2000"],
+        # Can't remove from a group that does't exist
+        ["group", "-g", nonExistentGroupId, "-r", str(gpuIds[0])],
+        # Can't remove from the default group (ID 0)
+        ["group", "-g", "0", "-r", "0"],
+        # Can't remove from the default group w/ handle
+        ["group", "-g", str(DCGM_ALL_GPUS), "-r", str(gpuIds[0])],
+        # Can't delete the default group (ID 0)
+        ["group", "-d", "0"],
+        # Can't delete the default group w/ handle
+        ["group", "-d", str(DCGM_ALL_GPUS)],
+        # Can't delete a group that doesnt exist
+        ["group", "-d", nonExistentGroupId],
+        # add a GPU to the group
+        ["group", "-g", groupId, "-a", "11111111-1111-1111-1111-111111111111"],
+        # remove the GPU from the group
+        ["group", "-g", groupId, "-r", "11111111-1111-1111-1111-111111111111"],
+        # add a GPU to the group
+        ["group", "-g", groupId, "-a", "GPU-11111111-1111-1111-1111-111111111111"],
+        # remove the GPU from the group
+        ["group", "-g", groupId, "-r", "GPU-11111111-1111-1111-1111-111111111111"],
+        # add a GPU to the group
+        ["group", "-g", groupId, "-a",
+         "MIG-GPU-11111111-1111-1111-1111-111111111111"],
+        # remove the GPU from the group
+        ["group", "-g", groupId, "-r",
+         "MIG-GPU-11111111-1111-1111-1111-111111111111"],
+        # Can't add an instance that doesn't exits
+        ["group", "-g", groupId, "-a", "%d/%d" % (129, instanceIds[0])],
+        # Can't remove an instance that doesn't exist
+        ["group", "-g", groupId, "-r", "%d/%d" % (129, instanceIds[0])],
+        # Can't add a CI that doesn't exist
+        ["group", "-g", groupId, "-a", "%d/%d/%d" %
+         (129, instanceIds[0], ciIds[0])],
+        # Can't remove a CI that doesn't exist
+        ["group", "-g", groupId, "-r", "%d/%d/%d" %
+         (129, instanceIds[0], ciIds[0])],
+    ])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -344,34 +437,49 @@ def test_dcgmi_cpu_group(handle, gpuIds, cpuIds):
         else:
             cpuStr = cpuStr + ",cpu:%s" % str(cpuId)
     entityStr = "%s,%s" % (gpuStr, cpuStr)
-    createGroupArgs = ["group", "-c", "cpu_test_group", "-a", entityStr ]
+    createGroupArgs = ["group", "-c", "cpu_test_group", "-a", entityStr]
     retValue, stdout_lines, stderr_lines = _run_dcgmi_command(createGroupArgs)
-    _assert_valid_dcgmi_results(createGroupArgs, retValue, stdout_lines, stderr_lines)
- 
+    _assert_valid_dcgmi_results(
+        createGroupArgs, retValue, stdout_lines, stderr_lines)
+
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_injection_nvswitches(2)
 def test_dcgmi_group_nvswitch(handle, switchIds):
 
-    groupId = str(_create_dcgmi_group(groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
+    groupId = str(_create_dcgmi_group(
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
 
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-            ["group", "-g", groupId, "-i"],                 # get info on created group
-            ["group", "-g", groupId, "-r", "nvswitch:%s" % str(switchIds[0])], # remove a switch from the group
-            ["group", "-g", groupId, "-a", "nvswitch:%s" % str(switchIds[0])], # add a switch to group
-            ["group", "-g", groupId, "-r", "nvswitch:%s" % str(switchIds[1])], # remove a 2nd switch from the group
-            ["group", "-g", groupId, "-a", "nvswitch:%s" % str(switchIds[1])], # add a 2nd switch to group
-            ["group", "-g", groupId, "-r", "nvswitch:%s,nvswitch:%s" % (str(switchIds[0]), str(switchIds[1]))], # remove both switches at once
-            ["group", "-g", groupId, "-a", "nvswitch:%s,nvswitch:%s" % (str(switchIds[0]), str(switchIds[1]))], # add both switches at once
+        # get info on created group
+        ["group", "-g", groupId, "-i"],
+        ["group", "-g", groupId, "-r", "nvswitch:%s" %
+            str(switchIds[0])],  # remove a switch from the group
+        ["group", "-g", groupId, "-a", "nvswitch:%s" %
+         str(switchIds[0])],  # add a switch to group
+        ["group", "-g", groupId, "-r", "nvswitch:%s" %
+         str(switchIds[1])],  # remove a 2nd switch from the group
+        ["group", "-g", groupId, "-a", "nvswitch:%s" %
+         str(switchIds[1])],  # add a 2nd switch to group
+        ["group", "-g", groupId, "-r", "nvswitch:%s,nvswitch:%s" %
+         # remove both switches at once
+         (str(switchIds[0]), str(switchIds[1]))],
+        ["group", "-g", groupId, "-a", "nvswitch:%s,nvswitch:%s" %
+         # add both switches at once
+         (str(switchIds[0]), str(switchIds[1]))],
     ])
-         
+
     nonExistantGroupId = str(int(groupId) + 10)
-     
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["group", "-g", groupId, "-r", "taco:%s" % str(switchIds[0])], # remove a switch from an invalid entityGroupId
-            ["group", "-g", groupId, "-a", "taco:%s" % str(switchIds[0])], # add a switch to an invalid entityGroupId
+        # remove a switch from an invalid entityGroupId
+        ["group", "-g", groupId, "-r", "taco:%s" % str(switchIds[0])],
+        # add a switch to an invalid entityGroupId
+        ["group", "-g", groupId, "-a", "taco:%s" % str(switchIds[0])],
     ])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -393,51 +501,66 @@ def test_dcgmi_config(handle, gpuIds):
 
     groupId = str(_create_dcgmi_group())
 
-    ## Keep args in order in all dcgmi command sequence arrays below.
+    # Keep args in order in all dcgmi command sequence arrays below.
 
-    ## This is the list of dcgmi command arguments that are valid as root
-    ## and non-root, and effect setup for additional tests. We use a list in
-    ## case we want to add more than one.
+    # This is the list of dcgmi command arguments that are valid as root
+    # and non-root, and effect setup for additional tests. We use a list in
+    # case we want to add more than one.
     setupArgsTestList = [
-        ["group", "-g", groupId, "-a", str(gpuIds[0])],        # add gpu to group
+        # add gpu to group
+        ["group", "-g", groupId, "-a", str(gpuIds[0])],
     ]
 
     _test_valid_args(setupArgsTestList)
 
-    ## This is the list of dcgmi command arguments that are valid as root,
-    ## and invalid as non-root.
+    # This is the list of dcgmi command arguments that are valid as root,
+    # and invalid as non-root.
     validArgsTestList = [
-            ["config", "--get", "-g", groupId],                    # get default group configuration
-            ["config", "--get", "-g", "0"],                        # get default group configuration by ID. This will work as long as group IDs start at 0
-            ["config", "-g", groupId, "--set", "-P", dft_pwr],     # set default power limit
-            ["config", "-g", groupId, "--set", "-P", max_pwr],     # set max power limit
-            ["config", "--get", "-g", groupId, "--verbose"],       # get verbose default group configuration
-            ["config", "--enforce", "-g", groupId],                # enforce default group configuration
-            ["config", "--enforce", "-g", "0" ]                    # enforce group configuration on default group by ID
+        # get default group configuration
+        ["config", "--get", "-g", groupId],
+        # get default group configuration by ID. This will work as long as group IDs start at 0
+        ["config", "--get", "-g", "0"],
+        ["config", "-g", groupId, "--set", "-P",
+         dft_pwr],     # set default power limit
+        ["config", "-g", groupId, "--set", "-P",
+         max_pwr],     # set max power limit
+        # get verbose default group configuration
+        ["config", "--get", "-g", groupId, "--verbose"],
+        # enforce default group configuration
+        ["config", "--enforce", "-g", groupId],
+        # enforce group configuration on default group by ID
+        ["config", "--enforce", "-g", "0"]
     ]
 
     # Setting the compute mode is only supported when MIG mode is not enabled.
     if not test_utils.is_mig_mode_enabled():
         # set group configuration on default group by ID
-        validArgsTestList.append(["config", "--set", "-c", "0", "-g", "0" ])
+        validArgsTestList.append(["config", "--set", "-c", "0", "-g", "0"])
 
-    #Config management only works when the host engine is running as root
+    # Config management only works when the host engine is running as root
     if utils.is_root():
         _test_valid_args(validArgsTestList)
     else:
         _test_invalid_args(validArgsTestList)
 
-    ## This is the list of invalid dcgmi command arguments.
+    # This is the list of invalid dcgmi command arguments.
     _test_invalid_args([
-            ["config", "--get", "-g", "9999"],                 # Can't get config of group that doesn't exist
-            ["config", "--get", "-g", "9999", "--verbose"],    # Can't get config of group that doesn't exist
-            ["config", "--set", ""],                        # Can't set group configuration to nothing
-            ["config", "--set", "-c", "5"],                 # Can't set an invalid compute mode
-            ["config", "--enforce", "-g", "9999"]           # Can't enforce a configuration of group that doesn't exist
+        # Can't get config of group that doesn't exist
+        ["config", "--get", "-g", "9999"],
+        # Can't get config of group that doesn't exist
+        ["config", "--get", "-g", "9999", "--verbose"],
+        # Can't set group configuration to nothing
+        ["config", "--set", ""],
+        # Can't set an invalid compute mode
+        ["config", "--set", "-c", "5"],
+        # Can't enforce a configuration of group that doesn't exist
+        ["config", "--enforce", "-g", "9999"]
     ])
- 
+
+
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_injection_gpus() #Use injected GPUs for policy so this doesn't fail on GeForce and Quadro
+# Use injected GPUs for policy so this doesn't fail on GeForce and Quadro
+@test_utils.run_with_injection_gpus()
 def test_dcgmi_policy(handle, gpuIds):
     """
      Test DCGMI policy
@@ -448,28 +571,42 @@ def test_dcgmi_policy(handle, gpuIds):
     groupIdStr = str(groupObj.GetId().value)
 
     DCGM_ALL_GPUS = dcgm_structs.DCGM_GROUP_ALL_GPUS
-     
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-            ["policy", "--get", "", "-g", groupIdStr],                 # get default group policy
-            ["policy", "--get", "-g", "0"],                            # get default group policy by ID. this will fail if groupIds ever start from > 0
-            ["policy", "--get", "--verbose", "-g", groupIdStr],        # get verbose default group policy
-            ["policy", "--set", "0,0", "-p", "-e", "-g", groupIdStr],  # set default group policy 
-            ["policy", "--set", "1,2", "-p", "-e", "-g", groupIdStr],  # set default group policy 
-            ["policy", "--set", "1,0", "-x", "-g", groupIdStr],        # set monitoring of xid errors
-            ["policy", "--set", "1,0", "-x", "-n", "-g", groupIdStr],  # set monitoring of xid errors and nvlink errors
-            #["policy", "--reg", ""]                                   # register default group policy (causes timeout)     
+        # get default group policy
+        ["policy", "--get", "", "-g", groupIdStr],
+        # get default group policy by ID. this will fail if groupIds ever start from > 0
+        ["policy", "--get", "-g", "0"],
+        # get verbose default group policy
+        ["policy", "--get", "--verbose", "-g", groupIdStr],
+        ["policy", "--set", "0,0", "-p", "-e", "-g",
+         groupIdStr],  # set default group policy
+        ["policy", "--set", "1,2", "-p", "-e", "-g",
+         groupIdStr],  # set default group policy
+        # set monitoring of xid errors
+        ["policy", "--set", "1,0", "-x", "-g", groupIdStr],
+        # set monitoring of xid errors and nvlink errors
+        ["policy", "--set", "1,0", "-x", "-n", "-g", groupIdStr],
+        # ["policy", "--reg", ""]                                   # register default group policy (causes timeout)
     ])
-     
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["policy", "--get", "-g", "1000"],               # Can't get policy of group that doesn't exist
-            ["policy", "--get", "-g", "1000", "--verbose"],  # Can't get policy of group that doesn't exist
-            ["policy", "--set", "-p"],                       # Can't set group policy w/ no action/validaion
-            ["policy", "--set", "0,0"],                      # Can't set group policy w/ no watches
-            ["policy", "--set", "0,0", "-p", "-g", "1000" ], # Can't set group policy on group that doesn't exist
-            ["policy", "--reg", "-g", "1000"]                # Can't register a policy of group that doesn't exist
+        # Can't get policy of group that doesn't exist
+        ["policy", "--get", "-g", "1000"],
+        # Can't get policy of group that doesn't exist
+        ["policy", "--get", "-g", "1000", "--verbose"],
+        # Can't set group policy w/ no action/validaion
+        ["policy", "--set", "-p"],
+        # Can't set group policy w/ no watches
+        ["policy", "--set", "0,0"],
+        # Can't set group policy on group that doesn't exist
+        ["policy", "--set", "0,0", "-p", "-g", "1000"],
+        # Can't register a policy of group that doesn't exist
+        ["policy", "--reg", "-g", "1000"]
     ])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -477,47 +614,69 @@ def test_dcgmi_health(handle, gpuIds):
     """
       Test DCGMI Health
     """
-     
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-            ["health", "--fetch", ""],                  # get default group health
-            ["health", "--set", "pmit"],                # set group health
-            ["health", "--clear", ""]                   # clear group health watches
+        ["health", "--fetch", ""],                  # get default group health
+        ["health", "--set", "pmit"],                # set group health
+        # clear group health watches
+        ["health", "--clear", ""]
     ])
-                
-    #Create group for testing
+
+    # Create group for testing
     groupId = str(_create_dcgmi_group())
     nonExistantGroupId = str(int(groupId) + 10)
-      
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["health", "--fetch", "-g", nonExistantGroupId],    # Can't get health of group that doesn't exist
-            ["health", "--set", "a", "-g", nonExistantGroupId], # Can't get health of group that doesn't exist
-            ["health", "--set", "pp"],                          # Can't set health of group with multiple of same tag
-            ["health", "--get", "ap"],                          # Can't set health to all plus another tag 
-            ["health", "--set", ""],                            # Can't set group health w/ no arguments
-            ["health", "--check", "-g", nonExistantGroupId],    # Can't check health of group that doesn't exist
-            ["health", "--check", "-g", groupId]                # Can't check health of group that has no watches enabled
+        # Can't get health of group that doesn't exist
+        ["health", "--fetch", "-g", nonExistantGroupId],
+        # Can't get health of group that doesn't exist
+        ["health", "--set", "a", "-g", nonExistantGroupId],
+        # Can't set health of group with multiple of same tag
+        ["health", "--set", "pp"],
+        # Can't set health to all plus another tag
+        ["health", "--get", "ap"],
+        # Can't set group health w/ no arguments
+        ["health", "--set", ""],
+        # Can't check health of group that doesn't exist
+        ["health", "--check", "-g", nonExistantGroupId],
+        # Can't check health of group that has no watches enabled
+        ["health", "--check", "-g", groupId]
     ])
- 
+
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 def test_dcgmi_discovery(handle, gpuIds):
     """
     Test DCGMI discovery 
     """
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-            ["discovery", "--list", ""],                   # list gpus
-            ["discovery", "--info", "aptc"],               # check group info
-            ["discovery", "--info", "aptc", "--verbose"]  # checl group info verbose
+        ["discovery", "--list", ""],                   # list gpus
+        ["discovery", "-l"],                           # list gpus (short form)
+        # list all gpus with status
+        ["discovery", "-l", "-a"],
+        # list all gpus with status (long form)
+        ["discovery", "-l", "--all"],
+        # list all gpus with status (mixed form)
+        ["discovery", "--list", "-a"],
+        # list all gpus with status (both long form)
+        ["discovery", "--list", "--all"],
+        ["discovery", "--info", "aptc"],               # check group info
+        # checl group info verbose
+        ["discovery", "--info", "aptc", "--verbose"]
     ])
-    
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["discovery", "--info", "a", "-g", "2"],              # Cant check info on group that doesn't exist
-            ["discovery", "--info", "a", "--gpuid", "123"]        # Cant check info on gpu that doesn't exist
+        # Cant check info on group that doesn't exist
+        ["discovery", "--info", "a", "-g", "2"],
+        # Cant check info on gpu that doesn't exist
+        ["discovery", "--info", "a", "--gpuid", "123"]
     ])
+
 
 @test_utils.run_only_on_numa_systems()
 @test_utils.run_with_standalone_host_engine(20)
@@ -527,11 +686,13 @@ def test_dcgmi_discovery_cpus(handle, gpuIds, cpuIds):
     """
     Test DCGMI discovery 
     """
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-            ["discovery", "--list", ""],
-            ["discovery", "--info", "a", "--cpuid", "0"]     # check cpu can be specified
+        ["discovery", "--list", ""],
+        # check cpu can be specified
+        ["discovery", "--info", "a", "--cpuid", "0"]
     ])
+
 
 def helper_dcgmi_discovery_can_list_cx(numCxCards):
     expectedStr = f"{numCxCards} ConnectX found."
@@ -543,16 +704,19 @@ def helper_dcgmi_discovery_can_list_cx(numCxCards):
             break
     assert found, f"Cannot find expected output: [{expectedStr}]"
 
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_cx()
 def test_dcgmi_discovery_can_list_cx_live(handle, cxIds):
     helper_dcgmi_discovery_can_list_cx(len(cxIds))
+
 
 @test_utils.run_with_nvsdm_mock_config("one_cx.yaml")
 @test_utils.run_with_standalone_host_engine(30)
 @test_utils.run_with_nvsdm_mocked_cx()
 def test_dcgmi_discovery_can_list_cx_mocked(handle, cxIds):
     helper_dcgmi_discovery_can_list_cx(len(cxIds))
+
 
 def get_nvidia_cpu_count():
     try:
@@ -565,7 +729,8 @@ def get_nvidia_cpu_count():
         return 0
 
     coreSiblingsSet = set()
-    coreSiblingsPaths = glob.iglob("/sys/devices/system/cpu/cpu*/topology/core_siblings")
+    coreSiblingsPaths = glob.iglob(
+        "/sys/devices/system/cpu/cpu*/topology/core_siblings")
     for coreSiblingsPath in coreSiblingsPaths:
         try:
             with open(coreSiblingsPath) as f:
@@ -576,6 +741,7 @@ def get_nvidia_cpu_count():
 
     return len(coreSiblingsSet)
 
+
 @test_utils.run_with_persistence_mode_on()
 @test_utils.run_with_standalone_host_engine(320)
 @test_utils.run_only_with_live_gpus()
@@ -584,8 +750,8 @@ def test_dcgmi_diag(handle, gpuIds):
     """
     Test DCGMI diagnostics
     """
-    allGpusCsv = ",".join(map(str,gpuIds))
-    ## keep args in this order. Changing it may break the test
+    allGpusCsv = ",".join(map(str, gpuIds))
+    # keep args in this order. Changing it may break the test
 
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
@@ -596,115 +762,232 @@ def test_dcgmi_diag(handle, gpuIds):
 
     pciTestParameters = "pcie.h2d_d2h_single_unpinned.min_pci_width=1"
     pciTestParameters += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
-    #Need to skip checks for down NvLinks or QA will file bugs
+    # Need to skip checks for down NvLinks or QA will file bugs
     if test_utils.are_any_nvlinks_down:
         pciTestParameters += ";pcie.test_nvlink_status=false"
 
-    pciTestCmdLineArgs = ["diag", "--run", "pcie", "-p", pciTestParameters, "-i", str(gpuIds[0])]
+    pciTestCmdLineArgs = ["diag", "--run", "pcie",
+                          "-p", pciTestParameters, "-i", str(gpuIds[0])]
 
     validArgsTestList = [
-           ["diag", "--run", "1", "-i", allGpusCsv], # run diagnostic other settings currently run for too long
-           ["diag", "--run", "1", "-i", str(gpuIds[0]), "--debugLogFile aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt"], # Test that we can pass a long debugLogFile
-           ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30", "--fail-early"], # verifies --fail-early option
-           ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30", "--fail-early", "--check-interval", "3"], # verifies --check-interval option
-           ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "memtest.test_duration=10;diagnostic.test_duration=10"], # verifies multiple parameters with different test name but same variable name
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "HW_SLOWDOWN"], # verifies that --throttle-mask with HW_SLOWDOWN reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "SW_THERMAL"], # verifies that --throttle-mask with SW_THERMAL reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "HW_THERMAL"], # verifies that --throttle-mask with HW_THERMAL reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "HW_POWER_BRAKE"], # verifies that --throttle-mask with HW_POWER_BRAKE reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "HW_SLOWDOWN,SW_THERMAL,HW_POWER_BRAKE"], # verifies that --throttle-mask with HW_POWER_BRAKE reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "SW_THERMAL,HW_THERMAL,HW_SLOWDOWN"], # verifies that --throttle-mask with HW_POWER_BRAKE reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "40"], # verifies that --throttle-mask with HW_SLOWDOWN (8) and SW_THERMAL (32) reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "96"], # verifies that --throttle-mask with SW_THERMAL (32) and HW_THERMAL (64) reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "232"], # verifies that --throttle-mask with ALL reasons to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "HW_SLOWDOWN"], # verifies that --clocksevent-mask with HW_SLOWDOWN reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "SW_THERMAL"], # verifies that --clocksevent-mask with SW_THERMAL reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "HW_THERMAL"], # verifies that --clocksevent-mask with HW_THERMAL reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "HW_POWER_BRAKE"], # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "HW_SLOWDOWN,SW_THERMAL,HW_POWER_BRAKE"], # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "SW_THERMAL,HW_THERMAL,HW_SLOWDOWN"], # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "40"], # verifies that --clocksevent-mask with HW_SLOWDOWN (8) and SW_THERMAL (32) reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "96"], # verifies that --clocksevent-mask with SW_THERMAL (32) and HW_THERMAL (64) reason to be ignored
-           ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "232"], # verifies that --clocksevent-mask with ALL reasons to be ignored
+        # run diagnostic other settings currently run for too long
+        ["diag", "--run", "1", "-i", allGpusCsv],
+        # Test that we can pass a long debugLogFile
+        ["diag", "--run", "1", "-i",
+            str(gpuIds[0]), "--debugLogFile aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt"],
+        ["diag", "--run", "1", "-i", allGpusCsv, "--parameters",
+         "diagnostic.test_duration=30", "--fail-early"],  # verifies --fail-early option
+        ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30",
+         "--fail-early", "--check-interval", "3"],  # verifies --check-interval option
+        # verifies multiple parameters with different test name but same variable name
+        ["diag", "--run", "1", "-i", allGpusCsv, "--parameters",
+         "memtest.test_duration=10;diagnostic.test_duration=10"],
+        # verifies that --throttle-mask with HW_SLOWDOWN reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--throttle-mask", "HW_SLOWDOWN"],
+        # verifies that --throttle-mask with SW_THERMAL reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--throttle-mask", "SW_THERMAL"],
+        # verifies that --throttle-mask with HW_THERMAL reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--throttle-mask", "HW_THERMAL"],
+        # verifies that --throttle-mask with HW_POWER_BRAKE reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--throttle-mask", "HW_POWER_BRAKE"],
+        # verifies that --throttle-mask with HW_POWER_BRAKE reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask",
+         "HW_SLOWDOWN,SW_THERMAL,HW_POWER_BRAKE"],
+        # verifies that --throttle-mask with HW_POWER_BRAKE reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask",
+         "SW_THERMAL,HW_THERMAL,HW_SLOWDOWN"],
+        # verifies that --throttle-mask with HW_SLOWDOWN (8) and SW_THERMAL (32) reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "40"],
+        # verifies that --throttle-mask with SW_THERMAL (32) and HW_THERMAL (64) reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "96"],
+        # verifies that --throttle-mask with ALL reasons to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "232"],
+        # verifies that --clocksevent-mask with HW_SLOWDOWN reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--clocksevent-mask", "HW_SLOWDOWN"],
+        # verifies that --clocksevent-mask with SW_THERMAL reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--clocksevent-mask", "SW_THERMAL"],
+        # verifies that --clocksevent-mask with HW_THERMAL reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--clocksevent-mask", "HW_THERMAL"],
+        # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--clocksevent-mask", "HW_POWER_BRAKE"],
+        # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask",
+         "HW_SLOWDOWN,SW_THERMAL,HW_POWER_BRAKE"],
+        # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask",
+         "SW_THERMAL,HW_THERMAL,HW_SLOWDOWN"],
+        # verifies that --clocksevent-mask with HW_SLOWDOWN (8) and SW_THERMAL (32) reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "40"],
+        # verifies that --clocksevent-mask with SW_THERMAL (32) and HW_THERMAL (64) reason to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "96"],
+        # verifies that --clocksevent-mask with ALL reasons to be ignored
+        ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "232"],
 
-           ["diag", "--run", "1", "--gpuList", ",".join(str(x) for x in gpuIds)], # verifies --gpuList option accepts and validates list of GPUs passed in
-           ["diag", "--run", "1", "--entity-id", "gpu:"+",".join(str(x) for x in gpuIds)], # verifies --entity-id option accepts and validates list of GPUs passed in
-           ["diag", "--run", "1", "--entity-id", "gpu:"+"{" + str(gpuIds[0]) + "}"], # verifies --entity-id option accepts and validates list of GPUs passed in
-           ["diag", "--run", "1", "--entity-id", "gpu:"+"{" + str(gpuIds[0]) + "-" + str(gpuIds[0]) + "}"], # verifies --entity-id option accepts and validates list of GPUs passed in
-           ["diag", "--run", "1", "--entity-id", gpu0Info.identifiers.uuid], # verifies --entity-id option accepts GPU UUID
-           ["diag", "--run", "1", "-g", str(createdGroupId)], # verifies --group can work
-           ["diag", "--run", "1", "-i", allGpusCsv, "-p", "generic_mode=true"], # This is a valid global parameter
-           ["diag", "--run", "1", "-i", allGpusCsv, "--enable-heartbeat"], # verifies that --enable-heartbeat works
-           pciTestCmdLineArgs,
+        # verifies --gpuList option accepts and validates list of GPUs passed in
+        ["diag", "--run", "1", "--gpuList",
+         ",".join(str(x) for x in gpuIds)],
+        # verifies --entity-id option accepts and validates list of GPUs passed in
+        ["diag", "--run", "1", "--entity-id",
+         "gpu:" + ",".join(str(x) for x in gpuIds)],
+        # verifies --entity-id option accepts and validates list of GPUs passed in
+        ["diag", "--run", "1", "--entity-id",
+         "gpu:" + "{" + str(gpuIds[0]) + "}"],
+        # verifies --entity-id option accepts and validates list of GPUs passed in
+        ["diag", "--run", "1", "--entity-id", "gpu:" +
+         "{" + str(gpuIds[0]) + "-" + str(gpuIds[0]) + "}"],
+        # verifies --entity-id option accepts GPU UUID
+        ["diag", "--run", "1", "--entity-id", gpu0Info.identifiers.uuid],
+        # verifies --group can work
+        ["diag", "--run", "1", "-g", str(createdGroupId)],
+        # This is a valid global parameter
+        ["diag", "--run", "1", "-i", allGpusCsv, "-p", "generic_mode=true"],
+        # verifies that --enable-heartbeat works
+        ["diag", "--run", "1", "-i", allGpusCsv, "--enable-heartbeat"],
+        pciTestCmdLineArgs,
     ]
 
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     invalidArgsTestList = [
-            ["diag", "--run", "-g", "2"],           # Can't run on group that doesn't exist
-            ["diag", "--run", "5"],                 # Can't run with a test number that doesn't exist
-            ["diag", "--run", "\"roshar stress\""], # Can't run a non-existent test name
-            ["diag", "--run", "\"pcie\"", "--entity-id", "cpu:0"], # Can't run an existing test but not for CPU
-            ["diag", "--run", "3", "--parameters", "dianarstic.test_duration=40"],
-            ["diag", "--run", "3", "--parameters", "diagnostic.test_durration=40"],
-            ["diag", "--run", "3", "--parameters", "pcie.h2d_d2h_singgle_pinned.iterations=4000"],
-            ["diag", "--run", "3", "--parameters", "pcie.h2d_d2h_single_pinned.itterations=4000"],
-            ["diag", "--run", "3", "--parameters", "bob.tom=maybe"],
-            ["diag", "--run", "3", "--parameters", "truck=slow"],
-            ["diag", "--run", "3", "--parameters", "now this is a story all about how"],
-            ["diag", "--run", "3", "--parameters", "my=life=got=flipped=turned=upside=down"],
-            ["diag", "--run", "3", "--parameters", "and.i'd.like.to.take.a=minute=just.sit=right=there"],
-            ["diag", "--run", "3", "--parameters", "i'll tell you=how.I.became the=prince of .a town called"],
-            ["diag", "--run", "3", "--parameters", "Bel-Air"],
-            ["diag", "--train"], # ensure that training is no longer supported
-            ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30", "--fail-early 10"], # verifies --fail-early does not accept parameters
-            ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30", "--fail-early", "--check-interval -1"], # no negative numbers allowed
-            ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30", "--fail-early", "--check-interval 350"], # no numbers > 300 allowed
-            ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30", "--check-interval 10"], # requires --fail-early parameter
-            # The tests below are disabled until bug http://nvbugs/2672193 is fixed
-            ["diag", "--run", "1", "--throttle-mask", "HW_ZSLOWDOWN"], # verifies that --throttle-mask incorrect reason does not work
-            ["diag", "--run", "1", "--throttle-mask", "SW_TRHERMAL"], # verifies that --throttle-mask incorrect reason does not work
-            ["diag", "--run", "1", "--throttle-mask", "HWT_THERMAL"], # verifies that --throttle-mask incorrect reason does not work
-            ["diag", "--run", "1", "--throttle-mask", "HW_POWER_OUTBRAKE"], # verifies that --throttle-mask incorrect reason does not work
-            ["diag", "--run", "1", "--throttle-mask -10"], # verifies that --throttle-mask does not accept incorrect values for any reasons to be ignored
-            ["diag", "--run", "1", "--clocksevent-mask", "HW_ZSLOWDOWN"], # verifies that --clocksevent-mask incorrect reason does not work
-            ["diag", "--run", "1", "--clocksevent-mask", "SW_TRHERMAL"], # verifies that --clocksevent-mask incorrect reason does not work
-            ["diag", "--run", "1", "--clocksevent-mask", "HWT_THERMAL"], # verifies that --clocksevent-mask incorrect reason does not work
-            ["diag", "--run", "1", "--clocksevent-mask", "HW_POWER_OUTBRAKE"], # verifies that --clocksevent-mask incorrect reason does not work
-            ["diag", "--run", "1", "--clocksevent-mask -10"], # verifies that --clocksevent-mask does not accept incorrect values for any reasons to be ignored
-            ["diag", "--run", "1", "--plugin-path", "/usr/libexec/datacenter-gpu-manager-4/unplugins"], # verifies --plugin-path fails if the plugins path is not specified correctly
-            # ["diag", "--run", "1", "--gpuList", "0-1-2-3-4-5"], # verifies --gpuList option accepts and validates list of GPUs passed in (disabled until http://nvbugs/2733071 is fixed)
-            ["diag", "--run", "1", "--gpuList", "-1,-2,-3,-4,-5"], # verifies --gpuList option accepts and validates list of GPUs passed in
-            ["diag", "--run", "1", "--gpuList", "a,b,c,d,e"], # verifies --gpuList option accepts and validates list of GPUs passed in
-            ["diag", "--run", "1", "-i", "0-1-2-3-4"], # Make sure -i is a comma-separated list of integers
-            ["diag", "--run", "1", "-i", "roshar"], # Make sure -i is a comma-separated list of integers
-            ["diag", "--run", "1", "-i", "a,b,c,d,e,f"], # Make sure -i is a comma-separated list of integers
-            ["diag", "--run", "1", "-i", allGpusCsv, "--plugin-path", "./apps/nvvs/plugins"], # verifies --plugin-path no longer works (removed)
-            ["diag", "--run", "1", "--iterations", "0"], # We cannot run 0 iterations
-            ["diag", "--run", "1", "--iterations", r"\-1"], # We cannot run negative iterations
-            ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30;diagnostic.test_duration=40"], # multiple defined parameters not allowed
-            ["diag", "--run", "diagnostic", "--parameters", "diagnostic.test_duration=10", "timeout", "10"], # test_duration equals the timeout
-            ["diag", "--run", "diagnostic,targeted_power", "--parameters", "diagnostic.test_duration=10,targeted_power.test_duration=10", "timeout", "15"], # combined test_duration exceeds the timeout
-            ["diag", "--run", "1", "--entity-id", "a,b,c,d,e"], # Test --entity-id option with invalid gpu id
-            ["diag", "--run", "1", "--entity-id", "-1,-2,-3,-4,-5"], # Test --entity-id option with invalid gpu id
-            ["diag", "--run", "1", "--entity-id", "dcgm:0,1"], # Test --entity-id option with invalid gpu id
-            ["diag", "--run", "1", "--entity-id", "gpu:{0"], # Test --entity-id option with invalid gpu id
-            ["diag", "--run", "1", "--entity-id", "GPU-00000000-0000-0000-0000-000000000000"], # Test --entity-id with invalid GPU UUID
-            ["diag", "--run", "1", "--entity-id", "core:0"], # Test --entity-id with non-GPU and non-CPU entity
-            ["diag", "--run", "1", "--entity-id", "cpu:0,cpu:0"], # Test --entity-id with duplicated CPU entities
-            ["diag", "--run", "1", "--entity-id", "core:*"], # Test --entity-id with non-supported wildcard entity type
-            ["diag", "--run", "1", "--entity-id", ""], # Test empty --entity-id
-            ["diag", "--run", "1", "--entity-id", "6" * (dcgm_structs.DCGM_ENTITY_ID_LIST_LEN + 1)], # Test too large --entity-id
-            ["diag", "--run", "1", "--entity-id", str(gpuIds[0]), "--gpuList", str(gpuIds[0])], # Test --entity-id and --gpuList cannot use in the same time
-            ["diag", "--run", "1", "--entity-id", str(gpuIds[0]), "--group", str(createdGroupId)], # Test --entity-id and --group cannot use in the same time
-            ["diag", "--run", "1", "--gpuList", str(gpuIds[0]), "--group", str(createdGroupId)], # Test --gpuList and --group cannot use in the same time
-            ["diag", "--run", "3", "--parameters", f"pcie.h2d_d2h_singgle_pinned.iterations={'6'*(dcgm_structs.DCGM_MAX_TEST_PARMS_LEN_V2 - len('pcie.h2d_d2h_singgle_pinned.iterations=') - 1)}"], # Test case parameter length limit exceeded
-            ["diag", "--run", "1", "--expectedNumEntities", "gpu:{0"], # Test --expectedNumEntities option with invalid num gpus
-            ["diag", "--run", "1", "--expectedNumEntities", "gpu:"], # Test --expectedNumEntities option with invalid num gpus
-            ["diag", "--run", "1", "--expectedNumEntities", "gpu:0,cpu:1"], # Test --expectedNumEntities option with invalid num gpus
-            ["diag", "--run", "1", "--expectedNumEntities", "gpu:-1"], # Test --expectedNumEntities option with invalid num gpus
-            ["diag", "--run", "1", "-f", "0,1", "--expectedNumEntities", f"gpu:{len(gpuIds)}"], # Test --expectedNumEntities option cannot be used with fake gpus
-            ["diag", "--run", "1", "--gpuList", allGpusCsv, "--expectedNumEntities", f"gpu:{len(gpuIds)}"], # Test --expectedNumEntities option cannot be used with gpu list
-            ["diag", "--run", "1", "-p", "funMode=true"], # Make sure we fail with an invalid global parameter
+        # Can't run on group that doesn't exist
+        ["diag", "--run", "-g", "2"],
+        # Can't run with a test number that doesn't exist
+        ["diag", "--run", "5"],
+        # Can't run a non-existent test name
+        ["diag", "--run", "\"roshar stress\""],
+        # Can't run an existing test but not for CPU
+        ["diag", "--run", "\"pcie\"", "--entity-id", "cpu:0"],
+        ["diag", "--run", "3", "--parameters", "dianarstic.test_duration=40"],
+        ["diag", "--run", "3", "--parameters", "diagnostic.test_durration=40"],
+        ["diag", "--run", "3", "--parameters",
+         "pcie.h2d_d2h_singgle_pinned.iterations=4000"],
+        ["diag", "--run", "3", "--parameters",
+         "pcie.h2d_d2h_single_pinned.itterations=4000"],
+        ["diag", "--run", "3", "--parameters", "bob.tom=maybe"],
+        ["diag", "--run", "3", "--parameters", "truck=slow"],
+        ["diag", "--run", "3", "--parameters",
+         "now this is a story all about how"],
+        ["diag", "--run", "3", "--parameters",
+         "my=life=got=flipped=turned=upside=down"],
+        ["diag", "--run", "3", "--parameters",
+         "and.i'd.like.to.take.a=minute=just.sit=right=there"],
+        ["diag", "--run", "3", "--parameters",
+         "i'll tell you=how.I.became the=prince of .a town called"],
+        ["diag", "--run", "3", "--parameters", "Bel-Air"],
+        ["diag", "--train"],  # ensure that training is no longer supported
+        ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30",
+         "--fail-early 10"],  # verifies --fail-early does not accept parameters
+        ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30",
+         "--fail-early", "--check-interval -1"],  # no negative numbers allowed
+        ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30",
+         "--fail-early", "--check-interval 350"],  # no numbers > 300 allowed
+        ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30",
+         "--check-interval 10"],  # requires --fail-early parameter
+        # The tests below are disabled until bug http://nvbugs/2672193 is fixed
+        # verifies that --throttle-mask incorrect reason does not work
+        ["diag", "--run", "1", "--throttle-mask", "HW_ZSLOWDOWN"],
+        # verifies that --throttle-mask incorrect reason does not work
+        ["diag", "--run", "1", "--throttle-mask", "SW_TRHERMAL"],
+        # verifies that --throttle-mask incorrect reason does not work
+        ["diag", "--run", "1", "--throttle-mask", "HWT_THERMAL"],
+        # verifies that --throttle-mask incorrect reason does not work
+        ["diag", "--run", "1", "--throttle-mask", "HW_POWER_OUTBRAKE"],
+        # verifies that --throttle-mask does not accept incorrect values for any reasons to be ignored
+        ["diag", "--run", "1", "--throttle-mask -10"],
+        # verifies that --clocksevent-mask incorrect reason does not work
+        ["diag", "--run", "1", "--clocksevent-mask", "HW_ZSLOWDOWN"],
+        # verifies that --clocksevent-mask incorrect reason does not work
+        ["diag", "--run", "1", "--clocksevent-mask", "SW_TRHERMAL"],
+        # verifies that --clocksevent-mask incorrect reason does not work
+        ["diag", "--run", "1", "--clocksevent-mask", "HWT_THERMAL"],
+        # verifies that --clocksevent-mask incorrect reason does not work
+        ["diag", "--run", "1", "--clocksevent-mask", "HW_POWER_OUTBRAKE"],
+        # verifies that --clocksevent-mask does not accept incorrect values for any reasons to be ignored
+        ["diag", "--run", "1", "--clocksevent-mask -10"],
+        # verifies --plugin-path fails if the plugins path is not specified correctly
+        ["diag", "--run", "1", "--plugin-path",
+         "/usr/libexec/datacenter-gpu-manager-4/unplugins"],
+        # ["diag", "--run", "1", "--gpuList", "0-1-2-3-4-5"], # verifies --gpuList option accepts and validates list of GPUs passed in (disabled until http://nvbugs/2733071 is fixed)
+        # verifies --gpuList option accepts and validates list of GPUs passed in
+        ["diag", "--run", "1", "--gpuList", "-1,-2,-3,-4,-5"],
+        # verifies --gpuList option accepts and validates list of GPUs passed in
+        ["diag", "--run", "1", "--gpuList", "a,b,c,d,e"],
+        # Make sure -i is a comma-separated list of integers
+        ["diag", "--run", "1", "-i", "0-1-2-3-4"],
+        # Make sure -i is a comma-separated list of integers
+        ["diag", "--run", "1", "-i", "roshar"],
+        # Make sure -i is a comma-separated list of integers
+        ["diag", "--run", "1", "-i", "a,b,c,d,e,f"],
+        # verifies --plugin-path no longer works (removed)
+        ["diag", "--run", "1", "-i", allGpusCsv,
+         "--plugin-path", "./apps/nvvs/plugins"],
+        # We cannot run 0 iterations
+        ["diag", "--run", "1", "--iterations", "0"],
+        # We cannot run negative iterations
+        ["diag", "--run", "1", "--iterations", r"\-1"],
+        # multiple defined parameters not allowed
+        ["diag", "--run", "1", "--parameters",
+         "diagnostic.test_duration=30;diagnostic.test_duration=40"],
+        ["diag", "--run", "diagnostic", "--parameters", "diagnostic.test_duration=10",
+         "timeout", "10"],  # test_duration equals the timeout
+        ["diag", "--run", "diagnostic,targeted_power", "--parameters", "diagnostic.test_duration=10,targeted_power.test_duration=10",
+         "timeout", "15"],  # combined test_duration exceeds the timeout
+        # Test --entity-id option with invalid gpu id
+        ["diag", "--run", "1", "--entity-id", "a,b,c,d,e"],
+        # Test --entity-id option with invalid gpu id
+        ["diag", "--run", "1", "--entity-id", "-1,-2,-3,-4,-5"],
+        # Test --entity-id option with invalid gpu id
+        ["diag", "--run", "1", "--entity-id", "dcgm:0,1"],
+        # Test --entity-id option with invalid gpu id
+        ["diag", "--run", "1", "--entity-id", "gpu:{0"],
+        # Test --entity-id with invalid GPU UUID
+        ["diag", "--run", "1", "--entity-id",
+         "GPU-00000000-0000-0000-0000-000000000000"],
+        # Test --entity-id with non-GPU and non-CPU entity
+        ["diag", "--run", "1", "--entity-id", "core:0"],
+        # Test --entity-id with duplicated CPU entities
+        ["diag", "--run", "1", "--entity-id", "cpu:0,cpu:0"],
+        # Test --entity-id with non-supported wildcard entity type
+        ["diag", "--run", "1", "--entity-id", "core:*"],
+        ["diag", "--run", "1", "--entity-id", ""],  # Test empty --entity-id
+        ["diag", "--run", "1", "--entity-id", "6" *
+         # Test too large --entity-id
+         (dcgm_structs.DCGM_ENTITY_ID_LIST_LEN + 1)],
+        # Test --entity-id and --gpuList cannot use in the same time
+        ["diag", "--run", "1", "--entity-id",
+         str(gpuIds[0]), "--gpuList", str(gpuIds[0])],
+        # Test --entity-id and --group cannot use in the same time
+        ["diag", "--run", "1", "--entity-id",
+         str(gpuIds[0]), "--group", str(createdGroupId)],
+        # Test --gpuList and --group cannot use in the same time
+        ["diag", "--run", "1", "--gpuList",
+         str(gpuIds[0]), "--group", str(createdGroupId)],
+        # Test case parameter length limit exceeded
+        ["diag", "--run", "3", "--parameters",
+         f"pcie.h2d_d2h_singgle_pinned.iterations={'6' * (dcgm_structs.DCGM_MAX_TEST_PARMS_LEN_V2 - len('pcie.h2d_d2h_singgle_pinned.iterations=') - 1)}"],
+        # Test --expectedNumEntities option with invalid num gpus
+        ["diag", "--run", "1", "--expectedNumEntities", "gpu:{0"],
+        # Test --expectedNumEntities option with invalid num gpus
+        ["diag", "--run", "1", "--expectedNumEntities", "gpu:"],
+        # Test --expectedNumEntities option with invalid num gpus
+        ["diag", "--run", "1", "--expectedNumEntities", "gpu:0,cpu:1"],
+        # Test --expectedNumEntities option with invalid num gpus
+        ["diag", "--run", "1", "--expectedNumEntities", "gpu:-1"],
+        # Test --expectedNumEntities option cannot be used with fake gpus
+        ["diag", "--run", "1", "-f", "0,1",
+         "--expectedNumEntities", f"gpu:{len(gpuIds)}"],
+        # Test --expectedNumEntities option cannot be used with gpu list
+        ["diag", "--run", "1", "--gpuList", allGpusCsv,
+         "--expectedNumEntities", f"gpu:{len(gpuIds)}"],
+        # Make sure we fail with an invalid global parameter
+        ["diag", "--run", "1", "-p", "funMode=true"],
     ]
 
     if nvidiaCpuCount != 0:
@@ -715,24 +998,32 @@ def test_dcgmi_diag(handle, gpuIds):
         # Since Grace EUD lacks an option to exclude the CPU in testing scenarios,
         # it becomes necessary to enumerate and indicate all processors within the system to initiating test.
         # Skip testing this case if we fail to find out the number of physical CPUs.
-        validArgsTestList.append(["diag", "--run", "1", "--entity-id", f"{entityIdArg}"])
+        validArgsTestList.append(
+            ["diag", "--run", "1", "--entity-id", f"{entityIdArg}"])
 
         # Test --entity-id with non-existed CPU entity
         # The presence of a CPU is only verified within Nvidia environment.
-        invalidArgsTestList.append(["diag", "--run", "1", "--entity-id", "cpu:5566"])
+        invalidArgsTestList.append(
+            ["diag", "--run", "1", "--entity-id", "cpu:5566"])
     else:
         # Test --entity-id with non Nvidia CPU entity
-        invalidArgsTestList.append(["diag", "--run", "1", "--entity-id", "cpu:0"])
+        invalidArgsTestList.append(
+            ["diag", "--run", "1", "--entity-id", "cpu:0"])
 
     # for_all_same_sku_gpus() protected us from running on heterogeneous GPUs in a single diag run.
     # We can detect that this decorator is in effect by comparing the gpuIds we're running against vs all of the gpuIds in the system
     # Don't test the --entity-id * if it will just return DCGM_ST_GROUP_INCOMPATIBLE
     allGpusInSystem = dcgmSystem.discovery.GetAllGpuIds()
     homogeneousSystemTestList = [
-        ["diag", "--run", "1", "--entity-id", "*"], # verifies --entity-id option accepts all GPUs via wildcard
-        ["diag", "--run", "1", "--expectedNumEntities", f"gpu:{len(gpuIds)}"], # verifies --expectedNumEntities works when all GPUs are present
-        ["diag", "--run", "1", "-g", str(dcgm_structs.DCGM_GROUP_ALL_GPUS), "--expectedNumEntities", f"gpu:{len(gpuIds)}"], # verifies --expectedNumEntities works with the DCGM_GROUP_ALL_GPUS groupId
-        ["diag", "--run", "1", "--expectedNumEntities", f"gpu:0"], # verifies --expectedNumEntities with value 0 is ignored and does not error
+        # verifies --entity-id option accepts all GPUs via wildcard
+        ["diag", "--run", "1", "--entity-id", "*"],
+        # verifies --expectedNumEntities works when all GPUs are present
+        ["diag", "--run", "1", "--expectedNumEntities", f"gpu:{len(gpuIds)}"],
+        # verifies --expectedNumEntities works with the DCGM_GROUP_ALL_GPUS groupId
+        ["diag", "--run", "1", "-g",
+            str(dcgm_structs.DCGM_GROUP_ALL_GPUS), "--expectedNumEntities", f"gpu:{len(gpuIds)}"],
+        # verifies --expectedNumEntities with value 0 is ignored and does not error
+        ["diag", "--run", "1", "--expectedNumEntities", f"gpu:0"],
     ]
     if len(allGpusInSystem) == len(gpuIds):
         validArgsTestList.extend(homogeneousSystemTestList)
@@ -741,6 +1032,7 @@ def test_dcgmi_diag(handle, gpuIds):
 
     _test_valid_args(validArgsTestList)
     _test_invalid_args(invalidArgsTestList)
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_persistence_mode_on()
@@ -752,7 +1044,8 @@ def test_dcgmi_diag_invalid_test_specified(handle, gpuIds):
 
     def verifyCliOutput(testNames):
         testNames = ','.join(testNames)
-        cliArgs = [ 'diag', '--run', testNames, '-i', ','.join(map(str, gpuIds)) ]
+        cliArgs = ['diag', '--run', testNames,
+                   '-i', ','.join(map(str, gpuIds))]
         _, stdoutLines, stderrLines = _run_dcgmi_command(cliArgs)
         combinedResult = '\n'.join(stdoutLines + stderrLines)
         assert 'Unable to complete diagnostic' in combinedResult
@@ -762,7 +1055,8 @@ def test_dcgmi_diag_invalid_test_specified(handle, gpuIds):
 
     def verifyJsonOutput(testNames):
         testNames = ','.join(testNames)
-        jsonArgs = [ 'diag', '--run', testNames, '-j', '-v', '-i', ','.join(map(str, gpuIds)) ]
+        jsonArgs = ['diag', '--run', testNames, '-j',
+                    '-v', '-i', ','.join(map(str, gpuIds))]
         _, stdoutLines, stderrLines = _run_dcgmi_command(jsonArgs)
         combinedResult = '\n'.join(stdoutLines + stderrLines)
         jsondata = json.loads(combinedResult)
@@ -780,6 +1074,7 @@ def test_dcgmi_diag_invalid_test_specified(handle, gpuIds):
     verifyJsonOutput(['capoo_power'])
     verifyJsonOutput(['capoo_power', 'dogdog_stress'])
 
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('A100x4-and-DGX.yaml')
 @test_utils.run_with_standalone_host_engine(120)
@@ -793,18 +1088,22 @@ def test_dcgmi_diag_on_heterogeneous_env(handle, gpuIds):
     # for_all_same_sku_gpus() protected us from running on heterogeneous GPUs in a single diag run.
     validArgsTestList = [
         ["diag", "--run", "1", "--gpuList", ",".join(str(x) for x in gpuIds)],
-        ["diag", "--run", "1", "--entity-id", ",".join(str(x) for x in gpuIds)],
+        ["diag", "--run", "1", "--entity-id",
+            ",".join(str(x) for x in gpuIds)],
     ]
     for args in validArgsTestList:
         _, stdoutLines, stderrLines = _run_dcgmi_command(args)
         allOutput = (' '.join(stdoutLines + stderrLines)).lower()
         hasError = "error" in allOutput
         hasHomogeneous = "homogeneous" in allOutput
-        assert (not hasError or not hasHomogeneous), "Should work in homogeneous group of GPUs."
+        assert (
+            not hasError or not hasHomogeneous), "Should work in homogeneous group of GPUs."
 
     invalidArgsTestList = [
-        ["diag", "--run", "1", "--gpuList", ",".join(str(x) for x in allGpusInSystem)],
-        ["diag", "--run", "1", "--entity-id", ",".join(str(x) for x in allGpusInSystem)],
+        ["diag", "--run", "1", "--gpuList",
+            ",".join(str(x) for x in allGpusInSystem)],
+        ["diag", "--run", "1", "--entity-id",
+            ",".join(str(x) for x in allGpusInSystem)],
         ["diag", "--run", "1", "--entity-id", "*"],
         ["diag", "--run", "1"],
     ]
@@ -814,7 +1113,9 @@ def test_dcgmi_diag_on_heterogeneous_env(handle, gpuIds):
         allOutput = (' '.join(stdoutLines + stderrLines)).lower()
         hasError = "error" in allOutput
         hasHomogeneous = "homogeneous" in allOutput
-        assert (hasError and hasHomogeneous), "Should not work in heterogeneous group of GPUs."
+        assert (
+            hasError and hasHomogeneous), "Should not work in heterogeneous group of GPUs."
+
 
 @test_utils.run_with_persistence_mode_on()
 @test_utils.run_with_standalone_host_engine(320)
@@ -822,7 +1123,7 @@ def test_dcgmi_diag_on_heterogeneous_env(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmi_diag_multiple_iterations(handle, gpuIds):
-    allGpusCsv = ",".join(map(str,gpuIds))
+    allGpusCsv = ",".join(map(str, gpuIds))
     args = ["diag", "-r", "1", "-j", "-i", allGpusCsv, "--iterations", "3"]
     retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
 
@@ -830,17 +1131,17 @@ def test_dcgmi_diag_multiple_iterations(handle, gpuIds):
     rawtext = ""
     for line in stdout_lines:
         rawtext = rawtext + line + "\n"
-    
-    try:        
+
+    try:
         jsondict = json.loads(rawtext)
         overallResult = jsondict["Overall Result"]
         assert overallResult != None, "Didn't find a populated value for the overall result!"
         iterationArray = jsondict["iterations"]
-        for i in range(0,2):
-            assert iterationArray[i] != None, "Didn't find a populated result for run %d" % i+1
+        for i in range(0, 2):
+            assert iterationArray[i] != None, "Didn't find a populated result for run %d" % i + 1
     except ValueError as e:
         assert False, ("Couldn't parse json from '%s'" % rawtext)
-    
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -849,52 +1150,63 @@ def test_dcgmi_stats(handle, gpuIds):
     """
      Test DCGMI Stats
     """
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-            ["stats", "--enable"],                  # Enable watches
-            #["stats", "--pid", "100"],                  # check pid
-            #["stats", "--pid", "100", "--verbose"],     # check pid verbose (run test process and enable these if wanted)
+        ["stats", "--enable"],                  # Enable watches
+        # ["stats", "--pid", "100"],                  # check pid
+        # ["stats", "--pid", "100", "--verbose"],     # check pid verbose (run test process and enable these if wanted)
 
-            ["stats", "--jstart", "1"],             #start a job with Job ID 1
-            ["stats", "--jstop", "1"],              #Stop the job
-            ["stats", "--job", "1"],                #Print stats for the job
-            ["stats", "--jremove", "1"],            #Remove the job the job
-            ["stats", "--jremoveall"],              #Remove all jobs
-            ["stats", "--disable"],                 #disable watches
+        ["stats", "--jstart", "1"],  # start a job with Job ID 1
+        ["stats", "--jstop", "1"],  # Stop the job
+        ["stats", "--job", "1"],  # Print stats for the job
+        ["stats", "--jremove", "1"],  # Remove the job the job
+        ["stats", "--jremoveall"],  # Remove all jobs
+        ["stats", "--disable"],  # disable watches
 
-            ["stats", "--jstart", "1"],             #start another job with Job ID 1. This should work due to jremove above. Also, setup the jstart failure below
+        # start another job with Job ID 1. This should work due to jremove above. Also, setup the jstart failure below
+        ["stats", "--jstart", "1"],
     ])
 
-    #Create group for testing
+    # Create group for testing
     groupId = str(_create_dcgmi_group())
     nonExistantGroupId = str(int(groupId) + 10)
-      
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["stats", "--pid", "100", "-g", groupId],            # Can't view stats with out watches enabled
-            ["stats", "enable", "-g", nonExistantGroupId],       # Can't enable watches on group that doesn't exist
-            ["stats", "disable", "-g", nonExistantGroupId],      # Can't disable watches on group that doesn't exist
-            ["stats", "--jstart", "1"],                          # Cant start the job with a job ID which is being used
-            ["stats", "--jstop", "3"],                           # Stop an invalid job id
-            ["stats", "--jremove", "3"],                         # Remove an invalid job id
-            ["stats", "--job", "3"]                              # Get stats for an invalid job id
+        # Can't view stats with out watches enabled
+        ["stats", "--pid", "100", "-g", groupId],
+        # Can't enable watches on group that doesn't exist
+        ["stats", "enable", "-g", nonExistantGroupId],
+        # Can't disable watches on group that doesn't exist
+        ["stats", "disable", "-g", nonExistantGroupId],
+        # Cant start the job with a job ID which is being used
+        ["stats", "--jstart", "1"],
+        # Stop an invalid job id
+        ["stats", "--jstop", "3"],
+        # Remove an invalid job id
+        ["stats", "--jremove", "3"],
+        # Get stats for an invalid job id
+        ["stats", "--job", "3"]
     ])
-        
+
+
 @test_utils.run_with_standalone_host_engine(20, "127.0.0.1:5545", ["--port", "5545"])
 def test_dcgmi_port(handle):
     """
     Test DCGMI port - does dcgmi group testing using port 5545
     """
-    
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-            ["group", "--host", "localhost:5545", "-l", ""],      # list groups
+        ["group", "--host", "localhost:5545", "-l", ""],      # list groups
     ])
-    
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["group", "--host", "localhost:5545", "-c", "--default"],      # Can't create a group called --default
+        # Can't create a group called --default
+        ["group", "--host", "localhost:5545", "-c", "--default"],
     ])
+
 
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_nvml()
@@ -905,56 +1217,68 @@ def test_dcgmi_field_groups(handle):
 
     _test_valid_args([
         ["fieldgroup", "-l"],
-        ["fieldgroup", "-i", "-g", "1"],                    # show internal field group
+        # show internal field group
+        ["fieldgroup", "-i", "-g", "1"],
         ["fieldgroup", "-c", "my_group", "-f", "1,2,3"],    # Add a field group
     ])
 
     _test_invalid_args([
-        ["fieldgroup", "-c", "my_group", "-f", "1,2,3"],      # Add a duplicate group
-        ["fieldgroup", "-c", "bad_fieldids", "-f", "999999"], # Pass bad fieldIds 
-        ["introspect", "-d", "-g", "1"],                      # Delete internal group. Bad
-        ["introspect", "-i", "-g", "100000"],                 # Info for invalid group
+        ["fieldgroup", "-c", "my_group", "-f",
+            "1,2,3"],      # Add a duplicate group
+        ["fieldgroup", "-c", "bad_fieldids", "-f", "999999"],  # Pass bad fieldIds
+        # Delete internal group. Bad
+        ["introspect", "-d", "-g", "1"],
+        # Info for invalid group
+        ["introspect", "-i", "-g", "100000"],
     ])
+
 
 @test_utils.run_with_standalone_host_engine()
 def test_dcgmi_introspect(handle):
     """
     Test DCGMI introspection - test the dcgmi commands under "introspection"
     """
-    
+
     _test_valid_args([
         ["introspect", "--show", "--hostengine"],           # show hostengine
         ["introspect", "-s", "-H"],                         # short form
     ])
-    
+
     _test_invalid_args([
-        ["introspect", "--show"],         # "show" without "--hostengine" should fail
+        # "show" without "--hostengine" should fail
+        ["introspect", "--show"],
     ])
-    
+
+
 @test_utils.run_with_standalone_host_engine(320)
 @test_utils.run_only_with_live_gpus()
 def test_dcgmi_nvlink(handle, gpuIds):
     """
     Test dcgmi to display nvlink error counts
     """
-    
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-           ["nvlink", "-e", "-g", str(gpuIds[0])],  # run the working nvlink command for gpuId[0]
-           ["nvlink", "-s"]                         # Link status should work without parameters
+        # run the working nvlink command for gpuId[0]
+        ["nvlink", "-e", "-g", str(gpuIds[0])],
+        # Link status should work without parameters
+        ["nvlink", "-s"]
     ])
-      
+
     _test_invalid_args([
-           ["nvlink","-e"],                         # -e option requires -g option
-           ["nvlink","-e -s"]                       # -e and -s are mutually exclusive
+        ["nvlink", "-e"],                         # -e option requires -g option
+        # -e and -s are mutually exclusive
+        ["nvlink", "-e -s"]
     ])
 
 
 def helper_make_switch_string(switchId):
     return "nvswitch:" + str(switchId)
 
+
 @test_utils.run_with_standalone_host_engine(120)
-@test_utils.run_with_injection_gpus(2) #Injecting compute instances only works with live ampere or injected GPUs
+# Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpus(2)
 @test_utils.run_with_injection_nvswitches(2)
 @test_utils.run_with_injection_gpu_instances(2)
 @test_utils.run_with_injection_gpu_compute_instances(2)
@@ -965,107 +1289,154 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds, cpuIds, coreI
     Test dcgmi to display dmon values
     """
     gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
-    switchGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
+    switchGroupId = str(_create_dcgmi_group(
+        dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
 
     logger.info("Injected switch IDs:" + str(switchIds))
 
     # Creates a comma separated list of gpus
-    allGpusCsv = ",".join(map(str,gpuIds))
+    allGpusCsv = ",".join(map(str, gpuIds))
     allInstancesCsv = ",".join([("instance:" + str(x)) for x in instanceIds])
     # All compute instances
     allCisCsv = ",".join([("ci:" + str(x)) for x in ciIds])
-    #Same for switches but predicate each one with nvswitch
-    allSwitchesCsv = ",".join(map(helper_make_switch_string,switchIds))
+    # Same for switches but predicate each one with nvswitch
+    allSwitchesCsv = ",".join(map(helper_make_switch_string, switchIds))
 
     switchFieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT
     cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER
 
-    #Inject a value for a field for each switch so we can retrieve it
+    # Inject a value for a field for each switch so we can retrieve it
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.fieldId = switchFieldId
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-    field.ts = int((time.time()-5) * 1000000.0) #5 seconds ago
+    field.ts = int((time.time() - 5) * 1000000.0)  # 5 seconds ago
     field.value.i64 = 0
     for switchId in switchIds:
-        linkId = (dcgm_fields.DCGM_FE_SWITCH << 0) | (switchId << 40) | (1 << 8)
-        ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_LINK, linkId, field)
+        linkId = (dcgm_fields.DCGM_FE_SWITCH << 0) | (
+            switchId << 40) | (1 << 8)
+        ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(
+            handle, dcgm_fields.DCGM_FE_LINK, linkId, field)
 
     _test_valid_args([
-        ["dmon", "-e", "150,155","-c","1"],                                             # run the dmon for default gpu group.
-        ["dmon", "-e", "150,155","-c","1","-g",gpuGroupId],                             # run the dmon for a specified gpu group
-        ["dmon", "-e", "150,155","-c","1","-g",'all_gpus'],                             # run the dmon for a specified group
-        ["dmon", "-e", str(switchFieldId),"-c","1","-g",'all_nvswitches'],              # run the dmon for a specified group - Reenable after DCGM-413 is fixed
-        ["dmon", "-e", str(switchFieldId),"-c","1","-g",switchGroupId],                 # run the dmon for a specified group
-        ["dmon", "-e", "150,155","-c","1","-d","2000"],                                 # run the dmon for delay mentioned and default gpu group.
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allGpusCsv],                 # run the dmon for devices mentioned and mentioned delay.
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allInstancesCsv],
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allCisCsv],
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allGpusCsv + "," + allInstancesCsv + "," + allCisCsv],
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*"],                        # run the dmon for all GPUs via wildcard
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*/*"],                      # run the dmon for all GPU Instances via wildcards
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*/*/*"],                    # run the dmon for all Compute Instances via wildcards
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i","*,*/*,*/*/*"],              # run the dmon for all entities via wildcards
-        ["dmon", "-e", str(switchFieldId),"-c","1","-d","2000","-i",allSwitchesCsv],    # run the dmon for devices mentioned and mentioned delay.
+        # run the dmon for default gpu group.
+        ["dmon", "-e", "150,155", "-c", "1"],
+        # run the dmon for a specified gpu group
+        ["dmon", "-e", "150,155", "-c", "1", "-g", gpuGroupId],
+        # run the dmon for a specified group
+        ["dmon", "-e", "150,155", "-c", "1", "-g", 'all_gpus'],
+        # run the dmon for a specified group - Reenable after DCGM-413 is fixed
+        ["dmon", "-e", str(switchFieldId), "-c", "1", "-g", 'all_nvswitches'],
+        # run the dmon for a specified group
+        ["dmon", "-e", str(switchFieldId), "-c", "1", "-g", switchGroupId],
+        # run the dmon for delay mentioned and default gpu group.
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000"],
+        # run the dmon for devices mentioned and mentioned delay.
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i", allGpusCsv],
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i", allInstancesCsv],
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i", allCisCsv],
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i",
+            allGpusCsv + "," + allInstancesCsv + "," + allCisCsv],
+        # run the dmon for all GPUs via wildcard
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i", "*"],
+        # run the dmon for all GPU Instances via wildcards
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i", "*/*"],
+        # run the dmon for all Compute Instances via wildcards
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i", "*/*/*"],
+        # run the dmon for all entities via wildcards
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i", "*,*/*,*/*/*"],
+        # run the dmon for devices mentioned and mentioned delay.
+        ["dmon", "-e", str(switchFieldId), "-c", "1", "-d",
+         "2000", "-i", allSwitchesCsv],
     ])
 
-    #Run tests that take a gpuId as an argument
+    # Run tests that take a gpuId as an argument
     for gpu in gpuIds:
         _test_valid_args([
-               ["dmon", "-e", "150","-c","1","-i",str(gpu)],        # run the dmon for one gpu.
-               ["dmon", "-e", "150","-c","1","-i",'gpu:'+str(gpu)], # run the dmon for one gpu, tagged as gpu:.
-               ["dmon", "-e", "150","-c","1","-i",str(gpu)],        # run the dmon for mentioned devices and count value.
-               ["dmon", "-e", "150,155","-c","1","-i",str(gpu)],    # run the dmon for devices mentioned, default delay and field values that are provided.
+            # run the dmon for one gpu.
+            ["dmon", "-e", "150", "-c", "1", "-i", str(gpu)],
+            # run the dmon for one gpu, tagged as gpu:.
+            ["dmon", "-e", "150", "-c", "1", "-i", 'gpu:' + str(gpu)],
+            # run the dmon for mentioned devices and count value.
+            ["dmon", "-e", "150", "-c", "1", "-i", str(gpu)],
+            # run the dmon for devices mentioned, default delay and field values that are provided.
+            ["dmon", "-e", "150,155", "-c", "1", "-i", str(gpu)],
         ])
-    
-    #Run tests that take a nvSwitch as an argument
+
+    # Run tests that take a nvSwitch as an argument
     for switchId in switchIds:
         _test_valid_args([
-               ["dmon", "-e", str(switchFieldId),"-c","1","-i",'nvswitch:'+str(switchId)], # run the dmon for one nvswitch, tagged as nvswitch:.
+            # run the dmon for one nvswitch, tagged as nvswitch:.
+            ["dmon", "-e", str(switchFieldId), "-c", "1",
+             "-i", 'nvswitch:' + str(switchId)],
         ])
 
-    hugeGpuCsv = ",".join(map(str,list(range(0, dcgm_structs.DCGM_MAX_NUM_DEVICES*2, 1))))
+    hugeGpuCsv = ",".join(
+        map(str, list(range(0, dcgm_structs.DCGM_MAX_NUM_DEVICES * 2, 1))))
 
     _test_invalid_args([
-           ["dmon","-c","1"],                                                    # run without required fields.
-           ["dmon", "-e", "-150","-c","1","-i","1"],                             # run with invalid field id.
-           ["dmon", "-e", "150","-c","1","-i","-2"],                             # run with invalid gpu id.
-           ["dmon", "-e", "150","-c","1","-i","gpu:999"],                        # run with invalid gpu id.
-           ["dmon", "-e", "150","-c","1","-g","999"],                            # run with invalid group id.
-           ["dmon", "-i", hugeGpuCsv, "-e", "150", "-c", "1"],                   # run with invalid number of devices.
-           ["dmon", "-i", "instance:2000", "-e", "150", "-c", "1"],              # run with invalid gpu_i
-           ["dmon", "-i", "ci:2000", "-e", "150", "-c", "1"],                    # run with invalid gpu_ci
-           ["dmon", "-e", "150","f","0","-c","1","-i","0,1,765"],                # run with invalid device id (non existing id).
-           ["dmon", "-e", "150","-c","-1","-i","1"],                             # run with invalid count value.
-           ["dmon", "-e", "150","-c","1","-i","1","-d","-1"],                    # run with invalid delay (negative value).
-           ["dmon", "-f", "-9","-c","1","-i","1","-d","10000"],                  # run with invalid field Id.
-           ["dmon", "-f", "150","-c", "1", "-i","0", "-d", "99" ],               # run with invalid delay value.
-           ["dmon", "-e", str(cpuFields), "-i", "cpu:0", "-g", "0", "-c", "1"],  # run dmon for CPUs and a group
-           ["dmon", "--gpu-id", "1"],                                            # run with invalid and obsolete --gpu-id arg.
-           ["dmon", "--group-id", "1", "--entity-id", "1", "--field-id", "1"],   # run with both group id and entity id
+        # run without required fields.
+        ["dmon", "-c", "1"],
+        # run with invalid field id.
+        ["dmon", "-e", "-150", "-c", "1", "-i", "1"],
+        # run with invalid gpu id.
+        ["dmon", "-e", "150", "-c", "1", "-i", "-2"],
+        # run with invalid gpu id.
+        ["dmon", "-e", "150", "-c", "1", "-i", "gpu:999"],
+        # run with invalid group id.
+        ["dmon", "-e", "150", "-c", "1", "-g", "999"],
+        # run with invalid number of devices.
+        ["dmon", "-i", hugeGpuCsv, "-e", "150", "-c", "1"],
+        ["dmon", "-i", "instance:2000", "-e", "150", "-c",
+         "1"],              # run with invalid gpu_i
+        # run with invalid gpu_ci
+        ["dmon", "-i", "ci:2000", "-e", "150", "-c", "1"],
+        # run with invalid device id (non existing id).
+        ["dmon", "-e", "150", "f", "0", "-c", "1", "-i", "0,1,765"],
+        # run with invalid count value.
+        ["dmon", "-e", "150", "-c", "-1", "-i", "1"],
+        # run with invalid delay (negative value).
+        ["dmon", "-e", "150", "-c", "1", "-i", "1", "-d", "-1"],
+        # run with invalid field Id.
+        ["dmon", "-f", "-9", "-c", "1", "-i", "1", "-d", "10000"],
+        # run with invalid delay value.
+        ["dmon", "-f", "150", "-c", "1", "-i", "0", "-d", "99"],
+        # run dmon for CPUs and a group
+        ["dmon", "-e", str(cpuFields), "-i", "cpu:0", "-g", "0", "-c", "1"],
+        # run with invalid and obsolete --gpu-id arg.
+        ["dmon", "--gpu-id", "1"],
+        # run with both group id and entity id
+        ["dmon", "--group-id", "1", "--entity-id", "1", "--field-id", "1"],
     ])
 
     # Run tests that take several entities
-    entityStr = "%d,nvswitch:%d,cpu:%d,core:%d" % (gpuIds[0], switchIds[0], cpuIds[0], coreIds[0])
+    entityStr = "%d,nvswitch:%d,cpu:%d,core:%d" % (
+        gpuIds[0], switchIds[0], cpuIds[0], coreIds[0])
     _test_valid_args([
-           ["dmon", "-e", "150,%s" % str(cpuFields), "-i", entityStr, "-c", "1"], # run dmon for CPUs and a group
+        # run dmon for CPUs and a group
+        ["dmon", "-e", "150,%s" % str(cpuFields), "-i", entityStr, "-c", "1"],
     ])
+
 
 @test_utils.run_only_on_numa_systems()
 @test_utils.run_with_standalone_host_engine()
-@test_utils.run_with_injection_gpus(2) #Injecting compute instances only works with live ampere or injected GPUs
+# Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpus(2)
 @test_utils.run_only_with_live_cpus()
 def test_dcgmi_dmon_cpu(handle, gpuIds, cpuIds):
     cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER
 
-    allGpusCsv = ",".join(map(str,gpuIds))
+    allGpusCsv = ",".join(map(str, gpuIds))
     cpuGpuCsv = ",".join(["cpu:0", allGpusCsv])
 
     _test_valid_args([
-        ["dmon", "-e", str(cpuFields), "-i", "cpu:0", "-c", "1"],   # run dmon for CPUs
-        ["dmon", "-e", str(cpuFields), "-i", cpuGpuCsv, "-c", "1"], # run dmon for CPUs and GPUs
+        ["dmon", "-e", str(cpuFields), "-i", "cpu:0", "-c",
+         "1"],   # run dmon for CPUs
+        ["dmon", "-e", str(cpuFields), "-i", cpuGpuCsv, "-c",
+         "1"],  # run dmon for CPUs and GPUs
     ])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -1075,43 +1446,55 @@ def test_dcgmi_nvlink_nvswitches(handle, gpuIds, switchIds):
     Test dcgmi to display dmon values
     """
     gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
-    switchGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
+    switchGroupId = str(_create_dcgmi_group(
+        dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
 
     logger.info("Injected switch IDs:" + str(switchIds))
 
     _test_valid_args([
-           ["nvlink", "-s"]                       # Link status should work without parameters
+        # Link status should work without parameters
+        ["nvlink", "-s"]
     ])
 
     # Creates a comma separated list of gpus
-    allGpusCsv = ",".join(map(str,gpuIds))
-    #Same for switches but predicate each one with nvswitch
-    allSwitchesCsv = ",".join(map(helper_make_switch_string,switchIds))
+    allGpusCsv = ",".join(map(str, gpuIds))
+    # Same for switches but predicate each one with nvswitch
+    allSwitchesCsv = ",".join(map(helper_make_switch_string, switchIds))
 
     switchFieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX
 
-    #Inject a value for a field for each switch so we can retrieve it
+    # Inject a value for a field for each switch so we can retrieve it
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.fieldId = switchFieldId
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-    field.ts = int((time.time()-5) * 1000000.0) #5 seconds ago
+    field.ts = int((time.time() - 5) * 1000000.0)  # 5 seconds ago
     field.value.i64 = 0
     for switchId in switchIds:
-        ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_SWITCH, 
+        ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_SWITCH,
                                                              switchId, field)
 
     _test_valid_args([
-        ["dmon", "-e", "150,155","-c","1"],                          # run the dmon for default gpu group.
-        ["dmon", "-e", "150,155","-c","1","-g",gpuGroupId],          # run the dmon for a specified gpu group
-        ["dmon", "-e", "150,155","-c","1","-g",'all_gpus'],          # run the dmon for a specified group
-        ["dmon", "-e", str(switchFieldId),"-c","1","-g",'all_nvswitches'], # run the dmon for a specified group - Reenable after DCGM-413 is fixed
-        ["dmon", "-e", str(switchFieldId),"-c","1","-g",switchGroupId], # run the dmon for a specified group
-        ["dmon", "-e", "150,155","-c","1","-d","2000"],              # run the dmon for delay mentioned and default gpu group. 
-        ["dmon", "-e", "150,155","-c","1","-d","2000","-i",allGpusCsv], # run the dmon for devices mentioned and mentioned delay.
-        ["dmon", "-e", str(switchFieldId),"-c","1","-d","2000","-i",allSwitchesCsv] # run the dmon for devices mentioned and mentioned delay.
+        # run the dmon for default gpu group.
+        ["dmon", "-e", "150,155", "-c", "1"],
+        # run the dmon for a specified gpu group
+        ["dmon", "-e", "150,155", "-c", "1", "-g", gpuGroupId],
+        # run the dmon for a specified group
+        ["dmon", "-e", "150,155", "-c", "1", "-g", 'all_gpus'],
+        # run the dmon for a specified group - Reenable after DCGM-413 is fixed
+        ["dmon", "-e", str(switchFieldId), "-c", "1", "-g", 'all_nvswitches'],
+        # run the dmon for a specified group
+        ["dmon", "-e", str(switchFieldId), "-c", "1", "-g", switchGroupId],
+        # run the dmon for delay mentioned and default gpu group.
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000"],
+        # run the dmon for devices mentioned and mentioned delay.
+        ["dmon", "-e", "150,155", "-c", "1", "-d", "2000", "-i", allGpusCsv],
+        # run the dmon for devices mentioned and mentioned delay.
+        ["dmon", "-e", str(switchFieldId), "-c", "1", "-d",
+         "2000", "-i", allSwitchesCsv]
     ])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -1120,19 +1503,20 @@ def test_dcgmi_modules(handle, gpuIds):
     Test DCGMI modules 
     """
 
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-           ["modules", "--list"],
-           ["modules", "--denylist", "5"],
-           ["modules", "--denylist", "policy"],
+        ["modules", "--list"],
+        ["modules", "--denylist", "5"],
+        ["modules", "--denylist", "policy"],
     ])
-      
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["modules", "--list", "4"],
-            ["modules", "--denylist", "20"],
-            ["modules", "--denylist", "notamodule"],
+        ["modules", "--list", "4"],
+        ["modules", "--denylist", "20"],
+        ["modules", "--denylist", "notamodule"],
     ])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -1146,37 +1530,41 @@ def test_dcgmi_profile(handle, gpuIds):
     dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
 
     # Creates a comma separated list of gpus
-    allGpusCsv = ",".join(map(str,gpuIds))
+    allGpusCsv = ",".join(map(str, gpuIds))
 
-    #See if these GPUs even support profiling. This will bail out for non-Tesla or Pascal or older SKUs
+    # See if these GPUs even support profiling. This will bail out for non-Tesla or Pascal or older SKUs
     try:
         supportedMetrics = dcgmGroup.profiling.GetSupportedMetricGroups()
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_PROFILING_NOT_SUPPORTED) as e:
-        test_utils.skip_test("Profiling is not supported for gpuIds %s" % str(gpuIds))
+        test_utils.skip_test(
+            "Profiling is not supported for gpuIds %s" % str(gpuIds))
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED) as e:
         test_utils.skip_test("The profiling module could not be loaded")
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED) as e:
         test_utils.skip_test("The profiling module is not supported")
 
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-           ["profile", "--list", "-i", allGpusCsv],
-           ["profile", "--list", "-g", str(dcgmGroup.GetId().value)],
+        ["profile", "--list", "-i", allGpusCsv],
+        ["profile", "--list", "-g", str(dcgmGroup.GetId().value)],
     ])
-      
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["profile", "--list", "--pause", "--resume"], #mutually exclusive flags
-            ["profile", "--pause", "--resume"], #mutually exclusive flags
-            ["profile", "--list", "-i", "999"], #Invalid gpuID
-            ["profile", "--list", "-i", allGpusCsv + ",taco"], #Invalid gpu at end
-            ["profile", "--list", "-g", "999"], #Invalid group
-            ["profile", "--gpu-id", "1"], #Invalid and obsolete --gpu-id
-            ["profile", "--group-id", "1", "--entity-id", "1", "--list"], #Both group id and entity id together
+        ["profile", "--list", "--pause", "--resume"],  # mutually exclusive flags
+        ["profile", "--pause", "--resume"],  # mutually exclusive flags
+        ["profile", "--list", "-i", "999"],  # Invalid gpuID
+        ["profile", "--list", "-i", allGpusCsv + ",taco"],  # Invalid gpu at end
+        ["profile", "--list", "-g", "999"],  # Invalid group
+        ["profile", "--gpu-id", "1"],  # Invalid and obsolete --gpu-id
+        # Both group id and entity id together
+        ["profile", "--group-id", "1", "--entity-id", "1", "--list"],
     ])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
+@test_utils.skip_on_gpm_non_gpm_hybrid_system()
 @test_utils.for_all_same_sku_gpus()
 def test_dcgmi_profile_affected_by_gpm(handle, gpuIds):
     """
@@ -1186,31 +1574,33 @@ def test_dcgmi_profile_affected_by_gpm(handle, gpuIds):
     dcgmSystem = dcgmHandle.GetSystem()
     dcgmGroup = dcgmSystem.GetGroupWithGpuIds('mygroup', gpuIds)
 
-    #See if these GPUs even support profiling. This will bail out for non-Tesla or Pascal or older SKUs
+    # See if these GPUs even support profiling. This will bail out for non-Tesla or Pascal or older SKUs
     try:
         supportedMetrics = dcgmGroup.profiling.GetSupportedMetricGroups()
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_PROFILING_NOT_SUPPORTED) as e:
-        test_utils.skip_test("Profiling is not supported for gpuIds %s" % str(gpuIds))
+        test_utils.skip_test(
+            "Profiling is not supported for gpuIds %s" % str(gpuIds))
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_MODULE_NOT_LOADED) as e:
         test_utils.skip_test("The profiling module could not be loaded")
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_SUPPORTED) as e:
         test_utils.skip_test("The profiling module is not supported")
 
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     pauseResumeArgs = [
-        ["profile", "--pause"], #Pause followed by resume
+        ["profile", "--pause"],  # Pause followed by resume
         ["profile", "--resume"],
-        ["profile", "--pause"], #Double pause and double resume should be fine
+        ["profile", "--pause"],  # Double pause and double resume should be fine
         ["profile", "--pause"],
         ["profile", "--resume"],
         ["profile", "--resume"],
     ]
 
-    #GPM GPUs don't support pause/resume since monitoring and profiling aren't mutually exclusive anymore
+    # GPM GPUs don't support pause/resume since monitoring and profiling aren't mutually exclusive anymore
     if test_utils.gpu_supports_gpm(handle, gpuIds[0]):
         _test_invalid_args(pauseResumeArgs)
     else:
         _test_valid_args(pauseResumeArgs)
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -1222,25 +1612,28 @@ def test_dcgmi_test_introspect(handle, gpuIds):
     gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
     gpuGroupIdStr = str(gpuGroupId)
 
-    fieldIdStr = str(dcgm_fields.DCGM_FI_DEV_ECC_CURRENT) #Use this field because it's watched by default in the host engine
+    # Use this field because it's watched by default in the host engine
+    fieldIdStr = str(dcgm_fields.DCGM_FI_DEV_ECC_CURRENT)
 
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-           ["test", "--introspect", "--gpuid", oneGpuIdStr, "--field", fieldIdStr],
-           ["test", "--introspect", "-g", gpuGroupIdStr, "--field", fieldIdStr],
-           ["test", "--introspect", "-g", gpuGroupIdStr, "--field", fieldIdStr],
+        ["test", "--introspect", "--gpuid", oneGpuIdStr, "--field", fieldIdStr],
+        ["test", "--introspect", "-g", gpuGroupIdStr, "--field", fieldIdStr],
+        ["test", "--introspect", "-g", gpuGroupIdStr, "--field", fieldIdStr],
     ])
-      
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["test", "--introspect", "--inject"], #mutually exclusive flags
-            ["test", "--introspect", "--gpuid", oneGpuIdStr], #Missing --field
-            ["test", "--introspect", "-g", gpuGroupIdStr, "--gpuid", oneGpuIdStr],
-            ["test", "--introspect", "--gpuid", "11001001"],
-            ["test", "--introspect", "-g", "11001001"],
-            ["test", "--introspect", "--group", "11001001"],
-            ["test", "--introspect", "-g", gpuGroupIdStr, "--field", "10000000"], #Bad fieldId
+        ["test", "--introspect", "--inject"],  # mutually exclusive flags
+        ["test", "--introspect", "--gpuid", oneGpuIdStr],  # Missing --field
+        ["test", "--introspect", "-g", gpuGroupIdStr, "--gpuid", oneGpuIdStr],
+        ["test", "--introspect", "--gpuid", "11001001"],
+        ["test", "--introspect", "-g", "11001001"],
+        ["test", "--introspect", "--group", "11001001"],
+        ["test", "--introspect", "-g", gpuGroupIdStr,
+         "--field", "10000000"],  # Bad fieldId
     ])
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -1252,25 +1645,31 @@ def test_dcgmi_test_inject(handle, gpuIds):
     gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
     gpuGroupIdStr = str(gpuGroupId)
 
-    fieldIdStr = str(dcgm_fields.DCGM_FI_DEV_GPU_TEMP) 
+    fieldIdStr = str(dcgm_fields.DCGM_FI_DEV_GPU_TEMP)
 
-    ## keep args in this order. Changing it may break the test
+    # keep args in this order. Changing it may break the test
     _test_valid_args([
-           ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", fieldIdStr, "-v", '45'],
-           ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", fieldIdStr, "--value", '45'],
+        ["test", "--inject", "--gpuid", oneGpuIdStr,
+            "--field", fieldIdStr, "-v", '45'],
+        ["test", "--inject", "--gpuid", oneGpuIdStr,
+         "--field", fieldIdStr, "--value", '45'],
     ])
-      
-    ## keep args in this order. Changing it may break the test
+
+    # keep args in this order. Changing it may break the test
     _test_invalid_args([
-            ["test", "--inject", "--introspect"], #mutually exclusive flags
-            ["test", "--inject", "-g", gpuGroupIdStr], #group ID is not supported
-            ["test", "--inject", "--gpuid", oneGpuIdStr], #Missing --field
-            ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", fieldIdStr], #Missing --value
-            ["test", "--inject", "-g", gpuGroupIdStr, "--gpuid", oneGpuIdStr],
-            ["test", "--inject", "--gpuid", "11001001", "--field", fieldIdStr, "--value", '45'], #Bad gpuId
-            ["test", "--inject", "-g", "11001001"],
-            ["test", "--inject", "--group", "11001001"],
-            ["test", "--inject", "--gpuid", oneGpuIdStr, "--field", "10000000", "--value", '45'], #Bad fieldId
+        ["test", "--inject", "--introspect"],  # mutually exclusive flags
+        # group ID is not supported
+        ["test", "--inject", "-g", gpuGroupIdStr],
+        ["test", "--inject", "--gpuid", oneGpuIdStr],  # Missing --field
+        ["test", "--inject", "--gpuid", oneGpuIdStr,
+         "--field", fieldIdStr],  # Missing --value
+        ["test", "--inject", "-g", gpuGroupIdStr, "--gpuid", oneGpuIdStr],
+        ["test", "--inject", "--gpuid", "11001001", "--field",
+         fieldIdStr, "--value", '45'],  # Bad gpuId
+        ["test", "--inject", "-g", "11001001"],
+        ["test", "--inject", "--group", "11001001"],
+        ["test", "--inject", "--gpuid", oneGpuIdStr, "--field",
+         "10000000", "--value", '45'],  # Bad fieldId
     ])
 
 
@@ -1285,7 +1684,8 @@ def test_dcgmi_dmon_pause_resume(handle):
 @test_utils.run_with_logging_on()
 def test_dcgmi_settings_logging_severity():
     if test_utils.loggingLevel != 'DEBUG':
-        test_utils.skip_test("Detected logLevel != DEBUG. This test requires DEBUG. Likely cause: --eris option")
+        test_utils.skip_test(
+            "Detected logLevel != DEBUG. This test requires DEBUG. Likely cause: --eris option")
 
     # Env var is automatically set in NvHostEngineApp
     app = apps.NvHostEngineApp()
@@ -1299,12 +1699,14 @@ def test_dcgmi_settings_logging_severity():
         with closing(open(app.dcgm_trace_fname, encoding='utf-8')) as f:
             # pylint: disable=no-member
             contents = f.read()
-            logger.debug("Read %d bytes from %s" % (len(contents), app.dcgm_trace_fname))
+            logger.debug("Read %d bytes from %s" %
+                         (len(contents), app.dcgm_trace_fname))
             if 'DEBUG' in contents:
                 break
 
     set_severity_args = ['set', '--logging-severity', 'VERB']
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(set_severity_args)
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(
+        set_severity_args)
 
     assert retValue == 0, f'retValue = {retValue}, stdout={stdout_lines}'
 
@@ -1315,7 +1717,8 @@ def test_dcgmi_settings_logging_severity():
         with closing(open(app.dcgm_trace_fname, encoding='utf-8')) as f:
             # pylint: disable=no-member
             contents = f.read()
-            logger.debug("Read %d bytes from %s" % (len(contents), app.dcgm_trace_fname))
+            logger.debug("Read %d bytes from %s" %
+                         (len(contents), app.dcgm_trace_fname))
             if 'VERB' in contents:
                 passed = True
                 break
@@ -1326,12 +1729,22 @@ def test_dcgmi_settings_logging_severity():
 
     assert passed, "Unable to find 'VERB' in log file"
 
+
 @test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_with_injection_gpus(5) #Injecting compute instances only works with live ampere or injected GPUs
-@test_utils.run_with_injection_gpu_instances(2,1)
-@test_utils.run_with_injection_gpu_instances(2,3)
+def test_dcgmi_set(handle):
+    _test_invalid_args([
+        ['set'],
+        ['set', '--attach-driver', '--detach-driver'],
+    ])
+
+
+@test_utils.run_with_standalone_host_engine(20)
+# Injecting compute instances only works with live ampere or injected GPUs
+@test_utils.run_with_injection_gpus(5)
+@test_utils.run_with_injection_gpu_instances(2, 1)
+@test_utils.run_with_injection_gpu_instances(2, 3)
 @test_utils.run_with_injection_gpu_compute_instances(2)
-@test_utils.run_with_injection_gpu_compute_instances(2,2)
+@test_utils.run_with_injection_gpu_compute_instances(2, 2)
 @test_utils.run_with_injection_nvswitches(2)
 def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
     """
@@ -1342,44 +1755,44 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
     Historically, dcgmi would ignore non-MIG entities when a MIG Hierarchy existed.
     """
     # Creates a comma separated list of all gpus
-    allGpusCsv = ",".join(map(str,gpuIds))
+    allGpusCsv = ",".join(map(str, gpuIds))
     # Creates a comma separated list of all GPU instances
     allInstancesCsv = ",".join([("instance:" + str(x)) for x in instanceIds])
     # Creates a comma separated list of all compute instances
     allCisCsv = ",".join([("ci:" + str(x)) for x in ciIds])
     # Creates a comma separated list of all nvswitches
-    allNvSwitchCsv= ",".join([("nvswitch:" + str(x)) for x in switchIds])
+    allNvSwitchCsv = ",".join([("nvswitch:" + str(x)) for x in switchIds])
 
     # Create a field object to insert into globals, GPUs, GIs, and CIs
 
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.status = 0
-    field.ts = int((time.time()-5) * 1000000.0) #5 seconds ago
+    field.ts = int((time.time() - 5) * 1000000.0)  # 5 seconds ago
 
     # Insert GLOBALS into a single GPU -- will appear in all of them
 
     globalData = []
 
-    globalData.append({ "type" : ord(dcgm_fields.DCGM_FT_STRING),
-                        "fieldId" : dcgm_fields.DCGM_FI_DRIVER_VERSION,
-                        "value" : "535.27" })
+    globalData.append({"type": ord(dcgm_fields.DCGM_FT_STRING),
+                       "fieldId": dcgm_fields.DCGM_FI_DRIVER_VERSION,
+                       "value": "535.27"})
 
-    globalData.append({ "type" : ord(dcgm_fields.DCGM_FT_STRING),
-                        "fieldId" : dcgm_fields.DCGM_FI_NVML_VERSION,
-                        "value" : "12.535.27" })
+    globalData.append({"type": ord(dcgm_fields.DCGM_FT_STRING),
+                       "fieldId": dcgm_fields.DCGM_FI_NVML_VERSION,
+                       "value": "12.535.27"})
 
-    globalData.append({ "type" :  ord(dcgm_fields.DCGM_FT_STRING),
-                        "fieldId" : dcgm_fields.DCGM_FI_PROCESS_NAME,
-                        "value" : "./apps/amd64/nv-hostengine" })
+    globalData.append({"type": ord(dcgm_fields.DCGM_FT_STRING),
+                       "fieldId": dcgm_fields.DCGM_FI_PROCESS_NAME,
+                       "value": "./apps/amd64/nv-hostengine"})
 
-    globalData.append({ "type" : ord(dcgm_fields.DCGM_FT_INT64),
-                        "fieldId" : dcgm_fields.DCGM_FI_DEV_COUNT,
-                        "value" : 8 })
+    globalData.append({"type": ord(dcgm_fields.DCGM_FT_INT64),
+                       "fieldId": dcgm_fields.DCGM_FI_DEV_COUNT,
+                       "value": 8})
 
-    globalData.append({ "type" : ord(dcgm_fields.DCGM_FT_INT64),
-                        "fieldId" : dcgm_fields.DCGM_FI_CUDA_DRIVER_VERSION,
-                        "value" : 12020 })
+    globalData.append({"type": ord(dcgm_fields.DCGM_FT_INT64),
+                       "fieldId": dcgm_fields.DCGM_FI_CUDA_DRIVER_VERSION,
+                       "value": 12020})
 
     for data in globalData:
         field.fieldType = data["type"]
@@ -1391,7 +1804,8 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
         if field.fieldType == ord(dcgm_fields.DCGM_FT_INT64):
             field.value.i64 = data["value"]
 
-        ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_NONE, gpuIds[0], field)
+        ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(
+            handle, dcgm_fields.DCGM_FE_NONE, gpuIds[0], field)
 
     # Insert non-GLOBAL data into non-MIG GPUs
 
@@ -1429,21 +1843,21 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
     """
 
     gpuArg = str(gpuIds[0])
-    gpuArg += ","+str(gpuIds[1])
-    gpuArg += ","+str(gpuIds[2])
-    gpuArg += ","+str(gpuIds[3])
-    gpuArg += ","+str(gpuIds[4])
-    gpuArg += ","+str(gpuIds[1]) + "/*"
-    gpuArg += ","+str(gpuIds[1]) + "/*/*"
-    gpuArg += ","+str(gpuIds[3]) + "/*"
-    gpuArg += ","+str(gpuIds[3]) + "/*/*"
-    gpuArg += ","+allNvSwitchCsv
+    gpuArg += "," + str(gpuIds[1])
+    gpuArg += "," + str(gpuIds[2])
+    gpuArg += "," + str(gpuIds[3])
+    gpuArg += "," + str(gpuIds[4])
+    gpuArg += "," + str(gpuIds[1]) + "/*"
+    gpuArg += "," + str(gpuIds[1]) + "/*/*"
+    gpuArg += "," + str(gpuIds[3]) + "/*"
+    gpuArg += "," + str(gpuIds[3]) + "/*/*"
+    gpuArg += "," + allNvSwitchCsv
 
     fieldArg = str(dcgm_fields.DCGM_FI_DRIVER_VERSION)
-    fieldArg += ","+str(dcgm_fields.DCGM_FI_NVML_VERSION)
-    fieldArg += ","+str(dcgm_fields.DCGM_FI_PROCESS_NAME)
-    fieldArg += ","+str(dcgm_fields.DCGM_FI_DEV_COUNT)
-    fieldArg += ","+str(dcgm_fields.DCGM_FI_CUDA_DRIVER_VERSION)
+    fieldArg += "," + str(dcgm_fields.DCGM_FI_NVML_VERSION)
+    fieldArg += "," + str(dcgm_fields.DCGM_FI_PROCESS_NAME)
+    fieldArg += "," + str(dcgm_fields.DCGM_FI_DEV_COUNT)
+    fieldArg += "," + str(dcgm_fields.DCGM_FI_CUDA_DRIVER_VERSION)
     """
     fieldArg += ","+str(dcgm_fields.DCGM_FI_PROF_DRAM_ACTIVE)
     fieldArg += ","+str(dcgm_fields.DCGM_FI_DEV_COMPUTE_MODE)
@@ -1468,40 +1882,46 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
 
     outputFormat = dcgm_fields.c_dcgm_field_output_format_t()
 
-    defaultFieldPosition = 11 # should match dcgmi dmon
+    defaultFieldPosition = 16  # should match dcgmi dmon
     outputPadding = 8  # should match dcgmi dmon
     fieldPosition = defaultFieldPosition
 
     for data in globalData + nonGlobalData:
         fieldId = data["fieldId"]
         fieldMeta = dcgm_fields.DcgmFieldGetById(fieldId)
-        memmove(addressof(outputFormat), fieldMeta.valueFormat, sizeof(outputFormat))
-        assert stdout_lines[0].find(outputFormat.shortName) == fieldPosition, outputFormat.shortName + " not in proper place on header"
-        assert stdout_lines[1][fieldPosition:].find(outputFormat.unit) == 0, outputFormat.shortName + " unit not in proper place on header"
+        memmove(addressof(outputFormat),
+                fieldMeta.valueFormat, sizeof(outputFormat))
+        assert stdout_lines[0].find(
+            outputFormat.shortName) == fieldPosition, outputFormat.shortName + " not in proper place on header"
+        assert stdout_lines[1][fieldPosition:].find(
+            outputFormat.unit) == 0, outputFormat.shortName + " unit not in proper place on header"
         fieldPosition += outputFormat.width + outputPadding
 
-    lineHeaders = [ "GPU " + str(gpuIds[0]),
-                    "GPU " + str(gpuIds[1]),
-                    "GPU-I " + str(instanceIds[0]),
-                    "GPU-CI " + str(ciIds[0]),
-                    "GPU-I " + str(instanceIds[1]),
-                    "GPU-CI " + str(ciIds[1]),
-                    "GPU " + str(gpuIds[2]),
-                    "GPU " + str(gpuIds[3]),
-                    "GPU-I " + str(instanceIds[2]),
-                    "GPU-CI " + str(ciIds[2]),
-                    "GPU-I " + str(instanceIds[3]),
-                    "GPU-CI " + str(ciIds[3]),
-                    "GPU " + str(gpuIds[4]),
-                    "Switch " + str(switchIds[0]),
-                    "Switch " + str(switchIds[1])
+    lineHeaders = ["GPU " + str(gpuIds[0]),
+                   "GPU " + str(gpuIds[1]),
+                   "GPU-I " + str(instanceIds[0]),
+                   "GPU-CI " + str(ciIds[0]),
+                   "GPU-I " + str(instanceIds[1]),
+                   "GPU-CI " + str(ciIds[1]),
+                   "GPU " + str(gpuIds[2]),
+                   "GPU " + str(gpuIds[3]),
+                   "GPU-I " + str(instanceIds[2]),
+                   "GPU-CI " + str(ciIds[2]),
+                   "GPU-I " + str(instanceIds[3]),
+                   "GPU-CI " + str(ciIds[3]),
+                   "GPU " + str(gpuIds[4]),
+                   "Switch " + str(switchIds[0]),
+                   "Switch " + str(switchIds[1])
 
-    ]
+                   ]
 
-    assert len(stdout_lines) == (len(lineHeaders) + 2), "Should have " + str(len(lineHeaders) + 2) + " output lines, have " + str(len(stdout_lines))
+    assert len(stdout_lines) == (len(lineHeaders) + 2), "Should have " + \
+        str(len(lineHeaders) + 2) + \
+        " output lines, have " + str(len(stdout_lines))
 
     for index in range(len(lineHeaders)):
-        assert stdout_lines[index + 2].find(lineHeaders[index]) == 0, lineHeaders[index] + " not present"
+        assert stdout_lines[index + 2].find(lineHeaders[index]
+                                            ) == 0, lineHeaders[index] + " not present"
 
     #  Match MIG GPU data
 
@@ -1511,8 +1931,10 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
     for data in globalData:
         fieldId = data["fieldId"]
         fieldMeta = dcgm_fields.DcgmFieldGetById(fieldId)
-        memmove(addressof(outputFormat), fieldMeta.valueFormat, sizeof(outputFormat))
-        assert firstDataLine[fieldPosition:].find(str(data["value"])[:outputFormat.width]) == 0, "Field " + outputFormat.shortName + " has wrong value"
+        memmove(addressof(outputFormat),
+                fieldMeta.valueFormat, sizeof(outputFormat))
+        assert firstDataLine[fieldPosition:].find(str(data["value"])[
+                                                  :outputFormat.width]) == 0, "Field " + outputFormat.shortName + " has wrong value"
         fieldPosition += outputFormat.width + outputPadding
 
     for data in nonGlobalData:
@@ -1526,14 +1948,17 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
 
         fieldId = data["fieldId"]
         fieldMeta = dcgm_fields.DcgmFieldGetById(fieldId)
-        memmove(addressof(outputFormat), fieldMeta.valueFormat, sizeof(outputFormat))
-        assert firstDataLine[fieldPosition:].find(matchValue) == 0, "Field " + outputFormat.shortName + " has wrong value"
+        memmove(addressof(outputFormat),
+                fieldMeta.valueFormat, sizeof(outputFormat))
+        assert firstDataLine[fieldPosition:].find(
+            matchValue) == 0, "Field " + outputFormat.shortName + " has wrong value"
         fieldPosition += outputFormat.width + outputPadding
 
     fieldPosition = defaultFieldPosition
 
     for line in [4, 5, 6, 7, 8, 10, 11, 12, 13, 14]:
-        assert firstDataLine[fieldPosition:] == stdout_lines[line][fieldPosition:], "line " + str(line) + " does not match other MIG GPUs"
+        assert firstDataLine[fieldPosition:] == stdout_lines[line][fieldPosition:], "line " + \
+            str(line) + " does not match other MIG GPUs"
 
     firstDataLine = stdout_lines[3]
     fieldPosition = defaultFieldPosition
@@ -1543,8 +1968,10 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
     for data in globalData:
         fieldId = data["fieldId"]
         fieldMeta = dcgm_fields.DcgmFieldGetById(fieldId)
-        memmove(addressof(outputFormat), fieldMeta.valueFormat, sizeof(outputFormat))
-        assert firstDataLine[fieldPosition:].find(str(data["value"])[:outputFormat.width]) == 0, "Field " + outputFormat.shortName + " has wrong value"
+        memmove(addressof(outputFormat),
+                fieldMeta.valueFormat, sizeof(outputFormat))
+        assert firstDataLine[fieldPosition:].find(str(data["value"])[
+                                                  :outputFormat.width]) == 0, "Field " + outputFormat.shortName + " has wrong value"
         fieldPosition += outputFormat.width + outputPadding
 
     for data in nonGlobalData:
@@ -1558,14 +1985,18 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
 
         fieldId = data["fieldId"]
         fieldMeta = dcgm_fields.DcgmFieldGetById(fieldId)
-        memmove(addressof(outputFormat), fieldMeta.valueFormat, sizeof(outputFormat))
-        assert firstDataLine[fieldPosition:].find(str(data["value"])[:outputFormat.width]) == 0, "Field " + outputFormat.shortName + " has wrong value"
+        memmove(addressof(outputFormat),
+                fieldMeta.valueFormat, sizeof(outputFormat))
+        assert firstDataLine[fieldPosition:].find(str(data["value"])[
+                                                  :outputFormat.width]) == 0, "Field " + outputFormat.shortName + " has wrong value"
         fieldPosition += outputFormat.width + outputPadding
 
     fieldPosition = defaultFieldPosition
 
     for line in [9, 15]:
-        assert firstDataLine[fieldPosition:] == stdout_lines[line][fieldPosition:], "line " + str(line) + " does not match other non-MIG GPUs"
+        assert firstDataLine[fieldPosition:] == stdout_lines[line][fieldPosition:], "line " + \
+            str(line) + " does not match other non-MIG GPUs"
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -1581,7 +2012,7 @@ def test_dcgmi_diag_expected_num_entities(handle, gpuIds):
         groupObj = dcgmSystem.GetGroupWithGpuIds("testgroup", entityIds)
         return str(groupObj.GetId().value)
 
-    def run_diag_with_args(args, expectError = False, errorString = ""):
+    def run_diag_with_args(args, expectError=False, errorString=""):
         _, stdoutLines, stderrLines = _run_dcgmi_command(args)
         allOutput = (' '.join(stdoutLines + stderrLines)).lower()
         if not expectError:
@@ -1593,16 +2024,24 @@ def test_dcgmi_diag_expected_num_entities(handle, gpuIds):
     newAllGpusGroupId = create_dcgmi_group_with_entities(allGpusInSystem)
     expectedNumEntitiesStr = f"gpu:{str(len(newAllGpusGroupId))}"
     invalidArgsTestList = [
-        ["diag", "--run", "1", "--entity-id", "0,1", "--expectedNumEntities", "gpu:2"],
-        ["diag", "--run", "1", "--entity-id", "0,1,2,3,4,5,6,7", "--expectedNumEntities", "gpu:8"],
-        ["diag", "--run", "1", "--entity-id", "*", "--expectedNumEntities", "gpu:8"],
-        ["diag", "--run", "1", "--group", newAllGpusGroupId, "--expectedNumEntities", "gpu:9"],
-        ["diag", "--run", "1", "--group", newAllGpusGroupId, "--expectedNumEntities", "gpu:3"],
-        ["diag", "--run", "1", "--group", newAllGpusGroupId, "--expectedNumEntities", expectedNumEntitiesStr]
+        ["diag", "--run", "1", "--entity-id", "0,1",
+            "--expectedNumEntities", "gpu:2"],
+        ["diag", "--run", "1", "--entity-id", "0,1,2,3,4,5,6,7",
+            "--expectedNumEntities", "gpu:8"],
+        ["diag", "--run", "1", "--entity-id", "*",
+            "--expectedNumEntities", "gpu:8"],
+        ["diag", "--run", "1", "--group", newAllGpusGroupId,
+            "--expectedNumEntities", "gpu:9"],
+        ["diag", "--run", "1", "--group", newAllGpusGroupId,
+            "--expectedNumEntities", "gpu:3"],
+        ["diag", "--run", "1", "--group", newAllGpusGroupId,
+            "--expectedNumEntities", expectedNumEntitiesStr]
     ]
 
     for args in invalidArgsTestList:
-        run_diag_with_args(args, "error occurred trying to parse the command line")
+        run_diag_with_args(
+            args, "error occurred trying to parse the command line")
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -1618,8 +2057,8 @@ def test_dcgmi_diag_missing_gpu_expected_num_entities(handle, gpuIds):
     injectionOffset = 1
     removeGpuId = gpuIds[1]
     updateFreq = 1000000
-    maxKeepAge = 600.0 #10 minutes
-    maxKeepEntries = 0 #no limit
+    maxKeepAge = 600.0  # 10 minutes
+    maxKeepEntries = 0  # no limit
     fieldId = dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION
     expectedAllGpusStr = "gpu:" + str(len(gpuIds))
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -1629,7 +2068,7 @@ def test_dcgmi_diag_missing_gpu_expected_num_entities(handle, gpuIds):
     dev1Uuid = "GPU-1ae4048a-9b19-f6c5-a7ed-1160943cdd18"
     dev6Uuid = "GPU-8c52e150-ab3b-77f7-34c0-107fb2163182"
 
-    def _run_diag_with_expected_entities(expectedEntities, expectError = False, error = dcgm_structs.DCGM_ST_OK):
+    def _run_diag_with_expected_entities(expectedEntities, expectError=False, error=dcgm_structs.DCGM_ST_OK):
         runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
         runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
         runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_NULL
@@ -1639,9 +2078,11 @@ def test_dcgmi_diag_missing_gpu_expected_num_entities(handle, gpuIds):
 
         if expectError:
             with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(error)):
-                response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+                response = test_utils.action_validate_wrapper(
+                    runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
         else:
-            response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+            response = test_utils.action_validate_wrapper(
+                runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
             assert response, "Should have received a response"
             assert response.tests[0].name == "software", \
                 f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
@@ -1659,41 +2100,48 @@ def test_dcgmi_diag_missing_gpu_expected_num_entities(handle, gpuIds):
         assert False, f"Timeout waiting for GPU {gpuId} status to update to {expectedGpuStatus}. Last GPU status was {currentGpuStatus}"
 
     def _wait_for_field_value_update(gpuId, fieldId, expectedValue):
-        maxWait = 2
+        maxWait = 10
         checkInterval = 0.25
         lastValue = 0
         start = time.time()
         while (time.time() - start) < maxWait:
             dcgm_agent.dcgmUpdateAllFields(handle, 1)
-            values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId, [fieldId])
+            values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId, [
+                                                                      fieldId])
             lastValue = values[0].value.i64
             if lastValue == expectedValue:
                 return
             time.sleep(checkInterval)
-        assert False, f"Timeout waiting for GPU {gpuId} field value to update to {lastValue}. Last GPU status was {expectedValue}"
+        assert False, f"Timeout waiting for GPU {gpuId} field value to update to {expectedValue}. Last GPU status was {lastValue}"
 
     # Verify injection before removing GPU
-    inject_nvml_value(handle, removeGpuId, fieldId, fakeCurrentTemperature, injectionOffset)
-    dcgm_agent_internal.dcgmWatchFieldValue(handle, removeGpuId, fieldId, updateFreq, maxKeepAge, maxKeepEntries)
+    inject_nvml_value(handle, removeGpuId, fieldId,
+                      fakeCurrentTemperature, injectionOffset)
+    dcgm_agent_internal.dcgmWatchFieldValue(
+        handle, removeGpuId, fieldId, updateFreq, maxKeepAge, maxKeepEntries)
     _wait_for_field_value_update(removeGpuId, fieldId, fakeCurrentTemperature)
 
     # Verify blank value for the field after removing the GPU
     dcgm_agent_internal.dcgmRemoveNvmlInjectedGpu(handle, dev1Uuid)
     _wait_for_gpu_status_change(1, dcgm_structs_internal.DcgmEntityStatusLost)
-    _run_diag_with_expected_entities(expectedAllGpusStr, True, dcgm_structs.DCGM_ST_BADPARAM) 
-    _wait_for_field_value_update(removeGpuId, fieldId, dcgmvalue.DCGM_INT64_BLANK)
+    _run_diag_with_expected_entities(
+        expectedAllGpusStr, True, dcgm_structs.DCGM_ST_BADPARAM)
+    _wait_for_field_value_update(
+        removeGpuId, fieldId, dcgmvalue.DCGM_INT64_BLANK)
 
     # Inject the temperature value again, and verify that the blank values
     # are replaced by the injected values now that the GPU is back online.
     dcgm_agent_internal.dcgmRestoreNvmlInjectedGpu(handle, dev1Uuid)
     _wait_for_gpu_status_change(1, dcgm_structs_internal.DcgmEntityStatusOk)
     _run_diag_with_expected_entities(expectedAllGpusStr)
-    inject_nvml_value(handle, removeGpuId, fieldId, fakeCurrentTemperature, injectionOffset)
+    inject_nvml_value(handle, removeGpuId, fieldId,
+                      fakeCurrentTemperature, injectionOffset)
     _wait_for_field_value_update(removeGpuId, fieldId, fakeCurrentTemperature)
 
     dcgm_agent_internal.dcgmRemoveNvmlInjectedGpu(handle, dev6Uuid)
     _wait_for_gpu_status_change(6, dcgm_structs_internal.DcgmEntityStatusLost)
-    _run_diag_with_expected_entities(expectedAllGpusStr, True, dcgm_structs.DCGM_ST_BADPARAM)
+    _run_diag_with_expected_entities(
+        expectedAllGpusStr, True, dcgm_structs.DCGM_ST_BADPARAM)
     dcgm_agent_internal.dcgmRestoreNvmlInjectedGpu(handle, dev6Uuid)
     _wait_for_gpu_status_change(6, dcgm_structs_internal.DcgmEntityStatusOk)
     _run_diag_with_expected_entities(expectedAllGpusStr)
@@ -1709,8 +2157,9 @@ def test_dcgmi_diag_missing_gpu_expected_num_entities(handle, gpuIds):
     _wait_for_gpu_status_change(6, dcgm_structs_internal.DcgmEntityStatusOk)
     _run_diag_with_expected_entities(expectedAllGpusStr)
 
+
 TEST_NAME_TO_RESULT_FIELD_ID = {
-    "memory": dcgm_fields.DCGM_FI_DEV_DIAG_MEMORY_RESULT,        
+    "memory": dcgm_fields.DCGM_FI_DEV_DIAG_MEMORY_RESULT,
     "diagnostic": dcgm_fields.DCGM_FI_DEV_DIAG_DIAGNOSTIC_RESULT,
     "pcie": dcgm_fields.DCGM_FI_DEV_DIAG_PCIE_RESULT,
     "targeted_stress": dcgm_fields.DCGM_FI_DEV_DIAG_TARGETED_STRESS_RESULT,
@@ -1722,14 +2171,18 @@ TEST_NAME_TO_RESULT_FIELD_ID = {
     "cpu_eud": dcgm_fields.DCGM_FI_DEV_DIAG_CPU_EUD_RESULT,
     "software": dcgm_fields.DCGM_FI_DEV_DIAG_SOFTWARE_RESULT,
     "nvbandwidth": dcgm_fields.DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT,
+    "nccl_tests": dcgm_fields.DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT,
 }
+
 
 def get_diag_status_struct(blob):
     diagStatus = dcgm_structs.c_dcgmDiagStatus_v1()
-    ctypes.memmove(ctypes.addressof(diagStatus), blob, diagStatus.FieldsSizeof())
+    ctypes.memmove(ctypes.addressof(diagStatus),
+                   blob, diagStatus.FieldsSizeof())
     return diagStatus
 
-def helper_dcgmi_diag_status(handle, dcgmiArgs, dcgmiTimeout, tests, errorCodes = {}):
+
+def helper_dcgmi_diag_status(handle, dcgmiArgs, dcgmiTimeout, tests, errorCodes={}):
     dcgmi = apps.DcgmiApp(dcgmiArgs)
     start = time.time()
     dcgmi.start(dcgmiTimeout)
@@ -1744,7 +2197,7 @@ def helper_dcgmi_diag_status(handle, dcgmiArgs, dcgmiTimeout, tests, errorCodes 
         testResultFieldId = TEST_NAME_TO_RESULT_FIELD_ID[test]
         fields.append(testResultFieldId)
 
-    startTs = int(start*1000000) # start time of dcgmi in us
+    startTs = int(start * 1000000)  # start time of dcgmi in us
     endTs = 0
     totalTestCount = len(tests)
     order = dcgm_structs.DCGM_ORDER_ASCENDING
@@ -1753,25 +2206,32 @@ def helper_dcgmi_diag_status(handle, dcgmiArgs, dcgmiTimeout, tests, errorCodes 
         expectedValuesCount = 1
         if field == dcgm_fields.DCGM_FI_DEV_DIAG_STATUS:
             expectedValuesCount = totalTestCount
-        fvFetched[field] = dcgm_agent_internal.dcgmGetMultipleValuesForField(handle, 0, field, totalTestCount, startTs, endTs, order)
-        assert len(fvFetched[field]) == expectedValuesCount, f"Expected {expectedValuesCount} values for field {field}. Got {len(fvFetched[field])}"
+        fvFetched[field] = dcgm_agent_internal.dcgmGetMultipleValuesForField(
+            handle, 0, field, totalTestCount, startTs, endTs, order)
+        assert len(
+            fvFetched[field]) == expectedValuesCount, f"Expected {expectedValuesCount} values for field {field}. Got {len(fvFetched[field])}"
 
     # For each test, verify that the diag status field updates with the
     # result of the test. Also, verify that the test result field is
     # updated with the same values.
     for i in range(totalTestCount):
-        diagStatus = get_diag_status_struct(fvFetched[dcgm_fields.DCGM_FI_DEV_DIAG_STATUS][i].value.blob)
+        diagStatus = get_diag_status_struct(
+            fvFetched[dcgm_fields.DCGM_FI_DEV_DIAG_STATUS][i].value.blob)
         testResult = fvFetched[TEST_NAME_TO_RESULT_FIELD_ID[tests[i]]][0].value.i64
 
         assert diagStatus.totalTests == totalTestCount, f"Actual value of totalTests is {diagStatus.totalTests}, expected {totalTestCount}"
-        assert diagStatus.testName == tests[i], f"Actual test name is {diagStatus.testName}, expected {tests[i]}"
+        assert diagStatus.testName == tests[
+            i], f"Actual test name is {diagStatus.testName}, expected {tests[i]}"
         assert diagStatus.errorCode == testResult, f"diagStatus error code for test {diagStatus.testName} is {diagStatus.errorCode}, test result field value is {testResult}"
-        assert diagStatus.completedTests == i+1, f"Actual value of completedTests is {diagStatus.completedTests}, expected {i+1}"
+        assert diagStatus.completedTests == i + \
+            1, f"Actual value of completedTests is {diagStatus.completedTests}, expected {i + 1}"
         # Verify the error codes for the tests if provided
         if diagStatus.testName in errorCodes:
-            assert diagStatus.errorCode == errorCodes[diagStatus.testName], f"Actual error code for test {diagStatus.testName} is {diagStatus.errorCode}, expected {errorCodes[diagStatus.testName]}"
+            assert diagStatus.errorCode == errorCodes[
+                diagStatus.testName], f"Actual error code for test {diagStatus.testName} is {diagStatus.errorCode}, expected {errorCodes[diagStatus.testName]}"
 
         logger.debug(f"Verified status of test {tests[i]}")
+
 
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_only_with_live_gpus()
@@ -1782,7 +2242,9 @@ def test_dcgmi_diag_status_r1(handle, gpuIds):
     fields as the test progresses.
     """
     args = ["diag", "-i", str(gpuIds[0]), "--run", "1"]
-    helper_dcgmi_diag_status(handle, args, 10, ["software"], {"software": dcgm_errors.DCGM_FR_OK})
+    helper_dcgmi_diag_status(handle, args, 10, ["software"], {
+                             "software": dcgm_errors.DCGM_FR_OK})
+
 
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_only_with_live_gpus()
@@ -1790,23 +2252,34 @@ def test_dcgmi_diag_status_r1(handle, gpuIds):
 def test_dcgmi_diag_status_r2(handle, gpuIds):
     # Skip the memory and pcie tests to reduce test time, and to verify the
     # new skipped error code
-    args = ["diag", "-i", str(gpuIds[0]), "--run", "2", "-p", "memory.is_allowed=0;pcie.is_allowed=0"]
-    helper_dcgmi_diag_status(handle, args, 60, ["software", "memory", "pcie"], {"software": dcgm_errors.DCGM_FR_OK, "pcie": dcgm_errors.DCGM_FR_TEST_SKIPPED, "memory": dcgm_errors.DCGM_FR_TEST_SKIPPED})
+    args = ["diag", "-i", str(gpuIds[0]), "--run", "2",
+            "-p", "memory.is_allowed=0;pcie.is_allowed=0"]
+    helper_dcgmi_diag_status(handle, args, 60, ["software", "memory", "pcie"], {
+                             "software": dcgm_errors.DCGM_FR_OK, "pcie": dcgm_errors.DCGM_FR_TEST_SKIPPED, "memory": dcgm_errors.DCGM_FR_TEST_SKIPPED})
+
 
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmi_diag_status_r_memory(handle, gpuIds):
-    args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=0"]
-    helper_dcgmi_diag_status(handle, args, 60, ["software", "memory"], {"software": dcgm_errors.DCGM_FR_OK, "memory": dcgm_errors.DCGM_FR_TEST_SKIPPED}) # the software plugin is always run
+    args = ["diag", "-i", str(gpuIds[0]), "--run",
+            "memory", "-p", "memory.is_allowed=0"]
+    helper_dcgmi_diag_status(handle, args, 60, ["software", "memory"], {
+                             # the software plugin is always run
+                             "software": dcgm_errors.DCGM_FR_OK, "memory": dcgm_errors.DCGM_FR_TEST_SKIPPED})
+
 
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmi_diag_status_r_memory_error(handle, gpuIds):
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_CURRENT, 0, 0, repeatCount=5)
-    args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=true"]
-    helper_dcgmi_diag_status(handle, args, 120, ["software", "memory"], {"software": dcgm_errors.DCGM_FR_OK, "memory": dcgm_errors.DCGM_FR_TEST_SKIPPED})
+    inject_value(
+        handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_CURRENT, 0, 0, repeatCount=5)
+    args = ["diag", "-i", str(gpuIds[0]), "--run",
+            "memory", "-p", "memory.is_allowed=true"]
+    helper_dcgmi_diag_status(handle, args, 120, ["software", "memory"], {
+                             "software": dcgm_errors.DCGM_FR_OK, "memory": dcgm_errors.DCGM_FR_TEST_SKIPPED})
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
@@ -1826,7 +2299,8 @@ def test_dcgmi_diag_status_with_injected_gpu_r1(handle, gpuIds):
     injectedRet.values[0].value.GpuFabricInfoV.state = dcgm_nvml.NVML_GPU_FABRIC_STATE_COMPLETED
     injectedRet.values[0].value.GpuFabricInfoV.status = dcgm_nvml.NVML_SUCCESS
     injectedRet.valueCount = 1
-    ret = dcgm_agent_internal.dcgmInjectNvmlDevice(handle, gpuIds[0], "GpuFabricInfoV", None, 0, injectedRet)
+    ret = dcgm_agent_internal.dcgmInjectNvmlDevice(
+        handle, gpuIds[0], "GpuFabricInfoV", None, 0, injectedRet)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     args = ["diag", "-i", str(gpuIds[0]), "--run", "1"]
@@ -1835,9 +2309,11 @@ def test_dcgmi_diag_status_with_injected_gpu_r1(handle, gpuIds):
     # Note that the error code may need to be updated when a new test is added
     # to the software test suite, and the first error code is from that test
     # instead.
-    helper_dcgmi_diag_status(handle, args, 10, ["software"], {"software": dcgm_errors.DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR})
+    helper_dcgmi_diag_status(handle, args, 10, ["software"], {
+                             "software": dcgm_errors.DCGM_FR_FABRIC_MANAGER_TRAINING_ERROR})
 
-def _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes, error = None):
+
+def _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes, error=None):
     dd = DcgmDiag.DcgmDiag(ignoreErrorCodesStr=ignoreErrorCodes)
 
     if error:
@@ -1848,6 +2324,7 @@ def _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes, error = None):
         assert response, "Should have received a response"
         assert response.tests[0].name == "software", \
             f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
@@ -1863,22 +2340,25 @@ def test_dcgmi_diag_ignore_error_codes_with_injected_gpus(handle, gpuIds):
     _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes)
 
     ignoreErrorCodes = "gpu3:0"
-    _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes, dcgm_structs.DCGM_ST_NVVS_ERROR)
+    _run_diag_with_ignore_error_codes(
+        handle, ignoreErrorCodes, dcgm_structs.DCGM_ST_NVVS_ERROR)
 
     ignoreErrorCodes = "gpu:*"
-    _run_diag_with_ignore_error_codes(handle, ignoreErrorCodes, dcgm_structs.DCGM_ST_NVVS_ERROR)
+    _run_diag_with_ignore_error_codes(
+        handle, ignoreErrorCodes, dcgm_structs.DCGM_ST_NVVS_ERROR)
+
 
 def _get_run_diag_info(gpuIds, ignoreErrorCodes, testNameStr):
     runDiagInfo = dcgm_structs.c_dcgmRunDiag_v10()
     runDiagInfo.version = dcgm_structs.dcgmRunDiag_version10
-    runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_NULL       
-    runDiagInfo.entityIds = ",".join(map(str,gpuIds))
+    runDiagInfo.groupId = dcgm_structs.DCGM_GROUP_NULL
+    runDiagInfo.entityIds = ",".join(map(str, gpuIds))
     runDiagInfo.ignoreErrorCodes = ignoreErrorCodes
 
     # The following is to ensure that the tests return as early as
     # possible, and do not take too long to run.
     runDiagInfo.flags = dcgm_structs.DCGM_RUN_FLAGS_FAIL_EARLY
-    runDiagInfo.failCheckInterval = 1 # 1s
+    runDiagInfo.failCheckInterval = 1  # 1s
     testDurationStr = None
     if testNameStr not in ["nvbandwidth", "memory_bandwidth"]:
         testDurationStr = f"{testNameStr}.test_duration=2"
@@ -1886,7 +2366,7 @@ def _get_run_diag_info(gpuIds, ignoreErrorCodes, testNameStr):
     index = 0
     for c in testNameStr:
         runDiagInfo.testNames[0][index] = ord(c)
-        index += 1 
+        index += 1
     index = 0
     if testDurationStr:
         for c in testDurationStr:
@@ -1894,6 +2374,7 @@ def _get_run_diag_info(gpuIds, ignoreErrorCodes, testNameStr):
             index += 1
 
     return runDiagInfo
+
 
 def _assert_diag_result_with_error_check(resultObj, expectedResults, entityId, errorsList, errorCode):
     if resultObj.result not in expectedResults:
@@ -1906,31 +2387,38 @@ def _assert_diag_result_with_error_check(resultObj, expectedResults, entityId, e
 
         if not errorFound:
             # If the failure is not due to the expected error, then we can skip the test
-            test_utils.skip_test(f"Test failed with unexpected result {resultObj.result} and does not contain the expected {errorCode} error, skipping test.")
+            test_utils.skip_test(
+                f"Test failed with unexpected result {resultObj.result} and does not contain the expected {errorCode} error, skipping test.")
         else:
             # If the expected error is found, then the test should have had expected results.
             assert False, f"Expected result {expectedResults}, got {resultObj.result}."
 
-def _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuId, expectedResults, testNameStr, errorCode = None):
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
 
-    response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+def _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuId, expectedResults, testNameStr, errorCode=None):
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
+                 97, 0, repeatCount=3, repeatOffset=5)
+
+    response = test_utils.action_validate_wrapper(
+        runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
     assert response.numTests == 2
     assert response, "Should have received a response"
     assert response.tests[0].name == "software", \
         f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
     assert response.tests[1].name == testNameStr, \
         f"The response should have contained the '{testNameStr}' plugin result, instead got {response.tests[1].name}"
-     
-    assert response.numResults == 2 
+
+    assert response.numResults == 2
 
     # Skip checking software test results
-    assert response.results[1].entity.entityId == gpuId, f"Expected GPU ID {gpuId}, got {response.results[1].entity.entityId}"
+    assert response.results[
+        1].entity.entityId == gpuId, f"Expected GPU ID {gpuId}, got {response.results[1].entity.entityId}"
     errorFound = False
     if errorCode:
-        assert response.results[1].result in expectedResults, f"Expected result in {expectedResults}, got {response.results[1].result}"
+        assert response.results[
+            1].result in expectedResults, f"Expected result in {expectedResults}, got {response.results[1].result}"
     else:
-        _assert_diag_result_with_error_check(response.results[1], expectedResults, gpuId, response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
+        _assert_diag_result_with_error_check(
+            response.results[1], expectedResults, gpuId, response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
         errorFound = True
         assert response.numErrors == 0, f"Expected 0 errors, got {response.numErrors} errors"
         # Verify that the ignored error is in the info array
@@ -1947,6 +2435,7 @@ def _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuId, ex
         logger.debug(f"Error {response.errors[i].code} found.")
     assert errorFound, f"Expected error code {errorCode} in response."
 
+
 @test_utils.run_with_standalone_host_engine(360)
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
@@ -1954,25 +2443,34 @@ def _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuId, ex
 def test_dcgmi_diag_ignore_error_codes(handle, gpuIds):
     testNames = ["memory"]
     for test in testNames:
-        logger.debug(f"Running {test} test with injected error - blank ignoreErrorCodes")
-        ignoreErrorCodes = "" 
+        logger.debug(
+            f"Running {test} test with injected error - blank ignoreErrorCodes")
+        ignoreErrorCodes = ""
         runDiagInfo = _get_run_diag_info([gpuIds[0]], ignoreErrorCodes, test)
-        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [dcgm_structs.DCGM_DIAG_RESULT_FAIL], test, dcgm_errors.DCGM_FR_XID_ERROR)
+        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [
+                                                      dcgm_structs.DCGM_DIAG_RESULT_FAIL], test, dcgm_errors.DCGM_FR_XID_ERROR)
 
-        logger.debug(f"Running {test} test with injected error - ignoreErrorCodes set to different error code")
+        logger.debug(
+            f"Running {test} test with injected error - ignoreErrorCodes set to different error code")
         ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_THERMAL_VIOLATIONS}"
         runDiagInfo = _get_run_diag_info([gpuIds[0]], ignoreErrorCodes, test)
-        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [dcgm_structs.DCGM_DIAG_RESULT_FAIL], test, dcgm_errors.DCGM_FR_XID_ERROR)
+        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [
+                                                      dcgm_structs.DCGM_DIAG_RESULT_FAIL], test, dcgm_errors.DCGM_FR_XID_ERROR)
 
-        logger.debug(f"Running {test} test with injected error - ignoreErrorCodes set to all possible gpus and error codes")
+        logger.debug(
+            f"Running {test} test with injected error - ignoreErrorCodes set to all possible gpus and error codes")
         ignoreErrorCodes = "*:*"
         runDiagInfo = _get_run_diag_info([gpuIds[0]], ignoreErrorCodes, test)
-        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], test)
+        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [
+                                                      dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], test)
 
-        logger.debug(f"Running {test} test with injected error - ignoreErrorCodes set to same gpu and error code")
+        logger.debug(
+            f"Running {test} test with injected error - ignoreErrorCodes set to same gpu and error code")
         ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_XID_ERROR}"
         runDiagInfo = _get_run_diag_info([gpuIds[0]], ignoreErrorCodes, test)
-        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], test)
+        _run_diag_with_ignore_error_codes_error_check(handle, runDiagInfo, gpuIds[0], [
+                                                      dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], test)
+
 
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_only_with_live_gpus()
@@ -1980,38 +2478,49 @@ def test_dcgmi_diag_ignore_error_codes(handle, gpuIds):
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmi_diag_ignore_error_codes_multiple_gpus_only_one_passes(handle, gpuIds):
     if len(gpuIds) <= 1:
-        test_utils.skip_test("This test can be run only when there is more than 1 GPU.")
-    
+        test_utils.skip_test(
+            "This test can be run only when there is more than 1 GPU.")
+
     test = "memory"
     # Inject error in both GPUs, but ignore error only on one GPU
     ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_XID_ERROR}"
-    runDiagInfo = _get_run_diag_info([gpuIds[0], gpuIds[1]], ignoreErrorCodes, test)
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
-    inject_value(handle, gpuIds[1], dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
+    runDiagInfo = _get_run_diag_info(
+        [gpuIds[0], gpuIds[1]], ignoreErrorCodes, test)
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
+                 97, 0, repeatCount=3, repeatOffset=5)
+    inject_value(handle, gpuIds[1], dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
+                 97, 0, repeatCount=3, repeatOffset=5)
 
-    response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+    response = test_utils.action_validate_wrapper(
+        runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
     assert response.numTests == 2, f"Expected 2 tests, got {response.numTests}"
     assert response, "Should have received a response"
     assert response.tests[0].name == "software", \
         f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
     assert response.tests[1].name == test, \
         f"The response should have contained the '{test}' plugin result, instead got {response.tests[0].name}"
-     
+
     assert response.numResults == 4, f"Expected 4 results, got {response.numResults}"
 
     # Skip checking software test results
-    assert response.results[2].entity.entityId == gpuIds[0], f"Expected GPU ID {gpuIds[0]}, got {response.results[2].entity.entityId}"
-    _assert_diag_result_with_error_check(response.results[2], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[0], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
+    assert response.results[2].entity.entityId == gpuIds[
+        0], f"Expected GPU ID {gpuIds[0]}, got {response.results[2].entity.entityId}"
+    _assert_diag_result_with_error_check(response.results[2], [
+                                         dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[0], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
 
-    assert response.results[3].entity.entityId == gpuIds[1], f"Expected GPU ID {gpuIds[1]}, got {response.results[3].entity.entityId}"
-    assert response.results[3].result in [dcgm_structs.DCGM_DIAG_RESULT_FAIL], f"Got result {response.results[3].result}"
+    assert response.results[3].entity.entityId == gpuIds[
+        1], f"Expected GPU ID {gpuIds[1]}, got {response.results[3].entity.entityId}"
+    assert response.results[3].result in [
+        dcgm_structs.DCGM_DIAG_RESULT_FAIL], f"Got result {response.results[3].result}"
 
     errorFound = False
     for i in range(response.numErrors):
         if response.errors[i].code == dcgm_errors.DCGM_FR_XID_ERROR and response.errors[i].entity.entityId == gpuIds[1]:
             errorFound = True
-        logger.debug(f"Error {response.errors[i].code} for entity {response.errors[i].entity.entityId} found.")
+        logger.debug(
+            f"Error {response.errors[i].code} for entity {response.errors[i].entity.entityId} found.")
     assert errorFound, f"Expected error code {dcgm_errors.DCGM_FR_XID_ERROR} in response for entity {gpuIds[1]}."
+
 
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_only_with_live_gpus()
@@ -2019,30 +2528,40 @@ def test_dcgmi_diag_ignore_error_codes_multiple_gpus_only_one_passes(handle, gpu
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgmi_diag_ignore_error_codes_multiple_gpus_all_pass(handle, gpuIds):
     if len(gpuIds) <= 1:
-        test_utils.skip_test("This test can be run only when there is more than 1 GPU.")
-    
+        test_utils.skip_test(
+            "This test can be run only when there is more than 1 GPU.")
+
     test = "pcie"
     # Inject error and ignore error on both GPUs
-    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
-    inject_value(handle, gpuIds[1], dcgm_fields.DCGM_FI_DEV_XID_ERRORS, 97, 0, repeatCount=3, repeatOffset=5)
-    
+    inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
+                 97, 0, repeatCount=3, repeatOffset=5)
+    inject_value(handle, gpuIds[1], dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
+                 97, 0, repeatCount=3, repeatOffset=5)
+
     ignoreErrorCodes = f"gpu{gpuIds[0]}:{dcgm_errors.DCGM_FR_XID_ERROR};gpu{gpuIds[1]}:{dcgm_errors.DCGM_FR_XID_ERROR}"
-    runDiagInfo = _get_run_diag_info([gpuIds[0], gpuIds[1]], ignoreErrorCodes, test)
-    response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+    runDiagInfo = _get_run_diag_info(
+        [gpuIds[0], gpuIds[1]], ignoreErrorCodes, test)
+    response = test_utils.action_validate_wrapper(
+        runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
     assert response.numTests == 2, f"Expected 2 tests, got {response.numTests}"
     assert response, "Should have received a response"
     assert response.tests[0].name == "software", \
         f"The response should have contained the 'software' plugin result, instead got {response.tests[0].name}"
     assert response.tests[1].name == test, \
         f"The response should have contained the '{test}' plugin result, instead got {response.tests[0].name}"
-     
+
     assert response.numResults == 4, f"Expected 4 results, got {response.numResults}"
 
     # Skip checking software test results
-    assert response.results[2].entity.entityId == gpuIds[0], f"Expected GPU ID {gpuIds[0]}, got {response.results[2].entity.entityId}"
-    _assert_diag_result_with_error_check(response.results[2], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[0], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
-    assert response.results[3].entity.entityId == gpuIds[1], f"Expected GPU ID {gpuIds[1]}, got {response.results[3].entity.entityId}"
-    _assert_diag_result_with_error_check(response.results[3], [dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[1], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
+    assert response.results[2].entity.entityId == gpuIds[
+        0], f"Expected GPU ID {gpuIds[0]}, got {response.results[2].entity.entityId}"
+    _assert_diag_result_with_error_check(response.results[2], [
+                                         dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[0], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
+    assert response.results[3].entity.entityId == gpuIds[
+        1], f"Expected GPU ID {gpuIds[1]}, got {response.results[3].entity.entityId}"
+    _assert_diag_result_with_error_check(response.results[3], [
+                                         dcgm_structs.DCGM_DIAG_RESULT_PASS, dcgm_structs.DCGM_DIAG_RESULT_SKIP], gpuIds[1], response.errors, dcgm_errors.DCGM_FR_XID_ERROR)
+
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -2058,10 +2577,11 @@ def test_dcgmi_diag_ignore_error_codes_software(handle, gpuIds):
     runDiagInfo.validate = 1
 
     fieldId = dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE
-    injected_value = 20 # random non-zero number
+    injected_value = 20  # random non-zero number
     inject_nvml_value(handle, gpuIds[0], fieldId, injected_value, 0)
 
-    response = test_utils.action_validate_wrapper(runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
+    response = test_utils.action_validate_wrapper(
+        runDiagInfo, handle, dcgm_structs.dcgmRunDiag_version10)
 
     suppressedErrorFound = False
     for i in range(response.numInfo):
@@ -2078,7 +2598,7 @@ def extract_line(output, line_to_extract):
         if line_to_extract in line:
             return line
     return None
-    
+
 
 def helper_memory_max_free_memory_test(handle, args, max_free_memory_param, invalid=False):
     # Run the diagnostic
@@ -2099,21 +2619,28 @@ def helper_memory_max_free_memory_test(handle, args, max_free_memory_param, inva
                 allocated_memory_bytes = int(match.group(1))
 
         # Convert bytes to MB for comparison
-        allocated_memory_mb = allocated_memory_bytes // (1024 * 1024) if allocated_memory_bytes else 0
+        allocated_memory_mb = allocated_memory_bytes // (
+            1024 * 1024) if allocated_memory_bytes else 0
 
         # Validate that allocated memory matches the max_free_memory parameter
         tolerance_mb = 1  # 1MB tolerance
-        validation_passed = abs(allocated_memory_mb - max_free_memory_param) <= tolerance_mb
+        validation_passed = abs(allocated_memory_mb -
+                                max_free_memory_param) <= tolerance_mb
 
         if not validation_passed:
-            logger.info("dcgmi.stdout_lines:\n" + "\n".join(dcgmi.stdout_lines))
+            logger.info("dcgmi.stdout_lines:\n" +
+                        "\n".join(dcgmi.stdout_lines))
         assert validation_passed, f"Memory allocation ({allocated_memory_mb:.2f} MB) should match requested limit ({max_free_memory_param} MB) within tolerance ({tolerance_mb} MB)"
-        logger.info(f"Memory test passed: allocated {allocated_memory_mb:.2f} MB (requested: {max_free_memory_param} MB)")
+        logger.info(
+            f"Memory test passed: allocated {allocated_memory_mb:.2f} MB (requested: {max_free_memory_param} MB)")
     else:
-        failure_line = extract_line(dcgmi.stdout_lines, "Caught an unknown exception")
+        failure_line = extract_line(
+            dcgmi.stdout_lines, "Caught an unknown exception")
         failure_message_found = failure_line is not None
         assert failure_message_found, "Expected failure message not found in dcgmi output: 'Caught an unknown exception while trying to execute the test'"
-        logger.info("Verified failure message for invalid max_free_memory parameter")
+        logger.info(
+            "Verified failure message for invalid max_free_memory parameter")
+
 
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_only_with_live_gpus()
@@ -2125,15 +2652,21 @@ def test_dcgmi_diag_memory_max_free_memory_parameter(handle, gpuIds):
 
     # Valid behaviour
     for max_free_memory_param in [0.1, 5, 100]:
-        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=true", "-p", f"memory.max_free_memory_mb={max_free_memory_param}", "-v"]
-        logger.info(f"Testing memory plugin with max_free_memory={max_free_memory_param}")
+        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=true",
+                "-p", f"memory.max_free_memory_mb={max_free_memory_param}", "-v"]
+        logger.info(
+            f"Testing memory plugin with max_free_memory={max_free_memory_param}")
         helper_memory_max_free_memory_test(handle, args, max_free_memory_param)
 
     # Invalid behaviour
     for max_free_memory_param in ["abc", "ab51"]:
-        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=true", "-p", f"memory.max_free_memory_mb={max_free_memory_param}", "-v"]
-        logger.info(f"Testing failure cases with invalid max_free_memory parameters: {max_free_memory_param}")
-        helper_memory_max_free_memory_test(handle, args, max_free_memory_param, invalid=True)
+        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory", "-p", "memory.is_allowed=true",
+                "-p", f"memory.max_free_memory_mb={max_free_memory_param}", "-v"]
+        logger.info(
+            f"Testing failure cases with invalid max_free_memory parameters: {max_free_memory_param}")
+        helper_memory_max_free_memory_test(
+            handle, args, max_free_memory_param, invalid=True)
+
 
 @test_utils.run_with_standalone_host_engine(120, heEnv={"CUDA_VISIBLE_DEVICES": "1,2,3"})
 @test_utils.run_only_with_live_gpus()
@@ -2154,7 +2687,8 @@ def test_dcgmi_diag_env_var_warning_hostengine_set(handle, gpuIds):
         assert "Hostengine Process Value: 1,2,3" in err
         assert "Dcgmi Process Value: 0,2" in err
         assert "Status: Values differ between local process and hostengine" in err
-        logger.info("Warning message correctly displayed when CUDA_VISIBLE_DEVICES mismatch detected")
+        logger.info(
+            "Warning message correctly displayed when CUDA_VISIBLE_DEVICES mismatch detected")
 
         # Case 2: dcgmi=1,2,3, hostengine=1,2,3
         os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
@@ -2163,21 +2697,24 @@ def test_dcgmi_diag_env_var_warning_hostengine_set(handle, gpuIds):
         assert "Hostengine Process Value: 1,2,3" in err
         assert "Dcgmi Process Value: 1,2,3" in err
         assert "Status: Values are consistent" in err
-        logger.info("Warning message correctly displayed when CUDA_VISIBLE_DEVICES is set and matches hostengine")
-        
+        logger.info(
+            "Warning message correctly displayed when CUDA_VISIBLE_DEVICES is set and matches hostengine")
+
         # Case 3: unset dcgmi, hostengine=1,2,3
         os.environ.pop('CUDA_VISIBLE_DEVICES', None)
         retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
         err = "\n".join(stderr_lines)
         assert "Environment Variable Information:" not in err
-        logger.info("Warning message correctly not displayed when CUDA_VISIBLE_DEVICES is unset")
+        logger.info(
+            "Warning message correctly not displayed when CUDA_VISIBLE_DEVICES is unset")
     finally:
         # cleanup
         if original is None:
             os.environ.pop('CUDA_VISIBLE_DEVICES', None)
         else:
             os.environ['CUDA_VISIBLE_DEVICES'] = original
-    
+
+
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
@@ -2197,20 +2734,23 @@ def test_dcgmi_diag_env_var_warning_hostengine_not_set(handle, gpuIds):
         assert "Hostengine Process Value: (not set)" in err
         assert "Dcgmi Process Value: 0,2" in err
         assert "Status: Failed to get hostengine environment variable" in err
-        logger.info("Warning message correctly displayed when CUDA_VISIBLE_DEVICES mismatch detected")
-        
+        logger.info(
+            "Warning message correctly displayed when CUDA_VISIBLE_DEVICES mismatch detected")
+
         # Case 2: unset dcgmi, hostengine not set
         os.environ.pop('CUDA_VISIBLE_DEVICES', None)
         retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
         err = "\n".join(stderr_lines)
         assert "Environment Variable Information:" not in err
-        logger.info("Warning message correctly not displayed when CUDA_VISIBLE_DEVICES is unset")
+        logger.info(
+            "Warning message correctly not displayed when CUDA_VISIBLE_DEVICES is unset")
     finally:
         # cleanup
         if original is None:
             os.environ.pop('CUDA_VISIBLE_DEVICES', None)
         else:
-            os.environ['CUDA_VISIBLE_DEVICES'] = original    
+            os.environ['CUDA_VISIBLE_DEVICES'] = original
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -2221,7 +2761,9 @@ def test_dcgmi_diag_h(handle, gpuIds):
     '''
     args = ["diag", "-h"]
     retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
-    _assert_valid_dcgmi_help_results(args, retValue, stdout_lines, stderr_lines)
+    _assert_valid_dcgmi_help_results(
+        args, retValue, stdout_lines, stderr_lines)
+
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
@@ -2232,7 +2774,9 @@ def test_dcgmi_diag_help(handle, gpuIds):
     '''
     args = ["diag", "--help"]
     retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
-    _assert_valid_dcgmi_help_results(args, retValue, stdout_lines, stderr_lines)
+    _assert_valid_dcgmi_help_results(
+        args, retValue, stdout_lines, stderr_lines)
+
 
 def helper_run_validate_memory_bw_memory_size(handle, args, memory_size, invalid=False):
     dcgmi = apps.DcgmiApp(args)
@@ -2242,39 +2786,32 @@ def helper_run_validate_memory_bw_memory_size(handle, args, memory_size, invalid
     if not invalid:
         # Memory size is bounded: minimum 6MB, maximum 756MB
         expected_size = min(max(memory_size, 6), 756)
-            
-        config_line = extract_line(dcgmi.stdout_lines, "Memory bandwidth configured test size:")
+
+        config_line = extract_line(
+            dcgmi.stdout_lines, "Memory bandwidth configured test size:")
         configured_size = None
         if config_line:
             try:
-                match = re.search(r"Memory bandwidth configured test size:\s*([0-9.]+)\s*", config_line)
+                match = re.search(
+                    r"Memory bandwidth configured test size:\s*([0-9.]+)\s*", config_line)
                 if match:
                     configured_size = float(match.group(1))
             except (ValueError, AttributeError):
-                logger.warning(f"Failed to parse configured memory size from line: {config_line}")
+                logger.warning(
+                    f"Failed to parse configured memory size from line: {config_line}")
 
-        assert abs(configured_size - expected_size) < 0.1, f"Configured memory size ({configured_size} MB) does not match expected ({expected_size} MB)"
-                    
+        assert abs(configured_size -
+                   expected_size) < 0.1, f"Configured memory size ({configured_size} MB) does not match expected ({expected_size} MB)"
+
     else:
         dcgmi.validate()
-        failure_line = extract_line(dcgmi.stdout_lines, "Caught an unknown exception")
+        failure_line = extract_line(
+            dcgmi.stdout_lines, "Caught an unknown exception")
         failure_message_found = failure_line is not None
         assert failure_message_found, "Expected failure message not found in dcgmi output: 'Caught an unknown exception while trying to execute the test'"
-        logger.info("Verified failure message for invalid memory size parameter")
+        logger.info(
+            "Verified failure message for invalid memory size parameter")
 
-@test_utils.run_with_standalone_host_engine(240)
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgmi_diag_memory_bw_memory_size_test(handle, gpuIds):
-    # Valid behaviour - Keeping small values for tests
-    for memory_size in [0.5, 10, 50]:
-        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory_bandwidth", "-v", "-p", "memory_bandwidth.is_allowed=true", "-p", f"memory_bandwidth.memory_size_mb={memory_size}"]
-        helper_run_validate_memory_bw_memory_size(handle, args, memory_size)
-
-    # Invalid behaviour
-    for memory_size in ["ab123c"]:
-        args = ["diag", "-i", str(gpuIds[0]), "--run", "memory_bandwidth", "-v", "-p", "memory_bandwidth.is_allowed=true", "-p", f"memory_bandwidth.memory_size_mb={memory_size}"]
-        helper_run_validate_memory_bw_memory_size(handle, args, memory_size, invalid=True)
 
 def helper_extract_warning_message(stderr_lines):
     warning_found = False
@@ -2283,7 +2820,9 @@ def helper_extract_warning_message(stderr_lines):
             warning_found = True
             break
     return warning_found
-    
+
+
+ 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
@@ -2294,12 +2833,14 @@ def test_dcgmi_diag_removed_env_var_negative(handle, gpuIds):
     """
     args = ["diag", "--run", "1", "-i", str(gpuIds[0])]
     retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
-    
+
     # Check that the warning message does NOT appear in stderr
     warning_found = helper_extract_warning_message(stderr_lines)
-    
+
     assert not warning_found, f"Unexpected warning message found in stderr when DCGM_DIAG_REMOVED is not set. stderr: {stderr_lines}"
-    logger.info("No warning message displayed when DCGM_DIAG_REMOVED is not set, as expected")
+    logger.info(
+        "No warning message displayed when DCGM_DIAG_REMOVED is not set, as expected")
+
 
 @test_utils.run_with_standalone_host_engine(120, heEnv={"DCGM_DIAG_REMOVED": "1"})
 @test_utils.run_only_with_live_gpus()
@@ -2311,9 +2852,173 @@ def test_dcgmi_diag_removed_env_var_positive(handle, gpuIds):
     """
     args = ["diag", "--run", "1", "-i", str(gpuIds[0])]
     retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
-    
+
     # Check that the warning message DOES appear in stderr
     warning_found = helper_extract_warning_message(stderr_lines)
-    
+
     assert warning_found, f"Expected warning message not found in stderr when DCGM_DIAG_REMOVED is set. stderr: {stderr_lines}"
-    logger.info("Warning message correctly displayed when DCGM_DIAG_REMOVED is set")
+    logger.info(
+        "Warning message correctly displayed when DCGM_DIAG_REMOVED is set")
+
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgmi_diag_software_memory_health(handle, gpuIds):
+    """
+    Test dcgmi diag software test detects unrepairable memory flag using NVML injection.
+    """
+    gpuId = gpuIds[3]
+    fieldId = dcgm_fields.DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG
+
+    memory_health_str = "Memory Health"
+    faulty_memory_str = "faulty memory"
+
+    # Software test should not have memory error (it might have other errors)
+    args = ["diag", "--run", "1", "-i", str(gpuId)]
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+
+    all_output = stdout_lines + stderr_lines
+    memory_health_line = extract_line(all_output, memory_health_str)
+    faulty_memory_line = extract_line(all_output, faulty_memory_str)
+
+    if memory_health_line is not None or faulty_memory_line is not None:
+        assert False, f"Did not expect {memory_health_str} or {faulty_memory_str} error without injection. Line found: {memory_health_line}, {faulty_memory_line}"
+
+    # Inject unrepairable memory present (value = 1)
+    injectedRet = nvml_injection.c_injectNvmlRet_t()
+    injectedRet.nvmlRet = dcgm_nvml.NVML_SUCCESS
+    injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_UNREPAIRABLEMEMORYSTATUS
+    injectedRet.values[0].value.UnrepairableMemoryStatus.version = 0x1000008
+    injectedRet.values[0].value.UnrepairableMemoryStatus.bUnrepairableMemory = 1
+    injectedRet.valueCount = 1
+
+    ret = dcgm_agent_internal.dcgmInjectNvmlDevice(
+        handle, gpuId, "UnrepairableMemoryFlag", None, 0, injectedRet)
+    assert ret == dcgm_structs.DCGM_ST_OK, f"NVML injection failed with status {ret}"
+
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    dcgm_agent_internal.dcgmWatchFieldValue(
+        dcgmHandle.handle, gpuId, fieldId, 60000000, 3600.0, 0)
+    dcgmSystem.UpdateAllFields(1)
+
+    # Validate injection
+    values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+        dcgmHandle.handle, gpuId, [fieldId])
+    logger.info(
+        f"Unrepairable memory flag value: {values[0].value.i64} (expected 1)")
+
+    # Software test should have memory health error (it might have other error also)
+    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    assert retValue != 0, f"Expected dcgmi diag to fail due to unrepairable memory flag, but it passed. stdout: {stdout_lines}"
+
+    all_output = stdout_lines + stderr_lines
+    memory_health_line = extract_line(all_output, memory_health_str)
+    faulty_memory_line = extract_line(all_output, faulty_memory_str)
+
+    assert memory_health_line and faulty_memory_line, f"Expected to find both {memory_health_str} and {faulty_memory_str} error in dcgmi output. stdout: {stdout_lines}, stderr: {stderr_lines}"
+
+
+def inject_value_and_wait(handle, gpuId, fieldId, value, max_wait=2.0, poll_interval=0.1):
+    """Inject a value and wait for it to be readable with timeout."""
+    inject_value(handle, gpuId, fieldId, value, 0, verifyInsertion=True)
+
+    start_time = time.time()
+    while (time.time() - start_time) < max_wait:
+        dcgm_agent.dcgmUpdateAllFields(handle, 1)
+        fieldValues = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId, [
+                                                                       fieldId])
+        if fieldValues[0].status == dcgm_structs.DCGM_ST_OK and fieldValues[0].value.i64 == value:
+            return True
+        time.sleep(poll_interval)
+
+    return False
+
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_if_mig_is_disabled()
+def test_dcgmi_pcie_with_gemm_failure(handle, gpuIds):
+    """
+    Test that PCIe correctable errors occurring during GEMM execution are detected
+    and cause failure when aer_threshold is exceeded.
+
+    Injects 1 error per second during a 5-second GEMM test with aer_threshold=1.
+    """
+    if len(gpuIds) < 1:
+        test_utils.skip_test("At least 1 GPU is required")
+
+    gpuId = gpuIds[0]
+    fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS
+
+    # Watch field and check if supported
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgm_agent_internal.dcgmWatchFieldValue(
+        dcgmHandle.handle, gpuId, fieldId, 1000000, 3600.0, 0)
+    dcgmHandle.GetSystem().UpdateAllFields(1)
+
+    fieldValues = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId, [
+                                                                   fieldId])
+    if fieldValues[0].status == dcgm_structs.DCGM_ST_NOT_SUPPORTED:
+        test_utils.skip_test(
+            f"GPU {gpuId} does not support DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS")
+    if fieldValues[0].status == dcgm_structs.DCGM_ST_OK and fieldValues[0].value.i64 > 0:
+        test_utils.skip_test(
+            f"GPU {gpuId} has {fieldValues[0].value.i64} pre-existing correctable errors")
+
+    # Start with 0 errors and wait for injection to be processed
+    if not inject_value_and_wait(handle, gpuId, fieldId, 0):
+        logger.warning(f"Could not verify injection for field {fieldId}")
+
+    # Background thread to inject errors continuously
+    injection_active = threading.Event()
+    injection_active.set()
+    error_counter = [0]
+
+    def inject_errors_continuously():
+        while injection_active.is_set():
+            error_counter[0] += 1
+            inject_value(handle, gpuId, fieldId,
+                         error_counter[0], 0, verifyInsertion=True)
+            logger.debug(f"Injected error #{error_counter[0]}")
+            time.sleep(1)
+
+    injection_thread = threading.Thread(
+        target=inject_errors_continuously, daemon=True)
+    injection_thread.start()
+
+    try:
+        args = ["diag", "--run", "pcie", "-i", str(gpuId),
+                "-p", "pcie.aer_threshold=1;pcie.test_duration=5;pcie.is_allowed=true;pcie.test_with_gemm=true"]
+
+        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+
+        # Stop injection and print results
+        injection_active.clear()
+        injection_thread.join(timeout=2)
+
+        logger.debug("=" * 80)
+        logger.debug(
+            f"Test completed. Return code: {retValue}, Errors injected: {error_counter[0]}")
+        for line in stdout_lines:
+            logger.debug(line)
+        logger.debug("=" * 80)
+
+        # Validate test failed due to AER threshold violation
+        assert retValue != 0, f"Test should FAIL with aer_threshold=1 and {error_counter[0]} injected errors"
+
+        all_output = ' '.join(stdout_lines + stderr_lines).lower()
+        assert any(keyword in all_output for keyword in ["pcie", "replay", "correctable", "aer"]), \
+            "Expected PCIe/AER error in output"
+
+    finally:
+        if injection_active.is_set():
+            injection_active.clear()
+            injection_thread.join(timeout=2)
+
+        if not inject_value_and_wait(handle, gpuId, fieldId, 0):
+            logger.warning(
+                f"Could not verify cleanup injection for field {fieldId}")

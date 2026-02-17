@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,7 +216,7 @@ int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
         }
     }
 
-    st = pDcgmGrpManager->GetGroupEntities(groupId, groupEntities);
+    st = pDcgmGrpManager->GetGroupEntities(groupId, DcgmGroupOption::ActiveOnly, groupEntities);
     if (st != DCGM_ST_OK)
     {
         fprintf(stderr, "pDcgmGrpManager->GetGroupEntities() Failed with %d", st);
@@ -292,7 +292,7 @@ int TestGroupManager::TestGroupManageGpus()
 
         vecGroupIds.push_back(groupId);
 
-        st = pDcgmGrpManager->GetGroupEntities(groupId, groupEntities);
+        st = pDcgmGrpManager->GetGroupEntities(groupId, DcgmGroupOption::ActiveOnly, groupEntities);
         if (st != DCGM_ST_OK)
         {
             fprintf(stderr, "pDcgmGrpManager->GetGroupEntities returned %d\n", st);
@@ -442,7 +442,7 @@ int TestGroupManager::TestDefaultGpusAreDynamic()
     DcgmGroupManager *groupManager   = heHandler->GetGroupManager();
 
     groupId    = groupManager->GetAllGpusGroup();
-    dcgmReturn = groupManager->GetGroupEntities(groupId, entities);
+    dcgmReturn = groupManager->GetGroupEntities(groupId, DcgmGroupOption::ActiveOnly, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         fprintf(stderr, "Got error %d from GetGroupEntities()\n", dcgmReturn);
@@ -462,7 +462,7 @@ int TestGroupManager::TestDefaultGpusAreDynamic()
     /* Add a fake GPU and make sure it appears in the entity list */
     fakeEntityId = cacheManager->AddFakeGpu();
 
-    dcgmReturn = groupManager->GetGroupEntities(groupId, entities);
+    dcgmReturn = groupManager->GetGroupEntities(groupId, DcgmGroupOption::ActiveOnly, entities);
     if (dcgmReturn != DCGM_ST_OK)
     {
         fprintf(stderr, "Got error %d from GetGroupEntities()\n", dcgmReturn);
@@ -558,7 +558,7 @@ int TestGroupManager::TestGroupLimits()
     for (index = 2; index < DCGM_MAX_NUM_GROUPS; index++)
     {
         std::vector<dcgmGroupEntityPair_t> entities {};
-        st = pDcgmGrpManager->GetGroupEntities(index, entities);
+        st = pDcgmGrpManager->GetGroupEntities(index, DcgmGroupOption::ActiveOnly, entities);
         CHECK(st == DCGM_ST_OK, "Unable to retrieve entities for groupId %d", index);
         CHECK(entities.size() == 0, "Got %ld entities for groupId %d, expected %d\n", entities.size(), index, 0);
         std::string groupName = pDcgmGrpManager->GetGroupName(DCGM_CONNECTION_ID_NONE, index);

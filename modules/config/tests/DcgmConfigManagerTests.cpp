@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,29 @@ public:
 TEST_CASE("DcgmConfigManager::HelperGetWorkloadPowerProfiles (old API)")
 {
     dcgmCoreCallbacks_t ccb {};
+    ccb.loggerfunc = [](void const *) { /* do nothing */ };
+    ccb.version    = dcgmCoreCallbacks_version;
+    ccb.poster     = nullptr;
+    ccb.postfunc   = [](dcgm_module_command_header_t *req, void *) -> dcgmReturn_t {
+        // Just to prevent the constructor of DcgmConfigManager from crashing.
+        if (req->subCommand == DcgmCoreReqIdCMGetGpuIds)
+        {
+            dcgmCoreGetGpuList_t cgg;
+            memcpy(&cgg, req, sizeof(cgg));
+
+            cgg.response.ret      = DCGM_ST_OK;
+            cgg.response.gpuCount = 1;
+            for (size_t i = 0; i < cgg.response.gpuCount; i++)
+            {
+                cgg.response.gpuIds[i] = i;
+            }
+
+            memcpy(req, &cgg, sizeof(cgg));
+            return DCGM_ST_OK;
+        }
+        return DCGM_ST_GENERIC_ERROR;
+    };
+
     DcgmConfigManagerTests configManager(ccb);
     dcgmConfig_t targetConfig  = dcmBlankConfig(0);
     dcgmConfig_t currentConfig = dcmBlankConfig(0);
@@ -211,6 +234,28 @@ TEST_CASE("DcgmConfigManager::HelperGetWorkloadPowerProfiles (old API)")
 TEST_CASE("DcgmConfigManager::HelperGetWorkloadPowerProfiles (new API)")
 {
     dcgmCoreCallbacks_t ccb {};
+    ccb.loggerfunc = [](void const *) { /* do nothing */ };
+    ccb.version    = dcgmCoreCallbacks_version;
+    ccb.poster     = nullptr;
+    ccb.postfunc   = [](dcgm_module_command_header_t *req, void *) -> dcgmReturn_t {
+        // Just to prevent the constructor of DcgmConfigManager from crashing.
+        if (req->subCommand == DcgmCoreReqIdCMGetGpuIds)
+        {
+            dcgmCoreGetGpuList_t cgg;
+            memcpy(&cgg, req, sizeof(cgg));
+
+            cgg.response.ret      = DCGM_ST_OK;
+            cgg.response.gpuCount = 1;
+            for (size_t i = 0; i < cgg.response.gpuCount; i++)
+            {
+                cgg.response.gpuIds[i] = i;
+            }
+
+            memcpy(req, &cgg, sizeof(cgg));
+            return DCGM_ST_OK;
+        }
+        return DCGM_ST_GENERIC_ERROR;
+    };
     DcgmConfigManagerTests configManager(ccb);
     dcgmConfig_t targetConfig = dcmBlankConfig(0);
     dcgmWorkloadPowerProfile_t newWorkloadPowerProfile {};

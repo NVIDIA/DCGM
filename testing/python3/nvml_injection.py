@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,10 +25,11 @@ if nvml_injection_structs.nvml_injection_usable:
     class c_injectNvmlRet_t(Structure):
         _fields_ = [
             ("nvmlRet", c_uint),
-            ("values", ARRAY(nvml_injection_structs.c_injectNvmlVal_t, (NVML_INJECTION_MAX_VALUES + 1))),
+            ("values", ARRAY(nvml_injection_structs.c_injectNvmlVal_t,
+             (NVML_INJECTION_MAX_VALUES + 1))),
             ("valueCount", c_uint),
         ]
-    
+
     class c_injectNvmlFuncCallInfo_t(Structure):
         _fields_ = [
             ("funcName", c_char * NVML_MAX_FUNC_NAME_LENGTH),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 #include <cstdlib>
 #include <dcgm_fields.h>
 #include <dcgm_structs_internal.h>
+#include <fmt/ranges.h>
 #include <iostream>
 #include <memory>
 #include <ranges>
@@ -1155,6 +1156,7 @@ bool NvidiaValidationSuite::FillTestVectors(suiteNames_enum suite, Test::testCla
                     testNames.push_back(CPU_EUD_TEST_NAME);
                 }
                 testNames.push_back(NVBANDWIDTH_PLUGIN_NAME);
+                testNames.push_back(NCCL_TESTS_PLUGIN_NAME);
             }
             if (suite >= NVVS_SUITE_XLONG)
             {

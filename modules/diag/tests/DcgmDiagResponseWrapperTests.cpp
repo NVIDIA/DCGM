@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -947,4 +947,183 @@ TEST_CASE("DcgmDiagResponseWrapper::AdoptEudResponse::Version mismatch")
     src.SetVersion(srcRv8.get());
 
     REQUIRE(dest.AdoptEudResponse(src) == DCGM_ST_VER_MISMATCH);
+}
+
+TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
+{
+    SECTION("Returns error for uninitialized wrapper")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+        REQUIRE(ret == DCGM_ST_UNINITIALIZED);
+    }
+
+    SECTION("Returns error for unsupported version")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v11>();
+        wrapper.SetVersion(response.get());
+
+        auto ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+        REQUIRE(ret == DCGM_ST_NOT_SUPPORTED);
+    }
+
+    SECTION("Adds entity and results to response")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
+
+        // With no tests: adds entity but no results
+        response->numTests = 0;
+        wrapper.SetVersion(response.get());
+        wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+        REQUIRE(response->numEntities == 1);
+        REQUIRE(response->entities[0].entity.entityId == 0);
+        REQUIRE(response->numResults == 0);
+
+        // With one test: adds entity and NOT_RUN result
+        response->numTests = 1;
+        SafeCopyTo(response->tests[0].name, "memory");
+        wrapper.AddGpuStatusToAllTests(1, DcgmEntityStatusDetached, "2336", "0987654321", false);
+        REQUIRE(response->numEntities == 2);
+        REQUIRE(response->numResults == 1);
+        REQUIRE(response->results[0].result == DCGM_DIAG_RESULT_NOT_RUN);
+    }
+
+    SECTION("Always adds error message regardless of isFail flag")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
+
+        response->numTests = 1;
+        SafeCopyTo(response->tests[0].name, "memory");
+        wrapper.SetVersion(response.get());
+
+        // When isFail=true, adds error message
+        wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+        REQUIRE(response->numErrors == 1);
+        REQUIRE(response->numInfo == 0);
+
+        // When isFail=false, also adds error message
+        wrapper.AddGpuStatusToAllTests(1, DcgmEntityStatusDetached, "2336", "0987654321", false);
+        REQUIRE(response->numErrors == 2); // Now 2 errors
+        REQUIRE(response->numInfo == 0);   // Still no info
+    }
+
+    SECTION("Updates test result based on isFail flag")
+    {
+        // Test isFail=true: updates PASS to FAIL
+        DcgmDiagResponseWrapper wrapper1;
+        auto response1             = MakeUniqueZero<dcgmDiagResponse_v12>();
+        response1->numTests        = 1;
+        response1->tests[0].result = DCGM_DIAG_RESULT_PASS;
+        wrapper1.SetVersion(response1.get());
+
+        wrapper1.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+        REQUIRE(response1->tests[0].result == DCGM_DIAG_RESULT_FAIL);
+
+        // Test isFail=false: does not update result
+        DcgmDiagResponseWrapper wrapper2;
+        auto response2             = MakeUniqueZero<dcgmDiagResponse_v12>();
+        response2->numTests        = 1;
+        response2->tests[0].result = DCGM_DIAG_RESULT_PASS;
+        wrapper2.SetVersion(response2.get());
+
+        wrapper2.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", false);
+        REQUIRE(response2->tests[0].result == DCGM_DIAG_RESULT_PASS);
+    }
+
+    SECTION("Adds result for each test")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
+
+        response->numTests = 3;
+        wrapper.SetVersion(response.get());
+
+        auto ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", false);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        REQUIRE(response->numResults == 3);
+        REQUIRE(response->tests[0].numResults == 1);
+        REQUIRE(response->tests[1].numResults == 1);
+        REQUIRE(response->tests[2].numResults == 1);
+    }
+
+    SECTION("Manages entities correctly")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
+
+        response->numTests = 1;
+        wrapper.SetVersion(response.get());
+
+        // Can add multiple different GPUs
+        wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", false);
+        wrapper.AddGpuStatusToAllTests(1, DcgmEntityStatusDetached, "2336", "0987654321", false);
+        REQUIRE(response->numEntities == 2);
+        REQUIRE(response->numResults == 2);
+
+        // Does not duplicate if entity already exists
+        wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", false);
+        REQUIRE(response->numEntities == 2); // Still 2, not 3
+        REQUIRE(response->numResults == 3);  // But results increase
+    }
+
+    SECTION("Does not update test result if already FAIL")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
+
+        response->numTests        = 1;
+        response->tests[0].result = DCGM_DIAG_RESULT_FAIL;
+        wrapper.SetVersion(response.get());
+
+        auto ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        REQUIRE(response->tests[0].result == DCGM_DIAG_RESULT_FAIL);
+    }
+
+    SECTION("Uses correct status strings")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
+
+        response->numTests = 1;
+        wrapper.SetVersion(response.get());
+
+        // Test Detached status (always adds error message)
+        wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", false);
+        REQUIRE(std::string_view(response->errors[0].msg).contains("detached"));
+
+        // Test Inaccessible status
+        wrapper.AddGpuStatusToAllTests(1, DcgmEntityStatusInaccessible, "2336", "0987654321", false);
+        REQUIRE(std::string_view(response->errors[1].msg).contains("inaccessible"));
+
+        // Test unknown status (defaults to "unavailable")
+        wrapper.AddGpuStatusToAllTests(2, static_cast<DcgmEntityStatus_t>(999), "2337", "1111111111", false);
+        REQUIRE(std::string_view(response->errors[2].msg).contains("unavailable"));
+    }
+
+    SECTION("Returns error when arrays are full")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
+
+        // Test entities array full
+        response->numEntities = DCGM_DIAG_RESPONSE_ENTITIES_MAX;
+        response->numTests    = 1;
+        wrapper.SetVersion(response.get());
+
+        auto ret = wrapper.AddGpuStatusToAllTests(999, DcgmEntityStatusDetached, "2999", "9999999999", false);
+        REQUIRE(ret == DCGM_ST_INSUFFICIENT_SIZE);
+
+        // Test results array full (reset entities first)
+        response->numEntities = 0;
+        response->numResults  = DCGM_DIAG_RESPONSE_RESULTS_MAX;
+
+        ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", false);
+        REQUIRE(ret == DCGM_ST_INSUFFICIENT_SIZE);
+    }
 }

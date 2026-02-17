@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,14 +36,18 @@ typedef nvmlReturn_t (*nvmlInit_f)();
 
 #define NVML_YAML_FILE "NVML_YAML_FILE"
 
+static std::mutex g_mutexNvmlCounter;
+static std::atomic<unsigned int> g_nvmlInitCounter = 0;
+
 static nvmlReturn_t injectionNvmlShutdown()
 {
-    auto InjectedNvml = InjectedNvml::GetInstance();
-    if (InjectedNvml != nullptr)
+    auto injectedNvml = InjectedNvml::GetInstance();
+    if (injectedNvml != nullptr)
     {
-        delete InjectedNvml;
+        delete injectedNvml;
         InjectedNvml::Reset();
     }
+    g_nvmlInitCounter = 0;
     return NVML_SUCCESS;
 }
 
@@ -81,30 +85,23 @@ static nvmlReturn_t injectionNvmlInit()
     return NVML_SUCCESS;
 }
 
-static std::mutex g_mutexNvmlCounter;
-static unsigned int g_nvmlInitCounter         = 0;
-static unsigned int g_nvmlInitNoAttachCounter = 0;
-static std::unordered_set<std::thread::id> g_initThreadIds;
-static std::unordered_set<std::thread::id> g_initNoAttachThreadIds;
-
 nvmlReturn_t nvmlInitImpl(unsigned int flags, std::string const &funcName)
 {
     auto increaseCallCount = [&funcName]() {
         auto *injectedNvml = InjectedNvml::GetInstance();
         injectedNvml->AddFuncCallCount(funcName);
     };
-    auto *counter = (flags & NVML_INIT_FLAG_NO_ATTACH) ? &g_nvmlInitNoAttachCounter : &g_nvmlInitCounter;
     std::unique_lock<std::mutex> lock(g_mutexNvmlCounter);
-    if (g_nvmlInitCounter != 0 || g_nvmlInitNoAttachCounter != 0)
+    if (g_nvmlInitCounter != 0)
     {
         if (!InjectedNvml::GetInstance()->AllowAttach())
         {
             return NVML_ERROR_NOT_READY;
         }
-        *counter += 1;
+        g_nvmlInitCounter += 1;
         lock.unlock();
         increaseCallCount();
-        if (!(flags & NVML_INIT_FLAG_NO_ATTACH))
+        if (!(flags & NVML_INIT_FLAG_NO_GPUS))
         {
             InjectedNvml::GetInstance()->HandleBindUnbindEvent();
         }
@@ -115,10 +112,10 @@ nvmlReturn_t nvmlInitImpl(unsigned int flags, std::string const &funcName)
     {
         return ret;
     }
-    *counter += 1;
+    g_nvmlInitCounter += 1;
     lock.unlock();
     increaseCallCount();
-    if (!(flags & NVML_INIT_FLAG_NO_ATTACH))
+    if (!(flags & NVML_INIT_FLAG_NO_GPUS))
     {
         InjectedNvml::GetInstance()->HandleBindUnbindEvent();
     }
@@ -127,33 +124,12 @@ nvmlReturn_t nvmlInitImpl(unsigned int flags, std::string const &funcName)
 
 nvmlReturn_t nvmlInit_v2()
 {
-    auto ret = nvmlInitImpl(0, "nvmlInit_v2");
-    if (ret != NVML_SUCCESS)
-    {
-        return ret;
-    }
-    std::lock_guard<std::mutex> lock(g_mutexNvmlCounter);
-    g_initThreadIds.insert(std::this_thread::get_id());
-    return ret;
+    return nvmlInitImpl(0, "nvmlInit_v2");
 }
 
 nvmlReturn_t nvmlInitWithFlags(unsigned int flags)
 {
-    auto ret = nvmlInitImpl(flags, "nvmlInitWithFlags");
-    if (ret != NVML_SUCCESS)
-    {
-        return ret;
-    }
-    std::lock_guard<std::mutex> lock(g_mutexNvmlCounter);
-    if (flags & NVML_INIT_FLAG_NO_ATTACH)
-    {
-        g_initNoAttachThreadIds.insert(std::this_thread::get_id());
-    }
-    else
-    {
-        g_initThreadIds.insert(std::this_thread::get_id());
-    }
-    return ret;
+    return nvmlInitImpl(flags, "nvmlInitWithFlags");
 }
 
 nvmlReturn_t nvmlShutdown()
@@ -164,22 +140,17 @@ nvmlReturn_t nvmlShutdown()
         return NVML_ERROR_UNINITIALIZED;
     }
 
-    auto const threadId = std::this_thread::get_id();
-    if (g_initThreadIds.contains(threadId))
+    if (g_nvmlInitCounter == 0)
     {
-        g_nvmlInitCounter -= 1;
-        g_initThreadIds.erase(threadId);
+        return NVML_ERROR_UNINITIALIZED;
     }
-    else if (g_initNoAttachThreadIds.contains(threadId))
-    {
-        g_nvmlInitNoAttachCounter -= 1;
-        g_initNoAttachThreadIds.erase(threadId);
-    }
+
+    g_nvmlInitCounter -= 1;
     if (g_nvmlInitCounter <= 0)
     {
         InjectedNvml::GetInstance()->SetAllowAttach(true);
     }
-    if (g_nvmlInitCounter != 0 || g_nvmlInitNoAttachCounter != 0)
+    if (g_nvmlInitCounter != 0)
     {
         return NVML_SUCCESS;
     }
@@ -299,9 +270,9 @@ nvmlReturn_t nvmlDeviceInjectForFollowingCalls(nvmlDevice_t nvmlDevice,
 
 nvmlReturn_t nvmlCreateDevice(unsigned int index)
 {
-    auto InjectedNvml = InjectedNvml::GetInstance();
+    auto injectedNvml = InjectedNvml::GetInstance();
     InjectionArgument indexArg(index);
-    if (InjectedNvml->SimpleDeviceCreate(INJECTION_INDEX_KEY, indexArg) == 0)
+    if (injectedNvml->SimpleDeviceCreate(INJECTION_INDEX_KEY, indexArg) == 0)
     {
         return NVML_SUCCESS;
     }
@@ -401,6 +372,17 @@ nvmlReturn_t nvmlRestoreGpu(const char *uuid)
     if (injectedNvml)
     {
         return injectedNvml->RestoreGpu(uuid);
+    }
+
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t nvmlDeviceReset(nvmlDevice_t nvmlDevice)
+{
+    auto *injectedNvml = InjectedNvml::GetInstance();
+    if (injectedNvml)
+    {
+        return injectedNvml->DeviceReset(nvmlDevice);
     }
 
     return NVML_SUCCESS;

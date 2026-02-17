@@ -20,6 +20,8 @@
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libMemtest.so.<SOFTWAREVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libNVBandwidth.so.<MAJORVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libNVBandwidth.so.<SOFTWAREVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libNcclTests.so.<MAJORVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libNcclTests.so.<SOFTWAREVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libPcie.so.<MAJORVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libPcie.so.<SOFTWAREVERSION>
 ./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cuda12/libTargetedPower.so.<MAJORVERSION>

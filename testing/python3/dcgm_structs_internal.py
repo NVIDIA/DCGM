@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,18 @@
 # Python bindings for "dcgm_structs.h"
 ##
 
-from ctypes import *
+from ctypes import c_char as c_char
+from ctypes import c_uint as c_uint
+from ctypes import c_int16 as c_int16
+from ctypes import c_uint16 as c_uint16
+from ctypes import c_int32 as c_int32
+from ctypes import c_uint32 as c_uint32
+from ctypes import c_int64 as c_int64
+from ctypes import c_short as c_short
+from ctypes import c_double as c_double
+from ctypes import sizeof as sizeof
+from ctypes import Union as Union
+
 from ctypes.util import find_library
 import dcgm_structs
 from dcgm_fields import _PrintableStructure
@@ -31,6 +42,7 @@ class c_dcgmGpuInfo(dcgm_structs._PrintableStructure):
         ('uuid', c_char * DCGM_MAX_STR_LENGTH)
     ]
 
+
 class value(Union):
     _fields_ = [
         ('i64', c_int64),
@@ -38,13 +50,17 @@ class value(Union):
         ('str', c_char * DCGM_MAX_STR_LENGTH)
     ]
 
+
 # Below is a test API simply to make sure versioning is working correctly
+
+
 class c_dcgmVersionTest_v1(dcgm_structs._PrintableStructure):
     _fields_ = [
         # version must always be first
         ('version', c_uint),
         ('a', c_uint)
     ]
+
 
 class c_dcgmVersionTest_v2(dcgm_structs._PrintableStructure):
     _fields_ = [
@@ -54,13 +70,18 @@ class c_dcgmVersionTest_v2(dcgm_structs._PrintableStructure):
         ('b', c_uint)
     ]
 
-dcgmVersionTest_version1 = dcgm_structs.make_dcgm_version(c_dcgmVersionTest_v1, 1)
-dcgmVersionTest_version2 = dcgm_structs.make_dcgm_version(c_dcgmVersionTest_v2, 2)
-dcgmVersionTest_version3 = dcgm_structs.make_dcgm_version(c_dcgmVersionTest_v2, 3)
+
+dcgmVersionTest_version1 = dcgm_structs.make_dcgm_version(
+    c_dcgmVersionTest_v1, 1)
+dcgmVersionTest_version2 = dcgm_structs.make_dcgm_version(
+    c_dcgmVersionTest_v2, 2)
+dcgmVersionTest_version3 = dcgm_structs.make_dcgm_version(
+    c_dcgmVersionTest_v2, 3)
 
 # Represents a command to save or load a JSON file to/from the DcgmCacheManager
 _dcgmStatsFileType_t = c_uint
 DCGM_STATS_FILE_TYPE_JSON = 0
+
 
 class c_dcgmCacheManagerSave_v1(dcgm_structs._PrintableStructure):
     _fields_ = [
@@ -70,13 +91,18 @@ class c_dcgmCacheManagerSave_v1(dcgm_structs._PrintableStructure):
         ('filename', c_char * 256)
     ]
 
+
 class c_dcgmCacheManagerLoad_v1(dcgm_structs._PrintableStructure):
     _fields_ = [
         ('version', c_uint),
     ]
 
-dcgmCacheManagerSave_version1 = dcgm_structs.make_dcgm_version(c_dcgmCacheManagerSave_v1, 1)
-dcgmCacheManagerLoad_version1 = dcgm_structs.make_dcgm_version(c_dcgmCacheManagerLoad_v1, 1)
+
+dcgmCacheManagerSave_version1 = dcgm_structs.make_dcgm_version(
+    c_dcgmCacheManagerSave_v1, 1)
+dcgmCacheManagerLoad_version1 = dcgm_structs.make_dcgm_version(
+    c_dcgmCacheManagerLoad_v1, 1)
+
 
 class c_dcgmInjectFieldValue_v1(dcgm_structs._PrintableStructure):
     _fields_ = [
@@ -88,20 +114,22 @@ class c_dcgmInjectFieldValue_v1(dcgm_structs._PrintableStructure):
         ('value', dcgm_structs.c_dcgmFieldValue_v1_value)
     ]
 
-# This structure is used to represent a field value to be injected into the cache manager
-dcgmInjectFieldValue_version1  = dcgm_structs.make_dcgm_version(c_dcgmInjectFieldValue_v1, 1)
 
-#Cache Manager Info flags
+# This structure is used to represent a field value to be injected into the cache manager
+dcgmInjectFieldValue_version1 = dcgm_structs.make_dcgm_version(
+    c_dcgmInjectFieldValue_v1, 1)
+
+# Cache Manager Info flags
 DCGM_CMI_F_WATCHED = 0x00000001
 
-#Watcher types
-DcgmWatcherTypeClient           = 0 # Embedded or remote client via external APIs
-DcgmWatcherTypeHostEngine       = 1 # Watcher is NvcmHostEngineHandler
-DcgmWatcherTypeHealthWatch      = 2 # Watcher is NvcmHealthWatch
-DcgmWatcherTypePolicyManager    = 3 # Watcher is NvcmPolicyMgr
-DcgmWatcherTypeCacheManager     = 4 # Watcher is DcgmCacheManager
-DcgmWatcherTypeConfigManager    = 5 # Watcher is NvcmConfigMgr
-DcgmWatcherTypeNvSwitchManager  = 6 # Watcher is NvSwitchManager
+# Watcher types
+DcgmWatcherTypeClient = 0  # Embedded or remote client via external APIs
+DcgmWatcherTypeHostEngine = 1  # Watcher is NvcmHostEngineHandler
+DcgmWatcherTypeHealthWatch = 2  # Watcher is NvcmHealthWatch
+DcgmWatcherTypePolicyManager = 3  # Watcher is NvcmPolicyMgr
+DcgmWatcherTypeCacheManager = 4  # Watcher is DcgmCacheManager
+DcgmWatcherTypeConfigManager = 5  # Watcher is NvcmConfigMgr
+DcgmWatcherTypeNvSwitchManager = 6  # Watcher is NvSwitchManager
 
 
 # ID of a remote client connection within the host engine
@@ -111,6 +139,7 @@ dcgm_connection_id_t = c_uint32
 DCGM_CONNECTION_ID_NONE = 0
 
 DCGM_CM_FIELD_INFO_NUM_WATCHERS = 10
+
 
 class c_dcgm_cm_field_info_watcher_t(dcgm_structs._PrintableStructure):
     _fields_ = [
@@ -140,34 +169,62 @@ class dcgmCacheManagerFieldInfo_v4(dcgm_structs._PrintableStructure):
         ('watchers', c_dcgm_cm_field_info_watcher_t * DCGM_CM_FIELD_INFO_NUM_WATCHERS)
     ]
 
-dcgmCacheManagerFieldInfo_version4 = dcgm_structs.make_dcgm_version(dcgmCacheManagerFieldInfo_v4, 4)
+
+dcgmCacheManagerFieldInfo_version4 = dcgm_structs.make_dcgm_version(
+    dcgmCacheManagerFieldInfo_v4, 4)
+
 
 class c_dcgmCreateFakeEntities_v2(dcgm_structs._PrintableStructure):
     _fields_ = [
         ('version', c_uint32),
         ('numToCreate', c_uint32),
-        ('entityList', dcgm_structs.DCGM_MAX_HIERARCHY_INFO * dcgm_structs.c_dcgmMigHierarchyInfo_t),
+        ('entityList', dcgm_structs.DCGM_MAX_HIERARCHY_INFO *
+         dcgm_structs.c_dcgmMigHierarchyInfo_t),
     ]
 
-dcgmCreateFakeEntities_version2 = dcgm_structs.make_dcgm_version(c_dcgmCreateFakeEntities_v2, 2)
+
+dcgmCreateFakeEntities_version2 = dcgm_structs.make_dcgm_version(
+    c_dcgmCreateFakeEntities_v2, 2)
+
 
 class c_dcgmSetNvLinkLinkState_v1(dcgm_structs._PrintableStructure):
     _fields_ = [
-        ('version', c_uint32),       # Version. Should be dcgmSetNvLinkLinkState_version1 
-        ('entityGroupId', c_uint32), # Entity group of the entity to set the link state of
+        # Version. Should be dcgmSetNvLinkLinkState_version1
+        ('version', c_uint32),
+        # Entity group of the entity to set the link state of
+        ('entityGroupId', c_uint32),
         ('entityId', c_uint32),      # ID of the entity to set the link state of
-        ('linkId', c_uint32),        # Link (or portId) of the link to set the state of
+        # Link (or portId) of the link to set the state of
+        ('linkId', c_uint32),
         ('linkState', c_uint32),     # State to set the link to
         ('unused', c_uint32)         # Not used for now. Set to 0
     ]
 
-dcgmSetNvLinkLinkState_version1 = dcgm_structs.make_dcgm_version(c_dcgmSetNvLinkLinkState_v1, 1)
+dcgmSetNvLinkLinkState_version1 = dcgm_structs.make_dcgm_version(
+    c_dcgmSetNvLinkLinkState_v1, 1)
 
-DcgmEntityStatusUnknown      = 0  # Entity has not been referenced yet
-DcgmEntityStatusOk           = 1  # Entity is known and OK
-DcgmEntityStatusUnsupported  = 2  # Entity is unsupported by DCGM
+DcgmEntityStatusUnknown = 0  # Entity has not been referenced yet
+DcgmEntityStatusOk = 1  # Entity is known and OK
+DcgmEntityStatusUnsupported = 2  # Entity is unsupported by DCGM
 DcgmEntityStatusInaccessible = 3  # Entity is inaccessible, usually due to cgroups
-DcgmEntityStatusLost         = 4  # Entity has been lost. Usually set from NVML returning NVML_ERROR_GPU_IS_LOST
-DcgmEntityStatusFake         = 5  # Entity is a fake, injection-only entity for testing
-DcgmEntityStatusDisabled     = 6  # Don't collect values from this GPU
-DcgmEntityStatusDetached     = 7  # Entity is detached, not good for any uses
+# Entity has been lost. Usually set from NVML returning NVML_ERROR_GPU_IS_LOST
+DcgmEntityStatusLost = 4
+DcgmEntityStatusFake = 5  # Entity is a fake, injection-only entity for testing
+DcgmEntityStatusDisabled = 6  # Don't collect values from this GPU
+DcgmEntityStatusDetached = 7  # Entity is detached, not good for any uses
+
+# Connection type
+DcgmConnectionTypeDomainSocket = 0
+DcgmConnectionTypeTcp = 1
+DcgmConnectionTypeVsock = 2
+
+
+class c_dcgmMsgModulesReloadable_v1(_PrintableStructure):
+    _fields_ = [
+        ('moduleMask', c_uint),
+        ('cmdRet', c_uint),
+    ]
+
+
+dcgmMsgModulesReloadable_version1 = dcgm_structs.make_dcgm_version(
+    c_dcgmMsgModulesReloadable_v1, 1)

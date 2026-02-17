@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ namespace {
 nvmlPciInfoExt_t *nvmlPciInfoExt_tDeserializer(const YAML::Node &node);
 nvmlPciInfo_t *nvmlPciInfo_tDeserializer(const YAML::Node &node);
 nvmlEccErrorCounts_t *nvmlEccErrorCounts_tDeserializer(const YAML::Node &node);
+nvmlUnrepairableMemoryStatus_t *nvmlUnrepairableMemoryStatus_tDeserializer(const YAML::Node &node);
 nvmlUtilization_t *nvmlUtilization_tDeserializer(const YAML::Node &node);
 nvmlMemory_t *nvmlMemory_tDeserializer(const YAML::Node &node);
 nvmlMemory_v2_t *nvmlMemory_v2_tDeserializer(const YAML::Node &node);
@@ -359,6 +360,36 @@ nvmlEccErrorCounts_t *nvmlEccErrorCounts_tDeserializer(const YAML::Node &node)
         NVML_LOG_ERR("missing registerFile for struct nvmlEccErrorCounts_t");
     }
     return eccErrorCounts;
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlUnrepairableMemoryStatus_t *nvmlUnrepairableMemoryStatus_tDeserializer(const YAML::Node &node)
+{
+    auto *unrepairableMemoryStatus = reinterpret_cast<nvmlUnrepairableMemoryStatus_t *>(malloc(sizeof(nvmlUnrepairableMemoryStatus_t)));
+    if (unrepairableMemoryStatus == nullptr)
+    {
+        return nullptr;
+    }
+    memset(unrepairableMemoryStatus, 0, sizeof(*unrepairableMemoryStatus));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        unrepairableMemoryStatus->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlUnrepairableMemoryStatus_t");
+    }
+    if (node["bUnrepairableMemory"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        unrepairableMemoryStatus->bUnrepairableMemory = node["bUnrepairableMemory"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing bUnrepairableMemory for struct nvmlUnrepairableMemoryStatus_t");
+    }
+    return unrepairableMemoryStatus;
 }
 
 // The following snippet is generated from write_deserializer_definition
@@ -5797,6 +5828,26 @@ std::optional<NvmlFuncReturn> EccErrorCountsParser(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> UnrepairableMemoryStatusParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *unrepairableMemoryStatus = nvmlUnrepairableMemoryStatus_tDeserializer(node["ReturnValue"]);
+    if (unrepairableMemoryStatus == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {unrepairableMemoryStatus, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
 std::optional<NvmlFuncReturn> UtilizationParser(const YAML::Node &node)
 {
     if (!node || !node["FunctionReturn"])
@@ -8364,6 +8415,8 @@ NvmlReturnDeserializer::NvmlReturnDeserializer()
         {"PowerSource", BasicTypeParser<int, nvmlPowerSource_t>},
         // The following snippet is generated from try_to_write_device_handler
         {"MemoryBusWidth", BasicTypeParser<unsigned int, unsigned int>},
+        // The following snippet is generated from try_to_write_device_handler
+        {"UnrepairableMemoryFlag", UnrepairableMemoryStatusParser},
         // The following snippet is generated from try_to_write_device_handler
         {"PcieLinkMaxSpeed", BasicTypeParser<unsigned int, unsigned int>},
         // The following snippet is generated from try_to_write_device_handler

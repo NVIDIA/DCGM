@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import logger
 g_latestDiagResponseVer = dcgm_structs.dcgmDiagResponse_version12
 g_latestRunDiagVer = dcgm_structs.dcgmRunDiag_version10
 
+
 class DcgmDiag:
 
     # Maps version codes to simple version values for range comparisons
@@ -36,7 +37,8 @@ class DcgmDiag:
                  timeout=0):
         # Make sure version is valid
         if version not in DcgmDiag._versionMap:
-            raise ValueError("'%s' is not a valid version for dcgmRunDiag." % version)
+            raise ValueError(
+                "'%s' is not a valid version for dcgmRunDiag." % version)
         self.version = version
 
         if self.version == dcgm_structs.dcgmRunDiag_version10:
@@ -48,7 +50,8 @@ class DcgmDiag:
         elif self.version == dcgm_structs.dcgmRunDiag_version7:
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
         else:
-            logger.info("Unexpected runDiag version " + self.version + " using RunDiag_t")
+            logger.info("Unexpected runDiag version " +
+                        self.version + " using RunDiag_t")
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_t()
 
         self.runDiagInfo.flags = 0
@@ -73,7 +76,8 @@ class DcgmDiag:
         else:
             # Make sure no number other that 1-4 were submitted
             if testNamesStr.isdigit():
-                raise ValueError("'%s' is not a valid test name." % testNamesStr)
+                raise ValueError(
+                    "'%s' is not a valid test name." % testNamesStr)
 
             # Copy to the testNames portion of the object
             names = testNamesStr.split(',')
@@ -128,7 +132,7 @@ class DcgmDiag:
 
         if logger.nvvs_trace_log_filename is not None:
             self.SetDebugLogFile(logger.nvvs_trace_log_filename)
-            self.SetDebugLevel(5) # Collect logs at highest level for nvvs.
+            self.SetDebugLevel(5)  # Collect logs at highest level for nvvs.
 
     def SetVerbose(self, val):
         if val == True:
@@ -185,20 +189,22 @@ class DcgmDiag:
 
     def SetClocksEventMask(self, value):
         if DcgmDiag._versionMap[self.version] < 3:
-            raise ValueError("Clocks event mask requires minimum version 3 for dcgmRunDiag.")
+            raise ValueError(
+                "Clocks event mask requires minimum version 3 for dcgmRunDiag.")
         if isinstance(value, str) and len(value) >= dcgm_structs.DCGM_CLOCKS_EVENT_MASK_LEN:
-            raise ValueError("Clocks event mask value '%s' exceeds max length %d." 
+            raise ValueError("Clocks event mask value '%s' exceeds max length %d."
                              % (value, dcgm_structs.DCGM_CLOCKS_EVENT_MASK_LEN - 1))
 
         self.runDiagInfo.clocksEventMask = str(value)
 
     # Deprecated: Use SetClocksEventMask instead
     def SetThrottleMask(self, value):
-            self.SetClocksEventMask(value)
+        self.SetClocksEventMask(value)
 
     def SetFailEarly(self, enable=True, checkInterval=5):
         if DcgmDiag._versionMap[self.version] < 5:
-            raise ValueError("Fail early requires minimum version 5 for dcgmRunDiag.")
+            raise ValueError(
+                "Fail early requires minimum version 5 for dcgmRunDiag.")
         if not isinstance(checkInterval, int):
             raise ValueError("Invalid checkInterval value: %s" % checkInterval)
 
@@ -214,7 +220,7 @@ class DcgmDiag:
     def SetStatsPath(self, statsPath):
         if len(statsPath) >= dcgm_structs.DCGM_PATH_LEN:
             err = "DcgmDiag cannot set statsPath '%s' because it exceeds max length %d." % \
-                   (statsPath, dcgm_structs.DCGM_PATH_LEN)
+                (statsPath, dcgm_structs.DCGM_PATH_LEN)
             raise ValueError(err)
 
         self.runDiagInfo.statsPath = statsPath
@@ -229,14 +235,15 @@ class DcgmDiag:
 
     def SetDebugLogFile(self, logFileName):
         if len(logFileName) >= dcgm_structs.DCGM_PATH_LEN:
-            raise ValueError("Cannot set debug file to '%s' because it exceeds max length %d."\
-                % (logFileName, dcgm_structs.DCGM_PATH_LEN))
+            raise ValueError("Cannot set debug file to '%s' because it exceeds max length %d."
+                             % (logFileName, dcgm_structs.DCGM_PATH_LEN))
 
         self.runDiagInfo.debugLogFile = logFileName
 
     def SetDebugLevel(self, debugLevel):
         if debugLevel < 0 or debugLevel > 5:
-            raise ValueError("Cannot set debug level to %d. Debug Level must be a value from 0-5 inclusive.")
+            raise ValueError(
+                "Cannot set debug level to %d. Debug Level must be a value from 0-5 inclusive.")
 
         self.runDiagInfo.debugLevel = debugLevel
 
@@ -249,13 +256,16 @@ class DcgmDiag:
 
 ################# General helpers #################
 
+
 def find_test_in_response(response, testName):
-    assert hasattr(response, 'tests') and hasattr(response, 'results'), "Response does not have tests or results"
+    assert hasattr(response, 'tests') and hasattr(
+        response, 'results'), "Response does not have tests or results"
     for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if test.name == testName:
             return test
 
     return None
+
 
 def retrieve_diag_failure_message(response, entityPair, testName):
     test = find_test_in_response(response, testName)
@@ -266,6 +276,7 @@ def retrieve_diag_failure_message(response, entityPair, testName):
             return response.errors[index].msg
 
     return None
+
 
 def check_diag_result_fail(response, entityPair, testName):
     # Returns `True` when there is a FAIL result associated with the specified `entityPair` and `testName`, `False` otherwise.
@@ -280,12 +291,13 @@ def check_diag_result_fail(response, entityPair, testName):
         return True
     return False
 
+
 def check_diag_result_pass(response, entityPair, testName):
     # Returns `True` when there is a PASS result associated with the specified `entityPair` and `testName`, `False` otherwise.
     test = find_test_in_response(response, testName)
     assert test, "Expected pass result for test %s but none was found" % testName
     if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_PASS and cur.entity == entityPair,
-               map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
+                   map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
         return True
 
     msg = retrieve_diag_failure_message(response, entityPair, testName)
@@ -295,13 +307,16 @@ def check_diag_result_pass(response, entityPair, testName):
 
     return False
 
+
 def check_diag_result_non_passing(response, entityPair, testName):
     # Returns `False` if there are one or more passing results for `entityPair` and `testName`, `True` otherwise.
     return not check_diag_result_pass(response, entityPair, testName)
 
+
 def check_diag_result_non_failing(response, entityPair, testName):
-# Returns `False` if there are one or more failing results for `entityPair` and `testName`, `True` otherwise.
+    # Returns `False` if there are one or more failing results for `entityPair` and `testName`, `True` otherwise.
     return not check_diag_result_fail(response, entityPair, testName)
+
 
 def check_diag_result_non_running(response, entityPair, testName):
     # Returns `False` if there are one or more tests running for `entityPair` and `testName`, `True` otherwise.
@@ -311,26 +326,31 @@ def check_diag_result_non_running(response, entityPair, testName):
             break
     if test.name == testName:
         # The test was found, so any result should be skipped or not run.
-        notRunResults = {dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN, dcgm_structs.DCGM_DIAG_RESULT_SKIP}
+        notRunResults = {dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN,
+                         dcgm_structs.DCGM_DIAG_RESULT_SKIP}
         if test.result in notRunResults:
             return True
         if next(filter(lambda cur: cur.result not in notRunResults and cur.entity == entityPair,
-                   map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
+                       map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
             return False
     return True
+
 
 def GetEntityCount(response, entityGroupId):
     # Returns the count of the specified entity group associated with the response.
     if hasattr(response, 'entities'):
-        return sum(1 for entity in response.entities[:min(response.numEntities, dcgm_structs.DCGM_DIAG_RESPONSE_ENTITIES_MAX)] \
+        return sum(1 for entity in response.entities[:min(response.numEntities, dcgm_structs.DCGM_DIAG_RESPONSE_ENTITIES_MAX)]
                    if entity.entity.entityGroupId == entityGroupId)
     elif hasattr(response, 'gpuCount') and entityGroupId == dcgm_fields.DCGM_FE_GPU:
         return response.gpuCount
     else:
-        raise NotImplementedError("Entity type {} not handled for version {}.".format(entityGroupId, response.version))
+        raise NotImplementedError("Entity type {} not handled for version {}.".format(
+            entityGroupId, response.version))
+
 
 def GetGpuCount(response):
     return GetEntityCount(response, dcgm_fields.DCGM_FE_GPU)
+
 
 def ResultToString(result):
     # Return a string that reflects the specified `result`.
@@ -341,20 +361,22 @@ def ResultToString(result):
         return "Pass"
     elif result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
         return "Fail"
-    elif result ==  dcgm_structs.DCGM_DIAG_RESULT_WARN:
+    elif result == dcgm_structs.DCGM_DIAG_RESULT_WARN:
         return "Warn"
-    elif result ==  dcgm_structs.DCGM_DIAG_RESULT_SKIP:
+    elif result == dcgm_structs.DCGM_DIAG_RESULT_SKIP:
         return "Skip"
     elif result == dcgm_structs.DCGM_DIAG_RESULT_NOT_RUN:
         return "Not Run"
     else:
         raise ValueError("Invalid result {} specified" % result)
 
+
 def DumpTestResults(logger, response, testNames=[]):
     # Utility for debugging. Dump test results from the response, optionally for specified tests.
     for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if not testNames or test.name in testNames:
-            logger.info("Results for {}, overall: {}".format(test.name, ResultToString(test.result)))
+            logger.info("Results for {}, overall: {}".format(
+                test.name, ResultToString(test.result)))
             for result in map(lambda resIdx: response.results[resIdx], test.resultIndices[:test.numResults]):
                 logger.info("   testId: {} ent grp:{}, id:{}, result: {}".format(result.testId, result.entity.entityGroupId,
                                                                                  result.entity.entityId,

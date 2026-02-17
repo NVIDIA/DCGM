@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,17 +16,20 @@ import os
 import utils
 import test_utils
 
+
 class RunCudaAssert(app_runner.AppRunner):
     """ Class to assert a Cuda Kernel and generate a XID 43 Error """
-    
+
     paths = {
-            "Linux_64bit": "./apps/cuda_ctx_create/cuda_assert_64bit",
-            "Linux_aarch64": "./apps/cuda_ctx_create/cuda_assert_aarch64",
-            }
+        "Linux_64bit": "./apps/cuda_ctx_create/cuda_assert_64bit",
+        "Linux_aarch64": "./apps/cuda_ctx_create/cuda_assert_aarch64",
+    }
 
     def __init__(self, args, env=None):
-        path = os.path.join(utils.script_dir, RunCudaAssert.paths[utils.platform_identifier])
-        super(RunCudaAssert, self).__init__(path, args, cwd=os.path.dirname(path), env=env)
+        path = os.path.join(
+            utils.script_dir, RunCudaAssert.paths[utils.platform_identifier])
+        super(RunCudaAssert, self).__init__(
+            path, args, cwd=os.path.dirname(path), env=env)
 
     def start(self, timeout=app_runner.default_timeout):
         """
@@ -38,7 +41,8 @@ class RunCudaAssert(app_runner.AppRunner):
 
         with test_utils.assert_raises(EOFError):
             # if matching line is not found then EOFError exception is risen
-            self.stdout_readtillmatch(lambda x: x == "Assertion `false` failed")
+            self.stdout_readtillmatch(
+                lambda x: x == "Assertion `false` failed")
 
     def __str__(self):
         return "RunCudaAssert on device " + super(RunCudaAssert, self).__str__()

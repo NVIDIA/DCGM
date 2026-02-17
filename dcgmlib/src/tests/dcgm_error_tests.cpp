@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -636,6 +636,9 @@ TEST_CASE("dcgm_errors: check full message")
     CHECK(d.GetMessage() == expected_msg);
     // count, gpu id
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NAN_VALUE, d, 0, 0); // "Found %ld NaN-value memory elements on GPU %u"
+    WARN(d.GetMessage());
+    CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_BINARY_PERMISSIONS, d); // "" /* See message inplace */
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
 }

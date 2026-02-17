@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,6 +79,28 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetGpuIds(dcgm_module_command_header_
 
     memcpy(header, &cgg, sizeof(cgg));
 
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCoreCommunication::ProcessGetGpuStatus(dcgm_module_command_header_t *header)
+{
+    dcgmCoreGetGpuStatus_v1 cgg;
+
+    if (header == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgmReturn_t ret = DcgmModule::CheckVersion(header, dcgmCoreGetGpuStatus_version1);
+
+    if (ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+
+    memcpy(&cgg, header, sizeof(cgg));
+    cgg.status = m_cacheManagerPtr->GetGpuStatus(cgg.gpuId);
+    memcpy(header, &cgg, sizeof(cgg));
     return DCGM_ST_OK;
 }
 
@@ -401,7 +423,12 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGpuIdToNvmlIndex(dcgm_module_command_
 
     memcpy(&br, header, sizeof(br));
 
-    br.response.uintAnswer = m_cacheManagerPtr->GpuIdToNvmlIndex(br.request.entityId);
+    auto nvmlIdxOpt = m_cacheManagerPtr->GpuIdToNvmlIndex(br.request.entityId);
+    if (!nvmlIdxOpt)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    br.response.uintAnswer = *nvmlIdxOpt;
 
     memcpy(header, &br, sizeof(br));
 
@@ -638,7 +665,13 @@ dcgmReturn_t DcgmCoreCommunication::ProcessNvmlIndexToGpuId(dcgm_module_command_
 
     memcpy(&bq, header, sizeof(bq));
 
-    bq.response.uintAnswer = m_cacheManagerPtr->NvmlIndexToGpuId(bq.request.entityId);
+    auto gpuIdOpt = m_cacheManagerPtr->NvmlIndexToGpuId(bq.request.entityId);
+    if (!gpuIdOpt)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    bq.response.uintAnswer = *gpuIdOpt;
+
     memcpy(header, &bq, sizeof(bq));
 
     return DCGM_ST_OK;
@@ -712,7 +745,8 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetGroupEntities(dcgm_module_command_
     memcpy(gge.get(), header, sizeof(*gge));
 
     std::vector<dcgmGroupEntityPair_t> entities;
-    gge->response.ret = m_groupManagerPtr->GetGroupEntities(gge->request.groupId, entities);
+    gge->response.ret = m_groupManagerPtr->GetGroupEntities(
+        gge->request.groupId, gge->request.activeOnly ? DcgmGroupOption::ActiveOnly : DcgmGroupOption::All, entities);
 
     if (entities.size() > DCGM_GROUP_MAX_ENTITIES_V2)
     {
@@ -781,7 +815,11 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetGroupGpuIds(dcgm_module_command_he
     memcpy(&ggg, header, sizeof(ggg));
 
     std::vector<unsigned int> gpuIds;
-    ggg.response.ret      = m_groupManagerPtr->GetGroupGpuIds(ggg.request.connectionId, ggg.request.groupId, gpuIds);
+    ggg.response.ret
+        = m_groupManagerPtr->GetGroupGpuIds(ggg.request.connectionId,
+                                            ggg.request.groupId,
+                                            ggg.request.activeOnly ? DcgmGroupOption::ActiveOnly : DcgmGroupOption::All,
+                                            gpuIds);
     ggg.response.gpuCount = gpuIds.size();
     for (size_t i = 0; i < gpuIds.size(); i++)
     {
@@ -1442,6 +1480,12 @@ dcgmReturn_t DcgmCoreCommunication::ProcessRequestInCore(dcgm_module_command_hea
         case DcgmCoreReqIdCMGetGpuIds:
         {
             ret = ProcessGetGpuIds(header);
+            break;
+        }
+
+        case DcgmCoreReqIdGetGpuStatus:
+        {
+            ret = ProcessGetGpuStatus(header);
             break;
         }
 

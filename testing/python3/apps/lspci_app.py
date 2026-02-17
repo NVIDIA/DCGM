@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,23 +20,24 @@ import dcgm_agent_internal
 import test_utils
 import utils
 
+
 class LspciApp(app_runner.AppRunner):
     """
     Run lspci
     """
-    
+
     paths = {
-            "Linux_32bit": "./lspci/Linux-x86/",
-            "Linux_64bit": "./lspci/Linux-x86_64/",
-            "Linux_aarch64": "./lspci/Linux-aarch64/",
-            }
-    
+        "Linux_32bit": "./lspci/Linux-x86/",
+        "Linux_64bit": "./lspci/Linux-x86_64/",
+        "Linux_aarch64": "./lspci/Linux-aarch64/",
+    }
+
     def __init__(self, busId, flags):
-        path = os.path.join(os.path.dirname(os.path.realpath(__file__)), LspciApp.paths[utils.platform_identifier])
+        path = os.path.join(os.path.dirname(os.path.realpath(
+            __file__)), LspciApp.paths[utils.platform_identifier])
         exepath = path + "/sbin/lspci"
         self.processes = None
         args = ["-s", busId, "-i", path + "/share/pci.ids"]
         for flag in flags:
             args.append(flag)
         super(LspciApp, self).__init__(exepath, args)
-

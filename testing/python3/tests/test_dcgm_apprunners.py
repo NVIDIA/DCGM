@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import dcgm_fields
 import apps
 import time
 
+
 @test_utils.run_only_on_linux()
 @test_utils.run_only_on_bare_metal()
 def test_nv_hostengine_app():
@@ -32,11 +33,11 @@ def test_nv_hostengine_app():
 
     # Start nv-hostengine and run for 15 seconds
     nvhost_engine = apps.NvHostEngineApp()
-    nvhost_engine.start(timeout=15)  
+    nvhost_engine.start(timeout=15)
 
     # Getting nv-hostenging process id
     pid = nvhost_engine.getpid()
-        
+
     # Cleanning up
     time.sleep(5)
     nvhost_engine.terminate()
@@ -56,17 +57,17 @@ def test_dcgmi_app():
     # Start dcgmi and start collecting data from nv-hostengine
     dcgmi_app = apps.DcgmiApp(["127.0.0.1", "0"])
     dcgmi_app.start()
-        
+
     # Getting nv-hostenging process id
     pid = dcgmi_app.getpid()
-
 
     # Cleanning up dcgmi run
     time.sleep(3)
     dcgmi_app.terminate()
-    dcgmi_app.validate()   
+    dcgmi_app.validate()
 
     logger.debug("dcgmi PID was %d" % pid)
+
 
 @test_utils.run_only_on_linux()
 @test_utils.run_only_on_bare_metal()
@@ -78,10 +79,10 @@ def test_dcgm_unittests_app(*args, **kwargs):
     Runs the testdcgmunittests app and verifies if there are any failing tests
     """
 
-    # Run testsdcgmunittests 
+    # Run testsdcgmunittests
     unittest_app = apps.TestDcgmUnittestsApp()
     unittest_app.run(1000)
-        
+
     # Getting testsdcgmunittests process id
     pid = unittest_app.getpid()
     logger.debug("The PID of testdcgmunittests is %d" % pid)
@@ -90,4 +91,3 @@ def test_dcgm_unittests_app(*args, **kwargs):
     unittest_app.wait()
     unittest_app.validate()
     assert unittest_app._retvalue == 0, "Unittest failed with return code %s" % unittest_app._retvalue
-

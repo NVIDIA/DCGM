@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 #include "DcgmHealthWatch.h"
+#include "DcgmImexManager.h"
+#include "DcgmMutex.h"
+#include "dcgm_fields.h"
 
 #include <DcgmLogging.h>
 #include <dcgm_errors.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs.h>
+#include <dcgm_structs_internal.h>
 #include <dcgm_test_apis.h>
 
 #include <timelib.h>
 
-#include <sstream>
-#include <stdexcept>
+#include <expected>
+#include <optional>
 
 const char *EntityToString(dcgm_field_entity_group_t entityGroupId)
 {
@@ -73,6 +79,28 @@ const char *EntityToString(dcgm_field_entity_group_t entityGroupId)
                       entityGroupId);                                                                     \
             return ret;                                                                                   \
         }                                                                                                 \
+    } while (0)
+
+#define ADD_GLOBAL_WATCH(fieldId)                                                      \
+    do                                                                                 \
+    {                                                                                  \
+        bool updateOnFirstWatch = false; /* callers call UpdateFields() right after */ \
+        bool wereFirstWatcher   = false;                                               \
+        ret                     = mpCoreProxy.AddFieldWatch(DCGM_FE_NONE,              \
+                                        0,                         \
+                                        fieldId,                   \
+                                        updateInterval,            \
+                                        maxKeepAge,                \
+                                        0,                         \
+                                        watcher,                   \
+                                        false,                     \
+                                        updateOnFirstWatch,        \
+                                        wereFirstWatcher);         \
+        if (DCGM_ST_OK != ret)                                                         \
+        {                                                                              \
+            log_error("Failed to set global watch for field {}", fieldId);             \
+            return ret;                                                                \
+        }                                                                              \
     } while (0)
 
 /*****************************************************************************/
@@ -172,6 +200,29 @@ dcgmReturn_t DcgmHealthWatch::SetNvSwitchWatches(std::vector<unsigned int> &grou
 }
 
 /*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::AttachGpus()
+{
+    unsigned int allGpuGroupId = DCGM_GROUP_ALL_GPUS;
+    if (auto ret = mpCoreProxy.VerifyAndUpdateGroupId(&allGpuGroupId); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+    dcgm_mutex_lock(m_mutex);
+    if (!mGroupWatchState.contains(allGpuGroupId))
+    {
+        dcgm_mutex_unlock(m_mutex);
+        return DCGM_ST_OK;
+    }
+    auto healthWatchState = mGroupWatchState[allGpuGroupId];
+    dcgm_mutex_unlock(m_mutex);
+    return SetWatches(allGpuGroupId,
+                      healthWatchState.systems,
+                      healthWatchState.connectionId,
+                      healthWatchState.updateInterval,
+                      healthWatchState.maxKeepAge);
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                                          dcgmHealthSystems_t systems,
                                          dcgm_connection_id_t connectionId,
@@ -185,7 +236,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
     DcgmWatcher watcher(DcgmWatcherTypeHealthWatch, connectionId);
     std::vector<dcgmGroupEntityPair_t> entities;
 
-    ret = mpCoreProxy.GetGroupEntities(groupId, entities);
+    ret = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
     if (ret != DCGM_ST_OK)
     {
         log_error("Got st {} from GetGroupEntities()", ret);
@@ -193,7 +244,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
     }
 
     dcgm_mutex_lock(m_mutex);
-    mGroupWatchState[groupId] = systems;
+    mGroupWatchState[groupId] = HealthWatchState { systems, connectionId, updateInterval, maxKeepAge };
     dcgm_mutex_unlock(m_mutex);
 
     /* Capture the entities that are GPUs as a separate list */
@@ -252,6 +303,14 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                             break;
                         case DCGM_HEALTH_WATCH_NVLINK:
                             tmpRet = SetNVLink(entities[i].entityGroupId,
+                                               entities[i].entityId,
+                                               (systems & bit) ? true : false,
+                                               watcher,
+                                               updateInterval,
+                                               maxKeepAge);
+                            break;
+                        case DCGM_HEALTH_WATCH_DRIVER:
+                            tmpRet = SetDriver(entities[i].entityGroupId,
                                                entities[i].entityId,
                                                (systems & bit) ? true : false,
                                                watcher,
@@ -328,6 +387,14 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
         }
     }
 
+    // Set global (system-wide) health checks once per group, not per entity
+    tmpRet = SetGlobalChecks(systems, watcher, updateInterval, maxKeepAge);
+    if (tmpRet != DCGM_ST_OK)
+    {
+        log_error("Error {} from SetGlobalChecks", tmpRet);
+        ret = tmpRet;
+    }
+
     if (groupSwitchIds.size() > 0)
     {
         ret = SetNvSwitchWatches(groupSwitchIds, systems, watcher, updateInterval, maxKeepAge);
@@ -351,7 +418,7 @@ dcgmReturn_t DcgmHealthWatch::GetWatches(unsigned int groupId, dcgmHealthSystems
     groupWatchTable_t::iterator groupWatchIter;
     std::vector<dcgmGroupEntityPair_t> entities;
 
-    ret = mpCoreProxy.GetGroupEntities(groupId, entities);
+    ret = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
     if (ret != DCGM_ST_OK)
     {
         log_error("Got st {} from GetGroupEntities()", ret);
@@ -366,7 +433,7 @@ dcgmReturn_t DcgmHealthWatch::GetWatches(unsigned int groupId, dcgmHealthSystems
     }
     else
     {
-        *systems = groupWatchIter->second;
+        *systems = groupWatchIter->second.systems;
     }
 
     dcgm_mutex_unlock(m_mutex);
@@ -387,6 +454,12 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatchesForGpu(unsigned int gpuId,
     {
         DCGM_LOG_ERROR << "Bad gpuId: " << gpuId;
         return DCGM_ST_BADPARAM;
+    }
+
+    auto const gpuStatus = mpCoreProxy.GetGpuStatus(gpuId);
+    if (gpuStatus == DcgmEntityStatusDetached)
+    {
+        return DCGM_ST_GPU_IS_LOST;
     }
 
     MonitorDevastatingXids(DCGM_FE_GPU, gpuId, response);
@@ -422,6 +495,10 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatchesForGpu(unsigned int gpuId,
                 if (bit & healthSystemsMask)
                     tmpRet = MonitorNVLink(DCGM_FE_GPU, gpuId, startTime, endTime, response);
                 break;
+            case DCGM_HEALTH_WATCH_DRIVER:
+                if (bit & healthSystemsMask)
+                    tmpRet = MonitorGpuRecoveryAction(DCGM_FE_GPU, gpuId, response);
+                break;
             default: // ignore everything else for now, other bugs
                 break;
         }
@@ -456,7 +533,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
     if (DCGM_INT64_IS_BLANK(endTime))
         endTime = 0;
 
-    ret = mpCoreProxy.GetGroupEntities(groupId, entities);
+    ret = mpCoreProxy.GetGroupEntities(groupId, EntityListOption::ActiveOnly, entities);
     if (ret != DCGM_ST_OK)
     {
         log_error("Got st {} from GetGroupEntities()", ret);
@@ -467,7 +544,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
     groupWatchTable_t::iterator groupWatchIter = mGroupWatchState.find(groupId);
     if (groupWatchIter != mGroupWatchState.end())
     {
-        healthSystemsMask = groupWatchIter->second;
+        healthSystemsMask = groupWatchIter->second.systems;
         log_debug("Found health systems mask {:X} for groupId {}", (unsigned int)healthSystemsMask, groupId);
     }
     else
@@ -478,6 +555,14 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
 
     if (healthSystemsMask == 0)
         return DCGM_ST_OK; /* This is the same as walking over the loops below and doing nothing */
+
+    // Perform global (system-wide) health checks before per-entity checks
+    dcgmReturn_t globalRet = MonitorGlobalHealthChecks(healthSystemsMask, response);
+    if (globalRet != DCGM_ST_OK)
+    {
+        log_debug("Global health checks returned error {}", (int)globalRet);
+        ret = globalRet;
+    }
 
     for (size_t entityIndex = 0; entityIndex < entities.size(); entityIndex++)
     {
@@ -536,6 +621,10 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
                     if (bit & healthSystemsMask && FitsGpuHardwareCheck(entityGroupId))
                         ret = MonitorNVLink(entityGroupId, entityId, startTime, endTime, response);
                     break;
+                case DCGM_HEALTH_WATCH_DRIVER:
+                    if (bit & healthSystemsMask && FitsGpuHardwareCheck(entityGroupId))
+                        ret = MonitorGpuRecoveryAction(entityGroupId, entityId, response);
+                    break;
                 case DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL:
                     if (bit & healthSystemsMask && entityGroupId == DCGM_FE_SWITCH)
                         ret = MonitorNvSwitchErrorCounts(false, entityGroupId, entityId, startTime, endTime, response);
@@ -550,6 +639,25 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
                     log_debug("Unhandled health bit {}", bit);
                     break;
             }
+        }
+    }
+
+    return ret;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorGlobalHealthChecks(dcgmHealthSystems_t healthSystemsMask,
+                                                        DcgmHealthResponse &response)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
+
+    if (healthSystemsMask & DCGM_HEALTH_WATCH_NVLINK)
+    {
+        dcgmReturn_t tmpRet = MonitorImex(DCGM_FE_NONE, 0, response);
+        if (tmpRet != DCGM_ST_OK)
+        {
+            log_error("Got error {} from MonitorImex (global check)", (int)tmpRet);
+            ret = tmpRet;
         }
     }
 
@@ -655,7 +763,6 @@ dcgmReturn_t DcgmHealthWatch::SetPcie(dcgm_field_entity_group_t entityGroupId,
         return ret;
 
     ADD_WATCH(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
-    ADD_WATCH(DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS);
     ADD_WATCH(DCGM_FI_DEV_PCIE_LINK_GEN);
     ADD_WATCH(DCGM_FI_DEV_PCIE_LINK_WIDTH);
 
@@ -784,7 +891,67 @@ dcgmReturn_t DcgmHealthWatch::SetMem(dcgm_field_entity_group_t entityGroupId,
         return ret;
     }
 
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
+    if (DCGM_ST_OK != ret)
+    {
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG,
+                  EntityToString(entityGroupId),
+                  entityId);
+        return ret;
+    }
+
     return ret;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::SetDriver(dcgm_field_entity_group_t entityGroupId,
+                                        dcgm_field_eid_t entityId,
+                                        bool enableWatch,
+                                        DcgmWatcher const &watcher,
+                                        long long updateInterval,
+                                        double maxKeepAge)
+{
+    bool updateOnFirstWatch = true;
+    bool wereFirstWatcher   = false;
+    dcgmReturn_t ret;
+
+    if (!enableWatch)
+    {
+        mpCoreProxy.RemoveFieldWatch(entityGroupId, entityId, DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION, 0, watcher);
+        return DCGM_ST_OK;
+    }
+
+    // Watch GPU recovery action field
+    ret = mpCoreProxy.AddFieldWatch(entityGroupId,
+                                    entityId,
+                                    DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION,
+                                    updateInterval,
+                                    maxKeepAge,
+                                    0,
+                                    watcher,
+                                    false,
+                                    updateOnFirstWatch,
+                                    wereFirstWatcher);
+    if (ret != DCGM_ST_OK)
+    {
+        log_error("Failed to set watch for field {} on {} {}",
+                  DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION,
+                  EntityToString(entityGroupId),
+                  entityId);
+        return ret;
+    }
+
+    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
@@ -1006,6 +1173,38 @@ dcgmReturn_t DcgmHealthWatch::SetNVLink(dcgm_field_entity_group_t entityGroupId,
     ADD_WATCH(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER);
+    ADD_WATCH(DCGM_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL);
+    ADD_WATCH(DCGM_FI_DEV_FABRIC_HEALTH_MASK);
+    ADD_WATCH(DCGM_FI_DEV_FABRIC_MANAGER_STATUS);
+
+    return ret;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::SetGlobalChecks(dcgmHealthSystems_t systems,
+                                              DcgmWatcher watcher,
+                                              long long updateInterval,
+                                              double maxKeepAge)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
+
+    // Add global watches for IMEX status fields (part of NVLink health system)
+    if (systems & DCGM_HEALTH_WATCH_NVLINK)
+    {
+        ADD_GLOBAL_WATCH(DCGM_FI_IMEX_DOMAIN_STATUS);
+        ADD_GLOBAL_WATCH(DCGM_FI_IMEX_DAEMON_STATUS);
+    }
+
+    // Future global checks can be added here
 
     return ret;
 }
@@ -1431,6 +1630,222 @@ dcgmReturn_t DcgmHealthWatch::MonitorMemRowRemapFailures(dcgm_field_entity_group
 }
 
 /*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorMemUnrepairableFlag(dcgm_field_entity_group_t entityGroupId,
+                                                         dcgm_field_eid_t entityId,
+                                                         DcgmHealthResponse &response)
+{
+    dcgmReturn_t ret;
+    dcgmcm_sample_t sample = {};
+
+    ret = mpCoreProxy.GetLatestSample(entityGroupId, entityId, DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG, &sample, nullptr);
+
+    if (ret == DCGM_ST_NO_DATA)
+    {
+        log_debug("No data for unrepairable memory flag for gpuId {}", entityId);
+        return DCGM_ST_OK;
+    }
+    else if (ret == DCGM_ST_NOT_WATCHED)
+    {
+        log_warning("Not watched for unrepairable memory flag for gpuId {}", entityId);
+        return DCGM_ST_OK;
+    }
+    else if (ret != DCGM_ST_OK)
+    {
+        log_error("Unable to retrieve field DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG from cache. gpuId {}", entityId);
+        return ret;
+    }
+
+    if (DCGM_INT64_IS_BLANK(sample.val.i64))
+    {
+        return DCGM_ST_OK;
+    }
+
+    // Fail if unrepairable memory flag is set (non-zero)
+    if (sample.val.i64 != 0)
+    {
+        DcgmError d { entityId };
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FAULTY_MEMORY, d, sample.val.i64, entityId);
+        SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, d, response);
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorImex(dcgm_field_entity_group_t /* entityGroupId */,
+                                          dcgm_field_eid_t /* entityId */,
+                                          DcgmHealthResponse &response)
+{
+    dcgmReturn_t ret;
+    dcgmcm_sample_t sample                                      = {};
+    dcgm_field_eid_t constexpr normalizedEntityId               = 0;
+    dcgm_field_entity_group_t constexpr normalizedEntityGroupId = DCGM_FE_NONE;
+
+    // Check IMEX domain status (string field)
+    ret = mpCoreProxy.GetLatestSample(
+        normalizedEntityGroupId, normalizedEntityId, DCGM_FI_IMEX_DOMAIN_STATUS, &sample, nullptr);
+
+    if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED)
+    {
+        log_debug("No data or not watched for IMEX domain status (global scope)");
+        // Continue to check daemon status
+    }
+    else if (ret != DCGM_ST_OK)
+    {
+        log_warning("Unable to retrieve DCGM_FI_IMEX_DOMAIN_STATUS from cache (global scope)");
+        return ret;
+    }
+    else if (!DCGM_STR_IS_BLANK(sample.val.str))
+    {
+        // Check if domain status is healthy
+        // PASS: UP, NOT_INSTALLED, NOT_CONFIGURED, UNAVAILABLE
+        // FAIL: DOWN, DEGRADED
+        auto const domainStatus = std::string_view(sample.val.str);
+        bool isDomainHealthy    = (domainStatus == "UP") || (domainStatus == "NOT_INSTALLED")
+                               || (domainStatus == "NOT_CONFIGURED") || (domainStatus == "UNAVAILABLE");
+
+        if (!isDomainHealthy)
+        {
+            DcgmError d { normalizedEntityId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_IMEX_UNHEALTHY, d, "domain", sample.val.str, "unhealthy");
+            SetResponse(normalizedEntityGroupId,
+                        normalizedEntityId,
+                        DCGM_HEALTH_RESULT_FAIL,
+                        DCGM_HEALTH_WATCH_NVLINK,
+                        d,
+                        response);
+        }
+    }
+
+    // Check IMEX daemon status (int64 field)
+    sample = {};
+    ret    = mpCoreProxy.GetLatestSample(
+        normalizedEntityGroupId, normalizedEntityId, DCGM_FI_IMEX_DAEMON_STATUS, &sample, nullptr);
+
+    if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED)
+    {
+        log_debug("No data or not watched for IMEX daemon status (global scope)");
+        return DCGM_ST_OK;
+    }
+    else if (ret != DCGM_ST_OK)
+    {
+        log_warning("Unable to retrieve DCGM_FI_IMEX_DAEMON_STATUS from cache (global scope)");
+        return ret;
+    }
+
+    if (DCGM_INT64_IS_BLANK(sample.val.i64))
+    {
+        return DCGM_ST_OK;
+    }
+
+    // Check if daemon status is healthy
+    // PASS: UNAVAILABLE (7), READY (5), NOT_INSTALLED (-1), NOT_CONFIGURED (-2)
+    // FAIL: All other states (INITIALIZING, STARTING_AUTH_SERVER, etc.)
+    DcgmImexDaemonStatus const daemonStatus = static_cast<DcgmImexDaemonStatus>(sample.val.i64);
+    bool const isDaemonHealthy              = (daemonStatus == DcgmImexDaemonStatus::UNAVAILABLE)
+                                 || (daemonStatus == DcgmImexDaemonStatus::READY)
+                                 || (daemonStatus == DcgmImexDaemonStatus::NOT_INSTALLED)
+                                 || (daemonStatus == DcgmImexDaemonStatus::NOT_CONFIGURED);
+
+    if (!isDaemonHealthy)
+    {
+        DcgmError d { normalizedEntityId };
+        auto const statusStr = std::to_string(sample.val.i64);
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_IMEX_UNHEALTHY, d, "daemon", statusStr.c_str(), "not READY");
+        SetResponse(normalizedEntityGroupId,
+                    normalizedEntityId,
+                    DCGM_HEALTH_RESULT_FAIL,
+                    DCGM_HEALTH_WATCH_NVLINK,
+                    d,
+                    response);
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorGpuRecoveryAction(dcgm_field_entity_group_t entityGroupId,
+                                                       dcgm_field_eid_t entityId,
+                                                       DcgmHealthResponse &response)
+{
+    dcgmReturn_t ret;
+    dcgmcm_sample_t sample = {};
+
+    ret = mpCoreProxy.GetLatestSample(entityGroupId, entityId, DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION, &sample, nullptr);
+
+    if (ret == DCGM_ST_NO_DATA)
+    {
+        log_verbose("No data for GPU recovery action for eg {} eid {}", entityGroupId, entityId);
+        return DCGM_ST_OK;
+    }
+    else if (ret == DCGM_ST_NOT_WATCHED)
+    {
+        log_debug("Not watched for GPU recovery action for eg {} eid {}", entityGroupId, entityId);
+        return DCGM_ST_OK;
+    }
+    else if (ret != DCGM_ST_OK)
+    {
+        log_warning(
+            "Unable to retrieve DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION from cache. eg {} eid {}", entityGroupId, entityId);
+        return ret;
+    }
+
+    if (DCGM_INT64_IS_BLANK(sample.val.i64))
+    {
+        return DCGM_ST_OK;
+    }
+
+    if (sample.val.i64 < NVML_GPU_RECOVERY_ACTION_NONE || sample.val.i64 > NVML_GPU_RECOVERY_ACTION_DRAIN_AND_RESET)
+    {
+        log_warning("Invalid GPU recovery action value {} for eg {} eid {}", sample.val.i64, entityGroupId, entityId);
+        return DCGM_ST_OK;
+    }
+
+    auto recoveryAction = static_cast<nvmlDeviceGpuRecoveryAction_t>(sample.val.i64);
+
+    switch (recoveryAction)
+    {
+        case NVML_GPU_RECOVERY_ACTION_NONE:
+            // Healthy - no action needed
+            break;
+
+        case NVML_GPU_RECOVERY_ACTION_GPU_RESET:
+        {
+            DcgmError d { entityId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GPU_RECOVERY_RESET, d, entityId, sample.val.i64);
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_DRIVER, d, response);
+            break;
+        }
+
+        case NVML_GPU_RECOVERY_ACTION_NODE_REBOOT:
+        {
+            DcgmError d { entityId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GPU_RECOVERY_REBOOT, d, entityId, sample.val.i64);
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_DRIVER, d, response);
+            break;
+        }
+
+        case NVML_GPU_RECOVERY_ACTION_DRAIN_P2P:
+        {
+            DcgmError d { entityId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GPU_RECOVERY_DRAIN_P2P, d, entityId, sample.val.i64);
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_DRIVER, d, response);
+            break;
+        }
+
+        case NVML_GPU_RECOVERY_ACTION_DRAIN_AND_RESET:
+        {
+            DcgmError d { entityId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GPU_RECOVERY_DRAIN_RESET, d, entityId, sample.val.i64);
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_DRIVER, d, response);
+            break;
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::MonitorMem(dcgm_field_entity_group_t entityGroupId,
                                          dcgm_field_eid_t entityId,
                                          long long startTime,
@@ -1477,50 +1892,94 @@ dcgmReturn_t DcgmHealthWatch::MonitorMem(dcgm_field_entity_group_t entityGroupId
         ret = localReturn;
     }
 
+    localReturn = MonitorMemUnrepairableFlag(entityGroupId, entityId, response);
+    if (localReturn != DCGM_ST_OK)
+    {
+        ret = localReturn;
+    }
     return ret;
 }
 
+namespace
+{
+/**
+ * Collect latest sample for a given field.
+ *
+ * @param coreProxy[in] : The cache manager proxy
+ * @param entityGroupId[in] : The entity group ID
+ * @param entityId[in] : The entity ID
+ * @param fieldId[in] : The field ID
+ * @param sample[out] : The sample
+ *
+ * @return expected<optional<sample>, error> where:
+ *         - Success with valid data: expected contains optional with sample
+ *         - Success with no data, not watched: expected contains empty optional
+ *         - Success with blank value, not supported: expected contains empty optional
+ *         - Error: expected contains error code
+ */
+std::expected<std::optional<dcgmcm_sample_t>, dcgmReturn_t> CollectLatestInt64Sample(
+    DcgmCoreProxy &coreProxy,
+    dcgm_field_entity_group_t entityGroupId,
+    dcgm_field_eid_t entityId,
+    unsigned short fieldId)
+{
+    dcgmcm_sample_t sample {};
+    dcgmReturn_t ret = coreProxy.GetLatestSample(entityGroupId, entityId, fieldId, &sample, 0);
+
+    if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED)
+    {
+        log_debug("{} for fieldId {} for eg {} eid {}",
+                  ret == DCGM_ST_NO_DATA ? "No data" : "Not watched",
+                  fieldId,
+                  entityGroupId,
+                  entityId);
+        return std::nullopt; // Success, but no data available
+    }
+
+    if (ret != DCGM_ST_OK)
+    {
+        log_warning(
+            "Got error {} from GetLatestSample for fieldId {} for eg {} eid {}", ret, fieldId, entityGroupId, entityId);
+        return std::unexpected(ret); // Actual error
+    }
+
+    if (DCGM_INT64_IS_BLANK(sample.val.i64) || sample.val.i64 == DCGM_INT64_NOT_SUPPORTED)
+    {
+        log_debug("Got {} for fieldId {} for eg {} eid {}",
+                  DCGM_INT64_IS_BLANK(sample.val.i64) ? "Blank" : "Not Supported",
+                  fieldId,
+                  entityGroupId,
+                  entityId);
+        return std::nullopt; // Success, but no data available
+    }
+
+    return sample; // Success with valid data
+}
+} // namespace
+
 dcgmReturn_t DcgmHealthWatch::MonitorInforom(dcgm_field_entity_group_t entityGroupId,
                                              dcgm_field_eid_t entityId,
-                                             long long startTime,
+                                             long long /* startTime */,
                                              long long /* endTime */,
                                              DcgmHealthResponse &response)
 {
-    dcgmReturn_t ret       = DCGM_ST_OK;
-    dcgmcm_sample_t sample = {};
     unsigned short fieldId = DCGM_FI_DEV_INFOROM_CONFIG_VALID;
 
     // Add XID monitoring for InfoROM subsystem
     MonitorSubsystemXids(entityGroupId, entityId, DCGM_HEALTH_WATCH_INFOROM, response);
 
-    if (!startTime)
+    auto const result = CollectLatestInt64Sample(mpCoreProxy, entityGroupId, entityId, fieldId);
+    if (!result.has_value())
     {
-        startTime = 0; /* Check from the start of the cache */
+        return result.error();
     }
 
-    /* Note: Allow endTime to be in the future. 0 = blank = most recent record in time series */
-
-    /* check for the fieldValue at the endTime*/
-    ret = mpCoreProxy.GetLatestSample(entityGroupId, entityId, fieldId, &sample, 0);
-
-    if (DCGM_ST_NO_DATA == ret)
+    if (!result.value().has_value())
     {
-        log_debug("No data for inforom for gpuId {}", entityId);
         return DCGM_ST_OK;
     }
-    else if (DCGM_ST_NOT_WATCHED == ret)
-    {
-        log_warning("Not watched for inforom for gpuId {}", entityId);
-        return DCGM_ST_OK;
-    }
-    else if (DCGM_ST_OK != ret)
-    {
-        log_error("Unable to retrieve field {} from cache. gpuId {}", fieldId, entityId);
-        return ret;
-    }
 
-    if (DCGM_INT64_IS_BLANK(sample.val.i64))
-        return DCGM_ST_OK;
+    auto const &sample = result.value().value();
 
     if (!(sample.val.i64))
     {
@@ -1529,7 +1988,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorInforom(dcgm_field_entity_group_t entityGro
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_INFOROM, d, response);
     }
 
-    return ret;
+    return DCGM_ST_OK;
 }
 
 /*****************************************************************************/
@@ -1566,6 +2025,10 @@ dcgmReturn_t DcgmHealthWatch::MonitorThermal(dcgm_field_entity_group_t entityGro
 
     if (DCGM_ST_NO_DATA == ret)
         return DCGM_ST_OK;
+    if (DCGM_ST_NOT_WATCHED == ret)
+    {
+        return DCGM_ST_OK;
+    }
     if (DCGM_ST_OK != ret)
         return ret;
     if (DCGM_INT64_IS_BLANK(startValue.val.i64))
@@ -1577,6 +2040,10 @@ dcgmReturn_t DcgmHealthWatch::MonitorThermal(dcgm_field_entity_group_t entityGro
 
     if (DCGM_ST_NO_DATA == ret)
         return DCGM_ST_OK;
+    if (DCGM_ST_NOT_WATCHED == ret)
+    {
+        return DCGM_ST_OK;
+    }
     if (DCGM_ST_OK != ret)
         return ret;
     if (DCGM_INT64_IS_BLANK(endValue.val.i64))
@@ -1646,6 +2113,10 @@ dcgmReturn_t DcgmHealthWatch::MonitorPower(dcgm_field_entity_group_t entityGroup
 
     if (DCGM_ST_NO_DATA == ret)
         return DCGM_ST_OK;
+    if (DCGM_ST_NOT_WATCHED == ret)
+    {
+        return DCGM_ST_OK;
+    }
     if (DCGM_ST_OK != ret)
         return ret;
     if (DCGM_INT64_IS_BLANK(startValue.val.i64))
@@ -1658,6 +2129,10 @@ dcgmReturn_t DcgmHealthWatch::MonitorPower(dcgm_field_entity_group_t entityGroup
         entityGroupId, entityId, fieldId, &endValue, &count, startTime, endTime, DCGM_ORDER_DESCENDING);
     if (DCGM_ST_NO_DATA == ret)
         return DCGM_ST_OK;
+    if (DCGM_ST_NOT_WATCHED == ret)
+    {
+        return DCGM_ST_OK;
+    }
     if (DCGM_ST_OK != ret)
         return ret;
     if (DCGM_INT64_IS_BLANK(endValue.val.i64))
@@ -1814,6 +2289,14 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
         log_error("Got error {} from MonitorNVLinkStatus gpuId {}", (int)tmpRet, entityId);
         ret = tmpRet;
     }
+
+    tmpRet = MonitorFabricFields(entityGroupId, entityId, startTime, endTime, response);
+    if (tmpRet != DCGM_ST_OK)
+    {
+        log_error("Got error {} from MonitorFabricHealth gpuId {}", (int)tmpRet, entityId);
+        ret = tmpRet;
+    }
+
     return ret;
 }
 
@@ -1942,9 +2425,21 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink5Fields(dcgm_field_entity_group_t ent
                                                    long long endTime,
                                                    DcgmHealthResponse &response)
 {
-    dcgmReturn_t ret = DCGM_ST_OK;
-    std::array constexpr fieldIds
-        = { DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS, DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER };
+    dcgmReturn_t ret              = DCGM_ST_OK;
+    std::array constexpr fieldIds = { DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS,
+                                      DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS,
+                                      // Shouldn't see Symbol at all. Symbol means FEC didn't succeed to fix the error.
+                                      DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER,
+                                      DCGM_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL };
+
     dcgmcm_sample_t startValue     = {};
     dcgmcm_sample_t endValue       = {};
     int count                      = 0;
@@ -2004,31 +2499,35 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink5Fields(dcgm_field_entity_group_t ent
             continue;
         }
 
-        if (field == DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS)
+        if (field == DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER || field == DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER)
         {
-            // Shouldn't see Symbol at all. Symbol means FEC didn't succeed to fix the error.
+            auto const berValue = endValue.val.i64;
+            // BER is the bit error rate itself, and a rate of 0 indicates a healthy system.
+            // However, in NVML the smallest value is 1.5e-254, to be able to compare and avoid precision issues
+            // with the decoded value, we decode it here and compare the mantissa and exponent to 15 and 255
+            // directly, rather than using the decoded field (i.e., DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT).
+            auto const [mantissa, exponent, ber] = DcgmNs::Utils::NvmlBerParser(berValue);
+            if (mantissa != 15 && exponent != 255)
+            {
+                DcgmError d { entityId };
+                auto const errorCode = (field == DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER)
+                                           ? DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD
+                                           : DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD;
+                DCGM_ERROR_FORMAT_MESSAGE(errorCode, d, ber, entityId);
+                SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            }
+        }
+        else
+        {
+            // Handle all other error counters
             int64_t const nvLinkError = (startValue.val.i64 >= endValue.val.i64)
                                             ? (startValue.val.i64 - endValue.val.i64)
                                             : (endValue.val.i64 - startValue.val.i64);
+
             if (nvLinkError >= DCGM_LIMIT_MAX_NVLINK_ERROR)
             {
                 DcgmError d { entityId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_ERROR_CRITICAL, d, nvLinkError, fieldTag.c_str(), entityId);
-                SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
-            }
-        }
-        else if (field == DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER)
-        {
-            auto const effectiveBer = endValue.val.i64;
-            // Effective BER is the bit error rate itself, and a rate of 0 indicates a healthy system.
-            // However, in NVML the smallest value is 1.5e-254, to be able to compare and avoid precision issues
-            // with the decoded value, we decode it here and compare the mantissa and exponent to 15 and 255
-            // directly, rather than using the decoded field (i.e., DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT).
-            auto const [mantissa, exponent, ber] = DcgmNs::Utils::NvmlBerParser(effectiveBer);
-            if (mantissa != 15 && exponent != 255)
-            {
-                DcgmError d { entityId };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD, d, ber, entityId);
                 SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
             }
         }
@@ -2037,12 +2536,39 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink5Fields(dcgm_field_entity_group_t ent
     return DCGM_ST_OK;
 }
 
+/*****************************************************************************/
+bool DcgmHealthWatch::IsGpuMigEnabled(dcgm_field_eid_t gpuId)
+{
+    dcgmcm_sample_t sample = {};
+    dcgmReturn_t ret       = mpCoreProxy.GetLatestSample(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_MIG_MODE, &sample, nullptr);
+
+    if (ret == DCGM_ST_OK)
+    {
+        if (DCGM_INT64_IS_BLANK(sample.val.i64))
+        {
+            log_debug("MIG mode for GPU {} is blank, treating as disabled", gpuId);
+            return false;
+        }
+        return sample.val.i64 != 0;
+    }
+
+    log_debug("Could not get MIG status for GPU {}", gpuId);
+    return false;
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::MonitorNVLinkStatus(dcgm_field_entity_group_t entityGroupId,
                                                   dcgm_field_eid_t entityId,
                                                   DcgmHealthResponse &response)
 {
     // Add XID monitoring for NVLink subsystem
     MonitorSubsystemXids(entityGroupId, entityId, DCGM_HEALTH_WATCH_NVLINK, response);
+
+    if (entityGroupId != DCGM_FE_GPU)
+    {
+        log_debug("MonitorNVLinkStatus called with entityGroupId {}, expected {}", entityGroupId, DCGM_FE_GPU);
+        return DCGM_ST_OK;
+    }
 
     dcgmNvLinkLinkState_t linkStates[DCGM_NVLINK_MAX_LINKS_PER_GPU];
     dcgmReturn_t ret = mpCoreProxy.GetEntityNvLinkLinkStatus(DCGM_FE_GPU, entityId, linkStates);
@@ -2051,14 +2577,36 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLinkStatus(dcgm_field_entity_group_t enti
         log_error("Got error {} from GetEntityNvLinkLinkStatus gpuId {}", (int)ret, entityId);
         return ret;
     }
+
+    bool const migIsEnabled = IsGpuMigEnabled(entityId);
+
     for (int i = 0; i < DCGM_NVLINK_MAX_LINKS_PER_GPU; i++)
     {
-        if (linkStates[i] == DcgmNvLinkLinkStateDown)
+        dcgmNvLinkLinkState_t linkState = linkStates[i];
+
+        if (linkState == DcgmNvLinkLinkStateNotSupported || linkState == DcgmNvLinkLinkStateDisabled)
         {
-            DcgmError d { entityId };
-            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, entityId, i);
-            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            continue;
         }
+
+        if (linkState == DcgmNvLinkLinkStateDown)
+        {
+            // Bug 200682374 - NVML reports links to MIG enabled GPUs as down. This causes
+            // health checks to fail. As a WaR, we'll treat any Down links as Disabled if
+            // this GPU is in MIG mode
+            if (migIsEnabled)
+            {
+                log_debug("GPU {} NvLink {} was reported down in MIG mode, treating as disabled", entityId, i);
+                continue;
+            }
+            else
+            {
+                DcgmError d { entityId };
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, entityId, i);
+                SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            }
+        }
+        // link state is up
     }
 
     return DCGM_ST_OK;
@@ -2215,7 +2763,7 @@ void DcgmHealthWatch::ProcessXidFv(dcgmBufferedFv_t *fv)
         bool subsystemEnabled = false;
         for (const auto &[groupId, systems] : mGroupWatchState)
         {
-            if (systems & subsystem)
+            if (systems.systems & subsystem)
             {
                 subsystemEnabled = true;
                 break;
@@ -2457,4 +3005,145 @@ void DcgmHealthWatch::MonitorDevastatingXids(dcgm_field_entity_group_t entityGro
             SetResponse(entityGroupId, entityId, xidInfo.severity, DCGM_HEALTH_WATCH_ALL, d, response);
         }
     }
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorFabricFields(dcgm_field_entity_group_t entityGroupId,
+                                                  dcgm_field_eid_t entityId,
+                                                  long long /* startTime */,
+                                                  long long /* endTime */,
+                                                  DcgmHealthResponse &response)
+{
+    log_debug("Monitoring Fabric Fields for {} {}, all systems {}",
+              EntityToString(entityGroupId),
+              entityId,
+              GetHealthSystemAsString(DCGM_HEALTH_WATCH_ALL));
+
+    dcgmGroupEntityPair_t const entityPair = { entityGroupId, entityId };
+
+    unsigned short const fieldId = DCGM_FI_DEV_FABRIC_HEALTH_MASK;
+    auto const result            = CollectLatestInt64Sample(mpCoreProxy, entityGroupId, entityId, fieldId);
+
+    if (result.has_value() && result.value().has_value())
+    {
+        auto const &sample = result.value().value();
+
+        if (DCGM_GPU_FABRIC_HEALTH_TEST(sample.val.i64, _ROUTE_UNHEALTHY, _TRUE))
+        {
+            DcgmError d { entityPair };
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_FIELD_VIOLATION, d, sample.val.i64, "Fabric Health: Route Unhealthy", entityId);
+            d.AddDetail("Route Unhealthy");
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            log_verbose("Found Route Unhealthy for gpuId {}, health_mask: 0x{:x}", entityId, sample.val.i64);
+        }
+
+        if (DCGM_GPU_FABRIC_HEALTH_TEST(sample.val.i64, _DEGRADED_BW, _TRUE))
+        {
+            DcgmError d { entityPair };
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_FIELD_VIOLATION, d, sample.val.i64, "Fabric Health: Bandwidth Degraded", entityId);
+            d.AddDetail("Bandwidth Degraded");
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            log_verbose("Found Bandwidth Degraded for gpuId {}, health_mask: 0x{:x}", entityId, sample.val.i64);
+        }
+
+        if (DCGM_GPU_FABRIC_HEALTH_TEST(sample.val.i64, _ROUTE_RECOVERY, _TRUE))
+        {
+            DcgmError d { entityPair };
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_FIELD_VIOLATION, d, sample.val.i64, "Fabric Health: Route Recovery", entityId);
+            d.AddDetail("Route Recovery");
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            log_verbose("Found Route Recovery for gpuId {}, health_mask: 0x{:x}", entityId, sample.val.i64);
+        }
+
+        if (DCGM_GPU_FABRIC_HEALTH_TEST(sample.val.i64, _ACCESS_TIMEOUT_RECOVERY, _TRUE))
+        {
+            DcgmError d { entityPair };
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_FIELD_VIOLATION, d, sample.val.i64, "Fabric Health: Access Timeout Recovery", entityId);
+            d.AddDetail("Access Timeout Recovery");
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            log_verbose("Found Access Timeout Recovery for gpuId {}, health_mask: 0x{:x}", entityId, sample.val.i64);
+        }
+
+        if (!DCGM_GPU_FABRIC_HEALTH_TEST(sample.val.i64, _INCORRECT_CONFIGURATION, _NOT_SUPPORTED)
+            && !DCGM_GPU_FABRIC_HEALTH_TEST(sample.val.i64, _INCORRECT_CONFIGURATION, _NONE))
+        {
+            DcgmError d { entityPair };
+            DCGM_ERROR_FORMAT_MESSAGE(
+                DCGM_FR_FIELD_VIOLATION, d, sample.val.i64, "Fabric Health: Incorrect Configuration", entityId);
+            d.AddDetail("Incorrect Configuration");
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            log_verbose("Found Incorrect Configuration for gpuId {}, health_mask: 0x{:x}", entityId, sample.val.i64);
+        }
+    }
+    else if (!result.has_value())
+    {
+        /* Errors logged by CollectLatestInt64Sample() */
+        return result.error();
+    }
+
+    unsigned short const fmStatusFieldId = DCGM_FI_DEV_FABRIC_MANAGER_STATUS;
+    auto const fmResult = CollectLatestInt64Sample(mpCoreProxy, entityGroupId, entityId, fmStatusFieldId);
+
+    if (fmResult.has_value() && fmResult.value().has_value())
+    {
+        auto const &fmSample = fmResult.value().value();
+        auto const status    = static_cast<dcgmFabricManagerStatus_t>(fmSample.val.i64);
+
+        auto handleError = [&](std::string_view statusStr, std::string detail, dcgmHealthWatchResults_t health) {
+            DcgmError d { entityPair };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FABRIC_PROBE_STATE, d, entityId, statusStr.data(), fmSample.val.i64);
+            d.AddDetail(detail);
+            SetResponse(entityGroupId, entityId, health, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            log_verbose("Fabric State {} for {} {}, status: {}",
+                        statusStr,
+                        EntityToString(entityGroupId),
+                        entityId,
+                        fmSample.val.i64);
+        };
+
+        switch (status)
+        {
+            case DcgmFMStatusSuccess:
+            case DcgmFMStatusNotSupported:
+                break;
+
+            case DcgmFMStatusInProgress:
+                handleError("In Progress", "Fabric Manager training in progress.", DCGM_HEALTH_RESULT_WARN);
+                break;
+
+            case DcgmFMStatusNotStarted:
+                handleError("Not Started", "Fabric Manager training has not started.", DCGM_HEALTH_RESULT_FAIL);
+                break;
+
+            case DcgmFMStatusFailure:
+                handleError("Failed", "Fabric Manager training failed.", DCGM_HEALTH_RESULT_FAIL);
+                break;
+
+            case DcgmFMStatusUnrecognized:
+                handleError("Unrecognized", "Fabric Manager status is unrecognized.", DCGM_HEALTH_RESULT_FAIL);
+                break;
+
+            case DcgmFMStatusNvmlTooOld:
+                handleError(
+                    "NvmlTooOld", "NVML version is too old to query Fabric Manager status.", DCGM_HEALTH_RESULT_FAIL);
+                break;
+
+            default:
+                handleError("Unknown",
+                            fmt::format("Unknown Fabric Manager status code: {}", fmSample.val.i64),
+                            DCGM_HEALTH_RESULT_FAIL);
+                break;
+        }
+    }
+    else if (!fmResult.has_value())
+    {
+        /* Errors logged by CollectLatestInt64Sample() */
+        return fmResult.error();
+    }
+
+    return DCGM_ST_OK;
 }
