@@ -4,7 +4,7 @@ NVIDIA Data Center GPU Manager (DCGM) is a suite of tools for managing and monit
 
 # Architecture
 
-As previously stated, DCGM is a tool used to monitor the health and telemetry of NVIDIAGPUs and their related components. We use a modular design to accomplish this task. The core of DCGM consists of:
+As previously stated, DCGM is a tool used to monitor the health and telemetry of NVIDIA GPUs and their related components. We use a modular design to accomplish this task. The core of DCGM consists of:
  - APIs for interacting with the DCGM agent (nv-hostengine).
  - A cache for the known telemetry.
  - Modules that perform different functions:
@@ -54,7 +54,7 @@ DCGM follows semver best practices, so the nature of the change will determine w
  - Insufficient time: changes that cannot be reviewed in time will be deferred to another release. Similarly, if a change is risky it must be adopted early enough in the release cycle to ensure that it hasn’t caused any regressions. Risky changes submitted later in a release cycle will also be deferred to the next release.
  - Incompleteness: for example, a change that updates C APIs, but doesn’t modify the Python bindings would be considered incomplete.
  - Changes that are not signed cannot be accepted.
- - Code must meet the DCGM coding best practices mentioned in dcgm_best_practices.md, as well as following the style that is checked for by the pre-commit hooks if properly configured. 
+ - Code must meet the DCGM coding best practices mentioned in [coding_best_practices.md](coding_best_practices.md), as well as following the style that is checked for by the pre-commit hooks if properly configured.
 
 ## The Mechanics of Contributing
 1. Create a github issue which explains the change that you desire to make.
