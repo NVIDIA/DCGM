@@ -41,7 +41,7 @@ New dependencies can be added by adding a script in the “scripts” directory
 similar to the existing scripts.
 
 As DCGM needs to support some older Linux distributions on various CPU
-architectures, the image provide custom builds of GCC compilers that produce
+architectures, the image provides custom builds of GCC compilers that produce
 binaries which depend on older versions of the GLibc libraries. The DCGM build
 image will also contain all 3rd party libraries that are precompiled using those
 custom GCC builds.
@@ -79,11 +79,11 @@ building 3 versions of GCC toolset for all supported platforms. Once the image
 has been built, it can be reused to build DCGM.
 
 ### Generating a DCGM build
-Once the build image is created, you can use the run `build.sh` to produce builds. A simple debian build of release (non-debug) code for an x86_64 system can be made with: 
+Once the build image is created, you can run `build.sh` to produce builds. A simple Debian build of release (non-debug) code for an x86_64 system can be made with:
 
 `./build.sh -r --deb`
 
-The rpm will be placed in `_out/Linux-amd64-release/datacenter-gpu-manager_2.1.4_amd64.deb`; it can now be installed as needed. The script includes options for building just the binaries (default), tarballs (--packages), or RPM (--rpm) as well. A complete list of options can been seen using `./build.sh -h`.
+The .deb package will be placed in `_out/Linux-amd64-release/` (e.g. `datacenter-gpu-manager_<version>_amd64.deb`); it can now be installed as needed. The script includes options for building just the binaries (default), tarballs (--packages), or RPM (--rpm) as well. A complete list of options can be seen using `./build.sh -h`.
 
 ### Running the Test Framework
 DCGM includes an extensive test suite that can be run on any system with one or more supported GPUs. After successfully building DCGM tarballs, a `datacenter-gpu-manager-tests` package is created alongside the normal DCGM package. There are multiple ways to run the tests but the most straightforward steps are the following:
