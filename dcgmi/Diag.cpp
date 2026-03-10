@@ -768,7 +768,7 @@ void Diag::HelperDisplayVersionAndDevIds(dcgmDiagResponse_v12 const &response) c
         {
             cmdView.addDisplayParameter(
                 DATA_NAME_TAG,
-                fmt::format("{} Device IDs Detected",
+                fmt::format("{} PCI Device IDs Detected",
                             DcgmFieldsGetEntityGroupString(static_cast<dcgm_field_entity_group_t>(gId))));
             cmdView.addDisplayParameter(DATA_INFO_TAG, str);
             cmdView.display();
