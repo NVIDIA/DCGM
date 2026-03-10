@@ -38,7 +38,7 @@
 #define NVVS_ERROR_SEVERITY   "error_severity"
 #define NVVS_ITERATIONS       "iterations"
 #define NVVS_RESULT           "Overall Result"
-#define NVVS_GPU_DEV_IDS      "GPU Device IDs"
+#define NVVS_GPU_DEV_IDS      "GPU PCI Device IDs"
 #define NVVS_GPU_SERIALS      "GPU Device Serials"
 #define NVVS_DRIVER_VERSION   "Driver Version Detected"
 #define NVVS_AUX_DATA         "aux_data"
