@@ -40,18 +40,22 @@ int InstallCtrlHandler()
 {
     if (signal(SIGHUP, sig_handler) == SIG_ERR)
     {
+        DCGM_LOG_ERROR << "registering SIGHUP failed: " << std::strerror(errno) << std::endl;
         return -1;
     }
     if (signal(SIGINT, sig_handler) == SIG_ERR)
     {
+        DCGM_LOG_ERROR << "registering SIGINT failed: " << std::strerror(errno) << std::endl;
         return -1;
     }
     if (signal(SIGQUIT, sig_handler) == SIG_ERR)
     {
+        DCGM_LOG_ERROR << "registering SIGQUIT failed: " << std::strerror(errno) << std::endl;
         return -1;
     }
     if (signal(SIGTERM, sig_handler) == SIG_ERR)
     {
+        DCGM_LOG_ERROR << "registering SIGTERM failed: " << std::strerror(errno) << std::endl;
         return -1;
     }
 
@@ -75,7 +79,10 @@ int main(int argc, char *argv[])
     DCGM_LOG_INFO << "Initialized DCGMI logger";
 
     // Install the signal handler
-    InstallCtrlHandler();
+    if (InstallCtrlHandler() != 0)
+    {
+        return 1;
+    }
 
     try
     {
