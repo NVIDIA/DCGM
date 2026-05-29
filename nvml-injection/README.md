@@ -65,7 +65,7 @@ make
 
 ### Usage
 
-When `sdk/nvidia/nvml/entry_points.h` or `sdk/nvidia/nvml/nvml.h` updated. Please re-run `generate_nvml_stubs.py` to ensure we can inject corresponding functions. As `nvml.h` is not a well-consistency header. It may have chance that you need to (slightly) modify `generate_nvml_stubs.py` to support new added functions, defines, etc.
+When `sdk/nvidia/nvml/entry_points.h` or `sdk/nvidia/nvml/dcgm_nvml.h` updated. Please re-run `generate_nvml_stubs.py` to ensure we can inject corresponding functions. As `dcgm_nvml.h` is not a well-consistency header. It may have chance that you need to (slightly) modify `generate_nvml_stubs.py` to support new added functions, defines, etc.
 
 From the dcgm/ directory:
 
@@ -99,7 +99,7 @@ Basically, it is a mirror of https://pypi.org/project/nvidia-ml-py/. We just add
 
 In this section, we will go through the process to show what to do to enable the NVML injection for new added functions.
 
-1. Add new functions and definitions into `nvml.h` and `entry_points.h`
+1. Add new functions and definitions into `dcgm_nvml.h` and `entry_points.h`
 
 2. Run `generate_nvml_stubs.py`
 

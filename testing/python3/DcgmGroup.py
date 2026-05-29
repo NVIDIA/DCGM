@@ -17,9 +17,17 @@ import dcgm_agent
 import dcgm_structs
 import dcgm_fields
 import dcgm_field_helpers
-import logger
 import threading
+import os
 from DcgmHandle import DcgmHandle
+
+# logger is test infrastructure module and is only available when testing
+# framework is active
+if ('__DCGM_TESTING_FRAMEWORK_ACTIVE' in os.environ and
+        os.environ['__DCGM_TESTING_FRAMEWORK_ACTIVE'] == '1'):
+    import logger
+else:
+    logger = None
 
 
 class DcgmGroupConfig:
@@ -390,19 +398,24 @@ class DcgmGroupPolicy:
 
     def __del__(self):
         if self._condition != 0:
-            logger.debug(
-                f"DcgmGroup Unregistering {self._condition} for group {self._groupId}")
+            if logger:
+                logger.debug(
+                    f"DcgmGroup Unregistering {self._condition} "
+                    f"for group {self._groupId}")
+
             # This may fail if hostengine is gone. So, we silently allow that.
             try:
                 dcgm_agent.dcgmPolicyUnregister(
                     self._dcgmHandle.handle, self._groupId, self._condition)
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
-                logger.debug("... hostengine disconnected")
+                if logger:
+                    logger.debug("... hostengine disconnected")
 
             self._condition = 0
 
         if self._policy is not None:
-            logger.debug(f"DcgmGroup clearing policy {self._policy}")
+            if logger:
+                logger.debug(f"DcgmGroup clearing policy {self._policy}")
 
             newPolicy = dcgm_structs.c_dcgmPolicy_v1()
 
@@ -413,7 +426,8 @@ class DcgmGroupPolicy:
             try:
                 self.Set(newPolicy)
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
-                logger.debug("... hostengine disconnected")
+                if logger:
+                    logger.debug("... hostengine disconnected")
 
             self._policy = None
 

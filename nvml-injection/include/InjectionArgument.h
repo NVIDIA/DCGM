@@ -24,7 +24,7 @@
 #pragma once
 
 #include <cstring>
-#include <nvml.h>
+#include <dcgm_nvml.h>
 #include <string>
 
 #include "nvml_injection_structs.h"
@@ -1176,6 +1176,56 @@ private:
                 if (m_value.NvlinkVersionPtr != nullptr)
                 {
                     std::memcpy(m_value.NvlinkVersionPtr, other.m_value.NvlinkVersionPtr, allocateNum * sizeof(*other.m_value.NvlinkVersionPtr));
+                }
+                break;
+            }
+            case INJECTION_PRMCOUNTERID_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PRMCounterIdPtr = static_cast<nvmlPRMCounterId_t *>(malloc(allocateNum * sizeof(*other.m_value.PRMCounterIdPtr)));
+                if (m_value.PRMCounterIdPtr != nullptr)
+                {
+                    std::memcpy(m_value.PRMCounterIdPtr, other.m_value.PRMCounterIdPtr, allocateNum * sizeof(*other.m_value.PRMCounterIdPtr));
+                }
+                break;
+            }
+            case INJECTION_PRMCOUNTERINPUT_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PRMCounterInput_v1Ptr = static_cast<nvmlPRMCounterInput_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.PRMCounterInput_v1Ptr)));
+                if (m_value.PRMCounterInput_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.PRMCounterInput_v1Ptr, other.m_value.PRMCounterInput_v1Ptr, allocateNum * sizeof(*other.m_value.PRMCounterInput_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_PRMCOUNTERLIST_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PRMCounterList_v1Ptr = static_cast<nvmlPRMCounterList_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.PRMCounterList_v1Ptr)));
+                if (m_value.PRMCounterList_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.PRMCounterList_v1Ptr, other.m_value.PRMCounterList_v1Ptr, allocateNum * sizeof(*other.m_value.PRMCounterList_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_PRMCOUNTERVALUE_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PRMCounterValue_v1Ptr = static_cast<nvmlPRMCounterValue_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.PRMCounterValue_v1Ptr)));
+                if (m_value.PRMCounterValue_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.PRMCounterValue_v1Ptr, other.m_value.PRMCounterValue_v1Ptr, allocateNum * sizeof(*other.m_value.PRMCounterValue_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_PRMCOUNTER_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.PRMCounter_v1Ptr = static_cast<nvmlPRMCounter_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.PRMCounter_v1Ptr)));
+                if (m_value.PRMCounter_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.PRMCounter_v1Ptr, other.m_value.PRMCounter_v1Ptr, allocateNum * sizeof(*other.m_value.PRMCounter_v1Ptr));
                 }
                 break;
             }
@@ -5394,6 +5444,156 @@ public:
     nvmlNvlinkVersion_t const &AsNvlinkVersion() const
     {
         return m_value.NvlinkVersion;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPRMCounterId_t *PRMCounterIdPtr, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTERID_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterIdPtr = PRMCounterIdPtr;
+    }
+    InjectionArgument(nvmlPRMCounterId_t PRMCounterId)
+        : m_type(INJECTION_PRMCOUNTERID)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterId = PRMCounterId;
+    }
+    InjectionArgument(nvmlPRMCounterId_t *PRMCounterIdPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTERID_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterIdPtr = PRMCounterIdPtr;
+    }
+
+    nvmlPRMCounterId_t *AsPRMCounterIdPtr() const
+    {
+        return m_value.PRMCounterIdPtr;
+    }
+
+    nvmlPRMCounterId_t const &AsPRMCounterId() const
+    {
+        return m_value.PRMCounterId;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPRMCounterInput_v1_t *PRMCounterInput_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTERINPUT_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterInput_v1Ptr = PRMCounterInput_v1Ptr;
+    }
+    InjectionArgument(nvmlPRMCounterInput_v1_t PRMCounterInput_v1)
+        : m_type(INJECTION_PRMCOUNTERINPUT_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterInput_v1 = PRMCounterInput_v1;
+    }
+    InjectionArgument(nvmlPRMCounterInput_v1_t *PRMCounterInput_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTERINPUT_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterInput_v1Ptr = PRMCounterInput_v1Ptr;
+    }
+
+    nvmlPRMCounterInput_v1_t *AsPRMCounterInput_v1Ptr() const
+    {
+        return m_value.PRMCounterInput_v1Ptr;
+    }
+
+    nvmlPRMCounterInput_v1_t const &AsPRMCounterInput_v1() const
+    {
+        return m_value.PRMCounterInput_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPRMCounterList_v1_t *PRMCounterList_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTERLIST_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterList_v1Ptr = PRMCounterList_v1Ptr;
+    }
+    InjectionArgument(nvmlPRMCounterList_v1_t PRMCounterList_v1)
+        : m_type(INJECTION_PRMCOUNTERLIST_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterList_v1 = PRMCounterList_v1;
+    }
+    InjectionArgument(nvmlPRMCounterList_v1_t *PRMCounterList_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTERLIST_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterList_v1Ptr = PRMCounterList_v1Ptr;
+    }
+
+    nvmlPRMCounterList_v1_t *AsPRMCounterList_v1Ptr() const
+    {
+        return m_value.PRMCounterList_v1Ptr;
+    }
+
+    nvmlPRMCounterList_v1_t const &AsPRMCounterList_v1() const
+    {
+        return m_value.PRMCounterList_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPRMCounterValue_v1_t *PRMCounterValue_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTERVALUE_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterValue_v1Ptr = PRMCounterValue_v1Ptr;
+    }
+    InjectionArgument(nvmlPRMCounterValue_v1_t PRMCounterValue_v1)
+        : m_type(INJECTION_PRMCOUNTERVALUE_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterValue_v1 = PRMCounterValue_v1;
+    }
+    InjectionArgument(nvmlPRMCounterValue_v1_t *PRMCounterValue_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTERVALUE_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounterValue_v1Ptr = PRMCounterValue_v1Ptr;
+    }
+
+    nvmlPRMCounterValue_v1_t *AsPRMCounterValue_v1Ptr() const
+    {
+        return m_value.PRMCounterValue_v1Ptr;
+    }
+
+    nvmlPRMCounterValue_v1_t const &AsPRMCounterValue_v1() const
+    {
+        return m_value.PRMCounterValue_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlPRMCounter_v1_t *PRMCounter_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTER_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounter_v1Ptr = PRMCounter_v1Ptr;
+    }
+    InjectionArgument(nvmlPRMCounter_v1_t PRMCounter_v1)
+        : m_type(INJECTION_PRMCOUNTER_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounter_v1 = PRMCounter_v1;
+    }
+    InjectionArgument(nvmlPRMCounter_v1_t *PRMCounter_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_PRMCOUNTER_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.PRMCounter_v1Ptr = PRMCounter_v1Ptr;
+    }
+
+    nvmlPRMCounter_v1_t *AsPRMCounter_v1Ptr() const
+    {
+        return m_value.PRMCounter_v1Ptr;
+    }
+
+    nvmlPRMCounter_v1_t const &AsPRMCounter_v1() const
+    {
+        return m_value.PRMCounter_v1;
     }
 
     // The following snippet is generated from write_injection_argument_header

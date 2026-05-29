@@ -40,8 +40,8 @@ Usage: ${0} [options] [command]
 "
 }
 
-LONG_OPTS=name,arch:,env:,help
-SHORT_OPTS=n,a:,e:,h
+LONG_OPTS=arch:,env:,help,name
+SHORT_OPTS=a:,e:,h,n
 
 ! PARSED=$(getopt --options=${SHORT_OPTS} --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -58,19 +58,19 @@ declare -a docker_args
 
 while true; do
     case $1 in
-    -a | --arch)
+    -a|--arch)
         TARGET_ARCH=$2
         shift 2
         ;;
-    -e | --env)
+    -e|--env)
         docker_args+=(--env "$2")
         shift 2
         ;;
-    -h | --help)
+    -h|--help)
         usage
         exit 0
         ;;
-    -n | --name)
+    -n|--name)
         PRINT_NAME_ONLY=1
         shift
         ;;
@@ -78,7 +78,8 @@ while true; do
         shift
         break
         ;;
-    *) ;;
+    *)
+        ;;
     esac
 done
 
@@ -86,16 +87,12 @@ if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -ne 0 ]]; then
     exit
 fi
 
-image=${DCGM_DOCKER_IMAGE}
-
 case "${TARGET_ARCH,,}" in
 amd64 | x86_64 | x64)
     TARGET_ARCH="x86_64"
-    image="${image}-x86_64"
     ;;
 aarch64 | arm64 | arm)
     TARGET_ARCH="aarch64"
-    image="${image}-aarch64"
     ;;
 *)
     >&2 echo "Unknown architecture $TARGET_ARCH"
@@ -103,7 +100,7 @@ aarch64 | arm64 | arm)
     exit 1
     ;;
 esac
-
+image="$DCGM_DOCKER_IMAGE-$TARGET_ARCH"
 
 if [[ -z "$image" ]]; then
     >&2 echo "Error: Cannot find a proper docker image to use"

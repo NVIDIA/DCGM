@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "nvml.h"
+#include "dcgm_nvml.h"
 #include <Defer.hpp>
 #include <InjectedNvml.h>
 #include <InjectionKeys.h>

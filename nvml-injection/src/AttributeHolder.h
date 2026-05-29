@@ -19,7 +19,7 @@
 #include <map>
 #include <string>
 
-#include <nvml.h>
+#include <dcgm_nvml.h>
 #include <timelib.h>
 
 #include "CompoundValue.h"

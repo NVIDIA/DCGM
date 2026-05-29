@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <nvml.h>
+#include <dcgm_nvml.h>
 
 #include "nvml_injection_structs.h"
 

@@ -126,6 +126,10 @@ int nvmlVgpuPgpuMetadata_tCompare(const nvmlVgpuPgpuMetadata_t &a, const nvmlVgp
 int nvmlVgpuPgpuCompatibility_tCompare(const nvmlVgpuPgpuCompatibility_t &a, const nvmlVgpuPgpuCompatibility_t &b);
 int nvmlExcludedDeviceInfo_tCompare(const nvmlExcludedDeviceInfo_t &a, const nvmlExcludedDeviceInfo_t &b);
 int nvmlPRMTLV_v1_tCompare(const nvmlPRMTLV_v1_t &a, const nvmlPRMTLV_v1_t &b);
+int nvmlPRMCounterInput_v1_tCompare(const nvmlPRMCounterInput_v1_t &a, const nvmlPRMCounterInput_v1_t &b);
+int nvmlPRMCounterValue_v1_tCompare(const nvmlPRMCounterValue_v1_t &a, const nvmlPRMCounterValue_v1_t &b);
+int nvmlPRMCounter_v1_tCompare(const nvmlPRMCounter_v1_t &a, const nvmlPRMCounter_v1_t &b);
+int nvmlPRMCounterList_v1_tCompare(const nvmlPRMCounterList_v1_t &a, const nvmlPRMCounterList_v1_t &b);
 int nvmlGpuInstancePlacement_tCompare(const nvmlGpuInstancePlacement_t &a, const nvmlGpuInstancePlacement_t &b);
 int nvmlGpuInstanceProfileInfo_tCompare(const nvmlGpuInstanceProfileInfo_t &a, const nvmlGpuInstanceProfileInfo_t &b);
 int nvmlGpuInstanceProfileInfo_v2_tCompare(const nvmlGpuInstanceProfileInfo_v2_t &a, const nvmlGpuInstanceProfileInfo_v2_t &b);
@@ -2709,6 +2713,75 @@ int nvmlPRMTLV_v1_tCompare(const nvmlPRMTLV_v1_t &a, const nvmlPRMTLV_v1_t &b)
     if (auto cmpRet = memcmp(a.inData, b.inData, sizeof(a.inData)); cmpRet != 0)
     {
         return cmpRet;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPRMCounterInput_v1_tCompare(const nvmlPRMCounterInput_v1_t &a, const nvmlPRMCounterInput_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.localPort != b.localPort)
+    {
+        return a.localPort < b.localPort ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPRMCounterValue_v1_tCompare(const nvmlPRMCounterValue_v1_t &a, const nvmlPRMCounterValue_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.status != b.status)
+    {
+        return a.status < b.status ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.outputType != b.outputType)
+    {
+        return a.outputType < b.outputType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(&a.outputValue, &b.outputValue, sizeof(a.outputValue)); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPRMCounter_v1_tCompare(const nvmlPRMCounter_v1_t &a, const nvmlPRMCounter_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.counterId != b.counterId)
+    {
+        return a.counterId < b.counterId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlPRMCounterInput_v1_tCompare(a.inData, b.inData); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlPRMCounterValue_v1_tCompare(a.counterValue, b.counterValue); ret)
+    {
+        return ret;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlPRMCounterList_v1_tCompare(const nvmlPRMCounterList_v1_t &a, const nvmlPRMCounterList_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.numCounters != b.numCounters)
+    {
+        return a.numCounters < b.numCounters ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = nvmlPRMCounter_v1_tCompare(*a.counters, *b.counters); ret)
+    {
+        return ret;
     }
     return 0;
 }
@@ -6840,6 +6913,161 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_NVLINKVERSION)
             {
                 memcpy(m_value.NvlinkVersionPtr, &other.m_value.NvlinkVersion, sizeof(*m_value.NvlinkVersionPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PRMCOUNTERID:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTERID)
+            {
+                memcpy(&m_value.PRMCounterId, &other.m_value.PRMCounterId, sizeof(*&m_value.PRMCounterId));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTERID_PTR)
+            {
+                memcpy(&m_value.PRMCounterId, other.m_value.PRMCounterIdPtr, sizeof(*&m_value.PRMCounterId));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTERID_PTR:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTERID_PTR)
+            {
+                memcpy(m_value.PRMCounterIdPtr, other.m_value.PRMCounterIdPtr, sizeof(*m_value.PRMCounterIdPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTERID)
+            {
+                memcpy(m_value.PRMCounterIdPtr, &other.m_value.PRMCounterId, sizeof(*m_value.PRMCounterIdPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PRMCOUNTERINPUT_V1:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTERINPUT_V1)
+            {
+                memcpy(&m_value.PRMCounterInput_v1, &other.m_value.PRMCounterInput_v1, sizeof(*&m_value.PRMCounterInput_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTERINPUT_V1_PTR)
+            {
+                memcpy(&m_value.PRMCounterInput_v1, other.m_value.PRMCounterInput_v1Ptr, sizeof(*&m_value.PRMCounterInput_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTERINPUT_V1_PTR:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTERINPUT_V1_PTR)
+            {
+                memcpy(m_value.PRMCounterInput_v1Ptr, other.m_value.PRMCounterInput_v1Ptr, sizeof(*m_value.PRMCounterInput_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTERINPUT_V1)
+            {
+                memcpy(m_value.PRMCounterInput_v1Ptr, &other.m_value.PRMCounterInput_v1, sizeof(*m_value.PRMCounterInput_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PRMCOUNTERLIST_V1:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTERLIST_V1)
+            {
+                memcpy(&m_value.PRMCounterList_v1, &other.m_value.PRMCounterList_v1, sizeof(*&m_value.PRMCounterList_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTERLIST_V1_PTR)
+            {
+                memcpy(&m_value.PRMCounterList_v1, other.m_value.PRMCounterList_v1Ptr, sizeof(*&m_value.PRMCounterList_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTERLIST_V1_PTR:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTERLIST_V1_PTR)
+            {
+                memcpy(m_value.PRMCounterList_v1Ptr, other.m_value.PRMCounterList_v1Ptr, sizeof(*m_value.PRMCounterList_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTERLIST_V1)
+            {
+                memcpy(m_value.PRMCounterList_v1Ptr, &other.m_value.PRMCounterList_v1, sizeof(*m_value.PRMCounterList_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PRMCOUNTERVALUE_V1:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTERVALUE_V1)
+            {
+                memcpy(&m_value.PRMCounterValue_v1, &other.m_value.PRMCounterValue_v1, sizeof(*&m_value.PRMCounterValue_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTERVALUE_V1_PTR)
+            {
+                memcpy(&m_value.PRMCounterValue_v1, other.m_value.PRMCounterValue_v1Ptr, sizeof(*&m_value.PRMCounterValue_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTERVALUE_V1_PTR:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTERVALUE_V1_PTR)
+            {
+                memcpy(m_value.PRMCounterValue_v1Ptr, other.m_value.PRMCounterValue_v1Ptr, sizeof(*m_value.PRMCounterValue_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTERVALUE_V1)
+            {
+                memcpy(m_value.PRMCounterValue_v1Ptr, &other.m_value.PRMCounterValue_v1, sizeof(*m_value.PRMCounterValue_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_PRMCOUNTER_V1:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTER_V1)
+            {
+                memcpy(&m_value.PRMCounter_v1, &other.m_value.PRMCounter_v1, sizeof(*&m_value.PRMCounter_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTER_V1_PTR)
+            {
+                memcpy(&m_value.PRMCounter_v1, other.m_value.PRMCounter_v1Ptr, sizeof(*&m_value.PRMCounter_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTER_V1_PTR:
+        {
+            if (other.m_type == INJECTION_PRMCOUNTER_V1_PTR)
+            {
+                memcpy(m_value.PRMCounter_v1Ptr, other.m_value.PRMCounter_v1Ptr, sizeof(*m_value.PRMCounter_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_PRMCOUNTER_V1)
+            {
+                memcpy(m_value.PRMCounter_v1Ptr, &other.m_value.PRMCounter_v1, sizeof(*m_value.PRMCounter_v1Ptr));
                 set = true;
             }
             break;
@@ -12947,6 +13175,137 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
+                case INJECTION_PRMCOUNTERID_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.PRMCounterIdPtr == *other.m_value.PRMCounterIdPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.PRMCounterIdPtr < *other.m_value.PRMCounterIdPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.PRMCounterIdPtr[i] == other.m_value.PRMCounterIdPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.PRMCounterIdPtr[i] < other.m_value.PRMCounterIdPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTERID:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.PRMCounterId < other.m_value.PRMCounterId)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.PRMCounterId > other.m_value.PRMCounterId)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTERINPUT_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPRMCounterInput_v1_tCompare(*m_value.PRMCounterInput_v1Ptr, *other.m_value.PRMCounterInput_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPRMCounterInput_v1_tCompare(*m_value.PRMCounterInput_v1Ptr, *other.m_value.PRMCounterInput_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTERINPUT_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPRMCounterInput_v1_tCompare(m_value.PRMCounterInput_v1, other.m_value.PRMCounterInput_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTERLIST_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPRMCounterList_v1_tCompare(*m_value.PRMCounterList_v1Ptr, *other.m_value.PRMCounterList_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPRMCounterList_v1_tCompare(*m_value.PRMCounterList_v1Ptr, *other.m_value.PRMCounterList_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTERLIST_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPRMCounterList_v1_tCompare(m_value.PRMCounterList_v1, other.m_value.PRMCounterList_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTERVALUE_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPRMCounterValue_v1_tCompare(*m_value.PRMCounterValue_v1Ptr, *other.m_value.PRMCounterValue_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPRMCounterValue_v1_tCompare(*m_value.PRMCounterValue_v1Ptr, *other.m_value.PRMCounterValue_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTERVALUE_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPRMCounterValue_v1_tCompare(m_value.PRMCounterValue_v1, other.m_value.PRMCounterValue_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTER_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlPRMCounter_v1_tCompare(*m_value.PRMCounter_v1Ptr, *other.m_value.PRMCounter_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlPRMCounter_v1_tCompare(*m_value.PRMCounter_v1Ptr, *other.m_value.PRMCounter_v1Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_PRMCOUNTER_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlPRMCounter_v1_tCompare(m_value.PRMCounter_v1, other.m_value.PRMCounter_v1);
+                    break; // NOT REACHED
+                }
                 case INJECTION_PRMTLV_V1_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -16372,6 +16731,46 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.NvlinkVersionPtr)
             {
                 free(m_value.NvlinkVersionPtr);
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTERID_PTR:
+        {
+            if (m_inHeap && m_value.PRMCounterIdPtr)
+            {
+                free(m_value.PRMCounterIdPtr);
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTERINPUT_V1_PTR:
+        {
+            if (m_inHeap && m_value.PRMCounterInput_v1Ptr)
+            {
+                free(m_value.PRMCounterInput_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTERLIST_V1_PTR:
+        {
+            if (m_inHeap && m_value.PRMCounterList_v1Ptr)
+            {
+                free(m_value.PRMCounterList_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTERVALUE_V1_PTR:
+        {
+            if (m_inHeap && m_value.PRMCounterValue_v1Ptr)
+            {
+                free(m_value.PRMCounterValue_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_PRMCOUNTER_V1_PTR:
+        {
+            if (m_inHeap && m_value.PRMCounter_v1Ptr)
+            {
+                free(m_value.PRMCounter_v1Ptr);
             }
             break;
         }

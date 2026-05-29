@@ -17,7 +17,7 @@
 
 #include "CompoundValue.h"
 
-#include <nvml.h>
+#include <dcgm_nvml.h>
 
 /*
  * This class wraps the function return (as nvmlReturn_t) and function output (view as CompoundValue)

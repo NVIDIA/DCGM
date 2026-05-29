@@ -115,7 +115,7 @@ def GetFunctionSignature(entryPoint, first):
     if m:
         return RemoveExtraSpaces(m.group(1)), RemoveExtraSpaces(m.group(2)), RemoveExtraSpaces(m.group(3))
     else:
-        if entryPoint == "include \"nvml.h":
+        if entryPoint == "include \"dcgm_nvml.h":
             pass
         # Ignore errors on the first token because it is everything from before the first entry point
         elif not first:

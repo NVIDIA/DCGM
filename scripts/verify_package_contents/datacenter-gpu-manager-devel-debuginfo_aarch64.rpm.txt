@@ -71,7 +71,7 @@
 /-/src_0/sdk
 /-/src_0/sdk/nvidia
 /-/src_0/sdk/nvidia/nvml
-/-/src_0/sdk/nvidia/nvml/nvml.h
+/-/src_0/sdk/nvidia/nvml/dcgm_nvml.h
 /usr/lib/debug
 /usr/lib/debug/usr
 /usr/lib/debug/usr/lib64

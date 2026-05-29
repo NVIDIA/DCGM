@@ -661,33 +661,30 @@ TEST_CASE("MnDiagMpiRunner ParseDcgmMnDiagToMpiCommand_v1")
         };
 
         // Check all default parameters from GetDefaultMnuberGemmParametersMap_v1
-        REQUIRE(checkParam("workload", "N"));
+        // Updated for 10kHz FP32 pulse configuration
+        REQUIRE(checkParam("workload", "GC"));
         REQUIRE(checkParam("time_to_run", "3600"));
         REQUIRE(checkParam("max_workload", "65536"));
         REQUIRE(checkParam("MM_max_workload", "65536"));
-        REQUIRE(checkParam("NET_sm_count", "152"));
-        // With 9 processes (odd), NET_link_order should be set to snake
-        REQUIRE(checkParam("NET_link_order", "snake"));
-        REQUIRE(checkParam("NET_size", "2048000000"));
-        REQUIRE(checkParam("freq", "1"));
-        REQUIRE(checkParam("duty", "1.0"));
+        REQUIRE(checkParam("MM_sm_count", "144"));
+        REQUIRE(checkParam("CE_type", "H"));
+        REQUIRE(checkParam("MM_N", "0"));
+        REQUIRE(checkParam("CE_size", "200000"));
+        REQUIRE(checkParam("MM_type", "ST_ST_SSS"));
+        REQUIRE(checkParam("MM_M_per_sm", "32"));
+        REQUIRE(checkParam("freq", "10000"));
+        REQUIRE(checkParam("duty", "0.5"));
 
         // Check flags (parameters with no values)
         bool foundDynamicAdj = false;
-        bool foundNoGraphs   = false;
         for (const auto &arg : cmdArgs)
         {
             if (arg == "--dynamic_adj")
             {
                 foundDynamicAdj = true;
             }
-            else if (arg == "--no_graphs")
-            {
-                foundNoGraphs = true;
-            }
         }
         REQUIRE(foundDynamicAdj);
-        REQUIRE(foundNoGraphs);
     }
 
     SECTION("Verify NET_link_order set to snake with odd number of processes")

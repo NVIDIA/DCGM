@@ -33,7 +33,6 @@
         }
       },
       "environment": {
-        "DCGM_SKIP_SOURCE_AUDIT": "1",
         "DCGM_SKIP_PYTHON_LINTING": "1"
       }
     }

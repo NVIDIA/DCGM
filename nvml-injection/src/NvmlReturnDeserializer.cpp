@@ -28,7 +28,7 @@
 #include <optional>
 #include <unordered_map>
 
-#include "nvml.h"
+#include "dcgm_nvml.h"
 #include <yaml-cpp/yaml.h>
 #include <yaml-cpp/node/node.h>
 
@@ -126,6 +126,8 @@ nvmlVgpuMetadata_t *nvmlVgpuMetadata_tDeserializer(const YAML::Node &node);
 nvmlVgpuPgpuMetadata_t *nvmlVgpuPgpuMetadata_tDeserializer(const YAML::Node &node);
 nvmlVgpuPgpuCompatibility_t *nvmlVgpuPgpuCompatibility_tDeserializer(const YAML::Node &node);
 nvmlExcludedDeviceInfo_t *nvmlExcludedDeviceInfo_tDeserializer(const YAML::Node &node);
+nvmlPRMCounterInput_v1_t *nvmlPRMCounterInput_v1_tDeserializer(const YAML::Node &node);
+nvmlPRMCounterList_v1_t *nvmlPRMCounterList_v1_tDeserializer(const YAML::Node &node);
 nvmlGpuInstancePlacement_t *nvmlGpuInstancePlacement_tDeserializer(const YAML::Node &node);
 nvmlGpuInstanceProfileInfo_t *nvmlGpuInstanceProfileInfo_tDeserializer(const YAML::Node &node);
 nvmlGpuInstanceProfileInfo_v2_t *nvmlGpuInstanceProfileInfo_v2_tDeserializer(const YAML::Node &node);
@@ -4627,6 +4629,57 @@ nvmlExcludedDeviceInfo_t *nvmlExcludedDeviceInfo_tDeserializer(const YAML::Node 
 }
 
 // The following snippet is generated from write_deserializer_definition
+nvmlPRMCounterInput_v1_t *nvmlPRMCounterInput_v1_tDeserializer(const YAML::Node &node)
+{
+    auto *pRMCounterInput_v1 = reinterpret_cast<nvmlPRMCounterInput_v1_t *>(malloc(sizeof(nvmlPRMCounterInput_v1_t)));
+    if (pRMCounterInput_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(pRMCounterInput_v1, 0, sizeof(*pRMCounterInput_v1));
+    if (node["localPort"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        pRMCounterInput_v1->localPort = node["localPort"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing localPort for struct nvmlPRMCounterInput_v1_t");
+    }
+    return pRMCounterInput_v1;
+}
+
+// The following snippet is generated from write_deserializer_definition
+nvmlPRMCounterList_v1_t *nvmlPRMCounterList_v1_tDeserializer(const YAML::Node &node)
+{
+    auto *pRMCounterList_v1 = reinterpret_cast<nvmlPRMCounterList_v1_t *>(malloc(sizeof(nvmlPRMCounterList_v1_t)));
+    if (pRMCounterList_v1 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(pRMCounterList_v1, 0, sizeof(*pRMCounterList_v1));
+    if (node["numCounters"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        pRMCounterList_v1->numCounters = node["numCounters"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing numCounters for struct nvmlPRMCounterList_v1_t");
+    }
+    if (node["counters"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        NVML_LOG_ERR("Skipping loading counters for struct nvmlPRMCounterList_v1_t");
+    }
+    else
+    {
+        NVML_LOG_ERR("missing counters for struct nvmlPRMCounterList_v1_t");
+    }
+    return pRMCounterList_v1;
+}
+
+// The following snippet is generated from write_deserializer_definition
 nvmlGpuInstancePlacement_t *nvmlGpuInstancePlacement_tDeserializer(const YAML::Node &node)
 {
     auto *gpuInstancePlacement = reinterpret_cast<nvmlGpuInstancePlacement_t *>(malloc(sizeof(nvmlGpuInstancePlacement_t)));
@@ -7288,6 +7341,46 @@ std::optional<NvmlFuncReturn> ExcludedDeviceInfoParser(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> PRMCounterInput_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *pRMCounterInput_v1 = nvmlPRMCounterInput_v1_tDeserializer(node["ReturnValue"]);
+    if (pRMCounterInput_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {pRMCounterInput_v1, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> PRMCounterList_v1Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *pRMCounterList_v1 = nvmlPRMCounterList_v1_tDeserializer(node["ReturnValue"]);
+    if (pRMCounterList_v1 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {pRMCounterList_v1, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
 std::optional<NvmlFuncReturn> GpuInstancePlacementParser(const YAML::Node &node)
 {
     if (!node || !node["FunctionReturn"])
@@ -8457,6 +8550,8 @@ NvmlReturnDeserializer::NvmlReturnDeserializer()
         {"SupportedVgpus", SupportedVgpusParser},
         // The following snippet is generated from try_to_write_device_handler
         {"CreatableVgpus", CreatableVgpusParser},
+        // The following snippet is generated from try_to_write_device_handler
+        {"ReadPRMCounters", PRMCounterList_v1Parser},
         // The following snippet is generated from try_to_write_device_handler
         {"MigMode", MigModeParser},
         // The following snippet is generated from try_to_write_device_handler

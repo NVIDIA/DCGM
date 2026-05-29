@@ -58,9 +58,9 @@ def test_nvbandwidth_plugin_fail_if_mem_copy_util_is_larger_than_threshold(handl
     err = response.errors[errIdx]
     assert err.code == dcgm_errors.DCGM_FR_FIELD_THRESHOLD_TS
     assert err.category == dcgm_errors.DCGM_FR_EC_HARDWARE_MEMORY
-    assert err.severity == dcgm_errors.DCGM_ERROR_ISOLATE
-    assert err.msg.find(
-        "is greater than 10%. This may affect the results of the nvbandwidth test.") != -1, f"Error message: {err.msg}"
+    assert err.severity == dcgm_errors.DCGM_ERROR_MONITOR
+    assert err.msg.find("did not reach idle threshold") != - \
+        1, f"Error message: {err.msg}"
 
 
 @skip_test_if_no_dcgm_nvml()

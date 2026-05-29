@@ -21,8 +21,8 @@
 #include <DcgmUtilities.h>
 #include <Defer.hpp>
 #include <atomic>
+#include <dcgm_nvml.h>
 #include <dcgm_structs.h>
-#include <nvml.h>
 #include <shared_mutex>
 
 using NvmlGeneration = unsigned int;

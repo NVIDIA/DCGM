@@ -133,7 +133,7 @@
 /-/src_0/sdk/nvidia/nvml/common
 /-/src_0/sdk/nvidia/nvml/common/timelib.c
 /-/src_0/sdk/nvidia/nvml/common/timelib.h
-/-/src_0/sdk/nvidia/nvml/nvml.h
+/-/src_0/sdk/nvidia/nvml/dcgm_nvml.h
 /usr/lib/debug
 /usr/lib/debug/usr
 /usr/lib/debug/usr/bin

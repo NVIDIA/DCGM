@@ -14,7 +14,6 @@
 
 import dcgm_agent
 import dcgm_structs
-import logger
 import threading
 
 '''

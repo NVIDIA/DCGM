@@ -17,7 +17,7 @@
 
 #include "InjectionArgument.h"
 
-#include <nvml.h>
+#include <dcgm_nvml.h>
 #include <vector>
 
 /*

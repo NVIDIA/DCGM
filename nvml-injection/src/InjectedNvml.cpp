@@ -15,7 +15,7 @@
  */
 
 #include "NvmlFuncReturn.h"
-#include "nvml.h"
+#include "dcgm_nvml.h"
 #include "nvml_injection_structs.h"
 #include <InjectedNvml.h>
 #include <InjectionKeys.h>
@@ -36,7 +36,8 @@ namespace
 bool IsDeviceFunc(const std::string &funcname, const std::vector<InjectionArgument> &args)
 {
     return (funcname.starts_with("nvmlDeviceGet") || funcname.starts_with("nvmlGpmQueryDevice")
-            || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceWorkloadPowerProfile"))
+            || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceWorkloadPowerProfile")
+            || funcname.starts_with("nvmlDeviceReadWritePRM_v"))
            && args.size() >= 1 && args[0].GetType() == INJECTION_DEVICE;
 }
 
@@ -1378,7 +1379,7 @@ bool InjectedNvml::IsGetter(const std::string &funcname) const
     if (funcname.starts_with("nvmlDeviceGet") || funcname.starts_with("nvmlGpuInstanceGet")
         || funcname.starts_with("nvmlComputeInstanceGet") || funcname.starts_with("nvmlVgpuInstanceGet")
         || funcname.starts_with("nvmlVgpuTypeGet") || funcname.starts_with("nvmlDeviceWorkloadPowerProfile")
-        || funcname == "nvmlDeviceValidateInforom")
+        || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceReadWritePRM_v"))
     {
         return true;
     }

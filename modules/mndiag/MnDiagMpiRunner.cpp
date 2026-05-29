@@ -113,19 +113,21 @@ bool UpdateParamsMapWithParameter(std::unordered_map<std::string, std::string> &
  */
 std::unordered_map<std::string, std::string> GetDefaultMnuberGemmParametersMap_v1()
 {
-    // Default parameters for GB200 NVL72x1
-    // Default workload parameters for mnubergemm as a map
+    // Default parameters for GB200 NVL72x1 - 10kHz FP32 pulse configuration
+    // Corresponds to the 10khz test in gb200nvl_diag.sh
     std::unordered_map<std::string, std::string> params = { { "time_to_run", "3600" },
                                                             { "dynamic_adj", "" }, // Flag (no value)
                                                             { "MM_max_workload", "65536" },
                                                             { "max_workload", "65536" },
-                                                            { "NET_sm_count", "152" },
-                                                            { "workload", "N" },
-                                                            { "no_graphs", "" }, // Flag (no value)
-                                                            { "NET_link_order", "pair" },
-                                                            { "NET_size", "2048000000" },
-                                                            { "freq", "1" },
-                                                            { "duty", "1.0" } };
+                                                            { "MM_sm_count", "144" }, // No networking SMs
+                                                            { "workload", "GC" },     // GPU + Copy Engine workload
+                                                            { "CE_type", "H" },
+                                                            { "MM_N", "0" },
+                                                            { "CE_size", "200000" },    // 10kHz pulse CE size
+                                                            { "MM_type", "ST_ST_SSS" }, // FP32 as BF16 algorithm
+                                                            { "MM_M_per_sm", "32" },
+                                                            { "freq", "10000" }, // 10kHz frequency
+                                                            { "duty", "0.5" } }; // 50% duty cycle
 
     return params;
 }

@@ -15,7 +15,15 @@
 import dcgm_structs
 import dcgm_fields
 import dcgm_agent
-import logger
+import os
+
+# logger is test infrastructure module and is only available when testing
+# framework is active
+if '__DCGM_TESTING_FRAMEWORK_ACTIVE' in os.environ and os.environ[
+        '__DCGM_TESTING_FRAMEWORK_ACTIVE'] == '1':
+    import logger
+else:
+    logger = None
 
 g_latestDiagResponseVer = dcgm_structs.dcgmDiagResponse_version12
 g_latestRunDiagVer = dcgm_structs.dcgmRunDiag_version10
@@ -50,8 +58,9 @@ class DcgmDiag:
         elif self.version == dcgm_structs.dcgmRunDiag_version7:
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_v7()
         else:
-            logger.info("Unexpected runDiag version " +
-                        self.version + " using RunDiag_t")
+            if logger:
+                logger.info("Unexpected runDiag version " +
+                            self.version + " using RunDiag_t")
             self.runDiagInfo = dcgm_structs.c_dcgmRunDiag_t()
 
         self.runDiagInfo.flags = 0
@@ -130,7 +139,7 @@ class DcgmDiag:
         if hasattr(self.runDiagInfo, 'expectedNumEntities'):
             self.runDiagInfo.expectedNumEntities = self.expectedNumGpus
 
-        if logger.nvvs_trace_log_filename is not None:
+        if logger and logger.nvvs_trace_log_filename is not None:
             self.SetDebugLogFile(logger.nvvs_trace_log_filename)
             self.SetDebugLevel(5)  # Collect logs at highest level for nvvs.
 
@@ -287,7 +296,8 @@ def check_diag_result_fail(response, entityPair, testName):
         msg = retrieve_diag_failure_message(response, entityPair, testName)
         if not msg:
             msg = "No error was found to accompany the test failure"
-        logger.info("Test %s failed, msg: '%s'" % (testName, msg))
+        if logger:
+            logger.info("Test %s failed, msg: '%s'" % (testName, msg))
         return True
     return False
 
@@ -303,7 +313,8 @@ def check_diag_result_pass(response, entityPair, testName):
     msg = retrieve_diag_failure_message(response, entityPair, testName)
     if not msg:
         msg = "No error was found to accompany the test failure"
-    logger.info("Test %s unexpectedly failed, msg: %s" % (testName, msg))
+    if logger:
+        logger.info("Test %s unexpectedly failed, msg: %s" % (testName, msg))
 
     return False
 

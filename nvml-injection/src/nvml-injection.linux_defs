@@ -320,6 +320,7 @@
         nvmlSystemEventSetFree;
         nvmlSystemRegisterEvents;
         nvmlSystemEventSetWait;
+        nvmlDeviceReadPRMCounters_v1;
         extern "C++" {
             _ZTI*;
             _ZTS*;

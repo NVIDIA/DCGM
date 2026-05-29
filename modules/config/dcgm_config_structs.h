@@ -20,10 +20,10 @@
 
 /*****************************************************************************/
 /* Introspect Subrequest IDs */
-#define DCGM_CONFIG_SR_GET           1
-#define DCGM_CONFIG_SR_SET           2
-#define DCGM_CONFIG_SR_ENFORCE_GROUP 3
-#define DCGM_CONFIG_SR_ENFORCE_GPU   4
+#define DCGM_CONFIG_SR_GET                        1
+#define DCGM_CONFIG_SR_SET                        2
+#define DCGM_CONFIG_SR_ENFORCE_GROUP              3
+#define DCGM_CONFIG_SR_ENFORCE_GPU                4
 #define DCGM_CONFIG_SR_SET_WORKLOAD_POWER_PROFILE 5
 #define DCGM_CONFIG_SR_COUNT                      6 /* Keep as last entry and 1 greater */
 

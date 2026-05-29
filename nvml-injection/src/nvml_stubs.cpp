@@ -17,7 +17,7 @@
 #include "InjectionKeys.h"
 #include "NvmlFuncReturn.h"
 #include "PassThruNvml.h"
-#include "nvml.h"
+#include "dcgm_nvml.h"
 #include "nvml_injection.h"
 
 #include <fmt/core.h>

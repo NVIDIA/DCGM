@@ -24,7 +24,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <nvml.h>
+#include <dcgm_nvml.h>
 #include <yaml-cpp/yaml.h>
 
 #include "AttributeHolder.h"
@@ -245,12 +245,12 @@ private:
     std::list<AttributeHolder<nvmlDevice_t>> m_migDeviceCollection;
 
     // This list collects all "fake" GPU instances. Each element is {DeviceUUID}_{idx} which represents as a GPU
-    // instance of {deviceUUID}. nvml.h dose not define nvmlGpuInstance_t, use the pointer of element in this list to
-    // represent it
+    // instance of {deviceUUID}. dcgm_nvml.h dose not define nvmlGpuInstance_t, use the pointer of element in this list
+    // to represent it
     std::list<std::string> m_gpuInstanceCollection;
 
     // This list collects all "fake" compute instances. Each element is {fake_gpu_instance}_{idx} which represents as a
-    // compute instance of GPU istance {fake_gpu_instance}. nvml.h dose not define nvmlComputeInstance_t, use the
+    // compute instance of GPU istance {fake_gpu_instance}. dcgm_nvml.h dose not define nvmlComputeInstance_t, use the
     // pointer of element in this list to represent it
     std::list<std::string> m_computeInstanceCollection;
 
