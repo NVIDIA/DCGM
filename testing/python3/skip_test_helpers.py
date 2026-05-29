@@ -43,4 +43,3 @@ def gpu_is_healthy_and_support_memtest(handle, gpuId):
         return False
     func.result_cache[gpuId] = True
     return True
-

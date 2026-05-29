@@ -50,7 +50,6 @@ class value(Union):
         ('str', c_char * DCGM_MAX_STR_LENGTH)
     ]
 
-
 # Below is a test API simply to make sure versioning is working correctly
 
 
@@ -199,6 +198,7 @@ class c_dcgmSetNvLinkLinkState_v1(dcgm_structs._PrintableStructure):
         ('linkState', c_uint32),     # State to set the link to
         ('unused', c_uint32)         # Not used for now. Set to 0
     ]
+
 
 dcgmSetNvLinkLinkState_version1 = dcgm_structs.make_dcgm_version(
     c_dcgmSetNvLinkLinkState_v1, 1)

@@ -48,7 +48,7 @@ private:
     std::string m_threadName;           /* Textual name of this thread that will appear in gdb */
 
 protected:
-    pid_t m_tid; /* Thread ID */
+    pid_t m_tid;                                    /* Thread ID */
     class HangDetectMonitor *m_monitor { nullptr }; /* Hang detection monitor */
 
 public:

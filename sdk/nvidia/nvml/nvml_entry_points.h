@@ -33,6 +33,7 @@
  * the above Disclaimer and U.S. Government End Users Notice.
  */
 
+
 NVML_ENTRY_POINT(nvmlDeviceGetClockInfo,
                  tsapiDeviceGetClockInfo,
                  (nvmlDevice_t device, nvmlClockType_t type, unsigned int *clock),

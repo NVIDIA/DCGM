@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.21.0)
 
-project(datacenter-gpu-manager-4 VERSION 4.5.0)
+project(datacenter-gpu-manager-4 VERSION 4.5.2)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF CACHE BOOL
     "Specify whether to link the target in the build tree with the INSTALL_RPATH")
@@ -258,7 +258,6 @@ message("${DCGM_BUILD_INFO}")
 
 string(TIMESTAMP BUILD_DATE "%Y%m%d")
 add_compile_definitions(BUILD_DATE="${BUILD_DATE}")
-
 add_compile_definitions(INJECTION_LIBRARY_AVAILABLE)
 
 add_library(nvml_injection SHARED)
@@ -318,9 +317,9 @@ add_library(nvvs_plugins_busgrind_interface INTERFACE)
 add_library(nvvs_plugins_nvbandwidth_interface INTERFACE)
 add_library(nvvs_plugins_memtest_interface INTERFACE)
 add_library(nvvs_plugins_memory_interface INTERFACE)
-add_library(nvvs_plugins_nccl_tests_interface INTERFACE)
 add_library(nvvs_plugins_contextcreate_interface INTERFACE)
 add_library(nvvs_plugins_common_interface INTERFACE)
+add_library(nvvs_plugins_nccl_tests_interface INTERFACE)
 add_library(public_vgpu_interface INTERFACE)
 add_library(sdk_nscq_interface INTERFACE)
 add_library(sdk_nscq_loader_interface INTERFACE)

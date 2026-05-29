@@ -121,9 +121,9 @@ static dcgmReturn_t MockPostWithCache(dcgm_module_command_header_t *header, void
     }
 
     // Other requests: return OK
-     return DCGM_ST_OK;
- }
- 
+    return DCGM_ST_OK;
+}
+
 // Test helper class that has friend access to DcgmHealthWatch
 class DcgmHealthWatchTestHelper
 {

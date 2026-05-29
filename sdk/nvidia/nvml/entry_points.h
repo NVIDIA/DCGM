@@ -1,5 +1,5 @@
 /*
- * Copyright 1993-2022 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2026 NVIDIA Corporation.  All rights reserved.
  *
  * NOTICE TO USER:
  *
@@ -33,6 +33,7 @@
  * the above Disclaimer and U.S. Government End Users Notice.
  */
 
-#include "nvml.h"
+
+#include "dcgm_nvml.h"
 #include "nvml_deprecated.h"
 #include "nvml_entry_points.h"

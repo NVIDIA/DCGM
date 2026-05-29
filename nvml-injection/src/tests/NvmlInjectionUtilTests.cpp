@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "NvmlInjectionUtil.h"
-#include "nvml.h"
+#include "dcgm_nvml.h"
 #include <catch2/catch_all.hpp>
 #include <cstring>
 

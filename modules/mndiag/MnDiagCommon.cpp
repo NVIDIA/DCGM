@@ -20,9 +20,9 @@
 #include <DcgmStringHelpers.h>
 #include <algorithm>
 #include <cstddef>
+#include <dcgm_nvml.h>
 #include <expected>
 #include <filesystem>
-#include <nvml.h>
 #include <ranges>
 #include <string>
 #include <string_view>

@@ -21,9 +21,9 @@
 #include <DcgmStringHelpers.h>
 #include <catch2/catch_all.hpp>
 #include <cstdlib>
+#include <dcgm_nvml.h>
 #include <dcgm_structs.h>
 #include <memory>
-#include <nvml.h>
 #include <ranges>
 
 #include "mocks/MockDcgmApi.h"

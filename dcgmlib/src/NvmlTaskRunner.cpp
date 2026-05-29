@@ -19,8 +19,8 @@
 
 #include <HangDetectMonitor.h>
 #include <atomic>
+#include <dcgm_nvml.h>
 #include <dcgm_structs.h>
-#include <nvml.h>
 
 bool operator==(const SafeNvmlHandle &a, const SafeNvmlHandle &b)
 {

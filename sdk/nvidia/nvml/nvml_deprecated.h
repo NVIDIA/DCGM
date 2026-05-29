@@ -1,5 +1,5 @@
 /*
- * Copyright 1993-2022 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2026 NVIDIA Corporation.  All rights reserved.
  *
  * NOTICE TO USER:
  *
@@ -33,12 +33,13 @@
  * the above Disclaimer and U.S. Government End Users Notice.
  */
 
+
 #ifndef _NVML_DEPRECATED_H_
 #define _NVML_DEPRECATED_H_
 
 /*
  * Declare prototypes for deprecated functions which are still exported for
- * backwards compatibility but not present in nvml.h
+ * backwards compatibility but not present in dcgm_nvml.h
  */
 extern nvmlReturn_t DECLDIR nvmlInit(void);
 extern nvmlReturn_t DECLDIR nvmlDeviceGetCount(unsigned int *deviceCount);

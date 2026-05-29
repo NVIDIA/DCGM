@@ -173,7 +173,7 @@ install(
         python3/DcgmGroup.py
         python3/DcgmHandle.py
         python3/DcgmJsonReader.py
-	    python3/DcgmLogging.py
+        python3/DcgmLogging.py
         python3/DcgmReader.py
         python3/DcgmStatus.py
         python3/DcgmSystem.py

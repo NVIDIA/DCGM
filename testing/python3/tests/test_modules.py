@@ -190,7 +190,6 @@ def test_dcgm_library_existence():
         'libdcgmmodulemndiag.so.4',
         'libdcgmmoduleintrospect.so.4',
         'libdcgmmodulepolicy.so.4',
-        'libdcgmmodulevgpu.so.4',
     ]
 
     name_to_found = {}

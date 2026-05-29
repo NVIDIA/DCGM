@@ -206,7 +206,7 @@ def get_function_signature(entry_point, first):
     if m:
         return remove_extra_spaces(m.group(1)), remove_extra_spaces(m.group(2)), remove_extra_spaces(m.group(3))
     else:
-        if entry_point == "include \"nvml.h":
+        if entry_point == "include \"dcgm_nvml.h":
             pass
         # Ignore errors on the first token because it is everything from before the first entry point
         elif not first:
@@ -461,7 +461,7 @@ def print_ungenerated_function(funcname, arg_types):
 
 def write_auto_generate_c_file_header(out_file):
     copyright_notice = '''/*
- * Copyright (c) 2024-2026, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -483,7 +483,7 @@ def write_auto_generate_c_file_header(out_file):
 
 def write_auto_generate_py_file_header(out_file):
     copyright_notice = '''#
-# Copyright (c) 2024-2026, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -776,7 +776,7 @@ def write_stub_file_header(stub_file):
         '#pragma GCC diagnostic push\n#pragma GCC diagnostic ignored "-Wunused-parameter"\n\n')
     stub_file.write('// clang-format off\n')
     stub_file.write("#include \"InjectedNvml.h\"\n")
-    stub_file.write("#include \"nvml.h\"\n")
+    stub_file.write("#include \"dcgm_nvml.h\"\n")
     stub_file.write("#include \"PassThruNvml.h\"\n\n")
     stub_file.write("#ifdef __cplusplus\n")
     stub_file.write("extern \"C\"\n{\n#endif\n\n")
@@ -1499,7 +1499,6 @@ def is_pynvml_missing_struct(struct_name):
         "c_nvmlNvlinkSupportedBwModes_t",
         "c_nvmlNvlinkGetBwMode_t",
         "c_nvmlNvlinkSetBwMode_t",
-        "c_nvmlPRMTLV_v1_t",
     }
     return struct_name_with_c_prefix in missing
 
@@ -1788,7 +1787,7 @@ def write_injection_structs_header(struct_with_member, output_dir, all_enum):
         write_auto_generate_c_file_header(injectionStructs)
         injectionStructs.write('// clang-format off\n')
         injectionStructs.write('#pragma once\n\n')
-        injectionStructs.write('#include <nvml.h>\n')
+        injectionStructs.write('#include <dcgm_nvml.h>\n')
 
         all_type_name_arr = get_all_type_name_arr(struct_with_member, all_enum)
         # write the union for simple value types
@@ -1915,7 +1914,7 @@ def write_injection_argument_header(output_dir, struct_with_member, all_enum):
         injectionHeader.write('// clang-format off\n')
         injectionHeader.write('#pragma once\n\n')
         injectionHeader.write('#include <cstring>\n')
-        injectionHeader.write('#include <nvml.h>\n')
+        injectionHeader.write('#include <dcgm_nvml.h>\n')
         injectionHeader.write('#include <string>\n\n')
         injectionHeader.write('#include "%s"\n\n' % INJECTION_STRUCTS_NAME)
 
@@ -3595,7 +3594,7 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         out_file.write('#include <functional>\n')
         out_file.write('#include <optional>\n')
         out_file.write('#include <unordered_map>\n\n')
-        out_file.write('#include "nvml.h"\n')
+        out_file.write('#include "dcgm_nvml.h"\n')
         out_file.write('#include <yaml-cpp/yaml.h>\n')
         out_file.write('#include <yaml-cpp/node/node.h>\n\n')
         out_file.write('#include "NvmlLogging.h"\n')
@@ -3908,9 +3907,15 @@ def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter, description=description)
     parser.add_argument(
-        '-i', '--input-file', default='sdk/nvidia/nvml/nvml_entry_points.h', dest='inputPath')
-    parser.add_argument('-n', '--nvml-header',
-                        default='sdk/nvidia/nvml/nvml.h', dest='nvmlHeaderPath')
+        '-i',
+        '--input-file',
+        default='sdk/nvidia/nvml/nvml_entry_points.h',
+        dest='inputPath')
+    parser.add_argument(
+        '-n',
+        '--nvml-header',
+        default='sdk/nvidia/nvml/dcgm_nvml.h',
+        dest='nvmlHeaderPath')
     parser.add_argument('-o', '--output-dir', default='.', dest='outputDir')
     parser.add_argument('--verbose', action="store_true")
     args = parser.parse_args()

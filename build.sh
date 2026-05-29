@@ -38,23 +38,24 @@ function usage() {
     echo "Buildscript for the DCGM project
 Usage: ${0} [options] [-- [any additional cmake arguments]]
     Where options are:
-        -d --debug           : Make debug build of the DCGM (CMAKE_BUILD_TYPE=Debug)
-        -r --release         : Make release build of the DCGM (CMAKE_BUILD_TYPE=RelWithDebInfo)
-           --coverage        : Generated build dumps coverage information
-        -p --packages        : Generate tar.gz packages once the build is done
-           --deb             : Generate *.deb packages once the build is done
-           --rpm             : Generate *.rpm packages once the build is done
-        -c --clean           : Make clean rebuild
-        -a --arch <arch>     : Make build for specified architecture. Supported are: amd64, aarch64
-        -n --no-tests        : Do not run build-time tests
-           --no-install      : Do not perform local installation to the _out directory
-           --address-san     : Turn on AddressSanitizer
-           --thread-san      : Turn on ThreadSanitizer
-           --ub-san          : Turn on UndefinedSanitizer
-           --leak-san        : Turn on LeakSanitizer
-           --gcc-analyzer    : Turn on GCC static analysis
-           --publication     : Generate packages without the BUILD_NUMBER suffix
-           --vmware          : Make vmware build of the DCGM
+        -d --debug                                         : Make debug build of the DCGM (CMAKE_BUILD_TYPE=Debug)
+        -r --release                                       : Make release build of the DCGM (CMAKE_BUILD_TYPE=RelWithDebInfo)
+           --coverage                                      : Generated build dumps coverage information
+        -p --packages                                      : Generate tar.gz packages once the build is done
+           --deb                                           : Generate *.deb packages once the build is done
+           --rpm                                           : Generate *.rpm packages once the build is done
+        -c --clean                                         : Make clean rebuild
+        -a --arch <arch>                                   : Make build for specified architecture. Supported are: amd64, aarch64
+        -n --no-tests                                      : Do not run build-time tests
+           --no-install                                    : Do not perform local installation to the _out directory
+           --address-san                                   : Turn on AddressSanitizer
+           --thread-san                                    : Turn on ThreadSanitizer
+           --ub-san                                        : Turn on UndefinedSanitizer
+           --leak-san                                      : Turn on LeakSanitizer
+           --gcc-analyzer                                  : Turn on GCC static analysis
+           --vmware                                        : Make vmware build of the DCGM
+           --debug-find                                    : Print debug logging while performing system introspection
+           --debug-find-pkg <name>[,<additional names>...] : As --debug-find, but for a specificied subset of packages
         -h --help            : This information
 
     Default options are: --release --arch amd64
@@ -77,7 +78,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
           sanitizers compatibility."
 }
 
-LONGOPTS=address-san,arch:,clean,coverage,deb,debug,gcc-analyzer,help,leak-san,no-install,no-tests,packages,publication,release,rpm,thread-san,ub-san,vmware
+LONGOPTS=address-san,arch:,clean,coverage,deb,debug,debug-find,debug-find-pkg:,gcc-analyzer,help,leak-san,no-install,no-tests,packages,release,rpm,thread-san,ub-san,vmware
 SHORTOPTS=drsa:pchn
 
 ! PARSED=$(getopt --options=${SHORTOPTS} --longoptions=${LONGOPTS} --name "${0}" -- "$@")
@@ -91,8 +92,7 @@ declare -a cmake_arguments
 declare -a cmake_build_types
 declare -a intodocker_arguments
 
-intodocker_arguments=(
-    --env DCGM_SKIP_PYTHON_LINTING=$DCGM_SKIP_PYTHON_LINTING)
+intodocker_arguments=( --env DCGM_SKIP_PYTHON_LINTING=$DCGM_SKIP_PYTHON_LINTING )
 
 for VARIABLE in BUILD_NUMBER DEBUG_BUILD_SCRIPT NPROC PRINT_UNCOMMITED_CHANGES
 do
@@ -106,7 +106,6 @@ COVERAGE=0
 DEB=0
 INSTALL=1
 OS=Linux
-PUBLICATION=0
 RPM=0
 TESTS=1
 TGZ=0
@@ -162,9 +161,6 @@ while [[ $# -ne 0 ]]; do
             ;;
         --packages|-p)
             TGZ=1
-            ;;
-        --publication)
-            PUBLICATION=1
             ;;
         --release|-r)
             cmake_build_types+=(RelWithDebInfo)
@@ -260,8 +256,6 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
 
     cp --force "$CMAKE_BINARY_DIR/compile_commands.json" "$CMAKE_SOURCE_DIR/"
 
-    declare -a build_prefix
-
     (set -x; cmake --build "$CMAKE_BINARY_DIR")
 
     if [[ $TESTS -eq 1 ]]; then
@@ -299,10 +293,6 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
     test $INSTALL -eq 0 || (set -x; cmake --install "$CMAKE_BINARY_DIR")
 
     pushd "$CMAKE_BINARY_DIR"
-
-    if [[ $PUBLICATION -eq 1 ]]; then
-        unset BUILD_NUMBER
-    fi
 
     for GENERATOR in ${!CMAKE_INSTALL_LIBDIR[@]}; do
         if [[ ${!GENERATOR} -eq 1 ]]; then

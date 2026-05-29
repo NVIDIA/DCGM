@@ -73,6 +73,40 @@ private:
     void appendExtraArgv(std::vector<std::string> &execArgv) const;
 
     /*************************************************************************/
+    /**
+     * Information about a GPU that failed to reach idle state
+     */
+    struct NonIdleGpuInfo
+    {
+        dcgmGroupEntityPair_t entity; //!< GPU entity information
+        int64_t utilization;          //!< Memory copy utilization percentage at timeout
+    };
+
+    /**
+     * Result of waiting for GPUs to reach idle memory copy utilization
+     */
+    struct WaitForIdleResult
+    {
+        bool allIdle;                            //!< True if all GPUs reached idle state
+        std::vector<NonIdleGpuInfo> nonIdleGpus; //!< GPUs that didn't reach idle (empty if allIdle is true)
+    };
+
+    /**
+     * Wait for all GPUs to reach idle memory copy utilization state
+     *
+     * @param[in] testName: Name of the test being run
+     * @param[in] entityInfo: Entity list containing GPU information
+     * @param[in] timeoutSeconds: Timeout in seconds to wait before returning (must be > 0)
+     * @param[in] maxUtilizationPercentage: Maximum acceptable memory copy utilization percentage
+     *
+     * @return WaitForIdleResult containing success status and list of non-idle GPUs if timeout occurred
+     */
+    WaitForIdleResult WaitForMemoryCopyIdle(std::string const &testName,
+                                            dcgmDiagPluginEntityList_v1 const *entityInfo,
+                                            double timeoutSeconds,
+                                            int64_t maxUtilizationPercentage);
+
+    /*************************************************************************/
     TestParameters m_testParameters; /* Parameters for this test, passed in from the framework.
                                                            Set when the go() method is called. DO NOT FREE */
     DcgmRecorder m_dcgmRecorder;

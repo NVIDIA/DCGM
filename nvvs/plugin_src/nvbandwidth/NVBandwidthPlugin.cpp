@@ -22,6 +22,7 @@
 #include <HangDetectMonitor.h>
 #include <PluginCommon.h>
 #include <TestFramework.h>
+#include <chrono>
 #include <dlfcn.h>
 #include <errno.h>
 #include <filesystem>
@@ -29,6 +30,7 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <sys/wait.h>
+#include <thread>
 
 namespace
 {
@@ -222,67 +224,45 @@ void NVBandwidthPlugin::Go(std::string const &testName,
     ParseIgnoreErrorCodesParam(testName, m_testParameters.GetString(PS_IGNORE_ERROR_CODES));
     m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
 
-    // Make sure the memory copy utilization is low before launching the nvbandwidth test
+    // Wait for all GPUs to reach idle memory copy utilization before launching the nvbandwidth test
     // This is to avoid the memory bandwidth from being saturated and affecting the results
-    // of the nvbandwidth test
-    dcgmFieldValue_v2 memCopyUtil = {};
-    for (unsigned int entityIdx = 0; entityIdx < entityInfo->numEntities; entityIdx++)
+    constexpr int64_t MAX_MEM_COPY_UTIL_PERCENTAGE { 10 };
+    constexpr double IDLE_WAIT_TIMEOUT_SEC { 20.0 };
+
+    auto idleResult = WaitForMemoryCopyIdle(testName, entityInfo, IDLE_WAIT_TIMEOUT_SEC, MAX_MEM_COPY_UTIL_PERCENTAGE);
+
+    // If we couldn't retrieve field values, the helper function already set the result to FAIL
+    // Check if the result is already set to FAIL before proceeding
+    if (GetResult(testName) == NVVS_RESULT_FAIL)
     {
-        if (entityInfo->entities[entityIdx].entity.entityGroupId != DCGM_FE_GPU)
-        {
-            continue;
-        }
-        // First try cached data to allow injected test values to be detected
-        dcgmReturn_t ret = m_dcgmRecorder.GetCurrentFieldValue(
-            entityInfo->entities[entityIdx].entity.entityId, DCGM_FI_DEV_MEM_COPY_UTIL, memCopyUtil, 0);
-        // If cached data is not available or not supported, try live data
-        if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED || memCopyUtil.status == DCGM_ST_NO_DATA
-            || memCopyUtil.status == DCGM_ST_NOT_WATCHED)
-        {
-            ret = m_dcgmRecorder.GetCurrentFieldValue(entityInfo->entities[entityIdx].entity.entityId,
-                                                      DCGM_FI_DEV_MEM_COPY_UTIL,
-                                                      memCopyUtil,
-                                                      DCGM_FV_FLAG_LIVE_DATA);
-        }
-        if (ret != DCGM_ST_OK)
-        {
-            std::string errStr = fmt::format("Failed to get the memory copy utilization for the GPU: {}",
-                                             entityInfo->entities[entityIdx].entity.entityId);
-            log_error(errStr);
-            dcgmDiagError_v1 err { .entity   = entityInfo->entities[entityIdx].entity,
-                                   .code     = DCGM_FR_CANNOT_GET_FIELD_TAG,
-                                   .category = DCGM_FR_EC_HARDWARE_MEMORY,
-                                   .severity = DCGM_ERROR_ISOLATE,
-                                   .msg      = "",
-                                   .testId   = DCGM_INT32_BLANK };
-            SafeCopyTo(err.msg, errStr.c_str());
-            AddError(testName, err);
-            SetResult(testName, NVVS_RESULT_FAIL);
-            return;
-        }
-        if (DCGM_INT64_IS_BLANK(memCopyUtil.value.i64))
-        {
-            log_info("GPU {} has no memory copy utilization data, skipping check.",
-                     entityInfo->entities[entityIdx].entity.entityId);
-            continue;
-        }
-        constexpr int64_t MAX_MEM_COPY_UTIL_PERCENTAGE { 10 };
-        if (memCopyUtil.value.i64 > MAX_MEM_COPY_UTIL_PERCENTAGE)
+        return;
+    }
+
+    // If timeout occurred, log warnings for the specific GPUs that didn't reach idle
+    if (!idleResult.allIdle && !idleResult.nonIdleGpus.empty())
+    {
+        log_warning("Timeout waiting for {} GPU(s) to reach idle memory copy utilization.",
+                    idleResult.nonIdleGpus.size());
+
+        // Add errors for each GPU that didn't reach idle
+        for (auto const &gpuInfo : idleResult.nonIdleGpus)
         {
             std::string errStr = fmt::format(
-                "The memory copy utilization for the GPU: {} is greater than 10%. This may affect the results of the nvbandwidth test.",
-                entityInfo->entities[entityIdx].entity.entityId);
-            log_error(errStr);
-            dcgmDiagError_v1 err { .entity   = entityInfo->entities[entityIdx].entity,
+                "GPU {} memory copy utilization ({}%) did not reach idle threshold (<= {}%) within timeout. "
+                "Proceeding with test, but results may be affected by residual memory activity.",
+                gpuInfo.entity.entityId,
+                gpuInfo.utilization,
+                MAX_MEM_COPY_UTIL_PERCENTAGE);
+            log_warning(errStr);
+
+            dcgmDiagError_v1 err { .entity   = gpuInfo.entity,
                                    .code     = DCGM_FR_FIELD_THRESHOLD_TS,
                                    .category = DCGM_FR_EC_HARDWARE_MEMORY,
-                                   .severity = DCGM_ERROR_ISOLATE,
+                                   .severity = DCGM_ERROR_MONITOR,
                                    .msg      = "",
                                    .testId   = DCGM_INT32_BLANK };
             SafeCopyTo(err.msg, errStr.c_str());
             AddError(testName, err);
-            SetResult(testName, NVVS_RESULT_FAIL);
-            return;
         }
     }
 
@@ -415,6 +395,88 @@ std::pair<bool, std::optional<NVBandwidthResult>> NVBandwidthPlugin::AttemptToRe
 std::string NVBandwidthPlugin::GetNvBandwidthTestName() const
 {
     return NVBANDWIDTH_PLUGIN_NAME;
+}
+
+NVBandwidthPlugin::WaitForIdleResult NVBandwidthPlugin::WaitForMemoryCopyIdle(
+    std::string const &testName,
+    dcgmDiagPluginEntityList_v1 const *entityInfo,
+    double timeoutSeconds,
+    int64_t maxUtilizationPercentage)
+{
+    auto const startTime = std::chrono::steady_clock::now();
+    auto const timeout   = std::chrono::duration<double>(timeoutSeconds);
+    constexpr int POLL_INTERVAL_MS { 200 };
+
+    while (true)
+    {
+        std::vector<NonIdleGpuInfo> nonIdleGpus;
+
+        for (auto const &entityEntry : std::span(entityInfo->entities, entityInfo->numEntities))
+        {
+            if (entityEntry.entity.entityGroupId != DCGM_FE_GPU)
+            {
+                continue;
+            }
+
+            dcgmFieldValue_v2 memCopyUtil {};
+            // Use live data to avoid stale cached values (watcher may have 30 minute intervals)
+            dcgmReturn_t ret = m_dcgmRecorder.GetCurrentFieldValue(
+                entityEntry.entity.entityId, DCGM_FI_DEV_MEM_COPY_UTIL, memCopyUtil, DCGM_FV_FLAG_LIVE_DATA);
+
+            if (ret != DCGM_ST_OK)
+            {
+                std::string errStr
+                    = fmt::format("Failed to get the memory copy utilization for GPU: {}", entityEntry.entity.entityId);
+                log_error(errStr);
+                dcgmDiagError_v1 err { .entity   = entityEntry.entity,
+                                       .code     = DCGM_FR_CANNOT_GET_FIELD_TAG,
+                                       .category = DCGM_FR_EC_HARDWARE_MEMORY,
+                                       .severity = DCGM_ERROR_ISOLATE,
+                                       .msg      = "",
+                                       .testId   = DCGM_INT32_BLANK };
+                SafeCopyTo(err.msg, errStr.c_str());
+                AddError(testName, err);
+                SetResult(testName, NVVS_RESULT_FAIL);
+                // Return value doesn't matter here since test result is set to FAIL
+                // Caller checks GetResult() and returns early before using this value
+                return { .allIdle = false, .nonIdleGpus = {} };
+            }
+
+            // Skip GPUs with blank utilization data (treat as idle)
+            if (DCGM_INT64_IS_BLANK(memCopyUtil.value.i64))
+            {
+                log_warning("GPU {} has no memory copy utilization data, treating as idle.",
+                            entityEntry.entity.entityId);
+                continue;
+            }
+
+            // Check if this GPU is idle
+            if (memCopyUtil.value.i64 > maxUtilizationPercentage)
+            {
+                nonIdleGpus.push_back({ .entity = entityEntry.entity, .utilization = memCopyUtil.value.i64 });
+                log_warning("GPU {} memory copy utilization is {}%, waiting for idle...",
+                            entityEntry.entity.entityId,
+                            memCopyUtil.value.i64);
+            }
+        }
+
+        // All GPUs are idle, return success
+        if (nonIdleGpus.empty())
+        {
+            return { .allIdle = true, .nonIdleGpus = {} };
+        }
+
+        // Check if timeout has been reached
+        auto const elapsed = std::chrono::steady_clock::now() - startTime;
+        if (elapsed >= timeout)
+        {
+            log_warning("Timeout reached while waiting for GPUs to reach idle memory copy utilization.");
+            return { .allIdle = false, .nonIdleGpus = std::move(nonIdleGpus) };
+        }
+
+        // Sleep before next poll
+        std::this_thread::sleep_for(std::chrono::milliseconds(POLL_INTERVAL_MS));
+    }
 }
 
 } //namespace DcgmNs::Nvvs::Plugins::NVBandwidth

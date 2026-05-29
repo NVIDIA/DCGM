@@ -29,7 +29,7 @@
  */
 
 /*
- * Copyright (c) 2016-2026, Ville Timonen
+ * Copyright (c) 2016, Ville Timonen
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

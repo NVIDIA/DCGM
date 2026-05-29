@@ -430,7 +430,7 @@
 /-/src_0/sdk/nvidia/nvml/common/timelib.h
 /-/src_0/sdk/nvidia/nvml/common/timeseries.c
 /-/src_0/sdk/nvidia/nvml/common/timeseries.h
-/-/src_0/sdk/nvidia/nvml/nvml.h
+/-/src_0/sdk/nvidia/nvml/dcgm_nvml.h
 /-/src_0/sdk/nvidia/nvml/nvml_entry_points.h
 /-/src_0/sdk/nvidia/nvml/nvml_error_strings.h
 /-/src_0/sdk/nvidia/nvml/nvml_loader

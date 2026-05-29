@@ -25,10 +25,10 @@
 #include "NvmlTaskRunner.hpp"
 #include "dcgm_errors.h"
 #include "dcgm_fields.h"
+#include "dcgm_nvml.h"
 #include "dcgm_prm_structs.h"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
-#include "nvml.h"
 #include <DcgmException.hpp>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
@@ -9105,12 +9105,6 @@ void DcgmCacheManager::CachePrmField(dcgmcm_update_thread_t const &threadCtx,
             DCGM_FE_LINK, linkEntityId, fieldId, static_cast<long long>(value), now, DCGM_ST_OK);
 
         log_debug("Added requested PRM field {} value {} to fvBuffer for link {}", fieldId, value, linkEntityId);
-        return;
-    }
-
-    // Skip if this is the originally requested field but not in live data mode (already cached)
-    if (fieldId == requestedFieldId)
-    {
         return;
     }
 
