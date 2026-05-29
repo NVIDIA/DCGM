@@ -5848,6 +5848,7 @@ bool DcgmCacheManager::IsModulePushedFieldId(unsigned int fieldId)
         case DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG:
         case DCGM_FI_DEV_NVLINK_GET_STATE:
         case DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT:
+        case DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION:
             return false;
         default:
             return true;
