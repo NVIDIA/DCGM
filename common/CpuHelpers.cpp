@@ -45,10 +45,8 @@ std::string_view CpuHelpers::GetGraceModelName()
 
 bool CpuHelpers::SupportNonNvidiaCpu()
 {
-    // Check both env vars to support old behavior
-    char const *envVar     = "DCGM_SUPPORT_NON_NVIDIA_CPU";
-    char const *skipEnvVar = "DCGM_SKIP_SYSMON_HARDWARE_CHECK";
-    return !!getenv(envVar) || !!getenv(skipEnvVar);
+    EnvConfig envConfig;
+    return envConfig.SupportNonNvidiaCpu();
 }
 
 void CpuHelpers::FillVendorAndModelIfNvidiaCpuPresent()

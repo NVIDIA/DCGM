@@ -263,8 +263,11 @@ class RunHostEngine(apps.NvHostEngineApp):
                 fp = open(filename)
                 lines = fp.readlines()
             except IOError as e:
-                print("Unable to read process file for pid %d: %d msg=%s fn=%s" % (
-                    pid, e.errno, e.message, e.filename))
+                errNo = getattr(e, 'errno', -1)
+                errFile = getattr(e, 'filename', filename)
+                print(
+                    "Unable to read process file for pid %d: %d msg=%s fn=%s" %
+                    (pid, errNo, str(e), errFile))
                 time.sleep(loopTime)
                 continue
 
@@ -310,9 +313,14 @@ class RunHostEngine(apps.NvHostEngineApp):
 
         timeout_start = time.time()
         while time.time() < timeout_start + float(timeout):
-            cmd = check_output(shlex.split(
-                "ps -p %d -o %%cpu" % pid)).decode('utf-8')
-            cpu.append(float(cmd.split("\n")[1]))
+            try:
+                cmd = check_output(shlex.split(
+                    "ps -p %d -o %%cpu" % pid)).decode('utf-8')
+                cpu.append(float(cmd.split("\n")[1]))
+            except (CalledProcessError, IndexError, ValueError) as e:
+                print("Unable to read CPU usage for pid %d: %s" % (pid, str(e)))
+                time.sleep(3)
+                continue
             time.sleep(3)
 
             cpu_min = min(cpu)

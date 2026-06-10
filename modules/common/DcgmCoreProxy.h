@@ -499,6 +499,16 @@ public:
      */
     dcgmReturn_t GetCudaVersion(int &cudaVersion);
 
+    /**
+     * Get the GPU chip architecture (compute capability major version)
+     *
+     * @param[in]  entityId - Entity ID to query
+     * @param[out] arch     - GPU architecture (e.g., 9 for Hopper, 10 for Blackwell)
+     *
+     * @return DCGM_ST_OK on success, DCGM_ST_* error code otherwise
+     */
+    dcgmReturn_t GetCudaComputeCapabilityMajorVersion(dcgm_field_eid_t entityId, int &arch);
+
 private:
     dcgmCoreCallbacks_t m_coreCallbacks;
 

@@ -30,3 +30,15 @@ const char *NvmlErrorToStringValue(nvmlReturn_t nvmlReturn);
 long long NvmlErrorToInt64Value(nvmlReturn_t nvmlReturn);
 int NvmlErrorToInt32Value(nvmlReturn_t nvmlReturn);
 double NvmlErrorToDoubleValue(nvmlReturn_t nvmlReturn);
+
+/*************************************************************************/
+/**
+ * Check if an NVML field ID requires scopeId = UINT_MAX for NVLink aggregation.
+ *
+ * NVLink5 COUNT fields return per-link data by default.
+ * Setting scopeId to UINT_MAX returns aggregate data across all NVLinks.
+ *
+ * @param[in] nvmlFieldId The NVML field ID to check
+ * @return true if the field requires aggregate scopeId, false otherwise
+ */
+[[nodiscard]] bool NvmlFieldRequiresNvLinkAggregate(unsigned short nvmlFieldId) noexcept;

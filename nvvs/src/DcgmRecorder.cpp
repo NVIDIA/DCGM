@@ -774,10 +774,12 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
                      && DCGM_FP64_IS_BLANK(fsr.response.values[valueIndex].fp64) == 0)
             {
                 DcgmError d { gpuId };
+                std::string const entityGroupString = fmt::format("{}", DCGM_FE_GPU);
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL,
                                           d,
                                           fsr.response.values[valueIndex].fp64,
                                           fm->tag,
+                                          entityGroupString.c_str(),
                                           gpuId,
                                           (*failureThresholds)[i].val.fp64);
                 st = DR_VIOLATION;

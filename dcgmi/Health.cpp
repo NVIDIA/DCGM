@@ -54,6 +54,7 @@
 #define DRIVER_SYSTEMS_TAG            "Driver"
 #define NVSWITCH_NONFATAL_SYSTEMS_TAG "NvSwitch NF"
 #define NVSWITCH_FATAL_SYSTEMS_TAG    "NvSwitch F"
+#define CONNECTX_SYSTEMS_TAG          "ConnectX"
 #define OVERALL_HEALTH_TAG            "Overall Health"
 
 #define MAX_SIZE_OF_HEALTH_INFO 54 /* Used for overflow (full length of health information tag) */
@@ -91,7 +92,7 @@ dcgmReturn_t Health::GetWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, 
     }
 
     std::cout << "Health monitor systems report" << std::endl;
-    for (unsigned int index = 0; index < DCGM_HEALTH_WATCH_COUNT_V2; index++)
+    for (unsigned int index = 0; index < DCGM_HEALTH_WATCH_COUNT_V3; index++)
     {
         unsigned int bit = 1 << index;
         switch (bit)
@@ -133,6 +134,9 @@ dcgmReturn_t Health::GetWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, 
                 break;
             case DCGM_HEALTH_WATCH_NVSWITCH_FATAL:
                 out[NVSWITCH_FATAL_SYSTEMS_TAG] = (systems & bit) ? on : off;
+                break;
+            case DCGM_HEALTH_WATCH_CONNECTX:
+                out[CONNECTX_SYSTEMS_TAG] = (systems & bit) ? on : off;
                 break;
             default:
                 std::cout << "Error: DCGM_HEALTH_WATCH_COUNT appears to be incorrect." << std::endl;
@@ -425,6 +429,8 @@ std::string Health::HelperSystemToString(dcgmHealthSystems_t system)
             return "Power system";
         case DCGM_HEALTH_WATCH_DRIVER:
             return "Driver";
+        case DCGM_HEALTH_WATCH_CONNECTX:
+            return "ConnectX system";
         default:
             return "Internal error";
     }

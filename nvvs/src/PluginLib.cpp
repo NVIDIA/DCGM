@@ -624,12 +624,23 @@ void PluginLib::RunTest(std::string const &testName,
                        << " while attempting to execute the test: " << e.what();
         return;
     }
+    catch (std::exception const &e)
+    {
+        dcgmDiagErrorDetail_v2 error;
+        error.code  = 1;
+        error.gpuId = -1;
+        auto msg    = fmt::format("Caught an exception while trying to execute the test: {}", e.what());
+        SafeCopyTo(error.msg, msg.c_str());
+        m_tests.at(testName).AddError(error);
+        log_error(msg);
+        return;
+    }
     catch (...)
     {
         dcgmDiagErrorDetail_v2 error;
         error.code  = 1;
         error.gpuId = -1;
-        snprintf(error.msg, sizeof(error.msg), "Caught an unknown exception while trying to execute the test");
+        SafeCopyTo(error.msg, "Caught an unknown exception while trying to execute the test");
         m_tests.at(testName).AddError(error);
         DCGM_LOG_ERROR << "Caught unknown exception from plugin " << GetName()
                        << " while attempting to execute the test";

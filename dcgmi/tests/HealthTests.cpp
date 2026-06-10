@@ -16,10 +16,15 @@
 #include <catch2/catch_all.hpp>
 
 #include <Health.h>
+#include <UniquePtrUtil.h>
 #include <dcgm_errors.h>
 #include <dcgm_structs.h>
 
 #include <sstream>
+
+// Constants for DcgmiOutputTree formatting
+static constexpr int TREE_COLUMN_WIDTH = 28;
+static constexpr int TREE_VALUE_WIDTH  = 60;
 
 void add_incident(dcgmHealthResponse_t &response,
                   dcgm_field_eid_t entityId,
@@ -53,11 +58,10 @@ void add_incident(dcgmHealthResponse_t &response,
 
 SCENARIO("Health::GenerateOutputFromResponse")
 {
-    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
-    memset(response.get(), 0, sizeof(*response));
-    dcgm_field_eid_t entityId               = 0;
-    dcgm_field_eid_t entityId2              = 1;
-    dcgm_field_entity_group_t entityGroupId = DCGM_FE_GPU;
+    std::unique_ptr<dcgmHealthResponse_t> response = MakeUniqueZero<dcgmHealthResponse_t>();
+    dcgm_field_eid_t entityId                      = 0;
+    dcgm_field_eid_t entityId2                     = 1;
+    dcgm_field_entity_group_t entityGroupId        = DCGM_FE_GPU;
 
     add_incident(*(response),
                  entityId,
@@ -79,7 +83,7 @@ SCENARIO("Health::GenerateOutputFromResponse")
                  "The guards wear Kholin blue because otherwise they'd be lame.");
 
     Health h;
-    DcgmiOutputTree outTree(28, 60);
+    DcgmiOutputTree outTree(TREE_COLUMN_WIDTH, TREE_VALUE_WIDTH);
     std::string output = h.GenerateOutputFromResponse(*(response), outTree);
     CHECK(output.find("| Overall Health            | Failure") != std::string::npos);
     CHECK(output.find("| -> 0                      | Warning") != std::string::npos);
@@ -96,18 +100,17 @@ SCENARIO("Health::GenerateOutputFromResponse")
 
 SCENARIO("Health::HandleOneEntity")
 {
-    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
-    memset(response.get(), 0, sizeof(*response));
-    dcgm_field_eid_t entityId               = 0;
-    dcgm_field_eid_t entityId2              = 1;
-    dcgm_field_entity_group_t entityGroupId = DCGM_FE_GPU;
+    std::unique_ptr<dcgmHealthResponse_t> response = MakeUniqueZero<dcgmHealthResponse_t>();
+    dcgm_field_eid_t entityId                      = 0;
+    dcgm_field_eid_t entityId2                     = 1;
+    dcgm_field_entity_group_t entityGroupId        = DCGM_FE_GPU;
 
     add_incident(*(response), entityId, entityGroupId, DCGM_HEALTH_WATCH_MEM, DCGM_HEALTH_RESULT_WARN, "red");
     add_incident(*(response), entityId2, entityGroupId, DCGM_HEALTH_WATCH_MEM, DCGM_HEALTH_RESULT_FAIL, "green");
     add_incident(*(response), entityId2, entityGroupId, DCGM_HEALTH_WATCH_SM, DCGM_HEALTH_RESULT_WARN, "blue");
 
     Health h;
-    DcgmiOutputTree outTree(28, 60);
+    DcgmiOutputTree outTree(TREE_COLUMN_WIDTH, TREE_VALUE_WIDTH);
     unsigned int incidentsProcessed = h.HandleOneEntity(*(response), 0, entityId, entityGroupId, outTree);
     CHECK(incidentsProcessed == 1);
 
@@ -121,10 +124,9 @@ SCENARIO("Health::HandleOneEntity")
 
 SCENARIO("Health::AppendSystemIncidents")
 {
-    std::unique_ptr<dcgmHealthResponse_t> response = std::make_unique<dcgmHealthResponse_t>();
-    memset(response.get(), 0, sizeof(*response));
-    dcgm_field_eid_t entityId               = 0;
-    dcgm_field_entity_group_t entityGroupId = DCGM_FE_GPU;
+    std::unique_ptr<dcgmHealthResponse_t> response = MakeUniqueZero<dcgmHealthResponse_t>();
+    dcgm_field_eid_t entityId                      = 0;
+    dcgm_field_entity_group_t entityGroupId        = DCGM_FE_GPU;
 
     add_incident(*(response), entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_WARN, "bobby bob");
     add_incident(*(response), entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_FAIL, "robby rob");
@@ -151,8 +153,7 @@ SCENARIO("Health::AppendSystemIncidents")
     CHECK(health == DCGM_HEALTH_RESULT_WARN);
     CHECK(buf.str() == ", snobby snob");
 
-    std::unique_ptr<dcgmHealthResponse_t> response2 = std::make_unique<dcgmHealthResponse_t>();
-    memset(response2.get(), 0, sizeof(*response2));
+    std::unique_ptr<dcgmHealthResponse_t> response2 = MakeUniqueZero<dcgmHealthResponse_t>();
 
     add_incident(*(response2), entityId, entityGroupId, DCGM_HEALTH_WATCH_PCIE, DCGM_HEALTH_RESULT_WARN, "bobby bob");
     add_incident(
@@ -178,4 +179,59 @@ SCENARIO("Health::AppendSystemIncidents")
     // Make sure we ignore out of bounds indices
     numAppended
         = h.AppendSystemIncidents(*(response2), response2->incidentCount, entityId, entityGroupId, system, buf, health);
+}
+
+SCENARIO("Health::ConnectX Output Formatting")
+{
+    std::unique_ptr<dcgmHealthResponse_t> response = MakeUniqueZero<dcgmHealthResponse_t>();
+    dcgm_field_eid_t cxId                          = 0;
+    dcgm_field_entity_group_t entityGroupId        = DCGM_FE_CONNECTX;
+
+    SECTION("Multiple ConnectX incidents")
+    {
+        add_incident(*(response),
+                     cxId,
+                     entityGroupId,
+                     DCGM_HEALTH_WATCH_CONNECTX,
+                     DCGM_HEALTH_RESULT_WARN,
+                     "ConnectX entity Id:0 uncorrectable non-fatal errors: 0x18988");
+        add_incident(*(response),
+                     cxId,
+                     entityGroupId,
+                     DCGM_HEALTH_WATCH_CONNECTX,
+                     DCGM_HEALTH_RESULT_FAIL,
+                     "ConnectX entity Id:0 uncorrectable fatal errors: 0x1010");
+
+        Health h;
+        DcgmiOutputTree outTree(TREE_COLUMN_WIDTH, TREE_VALUE_WIDTH);
+        std::string output = h.GenerateOutputFromResponse(*(response), outTree);
+
+        CHECK(output.find("Failure") != std::string::npos);
+        CHECK(output.find("non-fatal errors") != std::string::npos);
+        CHECK(output.find("fatal errors") != std::string::npos);
+        CHECK(output.find("0x1010") != std::string::npos);
+        CHECK(output.find("0x18988") != std::string::npos);
+    }
+
+    SECTION("Mixed GPU and ConnectX incidents")
+    {
+        dcgm_field_eid_t gpuId = 0;
+        add_incident(
+            *(response), gpuId, DCGM_FE_GPU, DCGM_HEALTH_WATCH_MEM, DCGM_HEALTH_RESULT_WARN, "GPU memory issue");
+        add_incident(*(response),
+                     cxId,
+                     entityGroupId,
+                     DCGM_HEALTH_WATCH_CONNECTX,
+                     DCGM_HEALTH_RESULT_FAIL,
+                     "ConnectX entity Id:0 uncorrectable fatal errors: 0x1000");
+
+        Health h;
+        DcgmiOutputTree outTree(TREE_COLUMN_WIDTH, TREE_VALUE_WIDTH);
+        std::string output = h.GenerateOutputFromResponse(*(response), outTree);
+
+        CHECK(output.find("Failure") != std::string::npos);
+        CHECK(output.find("GPU memory issue") != std::string::npos);
+        CHECK(output.find("fatal errors") != std::string::npos);
+        CHECK(output.find("0x1000") != std::string::npos);
+    }
 }

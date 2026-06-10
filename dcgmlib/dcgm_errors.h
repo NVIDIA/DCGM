@@ -168,7 +168,8 @@ typedef enum dcgmError_enum
     DCGM_FR_GPU_RECOVERY_DRAIN_P2P         = 127, //!< 127 Peer-to-peer traffic must be drained
     DCGM_FR_GPU_RECOVERY_DRAIN_RESET       = 128, //!< 128 GPU operating at reduced capacity, drain and reset required
     DCGM_FR_NCCL_ERROR                     = 129, //!< 129 Detected a NCCL error
-    DCGM_FR_ERROR_SENTINEL                 = 130, //!< 130 MUST BE THE LAST ERROR CODE
+    DCGM_FR_RETEST_REQUESTED               = 130, //!< 130 Retest requested before providing results
+    DCGM_FR_ERROR_SENTINEL                 = 131, //!< 131 MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -313,8 +314,9 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_FIELD_THRESHOLD_MSG "Detected %ld %s for GPU %u which is above the threshold %ld"
 // field value, field name, gpu id (same as DCGM_FR_FIELD_VIOLATION, but it's a double)
 #define DCGM_FR_FIELD_VIOLATION_DBL_MSG "Detected %.1f %s for GPU %u"
-// field value, field name, gpu id, allowable threshold (same as DCGM_FR_FIELD_THRESHOLD, but it's a double)
-#define DCGM_FR_FIELD_THRESHOLD_DBL_MSG "Detected %.1f %s for GPU %u which is above the threshold %.1f"
+// field value, field name, entity group string, entity id, allowable threshold (same as DCGM_FR_FIELD_THRESHOLD, but
+// it's a double)
+#define DCGM_FR_FIELD_THRESHOLD_DBL_MSG "Detected %.1f %s for %s:%u which is above the threshold %.1f"
 // field name
 #define DCGM_FR_UNSUPPORTED_FIELD_TYPE_MSG                            \
     "Field %s is not supported by this API because it is neither an " \
@@ -509,8 +511,9 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 // gpu id, recovery action value
 #define DCGM_FR_GPU_RECOVERY_DRAIN_RESET_MSG \
     "GPU %u operating at reduced capacity due to a fault. Recovery action: %ld (DRAIN_AND_RESET)."
-#define DCGM_FR_NCCL_ERROR_MSG     "Detected NCCL error: %s Recovery action: %ld (DRAIN_AND_RESET)."
-#define DCGM_FR_ERROR_SENTINEL_MSG "" /* See message inplace */
+#define DCGM_FR_NCCL_ERROR_MSG       "Detected NCCL error: %s Recovery action: %ld (DRAIN_AND_RESET)."
+#define DCGM_FR_RETEST_REQUESTED_MSG "" /* See message inplace */
+#define DCGM_FR_ERROR_SENTINEL_MSG   "" /* See message inplace */
 
 /*
  * Suggestions for next steps for the corresponding error message
@@ -697,8 +700,9 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
     "Terminate GPU processes conducting peer-to-peer traffic and disable UVM persistence mode. Check GPU health status again after draining."
 #define DCGM_FR_GPU_RECOVERY_DRAIN_RESET_NEXT \
     "Do not schedule new work on this GPU. Reset the GPU after existing work has drained."
-#define DCGM_FR_NCCL_ERROR_NEXT     "Attempt to reset the GPUs and reboot the machines if that fails."
-#define DCGM_FR_ERROR_SENTINEL_NEXT "" /* See message inplace */
+#define DCGM_FR_NCCL_ERROR_NEXT       "Attempt to reset the GPUs and reboot the machines if that fails."
+#define DCGM_FR_RETEST_REQUESTED_NEXT "" /* See message inplace */
+#define DCGM_FR_ERROR_SENTINEL_NEXT   "" /* See message inplace */
 
 #ifdef __cplusplus
 extern "C" {

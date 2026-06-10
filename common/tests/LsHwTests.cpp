@@ -59,6 +59,23 @@ private:
     std::unordered_map<std::string, std::pair<dcgmReturn_t, std::string>> m_mockCmdOutput;
 };
 
+class MockEnvConfig : public EnvConfig
+{
+public:
+    MockEnvConfig(bool supportNonNvidiaCpu)
+    {
+        m_supportNonNvidiaCpu = supportNonNvidiaCpu;
+    }
+
+    bool SupportNonNvidiaCpu() const override
+    {
+        return m_supportNonNvidiaCpu;
+    }
+
+private:
+    bool m_supportNonNvidiaCpu = false;
+};
+
 std::string lshwMultipleCpusAbridgedValidJson = R""(
 {
   "id" : "localhost",
@@ -666,6 +683,24 @@ TEST_CASE("LsHw::GetCpuSerials")
         auto cpuSerials = lshw.GetCpuSerials();
         REQUIRE(cpuSerials.has_value());
         REQUIRE(cpuSerials->size() == 0);
+    }
+
+    SECTION("Single Non-NVIDIA CPU, but supported by env var")
+    {
+        std::unique_ptr<MockEnvConfig> envConfig        = std::make_unique<MockEnvConfig>(true);
+        std::unique_ptr<MockRunningUserChecker> checker = std::make_unique<MockRunningUserChecker>();
+        checker->MockIsRoot(true);
+        std::unique_ptr<MockRunCmdHelper> runCmdHelper = std::make_unique<MockRunCmdHelper>();
+        runCmdHelper->MockCmdOutput("/usr/bin/lshw -json", DCGM_ST_OK, lshwSingleNonNvidiaCpuAbridgedValidJson);
+
+        LsHw lshw;
+        lshw.SetEnvConfig(std::move(envConfig));
+        lshw.SetChecker(std::move(checker));
+        lshw.SetRunCmdHelper(std::move(runCmdHelper));
+        auto cpuSerials = lshw.GetCpuSerials();
+        REQUIRE(cpuSerials.has_value());
+        REQUIRE(cpuSerials->size() == 1);
+        REQUIRE(cpuSerials.value()[0] == "0x000000017820B1C80400000015FF81C0");
     }
 
     SECTION("Incorrect Id")

@@ -1235,6 +1235,7 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                                             "\n n - NVLink watches (*)"
                                             "\n p - PCIe watches (*)"
                                             "\n t - thermal and power watches (*)"
+                                            "\n x - ConnectX watches (*)"
                                             "\n (*) watch requires 60 sec before first query",
                                             false,
                                             "pm",
@@ -1343,6 +1344,12 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                     // Check for duplicates
                     CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
                     break;
+                case 'x':
+                    bitwiseWatches |= DCGM_HEALTH_WATCH_CONNECTX;
+
+                    // Check for duplicates
+                    CheckDuplicateFlagsForSetWatches(i, setWatches.getValue());
+                    break;
                 case 'a':
                     // bitwiseWatches = DCGM_HEALTH_WATCH_ALL;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_PCIE;
@@ -1354,6 +1361,7 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_NVSWITCH_FATAL;
                     bitwiseWatches |= DCGM_HEALTH_WATCH_DRIVER;
+                    bitwiseWatches |= DCGM_HEALTH_WATCH_CONNECTX;
 
                     if (setWatches.getValue().length() > 1)
                     {

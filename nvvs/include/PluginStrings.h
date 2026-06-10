@@ -372,9 +372,14 @@ is less than this percentage, the test will be skipped */
 #define EUD_PLUGIN_CATEGORY  PLUGIN_CATEGORY_STRESS
 #define EUD_FULL_PROFILE     "full_profile"     /*!< Run the full MODS profile or not */
 #define EUD_PASSTHROUGH_ARGS "passthrough_args" /*!< Arguments to pass to the EUD binary */
-#define EUD_MLE_PARSE        "parse_mle"        /*!< Parse the MLE or not */
-#define EUD_STR_IS_ALLOWED   "is_allowed"       /* Is the EUD plugin allowed to run? */
-#define CPU_EUD_TEST_NAME    "cpu_eud"
+#define EUD_ORIGINAL_LEVEL                                                                                          \
+    "original_level" /*!< Original level of the EUD plugin, this is used as hint when re-running EUD as root. Since \
+                        when re-running EUD as root, the validate is set to DCGM_POLICY_VALID_NONE, we need to use  \
+                        this hint to correctly set the test profile when re-running EUD as root.                    \
+                        */
+#define EUD_MLE_PARSE      "parse_mle"  /*!< Parse the MLE or not */
+#define EUD_STR_IS_ALLOWED "is_allowed" /* Is the EUD plugin allowed to run? */
+#define CPU_EUD_TEST_NAME  "cpu_eud"
 
 /****************************************************************************
  * NVBandwidth PLUGIN

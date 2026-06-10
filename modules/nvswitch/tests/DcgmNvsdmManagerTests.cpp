@@ -657,6 +657,7 @@ TEST_CASE("DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary")
         dcgm_field_update_info_t entity;
         entity.entityGroupId = DCGM_FE_CONNECTX;
         entity.entityId      = 0;
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE);
         entities.push_back(entity);
         REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE, buf, entities, now)
                 == DCGM_ST_OK);
@@ -941,6 +942,7 @@ TEST_CASE("DcgmNvsdmManager::HandleCompositeFieldId")
         dcgm_field_update_info_t entity;
         entity.entityGroupId = DCGM_FE_SWITCH;
         entity.entityId      = switchID;
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
         entities.push_back(entity);
 
         REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX, buf, entities, now)

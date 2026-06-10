@@ -102,10 +102,11 @@ public:
     unsigned long long errorMask; /* error mask for inforom */
     int mainReturnCode;     /* MAIN_RET_? #define of the error to return or MAIN_RET_OK if no errors have occured */
     std::string pluginPath; /* Path given in command line for plugins */
-    std::set<std::string> desiredTest; /* Specific test(s) asked for on the command line */
-    std::string indexString;           /* A potentially comma-separated list of GPUs to run NVVS on */
-    std::string fakegpusString;        /* run diagnostics on fake gpus only */
-    std::string parmsString;           /* unparsed subtest parameters */
+    std::set<std::string, std::less<>> desiredTest; /* Specific test(s) asked for on the command line */
+    bool isEudOnly;                                 /* True if user requested ONLY EUD via -r eud */
+    std::string indexString;                        /* A potentially comma-separated list of GPUs to run NVVS on */
+    std::string fakegpusString;                     /* run diagnostics on fake gpus only */
+    std::string parmsString;                        /* unparsed subtest parameters */
     std::map<std::string, std::map<std::string, std::string>> parms; /* test parameters to set from the command line */
     std::string dcgmHostname;                                        /* Host name where DCGM is running */
     uint64_t clocksEventIgnoreMask;                                  // Mask of clocks event reasons to ignore.

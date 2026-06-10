@@ -53,16 +53,6 @@ import dcgm_nvml
 import re
 
 
-def _run_dcgmi_command(args):
-    ''' run a command then return (retcode, stdout_lines, stderr_lines) '''
-    dcgmi = apps.DcgmiApp(args)
-    # Some commands (diag -r 2) can take a minute or two
-    dcgmi.start(250)
-    retValue = dcgmi.wait()
-    dcgmi.validate()
-    return retValue, dcgmi.stdout_lines, dcgmi.stderr_lines
-
-
 def _is_eris_diag_inforom_failure(args, stdout_lines):
     INFOROM_FAILURE_STRING = 'nvmlDeviceValidateInforom for nvml device'
     if not option_parser.options.eris:
@@ -165,34 +155,17 @@ def _lines_with_errors(lines):
     return errorLines
 
 
-def _create_dcgmi_group(groupType=dcgm_structs.DCGM_GROUP_EMPTY):
-    ''' Create an empty group and return its group ID '''
-    createGroupArgs = ["group", "-c", "test_group"]
-
-    if groupType == dcgm_structs.DCGM_GROUP_DEFAULT:
-        createGroupArgs.append('--default')
-    elif groupType == dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES:
-        createGroupArgs.append('--defaultnvswitches')
-
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(createGroupArgs)
-    _assert_valid_dcgmi_results(
-        createGroupArgs, retValue, stdout_lines, stderr_lines)
-
-    # dcgmi "group -c" outputs a line like 'Successfully created group "test_group" with a group ID of 2'
-    # so we capture the last word as the group ID (it doesn't seem like there's a better way)
-    # convert to int so that if it's not an int, an exception is raised
-    return int(stdout_lines[0].strip().split()[-1])
-
-
 def _test_valid_args(argsList):
     for args in argsList:
-        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+            args, validate=True)
         _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines)
 
 
 def _test_invalid_args(argsList):
     for args in argsList:
-        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+            args, validate=False)
         _assert_invalid_dcgmi_results(
             args, retValue, stdout_lines, stderr_lines)
 
@@ -257,7 +230,7 @@ def test_dcgmi_group(handle, gpuIds, instanceIds, ciIds):
 
     DCGM_ALL_GPUS = dcgm_structs.DCGM_GROUP_ALL_GPUS
 
-    groupId = str(_create_dcgmi_group())
+    groupId = str(test_utils.create_dcgmi_group())
 
     # keep args in this order. Changing it may break the test
     _test_valid_args([
@@ -356,7 +329,7 @@ def test_dcgmi_group(handle, gpuIds, instanceIds, ciIds):
 
     nonExistentGroupId = str(int(groupId) + 10)
 
-    groupId = str(_create_dcgmi_group())
+    groupId = str(test_utils.create_dcgmi_group())
 
     # keep args in this order. Changing it may break the test
     _test_invalid_args([
@@ -438,7 +411,8 @@ def test_dcgmi_cpu_group(handle, gpuIds, cpuIds):
             cpuStr = cpuStr + ",cpu:%s" % str(cpuId)
     entityStr = "%s,%s" % (gpuStr, cpuStr)
     createGroupArgs = ["group", "-c", "cpu_test_group", "-a", entityStr]
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(createGroupArgs)
+    retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+        createGroupArgs, validate=True)
     _assert_valid_dcgmi_results(
         createGroupArgs, retValue, stdout_lines, stderr_lines)
 
@@ -447,7 +421,7 @@ def test_dcgmi_cpu_group(handle, gpuIds, cpuIds):
 @test_utils.run_with_injection_nvswitches(2)
 def test_dcgmi_group_nvswitch(handle, switchIds):
 
-    groupId = str(_create_dcgmi_group(
+    groupId = str(test_utils.create_dcgmi_group(
         groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
 
     # keep args in this order. Changing it may break the test
@@ -499,7 +473,7 @@ def test_dcgmi_config(handle, gpuIds):
         dft_pwr = str(gpuAttrib.powerLimits.defaultPowerLimit)
         max_pwr = str(gpuAttrib.powerLimits.maxPowerLimit)
 
-    groupId = str(_create_dcgmi_group())
+    groupId = str(test_utils.create_dcgmi_group())
 
     # Keep args in order in all dcgmi command sequence arrays below.
 
@@ -624,7 +598,7 @@ def test_dcgmi_health(handle, gpuIds):
     ])
 
     # Create group for testing
-    groupId = str(_create_dcgmi_group())
+    groupId = str(test_utils.create_dcgmi_group())
     nonExistantGroupId = str(int(groupId) + 10)
 
     # keep args in this order. Changing it may break the test
@@ -696,7 +670,8 @@ def test_dcgmi_discovery_cpus(handle, gpuIds, cpuIds):
 
 def helper_dcgmi_discovery_can_list_cx(numCxCards):
     expectedStr = f"{numCxCards} ConnectX found."
-    _, stdoutLines, _ = _run_dcgmi_command(["discovery", "--list"])
+    _, stdoutLines, _ = test_utils.run_dcgmi_command(
+        ["discovery", "--list"], validate=True)
     found = False
     for line in stdoutLines:
         if expectedStr in line:
@@ -1046,7 +1021,8 @@ def test_dcgmi_diag_invalid_test_specified(handle, gpuIds):
         testNames = ','.join(testNames)
         cliArgs = ['diag', '--run', testNames,
                    '-i', ','.join(map(str, gpuIds))]
-        _, stdoutLines, stderrLines = _run_dcgmi_command(cliArgs)
+        _, stdoutLines, stderrLines = test_utils.run_dcgmi_command(
+            cliArgs, validate=True)
         combinedResult = '\n'.join(stdoutLines + stderrLines)
         assert 'Unable to complete diagnostic' in combinedResult
         assert 'Error: requested test(s)' in combinedResult and 'were not found' in combinedResult
@@ -1057,7 +1033,8 @@ def test_dcgmi_diag_invalid_test_specified(handle, gpuIds):
         testNames = ','.join(testNames)
         jsonArgs = ['diag', '--run', testNames, '-j',
                     '-v', '-i', ','.join(map(str, gpuIds))]
-        _, stdoutLines, stderrLines = _run_dcgmi_command(jsonArgs)
+        _, stdoutLines, stderrLines = test_utils.run_dcgmi_command(
+            jsonArgs, validate=True)
         combinedResult = '\n'.join(stdoutLines + stderrLines)
         jsondata = json.loads(combinedResult)
         assert 'DCGM Diagnostic' in jsondata
@@ -1092,7 +1069,8 @@ def test_dcgmi_diag_on_heterogeneous_env(handle, gpuIds):
             ",".join(str(x) for x in gpuIds)],
     ]
     for args in validArgsTestList:
-        _, stdoutLines, stderrLines = _run_dcgmi_command(args)
+        _, stdoutLines, stderrLines = test_utils.run_dcgmi_command(
+            args, validate=True)
         allOutput = (' '.join(stdoutLines + stderrLines)).lower()
         hasError = "error" in allOutput
         hasHomogeneous = "homogeneous" in allOutput
@@ -1108,7 +1086,8 @@ def test_dcgmi_diag_on_heterogeneous_env(handle, gpuIds):
         ["diag", "--run", "1"],
     ]
     for args in invalidArgsTestList:
-        _, stdoutLines, stderrLines = _run_dcgmi_command(args)
+        _, stdoutLines, stderrLines = test_utils.run_dcgmi_command(
+            args, validate=True)
         # expected allOutput: error: diagnostic can only be performed on a homogeneous group of gpus.
         allOutput = (' '.join(stdoutLines + stderrLines)).lower()
         hasError = "error" in allOutput
@@ -1125,7 +1104,8 @@ def test_dcgmi_diag_on_heterogeneous_env(handle, gpuIds):
 def test_dcgmi_diag_multiple_iterations(handle, gpuIds):
     allGpusCsv = ",".join(map(str, gpuIds))
     args = ["diag", "-r", "1", "-j", "-i", allGpusCsv, "--iterations", "3"]
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    retValue, stdout_lines, _ = test_utils.run_dcgmi_command(
+        args, validate=True)
 
     assert retValue == 0, "Expected successful execution, but got %d" % retValue
     rawtext = ""
@@ -1168,7 +1148,7 @@ def test_dcgmi_stats(handle, gpuIds):
     ])
 
     # Create group for testing
-    groupId = str(_create_dcgmi_group())
+    groupId = str(test_utils.create_dcgmi_group())
     nonExistantGroupId = str(int(groupId) + 10)
 
     # keep args in this order. Changing it may break the test
@@ -1288,9 +1268,10 @@ def test_dcgmi_dmon(handle, gpuIds, switchIds, instanceIds, ciIds, cpuIds, coreI
     """
     Test dcgmi to display dmon values
     """
-    gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
-    switchGroupId = str(_create_dcgmi_group(
-        dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
+    gpuGroupId = str(test_utils.create_dcgmi_group(
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT))
+    switchGroupId = str(test_utils.create_dcgmi_group(
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
 
     logger.info("Injected switch IDs:" + str(switchIds))
 
@@ -1445,9 +1426,10 @@ def test_dcgmi_nvlink_nvswitches(handle, gpuIds, switchIds):
     """
     Test dcgmi to display dmon values
     """
-    gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
-    switchGroupId = str(_create_dcgmi_group(
-        dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
+    gpuGroupId = str(test_utils.create_dcgmi_group(
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT))
+    switchGroupId = str(test_utils.create_dcgmi_group(
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES))
 
     logger.info("Injected switch IDs:" + str(switchIds))
 
@@ -1609,7 +1591,8 @@ def test_dcgmi_test_introspect(handle, gpuIds):
     Test "dcgmi test --introspect"
     """
     oneGpuIdStr = str(gpuIds[0])
-    gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
+    gpuGroupId = str(test_utils.create_dcgmi_group(
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT))
     gpuGroupIdStr = str(gpuGroupId)
 
     # Use this field because it's watched by default in the host engine
@@ -1642,7 +1625,8 @@ def test_dcgmi_test_inject(handle, gpuIds):
     Test "dcgmi test --inject"
     """
     oneGpuIdStr = str(gpuIds[0])
-    gpuGroupId = str(_create_dcgmi_group(dcgm_structs.DCGM_GROUP_DEFAULT))
+    gpuGroupId = str(test_utils.create_dcgmi_group(
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT))
     gpuGroupIdStr = str(gpuGroupId)
 
     fieldIdStr = str(dcgm_fields.DCGM_FI_DEV_GPU_TEMP)
@@ -1705,8 +1689,8 @@ def test_dcgmi_settings_logging_severity():
                 break
 
     set_severity_args = ['set', '--logging-severity', 'VERB']
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(
-        set_severity_args)
+    retValue, stdout_lines, _ = test_utils.run_dcgmi_command(
+        set_severity_args, validate=True)
 
     assert retValue == 0, f'retValue = {retValue}, stdout={stdout_lines}'
 
@@ -1866,7 +1850,8 @@ def test_dcgmi_global_and_others(handle, gpuIds, instanceIds, ciIds, switchIds):
 
     cmdArgs = ["dmon", "-i", gpuArg, "-e", fieldArg, "-c", "1"]
 
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(cmdArgs)
+    retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+        cmdArgs, validate=True)
     _assert_valid_dcgmi_results(cmdArgs, retValue, stdout_lines, stderr_lines)
 
     for line in stdout_lines:
@@ -2013,7 +1998,8 @@ def test_dcgmi_diag_expected_num_entities(handle, gpuIds):
         return str(groupObj.GetId().value)
 
     def run_diag_with_args(args, expectError=False, errorString=""):
-        _, stdoutLines, stderrLines = _run_dcgmi_command(args)
+        _, stdoutLines, stderrLines = test_utils.run_dcgmi_command(
+            args, validate=True)
         allOutput = (' '.join(stdoutLines + stderrLines)).lower()
         if not expectError:
             assert "successfully ran diagnostic" in allOutput, f"Output of diag command '{args}': {allOutput}"
@@ -2634,10 +2620,13 @@ def helper_memory_max_free_memory_test(handle, args, max_free_memory_param, inva
         logger.info(
             f"Memory test passed: allocated {allocated_memory_mb:.2f} MB (requested: {max_free_memory_param} MB)")
     else:
+        expected = "Caught an exception"
         failure_line = extract_line(
-            dcgmi.stdout_lines, "Caught an unknown exception")
+            dcgmi.stdout_lines, expected)
         failure_message_found = failure_line is not None
-        assert failure_message_found, "Expected failure message not found in dcgmi output: 'Caught an unknown exception while trying to execute the test'"
+        assert failure_message_found, (
+            "Expected failure message not found in dcgmi "
+            f"output: '{expected}'")
         logger.info(
             "Verified failure message for invalid max_free_memory parameter")
 
@@ -2682,7 +2671,8 @@ def test_dcgmi_diag_env_var_warning_hostengine_set(handle, gpuIds):
 
         # Case 1: dcgmi=0,2, hostengine=1,2,3
         os.environ["CUDA_VISIBLE_DEVICES"] = "0,2"
-        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        _, _, stderr_lines = test_utils.run_dcgmi_command(
+            args, validate=True)
         err = "\n".join(stderr_lines)
         assert "Hostengine Process Value: 1,2,3" in err
         assert "Dcgmi Process Value: 0,2" in err
@@ -2692,7 +2682,8 @@ def test_dcgmi_diag_env_var_warning_hostengine_set(handle, gpuIds):
 
         # Case 2: dcgmi=1,2,3, hostengine=1,2,3
         os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3"
-        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        _, _, stderr_lines = test_utils.run_dcgmi_command(
+            args, validate=True)
         err = "\n".join(stderr_lines)
         assert "Hostengine Process Value: 1,2,3" in err
         assert "Dcgmi Process Value: 1,2,3" in err
@@ -2702,7 +2693,8 @@ def test_dcgmi_diag_env_var_warning_hostengine_set(handle, gpuIds):
 
         # Case 3: unset dcgmi, hostengine=1,2,3
         os.environ.pop('CUDA_VISIBLE_DEVICES', None)
-        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        _, _, stderr_lines = test_utils.run_dcgmi_command(
+            args, validate=True)
         err = "\n".join(stderr_lines)
         assert "Environment Variable Information:" not in err
         logger.info(
@@ -2729,7 +2721,8 @@ def test_dcgmi_diag_env_var_warning_hostengine_not_set(handle, gpuIds):
 
         # Case 1: dcgmi=0,2, hostengine not set
         os.environ["CUDA_VISIBLE_DEVICES"] = "0,2"
-        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        _, _, stderr_lines = test_utils.run_dcgmi_command(
+            args, validate=True)
         err = "\n".join(stderr_lines)
         assert "Hostengine Process Value: (not set)" in err
         assert "Dcgmi Process Value: 0,2" in err
@@ -2739,7 +2732,8 @@ def test_dcgmi_diag_env_var_warning_hostengine_not_set(handle, gpuIds):
 
         # Case 2: unset dcgmi, hostengine not set
         os.environ.pop('CUDA_VISIBLE_DEVICES', None)
-        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        _, _, stderr_lines = test_utils.run_dcgmi_command(
+            args, validate=True)
         err = "\n".join(stderr_lines)
         assert "Environment Variable Information:" not in err
         logger.info(
@@ -2760,7 +2754,8 @@ def test_dcgmi_diag_h(handle, gpuIds):
     Test that dcgmi diag -h command line argument works.
     '''
     args = ["diag", "-h"]
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+        args, validate=True)
     _assert_valid_dcgmi_help_results(
         args, retValue, stdout_lines, stderr_lines)
 
@@ -2773,44 +2768,10 @@ def test_dcgmi_diag_help(handle, gpuIds):
     Test that dcgmi diag --help command line argument works.
     '''
     args = ["diag", "--help"]
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+        args, validate=True)
     _assert_valid_dcgmi_help_results(
         args, retValue, stdout_lines, stderr_lines)
-
-
-def helper_run_validate_memory_bw_memory_size(handle, args, memory_size, invalid=False):
-    dcgmi = apps.DcgmiApp(args)
-    dcgmi.start(120)
-    dcgmi.wait()
-
-    if not invalid:
-        # Memory size is bounded: minimum 6MB, maximum 756MB
-        expected_size = min(max(memory_size, 6), 756)
-
-        config_line = extract_line(
-            dcgmi.stdout_lines, "Memory bandwidth configured test size:")
-        configured_size = None
-        if config_line:
-            try:
-                match = re.search(
-                    r"Memory bandwidth configured test size:\s*([0-9.]+)\s*", config_line)
-                if match:
-                    configured_size = float(match.group(1))
-            except (ValueError, AttributeError):
-                logger.warning(
-                    f"Failed to parse configured memory size from line: {config_line}")
-
-        assert abs(configured_size -
-                   expected_size) < 0.1, f"Configured memory size ({configured_size} MB) does not match expected ({expected_size} MB)"
-
-    else:
-        dcgmi.validate()
-        failure_line = extract_line(
-            dcgmi.stdout_lines, "Caught an unknown exception")
-        failure_message_found = failure_line is not None
-        assert failure_message_found, "Expected failure message not found in dcgmi output: 'Caught an unknown exception while trying to execute the test'"
-        logger.info(
-            "Verified failure message for invalid memory size parameter")
 
 
 def helper_extract_warning_message(stderr_lines):
@@ -2831,7 +2792,8 @@ def test_dcgmi_diag_removed_env_var_negative(handle, gpuIds):
     Test DCGM_DIAG_REMOVED env var not set
     """
     args = ["diag", "--run", "1", "-i", str(gpuIds[0])]
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    _, _, stderr_lines = test_utils.run_dcgmi_command(
+        args, validate=True)
 
     # Check that the warning message does NOT appear in stderr
     warning_found = helper_extract_warning_message(stderr_lines)
@@ -2850,7 +2812,8 @@ def test_dcgmi_diag_removed_env_var_positive(handle, gpuIds):
     Test DCGM_DIAG_REMOVED env var set (should show warning)
     """
     args = ["diag", "--run", "1", "-i", str(gpuIds[0])]
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    _, _, stderr_lines = test_utils.run_dcgmi_command(
+        args, validate=True)
 
     # Check that the warning message DOES appear in stderr
     warning_found = helper_extract_warning_message(stderr_lines)
@@ -2876,7 +2839,8 @@ def test_dcgmi_diag_software_memory_health(handle, gpuIds):
 
     # Software test should not have memory error (it might have other errors)
     args = ["diag", "--run", "1", "-i", str(gpuId)]
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+        args, validate=True)
 
     all_output = stdout_lines + stderr_lines
     memory_health_line = extract_line(all_output, memory_health_str)
@@ -2910,7 +2874,8 @@ def test_dcgmi_diag_software_memory_health(handle, gpuIds):
         f"Unrepairable memory flag value: {values[0].value.i64} (expected 1)")
 
     # Software test should have memory health error (it might have other error also)
-    retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+    retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+        args, validate=True)
     assert retValue != 0, f"Expected dcgmi diag to fail due to unrepairable memory flag, but it passed. stdout: {stdout_lines}"
 
     all_output = stdout_lines + stderr_lines
@@ -2993,7 +2958,8 @@ def test_dcgmi_pcie_with_gemm_failure(handle, gpuIds):
         args = ["diag", "--run", "pcie", "-i", str(gpuId),
                 "-p", "pcie.aer_threshold=1;pcie.test_duration=5;pcie.is_allowed=true;pcie.test_with_gemm=true"]
 
-        retValue, stdout_lines, stderr_lines = _run_dcgmi_command(args)
+        retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+            args, validate=True)
 
         # Stop injection and print results
         injection_active.clear()

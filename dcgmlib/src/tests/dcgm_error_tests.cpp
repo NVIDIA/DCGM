@@ -235,8 +235,9 @@ TEST_CASE("dcgm_errors: check full message")
                               d,
                               1.0,
                               "field",
+                              "GPU",
                               0,
-                              1.0); // "Detected %.1f %s for GPU %u which is above the threshold %.1f"
+                              1.0); // "Detected %.1f %s for %s:%u which is above the threshold %.1f"
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     // field name
@@ -563,6 +564,9 @@ TEST_CASE("dcgm_errors: check full message")
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_EUD_TEST_FAILED, d); //              "" /* See message inplace */
+    WARN(d.GetMessage());
+    CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
+    DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_RETEST_REQUESTED, d); //         "" /* See message inplace */
     WARN(d.GetMessage());
     CHECK(d.GetMessage().length() < DCGM_ERR_MSG_LENGTH);
     // directory

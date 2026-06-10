@@ -106,7 +106,8 @@ target_sources(dcgm_common PRIVATE
     ThreadSafeQueue.hpp
     TimeLib.cpp
     UriParser.cpp
-    gettid.cpp)
+    gettid.cpp
+    EnvConfig.cpp)
 
 target_link_libraries(dcgm_common PUBLIC
     jsoncpp_static

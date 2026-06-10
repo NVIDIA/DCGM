@@ -228,3 +228,52 @@ double NvmlErrorToDoubleValue(nvmlReturn_t nvmlReturn)
 
     return DCGM_FP64_BLANK;
 }
+
+/*****************************************************************************/
+bool NvmlFieldRequiresNvLinkAggregate(unsigned short nvmlFieldId) noexcept
+{
+    switch (nvmlFieldId)
+    {
+        // NVLink5 COUNT fields: packets, bytes, errors
+        case NVML_FI_DEV_NVLINK_COUNT_XMIT_PACKETS:
+        case NVML_FI_DEV_NVLINK_COUNT_XMIT_BYTES:
+        case NVML_FI_DEV_NVLINK_COUNT_RCV_PACKETS:
+        case NVML_FI_DEV_NVLINK_COUNT_RCV_BYTES:
+        case NVML_FI_DEV_NVLINK_COUNT_MALFORMED_PACKET_ERRORS:
+        case NVML_FI_DEV_NVLINK_COUNT_BUFFER_OVERRUN_ERRORS:
+        case NVML_FI_DEV_NVLINK_COUNT_RCV_ERRORS:
+        case NVML_FI_DEV_NVLINK_COUNT_RCV_REMOTE_ERRORS:
+        case NVML_FI_DEV_NVLINK_COUNT_RCV_GENERAL_ERRORS:
+        case NVML_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS:
+        case NVML_FI_DEV_NVLINK_COUNT_XMIT_DISCARDS:
+        case NVML_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS:
+        case NVML_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS:
+        case NVML_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS:
+        case NVML_FI_DEV_NVLINK_COUNT_SYMBOL_ERRORS:
+        case NVML_FI_DEV_NVLINK_COUNT_SYMBOL_BER:
+        // NVLink5 effective errors/BER
+        case NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS:
+        case NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER:
+        // NVLink5 FEC history fields
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14:
+        case NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15:
+            return true;
+
+        default:
+            return false;
+    }
+}

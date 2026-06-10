@@ -336,8 +336,8 @@ def get_cuda_driver_version(handle, gpuId):
     flags = dcgm_structs.DCGM_FV_FLAG_LIVE_DATA
     fieldValues = dcgm_agent.dcgmEntitiesGetLatestValues(
         handle, entities, fieldIds, flags)
-    majorVersion = fieldValues[0].value.i64 / 1000
-    minorVersion = (fieldValues[0].value.i64 - majorVersion * 1000) / 10
+    majorVersion = fieldValues[0].value.i64 // 1000
+    minorVersion = (fieldValues[0].value.i64 - majorVersion * 1000) // 10
     return [majorVersion, minorVersion]
 
 
@@ -4276,6 +4276,63 @@ def skip_on_gpm_non_gpm_hybrid_system():
             return fn(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def run_dcgmi_command(args, timeout_seconds=250, validate=False):
+    """
+    Run a dcgmi command and return the results.
+
+    This is a common helper function to execute dcgmi commands consistently across test files.
+    """
+    dcgmi = apps.DcgmiApp(args)
+    dcgmi.start(timeout_seconds)
+    retValue = dcgmi.wait()
+    if validate:
+        dcgmi.validate()
+    return retValue, dcgmi.stdout_lines, dcgmi.stderr_lines
+
+
+def create_dcgmi_group(name="test_group", gpuIds=None, groupType=None):
+    """
+    Create a dcgmi group and return its group ID.
+    """
+    args = ["group", "--create", name]
+
+    # Add group type flags if specified
+    if groupType == dcgm_structs.DCGM_GROUP_DEFAULT:
+        args.append('--default')
+    elif groupType == dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES:
+        args.append('--defaultnvswitches')
+
+    # Add GPUs during creation if specified
+    if gpuIds:
+        for gpuId in gpuIds:
+            args.extend(["-a", str(gpuId)])
+
+    retValue, stdout_lines, stderr_lines = run_dcgmi_command(args)
+
+    if retValue != 0:
+        raise AssertionError(
+            f"create_dcgmi_group failed with exit code {retValue}, stderr: {stderr_lines}")
+
+    try:
+        groupId = int(stdout_lines[0].strip().split()[-1])
+        return groupId
+    except (IndexError, ValueError) as e:
+        raise AssertionError(
+            f"Failed to parse group ID from dcgmi output (exit code {retValue}, stderr: {stderr_lines}): {stdout_lines}") from e
+
+
+def delete_dcgmi_group(groupId, ignore_errors=True):
+    """
+    Delete a dcgmi group by ID.
+    """
+    args = ["group", "-d", str(groupId)]
+    try:
+        run_dcgmi_command(args, validate=not ignore_errors)
+    except Exception:
+        if not ignore_errors:
+            raise
 
 
 def attach_detach_gpus(pcibusIds, sysFsPath: str):

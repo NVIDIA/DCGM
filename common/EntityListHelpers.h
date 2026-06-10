@@ -213,3 +213,11 @@ std::string ParseExpectedNumEntitiesForGpus(std::string const &expectedNumEntiti
 void TopologicalSort(dcgmMigHierarchy_v2 &hierarchy);
 
 } //namespace DcgmNs
+
+/**
+ * Format entity group as string.
+ * @note This function must be the same namespace as dcgm_field_entity_group_t.
+ * @param entityGroup Entity group.
+ * @return Entity group string.
+ */
+fmt::string_view format_as(dcgm_field_entity_group_t entityGroup);

@@ -256,7 +256,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
             case DCGM_FE_GPU:
             case DCGM_FE_GPU_I:
             case DCGM_FE_GPU_CI:
-                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V2; bitIndex++)
+                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V3; bitIndex++)
                 {
                     unsigned int bit = 1 << bitIndex;
                     switch (bit)
@@ -345,7 +345,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                 break;
 
             case DCGM_FE_CPU:
-                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V2; bitIndex++)
+                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V3; bitIndex++)
                 {
                     unsigned int bit = 1 << bitIndex;
                     switch (bit)
@@ -360,6 +360,35 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                             break;
                         case DCGM_HEALTH_WATCH_POWER:
                             tmpRet = SetCpuPower(entities[i].entityGroupId,
+                                                 entities[i].entityId,
+                                                 (systems & bit) ? true : false,
+                                                 watcher,
+                                                 updateInterval,
+                                                 maxKeepAge);
+                            break;
+                        default: // ignore everything else for now
+                            break;
+                    }
+                    if (DCGM_ST_OK != tmpRet)
+                    {
+                        log_error("Error {} from bit {}, entity group {} entityId {}",
+                                  tmpRet,
+                                  bit,
+                                  entities[i].entityGroupId,
+                                  entities[i].entityId);
+                        break; // exit on error
+                    }
+                }
+                break;
+
+            case DCGM_FE_CONNECTX:
+                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V3; bitIndex++)
+                {
+                    unsigned int bit = 1 << bitIndex;
+                    switch (bit)
+                    {
+                        case DCGM_HEALTH_WATCH_CONNECTX:
+                            tmpRet = SetConnectX(entities[i].entityGroupId,
                                                  entities[i].entityId,
                                                  (systems & bit) ? true : false,
                                                  watcher,
@@ -571,7 +600,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
 
         MonitorDevastatingXids(entityGroupId, entityId, response);
 
-        for (index = 0; index < DCGM_HEALTH_WATCH_COUNT_V2; index++)
+        for (index = 0; index < DCGM_HEALTH_WATCH_COUNT_V3; index++)
         {
             unsigned int bit = 1 << index;
 
@@ -619,7 +648,9 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
                     break;
                 case DCGM_HEALTH_WATCH_NVLINK:
                     if (bit & healthSystemsMask && FitsGpuHardwareCheck(entityGroupId))
+                    {
                         ret = MonitorNVLink(entityGroupId, entityId, startTime, endTime, response);
+                    }
                     break;
                 case DCGM_HEALTH_WATCH_DRIVER:
                     if (bit & healthSystemsMask && FitsGpuHardwareCheck(entityGroupId))
@@ -627,11 +658,21 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
                     break;
                 case DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL:
                     if (bit & healthSystemsMask && entityGroupId == DCGM_FE_SWITCH)
+                    {
                         ret = MonitorNvSwitchErrorCounts(false, entityGroupId, entityId, startTime, endTime, response);
+                    }
                     break;
                 case DCGM_HEALTH_WATCH_NVSWITCH_FATAL:
                     if (bit & healthSystemsMask && entityGroupId == DCGM_FE_SWITCH)
+                    {
                         ret = MonitorNvSwitchErrorCounts(true, entityGroupId, entityId, startTime, endTime, response);
+                    }
+                    break;
+                case DCGM_HEALTH_WATCH_CONNECTX:
+                    if (bit & healthSystemsMask && entityGroupId == DCGM_FE_CONNECTX)
+                    {
+                        ret = MonitorConnectX(entityGroupId, entityId, response);
+                    }
                     break;
                 default:
                     // reduce the logging level as this may pollute the log file if unsupported fields are watched
@@ -703,6 +744,9 @@ std::string DcgmHealthWatch::GetHealthSystemAsString(dcgmHealthSystems_t system)
             break; // NOT REACHED
         case DCGM_HEALTH_WATCH_NVSWITCH_FATAL:
             return "NVSwitch fatal errors";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_CONNECTX:
+            return "ConnectX";
             break; // NOT REACHED
         default:
             return "Unknown";
@@ -1153,6 +1197,20 @@ dcgmReturn_t DcgmHealthWatch::SetCpuPower(dcgm_field_entity_group_t entityGroupI
 }
 
 /*****************************************************************************/
+DcgmResult<int> DcgmHealthWatch::GetCudaComputeCapabilityMajorVersion(dcgm_field_eid_t entityId)
+{
+    int arch         = 0;
+    dcgmReturn_t ret = mpCoreProxy.GetCudaComputeCapabilityMajorVersion(entityId, arch);
+
+    if (ret == DCGM_ST_OK)
+    {
+        return arch;
+    }
+
+    return std::unexpected(ret);
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmHealthWatch::SetNVLink(dcgm_field_entity_group_t entityGroupId,
                                         unsigned int entityId,
                                         bool enable,
@@ -1185,6 +1243,47 @@ dcgmReturn_t DcgmHealthWatch::SetNVLink(dcgm_field_entity_group_t entityGroupId,
     ADD_WATCH(DCGM_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_FABRIC_HEALTH_MASK);
     ADD_WATCH(DCGM_FI_DEV_FABRIC_MANAGER_STATUS);
+
+    // Query GPU architecture to determine which NVLink error fields to watch
+    if (int gpuArch = GetCudaComputeCapabilityMajorVersion(entityId).value_or(0); gpuArch >= computeCapabilityBlackWell)
+    {
+        // New NVLink recovery fields (Blackwell+ only)
+        ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS);
+        ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS);
+        ADD_WATCH(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS);
+    }
+    else
+    {
+        // Old NVLink error fields (Pre-Blackwell only, deprecated on Blackwell+)
+        ADD_WATCH(DCGM_FI_DEV_NVLINK_ERROR_DL_CRC);
+        ADD_WATCH(DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY);
+        ADD_WATCH(DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY);
+    }
+
+    return ret;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::SetConnectX(dcgm_field_entity_group_t entityGroupId,
+                                          unsigned int entityId,
+                                          bool enable,
+                                          DcgmWatcher watcher,
+                                          long long updateInterval,
+                                          double maxKeepAge)
+{
+    dcgmReturn_t ret = DCGM_ST_OK;
+
+    if (!enable)
+    {
+        return ret;
+    }
+
+    // Basic health status
+    ADD_WATCH(DCGM_FI_DEV_CONNECTX_HEALTH);
+
+    // Error monitoring
+    ADD_WATCH(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS);
+    ADD_WATCH(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY);
 
     return ret;
 }
@@ -2211,14 +2310,33 @@ dcgmReturn_t DcgmHealthWatch::MonitorCpuThermal(dcgm_field_entity_group_t entity
         >= endValue[DCGM_FI_DEV_CPU_TEMP_WARNING].val.d)
     {
         DcgmError d { entityId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL, d, entityId);
+        std::string const entityGroupString = fmt::format("{}", entityGroupId);
+        double const threshold              = endValue[DCGM_FI_DEV_CPU_TEMP_WARNING].val.d;
+        double const currentValue
+            = (startValue[DCGM_FI_DEV_CPU_TEMP_CURRENT].val.d + endValue[DCGM_FI_DEV_CPU_TEMP_CURRENT].val.d) / 2;
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL,
+                                  d,
+                                  currentValue,
+                                  "DCGM_FI_DEV_CPU_TEMP_CURRENT",
+                                  entityGroupString.c_str(),
+                                  entityId,
+                                  threshold);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_THERMAL, d, response);
     }
     // If the latest sample is over the critical threshold (FAIL)
     if (endValue[DCGM_FI_DEV_CPU_TEMP_CURRENT].val.d >= endValue[DCGM_FI_DEV_CPU_TEMP_CRITICAL].val.d)
     {
         DcgmError d { entityId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL, d, entityId);
+        std::string const entityGroupString = fmt::format("{}", entityGroupId);
+        double const threshold              = endValue[DCGM_FI_DEV_CPU_TEMP_CRITICAL].val.d;
+        double const currentValue           = endValue[DCGM_FI_DEV_CPU_TEMP_CURRENT].val.d;
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL,
+                                  d,
+                                  currentValue,
+                                  "DCGM_FI_DEV_CPU_TEMP_CURRENT",
+                                  entityGroupString.c_str(),
+                                  entityId,
+                                  threshold);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_THERMAL, d, response);
     }
 
@@ -2253,7 +2371,16 @@ dcgmReturn_t DcgmHealthWatch::MonitorCpuPower(dcgm_field_entity_group_t entityGr
     if (currValue[DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT].val.d >= currValue[DCGM_FI_DEV_CPU_POWER_LIMIT].val.d)
     {
         DcgmError d { entityId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL, d, entityId);
+        std::string const entityGroupString = fmt::format("{}", entityGroupId);
+        double const threshold              = currValue[DCGM_FI_DEV_CPU_POWER_LIMIT].val.d;
+        double const currentValue           = currValue[DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT].val.d;
+        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FIELD_THRESHOLD_DBL,
+                                  d,
+                                  currentValue,
+                                  "DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT",
+                                  entityGroupString.c_str(),
+                                  entityId,
+                                  threshold);
         SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_POWER, d, response);
     }
 
@@ -2294,6 +2421,13 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink(dcgm_field_entity_group_t entityGrou
     if (tmpRet != DCGM_ST_OK)
     {
         log_error("Got error {} from MonitorFabricHealth gpuId {}", (int)tmpRet, entityId);
+        ret = tmpRet;
+    }
+
+    tmpRet = MonitorNVLinkErrorFields(entityGroupId, entityId, response);
+    if (tmpRet != DCGM_ST_OK)
+    {
+        log_error("Got error {} from MonitorNVLinkErrorFields gpuId {}", (int)tmpRet, entityId);
         ret = tmpRet;
     }
 
@@ -2709,6 +2843,120 @@ dcgmReturn_t DcgmHealthWatch::MonitorNvSwitchErrorCounts(bool fatal,
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, entityId, i);
                 SetResponse(entityGroupId, entityId, healthWatchResult, healthWatchSystems, d, response);
             }
+        }
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorConnectX(dcgm_field_entity_group_t entityGroupId,
+                                              dcgm_field_eid_t entityId,
+                                              DcgmHealthResponse &response)
+{
+    // Returns:
+    //   - expected with optional<int64_t> on success (nullopt if no data/not watched)
+    //   - unexpected with error code on actual failure
+    auto getFieldValue = [&](unsigned short fieldId) -> std::expected<std::optional<int64_t>, dcgmReturn_t> {
+        auto result = CollectLatestInt64Sample(mpCoreProxy, entityGroupId, entityId, fieldId);
+        if (!result.has_value())
+        {
+            log_warning("Failed to get ConnectX field {} for entity {} {}: {}",
+                        fieldId,
+                        entityGroupId,
+                        entityId,
+                        result.error());
+            return std::unexpected(result.error());
+        }
+        if (result.value().has_value())
+        {
+            return result.value().value().val.i64;
+        }
+        return std::nullopt;
+    };
+
+    auto reportIncident
+        = [&](unsigned short fieldId, std::string const &description, dcgmHealthWatchResults_t severity) {
+              dcgmGroupEntityPair_t entityPair = { entityGroupId, entityId };
+              DcgmError d { entityPair };
+              d.SetCode(DCGM_FR_FIELD_VIOLATION);
+              std::string message = fmt::format("ConnectX entity Id:{} {}", entityId, description);
+              d.SetMessage(message);
+              log_debug("ConnectX health incident: {} (field: {}, severity: {})", message, fieldId, severity);
+              SetResponse(entityGroupId, entityId, severity, DCGM_HEALTH_WATCH_CONNECTX, d, response);
+          };
+
+    // Check health status
+    if (auto health = getFieldValue(DCGM_FI_DEV_CONNECTX_HEALTH); health.has_value())
+    {
+        if (health->has_value() && **health != DcgmEntityStatusOk && **health != DcgmEntityStatusUnknown)
+        {
+            reportIncident(
+                DCGM_FI_DEV_CONNECTX_HEALTH, fmt::format("health status: {}", **health), DCGM_HEALTH_RESULT_WARN);
+        }
+    }
+    else
+    {
+        return health.error();
+    }
+
+    // Check uncorrectable errors and severity
+    auto uncorrectableStatus = getFieldValue(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS);
+
+    if (!uncorrectableStatus.has_value())
+    {
+        return uncorrectableStatus.error();
+    }
+
+    // Early return if uncorrectable error data not available (no data/not watched)
+    if (!uncorrectableStatus->has_value())
+    {
+        log_debug("ConnectX entityId {} entityGroupId {}: uncorrectable error status field not available",
+                  entityId,
+                  entityGroupId);
+        return DCGM_ST_OK;
+    }
+
+    auto uncorrectableMask = getFieldValue(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK);
+    if (!uncorrectableMask.has_value())
+    {
+        return uncorrectableMask.error();
+    }
+
+    auto uncorrectableSeverity = getFieldValue(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY);
+    if (!uncorrectableSeverity.has_value())
+    {
+        return uncorrectableSeverity.error();
+    }
+
+    if (!uncorrectableMask->has_value() || !uncorrectableSeverity->has_value())
+    {
+        log_debug("ConnectX entityId {} entityGroupId {}: uncorrectable error mask or severity field not available",
+                  entityId,
+                  entityGroupId);
+        return DCGM_ST_OK;
+    }
+
+    uint32_t unmasked = static_cast<uint32_t>(**uncorrectableStatus) & ~static_cast<uint32_t>(**uncorrectableMask);
+
+    if (unmasked != 0)
+    {
+        uint32_t severity = static_cast<uint32_t>(**uncorrectableSeverity);
+        uint32_t fatal    = unmasked & severity;
+        uint32_t nonFatal = unmasked & ~severity;
+
+        if (fatal != 0)
+        {
+            reportIncident(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS,
+                           fmt::format("uncorrectable fatal errors: 0x{:x}", fatal),
+                           DCGM_HEALTH_RESULT_FAIL);
+        }
+
+        if (nonFatal != 0)
+        {
+            reportIncident(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS,
+                           fmt::format("uncorrectable non-fatal errors: 0x{:x}", nonFatal),
+                           DCGM_HEALTH_RESULT_WARN);
         }
     }
 
@@ -3143,6 +3391,64 @@ dcgmReturn_t DcgmHealthWatch::MonitorFabricFields(dcgm_field_entity_group_t enti
     {
         /* Errors logged by CollectLatestInt64Sample() */
         return fmResult.error();
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmHealthWatch::MonitorNVLinkErrorFields(dcgm_field_entity_group_t entityGroupId,
+                                                       dcgm_field_eid_t entityId,
+                                                       DcgmHealthResponse &response)
+{
+    // Lambda to check a single NVLink error field and report incidents
+    auto checkNVLinkErrorField = [&](unsigned short fieldId,
+                                     std::string_view errorDescription,
+                                     dcgmHealthWatchResults_t severity) {
+        auto result = CollectLatestInt64Sample(mpCoreProxy, entityGroupId, entityId, fieldId);
+
+        if (result.has_value() && result.value().has_value())
+        {
+            auto const &sample = result.value().value();
+            if (sample.val.i64 > 0)
+            {
+                DcgmError d { entityId };
+                DCGM_ERROR_FORMAT_MESSAGE(
+                    DCGM_FR_NVLINK_ERROR_CRITICAL, d, sample.val.i64, errorDescription.data(), entityId);
+                SetResponse(entityGroupId, entityId, severity, DCGM_HEALTH_WATCH_NVLINK, d, response);
+            }
+        }
+        else if (!result.has_value())
+        {
+            // Real error occurred (not NO_DATA or NOT_WATCHED)
+            log_warning(
+                "Failed to get NVLink field {} for entity {} {}: {}", fieldId, entityGroupId, entityId, result.error());
+        }
+    };
+
+    // Query GPU architecture to determine which NVLink error fields to check
+    int gpuArch = GetCudaComputeCapabilityMajorVersion(entityId).value_or(0);
+    if (gpuArch >= computeCapabilityBlackWell)
+    {
+        // New NVLink recovery fields (Blackwell+ only)
+        checkNVLinkErrorField(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS,
+                              "link recovery successful events counter",
+                              DCGM_HEALTH_RESULT_WARN);
+        checkNVLinkErrorField(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS,
+                              "link recovery failed events counter",
+                              DCGM_HEALTH_RESULT_FAIL);
+        checkNVLinkErrorField(
+            DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS, "link recovery events counter", DCGM_HEALTH_RESULT_WARN);
+    }
+    else
+    {
+        // Old NVLink error fields (Pre-Blackwell only, deprecated on Blackwell+)
+        checkNVLinkErrorField(
+            DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, "datalink layer CRC error counter", DCGM_HEALTH_RESULT_FAIL);
+        checkNVLinkErrorField(
+            DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY, "datalink layer recovery error counter", DCGM_HEALTH_RESULT_FAIL);
+        checkNVLinkErrorField(
+            DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY, "datalink layer replay error counter", DCGM_HEALTH_RESULT_FAIL);
     }
 
     return DCGM_ST_OK;

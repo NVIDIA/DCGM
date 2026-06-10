@@ -631,6 +631,9 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
         return "";
     }
 
+    // Capture whether explicit EUD-only was requested before DistributeTests erases desiredTest
+    nvvsCommon.isEudOnly = (nvvsCommon.desiredTest.size() == 1) && nvvsCommon.desiredTest.contains(EUD_PLUGIN_NAME);
+
     DistributeTests(entitySets);
 
     auto const initDuration

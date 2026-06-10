@@ -317,3 +317,63 @@ def test_nvsdm_composite_field_telemetry(handle):
 @test_utils.run_with_standalone_host_engine()
 def test_nvsdm_mock_pause_resume(handle):
     nvsdm_helpers.helper_nvsdm_pause_resume(handle)
+
+
+@test_utils.run_with_nvsdm_mock_config("one_cx_with_errors.yaml")
+@test_utils.run_with_standalone_host_engine()
+def test_nvsdm_connectx_error_injection(handle):
+    """Test ConnectX error injection with PCIe AER compliant masking and severity classification."""
+
+    cxIds = dcgm_agent.dcgmGetEntityGroupEntities(
+        handle, dcgm_fields.DCGM_FE_CONNECTX, 0)
+    cxEntities = [dcgm_structs.c_dcgmGroupEntityPair_t(
+        dcgm_fields.DCGM_FE_CONNECTX, cxId) for cxId in cxIds]
+
+    fieldIds = [
+        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS,
+        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK,
+        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY,
+    ]
+    dr = DcgmReader.DcgmReader(
+        fieldIds=fieldIds, updateFrequency=200000, maxKeepAge=30.0, entities=cxEntities)
+    dr.SetHandle(handle)
+
+    cxLatest = dr.GetLatestEntityValuesAsFieldIdDict()[
+        dcgm_fields.DCGM_FE_CONNECTX]
+    for cxId in cxIds:
+        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS] == 104856
+        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK] == 1572864
+        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY] == 4599824
+
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmGroup = pydcgm.DcgmGroup(dcgmHandle, groupName="cxGroup")
+    for cxId in cxIds:
+        dcgmGroup.AddEntity(dcgm_fields.DCGM_FE_CONNECTX, cxId)
+
+    dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_CONNECTX)
+    group_health = dcgmGroup.health.Check()
+
+    assert group_health.incidentCount == 2, f"Expected 2 incidents, got {group_health.incidentCount}"
+    assert group_health.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
+
+    expectedIncidents = {
+        'fatal': ('0x1010', dcgm_structs.DCGM_HEALTH_RESULT_FAIL),
+        'non-fatal': ('0x18988', dcgm_structs.DCGM_HEALTH_RESULT_WARN),
+    }
+
+    incidentsSeen = {}
+    for i in range(group_health.incidentCount):
+        incident = group_health.incidents[i]
+        errorMsg = str(incident.error.msg)
+
+        assert incident.entityInfo.entityGroupId == dcgm_fields.DCGM_FE_CONNECTX
+        assert incident.system == dcgm_structs.DCGM_HEALTH_WATCH_CONNECTX
+
+        for keyword, (value, expectedSeverity) in expectedIncidents.items():
+            if keyword in errorMsg.lower() and value in errorMsg:
+                incidentsSeen[keyword] = incident.health
+                assert incident.health == expectedSeverity, f"{keyword}: expected severity {expectedSeverity}, got {incident.health}"
+                break
+
+    assert len(
+        incidentsSeen) == 2, f"Expected 2 incident types, saw: {list(incidentsSeen.keys())}"

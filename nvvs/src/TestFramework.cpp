@@ -22,6 +22,7 @@
 #include <DcgmHandle.h>
 #include <DcgmRecorder.h>
 #include <DcgmSystem.h>
+#include <Defer.hpp>
 #include <FdChannelClient.h>
 #include <Gpu.h>
 #include <NvvsCommon.h>
@@ -911,7 +912,7 @@ void TestFramework::GoList(Test::testClasses_enum classNum,
                 continue;
             }
 
-            if (testName == std::string(PULSE_TEST_PLUGIN_NAME))
+            if (testName == PULSE_TEST_PLUGIN_NAME)
             {
                 // Add the iterations parameters
                 tp->AddDouble(PULSE_TEST_STR_CURRENT_ITERATION, nvvsCommon.currentIteration);
@@ -920,6 +921,23 @@ void TestFramework::GoList(Test::testClasses_enum classNum,
 
             if (!skipRest && !main_should_stop)
             {
+                std::unordered_map<dcgm_field_eid_t, std::string> savedSkips;
+                if (nvvsCommon.isEudOnly)
+                {
+                    savedSkips = entitySet->SaveAndClearRowRemapSkips();
+                    if (!savedSkips.empty())
+                    {
+                        log_debug("EUD explicitly requested: bypassing {} row-remapping skip(s)", savedSkips.size());
+                    }
+                }
+
+                DcgmNs::Defer restoreSkips([entitySet, &savedSkips]() {
+                    if (!savedSkips.empty())
+                    {
+                        entitySet->RestoreSkips(savedSkips);
+                    }
+                });
+
                 DcgmRecorder dcgmRecorder(dcgmHandle.GetHandle());
                 std::vector<dcgmDiagPluginEntityInfo_v1> entityInfos = PopulateEntityInfoForPlugins(*entitySet);
 
@@ -942,6 +960,12 @@ void TestFramework::GoList(Test::testClasses_enum classNum,
                     log_error("failed to set test result to test [{}], ret: [{}].", testName, ret);
                 }
                 entitySet->UpdateSkippedEntities(entityResults);
+
+                if (nvvsCommon.isEudOnly && !savedSkips.empty())
+                {
+                    restoreSkips.Trigger();
+                    log_debug("Restored {} row-remapping skip(s) after EUD", savedSkips.size());
+                }
             }
             else
             {

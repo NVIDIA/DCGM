@@ -60,10 +60,9 @@ CpuId DcgmCpuManager::AddFakeCpu()
         return CpuId { DCGM_MAX_NUM_CPUS };
     }
 
-    unsigned int cpuId = m_nextCpuId;
-    m_cpus.emplace_back(DcgmInternalCpu(m_nextCpuId, true));
+    unsigned int const cpuId = m_cpus.size();
+    m_cpus.emplace_back(DcgmInternalCpu(cpuId, true));
     m_cpuIdToIndex[cpuId] = m_cpus.size() - 1;
-    m_nextCpuId++;
     return CpuId { cpuId };
 }
 
