@@ -350,14 +350,14 @@ TEST_CASE("TryParseEntityList")
         REQUIRE(rejectedId == "cpu:1");
 
         entityId                         = "*/*/*,cpu:1";
-        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(std::move(entityMap), entityId);
+        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(entityMap, entityId);
         REQUIRE(entityList.size() == 1);
         REQUIRE(entityList[0].entityId == 0);
         REQUIRE(entityList[0].entityGroupId == DCGM_FE_GPU_CI);
         REQUIRE(rejectedId == "cpu:1");
 
         entityId                         = "GPU-00000000-0000-0000-0000-000000000000,cpu:1";
-        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(std::move(entityMap), entityId);
+        std::tie(entityList, rejectedId) = DcgmNs::TryParseEntityList(entityMap, entityId);
         REQUIRE(entityList.size() == 0);
         REQUIRE(rejectedId == "GPU-00000000-0000-0000-0000-000000000000,cpu:1");
     }

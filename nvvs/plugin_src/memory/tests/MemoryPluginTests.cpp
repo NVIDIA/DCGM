@@ -52,4 +52,6 @@ TEST_CASE("mem_init")
     REQUIRE(entityResults.numErrors == 1);
     CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_GPU);
     CHECK(entityResults.errors[0].entity.entityId == 1);
+
+    delete memGlobals.nvvsDevice;
 }

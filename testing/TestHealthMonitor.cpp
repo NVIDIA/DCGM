@@ -21,6 +21,7 @@
 #include <UniquePtrUtil.h>
 
 #include <algorithm>
+#include <array>
 #include <ctime>
 #include <fmt/core.h>
 #include <iostream>
@@ -1114,8 +1115,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
 
     std::cout << response->incidents[0].error.msg << std::endl;
 
-    // Cleanup: Inject healthy value to avoid impacting other tests
-    // If these tests are expanded, we'll want to wrap this in a call to DcgmNs::Defer
+    // Cleanup: Inject healthy value for CRC_FLIT field
     fv.value.i64 = 0;
     fv.ts        = ToLegacyTimestamp(now + 3s);
     result       = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
@@ -1125,7 +1125,117 @@ int TestHealthMonitor::TestHMCheckNVLink()
         return result;
     }
 
-    // Cleanup: Clear health watches
+    // Test the three new NVLink datalink error fields
+    constexpr std::array<unsigned short, 3> errorFields = {
+        DCGM_FI_DEV_NVLINK_ERROR_DL_CRC,
+        DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY,
+        DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY,
+    };
+
+    constexpr std::array<char const *, 3> errorFieldNames = {
+        "DL CRC",
+        "DL Recovery",
+        "DL Replay",
+    };
+
+    for (size_t i = 0; i < errorFields.size(); i++)
+    {
+        unsigned short fieldId = errorFields[i];
+        char const *fieldName  = errorFieldNames[i];
+
+        memset(response.get(), 0, sizeof(*response));
+        response->version = dcgmHealthResponse_version;
+
+        // Inject baseline healthy value (0 means no errors)
+        fv.fieldId   = fieldId;
+        fv.value.i64 = 0;
+        fv.ts        = ToLegacyTimestamp(now + static_cast<std::chrono::seconds>(i * 10 + 4));
+
+        result = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
+        if (result != DCGM_ST_OK)
+        {
+            fprintf(stderr, "Unable to inject a 0 value for %s field: '%s'\n", fieldName, errorString(result));
+            return result;
+        }
+
+        // Verify baseline is healthy
+        result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
+        if (result != DCGM_ST_OK && result != DCGM_ST_NO_DATA)
+        {
+            fprintf(stderr, "Unable to check health for %s baseline: '%s'\n", fieldName, errorString(result));
+            return result;
+        }
+
+        // Inject error value (> 0 should trigger FAIL for these fields)
+        fv.value.i64 = 5;
+        fv.ts        = ToLegacyTimestamp(now + static_cast<std::chrono::seconds>(i * 10 + 6));
+
+        result = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
+        if (result != DCGM_ST_OK)
+        {
+            fprintf(stderr, "Unable to inject an error for %s field: '%s'\n", fieldName, errorString(result));
+            return result;
+        }
+
+        // Check health after error injection
+        memset(response.get(), 0, sizeof(*response));
+        response->version = dcgmHealthResponse_version;
+
+        result = dcgmHealthCheck(m_dcgmHandle, m_gpuGroup, response.get());
+        if (result != DCGM_ST_OK)
+        {
+            fprintf(stderr,
+                    "Unable to check NVLINK health after injecting %s error: '%s'\n",
+                    fieldName,
+                    errorString(result));
+            return result;
+        }
+
+        // Verify we got a failure (these fields trigger FAIL, not WARN)
+        if (response->overallHealth != DCGM_HEALTH_RESULT_FAIL)
+        {
+            fprintf(
+                stderr, "Expected DCGM_HEALTH_RESULT_FAIL for %s error, got %d\n", fieldName, response->overallHealth);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        if (response->incidentCount < 1)
+        {
+            fprintf(stderr, "Expected at least 1 incident for %s error, got %d\n", fieldName, response->incidentCount);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        // Verify incident is for NVLink system with FAIL health
+        bool foundNVLinkFailIncident = false;
+        for (unsigned int inc = 0; inc < response->incidentCount; inc++)
+        {
+            if (response->incidents[inc].system == DCGM_HEALTH_WATCH_NVLINK
+                && response->incidents[inc].health == DCGM_HEALTH_RESULT_FAIL)
+            {
+                foundNVLinkFailIncident = true;
+                printf("  %s error correctly detected: %s\n", fieldName, response->incidents[inc].error.msg);
+                break;
+            }
+        }
+
+        if (!foundNVLinkFailIncident)
+        {
+            fprintf(stderr, "Did not find NVLink FAIL incident for %s error\n", fieldName);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+
+        // Cleanup: Inject healthy value for next iteration
+        fv.value.i64 = 0;
+        fv.ts        = ToLegacyTimestamp(now + static_cast<std::chrono::seconds>(i * 10 + 8));
+        result       = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
+        if (result != DCGM_ST_OK)
+        {
+            fprintf(stderr, "Unable to inject a healthy value for %s: '%s'\n", fieldName, errorString(result));
+            return result;
+        }
+    }
+
+    // Final cleanup: Clear health watches
     dcgmHealthSet(m_dcgmHandle, m_gpuGroup, static_cast<dcgmHealthSystems_t>(0));
 
     return result;

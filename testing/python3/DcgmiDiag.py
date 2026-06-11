@@ -107,10 +107,14 @@ class FailedTestInfo():
 
     ################################################################################
     def GetGpuId(self):
-        (group, id) = self.m_entityPair
-        if group.lower() != 'gpu':
+        if not self.m_entityPair:
+            raise ValueError(
+                'Expected GPU entity information, but none was provided')
+
+        (group, entityId) = self.m_entityPair
+        if not isinstance(group, str) or group.lower() != 'gpu':
             raise ValueError(f'Expected entity of type GPU, found {group}')
-        return id
+        return entityId
 
     ################################################################################
     def GetEntityPair(self):
@@ -244,6 +248,7 @@ class DcgmiDiag:
             for result in results:
                 if result[STATUS_FIELD] == TEST_STATUS_FAIL:
                     if WARNINGS_FIELD in result:
+                        entityPair = None
                         if ENTITY_ID_FIELD in result:
                             entityPair = (
                                 result[ENTITY_GROUP_FIELD], result[ENTITY_ID_FIELD])
@@ -306,8 +311,17 @@ class DcgmiDiag:
         for failInfo in failed_list:
             fieldId = failInfo.GetFieldId()
             if fieldId:
+                try:
+                    gpuId = failInfo.GetGpuId()
+                except ValueError as e:
+                    # Summary-level failures may not include entity metadata.
+                    # Only correlate field IDs against nvidia-smi when a GPU entity exists.
+                    print("Skipping nvidia-smi correlation for '%s': %s"
+                          % (failInfo.GetTestname(), e))
+                    continue
+
                 val, correct_val = nsc.GetErrorValue(
-                    failInfo.GetGpuId(), fieldId)
+                    gpuId, fieldId)
                 failInfo.SetFailureMessage(val, correct_val)
 
         return failed_list

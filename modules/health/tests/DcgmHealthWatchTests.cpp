@@ -168,6 +168,22 @@ public:
     {
         return healthWatch.MonitorGlobalHealthChecks(healthSystemsMask, response);
     }
+
+    static dcgmReturn_t MonitorConnectX(DcgmHealthWatch &healthWatch,
+                                        dcgm_field_entity_group_t entityGroupId,
+                                        dcgm_field_eid_t entityId,
+                                        DcgmHealthResponse &response)
+    {
+        return healthWatch.MonitorConnectX(entityGroupId, entityId, response);
+    }
+
+    static dcgmReturn_t MonitorNVLinkErrorFields(DcgmHealthWatch &healthWatch,
+                                                 dcgm_field_entity_group_t entityGroupId,
+                                                 dcgm_field_eid_t entityId,
+                                                 DcgmHealthResponse &response)
+    {
+        return healthWatch.MonitorNVLinkErrorFields(entityGroupId, entityId, response);
+    }
 };
 
 // Test fixture class for common setup
@@ -625,5 +641,431 @@ TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorImex")
         {
             ValidateImexResponse(healthWatch, response, DCGM_ST_OK, 0, DCGM_HEALTH_RESULT_PASS);
         }
+    }
+}
+
+TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorConnectX")
+{
+    const dcgm_field_eid_t testConnectXId               = 0;
+    const dcgm_field_entity_group_t testConnectXGroupId = DCGM_FE_CONNECTX;
+
+    SECTION("Healthy ConnectX - all checks pass")
+    {
+        dcgmcm_sample_t sample = {};
+
+        sample.val.i64 = DcgmEntityStatusOk;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_HEALTH, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS, DCGM_ST_OK, sample);
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK, DCGM_ST_OK, sample);
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorConnectX(healthWatch, testConnectXGroupId, testConnectXId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 0);
+    }
+
+    SECTION("Health status not healthy (lost) - warning")
+    {
+        dcgmcm_sample_t sample = {};
+        sample.val.i64         = DcgmEntityStatusLost;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_HEALTH, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorConnectX(healthWatch, testConnectXGroupId, testConnectXId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_WARN);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_CONNECTX);
+    }
+
+    SECTION("Uncorrectable fatal errors - failure")
+    {
+        dcgmcm_sample_t sample = {};
+
+        sample.val.i64 = 0x1000;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0x1000;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorConnectX(healthWatch, testConnectXGroupId, testConnectXId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_CONNECTX);
+    }
+
+    SECTION("Uncorrectable non-fatal errors - warning")
+    {
+        dcgmcm_sample_t sample = {};
+
+        sample.val.i64 = 0x1000;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorConnectX(healthWatch, testConnectXGroupId, testConnectXId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_WARN);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_CONNECTX);
+    }
+
+    SECTION("Uncorrectable errors masked - no incidents")
+    {
+        dcgmcm_sample_t sample = {};
+
+        sample.val.i64 = 0x100000;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0x180000;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0x463010;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorConnectX(healthWatch, testConnectXGroupId, testConnectXId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 0);
+    }
+
+    SECTION("Multiple unmasked errors - fatal and non-fatal")
+    {
+        dcgmcm_sample_t sample = {};
+
+        sample.val.i64 = 0x19998;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 0x1010;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorConnectX(healthWatch, testConnectXGroupId, testConnectXId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 2);
+
+        bool foundFatal = false;
+        bool foundWarn  = false;
+        for (unsigned int i = 0; i < healthResponse.incidentCount; i++)
+        {
+            REQUIRE(healthResponse.incidents[i].system == DCGM_HEALTH_WATCH_CONNECTX);
+            if (healthResponse.incidents[i].health == DCGM_HEALTH_RESULT_FAIL)
+                foundFatal = true;
+            if (healthResponse.incidents[i].health == DCGM_HEALTH_RESULT_WARN)
+                foundWarn = true;
+        }
+        REQUIRE(foundFatal);
+        REQUIRE(foundWarn);
+    }
+
+    SECTION("Fields not watched - no incidents")
+    {
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_HEALTH, DCGM_ST_NOT_WATCHED);
+        mockCache.SetFieldSample(DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS, DCGM_ST_NOT_WATCHED);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorConnectX(healthWatch, testConnectXGroupId, testConnectXId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 0);
+    }
+}
+
+TEST_CASE_METHOD(DcgmHealthWatchFixture, "DcgmHealthWatch::MonitorNVLinkErrorFields")
+{
+    const dcgm_field_eid_t testGpuId                  = 0;
+    const dcgm_field_entity_group_t testEntityGroupId = DCGM_FE_GPU;
+
+    SECTION("No NVLink errors - healthy (old fields, pre-Blackwell)")
+    {
+        dcgmcm_sample_t sample = {};
+
+        // Set compute capability to SM 9.0 (Hopper, pre-Blackwell)
+        sample.val.i64 = (9 << 16) | 0; // Major 9, Minor 0
+        mockCache.SetFieldSample(DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_ST_OK, sample);
+
+        // All old error counts are zero
+        sample.val.i64 = 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, DCGM_ST_OK, sample);
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY, DCGM_ST_OK, sample);
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 0);
+    }
+
+    SECTION("No NVLink errors - healthy (new fields, Blackwell+)")
+    {
+        dcgmcm_sample_t sample = {};
+
+        // Set compute capability to SM 10.0 (Blackwell)
+        sample.val.i64 = (10 << 16) | 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_ST_OK, sample);
+
+        // All new recovery event counts are zero
+        sample.val.i64 = 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS, DCGM_ST_OK, sample);
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS, DCGM_ST_OK, sample);
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 0);
+    }
+
+    SECTION("NVLink DL CRC errors detected - failure")
+    {
+        dcgmcm_sample_t sample = {};
+        sample.val.i64         = 5; // CRC errors
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
+    }
+
+    SECTION("NVLink DL Recovery errors detected - failure")
+    {
+        dcgmcm_sample_t sample = {};
+        sample.val.i64         = 3; // Recovery errors
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
+    }
+
+    SECTION("NVLink DL Replay errors detected - failure")
+    {
+        dcgmcm_sample_t sample = {};
+        sample.val.i64         = 7; // Replay errors
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
+    }
+
+    SECTION("Multiple NVLink error types - multiple failures")
+    {
+        dcgmcm_sample_t sample = {};
+
+        // CRC errors
+        sample.val.i64 = 2;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, DCGM_ST_OK, sample);
+
+        // Recovery errors
+        sample.val.i64 = 4;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY, DCGM_ST_OK, sample);
+
+        // Replay errors
+        sample.val.i64 = 6;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 3);
+    }
+
+    SECTION("Link recovery successful events - warning")
+    {
+        dcgmcm_sample_t sample = {};
+
+        // Inject Blackwell+ compute capability (CC 10.0)
+        sample.val.i64 = (10 << 16) | 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 5; // Some successful recovery events
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_WARN);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
+    }
+
+    SECTION("Link recovery failed events - failure")
+    {
+        dcgmcm_sample_t sample = {};
+
+        // Inject Blackwell+ compute capability (CC 10.0)
+        sample.val.i64 = (10 << 16) | 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 2; // Failed recovery events indicate serious issues
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_FAIL);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
+    }
+
+    SECTION("Total link recovery events - warning")
+    {
+        dcgmcm_sample_t sample = {};
+
+        // Inject Blackwell+ compute capability (CC 10.0)
+        sample.val.i64 = (10 << 16) | 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 10; // Total recovery events
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].health == DCGM_HEALTH_RESULT_WARN);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
+    }
+
+    SECTION("Multiple new recovery fields - multiple incidents")
+    {
+        dcgmcm_sample_t sample = {};
+
+        // Inject Blackwell+ compute capability (CC 10.0)
+        sample.val.i64 = (10 << 16) | 0;
+        mockCache.SetFieldSample(DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_ST_OK, sample);
+
+        // Successful recovery events
+        sample.val.i64 = 3;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS, DCGM_ST_OK, sample);
+
+        // Failed recovery events
+        sample.val.i64 = 1;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS, DCGM_ST_OK, sample);
+
+        // Total recovery events
+        sample.val.i64 = 4;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 3); // 2 warnings + 1 failure
+    }
+
+    SECTION("Pre-Blackwell GPU only checks old fields")
+    {
+        dcgmcm_sample_t sample = {};
+
+        // Inject pre-Blackwell compute capability (CC 9.0)
+        sample.val.i64 = (9 << 16) | 0; // Major 9, Minor 0
+        mockCache.SetFieldSample(DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_ST_OK, sample);
+
+        // Set both old and new fields with errors
+        sample.val.i64 = 1;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, DCGM_ST_OK, sample);
+
+        sample.val.i64 = 2;
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS, DCGM_ST_OK, sample);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        // Only old field (DL_CRC) should be checked, new field ignored
+        REQUIRE(healthResponse.incidentCount == 1);
+        REQUIRE(healthResponse.incidents[0].system == DCGM_HEALTH_WATCH_NVLINK);
+    }
+
+    SECTION("Fields not watched - no incidents")
+    {
+        // All fields return NOT_WATCHED (default behavior)
+        mockCache.SetFieldSample(DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, DCGM_ST_NOT_WATCHED);
+
+        dcgmReturn_t ret
+            = DcgmHealthWatchTestHelper::MonitorNVLinkErrorFields(healthWatch, testEntityGroupId, testGpuId, response);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        dcgmHealthResponse_v5 healthResponse = {};
+        response.PopulateHealthResponse(healthResponse);
+        REQUIRE(healthResponse.incidentCount == 0);
     }
 }

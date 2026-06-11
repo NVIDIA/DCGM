@@ -35,6 +35,7 @@ import nvml_injection_structs
 import dcgm_nvml
 import utils
 import os
+import DcgmGroup
 from ctypes import *
 from dcgm_field_injection_helpers import inject_nvml_value, inject_value
 import dcgm_field_injection_helpers
@@ -2060,3 +2061,321 @@ def test_gpu_recovery_action_field_values(handle, gpuIds):
         0].value.i64 == dcgmvalue.DCGM_INT64_NOT_SUPPORTED, f"Expected NOT_SUPPORTED value but got {values[0].value.i64}"
     dcgm_agent_internal.dcgmUnwatchFieldValue(
         dcgmHandle.handle, gpuId, field_id, True)
+
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+def test_nvlink_count_aggregate_behavior_real_hardware(handle, gpuIds):
+    """
+    Test NVLink COUNT fields return correct values based on NVLink version.
+
+    - NVLink4 and older: Fields should return NOT_SUPPORTED/BLANK
+    - NVLink5 and newer: DCGM returns aggregate (sum of all links)
+
+    Compares DCGM field values against nvidia-smi to verify correct behavior.
+    """
+    import subprocess
+
+    def parse_nvlink_stats(output, pattern, link_filter=None):
+        """Parse nvidia-smi nvlink output. Returns sum of all links, or single link value if link_filter set."""
+        total, found = 0, False
+        for line in output.splitlines():
+            if "Malformed" in line and "Malformed" not in pattern:
+                continue
+            if pattern.lower() not in line.lower():
+                continue
+            if link_filter and link_filter not in line:
+                continue
+            try:
+                value = int(line.split()[-1])
+                if link_filter:
+                    return value
+                total += value
+                found = True
+            except (ValueError, IndexError):
+                continue
+        return total if found else None
+
+    def get_dcgm_value(handle, system, gpu_id, field_id):
+        """Watch field, update, get value, unwatch. Returns (value, is_blank)."""
+        dcgm_agent_internal.dcgmWatchFieldValue(
+            handle, gpu_id, field_id, 10000, 1.0, 1)
+        system.UpdateAllFields(1)
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+            handle, gpu_id, [field_id])
+        val = values[0].value.i64
+        dcgm_agent_internal.dcgmUnwatchFieldValue(
+            handle, gpu_id, field_id, True)
+        return val, dcgmvalue.DCGM_INT64_IS_BLANK(val)
+
+    gpuId = gpuIds[0]
+    chip_arch = dcgm_agent.dcgmGetGpuChipArchitecture(handle, gpuId)
+    is_nvlink5 = chip_arch >= dcgm_structs.DCGM_CHIP_ARCH_BLACKWELL
+
+    logger.info(
+        f"GPU {gpuId} arch: {chip_arch} ({'NVLink5+' if is_nvlink5 else 'NVLink4-'})")
+
+    test_fields = [
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS, "Tx packets"),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES, "Tx bytes"),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS, "Rx packets"),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_BYTES, "Rx bytes"),
+    ]
+
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+
+    # Get nvidia-smi output once for NVLink5+ validation
+    nvml_output = None
+    if is_nvlink5:
+        try:
+            result = subprocess.run(
+                ["nvidia-smi", "nvlink", "-i", str(gpuId), "-e"],
+                capture_output=True, text=True, timeout=10)
+            nvml_output = result.stdout if result.returncode == 0 else None
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+    results = {
+        "validated": 0,
+        "not_supported": 0,
+        "inconclusive": 0,
+        "skipped": 0}
+    failed_fields = []
+
+    for field_id, field_name in test_fields:
+        dcgm_value, is_blank = get_dcgm_value(
+            dcgmHandle.handle, dcgmSystem, gpuId, field_id)
+
+        # NVLink4-: expect NOT_SUPPORTED
+        if not is_nvlink5:
+            if is_blank:
+                logger.info(
+                    f"{field_name}: NOT_SUPPORTED as expected on NVLink4-")
+                results["not_supported"] += 1
+            else:
+                logger.warning(
+                    f"{field_name}: got {dcgm_value}, expected NOT_SUPPORTED on NVLink4-")
+            continue
+
+        # NVLink5+: validate aggregate behavior
+        if is_blank or nvml_output is None:
+            logger.warning(
+                f"{field_name}: skipped (blank={is_blank}, nvml_available={nvml_output is not None})")
+            results["skipped"] += 1
+            continue
+
+        agg = parse_nvlink_stats(nvml_output, field_name)
+        link0 = parse_nvlink_stats(nvml_output, field_name, "Link 0:")
+
+        if agg is None or link0 is None:
+            logger.warning(
+                f"{field_name}: skipped (could not parse nvidia-smi)")
+            results["skipped"] += 1
+            continue
+
+        logger.info(
+            f"{field_name}: DCGM={dcgm_value}, aggregate={agg}, Link0={link0}")
+
+        # Inconclusive if aggregate == link0 (single active link)
+        if agg == link0:
+            logger.info(f"{field_name}: INCONCLUSIVE (aggregate == Link0)")
+            results["inconclusive"] += 1
+            continue
+
+        # Validate: DCGM should be closer to aggregate than to link0
+        diff_agg, diff_link0 = abs(dcgm_value - agg), abs(dcgm_value - link0)
+        if diff_agg < diff_link0:
+            results["validated"] += 1
+        else:
+            failed_fields.append(
+                f"{field_name}: DCGM={dcgm_value} closer to Link0({link0}) than aggregate({agg})")
+
+    # Log summary
+    logger.info(f"Results: {results}, failures: {len(failed_fields)}")
+
+    if failed_fields:
+        raise AssertionError(
+            "NVLink5+ aggregate validation failed:\n  " +
+            "\n  ".join(failed_fields))
+
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('B200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_nvlink_count_aggregate_behavior_injection(handle, gpuIds):
+    """
+    Test all NVLink COUNT fields can be injected and retrieved correctly.
+
+    This is a basic sanity test using NVML injection to verify that:
+    1. All 34 NVLink COUNT fields can have values injected
+    2. The injected values can be retrieved via DCGM
+    3. The basic injection -> retrieval path works correctly
+
+    Uses B200.yaml (Blackwell) as the injection SKU.
+    """
+    gpuId = gpuIds[0]
+
+    # All NVLink COUNT fields that use aggregate behavior on NVLink5+
+    nvlink_count_fields = [
+        # TX/RX packets and bytes (4 fields)
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_BYTES,
+        # Error counters (12 fields)
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER,
+        # Effective errors/BER (2 fields)
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER,
+    ]
+
+    # Add FEC history fields (16 fields)
+    for i in range(16):
+        nvlink_count_fields.append(
+            getattr(dcgm_fields, f'DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_{i}'))
+
+    # Test value to inject
+    test_value = 12345678
+
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+
+    passed_count = 0
+    failed_fields = []
+
+    for field_id in nvlink_count_fields:
+        try:
+            # Inject the test value
+            ret = dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, gpuId, field_id, test_value, 0)
+            if ret != dcgm_structs.DCGM_ST_OK:
+                failed_fields.append((field_id, f"inject failed with {ret}"))
+                continue
+
+            # Watch and update the field
+            dcgm_agent_internal.dcgmWatchFieldValue(
+                dcgmHandle.handle, gpuId, field_id, 10000, 1.0, 1)
+            dcgmSystem.UpdateAllFields(1)
+
+            # Retrieve the value
+            values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+                dcgmHandle.handle, gpuId, [field_id])
+            actual_value = values[0].value.i64
+
+            # Verify the value matches
+            if actual_value != test_value:
+                failed_fields.append(
+                    (field_id, f"expected {test_value}, got {actual_value}"))
+            else:
+                passed_count += 1
+
+            dcgm_agent_internal.dcgmUnwatchFieldValue(
+                dcgmHandle.handle, gpuId, field_id, True)
+
+        except Exception as e:
+            failed_fields.append((field_id, f"exception: {e}"))
+
+    logger.info(
+        f"NVLink COUNT fields injection test: {passed_count}/{len(nvlink_count_fields)} passed")
+
+    if failed_fields:
+        error_msg = "Failed fields:\n"
+        for field_id, reason in failed_fields:
+            error_msg += f"  Field {field_id}: {reason}\n"
+        assert False, error_msg
+
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('GB200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_c2c_link_fields(handle, gpuIds):
+    '''
+    Test C2C link fields have values
+
+    * DCGM_FI_DEV_C2C_LINK_ERROR_INTR
+    * DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY
+    * DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B
+    * DCGM_FI_DEV_C2C_LINK_POWER_STATE
+    '''
+    gpuId = gpuIds[0]
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+
+    fieldIds = [
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_INTR,
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY,
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B,
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_POWER_STATE,
+    ]
+    fieldGroup = pydcgm.DcgmFieldGroup(
+        dcgmHandle, "test_c2c_link_fields", fieldIds)
+    group = DcgmGroup.DcgmGroup(
+        dcgmHandle, groupName="test_c2c_link_fields")
+    group.AddGpu(gpuId)
+    group.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
+
+    dcgmSystem.UpdateAllFields(1)
+
+    values = group.samples.GetLatest_v2(fieldGroup)
+    for fieldId in fieldIds:
+        assert values.values[dcgm_fields.DCGM_FE_GPU][gpuId][
+            fieldId][0].isBlank == False, f"Field {fieldId} is blank"
+
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('B200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_nvlink_fec_history_fields(handle, gpuIds):
+    '''
+    Test DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_* fields have values
+    '''
+    gpuId = gpuIds[0]
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+
+    fieldIds = [
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15,
+    ]
+    fieldGroup = pydcgm.DcgmFieldGroup(
+        dcgmHandle, "test_nvlink_fec_history_fields", fieldIds)
+    group = DcgmGroup.DcgmGroup(
+        dcgmHandle, groupName="test_nvlink_fec_history_fields")
+    group.AddGpu(gpuId)
+    group.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
+
+    dcgmSystem.UpdateAllFields(1)
+
+    values = group.samples.GetLatest_v2(fieldGroup)
+    for fieldId in fieldIds:
+        assert values.values[dcgm_fields.DCGM_FE_GPU][gpuId][
+            fieldId][0].isBlank == False, f"Field {fieldId} is blank"

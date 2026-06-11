@@ -1399,3 +1399,17 @@ dcgmReturn_t DcgmCoreProxy::GetCudaVersion(int &cudaVersion)
     }
     return ret;
 }
+
+dcgmReturn_t DcgmCoreProxy::GetCudaComputeCapabilityMajorVersion(dcgm_field_eid_t entityId, int &arch)
+{
+    dcgmcm_sample_t sample {};
+    dcgmReturn_t ret = GetLatestSample(DCGM_FE_GPU, entityId, DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, &sample, nullptr);
+
+    if (ret == DCGM_ST_OK && !DCGM_INT64_IS_BLANK(sample.val.i64))
+    {
+        // Compute capability is encoded as: (major << 16) | minor
+        arch = static_cast<int>(sample.val.i64 >> 16);
+    }
+
+    return ret;
+}

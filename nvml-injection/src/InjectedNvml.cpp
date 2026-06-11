@@ -467,7 +467,7 @@ bool InjectedNvml::ActiveVgpusParser(const std::string &key, const YAML::Node &n
         elementsPtr[i]                  = static_cast<nvmlVgpuInstance_t>(elements[i]);
         m_vgpuInstances[elementsPtr[i]] = AttributeHolder<nvmlVgpuInstance_t>();
     }
-    injectedArgs.emplace_back(elementsPtr, numElements);
+    injectedArgs.emplace_back(elementsPtr, numElements, true);
     ah.SetAttribute(key, NvmlFuncReturn(ret, std::move(injectedArgs)));
     return true;
 }
@@ -505,7 +505,7 @@ bool InjectedNvml::GpuInstancesParser(const std::string &key, const YAML::Node &
             idx += 1;
         }
         std::vector<InjectionArgument> args;
-        args.emplace_back(gpuInstanceArr);
+        args.emplace_back(gpuInstanceArr, static_cast<unsigned int>(idx), true);
         args.emplace_back(idx);
         ah.SetAttribute(key, key2, NvmlFuncReturn(profileRet, args));
     }
@@ -558,7 +558,8 @@ bool InjectedNvml::MigDeviceUUIDParser(const std::string &, const YAML::Node &no
         m_migDeviceCollection.emplace_back(AttributeHolder<nvmlDevice_t>());
         m_uuidToDevice[migDeviceUUID] = std::prev(m_migDeviceCollection.end());
         m_devices[*newDevicePtr]      = std::prev(m_migDeviceCollection.end());
-        ah.SetAttribute("MigDeviceHandleByIndex", idx, NvmlFuncReturn(NVML_SUCCESS, newDevicePtr));
+        ah.SetAttribute(
+            "MigDeviceHandleByIndex", idx, NvmlFuncReturn(NVML_SUCCESS, InjectionArgument(newDevicePtr, true)));
         idx += 1;
     }
     return true;
@@ -661,7 +662,7 @@ bool InjectedNvml::TopologyNearestGpuParser(const std::string &key,
         }
         std::vector<InjectionArgument> args;
         args.emplace_back(size);
-        args.emplace_back(deviceArr, size);
+        args.emplace_back(deviceArr, size, true);
         ah.SetAttribute(key, level, NvmlFuncReturn(nvmlRet, args));
     }
     return true;
@@ -904,7 +905,7 @@ bool InjectedNvml::ComputeInstancesParser(const std::string &key,
             idx += 1;
         }
         std::vector<InjectionArgument> args;
-        args.emplace_back(computeInstanceArr);
+        args.emplace_back(computeInstanceArr, static_cast<unsigned int>(idx), true);
         args.emplace_back(idx);
         ah.SetAttribute(key, profileId, NvmlFuncReturn(NVML_SUCCESS, args));
     }
@@ -938,7 +939,7 @@ bool InjectedNvml::GpuInstanceInfoParser(const std::string &key,
     info->profileId       = node[ReturnValue]["profileId"].as<unsigned int>();
     info->placement.size  = node[ReturnValue]["placement"]["size"].as<unsigned int>();
     info->placement.start = node[ReturnValue]["placement"]["start"].as<unsigned int>();
-    ah.SetAttribute(key, NvmlFuncReturn(ret, info));
+    ah.SetAttribute(key, NvmlFuncReturn(ret, InjectionArgument(info, true)));
     return true;
 }
 
@@ -984,7 +985,7 @@ bool InjectedNvml::ComputeInstanceInfoParser(const std::string &key,
     info->profileId       = node[ReturnValue]["profileId"].as<unsigned int>();
     info->placement.size  = node[ReturnValue]["placement"]["size"].as<unsigned int>();
     info->placement.start = node[ReturnValue]["placement"]["start"].as<unsigned int>();
-    ah.SetAttribute(key, NvmlFuncReturn(ret, info));
+    ah.SetAttribute(key, NvmlFuncReturn(ret, InjectionArgument(info, true)));
     return true;
 }
 
@@ -1012,8 +1013,8 @@ bool InjectedNvml::ParseOneGpuInstance(const YAML::Node &gpuInstance, AttributeH
 
     for (YAML::const_iterator it = gpuInstance.begin(); it != gpuInstance.end(); ++it)
     {
-        auto key          = it->first.as<std::string>();
-        auto const &value = it->second;
+        auto key   = it->first.as<std::string>();
+        auto value = it->second;
 
         if (handlers.contains(key))
         {
@@ -1099,8 +1100,8 @@ bool InjectedNvml::ParseOneComputeInstance(const YAML::Node &computeInstance,
 
     for (YAML::const_iterator it = computeInstance.begin(); it != computeInstance.end(); ++it)
     {
-        auto key          = it->first.as<std::string>();
-        auto const &value = it->second;
+        auto key   = it->first.as<std::string>();
+        auto value = it->second;
 
         if (handlers.contains(key))
         {
@@ -1155,8 +1156,8 @@ bool InjectedNvml::ParseOneVgpuType(const YAML::Node &vgpuType, AttributeHolder<
 
     for (YAML::const_iterator it = vgpuType.begin(); it != vgpuType.end(); ++it)
     {
-        auto key          = it->first.as<std::string>();
-        auto const &value = it->second;
+        auto key   = it->first.as<std::string>();
+        auto value = it->second;
 
         auto parsedResultOpt = nvmlReturnDeserializer.VgpuTypeHandle(key, value);
         if (parsedResultOpt)
@@ -1213,8 +1214,8 @@ bool InjectedNvml::ParseOneVgpuInstance(const YAML::Node &vgpuInstance, Attribut
 
     for (YAML::const_iterator it = vgpuInstance.begin(); it != vgpuInstance.end(); ++it)
     {
-        auto key          = it->first.as<std::string>();
-        auto const &value = it->second;
+        auto key   = it->first.as<std::string>();
+        auto value = it->second;
 
         if (handlers.contains(key))
         {
@@ -1440,11 +1441,14 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
             {
                 return nvmlFuncReturn.GetRet();
             }
-            if (nvmlFuncReturn.GetCompoundValue().RawValues().size() < 1)
+            // Store CompoundValue to prevent use-after-free (GetCompoundValue returns by value)
+            CompoundValue compoundValue = nvmlFuncReturn.GetCompoundValue();
+            auto &rawValues             = compoundValue.RawValues();
+            if (rawValues.size() < 1)
             {
                 return NVML_ERROR_UNKNOWN;
             }
-            *values[0].AsUIntPtr() = nvmlFuncReturn.GetCompoundValue().RawValues()[0].AsUInt();
+            *values[0].AsUIntPtr() = rawValues[0].AsUInt();
             if (*values[0].AsUIntPtr())
             {
                 return returnInsufficientSizeWhenHasValue ? NVML_ERROR_INSUFFICIENT_SIZE : NVML_SUCCESS;
@@ -1470,9 +1474,12 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
         {
             return nvmlFuncReturn.GetRet();
         }
-        nvmlComputeInstance_t *actualComputeInstances
-            = nvmlFuncReturn.GetCompoundValue().RawValues()[0].AsComputeInstancePtr();
-        unsigned actualCount = nvmlFuncReturn.GetCompoundValue().RawValues()[1].AsUInt();
+        // Store the CompoundValue in a local variable to prevent use-after-free
+        // GetCompoundValue() returns by value, and its destructor frees heap-allocated data
+        CompoundValue compoundValue                   = nvmlFuncReturn.GetCompoundValue();
+        auto &rawValues                               = compoundValue.RawValues();
+        nvmlComputeInstance_t *actualComputeInstances = rawValues[0].AsComputeInstancePtr();
+        unsigned actualCount                          = rawValues[1].AsUInt();
         for (unsigned i = 0; i < actualCount; ++i)
         {
             std::memcpy(&computeInstances[i], &actualComputeInstances[i], sizeof(nvmlComputeInstance_t));
@@ -1495,13 +1502,15 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
         {
             return nvmlFuncRet.GetRet();
         }
-        for (unsigned i = 0; i < nvmlFuncRet.GetCompoundValue().RawValues()[1].AsUInt(); ++i)
+        // Store CompoundValue to prevent use-after-free (GetCompoundValue returns by value)
+        CompoundValue compoundValue = nvmlFuncRet.GetCompoundValue();
+        auto &rawValues             = compoundValue.RawValues();
+        for (unsigned i = 0; i < rawValues[1].AsUInt(); ++i)
         {
-            std::memcpy(&values[0].AsGpuInstancePtr()[i],
-                        &nvmlFuncRet.GetCompoundValue().RawValues()[0].AsGpuInstancePtr()[i],
-                        sizeof(nvmlGpuInstance_t));
+            std::memcpy(
+                &values[0].AsGpuInstancePtr()[i], &rawValues[0].AsGpuInstancePtr()[i], sizeof(nvmlGpuInstance_t));
         }
-        values[1].SetValueFrom(nvmlFuncRet.GetCompoundValue().RawValues()[1]);
+        values[1].SetValueFrom(rawValues[1]);
         return NVML_SUCCESS;
     }
     if (funcname == "nvmlVgpuInstanceGetVmID")
@@ -1516,17 +1525,20 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
         {
             return nvmlFuncReturn.GetRet();
         }
-        if (nvmlFuncReturn.GetCompoundValue().RawValues().size() < 2)
+        // Store CompoundValue to prevent use-after-free (GetCompoundValue returns by value)
+        CompoundValue compoundValue = nvmlFuncReturn.GetCompoundValue();
+        auto &rawValues             = compoundValue.RawValues();
+        if (rawValues.size() < 2)
         {
             return NVML_ERROR_UNKNOWN;
         }
-        auto vmId = nvmlFuncReturn.GetCompoundValue().RawValues()[0].AsString();
+        auto vmId = rawValues[0].AsString();
         if (vmId.size() > args[1].AsUInt())
         {
             return NVML_ERROR_INSUFFICIENT_SIZE;
         }
         snprintf(values[0].AsStr(), vmId.size(), "%s", vmId.c_str());
-        values[1].SetValueFrom(nvmlFuncReturn.GetCompoundValue().RawValues()[1]);
+        values[1].SetValueFrom(rawValues[1]);
         return NVML_SUCCESS;
     }
     if (funcname == "nvmlDeviceGetProcessUtilization")
@@ -1633,13 +1645,16 @@ std::optional<nvmlReturn_t> InjectedNvml::GetWrapperSpecialCase(const std::strin
         {
             return nvmlFuncRet.GetRet();
         }
-        if (nvmlFuncRet.GetCompoundValue().RawValues().size() < 1)
+        // Store CompoundValue to prevent use-after-free (GetCompoundValue returns by value)
+        CompoundValue compoundValue = nvmlFuncRet.GetCompoundValue();
+        auto &rawValues             = compoundValue.RawValues();
+        if (rawValues.size() < 1)
         {
             return NVML_ERROR_UNKNOWN;
         }
-        values[0].AsMemoryPtr()->free  = nvmlFuncRet.GetCompoundValue().RawValues()[0].AsMemory_v2Ptr()->free;
-        values[0].AsMemoryPtr()->used  = nvmlFuncRet.GetCompoundValue().RawValues()[0].AsMemory_v2Ptr()->used;
-        values[0].AsMemoryPtr()->total = nvmlFuncRet.GetCompoundValue().RawValues()[0].AsMemory_v2Ptr()->total;
+        values[0].AsMemoryPtr()->free  = rawValues[0].AsMemory_v2Ptr()->free;
+        values[0].AsMemoryPtr()->used  = rawValues[0].AsMemory_v2Ptr()->used;
+        values[0].AsMemoryPtr()->total = rawValues[0].AsMemory_v2Ptr()->total;
         return NVML_SUCCESS;
     }
     return std::nullopt;
@@ -1798,7 +1813,10 @@ nvmlReturn_t InjectedNvml::GetWrapper(const std::string &funcname,
     {
         return nvmlFuncReturn.GetRet();
     }
-    if (values.size() > nvmlFuncReturn.GetCompoundValue().RawValues().size())
+    // Store CompoundValue to prevent use-after-free (GetCompoundValue returns by value)
+    CompoundValue compoundValue = nvmlFuncReturn.GetCompoundValue();
+    auto &rawValues             = compoundValue.RawValues();
+    if (values.size() > rawValues.size())
     {
         NVML_LOG_ERR("value of key [%s] is not expected", key.c_str());
         return NVML_ERROR_INVALID_ARGUMENT;
@@ -1806,7 +1824,7 @@ nvmlReturn_t InjectedNvml::GetWrapper(const std::string &funcname,
 
     for (size_t i = 0; i < values.size(); ++i)
     {
-        auto nvmlRet = values[i].SetValueFrom(nvmlFuncReturn.GetCompoundValue().RawValues()[i]);
+        auto nvmlRet = values[i].SetValueFrom(rawValues[i]);
         if (nvmlRet != NVML_SUCCESS)
         {
             return nvmlRet;
@@ -2028,6 +2046,18 @@ std::pair<nvmlReturn_t, std::string> InjectedNvml::GetString(InjectionArgument &
             return { nvmlFuncRet.GetRet(), nvmlFuncRet.GetCompoundValue().AsInjectionArgument().AsString() };
             break;
         }
+        case INJECTION_UINT:
+        {
+            // nvmlVgpuTypeId_t is typedef for unsigned int, so comes in as INJECTION_UINT
+            auto vgpuTypeId = static_cast<nvmlVgpuTypeId_t>(arg.AsUInt());
+            if (!m_vgpuTypeIds.contains(vgpuTypeId))
+            {
+                return { NVML_ERROR_INVALID_ARGUMENT, "" };
+            }
+            auto nvmlFuncRet = m_vgpuTypeIds[vgpuTypeId].GetAttribute(key);
+            return { nvmlFuncRet.GetRet(), nvmlFuncRet.GetCompoundValue().AsInjectionArgument().AsString() };
+            break;
+        }
         default:
             break;
     }
@@ -2048,6 +2078,18 @@ std::pair<nvmlReturn_t, std::string> InjectedNvml::GetString(InjectionArgument &
                 return { NVML_ERROR_INVALID_ARGUMENT, "" };
             }
             auto nvmlFuncRet = m_devices[arg.AsDevice()]->GetAttribute(key, key2);
+            return { nvmlFuncRet.GetRet(), nvmlFuncRet.GetCompoundValue().AsInjectionArgument().AsString() };
+            break;
+        }
+        case INJECTION_UINT:
+        {
+            // nvmlVgpuTypeId_t is typedef for unsigned int, so comes in as INJECTION_UINT
+            auto vgpuTypeId = static_cast<nvmlVgpuTypeId_t>(arg.AsUInt());
+            if (!m_vgpuTypeIds.contains(vgpuTypeId))
+            {
+                return { NVML_ERROR_INVALID_ARGUMENT, "" };
+            }
+            auto nvmlFuncRet = m_vgpuTypeIds[vgpuTypeId].GetAttribute(key, key2);
             return { nvmlFuncRet.GetRet(), nvmlFuncRet.GetCompoundValue().AsInjectionArgument().AsString() };
             break;
         }
@@ -2250,7 +2292,7 @@ void InjectedNvml::InitializeGpuDefaults(nvmlDevice_t device, unsigned int index
     {
         memset(pciInfo, 0, sizeof(*pciInfo));
         snprintf(pciInfo->busId, sizeof(pciInfo->busId), "00000000:%02d:00.0", 3 * index + 1);
-        InjectionArgument pciInfoArg(pciInfo);
+        InjectionArgument pciInfoArg(pciInfo, true);
         DeviceSetNoLock(device, INJECTION_PCIINFO_KEY, {}, NvmlFuncReturn(NVML_SUCCESS, pciInfoArg));
     }
 

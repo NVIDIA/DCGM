@@ -107,27 +107,28 @@ std::string ParseIgnoreErrorCodesString(std::string_view inputString,
                 return fmt::format("Only GPU entities are supported at this time. {}", invalidParamErrStr);
             }
             // remove "gpu" from the start of the string
-            std::string_view gpuIdStr = entityStr.substr(3);
-            try
-            {
-                // only gpus from the provided set are allowed
-                gpuId = std::stoul(gpuIdStr.data());
-                dcgmGroupEntityPair_t entity {
-                    .entityGroupId = DCGM_FE_GPU,
-                    .entityId      = gpuId,
-                };
-                if (!validGpuSet.contains(gpuId))
-                {
-                    return fmt::format("GPU index {} invalid. {}", gpuId, invalidParamErrStr);
-                }
-                if (gpuErrorCodeMap.contains(entity))
-                {
-                    return fmt::format("GPU index {} repeated. {}", gpuId, invalidParamErrStr);
-                }
-            }
-            catch (const std::exception &)
+            auto const gpuIdStr = std::string_view { entityStr }.substr(3);
+
+            // only gpus from the provided set are allowed
+            auto [ptr, err] = std::from_chars(gpuIdStr.data(), gpuIdStr.data() + gpuIdStr.size(), gpuId);
+            if (err != std::errc() || ptr != gpuIdStr.data() + gpuIdStr.size())
             {
                 return fmt::format("Invalid entities. {}", invalidParamErrStr);
+            }
+
+            if (!validGpuSet.contains(gpuId))
+            {
+                return fmt::format("GPU index {} invalid. {}", gpuId, invalidParamErrStr);
+            }
+
+            dcgmGroupEntityPair_t entity {
+                .entityGroupId = DCGM_FE_GPU,
+                .entityId      = gpuId,
+            };
+
+            if (gpuErrorCodeMap.contains(entity))
+            {
+                return fmt::format("GPU index {} repeated. {}", gpuId, invalidParamErrStr);
             }
         }
 

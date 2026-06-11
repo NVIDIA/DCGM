@@ -44,6 +44,7 @@ target_sources(commontests
         UriParserTests.cpp
         PermissionCheckTests.cpp
         DcgmMutexTests.cpp
+        EnvConfigTests.cpp
 )
 
 target_link_libraries(commontests

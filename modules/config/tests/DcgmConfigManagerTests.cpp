@@ -187,7 +187,10 @@ TEST_CASE("DcgmConfigManager::HelperGetWorkloadPowerProfiles (old API)")
 
         memcpy(targetConfig.workloadPowerProfiles, initialWorkloadPowerProfiles, sizeof(initialWorkloadPowerProfiles));
         memcpy(currentConfig.workloadPowerProfiles, initialWorkloadPowerProfiles, sizeof(initialWorkloadPowerProfiles));
-        memset(newConfig.workloadPowerProfiles, DCGM_INT32_BLANK, sizeof(newConfig.workloadPowerProfiles));
+        for (unsigned int i = 0; i < std::size(newConfig.workloadPowerProfiles); i++)
+        {
+            newConfig.workloadPowerProfiles[i] = DCGM_INT32_BLANK;
+        }
 
         bool needsMerge  = false;
         dcgmReturn_t ret = configManager.HelperGetWorkloadPowerProfiles(targetConfig,

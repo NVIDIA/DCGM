@@ -42,6 +42,7 @@ NvvsCommon::NvvsCommon()
     , mainReturnCode(NVVS_ST_SUCCESS)
     , pluginPath()
     , desiredTest()
+    , isEudOnly(false)
     , indexString()
     , fakegpusString()
     , parmsString()
@@ -77,6 +78,7 @@ NvvsCommon::NvvsCommon(const NvvsCommon &other)
     , mainReturnCode(other.mainReturnCode)
     , pluginPath(other.pluginPath)
     , desiredTest(other.desiredTest)
+    , isEudOnly(other.isEudOnly)
     , indexString(other.indexString)
     , fakegpusString(other.fakegpusString)
     , parmsString(other.parmsString)
@@ -115,6 +117,7 @@ NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
     mainReturnCode         = other.mainReturnCode;
     pluginPath             = other.pluginPath;
     desiredTest            = other.desiredTest;
+    isEudOnly              = other.isEudOnly;
     indexString            = other.indexString;
     fakegpusString         = other.fakegpusString;
     parmsString            = other.parmsString;
@@ -155,6 +158,7 @@ void NvvsCommon::Init()
     mainReturnCode         = NVVS_ST_SUCCESS;
     pluginPath             = "";
     desiredTest.clear();
+    isEudOnly      = false;
     indexString    = "";
     fakegpusString = "";
     parmsString    = "";

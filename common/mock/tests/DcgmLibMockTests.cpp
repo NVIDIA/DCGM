@@ -42,7 +42,7 @@ dcgmHandle_t GetTestHandle(DcgmNs::DcgmLibMock &dcgmLibMock)
 
 void MockDoubleField(DcgmNs::DcgmMockEntity &mockedEntity, unsigned short fieldId, double value)
 {
-    dcgmFieldValue_v2 mockedVal;
+    dcgmFieldValue_v2 mockedVal {};
 
     mockedVal.entityGroupId = mockedEntity.GetEntity().entityGroupId;
     mockedVal.entityId      = mockedEntity.GetEntity().entityId;
@@ -50,6 +50,7 @@ void MockDoubleField(DcgmNs::DcgmMockEntity &mockedEntity, unsigned short fieldI
     mockedVal.fieldType     = DCGM_FT_DOUBLE;
     mockedVal.status        = DCGM_ST_OK;
     mockedVal.value.dbl     = value;
+    mockedVal.version       = dcgmFieldValue_version2;
     mockedEntity.InjectFieldValue(fieldId, mockedVal);
 }
 
@@ -71,13 +72,14 @@ TEST_CASE("DcgmMockEntity::GetFieldValue")
 
     SECTION("With Data")
     {
-        dcgmFieldValue_v2 mockedVal;
+        dcgmFieldValue_v2 mockedVal {};
 
         mockedVal.entityGroupId = mockedEntity.GetEntity().entityGroupId;
         mockedVal.entityId      = mockedEntity.GetEntity().entityId;
         mockedVal.fieldId       = DCGM_FI_DEV_MIG_MODE;
         mockedVal.fieldType     = DCGM_FT_INT64;
         mockedVal.status        = DCGM_ST_OK;
+        mockedVal.version       = dcgmFieldValue_version2;
         mockedVal.value.i64     = 1;
         mockedEntity.InjectFieldValue(DCGM_FI_DEV_MIG_MODE, mockedVal);
 

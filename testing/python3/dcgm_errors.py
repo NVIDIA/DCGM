@@ -164,7 +164,8 @@ DCGM_FR_GPU_RECOVERY_DRAIN_P2P = 127  # Peer-to-peer traffic must be drained
 # GPU operating at reduced capacity, drain and reset required
 DCGM_FR_GPU_RECOVERY_DRAIN_RESET = 128
 DCGM_FR_NCCL_ERROR = 129
-DCGM_FR_ERROR_SENTINEL = 130  # MUST BE THE LAST ERROR CODE
+DCGM_FR_RETEST_REQUESTED = 130  # Retest requested before providing results
+DCGM_FR_ERROR_SENTINEL = 131  # MUST BE THE LAST ERROR CODE
 
 # Deprecated throttling-related events
 # Deprecated: Use DCGM_FR_CLOCKS_EVENT_THERMAL instead
@@ -284,7 +285,7 @@ DCGM_FR_CANNOT_GET_FIELD_TAG_MSG = "Unable to get field information for field id
 DCGM_FR_FIELD_VIOLATION_MSG = "Detected %ld %s for GPU %u"
 DCGM_FR_FIELD_THRESHOLD_MSG = "Detected %ld %s for GPU %u which is above the threshold %ld"
 DCGM_FR_FIELD_VIOLATION_DBL_MSG = "Detected %.1f %s for GPU %u"
-DCGM_FR_FIELD_THRESHOLD_DBL_MSG = "Detected %.1f %s for GPU %u which is above the threshold %.1f"
+DCGM_FR_FIELD_THRESHOLD_DBL_MSG = "Detected %.1f %s for %s:%u which is above the threshold %.1f"
 DCGM_FR_UNSUPPORTED_FIELD_TYPE_MSG = "Field %s is not supported by this API because it is neither an "\
     "int64 nor a double type."
 DCGM_FR_FIELD_THRESHOLD_TS_MSG = "%s met or exceeded the threshold of %lu per second: %lu at "\
@@ -355,7 +356,7 @@ DCGM_FR_PENDING_ROW_REMAP_MSG = "GPU %u has pending row remappings"
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG = "GPU %u was unsuccessfully written to by GPU %u in a peer-to-peer test: %s"
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG = "GPU %u unsuccessfully wrote data to GPU %u in a peer-to-peer test: %s"
 DCGM_FR_NVSWITCH_NVLINK_DOWN_MSG = "NVSwitch %u's NvLink %u is down."
-DCGM_FR_PCIE_H_REPLAY_VIOLATION = "GPU %u host-side correctable PCIe replay count violation, see dmesg for more information."
+DCGM_FR_PCIE_H_REPLAY_VIOLATION_MSG = "GPU %u host-side correctable PCIe replay count violation, see dmesg for more information."
 DCGM_FR_FILE_CREATE_PERMISSIONS_MSG = "The DCGM Diagnostic does not have permissions to create a file in directory '%s'"
 DCGM_FR_XID_ERROR_MSG = "Detected XID %u for GPU %u"
 DCGM_FR_SBE_VIOLATION_MSG = "Detected SBE violation for GPU %u"

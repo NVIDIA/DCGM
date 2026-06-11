@@ -1049,6 +1049,8 @@ std::string ProcessStats::HelperHealthSystemToString(dcgmHealthSystems_enum syst
             return "Power Health";
         case DCGM_HEALTH_WATCH_DRIVER:
             return "Driver Health";
+        case DCGM_HEALTH_WATCH_CONNECTX:
+            return "ConnectX Health";
         default:
             return DCGM_STR_BLANK;
     }

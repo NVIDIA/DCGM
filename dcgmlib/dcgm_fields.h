@@ -2822,101 +2822,121 @@ typedef unsigned int dcgm_field_eid_t;
 
 /**
  * Total Tx packets on the link in NVLink5
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS 1200
 
 /**
  * Total Tx bytes on the link in NVLink5
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES 1201
 
 /**
  * Total Rx packets on the link in NVLink5
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS 1202
 
 /**
  * Total Rx bytes on the link in NVLink5
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_BYTES 1203
 
 /**
  * Number of packets Rx on a link where packets are malformed
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS 1204
 
 /**
  * Number of packets that were discarded on Rx due to buffer overrun
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS 1205
 
 /**
  * Total number of packets with errors Rx on a link
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS 1206
 
 /**
  * Total number of packets Rx - stomp/EBP marker
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS 1207
 
 /**
  * Total number of packets Rx with header mismatch
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS 1208
 
 /**
  * Total number of times that the count of local errors exceeded a threshold
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS 1209
 
 /**
  * Total number of tx error packets that were discarded
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS 1210
 
 /**
  * Number of times link went from Up to recovery, succeeded and link came back up
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS 1211
 
 /**
  * Number of times link went from Up to recovery, failed and link was declared down
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS 1212
 
 /**
  * Number of times link went from Up to recovery, irrespective of the result
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS 1213
 
 /**
  * Number of errors in rx symbols
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS 1214
 
 /**
  * BER for symbol errors - raw value
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER 1215
 
 /**
  * BER for symbol errors - decoded float (derived from DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER)
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT 1216
 
 /**
  * Effective BER for effective errors - raw value
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER 1217
 
 /**
  * Effective BER for effective errors - decoded float (derived from DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER)
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT 1218
 
 /**
  * Sum of the number of errors in each Nvlink packet
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 #define DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS 1219
 
@@ -3020,95 +3040,111 @@ typedef unsigned int dcgm_field_eid_t;
 
 /**
  * Count of symbol errors that are corrected - bin 0
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0 1404
 
 /**
  * Count of symbol errors that are corrected - bin 1
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1 1405
 
 /**
  * Count of symbol errors that are corrected - bin 2
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2 1406
 
 /**
  * Count of symbol errors that are corrected - bin 3
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3 1407
 
 /**
  * Count of symbol errors that are corrected - bin 4
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4 1408
 
 /**
  * Count of symbol errors that are corrected - bin 5
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5 1409
 
 /**
  * Count of symbol errors that are corrected - bin 6
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6 1410
 
 /**
  * Count of symbol errors that are corrected - bin 7
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7 1411
 
 /**
  * Count of symbol errors that are corrected - bin 8
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8 1412
 
 /**
  * Count of symbol errors that are corrected - bin 9
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9 1413
 
 /**
  * Count of symbol errors that are corrected - bin 10
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10 1414
 
 /**
  * Count of symbol errors that are corrected - bin 11
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11 1415
 
 /**
  * Count of symbol errors that are corrected - bin 12
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12 1416
 /**
  * Count of symbol errors that are corrected - bin 13
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13 1417
 
 /**
  * Count of symbol errors that are corrected - bin 14
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14 1418
 
 /**
  * Count of symbol errors that are corrected - bin 15
+ * Note: NVLink5+ only. Returns aggregate value across all links. Not supported on NVLink4 and earlier.
  */
 
 #define DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15 1419

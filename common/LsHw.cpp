@@ -23,20 +23,11 @@
 #include <json/reader.h>
 #include <json/value.h>
 
-namespace
-{
-
-bool SupportNonNvidiaCpu()
-{
-    char const *envVar = "DCGM_SUPPORT_NON_NVIDIA_CPU";
-    return !!getenv(envVar);
-}
-
-} //namespace
 
 LsHw::LsHw()
     : m_runningUserChecker(std::make_unique<DcgmNs::Utils::RunningUserChecker>())
     , m_runCmdHelper(std::make_unique<DcgmNs::Utils::RunCmdHelper>())
+    , m_envConfig(std::make_unique<EnvConfig>())
 {}
 
 void LsHw::SetChecker(std::unique_ptr<DcgmNs::Utils::RunningUserChecker> checker)
@@ -47,6 +38,11 @@ void LsHw::SetChecker(std::unique_ptr<DcgmNs::Utils::RunningUserChecker> checker
 void LsHw::SetRunCmdHelper(std::unique_ptr<DcgmNs::Utils::RunCmdHelper> runCmdHelper)
 {
     m_runCmdHelper = std::move(runCmdHelper);
+}
+
+void LsHw::SetEnvConfig(std::unique_ptr<EnvConfig> envConfig)
+{
+    m_envConfig = std::move(envConfig);
 }
 
 std::optional<std::vector<std::string>> LsHw::GetCpuSerials() const
@@ -101,7 +97,7 @@ std::optional<std::vector<std::string>> LsHw::ParseCpuSerials(std::string const 
                 {
                     continue;
                 }
-                if (!SupportNonNvidiaCpu())
+                if (!m_envConfig->SupportNonNvidiaCpu())
                 {
                     if (l2Obj[LSHW_KEY_VENDOR].asString() != LSHW_VAL_VENDOR_NVIDIA)
                     {

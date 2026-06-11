@@ -2286,18 +2286,19 @@ typedef struct
  */
 typedef enum dcgmHealthSystems_enum
 {
-    DCGM_HEALTH_WATCH_PCIE              = 0x1,   //!< PCIe system watches (must have 1m of data before query)
-    DCGM_HEALTH_WATCH_NVLINK            = 0x2,   //!< NVLINK system watches
-    DCGM_HEALTH_WATCH_PMU               = 0x4,   //!< Power management unit watches
-    DCGM_HEALTH_WATCH_MCU               = 0x8,   //!< Micro-controller unit watches
-    DCGM_HEALTH_WATCH_MEM               = 0x10,  //!< Memory watches
-    DCGM_HEALTH_WATCH_SM                = 0x20,  //!< Streaming multiprocessor watches
-    DCGM_HEALTH_WATCH_INFOROM           = 0x40,  //!< Inforom watches
-    DCGM_HEALTH_WATCH_THERMAL           = 0x80,  //!< Temperature watches (must have 1m of data before query)
-    DCGM_HEALTH_WATCH_POWER             = 0x100, //!< Power watches (must have 1m of data before query)
-    DCGM_HEALTH_WATCH_DRIVER            = 0x200, //!< Driver-related watches
-    DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL = 0x400, //!< Non-fatal errors in NvSwitch
-    DCGM_HEALTH_WATCH_NVSWITCH_FATAL    = 0x800, //!< Fatal errors in NvSwitch
+    DCGM_HEALTH_WATCH_PCIE              = 0x1,    //!< PCIe system watches (must have 1m of data before query)
+    DCGM_HEALTH_WATCH_NVLINK            = 0x2,    //!< NVLINK system watches
+    DCGM_HEALTH_WATCH_PMU               = 0x4,    //!< Power management unit watches
+    DCGM_HEALTH_WATCH_MCU               = 0x8,    //!< Micro-controller unit watches
+    DCGM_HEALTH_WATCH_MEM               = 0x10,   //!< Memory watches
+    DCGM_HEALTH_WATCH_SM                = 0x20,   //!< Streaming multiprocessor watches
+    DCGM_HEALTH_WATCH_INFOROM           = 0x40,   //!< Inforom watches
+    DCGM_HEALTH_WATCH_THERMAL           = 0x80,   //!< Temperature watches (must have 1m of data before query)
+    DCGM_HEALTH_WATCH_POWER             = 0x100,  //!< Power watches (must have 1m of data before query)
+    DCGM_HEALTH_WATCH_DRIVER            = 0x200,  //!< Driver-related watches
+    DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL = 0x400,  //!< Non-fatal errors in NvSwitch
+    DCGM_HEALTH_WATCH_NVSWITCH_FATAL    = 0x800,  //!< Fatal errors in NvSwitch
+    DCGM_HEALTH_WATCH_CONNECTX          = 0x1000, //!< ConnectX device health
 
     // ...
     DCGM_HEALTH_WATCH_ALL = 0xFFFFFFFF //!< All watches enabled
@@ -2305,6 +2306,7 @@ typedef enum dcgmHealthSystems_enum
 
 #define DCGM_HEALTH_WATCH_COUNT_V1 10 /*!< For iterating through the dcgmHealthSystems_v1 enum */
 #define DCGM_HEALTH_WATCH_COUNT_V2 12 /*!< For iterating through the dcgmHealthSystems_v2 enum */
+#define DCGM_HEALTH_WATCH_COUNT_V3 13 /*!< For iterating through the dcgmHealthSystems_v3 enum */
 
 /**
  * Health Watch test results

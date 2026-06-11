@@ -45,55 +45,6 @@ static const char cNA[] = "N/A";
    we've received a signal from a ctrl-c... etc that we should stop */
 static std::atomic<bool> gDeviceMonitorShouldStop = false;
 
-fmt::string_view format_as(dcgm_field_entity_group_t entityGroupId)
-{
-    fmt::string_view val = "UNKNOWN";
-    switch (entityGroupId)
-    {
-        case DCGM_FE_GPU:
-            val = "GPU";
-            break;
-        case DCGM_FE_VGPU:
-            val = "vGPU";
-            break;
-        case DCGM_FE_SWITCH:
-            val = "Switch";
-            break;
-        case DCGM_FE_GPU_I:
-            val = "GPU-I";
-            break;
-        case DCGM_FE_GPU_CI:
-            val = "GPU-CI";
-            break;
-        case DCGM_FE_LINK:
-            val = "LINK";
-            break;
-        case DCGM_FE_CPU:
-            val = "CPU";
-            break;
-        case DCGM_FE_CPU_CORE:
-            val = "CPU Core";
-            break;
-        case DCGM_FE_CONNECTX:
-            val = "CX";
-            break;
-        case DCGM_FE_NONE:
-            /**
-             * We used to display this as "GPU" if there is no non-GLOBAL
-             * entity to combine global data with to display. We did this
-             * since GLOBAL data was still reported per GPU. But, current
-             * code should not be sending DCGM_FE_NONE, so we tag it as
-             * "UNKNOWN".
-             */
-            break;
-        case DCGM_FE_COUNT:
-            break;
-    }
-
-    return val;
-}
-
-
 template <>
 struct std::hash<dcgmi_entity_pair_t>
 {

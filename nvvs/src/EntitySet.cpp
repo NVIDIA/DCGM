@@ -147,18 +147,18 @@ std::unordered_map<dcgm_field_eid_t, std::string> EntitySet::GetSkippedEntities(
 void EntitySet::UpdateSkippedEntities(dcgmDiagEntityResults_v2 const &result)
 {
     std::unordered_map<unsigned int, std::string> const errorToSkip
-        = { { DCGM_FR_UNCORRECTABLE_ROW_REMAP,
-              "Skipping this test due to previously detected uncorrectable row remapping." },
-            { DCGM_FR_PENDING_ROW_REMAP, "Skipping this test due to previously detected pending row remapping." },
+        = { { DCGM_FR_UNCORRECTABLE_ROW_REMAP, std::string(SKIP_REASON_UNCORRECTABLE_ROW_REMAP) },
+            { DCGM_FR_PENDING_ROW_REMAP, std::string(SKIP_REASON_PENDING_ROW_REMAP) },
             { DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS,
               "Skipping this test due to previously detected pending page retirements." },
             { DCGM_FR_PENDING_PAGE_RETIREMENTS,
               "Skipping this test due to previously detected pending page retirements." },
             { DCGM_FR_RETIRED_PAGES_LIMIT,
               "Skipping this test due to previously detected unacceptable total page retirements." },
-            { DCGM_FR_ROW_REMAP_FAILURE, "Skipping this test due to previously detected row remapping failure." } };
+            { DCGM_FR_ROW_REMAP_FAILURE, std::string(SKIP_REASON_ROW_REMAP_FAILURE) } };
 
     auto errors = std::span(result.errors, std::min(static_cast<size_t>(result.numErrors), std::size(result.errors)));
+
     for (auto const &error : errors)
     {
         auto it = errorToSkip.find(error.code);
@@ -172,4 +172,26 @@ void EntitySet::UpdateSkippedEntities(dcgmDiagEntityResults_v2 const &result)
         }
         m_skippedForFutureTests.insert({ error.entity.entityId, it->second });
     }
+}
+
+bool EntitySet::IsRowRemapSkip(std::string const &reason)
+{
+    return reason == SKIP_REASON_ROW_REMAP_FAILURE;
+}
+
+std::unordered_map<dcgm_field_eid_t, std::string> EntitySet::SaveAndClearRowRemapSkips()
+{
+    std::unordered_map<dcgm_field_eid_t, std::string> saved;
+
+    DcgmNs::Utils::EraseAndNotifyIf(
+        m_skippedForFutureTests,
+        [&](auto const &skip) { return IsRowRemapSkip(skip.second); },
+        [&](auto const &skip) { saved.insert(skip); });
+
+    return saved;
+}
+
+void EntitySet::RestoreSkips(std::unordered_map<dcgm_field_eid_t, std::string> const &skips)
+{
+    m_skippedForFutureTests.insert(skips.begin(), skips.end());
 }

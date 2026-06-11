@@ -86,6 +86,37 @@ def test_dcgm_health_set_pcie_standalone(handle):
     helper_dcgm_health_set_pcie(handle)
 
 
+def helper_dcgm_health_set_connectx(handle):
+    """
+    Verifies that the set/get path for ConnectX health monitoring is working
+    """
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetDefaultGroup()
+
+    groupObj.health.Set(0)
+
+    currentSystems = groupObj.health.Get()
+    assert (currentSystems == 0)
+
+    newSystems = currentSystems | dcgm_structs.DCGM_HEALTH_WATCH_CONNECTX
+
+    groupObj.health.Set(newSystems)
+
+    currentSystems = groupObj.health.Get()
+    assert (currentSystems == newSystems)
+
+    # Set it back to 0 and validate it
+    groupObj.health.Set(0)
+    currentSystems = groupObj.health.Get()
+    assert (currentSystems == 0)
+
+
+@test_utils.run_with_standalone_host_engine(20)
+def test_dcgm_health_set_connectx_standalone(handle):
+    helper_dcgm_health_set_connectx(handle)
+
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_health_invalid_group_embedded(handle):
     '''
@@ -638,7 +669,7 @@ def test_dcgm_standalone_health_set_power(handle):
     assert (currentSystems == newSystems)
 
 
-def helper_check_health_response_v4(gpuIds, response):
+def helper_check_health_response_v4(entityIds, response):
     numErrors = 0
     if response.version == 0:
         numErrors += 1
@@ -646,15 +677,39 @@ def helper_check_health_response_v4(gpuIds, response):
     if response.overallHealth != dcgm_structs.DCGM_HEALTH_RESULT_PASS:
         numErrors += 1
         logger.error(
-            "bad response.overallHealth %d. Are these GPUs really healthy?" % response.overallHealth)
+            "bad response.overallHealth %d. Are these entities really healthy?" % response.overallHealth)
         test_utils.skip_test(
-            "bad response.overallHealth %d. Are these GPUs really healthy?" % response.overallHealth)
+            "bad response.overallHealth %d. Are these entities really healthy?" % response.overallHealth)
     if response.incidentCount > 0:
         numErrors += 1
         logger.error("bad response.incidentCount %d > 0" %
                      (response.incidentCount))
 
     assert numErrors == 0, "Errors were encountered. See above."
+
+
+def helper_run_dcgm_health_check_sanity_connectx(handle, cxIds, system_to_check):
+    """
+    Verifies that the DCGM health checks return healthy for ConnectX devices on live systems.
+    """
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+
+    # Create a group with ConnectX entities
+    groupObj = systemObj.GetEmptyGroup("testgroup")
+    for cxId in cxIds:
+        groupObj.AddEntity(dcgm_fields.DCGM_FE_CONNECTX, cxId)
+
+    groupObj.health.Set(system_to_check)
+
+    systemObj.UpdateAllFields(1)
+
+    # This will throw an exception on error
+    responseV5 = groupObj.health.Check(
+        dcgm_structs.dcgmHealthResponse_version5)
+
+    # Check that our response comes back clean
+    helper_check_health_response_v4(cxIds, responseV5)
 
 
 def helper_run_dcgm_health_check_sanity(handle, gpuIds, system_to_check):
@@ -739,6 +794,13 @@ def test_dcgm_health_check_sanity_nvswitch_nonfatal_standalone(handle, gpuIds):
 def test_dcgm_health_check_sanity_nvswitch_fatal_standalone(handle, gpuIds):
     helper_run_dcgm_health_check_sanity(
         handle, gpuIds, dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL)
+
+
+@test_utils.run_with_standalone_host_engine()
+@test_utils.run_only_with_live_cx()
+def test_dcgm_health_check_sanity_connectx_standalone(handle, cxIds):
+    helper_run_dcgm_health_check_sanity_connectx(
+        handle, cxIds, dcgm_structs.DCGM_HEALTH_WATCH_CONNECTX)
 
 # End health sanity checks
 
@@ -2396,7 +2458,8 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
 
 
 def clearNvlinkFields(handle, gpuId, timestamp):
-    nvlink_fields = [
+    # Required fields that should be supported on most hardware
+    nvlink_fields_required = [
         (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL, 0),
         (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL, 0),
         (dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL, 0),
@@ -2408,10 +2471,31 @@ def clearNvlinkFields(handle, gpuId, timestamp):
         (dcgm_fields.DCGM_FI_DEV_FABRIC_MANAGER_STATUS, dcgmvalue.DCGM_INT64_BLANK),
     ]
 
-    for field_id, healthy_value in nvlink_fields:
+    nvlink_fields_deprecated_blackwell_plus = [
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY, 0),
+    ]
+
+    # Blackwell+ optional fields (may not be supported on older hardware)
+    nvlink_fields_blackwell_plus = [
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS, 0),
+    ]
+
+    # Clear required fields - must succeed
+    for field_id, healthy_value in nvlink_fields_required:
         ret = dcgm_field_injection_helpers.inject_field_value_i64(
             handle, gpuId, field_id, healthy_value, timestamp)
-        assert ret == dcgm_structs.DCGM_ST_OK
+        assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to clear required field {field_id}: {ret}"
+
+    # Clear Blackwell deprecated and Blackwell+ fields - tolerate NOT_SUPPORTED
+    for field_id, healthy_value in nvlink_fields_blackwell_plus + nvlink_fields_deprecated_blackwell_plus:
+        ret = dcgm_field_injection_helpers.inject_field_value_i64(
+            handle, gpuId, field_id, healthy_value, timestamp)
+        assert ret in [dcgm_structs.DCGM_ST_OK, dcgm_structs.DCGM_ST_NOT_SUPPORTED], \
+            f"Failed to clear Blackwell+ field {field_id}: {ret}"
 
 
 @test_utils.run_with_standalone_host_engine(120)
@@ -2814,3 +2898,90 @@ def test_health_check_gpu_recovery_action_multiple_gpus_standalone(handle, gpuId
 def test_health_check_gpu_recovery_action_multiple_gpus_embedded(handle, gpuIds):
     """Test GPU recovery action with multiple GPUs having different recovery states"""
     helper_health_check_gpu_recovery_action_multiple_gpus(handle, gpuIds)
+
+
+def inject_gpu_arch(handle, gpuId, arch_major, arch_minor=0):
+    """
+    Inject GPU compute capability to simulate different GPU architectures.
+    """
+    # Compute capability is encoded as: (major << 16) | minor
+    compute_capability = (arch_major << 16) | arch_minor
+    fieldId = dcgm_fields.DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY
+
+    ret = dcgm_field_injection_helpers.inject_value(
+        handle,
+        gpuId,
+        fieldId,
+        compute_capability,
+        offset=0,
+        verifyInsertion=True
+    )
+
+    return compute_capability
+
+
+def helper_dcgmi_health_check_nvlink_arch_specific(handle, gpuIds, test_fields):
+    """
+    Helper to test architecture-specific NVLink error fields using dcgmi.
+    """
+    gpuId = gpuIds[0]
+    groupId = test_utils.create_dcgmi_group(
+        "health_test_group", gpuIds=[gpuId])
+
+    try:
+        for field_id, field_name, error_value, arch_major in test_fields:
+            inject_gpu_arch(handle, gpuId, arch_major=arch_major)
+
+            # Clear all NVLink fields before testing this field
+            clearNvlinkFields(handle, gpuId, -60)
+
+            args = ["health", "--set", "n", "-g", str(groupId)]
+            retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+                args)
+            assert retValue == 0, f"Failed to set health watches: {stderr_lines}"
+
+            # Inject error value
+            ret = dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, gpuId, field_id, error_value, -10)
+            assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject field {field_id} ({field_name}): {ret}"
+
+            args = ["health", "--check", "-g", str(groupId)]
+            retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+                args)
+
+            output = " ".join(stdout_lines)
+            formatted_output = "\n".join(stdout_lines)
+            logger.debug(
+                f"Health check output for {field_name} (field {field_id}, injected value {error_value}):\n{formatted_output}")
+
+            assert "NVLink" in output, f"Expected 'NVLink' in output for {field_name}.\n\nOutput:\n{formatted_output}"
+            assert f"Detected {error_value}" in output, \
+                f"Expected 'Detected {error_value}' in output for {field_name}.\n\nOutput:\n{formatted_output}"
+    finally:
+        test_utils.delete_dcgmi_group(groupId)
+
+
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_injection_gpus()
+def test_dcgmi_health_check_nvlink_arch_specific_fields(handle, gpuIds):
+    """
+    Test architecture-specific NVLink error fields using dcgmi.
+
+    Tests pre-Blackwell fields (DL_CRC, DL_RECOVERY, DL_REPLAY) on arch < 10
+    and Blackwell+ fields (recovery events) on arch >= 10.
+    """
+    test_fields = [
+        # Pre-Blackwell fields (arch 9)
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, "DL_CRC", 10, 9),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY, "DL_RECOVERY", 5, 9),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY, "DL_REPLAY", 3, 9),
+        # Blackwell+ fields (arch 10)
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS,
+         "Recovery Successful", 5, 10),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS,
+         "Recovery Failed", 2, 10),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS,
+         "Recovery Total", 10, 10),
+    ]
+    helper_dcgmi_health_check_nvlink_arch_specific(
+        handle, gpuIds, test_fields=test_fields)

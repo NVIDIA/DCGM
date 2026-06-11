@@ -356,6 +356,7 @@ typedef struct dcgmcm_update_thread_t
         memset(numFieldValues, 0, sizeof(numFieldValues));
         memset(fieldValueFields, 0, sizeof(fieldValueFields));
         memset(fieldValueWatchInfo, 0, sizeof(fieldValueWatchInfo));
+        memset(fieldValueOriginalEntity, 0, sizeof(fieldValueOriginalEntity));
     }
 
     /* Information about the entity currently being worked on */
@@ -377,6 +378,8 @@ typedef struct dcgmcm_update_thread_t
     dcgm_field_meta_p fieldValueFields[DCGM_MAX_NUM_DEVICES][NVML_FI_MAX]; /* Fields to update with field-value APIs
                                                                               rather than CacheLatest*Value() */
     dcgmcm_watch_info_p fieldValueWatchInfo[DCGM_MAX_NUM_DEVICES][NVML_FI_MAX]; /* Watch info for field values */
+    dcgm_entity_key_t fieldValueOriginalEntity[DCGM_MAX_NUM_DEVICES]
+                                              [NVML_FI_MAX]; /* Original entity for MIG remapping */
 
     /*************************************************************************/
     /*
@@ -423,6 +426,9 @@ private:
     bool m_ownFvBuffer;
 
 } dcgmcm_update_thread_t, *dcgmcm_update_thread_p;
+
+static_assert(sizeof(dcgmcm_update_thread_t) < 512 * 1024,
+              "dcgmcm_update_thread_t stack allocation exceeds 512KB - consider heap allocation or restructuring");
 
 /*****************************************************************************/
 /* Callback function
@@ -2271,7 +2277,8 @@ private:
     dcgmReturn_t ReadAndCacheNvLinkBer(dcgmcm_update_thread_t &threadCtx,
                                        SafeNvmlHandle const nvmlDevice,
                                        unsigned short const fieldId,
-                                       timelib64_t const expireTime);
+                                       timelib64_t const expireTime,
+                                       unsigned int const gpuId);
 
 
     /**

@@ -19,6 +19,7 @@
 #include "Test.h"
 #include <dcgm_structs.h>
 #include <string>
+#include <string_view>
 #include <vector>
 
 constexpr int CUSTOM_TEST_OBJS      = 0;
@@ -75,7 +76,39 @@ public:
      */
     void UpdateSkippedEntities(dcgmDiagEntityResults_v2 const &results);
 
+    /**
+     * Save and clear row-remapping skip entries.
+     * Removes only row-remapping skips from m_skippedForFutureTests.
+     * Used to allow EUD to run despite row-remapping failures.
+     *
+     * @return Map of entities that were skipped for row-remapping
+     */
+    [[nodiscard]] std::unordered_map<dcgm_field_eid_t, std::string> SaveAndClearRowRemapSkips();
+
+    /**
+     * Restore previously saved skip entries.
+     *
+     * @param[in] skips Map of entity skips to restore
+     */
+    void RestoreSkips(std::unordered_map<dcgm_field_eid_t, std::string> const &skips);
+
 private:
+    /**
+     * Check if a skip reason is due to row-remapping.
+     *
+     * @param[in] reason Skip reason string from UpdateSkippedEntities()
+     * @return true if this is a row-remapping skip; false otherwise
+     */
+    static bool IsRowRemapSkip(std::string const &reason);
+
+    // Skip reason message constants for row-remapping errors
+    static constexpr std::string_view SKIP_REASON_UNCORRECTABLE_ROW_REMAP
+        = "Skipping this test due to previously detected uncorrectable row remapping.";
+    static constexpr std::string_view SKIP_REASON_PENDING_ROW_REMAP
+        = "Skipping this test due to previously detected pending row remapping.";
+    static constexpr std::string_view SKIP_REASON_ROW_REMAP_FAILURE
+        = "Skipping this test due to previously detected row remapping failure.";
+
     std::string m_name;
     std::vector<Test *> m_customTestObjs;      // user-specified test objects
     std::vector<Test *> m_softwareTestObjs;    // software-class test objects

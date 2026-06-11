@@ -29,7 +29,7 @@ DEV_MODE_MSG = "Manual test for verifying plugin output. Use developer mode to e
 # a health check.
 SAMPLE_SCRIPT_TIMEOUT = 120.0
 
-DCGM_SKIP_SYSMON_HARDWARE_CHECK = "DCGM_SKIP_SYSMON_HARDWARE_CHECK"
+DCGM_SUPPORT_NON_NVIDIA_CPU = "DCGM_SUPPORT_NON_NVIDIA_CPU"
 
 # duration to gather data for when we limit the record count for DCGM to store
 # This time needs to be long enough for memory usage to level off.

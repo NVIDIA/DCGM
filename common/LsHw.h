@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "DcgmUtilities.h"
+#include "EnvConfig.h"
 
 class LsHw
 {
@@ -28,6 +29,7 @@ public:
 
     void SetChecker(std::unique_ptr<DcgmNs::Utils::RunningUserChecker> checker);
     void SetRunCmdHelper(std::unique_ptr<DcgmNs::Utils::RunCmdHelper> runCmdHelper);
+    void SetEnvConfig(std::unique_ptr<EnvConfig> envConfig);
 
     virtual std::optional<std::vector<std::string>> GetCpuSerials() const;
 
@@ -39,4 +41,5 @@ private:
 
     std::unique_ptr<DcgmNs::Utils::RunningUserChecker> m_runningUserChecker;
     std::unique_ptr<DcgmNs::Utils::RunCmdHelper> m_runCmdHelper;
+    std::unique_ptr<EnvConfig> m_envConfig;
 };

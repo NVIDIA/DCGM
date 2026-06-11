@@ -41,6 +41,7 @@ public:
         m_cpu.cpuId     = cpuId;
         m_cpu.coreCount = 0;
         memset(&m_cpu.ownedCores, 0, sizeof(m_cpu.ownedCores));
+        memset(&m_cpu.serial, 0, sizeof(m_cpu.serial));
     }
 
     bool OwnsCore(DcgmNs::Cpu::CoreId coreId) const
@@ -156,6 +157,5 @@ private:
     /*****************************************************************************/
     std::vector<DcgmInternalCpu> m_cpus;
     std::unordered_map<unsigned int, size_t> m_cpuIdToIndex;
-    unsigned int m_nextCpuId  = 0;
     unsigned int m_nextCoreId = 0;
 };

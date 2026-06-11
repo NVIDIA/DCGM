@@ -319,6 +319,17 @@ def check_diag_result_pass(response, entityPair, testName):
     return False
 
 
+def check_diag_result_skip(response, entityPair, testName):
+    """Returns `True` when there is a SKIP result associated with the specified
+    `entityPair` and `testName`, `False` otherwise."""
+    test = find_test_in_response(response, testName)
+    assert test, "Expected skip result for test %s but none was found" % testName
+    if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_SKIP and cur.entity == entityPair, map(
+            lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
+        return True
+    return False
+
+
 def check_diag_result_non_passing(response, entityPair, testName):
     # Returns `False` if there are one or more passing results for `entityPair` and `testName`, `True` otherwise.
     return not check_diag_result_pass(response, entityPair, testName)

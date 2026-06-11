@@ -191,6 +191,10 @@ def test_diag_nccl_tests_zero_exit_no_output(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env_Live())
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
+@test_utils.for_all_same_sku_gpus()
+# The all_reduce_perf binary built for tests is only available on CUDA
+# 12.8 and higher.
+@test_utils.run_only_with_minimum_cuda_version(12, 8)
 def test_diag_nccl_tests_live_pass(handle, gpuIds):
     """
     Test that nccl_tests plugin passes with real all_reduce_perf binary.
@@ -209,6 +213,10 @@ def test_diag_nccl_tests_live_pass(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env_Live({"NCCL_TESTS_MIN_BW": "99999"}))
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
+@test_utils.for_all_same_sku_gpus()
+# The all_reduce_perf binary built for tests is only available on CUDA
+# 12.8 and higher.
+@test_utils.run_only_with_minimum_cuda_version(12, 8)
 def test_diag_nccl_tests_live_fail_min_bw(handle, gpuIds):
     """
     Test that nccl_tests plugin fails when minimum bandwidth threshold is unreachable.

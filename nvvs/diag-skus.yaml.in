@@ -4484,3 +4484,92 @@ skus:
       is_allowed: true
     nvbandwidth:
       is_allowed: true
+  - name: HGX B200 168GB
+    # Subsystem id is 22eb
+    id: 2909
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 1000.00
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 33843
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures 45125. Multiply by .75 to get 33843
+      target_stress: 33843
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 5.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 5.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 5870000. Multiply by .75 to get 4402500
+      minimum_bandwidth: 4402500
+    nvbandwidth:
+      is_allowed: true
+    pulse_test:
+      is_allowed: true
+  - name: Galaxy TS2 # NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition
+    id: 2bb4
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 299.00
+      use_dgemv: true
+      use_dgemm: false
+      ops_per_requeue: 2
+      cuda_streams_per_gpu: 24
+      enable_fp16_gemm: true
+      fp64_gemm_ratio: 0.6
+      fp16_gemm_ratio: 0.4
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 39306
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures 52408. Multiply by .75 to get 39306
+      target_stress: 39306
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 1530000. Multiply by .75 to get 1147500
+      minimum_bandwidth: 1147500
+    pulse_test:
+      is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+    memtest:
+      num_chunks: 8

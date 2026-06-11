@@ -135,6 +135,9 @@ private:
     // miscellaneous helper methods
     std::string MemFieldToString(unsigned short fieldId);
 
+    // Get GPU architecture (compute capability major version)
+    DcgmResult<int> GetCudaComputeCapabilityMajorVersion(dcgm_field_eid_t entityId);
+
     /* Build internal lists of fieldIds to be used by other methods */
     void BuildFieldLists(void);
 
@@ -203,6 +206,12 @@ private:
                                     DcgmWatcher watcher,
                                     long long updateInterval,
                                     double maxKeepAge);
+    dcgmReturn_t SetConnectX(dcgm_field_entity_group_t entityGroupId,
+                             unsigned int entityId,
+                             bool enable,
+                             DcgmWatcher watcher,
+                             long long updateInterval,
+                             double maxKeepAge);
 
     /*************************************************************************/
     /*
@@ -297,12 +306,20 @@ private:
     dcgmReturn_t MonitorNVLinkStatus(dcgm_field_entity_group_t entityGroupId,
                                      dcgm_field_eid_t entityId,
                                      DcgmHealthResponse &response);
+    dcgmReturn_t MonitorNVLinkErrorFields(dcgm_field_entity_group_t entityGroupId,
+                                          dcgm_field_eid_t entityId,
+                                          DcgmHealthResponse &response);
     dcgmReturn_t MonitorNvSwitchErrorCounts(bool fatal,
                                             dcgm_field_entity_group_t entityGroupId,
                                             dcgm_field_eid_t entityId,
                                             long long startTime,
                                             long long endTime,
                                             DcgmHealthResponse &response);
+
+    // Monitor ConnectX device health
+    dcgmReturn_t MonitorConnectX(dcgm_field_entity_group_t entityGroupId,
+                                 dcgm_field_eid_t entityId,
+                                 DcgmHealthResponse &response);
 
     /* Helpers called by MonitorMem() */
     dcgmReturn_t MonitorMemVolatileDbes(dcgm_field_entity_group_t entityGroupId,
@@ -374,6 +391,8 @@ private:
 
     // Friend class for testing
     friend class DcgmHealthWatchTestHelper;
+
+    static constexpr int computeCapabilityBlackWell = 10;
 };
 
 #endif //_DCGM_HEALTH_WATCH_H

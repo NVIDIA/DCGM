@@ -26,6 +26,7 @@
 #include <DcgmUtilities.h>
 #include <Defer.hpp>
 #include <EntityListHelpers.h>
+#include <NvvsCommon.h>
 #include <NvvsExitCode.h>
 #include <UniquePtrUtil.h>
 #include <dcgm_config_structs.h>
@@ -1315,6 +1316,85 @@ bool ExecuteEudPluginsAsRoot(DcgmDiagManager &diagManager,
     return true;
 }
 
+/*
+ * @brief Adds the EUD tests original level to the dcgmRunDiag_v10. This is used when re-running EUD as root. In this
+ * case, the drd->validate will be set to DCGM_POLICY_VALID_NONE. So that the EudPlugin cannot correctly set the test
+ * profile.
+ * @param[in,out] drd The DRD to add the EUD tests original level to.
+ * @param[in] runLevel The run level.
+ * @param[in] testName The test name.
+ * @return DCGM_ST_OK if successful, DCGM_ST_INSUFFICIENT_SIZE if no empty slot is found.
+ */
+dcgmReturn_t AddEudTestOriginalLevel(dcgmRunDiag_v10 *drd, dcgmPolicyValidation_t runLevel, std::string const &testName)
+{
+    int emptySlot = -1;
+    for (unsigned int i = 0; i < DCGM_MAX_TEST_PARMS; i++)
+    {
+        if (drd->testParms[i][0] == '\0')
+        {
+            emptySlot = i;
+            break;
+        }
+    }
+    if (emptySlot == -1)
+    {
+        log_error("No empty slot found for adding test parameter: {}.original_level", testName);
+        return DCGM_ST_INSUFFICIENT_SIZE;
+    }
+    if (runLevel == DCGM_POLICY_VALID_SV_LONG)
+    {
+        SafeCopyTo(drd->testParms[emptySlot], fmt::format("{}.original_level={}", testName, NVVS_SUITE_LONG).c_str());
+    }
+    else if (runLevel == DCGM_POLICY_VALID_SV_XLONG)
+    {
+        SafeCopyTo(drd->testParms[emptySlot], fmt::format("{}.original_level={}", testName, NVVS_SUITE_XLONG).c_str());
+    }
+    return DCGM_ST_OK;
+}
+
+bool CheckEnvOrPathExist(std::string const &envName, std::string_view path)
+{
+    auto envVar = std::getenv(envName.c_str());
+    return (envVar != nullptr) || std::filesystem::exists(path);
+}
+
+bool SupportGpuEud()
+{
+    static std::string const customEudBinPathEnv = "DCGM_EUD_BIN_PATH";
+    std::string_view constexpr eudBinPath        = "/usr/share/nvidia/diagnostic/specializediag";
+    return CheckEnvOrPathExist(customEudBinPathEnv, eudBinPath);
+}
+
+bool SupportCpuEud()
+{
+    static std::string const customCpuEudBinPathEnv = "DCGM_CPU_EUD_BIN_PATH";
+    std::string_view constexpr cpuEudBinPath        = "/usr/share/nvidia/cpu/diagnostic/cpueud";
+    return CheckEnvOrPathExist(customCpuEudBinPathEnv, cpuEudBinPath);
+}
+
+dcgmReturn_t AddEudTestsOriginalLevel(dcgmRunDiag_v10 *drd, dcgmPolicyValidation_t runLevel)
+{
+    if (runLevel != DCGM_POLICY_VALID_SV_LONG && runLevel != DCGM_POLICY_VALID_SV_XLONG)
+    {
+        return DCGM_ST_OK; // Does not need to add original level for these cases.
+    }
+    if (SupportGpuEud())
+    {
+        if (auto ret = AddEudTestOriginalLevel(drd, runLevel, EUD_PLUGIN_NAME); ret != DCGM_ST_OK)
+        {
+            return ret;
+        }
+    }
+    if (SupportCpuEud())
+    {
+        if (auto ret = AddEudTestOriginalLevel(drd, runLevel, CPU_EUD_TEST_NAME); ret != DCGM_ST_OK)
+        {
+            return ret;
+        }
+    }
+    return DCGM_ST_OK;
+}
+
 } // namespace
 
 std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
@@ -1336,6 +1416,13 @@ std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
     {
         eudRerunTestNames.push_back(EUD_TEST);
         eudRerunTestNames.push_back(CPU_EUD_TEST);
+        if (drd->validate == DCGM_POLICY_VALID_SV_LONG || drd->validate == DCGM_POLICY_VALID_SV_XLONG)
+        {
+            if (auto ret = AddEudTestsOriginalLevel(drd, drd->validate); ret != DCGM_ST_OK)
+            {
+                return { WasExecuted_t::WAS_NOT_EXECUTED, ret };
+            }
+        }
     }
     else
     {

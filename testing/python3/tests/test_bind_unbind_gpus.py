@@ -213,18 +213,6 @@ def unbind_gpu_and_wait_for_status_updated(dcgmSystem, gpuIds, pcibusIds=None):
                                    dcgm_structs.DCGM_BU_EVENT_STATE_SYSTEM_REINITIALIZATION_COMPLETED: 1})
 
 
-def helper_run_dcgmi(args):
-    """
-    Helper function to run dcgmi commands.
-    Returns tuple: (returnCode, stdout_lines, stderr_lines)
-    """
-    dcgmi = apps.DcgmiApp(args)
-    dcgmi.start(250)
-    retValue = dcgmi.wait()
-    dcgmi.validate()
-    return retValue, dcgmi.stdout_lines, dcgmi.stderr_lines
-
-
 def get_gpu_section(output, gpuId):
     """Extract the section of discovery output for a specific GPU (excludes other device types)."""
     lines = output.split('\n')
@@ -2553,8 +2541,8 @@ def helper_test_dcgmi_diag_with_one_gpu_detached(handle, gpuIds, pcibusIds=None)
     for _ in range(100):
         time.sleep(0.1)
 
-        _, stdoutJson, _ = helper_run_dcgmi(
-            ["diag", "-r", "1", "-i", f"{gpuToDetach},{attachedGpu}", "-j"])
+        _, stdoutJson, _ = test_utils.run_dcgmi_command(
+            ["diag", "-r", "1", "-i", f"{gpuToDetach},{attachedGpu}", "-j"], validate=True)
         jsonOutput = '\n'.join(stdoutJson)
 
         try:
@@ -2652,7 +2640,8 @@ def helper_test_dcgmi_discovery_shows_detached_gpu_status(handle, gpuIds, pcibus
         assert attrs.identifiers.uuid != dcgmvalue.DCGM_STR_BLANK, f"GPU {gpuId}: cached UUID missing"
 
     # Get discovery output with -a flag to show all GPUs including detached ones
-    _, stdout_lines, _ = helper_run_dcgmi(["discovery", "-l", "-a"])
+    _, stdout_lines, _ = test_utils.run_dcgmi_command(
+        ["discovery", "-l", "-a"], validate=True)
     output = '\n'.join(stdout_lines)
     logger.debug(
         f"discovery output for -l -a with with detached GPUs: {output}")
@@ -2671,7 +2660,8 @@ def helper_test_dcgmi_discovery_shows_detached_gpu_status(handle, gpuIds, pcibus
         assert "Status:" not in section, f"GPU {gpuId}: should not show status (OK is implicit)\n{section}"
 
     # Verify that without -a flag, detached GPUs are NOT shown (default behavior shows only active GPUs)
-    _, stdout_lines_no_flag, _ = helper_run_dcgmi(["discovery", "-l"])
+    _, stdout_lines_no_flag, _ = test_utils.run_dcgmi_command(
+        ["discovery", "-l"], validate=True)
     output_no_flag = '\n'.join(stdout_lines_no_flag)
     logger.debug(
         f"discovery output for -l with detatched GPUs hidden: {output_no_flag}")
@@ -2699,7 +2689,8 @@ def helper_test_dcgmi_discovery_shows_detached_gpu_status(handle, gpuIds, pcibus
                         dcgm_structs_internal.DcgmEntityStatusOk)
 
     # Get discovery output after re-attach (both with and without -a flag should now show all GPUs)
-    _, stdout_lines_after, _ = helper_run_dcgmi(["discovery", "-l"])
+    _, stdout_lines_after, _ = test_utils.run_dcgmi_command(
+        ["discovery", "-l"], validate=True)
     output_after = '\n'.join(stdout_lines_after)
     assert output_after, "Failed to get dcgmi discovery output after re-attach"
 
@@ -2746,7 +2737,8 @@ def test_dcgmi_discovery_detached_status_after_detach_driver(handle, gpuIds):
 
     # Detach driver and get discovery output with -a flag to show all GPUs
     dcgm_agent.dcgmDetachDriver(handle)
-    _, stdout_lines, _ = helper_run_dcgmi(["discovery", "-l", "-a"])
+    _, stdout_lines, _ = test_utils.run_dcgmi_command(
+        ["discovery", "-l", "-a"], validate=True)
     output = '\n'.join(stdout_lines)
 
     # Verify all GPUs show detached status with cached values
@@ -2762,7 +2754,8 @@ def test_dcgmi_discovery_detached_status_after_detach_driver(handle, gpuIds):
         assert gpuUuids[gpuId] in section, f"GPU {gpuId}: UUID mismatch\n{section}"
 
     # Verify that without -a flag, NO GPUs are shown (all are detached)
-    _, stdout_lines_no_flag, _ = helper_run_dcgmi(["discovery", "-l"])
+    _, stdout_lines_no_flag, _ = test_utils.run_dcgmi_command(
+        ["discovery", "-l"], validate=True)
     output_no_flag = '\n'.join(stdout_lines_no_flag)
     assert "DETACHED" not in output_no_flag, "Output without -a flag should not contain 'DETACHED' at all"
 
@@ -2772,7 +2765,8 @@ def test_dcgmi_discovery_detached_status_after_detach_driver(handle, gpuIds):
 
     # Re-attach and verify status cleared
     dcgm_agent.dcgmAttachDriver(handle)
-    _, stdout_lines_after, _ = helper_run_dcgmi(["discovery", "-l"])
+    _, stdout_lines_after, _ = test_utils.run_dcgmi_command(
+        ["discovery", "-l"], validate=True)
     output_after = '\n'.join(stdout_lines_after)
 
     for gpuId in gpuIds:
@@ -2985,7 +2979,7 @@ def test_nvlink_errors_on_detached_gpu(handle, gpuIds):
     detachedGpuId = gpuIds[0]
     unbind_gpu_and_wait_for_status_updated(dcgmSystem, [detachedGpuId])
 
-    _, stdoutLines, _ = helper_run_dcgmi(
-        ["nvlink", "-e", "-g", f"{detachedGpuId}"])
+    _, stdoutLines, _ = test_utils.run_dcgmi_command(
+        ["nvlink", "-e", "-g", f"{detachedGpuId}"], validate=True)
     stdout = '\n'.join(stdoutLines)
     assert "GPU is lost" in stdout, f"Expected 'GPU is lost' in stdout, got {stdout}."

@@ -49,10 +49,9 @@ public:
         : PluginDevice(testName, ndi, pciBusId, p)
         , cuContext(0)
     {
-        char buf[256] = { 0 };
-        const char *errorString;
-        dcgmDeviceAttributes_t attr;
-        memset(&attr, 0, sizeof(attr));
+        char buf[256] {};
+        const char *errorString = nullptr;
+        dcgmDeviceAttributes_t attr {};
         attr.version = dcgmDeviceAttributes_version3;
 
         dcgmReturn_t ret = dcgmGetDeviceAttributes(handle.GetHandle(), ndi, &attr);
