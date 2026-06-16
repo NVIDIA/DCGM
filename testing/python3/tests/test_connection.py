@@ -129,6 +129,51 @@ def test_dcgm_ipv6_loopback():
     nvHe.validate()
 
 
+@test_utils.run_only_as_root()
+@test_utils.run_with_ipv6_enabled()
+def test_dcgm_ipv6_hostname_resolution():
+    '''
+    Verify that a hostname which resolves exclusively to an IPv6 address can connect to a
+    host engine bound to [::1].  This exercises the AF_UNSPEC path in ConnectTcpAsyncImpl —
+    the fix for the bug where AF_INET was hardcoded, preventing hostname→IPv6 resolution.
+    The test is skipped when no IPv6-only hostname alias is available on the system.
+    '''
+    import socket as _socket
+
+    def _resolves_only_to_ipv6(hostname):
+        try:
+            if _socket.getaddrinfo(hostname, None, _socket.AF_INET):
+                return False
+        except _socket.gaierror:
+            pass
+        try:
+            return bool(_socket.getaddrinfo(hostname, None, _socket.AF_INET6))
+        except _socket.gaierror:
+            return False
+
+    # ip6-loopback / ip6-localhost are standard aliases for ::1 on many Linux distros
+    test_hostname = next(
+        (h for h in ('ip6-loopback', 'ip6-localhost') if _resolves_only_to_ipv6(h)),
+        None,
+    )
+    if test_hostname is None:
+        test_utils.skip_test("No hostname found that resolves exclusively to an IPv6 address")
+
+    nvHe = apps.NvHostEngineApp(['-b', '[::1]'])
+    nvHe.start(timeout=90)
+
+    handle = pydcgm.DcgmHandle(ipAddress=test_hostname, timeoutMs=90)
+    assert handle
+    dcgmSystem = handle.GetSystem()
+    dcgmSystem.discovery.GetAllGpuIds()
+
+    del handle
+    handle = None
+
+    nvHe.terminate()
+    nvHe.validate()
+
+
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 def test_dcgm_connection_client_cleanup(handle, gpuIds):
