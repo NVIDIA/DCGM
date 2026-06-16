@@ -232,6 +232,7 @@ jobs:
             --release \
             --arch "${{ steps.architecture.outputs.package_architecture }}" \
             "${test_arguments[@]}" \
+            --no-install \
             --deb \
             --rpm \
             --packages \
