@@ -234,7 +234,6 @@ jobs:
             "${test_arguments[@]}" \
             --no-install \
             --deb \
-            --rpm \
             --packages \
             --package-release "$DCGM_PACKAGE_RELEASE"
 
@@ -246,7 +245,7 @@ jobs:
 
           mkdir -p release-assets
           find _out \
-            \( -name '*.deb' -o -name '*.ddeb' -o -name '*.rpm' -o -name '*.tar.gz' \) \
+            \( -name '*.deb' -o -name '*.ddeb' -o -name '*.tar.gz' \) \
             -type f \
             -exec cp --target-directory release-assets {} +
 
