@@ -1,0 +1,205 @@
+name: Build / Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: Package architecture to build
+        required: true
+        default: amd64
+        type: choice
+        options:
+          - amd64
+          - aarch64
+      package_release:
+        description: Package release suffix
+        required: true
+        default: "2"
+        type: string
+      run_tests:
+        description: Run build-time tests
+        required: true
+        default: false
+        type: boolean
+      release_comments:
+        description: Optional release comments. Defaults to the build commit hash.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  packages:
+    name: Build packages and create release
+    runs-on: ubuntu-24.04
+    env:
+      DCGM_PACKAGE_RELEASE: ${{ inputs.package_release }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Prepare release metadata
+        id: metadata
+        shell: bash
+        env:
+          PACKAGE_ARCHITECTURE: ${{ inputs.architecture }}
+          RELEASE_COMMENTS: ${{ inputs.release_comments }}
+        run: |
+          set -euo pipefail
+
+          version="$(sed -nE 's/^project\(datacenter-gpu-manager-4 VERSION ([^)]+)\)/\1/p' CMakeLists.txt)"
+          if [[ -z "$version" ]]; then
+            echo "Unable to determine DCGM version from CMakeLists.txt" >&2
+            exit 1
+          fi
+
+          tag="v${version}-${DCGM_PACKAGE_RELEASE}-${PACKAGE_ARCHITECTURE}"
+          name="DCGM ${version}-${DCGM_PACKAGE_RELEASE}-${PACKAGE_ARCHITECTURE}"
+
+          if [[ -n "$RELEASE_COMMENTS" ]]; then
+            body="$RELEASE_COMMENTS"
+          else
+            body="Build commit: ${GITHUB_SHA}"
+          fi
+
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "name=$name"
+            echo "body<<EOF"
+            echo "$body"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Git LFS cache key
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+          git lfs ls-files -l | sort > .git-lfs-cache-key
+
+      - name: Cache Git LFS objects
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: git-lfs-${{ runner.os }}-${{ hashFiles('.git-lfs-cache-key') }}
+          restore-keys: |
+            git-lfs-${{ runner.os }}-
+
+      - name: Pull Git LFS objects
+        shell: bash
+        run: git lfs pull
+
+      - name: Set build architecture
+        id: architecture
+        shell: bash
+        env:
+          PACKAGE_ARCHITECTURE: ${{ inputs.architecture }}
+        run: |
+          set -euo pipefail
+
+          case "$PACKAGE_ARCHITECTURE" in
+            amd64)
+              docker_architecture=x86_64
+              package_architecture=amd64
+              ;;
+            aarch64)
+              docker_architecture=aarch64
+              package_architecture=aarch64
+              ;;
+            *)
+              echo "Unsupported architecture: $PACKAGE_ARCHITECTURE" >&2
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "docker_architecture=$docker_architecture"
+            echo "package_architecture=$package_architecture"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build cached DCGM build image
+        working-directory: dcgmbuild
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker_architecture="${{ steps.architecture.outputs.docker_architecture }}"
+
+          docker buildx bake "dcgmbuild-${docker_architecture}" \
+            --set "common-host-software.cache-from=type=gha,scope=dcgmbuild-common-host-software" \
+            --set "common-host-software.cache-to=type=gha,scope=dcgmbuild-common-host-software,mode=max" \
+            --set "toolchain-${docker_architecture}.cache-from=type=gha,scope=dcgmbuild-toolchain-${docker_architecture}" \
+            --set "toolchain-${docker_architecture}.cache-to=type=gha,scope=dcgmbuild-toolchain-${docker_architecture},mode=max" \
+            --set "dcgmbuild-${docker_architecture}.cache-from=type=gha,scope=dcgmbuild-${docker_architecture}" \
+            --set "dcgmbuild-${docker_architecture}.cache-to=type=gha,scope=dcgmbuild-${docker_architecture},mode=max" \
+            --set "dcgmbuild-${docker_architecture}.output=type=docker"
+
+      - name: Build packages
+        env:
+          DCGM_SKIP_LFS_INSTALL: 1
+          DCGM_SKIP_PYTHON_LINTING: 1
+          NPROC: 4
+          RUN_TESTS: ${{ inputs.run_tests }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test_arguments=(--no-tests)
+          if [[ "$RUN_TESTS" == "true" ]]; then
+            test_arguments=()
+          fi
+
+          ./build.sh \
+            --release \
+            --arch "${{ steps.architecture.outputs.package_architecture }}" \
+            "${test_arguments[@]}" \
+            --deb \
+            --rpm \
+            --packages \
+            --package-release "$DCGM_PACKAGE_RELEASE"
+
+      - name: Collect packages
+        id: packages
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-assets
+          find _out \
+            \( -name '*.deb' -o -name '*.ddeb' -o -name '*.rpm' -o -name '*.tar.gz' \) \
+            -type f \
+            -exec cp --target-directory release-assets {} +
+
+          if ! compgen -G 'release-assets/*' > /dev/null; then
+            echo "No package artifacts were produced" >&2
+            exit 1
+          fi
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcgm-packages-${{ steps.architecture.outputs.package_architecture }}
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.metadata.outputs.tag }}
+          name: ${{ steps.metadata.outputs.name }}
+          body: ${{ steps.metadata.outputs.body }}
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
+          files: release-assets/*

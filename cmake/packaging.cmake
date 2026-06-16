@@ -16,6 +16,11 @@
 set(CPACK_PACKAGE_CONTACT "dcgm-support <dcgm-support@nvidia.com>")
 set(CPACK_PACKAGE_VENDOR "NVIDIA Corp.")
 
+set(DCGM_PACKAGE_RELEASE "1")
+if (DEFINED ENV{DCGM_PACKAGE_RELEASE} AND NOT "$ENV{DCGM_PACKAGE_RELEASE}" STREQUAL "")
+    set(DCGM_PACKAGE_RELEASE "$ENV{DCGM_PACKAGE_RELEASE}")
+endif()
+
 set(CPACK_PACKAGE_DESCRIPTION
 "This package is a component of DCGM, a userspace library and service that
 simplifies the administration of NVIDIA datacenter hardware in cluster and
@@ -122,7 +127,7 @@ if (CPACK_GENERATOR MATCHES "DEB")
     endif()
 
     set(CPACK_COMPONENTS_GROUPING "IGNORE")
-    set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
+    set(CPACK_DEBIAN_PACKAGE_RELEASE "${DCGM_PACKAGE_RELEASE}")
     set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
     set(CPACK_PRE_BUILD_SCRIPTS
         "${CMAKE_CURRENT_LIST_DIR}/cpack-deb-prebuild.cmake")
@@ -267,7 +272,7 @@ elseif(CPACK_GENERATOR MATCHES "RPM")
     set(CPACK_RPM_PACKAGE_AUTOREQ "no") # Removes dependency on libcuda.so.1
     set(CPACK_RPM_PACKAGE_DESCRIPTION "${CPACK_PACKAGE_DESCRIPTION_SUMMARY}")
     set(CPACK_RPM_PACKAGE_LICENSE "NVIDIA Proprietary")
-    set(CPACK_RPM_PACKAGE_RELEASE 1) # this is the package spec version, not the software version
+    set(CPACK_RPM_PACKAGE_RELEASE "${DCGM_PACKAGE_RELEASE}") # this is the package spec version, not the software version
     set(CPACK_RPM_SPEC_MORE_DEFINE "
 %define __strip ${CPACK_STRIP}
 %define __objdump ${CPACK_OBJDUMP}
