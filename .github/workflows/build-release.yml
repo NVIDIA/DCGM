@@ -80,25 +80,6 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Prepare Git LFS cache key
-        shell: bash
-        run: |
-          set -euo pipefail
-          git lfs install --local
-          git lfs ls-files -l | sort > .git-lfs-cache-key
-
-      - name: Cache Git LFS objects
-        uses: actions/cache@v4
-        with:
-          path: .git/lfs
-          key: git-lfs-${{ runner.os }}-${{ hashFiles('.git-lfs-cache-key') }}
-          restore-keys: |
-            git-lfs-${{ runner.os }}-
-
-      - name: Pull Git LFS objects
-        shell: bash
-        run: git lfs pull
-
       - name: Set build architecture
         id: architecture
         shell: bash
@@ -126,6 +107,52 @@ jobs:
             echo "docker_architecture=$docker_architecture"
             echo "package_architecture=$package_architecture"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Git LFS cache key
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs install --local
+
+          docker_architecture="${{ steps.architecture.outputs.docker_architecture }}"
+          package_architecture="${{ steps.architecture.outputs.package_architecture }}"
+
+          {
+            echo "modules/mndiag/cuda12/${docker_architecture}/libcurand.so.10.3.10.19"
+            echo "modules/mndiag/cuda12/${docker_architecture}/mnubergemm"
+            echo "modules/mndiag/cuda13/${docker_architecture}/libcurand.so.10.4.0.35"
+            echo "modules/mndiag/cuda13/${docker_architecture}/mnubergemm"
+            echo "nvvs/plugin_src/nvbandwidth/Cuda12/bin/${docker_architecture}/nvbandwidth"
+            echo "nvvs/plugin_src/nvbandwidth/Cuda13/bin/${docker_architecture}/nvbandwidth"
+
+            if [[ "$package_architecture" == "amd64" ]]; then
+              echo "testing/python3/apps/nvpex2/nvpex2"
+              echo "testing/python3/apps/nvswitch-audit/nvswitch-audit"
+              echo "testing/python3/apps/p2p_bandwidth/p2p_bandwidth"
+            else
+              echo "testing/python3/apps/cuda_ctx_create/cuda_assert_aarch64"
+              echo "testing/python3/apps/cuda_ctx_create/cuda_ctx_create_aarch64"
+            fi
+          } | sort > .git-lfs-include
+
+          git lfs ls-files -l \
+            | sort \
+            | grep --fixed-strings --file .git-lfs-include \
+            > .git-lfs-cache-key
+
+      - name: Cache Git LFS objects
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: git-lfs-${{ runner.os }}-${{ steps.architecture.outputs.package_architecture }}-${{ hashFiles('.git-lfs-cache-key') }}
+          restore-keys: |
+            git-lfs-${{ runner.os }}-${{ steps.architecture.outputs.package_architecture }}-
+
+      - name: Pull Git LFS objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          git lfs pull --include="$(paste -sd, .git-lfs-include)" --exclude=""
 
       - name: Prepare DCGM build image tag
         id: build_image
