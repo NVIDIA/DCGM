@@ -45,7 +45,7 @@ def test_connection_disconnect_error_after_shutdown():
 @test_utils.run_with_standalone_host_engine(passAppAsArg=True)
 def test_dcgm_standalone_connection_disconnect_error_after_hostengine_terminate(handle, hostengineApp):
     '''
-    Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after 
+    Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after
     the hostengine process is terminated via `nv-hostengine --term`.
     '''
 
@@ -70,7 +70,7 @@ def test_dcgm_standalone_connection_disconnect_error_after_hostengine_terminate(
 @test_utils.run_with_standalone_host_engine(passAppAsArg=True)
 def test_dcgm_standalone_connection_disconnect_error_after_hostengine_murder(handle, hostengineApp):
     '''
-    Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after 
+    Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after
     the hostengine process is killed via a `SIGKILL` signal.
     '''
     handle = pydcgm.DcgmHandle(handle)

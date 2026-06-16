@@ -16,6 +16,7 @@ import pydcgm
 import dcgm_structs
 import dcgm_agent
 import threading
+import ipaddress
 
 
 class DcgmHandle:
@@ -98,6 +99,13 @@ class DcgmHandle:
             connectParams.persistAfterDisconnect = 0
 
         if ipAddress is not None:
+            # Wrap bare IPv6 literals in brackets so ParseEndpoint can distinguish
+            # the address colons from the host:port separator (e.g. "::1" -> "[::1]").
+            try:
+                if ipaddress.ip_address(ipAddress).version == 6:
+                    ipAddress = "[" + ipAddress + "]"
+            except ValueError:
+                pass  # hostname or already-bracketed address — leave as-is
             connectToAddress = "tcp://" + ipAddress
         else:
             connectToAddress = "unix://" + unixSocketPath
