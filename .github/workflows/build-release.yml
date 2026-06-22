@@ -245,6 +245,8 @@ jobs:
 
           mkdir -p release-assets
           find _out \
+            -path _out/build -prune \
+            -o \
             \( -name '*.deb' -o -name '*.ddeb' -o -name '*.tar.gz' \) \
             -type f \
             -exec cp --target-directory release-assets {} +
