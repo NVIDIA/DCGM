@@ -44,6 +44,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
         -p --packages                                      : Generate tar.gz packages once the build is done
            --deb                                           : Generate *.deb packages once the build is done
            --rpm                                           : Generate *.rpm packages once the build is done
+           --package-release <release>                     : Override the package release suffix for DEB/RPM packages
         -c --clean                                         : Make clean rebuild
         -a --arch <arch>                                   : Make build for specified architecture. Supported are: amd64, aarch64
         -n --no-tests                                      : Do not run build-time tests
@@ -78,7 +79,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
           sanitizers compatibility."
 }
 
-LONGOPTS=address-san,arch:,clean,coverage,deb,debug,debug-find,debug-find-pkg:,gcc-analyzer,help,leak-san,no-install,no-tests,packages,release,rpm,thread-san,ub-san,vmware
+LONGOPTS=address-san,arch:,clean,coverage,deb,debug,debug-find,debug-find-pkg:,gcc-analyzer,help,leak-san,no-install,no-tests,package-release:,packages,release,rpm,thread-san,ub-san,vmware
 SHORTOPTS=drsa:pchn
 
 ! PARSED=$(getopt --options=${SHORTOPTS} --longoptions=${LONGOPTS} --name "${0}" -- "$@")
@@ -106,6 +107,7 @@ COVERAGE=0
 DEB=0
 INSTALL=1
 OS=Linux
+PACKAGE_RELEASE=
 RPM=0
 TESTS=1
 TGZ=0
@@ -162,6 +164,12 @@ while [[ $# -ne 0 ]]; do
         --packages|-p)
             TGZ=1
             ;;
+        --package-release)
+            PACKAGE_RELEASE=$2
+            build_arguments+=($1 $2)
+            shift 2
+            continue
+            ;;
         --release|-r)
             cmake_build_types+=(RelWithDebInfo)
             ;;
@@ -193,6 +201,11 @@ while [[ $# -ne 0 ]]; do
 done
 
 cmake_arguments+=(-D BUILD_TESTING=$TESTS)
+
+if [[ -n "$PACKAGE_RELEASE" ]]; then
+    export DCGM_PACKAGE_RELEASE="$PACKAGE_RELEASE"
+    intodocker_arguments+=(--env "DCGM_PACKAGE_RELEASE=$DCGM_PACKAGE_RELEASE")
+fi
 
 if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -eq 0 ]]; then
     if [[ $DCGM_SKIP_LFS_INSTALL -eq 0 ]]; then
