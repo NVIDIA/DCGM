@@ -16,11 +16,6 @@ on:
         required: true
         default: "2"
         type: string
-      run_tests:
-        description: Run build-time tests
-        required: true
-        default: false
-        type: boolean
       release_comments:
         description: Optional release comments. Defaults to the build commit hash.
         required: false
@@ -115,7 +110,6 @@ jobs:
           git lfs install --local
 
           docker_architecture="${{ steps.architecture.outputs.docker_architecture }}"
-          package_architecture="${{ steps.architecture.outputs.package_architecture }}"
 
           {
             echo "modules/mndiag/cuda12/${docker_architecture}/libcurand.so.10.3.10.19"
@@ -124,15 +118,6 @@ jobs:
             echo "modules/mndiag/cuda13/${docker_architecture}/mnubergemm"
             echo "nvvs/plugin_src/nvbandwidth/Cuda12/bin/${docker_architecture}/nvbandwidth"
             echo "nvvs/plugin_src/nvbandwidth/Cuda13/bin/${docker_architecture}/nvbandwidth"
-
-            if [[ "$package_architecture" == "amd64" ]]; then
-              echo "testing/python3/apps/nvpex2/nvpex2"
-              echo "testing/python3/apps/nvswitch-audit/nvswitch-audit"
-              echo "testing/python3/apps/p2p_bandwidth/p2p_bandwidth"
-            else
-              echo "testing/python3/apps/cuda_ctx_create/cuda_assert_aarch64"
-              echo "testing/python3/apps/cuda_ctx_create/cuda_ctx_create_aarch64"
-            fi
           } | sort > .git-lfs-include
 
           git lfs ls-files -l \
@@ -218,23 +203,16 @@ jobs:
           DCGM_SKIP_LFS_INSTALL: 1
           DCGM_SKIP_PYTHON_LINTING: 1
           NPROC: 4
-          RUN_TESTS: ${{ inputs.run_tests }}
         shell: bash
         run: |
           set -euo pipefail
 
-          test_arguments=(--no-tests)
-          if [[ "$RUN_TESTS" == "true" ]]; then
-            test_arguments=()
-          fi
-
           ./build.sh \
             --release \
             --arch "${{ steps.architecture.outputs.package_architecture }}" \
-            "${test_arguments[@]}" \
+            --no-tests \
             --no-install \
             --deb \
-            --packages \
             --package-release "$DCGM_PACKAGE_RELEASE"
 
       - name: Collect packages
@@ -247,7 +225,7 @@ jobs:
           find _out \
             -path _out/build -prune \
             -o \
-            \( -name '*.deb' -o -name '*.ddeb' -o -name '*.tar.gz' \) \
+            \( -name '*.deb' -o -name '*.ddeb' \) \
             -type f \
             -exec cp --target-directory release-assets {} +
 
