@@ -18,6 +18,11 @@ target_include_directories(dcgm_interface INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}>)
 
+# Hide deprecated field aliases in source-tree builds while preserving them for installed consumers
+target_compile_definitions(dcgm_interface INTERFACE
+    $<BUILD_INTERFACE:DCGM_DEPRECATED=0>
+)
+
 target_link_libraries(dcgm_interface INTERFACE $<BUILD_INTERFACE:sdk_nvml_interface>)
 
 install(

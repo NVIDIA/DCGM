@@ -80,7 +80,7 @@ extern const int GLOBAL_WATCH_ENTITY_INDEX;
 struct dcgm_watch_info_t
 {
     dcgm_watch_info_t()
-        : watchKey({ 0, DCGM_FI_UNKNOWN, DCGM_FE_NONE })
+        : watchKey({ 0, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_FE_NONE })
         , isWatched(false)
         , hasSubscribedWatchers(false)
         , lastQueriedUsec(0)

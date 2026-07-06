@@ -27,13 +27,16 @@ import DcgmReader
 import random
 import dcgm_field_helpers
 import apps
+import DcgmGroup
+from _test_helpers import skip_test_if_no_dcgm_nvml
 
 g_profNotSupportedErrorStr = "Continuous mode profiling is not supported for this GPU group. Either libnvperf_dcgm_host.so isn't in your LD_LIBRARY_PATH or it is not the NDA version that supports DC profiling"
 g_moduleNotLoadedErrorStr = "Continuous mode profiling is not supported for this system because the profiling module could not be loaded. This is likely due to libnvperf_dcgm_host.so not being in LD_LIBRARY_PATH"
 g_profGroupIsEmpty = "No GPUs suitable for testing."
 g_noMigSlicesErrorStr = "GPU(s) is(are) in MIG mode, but no MIG CI partitions are defined."
 
-# This is taken from modules/profiling/DcgmLopConfig.h. These values need to be in sync for multipass tests to pass
+# This is taken from modules/profiling/DcgmLopConfig.h. These values need
+# to be in sync for multipass tests to pass
 DLG_MAX_METRIC_GROUPS = 5
 
 
@@ -69,7 +72,7 @@ def helper_get_supported_field_ids(dcgmGroup):
 
 def helper_get_multipass_field_ids(dcgmGroup):
     '''
-    Get a list of the supported fieldIds for the provided DcgmGroup object that 
+    Get a list of the supported fieldIds for the provided DcgmGroup object that
     require multiple passes in the hardware
 
     Returns None if no such combination exists. Otherwise a list of lists
@@ -109,6 +112,13 @@ def helper_get_single_pass_field_ids(dcgmGroup):
     '''
     fieldIds = []
 
+    # These per-link fields report on the LINK entity rather than the GPU
+    # entity, so exclude them from the single-pass GPU field list.
+    excludedFieldIds = {
+        dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK,
+        dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK,
+    }
+
     # Try to return the largest single-pass group
     largestMetricGroupIndex = None
     largestMetricGroupCount = 0
@@ -122,9 +132,12 @@ def helper_get_single_pass_field_ids(dcgmGroup):
     if largestMetricGroupIndex is None:
         return None
 
-    for i in range(metricGroups.metricGroups[largestMetricGroupIndex].numFieldIds):
-        fieldIds.append(
-            metricGroups.metricGroups[largestMetricGroupIndex].fieldIds[i])
+    for i in range(
+            metricGroups.metricGroups[largestMetricGroupIndex].numFieldIds):
+        fieldId = metricGroups.metricGroups[largestMetricGroupIndex].fieldIds[i]
+        if fieldId in excludedFieldIds:
+            continue
+        fieldIds.append(fieldId)
 
     return fieldIds
 
@@ -134,7 +147,8 @@ def get_used_cuda_major_version(handle, gpuId):
     chipArchitecture = dcgm_agent.dcgmGetGpuChipArchitecture(handle, gpuId)
     # CUDA 13.0 drops support for everything that is < 7.5 SM Cuda Compatibility. These older SKUs need to run
     # a 12.9-linked application.
-    # Note: We only check one GPU because we are protected by the `for_all_same_sku_gpus`.
+    # Note: We only check one GPU because we are protected by the
+    # `for_all_same_sku_gpus`.
     if (chipArchitecture == dcgm_structs.DCGM_CHIP_ARCH_MAXWELL or
             chipArchitecture == dcgm_structs.DCGM_CHIP_ARCH_PASCAL or
             chipArchitecture == dcgm_structs.DCGM_CHIP_ARCH_VOLTA) and\
@@ -172,9 +186,11 @@ def helper_setup_watch_fields_test(handle, gpuIds):
     fieldIds = helper_get_single_pass_field_ids(dcgmGroup)
     assert fieldIds is not None
 
-    logger.info("Single pass field IDs: " + str(fieldIds))
+    logger.info(
+        f"Single pass field IDs: {fieldIds} for my_field_group_{gpuIds[0]}")
 
-    fieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, "my_field_group", fieldIds)
+    fieldGroup = pydcgm.DcgmFieldGroup(
+        dcgmHandle, f"my_field_group_{gpuIds[0]}", fieldIds)
 
     return dcgmGroup, fieldGroup
 
@@ -215,11 +231,13 @@ def test_dcgm_prof_requires_root_privileges(handle, gpuIds):
     '''
     dcgmGroup, fieldGroup = helper_setup_watch_fields_test(handle, gpuIds)
 
-    # Attempt to watch profiling fields as non-root user. This should fail with DCGM_ST_REQUIRES_ROOT.
+    # Attempt to watch profiling fields as non-root user. This should fail
+    # with DCGM_ST_REQUIRES_ROOT.
     try:
         dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
         dcgmGroup.samples.UnwatchFields(fieldGroup)
-        # If we get here, the test should fail because we expected a privilege error
+        # If we get here, the test should fail because we expected a privilege
+        # error
         assert False, "Expected DCGM_ST_REQUIRES_ROOT error when watching profiling fields as non-root user."
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_REQUIRES_ROOT) as e:
         # This is the expected behavior - profiling requires root privileges
@@ -233,6 +251,7 @@ def test_dcgm_prof_requires_root_privileges(handle, gpuIds):
         dcgmGroup.Delete()
 
 
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
@@ -240,11 +259,12 @@ def test_dcgm_prof_requires_root_privileges(handle, gpuIds):
 @test_utils.run_only_as_root()
 @test_utils.run_clearing_gpus()  # Remove real GPUs.
 # Injecting fake GPUs to simulate not supported SKUs
+# NO HARDWARE
 @test_utils.run_with_injection_gpus(gpuCount=2)
 @test_utils.run_for_each_gpu_individually()
 def test_dcgm_prof_all_supported_fields_watchable(handle, gpuId):
     '''
-    Verify that all fields that are reported as supported are watchable and 
+    Verify that all fields that are reported as supported are watchable and
     that values can be returned for them
     '''
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
@@ -274,7 +294,7 @@ def test_dcgm_prof_all_supported_fields_watchable(handle, gpuId):
         try:
             dcgmGroup.samples.WatchFields(
                 fieldGroup, watchFreq, maxKeepAge, maxKeepSamples)
-        except:
+        except BaseException:
             fieldGroup.Delete()
             test_utils.skip_test_supported("DCP")
 
@@ -334,7 +354,8 @@ def test_dcgm_prof_watch_multipass(handle, gpuIds):
 
     logger.info("Multipass fieldIds: " + str(mpFieldIds))
 
-    # Make sure that multipass watching up to DLG_MAX_METRIC_GROUPS groups works
+    # Make sure that multipass watching up to DLG_MAX_METRIC_GROUPS groups
+    # works
     for i in range(min(len(mpFieldIds), DLG_MAX_METRIC_GROUPS)):
         fieldIds = []
         for j in range(i + 1):
@@ -350,8 +371,9 @@ def test_dcgm_prof_watch_multipass(handle, gpuIds):
         fieldGroup.Delete()
 
     if len(mpFieldIds) <= DLG_MAX_METRIC_GROUPS:
-        test_utils.skip_test("Skipping multipass failure test since there are %d <= %d multipass groups." %
-                             (len(mpFieldIds), DLG_MAX_METRIC_GROUPS))
+        test_utils.skip_test(
+            "Skipping multipass failure test since there are %d <= %d multipass groups." %
+            (len(mpFieldIds), DLG_MAX_METRIC_GROUPS))
 
     for i in range(DLG_MAX_METRIC_GROUPS + 1, len(mpFieldIds) + 1):
         fieldIds = []
@@ -429,8 +451,8 @@ def test_dcgm_prof_watch_fields_multi_user(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgm_prof_with_dcgmreader(handle, gpuIds):
-    """ 
-    Verifies that we can access profiling data with DcgmReader, which is the 
+    """
+    Verifies that we can access profiling data with DcgmReader, which is the
     base class for dcgm exporters
     """
     dcgmHandle = pydcgm.DcgmHandle(handle)
@@ -446,8 +468,12 @@ def test_dcgm_prof_with_dcgmreader(handle, gpuIds):
     # Convert to seconds and sleep twice as long; ensures fresh sample
     sleepTime = updateFrequencyUsec / 1000000 * 2
 
-    dr = DcgmReader.DcgmReader(fieldIds=fieldIds, updateFrequency=updateFrequencyUsec,
-                               maxKeepAge=30.0, gpuIds=gpuIds, ignoreBlank=False)
+    dr = DcgmReader.DcgmReader(
+        fieldIds=fieldIds,
+        updateFrequency=updateFrequencyUsec,
+        maxKeepAge=30.0,
+        gpuIds=gpuIds,
+        ignoreBlank=False)
     dr.SetHandle(handle)
 
     for i in range(5):
@@ -504,7 +530,8 @@ def test_dcgm_prof_initial_valid_record(handle, gpuIds):
     fieldGroup = pydcgm.DcgmFieldGroup(
         dcgmHandle, "my_field_group_0", fieldIds)
 
-    # Set watches using a large interval so we don't get a record for 10 seconds in the bug case
+    # Set watches using a large interval so we don't get a record for 10
+    # seconds in the bug case
     dcgmGroup.samples.WatchFields(fieldGroup, 10000000, 3600.0, 0)
 
     gpuId = gpuIds[0]
@@ -554,7 +581,8 @@ def test_dcgm_prof_multi_pause_resume(handle, gpuIds):
 
     helper_check_profiling_environment(dcgmGroup)
 
-    # We should never get an error back from pause or resume. Pause and Resume throw exceptions on error
+    # We should never get an error back from pause or resume. Pause and Resume
+    # throw exceptions on error
     numPauses = 0
     numResumes = 0
 
@@ -694,7 +722,8 @@ def helper_test_dpt_sync_count(handle, gpuIds, fieldIdsStr, extraArgs=None):
     args = ["-d", str(duration), "-r", str(rate), "-t", fieldIdsStr]
 
     # MIG requires slightly looser tolerances than 10%
-    if ((fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_ACTIVE)) or (fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY))) and (slices > 1):
+    if ((fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_UTIL_RATIO)) or (
+            fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY_RATIO))) and (slices > 1):
         args.extend(["--percent-tolerance", "15"])
 
     if extraArgs is not None:
@@ -707,7 +736,12 @@ def helper_test_dpt_sync_count(handle, gpuIds, fieldIdsStr, extraArgs=None):
     app.wait()
 
 
-def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, fast=False, extraArgs=None):
+def helper_test_dpt_field_ids(
+        handle,
+        gpuIds,
+        fieldIdsStr,
+        fast=False,
+        extraArgs=None):
     '''
     Test that dcgmproftester passes for validation run.
     '''
@@ -743,11 +777,27 @@ def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, fast=False, extraArgs
     rate = 0.25 * slices
     useGpuIds = [gpuId]
 
-    args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate",
-            "-d", str(duration), "-r", str(rate), "--sync-count", "5", "-w", "5", "-t", fieldIdsStr]
+    args = [
+        "--target-max-value",
+        "--no-dcgm-validation",
+        "--dvs",
+        "--reset",
+        "--mode",
+        "validate",
+        "-d",
+        str(duration),
+        "-r",
+        str(rate),
+        "--sync-count",
+        "5",
+        "-w",
+        "5",
+        "-t",
+        fieldIdsStr]
 
     # MIG requires slightly looser tolerances than 10%
-    if ((fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_ACTIVE)) or (fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY))) and (slices > 1):
+    if ((fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_UTIL_RATIO)) or (
+            fieldIdsStr == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY_RATIO))) and (slices > 1):
         args.extend(["--percent-tolerance", "15"])
 
     if extraArgs is not None:
@@ -760,14 +810,24 @@ def helper_test_dpt_field_ids(handle, gpuIds, fieldIdsStr, fast=False, extraArgs
     app.wait()
 
 
-def helper_test_dpt_field_id(handle, gpuIds, fieldId, fast=False, extraArgs=None):
+def helper_test_dpt_field_id(
+        handle,
+        gpuIds,
+        fieldId,
+        fast=False,
+        extraArgs=None):
     '''
     Test that dcgmproftester passes.
     '''
     helper_test_dpt_field_ids(handle, gpuIds, str(fieldId), extraArgs)
 
 
-def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, fast=False, extraArgs=None):
+def helper_test_dpt_field_fast_id(
+        handle,
+        gpuIds,
+        fieldId,
+        fast=False,
+        extraArgs=None):
     '''
     Test that dcgmproftester passes in fast mode.
     '''
@@ -804,11 +864,27 @@ def helper_test_dpt_field_fast_id(handle, gpuIds, fieldId, fast=False, extraArgs
 
     useGpuIds = [gpuId]
 
-    args = ["--target-max-value", "--no-dcgm-validation", "--dvs", "--reset", "--mode", "validate,fast",
-            "-d", str(duration), "-r", str(rate), "--sync-count", "5", "-w", "5", "-t", str(fieldId)]
+    args = [
+        "--target-max-value",
+        "--no-dcgm-validation",
+        "--dvs",
+        "--reset",
+        "--mode",
+        "validate,fast",
+        "-d",
+        str(duration),
+        "-r",
+        str(rate),
+        "--sync-count",
+        "5",
+        "-w",
+        "5",
+        "-t",
+        str(fieldId)]
 
     # MIG requires slightly looser tolerances than 10%
-    if ((fieldId == dcgm_fields.DCGM_FI_PROF_SM_ACTIVE) or (fieldId == dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY)) and (slices > 1):
+    if ((fieldId == dcgm_fields.DCGM_FI_PROF_SM_UTIL_RATIO) or (
+            fieldId == dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY_RATIO)) and (slices > 1):
         args.extend(["--percent-tolerance", "15"])
 
     if extraArgs is not None:
@@ -879,7 +955,7 @@ def helper_test_dpt_help(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_non_validation(handle, gpuIds):
     helper_test_dpt_sync_count(handle, gpuIds, str(
-        dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE))
+        dcgm_fields.DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO))
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -890,7 +966,7 @@ def test_dcgmproftester_non_validation(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_gr_active(handle, gpuIds):
     helper_test_dpt_field_id(
-        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE)
+        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -921,7 +997,7 @@ def test_dcgmproftester_help(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_sm_active(handle, gpuIds):
     helper_test_dpt_field_id(
-        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_SM_ACTIVE)
+        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_SM_UTIL_RATIO)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -932,7 +1008,7 @@ def test_dcgmproftester_sm_active(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_sm_occupancy(handle, gpuIds):
     helper_test_dpt_field_id(
-        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY)
+        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY_RATIO)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -946,7 +1022,7 @@ def test_dcgmproftester_sm_occupancy(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_tensor_active(handle, gpuIds):
     helper_test_dpt_field_id(
-        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, True)
+        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_TENSOR_UTIL_RATIO, True)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -958,7 +1034,7 @@ def test_dcgmproftester_tensor_active(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp64_active(handle, gpuIds):
     helper_test_dpt_field_id(
-        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP64_ACTIVE, True)
+        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_FP64_UTIL_RATIO, True)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -969,7 +1045,7 @@ def test_dcgmproftester_fp64_active(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp32_active(handle, gpuIds):
     helper_test_dpt_field_id(
-        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP32_ACTIVE, True)
+        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_FP32_UTIL_RATIO, True)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -980,7 +1056,11 @@ def test_dcgmproftester_fp32_active(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp32_active_cublas(handle, gpuIds):
     helper_test_dpt_field_id(
-        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP32_ACTIVE, True, ["--cublas"])
+        handle,
+        gpuIds,
+        dcgm_fields.DCGM_FI_PROF_FP32_UTIL_RATIO,
+        True,
+        ["--cublas"])
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -991,7 +1071,7 @@ def test_dcgmproftester_fp32_active_cublas(handle, gpuIds):
 @test_utils.run_only_as_root()
 def test_dcgmproftester_fp16_active(handle, gpuIds):
     helper_test_dpt_field_id(
-        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PIPE_FP16_ACTIVE, True)
+        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_FP16_UTIL_RATIO, True)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -1001,8 +1081,9 @@ def test_dcgmproftester_fp16_active(handle, gpuIds):
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 def test_dcgmproftester_pcie_rx(handle, gpuIds):
-    helper_test_dpt_field_fast_id(handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_RX_BYTES, True, [
-                                  "--percent-tolerance", "20.0"])
+    helper_test_dpt_field_fast_id(
+        handle, gpuIds, dcgm_fields.DCGM_FI_PROF_PCIE_RX_BYTES, True, [
+            "--percent-tolerance", "20.0"])
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -1023,7 +1104,8 @@ def dont_test_slower_gpus(handle, gpuIds):
         deviceId = test_utils.get_device_id(handle, gpuId)
         if deviceId in lower_bandwidth_ids:
             test_utils.skip_test(
-                "Skipping the nvlink bandwidth tests for device id: '%s'" % deviceId)
+                "Skipping the nvlink bandwidth tests for device id: '%s'" %
+                deviceId)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -1065,8 +1147,10 @@ def test_dcgmproftester_nvlink_and_other(handle, gpuIds):
     https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3903747
     '''
     dont_test_slower_gpus(handle, gpuIds)
-    helper_test_dpt_field_ids(handle, gpuIds, str(
-        dcgm_fields.DCGM_FI_PROF_PIPE_FP16_ACTIVE) + "," + str(dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES), True)
+    helper_test_dpt_field_ids(
+        handle, gpuIds, str(
+            dcgm_fields.DCGM_FI_PROF_FP16_UTIL_RATIO) + "," + str(
+            dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES), True)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -1095,7 +1179,8 @@ def test_dcgmproftester_parallel_gpus(handle, gpuIds):
 
     cudaDriverVersion = get_used_cuda_major_version(handle, gpuIds[0])
 
-    # FP16 works for every GPU that supports DCP. It also works reliably even under heavy concurrecy
+    # FP16 works for every GPU that supports DCP. It also works reliably even
+    # under heavy concurrecy
     fieldIds = "1008"
 
     args = ["--mode", "validate", "--sync-count",
@@ -1117,7 +1202,8 @@ def test_dcgmproftester_parallel_gpus(handle, gpuIds):
         args.extend(["-d", str(duration), "-r", str(rate)])
 
         # MIG requires slightly looser tolerances than 10%
-        if ((fieldIds == str(dcgm_fields.DCGM_FI_PROF_SM_ACTIVE)) or (fieldIds == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY))) and (slices > 1):
+        if ((fieldIds == str(dcgm_fields.DCGM_FI_PROF_SM_UTIL_RATIO)) or (
+                fieldIds == str(dcgm_fields.DCGM_FI_PROF_SM_OCCUPANCY_RATIO))) and (slices > 1):
             args.extend(["--percent-tolerance", "15"])
 
         args.extend(["-i", str(gpuId)])
@@ -1213,3 +1299,94 @@ def test_dcgm_prof_global_pause_resume_values(handle, gpuIds):
 
     dcgmGroup.samples.UnwatchFields(fieldGroup)
     fieldGroup.Delete()
+
+
+# NO HARDWARE
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_gpm_metrics_supported(handle, gpuIds):
+    '''
+    Test the GPM metrics supported in nvml injection mode.
+    '''
+    gpuId = gpuIds[0]
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    group = DcgmGroup.DcgmGroup(dcgmHandle,
+                                groupName="test_gpm_metrics_supported")
+    group.AddGpu(gpuId)
+    fieldGroup = pydcgm.DcgmFieldGroup(
+        dcgmHandle, "test_gpm_metrics_supported", [
+            dcgm_fields.DCGM_FI_DEV_GPM_SUPPORT, dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES_TOTAL])
+    group.samples.WatchFields(fieldGroup, 1000, 3600.0, 0)
+    values = group.samples.GetLatest_v2(fieldGroup)
+    assert not values.values[dcgm_fields.DCGM_FE_GPU][gpuId][dcgm_fields.DCGM_FI_DEV_GPM_SUPPORT][0].isBlank
+    assert values.values[dcgm_fields.DCGM_FE_GPU][gpuId][dcgm_fields.DCGM_FI_DEV_GPM_SUPPORT][0].value == 1
+    for _ in range(10):
+        # We need 2 samples for calculating the GPM metrics
+        dcgmSystem.UpdateAllFields(1)
+        values = group.samples.GetLatest_v2(fieldGroup)
+        if not values.values[dcgm_fields.DCGM_FE_GPU][gpuId][dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES_TOTAL][0].isBlank:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError("The tx bytes should have been updated")
+
+
+# NO HARDWARE
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_gpm_cumulative_metrics(handle, gpuIds):
+    '''
+    Test that cumulative GPM counter fields return non-blank int64 values
+    and that the values match the expected injected data.
+    '''
+    gpuId = gpuIds[0]
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    group = DcgmGroup.DcgmGroup(dcgmHandle,
+                                groupName="test_gpm_cumulative_metrics")
+    group.AddGpu(gpuId)
+
+    # Cumulative fields and their expected values (from H200.yaml injection)
+    all_fields = {
+        dcgm_fields.DCGM_FI_PROF_SM_CYCLES_ELAPSED_TOTAL: 1000000,
+        dcgm_fields.DCGM_FI_PROF_SM_CYCLES_ACTIVE_TOTAL: 500000,
+        dcgm_fields.DCGM_FI_PROF_MMA_CYCLES_ACTIVE_TOTAL: 100000,
+        dcgm_fields.DCGM_FI_PROF_DMMA_CYCLES_ACTIVE_TOTAL: 80000,
+        dcgm_fields.DCGM_FI_PROF_HMMA_CYCLES_ACTIVE_TOTAL: 70000,
+        dcgm_fields.DCGM_FI_PROF_IMMA_CYCLES_ACTIVE_TOTAL: 60000,
+        dcgm_fields.DCGM_FI_PROF_DFMA_CYCLES_ACTIVE_TOTAL: 50000,
+        dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES_TOTAL: 5000000000,
+        dcgm_fields.DCGM_FI_PROF_PCIE_RX_BYTES_TOTAL: 4000000000,
+        dcgm_fields.DCGM_FI_PROF_INT_CYCLES_ACTIVE_TOTAL: 90000,
+        dcgm_fields.DCGM_FI_PROF_FP64_CYCLES_ACTIVE_TOTAL: 40000,
+        dcgm_fields.DCGM_FI_PROF_FP32_CYCLES_ACTIVE_TOTAL: 30000,
+        dcgm_fields.DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL: 20000,
+    }
+    field_ids = list(all_fields.keys())
+
+    fieldGroup = pydcgm.DcgmFieldGroup(
+        dcgmHandle, "test_gpm_cumulative_metrics", field_ids)
+    group.samples.WatchFields(fieldGroup, 1000, 3600.0, 0)
+
+    for _ in range(10):
+        dcgmSystem.UpdateAllFields(1)
+        values = group.samples.GetLatest_v2(fieldGroup)
+        sample = values.values[dcgm_fields.DCGM_FE_GPU][gpuId]
+        if not sample[dcgm_fields.DCGM_FI_PROF_SM_CYCLES_ELAPSED_TOTAL][0].isBlank:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError("Cumulative metrics should have been updated")
+
+    for field_id, expected in all_fields.items():
+        val = sample[field_id][0]
+        assert not val.isBlank, f"Field {field_id} should not be blank"
+        assert val.value == expected, \
+            f"Field {field_id}: expected {expected}, got {val.value}"

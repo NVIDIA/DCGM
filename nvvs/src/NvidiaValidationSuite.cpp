@@ -18,6 +18,7 @@
 #include "DcgmHandle.h"
 #include "DcgmSystem.h"
 #include "EntitySet.h"
+#include "EnvConfig.h"
 #include "IgnoreErrorCodesHelper.h"
 #include "NvvsException.hpp"
 #include "NvvsJsonStrings.h"
@@ -49,7 +50,6 @@
 #include <vector>
 
 using namespace DcgmNs::Nvvs;
-
 DcgmHandle dcgmHandle;
 DcgmSystem dcgmSystem;
 NvvsCommon nvvsCommon __attribute__((visibility("default")));
@@ -656,6 +656,7 @@ std::string NvidiaValidationSuite::Go(int argc, char *argv[])
     // Execute the tests... let the TF catch all exceptions and decide
     // whether to throw them higher.
 
+    m_tf->CreateSoftwarePluginFrameworks(entitySets);
     m_tf->Go(entitySets);
     if (m_monitor != nullptr)
     {
@@ -1160,6 +1161,11 @@ bool NvidiaValidationSuite::FillTestVectors(suiteNames_enum suite, Test::testCla
                 }
                 testNames.push_back(NVBANDWIDTH_PLUGIN_NAME);
                 testNames.push_back(NCCL_TESTS_PLUGIN_NAME);
+                EnvConfig envConfig;
+                if (envConfig.IsEnvVarPathToRegularFile(DCGM_RIST_BIN_PATH_ENV))
+                {
+                    testNames.push_back(RIST_PLUGIN_NAME);
+                }
             }
             if (suite >= NVVS_SUITE_XLONG)
             {

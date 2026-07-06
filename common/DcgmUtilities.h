@@ -21,6 +21,7 @@
 
 #include "DcgmLogging.h"
 #include <chrono>
+#include <csignal>
 #include <expected>
 #include <filesystem>
 #include <fmt/format.h>
@@ -218,14 +219,12 @@ auto EraseAndNotifyIf(Container &container, Pred pred, Callback callback) -> typ
 }
 
 /**
- * @brief Calculate the a duration in milliseconds based on the watch parameters.
+ * Calculate the retention duration in ms from watch parameters.
  * @param[in] monitorFrequency  Polling frequency in milliseconds.
  * @param[in] maxAge            Max age of a record to keep in milliseconds.
  * @param[in] maxKeepSamples    Max number of samples to keep.
- * @param[in] slackMultiplier   Multiplier to calculate slack as a product of max age
- * @return  How long a record to should be kept. In milliseconds.
- * @note This function returns smallest non-zero value from \c maxAge and <tt>monitorFrequency*maxKeepSamples</tt>
- * but not smaller than 1000ms
+ * @param[in] slackMultiplier   Multiplier to calculate slack as a product of max age.
+ * @return The greater of \c maxAge and <tt>monitorFrequency*maxKeepSamples</tt>, but at least 1000 ms.
  */
 std::chrono::milliseconds GetMaxAge(std::chrono::milliseconds monitorFrequency,
                                     std::chrono::milliseconds maxAge,
@@ -528,12 +527,10 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
 /*
  * Reads the output in the specified FileHandle and populates stdoutStream with the data.
  *
- * @param outputFd: (IN)
- * @param stdoutStream: (OUT)
+ * @param stdoutStream: (OUT) buffer populated with data read from outputFd
+ * @param outputFd:     (IN)  file descriptor to read from (takes ownership)
  *
- * @return: the return code.
- *           0 if the output was successfully read and the buffer was populated
- *          -1 if an error occurred.
+ * @return 0 on success, or a positive errno value on failure.
  */
 int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandle outputFd);
 
@@ -547,10 +544,32 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
  */
 dcgmReturn_t RunCmdAndGetOutput(std::string const &cmd, std::string &output);
 
+/**
+ * @brief Run a command and return its output, with a timeout.
+ *
+ * Same semantics as RunCmdAndGetOutput, but kills the child process if it does not
+ * complete within the specified timeout. Uses SIGTERM followed by SIGKILL after a
+ * brief grace period.
+ *
+ * @param cmd     a string containing the command to run, and its arguments
+ * @param output  a reference to the output from the command (may be partial on timeout)
+ * @param timeout maximum time to wait for the command to complete
+ *
+ * @return DCGM_ST_OK on success, DCGM_ST_TIMEOUT if the command was killed due to timeout,
+ *         or DCGM_ST_INIT_ERROR on other failures
+ */
+dcgmReturn_t RunCmdAndGetOutputWithTimeout(std::string const &cmd,
+                                           std::string &output,
+                                           std::chrono::steady_clock::duration timeout);
+
 class RunCmdHelper
 {
 public:
+    virtual ~RunCmdHelper() = default;
     virtual dcgmReturn_t RunCmdAndGetOutput(std::string const &cmd, std::string &output) const;
+    virtual dcgmReturn_t RunCmdAndGetOutputWithTimeout(std::string const &cmd,
+                                                       std::string &output,
+                                                       std::chrono::steady_clock::duration timeout) const;
 };
 
 bool IsRunningAsRoot();
@@ -558,6 +577,7 @@ bool IsRunningAsRoot();
 class RunningUserChecker
 {
 public:
+    virtual ~RunningUserChecker() = default;
     virtual bool IsRoot() const;
 };
 
@@ -615,6 +635,19 @@ bool WaitFor(F &&fn, std::chrono::duration<Rep, Period> timeout) noexcept(noexce
  */
 std::tuple<uint64_t, uint64_t, double> NvmlBerParser(int64_t ber);
 
+/**
+ * Returns true when effective BER exceeds the 1e-12 failure threshold.
+ *
+ * @param[in] mantissa The mantissa of the BER value
+ * @param[in] exponent The exponent of the BER value
+ * @return true if the effective BER exceeds the 1e-12 failure threshold,
+ *         false otherwise
+ *
+ * @note The encoded BER is represented as mantissa * 10^-exponent, with a
+ *       zero sentinel of mantissa=15 and exponent=255.
+ */
+[[nodiscard]] bool IsEffectiveBerThresholdExceeded(uint64_t mantissa, uint64_t exponent);
+
 
 struct LogPaths
 {
@@ -642,6 +675,92 @@ LogPaths GetLogFilePath(std::string_view testName);
 std::expected<std::string, dcgmReturn_t> FindExecutable(std::string_view executableName,
                                                         std::vector<std::string> const &searchPaths,
                                                         std::string &executableDir);
+
+/**
+ * @brief Checks if a process with the given PID is currently running.
+ *
+ * Uses kill(pid, 0) to probe for process existence. Suitable for arbitrary processes,
+ * not just direct children.
+ *
+ * @param pid Process ID to check
+ * @return true if the process exists and is accessible, false otherwise
+ */
+bool IsProcessRunning(pid_t pid);
+
+using LivenessCheckFn = std::function<bool(pid_t)>;
+
+/**
+ * @brief Core SIGTERM-then-SIGKILL termination loop parameterized by a liveness-check callback.
+ *
+ * Sends SIGTERM on the first (maxAttempts - 1) iterations, then escalates to SIGKILL.
+ * Yields on the first attempt, then sleeps for retryDelay between subsequent attempts.
+ *
+ * @param pid           Process ID to terminate
+ * @param isAlive       Callback returning true while the process is still alive
+ * @param maxAttempts   Total number of signal attempts (SIGTERM + one final SIGKILL)
+ * @param retryDelay    Delay between attempts after the first yield
+ * @return DCGM_ST_OK if the process was terminated, DCGM_ST_CHILD_NOT_KILLED otherwise
+ */
+dcgmReturn_t TerminateProcess(pid_t pid,
+                              LivenessCheckFn const &isAlive,
+                              unsigned int maxAttempts             = 4,
+                              std::chrono::milliseconds retryDelay = std::chrono::milliseconds { 500 });
+
+/**
+ * @brief Terminates a direct child process using SIGTERM/SIGKILL and reaps it via waitpid.
+ *
+ * Uses waitpid(WNOHANG) for liveness checks during the signal loop, and performs a final
+ * blocking waitpid to reap the zombie.
+ *
+ * @param pid           Child process ID to terminate and reap
+ * @param maxAttempts   Total number of signal attempts
+ * @param retryDelay    Delay between attempts after the first yield
+ */
+void KillAndReapChild(pid_t pid,
+                      unsigned int maxAttempts             = 4,
+                      std::chrono::milliseconds retryDelay = std::chrono::milliseconds { 500 });
+
+/**
+ * @brief Stops an arbitrary process (not necessarily a child) using SIGTERM/SIGKILL.
+ *
+ * Uses kill(pid, 0) for liveness checks. Suitable for processes that are not direct children,
+ * where waitpid would fail with ECHILD.
+ *
+ * @param pid                  Process ID to stop
+ * @param maxSigtermAttempts   Maximum number of SIGTERM attempts before escalating to SIGKILL
+ * @param sigtermRetryDelay    Delay between attempts
+ * @return DCGM_ST_OK if process was stopped, DCGM_ST_INSTANCE_NOT_FOUND if it wasn't running,
+ *         DCGM_ST_CHILD_NOT_KILLED if it could not be stopped
+ */
+template <typename DurationType = std::chrono::seconds>
+dcgmReturn_t StopProcess(pid_t pid,
+                         unsigned int maxSigtermAttempts = 4,
+                         DurationType sigtermRetryDelay  = std::chrono::seconds(4))
+{
+    if (!IsProcessRunning(pid))
+    {
+        return DCGM_ST_INSTANCE_NOT_FOUND;
+    }
+    auto delayMs = std::chrono::duration_cast<std::chrono::milliseconds>(sigtermRetryDelay);
+    auto result  = TerminateProcess(pid, [](pid_t p) { return kill(p, 0) == 0; }, maxSigtermAttempts, delayMs);
+    if (result != DCGM_ST_OK && IsProcessRunning(pid))
+    {
+        log_error("Giving up attempting to kill process {} after {} retries.", pid, maxSigtermAttempts);
+        return DCGM_ST_CHILD_NOT_KILLED;
+    }
+    return DCGM_ST_OK;
+}
+
+/**
+ * @brief Writes the whole content of the buffer to the file.
+ * This function is used to write the content of the buffer to the file defined by a non-blocking file descriptor.
+ * Signal interruptions and EAGAIN errors are handled properly.
+ * @param fd[in]    File descriptor to write to.
+ * @param ptr[in]   Pointer to the buffer.
+ * @param size[in]  Size of the buffer.
+ * @return 0 on success, errno on failure.
+ */
+int WriteAll(int fd, void const *ptr, size_t size);
 
 } // namespace DcgmNs::Utils
 #endif // DCGM_UTILITIES_H

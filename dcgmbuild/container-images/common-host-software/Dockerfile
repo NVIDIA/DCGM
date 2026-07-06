@@ -34,6 +34,7 @@ RUN --mount=type=bind,source=requirements.txt,target=/tmp/requirements.txt \
         libedit-dev \
         make \
         ninja-build \
+        parallel \
         patch \
         pkg-config \
         pylint \
@@ -46,6 +47,7 @@ RUN --mount=type=bind,source=requirements.txt,target=/tmp/requirements.txt \
         qemu-system-arm \
         qemu-user \
         rpm \
+        rsync \
         software-properties-common \
         unzip \
         vim \

@@ -60,9 +60,13 @@ class FieldReader(DcgmReader):
 STANDALONE_DENYLIST_SCRIPT_NAME = "denylist_recommendations.py"
 
 
-def createDenylistApp(numGpus=None, numSwitches=None, testNames=None, instantaneous=False):
+def createDenylistApp(
+        numGpus=None,
+        numSwitches=None,
+        testNames=None,
+        instantaneous=False):
     args = ["./%s" % STANDALONE_DENYLIST_SCRIPT_NAME]
-    if numGpus == None or numSwitches == None:
+    if numGpus is None or numSwitches is None:
         args.append("-d")
     else:
         args.append("-g")
@@ -86,7 +90,13 @@ def createDenylistApp(numGpus=None, numSwitches=None, testNames=None, instantane
 STANDALONE_VALUE_VERIFICATION_SCRIPT_NAME = "verify_field_value.py"
 
 
-def verify_field_value(gpuId, fieldId, expectedValue, maxWait=2, checkInterval=0.1, numMatches=3):
+def verify_field_value(
+        gpuId,
+        fieldId,
+        expectedValue,
+        maxWait=2,
+        checkInterval=0.1,
+        numMatches=3):
     """
     Verify that DCGM sees the expected value for the specified field ID. Waits a maximum of maxWait seconds to see
     the given value.
@@ -98,8 +108,12 @@ def verify_field_value(gpuId, fieldId, expectedValue, maxWait=2, checkInterval=0
     Returns True on successful verifcation and False otherwise.
     """
     interval_in_usec = int(checkInterval * 1000000)
-    fr = FieldReader(expectedValue, numMatches, fieldIds=[
-                     fieldId], updateFrequency=interval_in_usec, gpuIds=[gpuId])
+    fr = FieldReader(
+        expectedValue,
+        numMatches,
+        fieldIds=[fieldId],
+        updateFrequency=interval_in_usec,
+        gpuIds=[gpuId])
 
     start = time.time()
     while (time.time() - start) < maxWait:
@@ -108,7 +122,8 @@ def verify_field_value(gpuId, fieldId, expectedValue, maxWait=2, checkInterval=0
             return True
         time.sleep(checkInterval)
 
-    # If we were unable to see the expected value, log how many times we did see it before failing
+    # If we were unable to see the expected value, log how many times we did
+    # see it before failing
     logger.info("Saw expected value %s (for field %s) %s times" %
                 (expectedValue, fieldId, fr.numMatchesSeen))
     return False
@@ -129,7 +144,8 @@ def check_nvvs_process(want_running, delay=0.5, attempts=20):
         retry_count += 1
         time.sleep(delay)  # delay for a bit before trying again
         try:
-            # If pgrep is run via a shell, there will be extraneous output caused by the shell command itself
+            # If pgrep is run via a shell, there will be extraneous output
+            # caused by the shell command itself
             debug_output = subprocess.check_output(
                 ["pgrep", "-l", "-f", "apps/nvvs/nvvs"])
             if want_running:

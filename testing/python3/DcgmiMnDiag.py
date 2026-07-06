@@ -27,8 +27,16 @@ logFile = "nvvs_diag.log"
 
 
 class DcgmiMnDiag:
-    def __init__(self, hostList=None, hostEngineAddress=None, testName=None, parameters=[],
-                 verbose=False, debugLevel=None, debugLogFile=None, dcgmiPrefix=""):
+    def __init__(
+            self,
+            hostList=None,
+            hostEngineAddress=None,
+            testName=None,
+            parameters=[],
+            verbose=False,
+            debugLevel=None,
+            debugLogFile=None,
+            dcgmiPrefix=""):
         self.hostList = hostList
         self.hostEngineAddress = hostEngineAddress
         self.testName = testName

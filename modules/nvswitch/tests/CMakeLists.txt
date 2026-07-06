@@ -23,6 +23,8 @@ target_sources(nvswitchtests
         DcgmNvsdmManagerTests.cpp
         DcgmModuleNvSwitchTests.cpp
         DcgmNvSwitchManagerBaseTests.cpp
+        NvSwitchDataTests.cpp
+        NvsdmLibTests.cpp
 )
     
 target_link_libraries(nvswitchtests

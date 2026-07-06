@@ -19,7 +19,7 @@ import dcgm_fields
 import dcgm_agent_internal
 import dcgm_internal_helpers
 import DcgmDiag
-from DcgmDiag import check_diag_result_fail, check_diag_result_pass
+from DcgmDiag import check_diag_result_fail, check_diag_result_pass, find_test_in_response
 import option_parser
 import os
 import subprocess
@@ -34,7 +34,8 @@ import dcgm_nvml
 from _test_helpers import skip_test_if_no_dcgm_nvml
 from apps.app_runner import AppRunner
 
-from dcgm_field_injection_helpers import inject_value
+import dcgm_errors
+from dcgm_field_injection_helpers import inject_value, inject_nvml_value
 from shutil import which as find_executable
 
 TEST_DIAGNOSTIC = "diagnostic"
@@ -57,7 +58,7 @@ def support_temperature_threshold(gpuId):
         _ = dcgm_nvml.nvmlDeviceGetTemperatureThreshold(
             handle, dcgm_nvml.NVML_TEMPERATURE_THRESHOLD_GPU_MAX)
         supported = True
-    except:
+    except BaseException:
         supported = False
     dcgm_nvml.nvmlShutdown()
     return supported
@@ -66,12 +67,13 @@ def support_temperature_threshold(gpuId):
 
 
 def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
-    # We will inject DCGM_FI_DEV_GPU_TEMP to trigger a failure.
+    # We will inject DCGM_FI_DEV_GPU_TEMP_CELSIUS to trigger a failure.
     # When the GPU does not support a temperature threshold, the temperature check will be irrelevant or meaningless
     # and not triggering a failure.
     if not support_temperature_threshold(gpuId):
         test_utils.skip_test(
-            "Not testing because GPU %s does not support temperature threshold." % (gpuId))
+            "Not testing because GPU %s does not support temperature threshold." %
+            (gpuId))
 
     # Helper method for verifying the fail early checks for the specified test.
     # Prevent false failures due to min
@@ -91,8 +93,10 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
     entityPair = dcgm_structs.c_dcgmGroupEntityPair_t(
         dcgm_fields.DCGM_FE_GPU, gpuId)
     if not check_diag_result_pass(response, entityPair, test_name):
-        test_utils.skip_test("Not testing %s because GPU %s does not pass. "
-                             "Please verify whether the GPU is healthy." % (test_name, gpuId))
+        test_utils.skip_test(
+            "Not testing %s because GPU %s does not pass. "
+            "Please verify whether the GPU is healthy." %
+            (test_name, gpuId))
 
     ###
     # Verify fail early behavior by inserting an error.
@@ -114,7 +118,7 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
         gpuIds=[gpuId], testNamesStr=test_names, paramsStr=paramsStr)
     dd.SetFailEarly(checkInterval=2)  # enable fail early checks
 
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS,
                  150, 15, True, repeatCount=10)
 
     # launch the diagnostic
@@ -123,20 +127,21 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
     end = time.time()
     total_time = end - start
 
-    for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
+    for test in response.tests[:min(
+            response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if test.name == test_name:
             break
     assert test.name == test_name, "Expected results for test %s, but none were found" % test_name
 
-    result = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuId,
-                         map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None)
+    result = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuId, map(
+        lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None)
     assert result, "Expected a result for gpu %d, test %s but none were found" % (
         gpuId, test_name)
 
-    info = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuId,
-                       map(lambda infoIdx: response.info[infoIdx], test.infoIndices[:min(test.numInfo, dcgm_structs.DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX)])), None)
-    error = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuId,
-                        map(lambda errorIdx: response.errors[errorIdx], test.errorIndices[:min(test.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)])), None)
+    info = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuId, map(
+        lambda infoIdx: response.info[infoIdx], test.infoIndices[:min(test.numInfo, dcgm_structs.DCGM_DIAG_TEST_RUN_INFO_INDICES_MAX)])), None)
+    error = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId == gpuId, map(
+        lambda errorIdx: response.errors[errorIdx], test.errorIndices[:min(test.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)])), None)
 
     exitEarlyMsg = "Expected %s test to exit early. Test took %ss to complete." % (
         test_name, total_time)
@@ -168,7 +173,8 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
         response, entityPair, test_name), injectedDbesMsg
 
     if extraTestInfo:
-        for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
+        for test in response.tests[:min(
+                response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
             if test.name == extraTestInfo[0]:
                 break
         assert test.name != extraTestInfo[0] or test.name == extraTestInfo[0] and \
@@ -177,7 +183,8 @@ def verify_early_fail_checks_for_test(handle, gpuId, test_name, extraTestInfo):
                 test.name, test.result)
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_with_standalone_host_engine(120,
+                                            heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_mig_is_disabled()
@@ -185,7 +192,8 @@ def test_nvvs_plugin_fail_early_diagnostic_standalone(handle, gpuIds):
     verify_early_fail_checks_for_test(handle, gpuIds[0], TEST_DIAGNOSTIC, None)
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_with_standalone_host_engine(120,
+                                            heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_mig_is_disabled()
@@ -194,7 +202,8 @@ def test_nvvs_plugin_fail_early_targeted_stress_standalone(handle, gpuIds):
         handle, gpuIds[0], TEST_TARGETED_STRESS, None)
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_with_standalone_host_engine(120,
+                                            heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_mig_is_disabled()
@@ -203,7 +212,8 @@ def test_nvvs_plugin_fail_early_targeted_power_standalone(handle, gpuIds):
         handle, gpuIds[0], TEST_TARGETED_POWER, None)
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_utils.smallFbModeEnv)
+@test_utils.run_with_standalone_host_engine(120,
+                                            heEnv=test_utils.smallFbModeEnv)
 @test_utils.run_only_with_live_gpus()
 @test_utils.exclude_confidential_compute_gpus()
 @test_utils.run_only_if_mig_is_disabled()
@@ -219,11 +229,12 @@ def pageRetirementErrorsPresent(response):
     """Returns `True` when known errors associated with page retirement are present, `False` otherwise."""
     import re
     assert response.numTests == 1
-    for error in response.errors[:min(response.numErrors, dcgm_structs.DCGM_DIAG_RESPONSE_ERRORS_MAX)]:
+    for error in response.errors[:min(
+            response.numErrors, dcgm_structs.DCGM_DIAG_RESPONSE_ERRORS_MAX)]:
         unwantedErrors = \
             r'retired page' + \
             r'|retired_pages_' + \
-            r'|DCGM_FI_DEV_RETIRED_PENDING' + \
+            r'|DCGM_FI_DEV_PAGE_RETIRED_PENDING' + \
             r'|Pending page retirements together with a DBE were detected'
         if re.search(unwantedErrors, error.msg):
             return True
@@ -233,10 +244,12 @@ def pageRetirementErrorsPresent(response):
 def expectTestFailures(response):
     """Returns `True` if there is one or more test failure, `False` otherwise."""
     assert response.numTests == 1
-    for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
+    for test in response.tests[:min(
+            response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if test.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
             return True
-    for result in response.results[:min(response.numResults, dcgm_structs.DCGM_DIAG_RESPONSE_RESULTS_MAX)]:
+    for result in response.results[:min(
+            response.numResults, dcgm_structs.DCGM_DIAG_RESPONSE_RESULTS_MAX)]:
         if result.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
             return True
     if response.numErrors != 0:
@@ -245,7 +258,9 @@ def expectTestFailures(response):
     return False
 
 
-def helper_check_software_page_retirements_fail_on_pending_retirements(handle, gpuId):
+def helper_check_software_page_retirements_fail_on_pending_retirements(
+        handle,
+        gpuId):
     """
     Ensure that the software test for page retirements fails when there are pending page retirements.
     """
@@ -255,11 +270,13 @@ def helper_check_software_page_retirements_fail_on_pending_retirements(handle, g
     dd.UseFakeGpus()
     response = test_utils.diag_execute_wrapper(dd, handle)
     if pageRetirementErrorsPresent(response):
-        test_utils.skip_test("Skipping because GPU %s does not pass software page retirement test. "
-                             "Please verify whether the GPU is healthy." % gpuId)
+        test_utils.skip_test(
+            "Skipping because GPU %s does not pass software page retirement test. "
+            "Please verify whether the GPU is healthy." %
+            gpuId)
 
     # Inject some pending page retirements
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING,
                  1, injection_offset, True)
     response = test_utils.diag_execute_wrapper(dd, handle)
     # Ensure software test failed due to pending page retirments
@@ -269,44 +286,54 @@ def helper_check_software_page_retirements_fail_on_pending_retirements(handle, g
         response), "Expected software test to fail due to pending page retirements in the GPU"
 
     # Reset injected value
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING,
                  0, injection_offset, True)
     # Ensure diag passes now
     response = test_utils.diag_execute_wrapper(dd, handle)
     assert not expectTestFailures(response), "Expected software test to pass"
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
-def test_nvvs_plugin_software_pending_page_retirements_standalone(handle, gpuIds):
+def test_nvvs_plugin_software_pending_page_retirements_standalone(
+        handle,
+        gpuIds):
     # Injection tests can only work with the standalone host engine
     helper_check_software_page_retirements_fail_on_pending_retirements(
         handle, gpuIds[0])
 
 
-def helper_check_software_page_retirements_fail_total_retirements(handle, gpuId):
+def helper_check_software_page_retirements_fail_total_retirements(
+        handle,
+        gpuId):
     """
     Ensure that the software test for page retirements fails when there are mroe than 60 page retirements.
     """
-    # First verify that the software test passes for the gpu. If it doesn't pass, skip test and add note to check GPU health
+    # First verify that the software test passes for the gpu. If it doesn't
+    # pass, skip test and add note to check GPU health
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId])
     dd.UseFakeGpus()
     response = test_utils.diag_execute_wrapper(dd, handle)
     if pageRetirementErrorsPresent(response):
-        test_utils.skip_test("Skipping because GPU %s does not pass software page retirement test. "
-                             "Please verify whether the GPU is healthy." % gpuId)
+        test_utils.skip_test(
+            "Skipping because GPU %s does not pass software page retirement test. "
+            "Please verify whether the GPU is healthy." %
+            gpuId)
 
     # Inject enough page retirements to cause failure
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
                  33, injection_offset, True)
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
                  33, injection_offset, True)
     response = test_utils.diag_execute_wrapper(dd, handle)
     assert pageRetirementErrorsPresent(
         response), "Expected software test to fail due to 60 total page retirements in the GPU"
 
     # Ensure 59 pages pass injected value
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
                  25, injection_offset, True)
     # Ensure diag passes now
     response = test_utils.diag_execute_wrapper(dd, handle)
@@ -314,9 +341,9 @@ def helper_check_software_page_retirements_fail_total_retirements(handle, gpuId)
         response), "Expected software test to pass since there are less than 60 total retired pages"
 
     # Reset retired pages count and verify pass
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
                  0, injection_offset, True)
-    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
+    inject_value(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
                  0, injection_offset, True)
     # Ensure diag still passes
     response = test_utils.diag_execute_wrapper(dd, handle)
@@ -324,9 +351,14 @@ def helper_check_software_page_retirements_fail_total_retirements(handle, gpuId)
         "Expected software test to pass since there are no retired pages"
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
-def test_nvvs_plugin_software_total_page_retirements_standalone(handle, gpuIds):
+def test_nvvs_plugin_software_total_page_retirements_standalone(
+        handle,
+        gpuIds):
     # Injection tests can only work with the standalone host engine
     helper_check_software_page_retirements_fail_total_retirements(
         handle, gpuIds[0])
@@ -381,7 +413,7 @@ def test_nvvs_plugins_required_symbols():
             if os.path.islink(soPath):
                 continue
             # Skip non-libraries
-            if not ".so" in soPath:
+            if ".so" not in soPath:
                 continue
 
             # Skip some helper libraries that aren't plugin entry points
@@ -401,7 +433,7 @@ def test_nvvs_plugins_required_symbols():
                     "The installed nm is unable to see symbols within our plugins.")
 
             for rs in requiredSymbols:
-                if not rs in output:
+                if rs not in output:
                     logger.error("library %s is missing symbol %s" %
                                  (soPath, rs))
                     numErrors += 1
@@ -409,9 +441,12 @@ def test_nvvs_plugins_required_symbols():
     assert numErrors == 0, "Some plugins were missing symbols. See errors above."
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
-@test_utils.run_with_current_system_injection_nvml(skuFileName="current_test_software_on_fabric_manager.yaml")
+@test_utils.run_with_current_system_injection_nvml(
+    skuFileName="current_test_software_on_fabric_manager.yaml")
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
 @test_utils.run_only_if_mig_is_disabled()
@@ -524,7 +559,8 @@ def test_software_on_fabric_manager(handle, gpuIds):
     healthMaskCase.SetFbHealthMask(
         dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE)
     healthMaskCase.SetExpectedErrorMsg(
-        f"Health Mask: {dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE:#x}")
+        f"Health Mask: "
+        f"{dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE:#x}")
     caseList.append(healthMaskCase)
 
     completeAndSuccessCase = Case()
@@ -544,32 +580,52 @@ def test_software_on_fabric_manager(handle, gpuIds):
 
         dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]])
         response = test_utils.diag_execute_wrapper(dd, handle)
-        assert response.numTests == 1, f"Case: [{currentCase.GetCaseName()}], actual number of tests: [{response.numTests}]"
-        assert response.tests[0].name == "software", f"Case: [{currentCase.GetCaseName()}], actual test name: [{response.tests[0].name}]"
+        assert response.numTests == 1, (
+            f"Case: [{currentCase.GetCaseName()}], actual number of "
+            f"tests: [{response.numTests}]")
+        assert response.tests[0].name == "software", (
+            f"Case: [{currentCase.GetCaseName()}], actual test name: "
+            f"[{response.tests[0].name}]")
         if currentCase.GetIsPass():
-            assert response.tests[
-                0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, f"Case: [{currentCase.GetCaseName()}], actual result: [{response.tests[0].result}]"
-            assert response.numErrors == 0, f"Case: [{currentCase.GetCaseName()}], actual number of errors: [{response.numErrors}]"
+            assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, (
+                f"Case: [{currentCase.GetCaseName()}], actual result: "
+                f"[{response.tests[0].result}]")
+            assert response.numErrors == 0, (
+                f"Case: [{currentCase.GetCaseName()}], actual number of "
+                f"errors: [{response.numErrors}]")
         else:
-            assert response.tests[
-                0].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"Case: [{currentCase.GetCaseName()}], actual result: [{response.tests[0].result}]"
-            assert response.numErrors == 1, f"Case: [{currentCase.GetCaseName()}], actual number of errors: [{response.numErrors}]"
-            assert response.errors[0].msg.find(currentCase.GetExpectedErrorMsg(
-            )) != -1, f"Case: [{currentCase.GetCaseName()}], expected error: [{currentCase.GetExpectedErrorMsg()}], actual error message: [{response.errors[0].msg}]"
+            assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+                f"Case: [{currentCase.GetCaseName()}], actual result: "
+                f"[{response.tests[0].result}]")
+            assert response.numErrors == 1, (
+                f"Case: [{currentCase.GetCaseName()}], actual number of "
+                f"errors: [{response.numErrors}]")
+            assert response.errors[0].msg.find(
+                currentCase.GetExpectedErrorMsg()) != -1, (
+                f"Case: [{currentCase.GetCaseName()}], expected error: "
+                f"[{currentCase.GetExpectedErrorMsg()}], actual error "
+                f"message: [{response.errors[0].msg}]")
 
 
 def assert_gpu_result(response, gpuId, testId, expectedResult):
     gpuResult = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId ==
                      gpuId and cur.testId == testId, response.results[:min(response.numResults, dcgm_structs.DCGM_DIAG_RESPONSE_RESULTS_MAX)]), None)
     assert gpuResult, f"Expected to find a result for gpu {gpuId} with testId {testId}"
-    assert gpuResult.result == expectedResult, f"Actual result is {gpuResult.result}"
+    assert gpuResult.result == expectedResult, (
+        f"Actual result is {gpuResult.result}")
 
+
+# NO HARDWARE
 
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
-def test_nvvs_plugin_skip_memtest_if_pre_defined_errors_present(handle, gpuIds):
+def test_nvvs_plugin_skip_memtest_if_pre_defined_errors_present(
+        handle,
+        gpuIds):
     dd = DcgmDiag.DcgmDiag(
-        gpuIds=gpuIds, testNamesStr="memtest", paramsStr="memtest.test_duration=10")
+        gpuIds=gpuIds,
+        testNamesStr="memtest",
+        paramsStr="memtest.test_duration=10")
     dd.UseFakeGpus()
 
     softwareId = 0
@@ -583,31 +639,38 @@ def test_nvvs_plugin_skip_memtest_if_pre_defined_errors_present(handle, gpuIds):
         response, gpuIds[1], memtestId, dcgm_structs.DCGM_DIAG_RESULT_PASS)
 
     fieldIds = [dcgm_fields.DCGM_FI_DEV_ROW_REMAP_PENDING,
-                dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
-                dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE]
+                dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING,
+                dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
+                dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILED]
 
     for fieldId in fieldIds:
         inject_value(handle, gpuIds[0], fieldId, 64, 10, True, repeatCount=10)
         response = test_utils.diag_execute_wrapper(dd, handle)
         assert response.numErrors > 0
-        assert response.tests[
-            softwareId].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"Actual result is {response.tests[softwareId].result}"
+        assert response.tests[softwareId].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+            f"Actual result is {response.tests[softwareId].result}")
         assert_gpu_result(
-            response, gpuIds[0], softwareId, dcgm_structs.DCGM_DIAG_RESULT_FAIL)
+            response,
+            gpuIds[0],
+            softwareId,
+            dcgm_structs.DCGM_DIAG_RESULT_FAIL)
 
-        assert response.tests[
-            memtestId].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, f"Actual result is {response.tests[memtestId].result}"
-        assert response.tests[
-            memtestId].numResults == 2, f"Actual number of results is {response.tests[memtestId].numResults}"
+        assert response.tests[memtestId].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, (
+            f"Actual result is {response.tests[memtestId].result}")
+        assert response.tests[memtestId].numResults == 2, (
+            f"Actual number of results is "
+            f"{response.tests[memtestId].numResults}")
 
-        # When errors are present, GPU 0's memtest should be skipped with a reason.
+        # When errors are present, GPU 0's memtest should be skipped with a
+        # reason.
         assert_gpu_result(
             response, gpuIds[0], memtestId, dcgm_structs.DCGM_DIAG_RESULT_SKIP)
 
         gpu0Info = next(filter(lambda cur: cur.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU and cur.entity.entityId ==
                         gpuIds[0] and cur.testId == memtestId, response.info[:min(response.numInfo, dcgm_structs.DCGM_DIAG_RESPONSE_INFO_MAX_V2)]), None)
-        assert gpu0Info, f"Expected to find a info for gpu {gpuIds[0]} with testId {memtestId}"
+        assert gpu0Info, (
+            f"Expected to find a info for gpu {gpuIds[0]} with testId "
+            f"{memtestId}")
         assert gpu0Info.msg.find(
             "Skipping this test due to previously detected") != -1, f"Actual info is {gpu0Info.msg}"
 
@@ -617,30 +680,49 @@ def test_nvvs_plugin_skip_memtest_if_pre_defined_errors_present(handle, gpuIds):
                      10, True, repeatCount=10)  # reset the value
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
-def test_nvvs_plugin_skip_memtest_if_all_entities_have_pre_defined_errors_present(handle, gpuIds):
+def test_nvvs_plugin_skip_memtest_if_all_entities_have_pre_defined_errors_present(
+        handle,
+        gpuIds):
     dd = DcgmDiag.DcgmDiag(
-        gpuIds=gpuIds, testNamesStr="memtest", paramsStr="memtest.test_duration=10")
+        gpuIds=gpuIds,
+        testNamesStr="memtest",
+        paramsStr="memtest.test_duration=10")
     dd.UseFakeGpus()
 
     softwareId = 0
     memtestId = 1
 
     inject_value(
-        handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ROW_REMAP_PENDING, 64, 10, True, repeatCount=10)
+        handle,
+        gpuIds[0],
+        dcgm_fields.DCGM_FI_DEV_ROW_REMAP_PENDING,
+        64,
+        10,
+        True,
+        repeatCount=10)
     inject_value(
-        handle, gpuIds[1], dcgm_fields.DCGM_FI_DEV_ROW_REMAP_PENDING, 64, 10, True, repeatCount=10)
+        handle,
+        gpuIds[1],
+        dcgm_fields.DCGM_FI_DEV_ROW_REMAP_PENDING,
+        64,
+        10,
+        True,
+        repeatCount=10)
     response = test_utils.diag_execute_wrapper(dd, handle)
     assert response.numErrors > 0
-    assert response.tests[
-        softwareId].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"Actual result is {response.tests[softwareId].result}"
-    assert response.tests[
-        softwareId].numResults == 2, f"Actual number of results is {response.tests[softwareId].numResults}"
-    assert response.tests[
-        memtestId].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP, f"Actual result is {response.tests[memtestId].result}"
-    assert response.tests[
-        memtestId].numResults == 2, f"Actual number of results is {response.tests[memtestId].numResults}"
+    assert response.tests[softwareId].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+        f"Actual result is {response.tests[softwareId].result}")
+    assert response.tests[softwareId].numResults == 2, (
+        f"Actual number of results is {response.tests[softwareId].numResults}")
+    assert response.tests[memtestId].result == dcgm_structs.DCGM_DIAG_RESULT_SKIP, (
+        f"Actual result is {response.tests[memtestId].result}")
+    assert response.tests[memtestId].numResults == 2, (
+        f"Actual number of results is {response.tests[memtestId].numResults}")
 
     for gpuId in gpuIds:
         assert_gpu_result(response, gpuId, memtestId,
@@ -660,15 +742,21 @@ def test_nvvs_plugin_skip_memtest_if_all_entities_have_pre_defined_errors_presen
 @test_utils.for_all_same_sku_gpus()
 def test_nvvs_executes_directly(handle, gpuIds):
     nvvs = AppRunner("./apps/nvvs/nvvs",
-                     ["--entity-id", str(gpuIds[0]), "--specifiedtest", "short"])
+                     ["--entity-id",
+                      str(gpuIds[0]),
+                         "--specifiedtest",
+                         "short"])
     nvvs.start(timeout=60)
     retValue = nvvs.wait()
     assert retValue == 0, f"Actual ret: [{retValue}]"
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
-@test_utils.run_with_current_system_injection_nvml(skuFileName="current_test_software_parameters.yaml")
+@test_utils.run_with_current_system_injection_nvml(
+    skuFileName="current_test_software_parameters.yaml")
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
 @test_utils.run_only_if_mig_is_disabled()
@@ -688,19 +776,95 @@ def test_software_parameters(handle, gpuIds):
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]])
     dd.AddParameter("software.require_persistence_mode=true")
     response = test_utils.diag_execute_wrapper(dd, handle)
-    assert response.numTests == 1, f"actual number of tests: [{response.numTests}]"
-    assert response.tests[0].name == "software", f"actual test name: [{response.tests[0].name}]"
-    assert response.tests[
-        0].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"actual result: [{response.tests[0].result}]"
-    assert response.numErrors == 1, f"actual number of errors: [{response.numErrors}]"
+    assert response.numTests == 1, (
+        f"actual number of tests: [{response.numTests}]")
+    assert response.tests[0].name == "software", (
+        f"actual test name: [{response.tests[0].name}]")
+    assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+        f"actual result: [{response.tests[0].result}]")
+    assert response.numErrors == 1, (
+        f"actual number of errors: [{response.numErrors}]")
     assert response.errors[0].msg.find(
         "Persistence Mode") != -1, f"actual error: [{response.errors[0].msg}]"
 
     dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]])
     dd.AddParameter("software.require_persistence_mode=false")
     response = test_utils.diag_execute_wrapper(dd, handle)
-    assert response.numTests == 1, f"actual number of tests: [{response.numTests}]"
-    assert response.tests[0].name == "software", f"actual test name: [{response.tests[0].name}]"
-    assert response.tests[
-        0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, f"actual result: [{response.tests[0].result}]"
-    assert response.numErrors == 0, f"actual number of errors: [{response.numErrors}]"
+    assert response.numTests == 1, (
+        f"actual number of tests: [{response.numTests}]")
+    assert response.tests[0].name == "software", (
+        f"actual test name: [{response.tests[0].name}]")
+    assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, (
+        f"actual result: [{response.tests[0].result}]")
+    assert response.numErrors == 0, (
+        f"actual number of errors: [{response.numErrors}]")
+
+
+def _run_software_diag_and_assert_pass(handle, gpuIds):
+    """Run level-1 (software) diag; if it does not pass, skip all subsequent GPU recovery tests."""
+    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]], testNamesStr="1")
+    response = test_utils.diag_execute_wrapper(dd, handle)
+    entity_pair = dcgm_structs.c_dcgmGroupEntityPair_t(
+        dcgm_fields.DCGM_FE_GPU, gpuIds[0])
+    if not find_test_in_response(response, "software") or not check_diag_result_pass(
+            response, entity_pair, "software"):
+        test_utils.skip_test(
+            "Baseline software test did not pass; skipping GPU recovery failure test.")
+    return response
+
+
+# NO HARDWARE
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('T400.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_software_gpu_recovery_action_fail_nvml(handle, gpuIds):
+    """
+    NVML injection of each GPU recovery action (1-4) causes software test to fail
+    with the corresponding DCGM_FR_GPU_RECOVERY_* code. Skipped if baseline (no injection) pass fails.
+    """
+    gpuId = gpuIds[0]
+    field_id = dcgm_fields.DCGM_FI_DEV_GPU_RECOVERY_ACTION
+
+    _run_software_diag_and_assert_pass(handle, gpuIds)
+
+    _GPU_RECOVERY_INJECTION_CASES = (
+        (1, dcgm_errors.DCGM_FR_GPU_RECOVERY_RESET, "GPU_RESET"),
+        (2, dcgm_errors.DCGM_FR_GPU_RECOVERY_REBOOT, "NODE_REBOOT"),
+        (3, dcgm_errors.DCGM_FR_GPU_RECOVERY_DRAIN_P2P, "DRAIN_P2P"),
+        (4, dcgm_errors.DCGM_FR_GPU_RECOVERY_DRAIN_RESET, "DRAIN_AND_RESET"),
+    )
+
+    for inject_val, expected_code, msg_snippet in _GPU_RECOVERY_INJECTION_CASES:
+        ret = inject_nvml_value(handle, gpuId, field_id, inject_val, 0)
+        assert ret == dcgm_structs.DCGM_ST_OK, f"inject_nvml_value({inject_val}) failed: {ret}"
+
+        dd = DcgmDiag.DcgmDiag(gpuIds=[gpuId], testNamesStr="1")
+        response = test_utils.diag_execute_wrapper(dd, handle)
+        test = find_test_in_response(response, "software")
+        assert test, f"inject_val={inject_val}: software test not found"
+        assert test.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+            f"inject_val={inject_val}: expected FAIL, got {test.result}")
+        assert test.numErrors > 0, f"inject_val={inject_val}: numErrors"
+
+        found = False
+        for i in range(test.numErrors):
+            errIdx = test.errorIndices[i]
+            err = response.errors[errIdx]
+            if err.code == expected_code:
+                assert err.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU, (
+                    f"inject_val={inject_val}: expected entity GPU, got {err.entity.entityGroupId}")
+                assert err.entity.entityId == gpuId, (
+                    f"inject_val={inject_val}: expected entity id {gpuId}, got {err.entity.entityId}")
+                assert msg_snippet in err.msg, (
+                    f"inject_val={inject_val}: expected snippet {msg_snippet!r} in message: {err.msg!r}")
+                found = True
+                break
+        assert found, (
+            f"inject_val={inject_val}: expected {expected_code} in errors, got: "
+            f"{[response.errors[test.errorIndices[j]].code for j in range(test.numErrors)]}")
+
+    ret = inject_nvml_value(handle, gpuId, field_id, 0, 0)
+    assert ret == dcgm_structs.DCGM_ST_OK, f"inject_nvml_value(0) cleanup failed: {ret}"

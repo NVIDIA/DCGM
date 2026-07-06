@@ -34,7 +34,8 @@ def helper_verify_fv_equal(fv1, fv2):
     Helper function to verify that fv1 == fv2 with useful errors if they are not equal. An
     assertion is thrown from this if they are not equal
     '''
-    # assert fv1.version == fv2.version #Don't check version. We may be comparing injected values to retrieved ones
+    # assert fv1.version == fv2.version #Don't check version. We may be
+    # comparing injected values to retrieved ones
     assert fv1.fieldId == fv2.fieldId, "%d != %d" % (
         fv1.value.fieldId, fv2.value.fieldId)
     assert fv1.status == fv2.status, "%d != %d" % (
@@ -45,6 +46,8 @@ def helper_verify_fv_equal(fv1, fv2):
     assert fv1.value.i64 == fv2.value.i64, "%d != %d" % (
         fv1.value.i64, fv2.value.i64)
 
+
+# NO HARDWARE
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(1)
@@ -57,7 +60,7 @@ def test_dcgm_injection_agent(handle, gpuIds):
     # Make a base value that is good for starters
     fvGood = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     fvGood.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    fvGood.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_CURRENT
+    fvGood.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_MODE
     fvGood.status = 0
     fvGood.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     fvGood.ts = get_usec_since_1970()
@@ -110,6 +113,8 @@ def test_dcgm_injection_agent(handle, gpuIds):
         dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, fvBad)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_injection_gpus(1)
 def test_dcgm_injection_remote(handle, gpuIds):
@@ -121,7 +126,7 @@ def test_dcgm_injection_remote(handle, gpuIds):
     # Make a base value that is good for starters
     fvGood = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     fvGood.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    fvGood.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_CURRENT
+    fvGood.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_MODE
     fvGood.status = 0
     fvGood.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     fvGood.ts = get_usec_since_1970()
@@ -199,8 +204,9 @@ def helper_verify_multi_values(fieldValues, order, injectedValues):
             logger.error("Null timestamp at index %d" % i)
             Nerrors += 1
         if fv.ts != injectedFv.ts:
-            logger.error("Timestamp mismatch at index %d: read %d. injected %d" % (
-                i, fv.ts, injectedFv.ts))
+            logger.error(
+                "Timestamp mismatch at index %d: read %d. injected %d" %
+                (i, fv.ts, injectedFv.ts))
             Nerrors += 1
         if fv.value.i64 != injectedFv.value.i64:
             logger.error("Value mismatch at index %d: read %d. injected %d" % (
@@ -215,17 +221,21 @@ def helper_verify_multi_values(fieldValues, order, injectedValues):
 
         if order == dcgm_structs.DCGM_ORDER_ASCENDING:
             if fv.ts <= fvPrev.ts:
-                logger.error("Out of order ASC timestamp at index %d, fv.ts %d, fvPrev.ts %d" % (
-                    i, fv.ts, fvPrev.ts))
+                logger.error(
+                    "Out of order ASC timestamp at index %d, fv.ts %d, fvPrev.ts %d" %
+                    (i, fv.ts, fvPrev.ts))
                 Nerrors += 1
         else:  # Descending
             if fv.ts >= fvPrev.ts:
-                logger.error("Out of order DESC timestamp at index %d, fv.ts %d, fvPrev.ts %d" % (
-                    i, fv.ts, fvPrev.ts))
+                logger.error(
+                    "Out of order DESC timestamp at index %d, fv.ts %d, fvPrev.ts %d" %
+                    (i, fv.ts, fvPrev.ts))
                 Nerrors += 1
 
     assert Nerrors < 1, "Comparison errors occurred"
 
+
+# NO HARDWARE
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(1)
@@ -284,6 +294,8 @@ def test_dcgm_injection_multi_fetch_agent(handle, gpuIds):
         NinjectValues, len(fvFetched))
     helper_verify_multi_values(fvFetched, order, injectedValues)
 
+
+# NO HARDWARE
 
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_with_injection_gpus(1)
@@ -348,8 +360,8 @@ def helper_test_dcgm_injection_summaries(handle, gpuIds):
     gpuId = gpuIds[0]
 
     # Watch the field we're inserting into
-    dcgm_agent_internal.dcgmWatchFieldValue(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL, 1, 3600.0,
-                                            10000)
+    dcgm_agent_internal.dcgmWatchFieldValue(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL, 1, 3600.0, 10000)
 
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
@@ -377,19 +389,33 @@ def helper_test_dcgm_injection_summaries(handle, gpuIds):
     tmpMask = tmpMask | dcgm_structs.DCGM_SUMMARY_AVG | dcgm_structs.DCGM_SUMMARY_DIFF
     # Pass baseTime for the start to get nothing from the first query
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NO_DATA)):
-        request = dcgm_agent.dcgmGetFieldSummary(handle, dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
-                                                 dcgm_fields.DCGM_FE_GPU, gpuId, tmpMask, baseTime - 60,
-                                                 baseTime - 30)
+        request = dcgm_agent.dcgmGetFieldSummary(
+            handle,
+            dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
+            dcgm_fields.DCGM_FE_GPU,
+            gpuId,
+            tmpMask,
+            baseTime - 60,
+            baseTime - 30)
 
     # Now adjust the time so we get values
-    request = dcgm_agent.dcgmGetFieldSummary(handle, dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
-                                             dcgm_fields.DCGM_FE_GPU, gpuId, tmpMask, 0, 0)
+    request = dcgm_agent.dcgmGetFieldSummary(
+        handle,
+        dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
+        dcgm_fields.DCGM_FE_GPU,
+        gpuId,
+        tmpMask,
+        0,
+        0)
     assert (request.response.values[0].i64 == 0)
     assert (request.response.values[1].i64 == 9)
     assert (request.response.values[2].i64 == 4)
     assert (request.response.values[3].i64 == 9)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(1)
 def test_dcgm_injection_summaries_embedded(handle, gpuIds):

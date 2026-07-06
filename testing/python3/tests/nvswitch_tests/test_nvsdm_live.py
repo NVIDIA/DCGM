@@ -17,10 +17,11 @@ from . import nvsdm_helpers
 import dcgm_structs
 import dcgm_structs_internal
 import dcgm_fields
-import dcgm_structs
 import test_utils
 import time
 import DcgmReader
+import logging
+logger = logging.getLogger(__name__)
 
 
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
@@ -63,7 +64,7 @@ def test_nvsdm_live_port_telemetry(handle):
 
     fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX,
                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX,
-                dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_UUID,
                 ]
 
     updateFrequencyUsec = 200000  # 200ms
@@ -71,7 +72,10 @@ def test_nvsdm_live_port_telemetry(handle):
     sleepTime = updateFrequencyUsec / 1000000 * 2
 
     dr = DcgmReader.DcgmReader(
-        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=linkEntities)
+        fieldIds=fieldIds,
+        updateFrequency=updateFrequencyUsec,
+        maxKeepAge=30.0,
+        entities=linkEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
@@ -108,7 +112,7 @@ def test_nvsdm_live_port_telemetry(handle):
                 assert len(linkLatest[linkId]) == len(fieldIds), errmsg
 
             # Verify the GUID for each NvLink
-            receivedGUID = linkLatest[linkId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID]
+            receivedGUID = linkLatest[linkId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_UUID]
             assert receivedGUID != "", "Received empty GUID"
 
 
@@ -137,9 +141,9 @@ def test_nvsdm_live_platform_telemetry(handle):
 
     dcgmGroup = dcgmSystem.GetGroupWithEntities('switchGroup', switchEntities)
 
-    fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_POWER_VDD,
-                dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT,
-                dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID,
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_UUID,
                 ]
 
     updateFrequencyUsec = 200000  # 200ms
@@ -147,7 +151,10 @@ def test_nvsdm_live_platform_telemetry(handle):
     sleepTime = updateFrequencyUsec / 1000000 * 2
 
     dr = DcgmReader.DcgmReader(
-        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=switchEntities)
+        fieldIds=fieldIds,
+        updateFrequency=updateFrequencyUsec,
+        maxKeepAge=30.0,
+        entities=switchEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
@@ -182,7 +189,7 @@ def test_nvsdm_live_platform_telemetry(handle):
                 assert len(switchLatest[switchId]) == len(fieldIds), errmsg
 
             # Verify the GUID for each NvSwitch.
-            receivedGUID = switchLatest[switchId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID]
+            receivedGUID = switchLatest[switchId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_UUID]
             assert receivedGUID != "", "Received empty GUID"
 
 
@@ -225,7 +232,8 @@ def test_nvsdm_live_nvswitch_health_check(handle):
         dcgm_structs.DCGM_HEALTH_RESULT_WARN,
         dcgm_structs.DCGM_HEALTH_RESULT_FAIL
     }
-    assert group_health.overallHealth in valid_health_results, f"Invalid health result: {group_health.overallHealth}"
+    assert group_health.overallHealth in valid_health_results, (
+        f"Invalid health result: {group_health.overallHealth}")
 
 
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
@@ -260,7 +268,10 @@ def test_nvsdm_live_composite_field_telemetry(handle):
     sleepTime = updateFrequencyUsec / 1000000 * 2
 
     dr = DcgmReader.DcgmReader(
-        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=switchEntities)
+        fieldIds=fieldIds,
+        updateFrequency=updateFrequencyUsec,
+        maxKeepAge=30.0,
+        entities=switchEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
@@ -296,13 +307,53 @@ def test_nvsdm_live_composite_field_telemetry(handle):
 
 
 def helper_is_active_link(linkId, linkStates):
+    # linkId is a packed dcgm_link_t.raw value.
+    # Bits 31-24 encode the owning switchId; bits 23-8 encode the port index on that switch.
+    switchId = (linkId >> 24) & 0xFF
+    portIndex = (linkId >> 8) & 0xFFFF
+
+    # Locate the specific switch that owns this link; a linkId belongs to exactly one switch.
+    switchIndex = None
     for i in range(linkStates.numNvSwitches):
-        if linkStates.nvSwitches[i].linkState[linkId - 1] != dcgm_structs_internal.DcgmEntityStatusOk:
-            return False
-    return True
+        if linkStates.nvSwitches[i].entityId == switchId:
+            switchIndex = i
+            break
+    if switchIndex is None:
+        logger.warning("linkId=%d (0x%x) references switchId=%d not present in linkStates, skipping",
+                       linkId, linkId, switchId)
+        return False
+
+    if portIndex >= dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH:
+        logger.warning("linkId=%d (0x%x) switchId=%d portIndex=%d out of range [0,%d), skipping",
+                       linkId, linkId, switchId, portIndex,
+                       dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
+        return False
+
+    return linkStates.nvSwitches[switchIndex].linkState[portIndex] == dcgm_structs_internal.DcgmEntityStatusOk
 
 
 @test_utils.run_with_standalone_host_engine(initializedClient=True)
 @test_utils.run_only_with_nvsdm_live()
 def test_nvsdm_live_pause_resume(handle):
     nvsdm_helpers.helper_nvsdm_pause_resume(handle)
+
+
+@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_only_with_nvsdm_live()
+def test_nvsdm_live_switch_topology_fields(handle):
+    """
+    Read switch-level topology/info fields from live NVSDM.
+    Tests fields 863 (PHYS_ID), 864 (RESET_REQUIRED), 866-869 (PCIe info),
+    and 1524 (FIRMWARE_VERSION).
+    """
+    nvsdm_helpers.helper_nvsdm_switch_topology_fields(handle)
+
+
+@test_utils.run_with_standalone_host_engine(initializedClient=True)
+@test_utils.run_only_with_nvsdm_live()
+def test_nvsdm_live_link_topology_fields(handle):
+    """
+    Read link-level topology/info fields from live NVSDM.
+    Tests fields 865 (LINK_ID), 870-877 (link status, type, remote device info).
+    """
+    nvsdm_helpers.helper_nvsdm_link_topology_fields(handle)

@@ -65,7 +65,8 @@ class DcgmStubRunnerApp(app_runner.AppRunner):
         if logger.log_dir is None:
             return
 
-        # Verify that stub_library_test doesn't print any strings that should never be printed
+        # Verify that stub_library_test doesn't print any strings that should
+        # never be printed
         stdout = "\n".join(self.stdout_lines)
         for forbidden_text in DcgmStubRunnerApp.forbidden_strings:
             assert stdout.find(

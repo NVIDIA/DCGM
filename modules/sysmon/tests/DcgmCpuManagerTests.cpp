@@ -105,3 +105,20 @@ TEST_CASE("DcgmCpuManager AddCpu")
         CHECK(cpus.IsValidCoreId(CoreId { i }));
     }
 }
+
+TEST_CASE("DcgmCpuManager: GetCpus caps cpuCount at array size")
+{
+    DcgmCpuManager cpus;
+
+    for (unsigned int i = 0; i < DCGM_MAX_NUM_CPUS + 2; i++)
+    {
+        dcgm_sysmon_cpu_t cpu {};
+        cpu.cpuId = i;
+        cpus.AddCpu(cpu);
+    }
+
+    dcgm_sysmon_msg_get_cpus_t msg {};
+    cpus.GetCpus(msg);
+
+    CHECK(msg.cpuCount <= DCGM_MAX_NUM_CPUS);
+}

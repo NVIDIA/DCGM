@@ -75,7 +75,9 @@ class NvidiaSmiApp(app_runner.AppRunner):
 
         if filename is None:
             filename = os.path.join(
-                logger.log_dir, "app_%03d_filename_output.txt" % (self.process_nb))
+                logger.log_dir,
+                "app_%03d_filename_output.txt" %
+                (self.process_nb))
 
         self.args.extend(["-f", filename])
         self.output_filename = filename
@@ -92,7 +94,8 @@ class NvidiaSmiApp(app_runner.AppRunner):
         # TODO, debug builds can print to stderr.  We can check for release build here
         # assert self.stderr_lines == [], "nvidia-smi printed something to stderr. It shouldn't ever do that!"
 
-        # Verify that nvidia smi doesn't print any strings that should never be printed on a working system
+        # Verify that nvidia smi doesn't print any strings that should never be
+        # printed on a working system
         stdout = "\n".join(self.stdout_lines)
         for forbidden_text in NvidiaSmiApp.forbidden_strings:
             assert stdout.find(

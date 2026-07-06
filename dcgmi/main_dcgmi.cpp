@@ -20,7 +20,9 @@
 #include <DcgmLogging.h>
 #include <DcgmSettings.h>
 
+#include <cerrno>
 #include <csignal>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -36,26 +38,16 @@ void sig_handler(int signum)
  * This method provides mechanism to register Sighandler callbacks for
  * SIGHUP, SIGINT, SIGQUIT, and SIGTERM
  *****************************************************************************/
-int InstallCtrlHandler()
+void InstallCtrlHandler()
 {
-    if (signal(SIGHUP, sig_handler) == SIG_ERR)
+    int const signals[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM };
+    for (int const signum : signals)
     {
-        return -1;
+        if (signal(signum, sig_handler) == SIG_ERR)
+        {
+            log_warning("Failed to register handler for signal {}: {}", signum, std::strerror(errno));
+        }
     }
-    if (signal(SIGINT, sig_handler) == SIG_ERR)
-    {
-        return -1;
-    }
-    if (signal(SIGQUIT, sig_handler) == SIG_ERR)
-    {
-        return -1;
-    }
-    if (signal(SIGTERM, sig_handler) == SIG_ERR)
-    {
-        return -1;
-    }
-
-    return 0;
 }
 
 
@@ -74,7 +66,7 @@ int main(int argc, char *argv[])
 
     DCGM_LOG_INFO << "Initialized DCGMI logger";
 
-    // Install the signal handler
+    /* Startup signal handlers are best-effort; registration failures are logged. */
     InstallCtrlHandler();
 
     try

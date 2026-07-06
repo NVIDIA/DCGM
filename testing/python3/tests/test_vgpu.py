@@ -28,15 +28,20 @@ import apps
 from subprocess import check_output
 
 
-def helper_inject_vgpu_configuration(handle, gpuId, eccModeVal, powerLimitVal, computeModeVal):
+def helper_inject_vgpu_configuration(
+        handle,
+        gpuId,
+        eccModeVal,
+        powerLimitVal,
+        computeModeVal):
     """
     Helper method to inject configuration to Cachemanager
     """
-    if (eccModeVal != None):
+    if (eccModeVal is not None):
         # inject an error into Ecc Mode
         eccMode = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
         eccMode.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-        eccMode.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_CURRENT
+        eccMode.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_MODE
         eccMode.status = 0
         eccMode.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
         # set the injected data into the future
@@ -46,10 +51,10 @@ def helper_inject_vgpu_configuration(handle, gpuId, eccModeVal, powerLimitVal, c
         ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, eccMode)
         assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    if (powerLimitVal != None):
+    if (powerLimitVal is not None):
         powerLimit = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
         powerLimit.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-        powerLimit.fieldId = dcgm_fields.DCGM_FI_DEV_POWER_MGMT_LIMIT
+        powerLimit.fieldId = dcgm_fields.DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS
         powerLimit.status = 0
         powerLimit.fieldType = ord(dcgm_fields.DCGM_FT_DOUBLE)
         # set the injected data into the future
@@ -60,10 +65,10 @@ def helper_inject_vgpu_configuration(handle, gpuId, eccModeVal, powerLimitVal, c
             handle, gpuId, powerLimit)
         assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    if (computeModeVal != None):
+    if (computeModeVal is not None):
         computeMode = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
         computeMode.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-        computeMode.fieldId = dcgm_fields.DCGM_FI_DEV_COMPUTE_MODE
+        computeMode.fieldId = dcgm_fields.DCGM_FI_DEV_GPU_COMPUTE_MODE
         computeMode.status = 0
         computeMode.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
         # set the injected data into the future
@@ -83,7 +88,7 @@ def helper_get_status_list(statusHandle):
 
     errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
-    while (errorInfo != None):
+    while (errorInfo is not None):
         errorList.append(errorInfo)
         errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
@@ -349,7 +354,7 @@ def test_dcgm_vgpu_config_power_enforce_standalone(handle, gpuIds):
     gpuId = gpuIds[0]
 
     #Make sure that the power management limit is updating fast enough to look at
-    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, dcgm_fields.DCGM_FI_DEV_POWER_MGMT_LIMIT)
+    fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, dcgm_fields.DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS)
     sleepTime = 1.2 * (fieldInfo.monitorIntervalUsec / 1000000.0)
 
     ## Get Min and Max Power limit on the group
@@ -436,7 +441,7 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
     validDevice = -1
     for x in gpuIds:
         fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(
-            handle, x, [dcgm_fields.DCGM_FI_DEV_RETIRED_DBE])
+            handle, x, [dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL])
         if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
             validDevice = x
         break
@@ -456,7 +461,11 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
 
     # Get original ECC mode on the device
     vgpu_config_values = dcgm_agent_internal.dcgmVgpuConfigGet(
-        handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+        handle,
+        groupId,
+        dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+        groupInfo.count,
+        status_handle)
     assert len(vgpu_config_values) > 0, "Failed to work with NULL status handle"
 
     eccmodeOnGroupExisting = vgpu_config_values[0].mEccMode
@@ -491,10 +500,12 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
         for error in errors:
             if error.status == dcgm_structs.DCGM_ST_RESET_REQUIRED:
                 test_utils.skip_test(
-                    "Skipping the test - Unable to reset the Gpu, FieldId - %d, Return - %d" % (error.fieldId, error.status))
+                    "Skipping the test - Unable to reset the Gpu, FieldId - %d, Return - %d" %
+                    (error.fieldId, error.status))
             else:
                 test_utils.skip_test(
-                    "Skipping the test - Unable to set the ECC mode. FieldId - %d, Return %d" % (error.fieldId, error.status))
+                    "Skipping the test - Unable to set the ECC mode. FieldId - %d, Return %d" %
+                    (error.fieldId, error.status))
 
     # Sleep after reset and then apply update for it to occur
     time.sleep(2)
@@ -507,7 +518,11 @@ def test_dcgm_vgpu_configure_ecc_mode(handle, gpuIds):
 
     # Get the current configuration
     config_values = dcgm_agent_internal.dcgmVgpuConfigGet(
-        handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+        handle,
+        groupId,
+        dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+        groupInfo.count,
+        status_handle)
     assert len(
         config_values) > 0, "Failed to get configuration using dcgmiVgpuConfigGet"
 

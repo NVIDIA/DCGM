@@ -14,11 +14,20 @@
 
 import test_utils
 
+
+def get_injection_values():
+    return {
+        "INJECTION_YAML": "GB200.yaml",
+        "INJECTION_SKU": "2941",
+        "INJECTION_DRIVER_VERSION": "580.126.16"
+    }
+
+
 _HE_ENV = {
     "PATH": test_utils.get_updated_env_path_variable(),
-    "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path(),
+    "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path,
     "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(),
-    "DCGM_MNDIAG_SUPPORTED_SKUS": test_utils.get_saved_skus_env,
+    "DCGM_MNDIAG_SUPPORTED_SKUS": get_injection_values()["INJECTION_SKU"],
     "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1",
 }
 

@@ -17,6 +17,7 @@
 #pragma once
 #include "dcgm_structs.h"
 
+#define DCGM_MAX_TEST_PREFIX_LEN 64
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,6 +76,15 @@ typedef struct
 
 typedef struct
 {
+    unsigned int headNodeId;
+    dcgmRunMnDiag_v1 runMnDiag;
+    char testBinaryPath[DCGM_MAX_STR_LENGTH];
+    unsigned int timeToRunSeconds;
+    char testPrefix[DCGM_MAX_TEST_PREFIX_LEN];
+} dcgmMultinodeRunParams_v2;
+
+typedef struct
+{
     unsigned int version;
     dcgmMultinodeTestType_t testType;
     dcgmMultinodeRequestType_t requestType;
@@ -87,8 +97,24 @@ typedef struct
     } requestData;
 } dcgmMultinodeRequest_v1;
 
-typedef dcgmMultinodeRequest_v1 dcgmMultinodeRequest_t;
+typedef struct
+{
+    unsigned int version;
+    dcgmMultinodeTestType_t testType;
+    dcgmMultinodeRequestType_t requestType;
+    union
+    {
+        dcgmMultinodeResource_v1 resource;
+        dcgmMultinodeAuthorization_v1 authorization;
+        dcgmMultinodeRunParams_v2 runParams;
+        dcgmMultinodeNodeInfo_v1 nodeInfo;
+    } requestData;
+} dcgmMultinodeRequest_v2;
+
+typedef dcgmMultinodeRequest_v2 dcgmMultinodeRequest_t;
 #define dcgmMultinodeRequest_version1 MAKE_DCGM_VERSION(dcgmMultinodeRequest_v1, 1)
+#define dcgmMultinodeRequest_version2 MAKE_DCGM_VERSION(dcgmMultinodeRequest_v2, 2)
+#define dcgmMultinodeRequest_version  dcgmMultinodeRequest_version2
 
 dcgmReturn_t DCGM_PUBLIC_API dcgmMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultinodeRequest_t *pRequest);
 

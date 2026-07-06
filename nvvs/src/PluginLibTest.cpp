@@ -230,7 +230,11 @@ void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v2 const &entity
               entityResult.numInfo,
               entityResult.numResults);
 
-    for (unsigned int i = 0; i < entityResult.numErrors; ++i)
+    // Each entityResult.num* count is supplied by plugin, clamp to the array's static size before iterating
+    auto const clampedErrorCount
+        = std::min(static_cast<size_t>(entityResult.numErrors), std::size(entityResult.errors));
+
+    for (unsigned int i = 0; i < clampedErrorCount; ++i)
     {
         if (m_entityResult.numErrors >= DCGM_DIAG_RESPONSE_ERRORS_MAX)
         {
@@ -244,7 +248,9 @@ void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v2 const &entity
         m_entityResult.numErrors += 1;
     }
 
-    for (unsigned int i = 0; i < entityResult.numInfo; ++i)
+    auto const clampedInfoCount = std::min(static_cast<size_t>(entityResult.numInfo), std::size(entityResult.info));
+
+    for (unsigned int i = 0; i < clampedInfoCount; ++i)
     {
         if (m_entityResult.numInfo >= std::size(m_entityResult.info))
         {
@@ -258,7 +264,10 @@ void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v2 const &entity
         m_entityResult.numInfo += 1;
     }
 
-    for (unsigned int i = 0; i < entityResult.numResults; ++i)
+    auto const clampedResultCount
+        = std::min(static_cast<size_t>(entityResult.numResults), std::size(entityResult.results));
+
+    for (unsigned int i = 0; i < clampedResultCount; ++i)
     {
         if (m_entityResult.numResults >= std::min(static_cast<unsigned int>(DCGM_DIAG_TEST_RUN_RESULTS_MAX),
                                                   static_cast<unsigned int>(std::size(entityResult.results))))
@@ -301,7 +310,8 @@ void PluginLibTest::PopulateEntityResults(dcgmDiagEntityResults_v2 const &entity
             builder["allowSpecialFloats"]  = true;
             builder["skipBom"]             = false;
             ::Json::Value auxObj;
-            if (builder.newCharReader()->parse(auxData.data(), auxData.data() + auxData.size(), &auxObj, &errors))
+            std::unique_ptr<::Json::CharReader> reader(builder.newCharReader());
+            if (reader->parse(auxData.data(), auxData.data() + auxData.size(), &auxObj, &errors))
             {
                 log_debug("Plugin returned aux data: {}", auxObj.toStyledString());
                 m_auxData = auxObj;

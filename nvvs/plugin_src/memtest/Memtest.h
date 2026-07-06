@@ -225,6 +225,9 @@ private:
 
     std::unique_ptr<DcgmRecorder> m_dcgmRecorder;
     std::vector<memtest_device_t> m_device; /* Per-device data */
+
+    // Allows MemtestTest to access private members for unit testing
+    friend class MemtestTest;
 };
 
 /*****************************************************************************/

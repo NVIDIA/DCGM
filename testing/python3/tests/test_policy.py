@@ -29,7 +29,9 @@ import queue
 import sys
 import os
 
-# How long to wait for policy callbacks to occur. The loop runs every 10 seconds in the host engine, so this should be 10 seconds + some fuzz time
+# How long to wait for policy callbacks to occur. The loop runs every 10
+# seconds in the host engine, so this should be 10 seconds + some fuzz
+# time
 POLICY_CALLBACK_TIMEOUT_SECS = 15
 INJECT_TS_OFFSET_SEC = 60
 
@@ -39,10 +41,13 @@ INJECT_TS_OFFSET_SEC = 60
 
 
 def create_c_callback(queue=None):
-    @CFUNCTYPE(None, POINTER(dcgm_structs.c_dcgmPolicyCallbackResponse_v2), c_uint64)
+    @CFUNCTYPE(None,
+               POINTER(dcgm_structs.c_dcgmPolicyCallbackResponse_v2),
+               c_uint64)
     def c_callback(response, userData):
         if queue:
-            # copy data into a python struct so that it is the right format and is not lost when "response" var is lost
+            # copy data into a python struct so that it is the right format and
+            # is not lost when "response" var is lost
             callbackResp = dcgm_structs.c_dcgmPolicyCallbackResponse_v2()
             memmove(addressof(callbackResp), response,
                     callbackResp.FieldsSizeof())
@@ -52,6 +57,8 @@ def create_c_callback(queue=None):
             queue.put(callbackUserData)
     return c_callback
 
+
+# NO HARDWARE
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_injection_gpus()
@@ -72,6 +79,8 @@ def test_dcgm_policy_reg_unreg_for_policy_update_standalone(handle, gpuIds):
     group.policy.Unregister(dcgm_structs.DCGM_POLICY_COND_DBE)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_standalone_host_engine(20)
 def test_dcgm_policy_negative_register_standalone(handle):
     """
@@ -84,6 +93,8 @@ def test_dcgm_policy_negative_register_standalone(handle):
         policy.Register(dcgm_structs.DCGM_POLICY_COND_DBE, empty_c_callback)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_standalone_host_engine(20)
 def test_dcgm_policy_negative_unregister_standalone(handle):
     """
@@ -93,6 +104,8 @@ def test_dcgm_policy_negative_unregister_standalone(handle):
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_CONFIGURED)):
         policy.Unregister(dcgm_structs.DCGM_POLICY_COND_DBE)
 
+
+# NO HARDWARE
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_with_injection_gpus()
@@ -152,16 +165,24 @@ def helper_dcgm_policy_inject_eccerror(handle, gpuIds):
     group.policy.Register(
         dcgm_structs.DCGM_POLICY_COND_DBE, c_callback, newPolicy)
 
-    # inject an error into ECC
+    # inject baseline sample first (required for delta detection)
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_DEV
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-    # set the injected data into the future
     field.ts = int((time.time() + INJECT_TS_OFFSET_SEC) * 1000000.0)
-    field.value.i64 = 1
-    logger.debug("injecting %s for gpuId %d" % (str(field), gpuIds[0]))
+    field.value.i64 = 0  # baseline
+    logger.debug("injecting baseline %s for gpuId %d" %
+                 (str(field), gpuIds[0]))
+
+    ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    # inject an error into ECC (delta detection will see 0 -> 1)
+    field.ts = int((time.time() + INJECT_TS_OFFSET_SEC + 5) * 1000000.0)
+    field.value.i64 = 1  # new error
+    logger.debug("injecting error %s for gpuId %d" % (str(field), gpuIds[0]))
 
     ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
@@ -178,25 +199,32 @@ def helper_dcgm_policy_inject_eccerror(handle, gpuIds):
     assert (dcgm_structs.DCGM_POLICY_COND_DBE == callbackResp.condition), \
         ("error callback was not for a DBE error, got: %s" % callbackResp.condition)
     assert (1 == callbackResp.val.dbe.numerrors), 'Expected 1 DBE error but got %s' % callbackResp.val.dbe.numerrors
-    assert (dcgm_structs.c_dcgmPolicyConditionDbe_t.LOCATIONS['DEVICE'] == callbackResp.val.dbe.location), \
-        'got: %s' % callbackResp.val.dbe.location
+    assert (dcgm_structs.c_dcgmPolicyConditionDbe_t.LOCATIONS['DEVICE'] ==
+            callbackResp.val.dbe.location), 'got: %s' % callbackResp.val.dbe.location
 
     # check that callback occured with the correct user data
     assert (callbackUserData.version == newPolicy.version), "User data at callback is incorrect. " \
         "Received: [%d], Expected: [%d]." % (
             callbackUserData.version, newPolicy.version)
 
-    # check that callback response has correct gpuId for which error was injected.
+    # check that callback response has correct gpuId for which error was
+    # injected.
     assert (callbackResp.gpuId == gpuIds[0]), "GPU ID in callback response is incorrect. " \
         "Received: [%d], Expected: [%d]." % (callbackResp.gpuId, gpuIds[0])
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_eccerror_standalone(handle, gpuIds):
     helper_dcgm_policy_inject_eccerror(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
@@ -221,14 +249,21 @@ def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
     c_callback = create_c_callback(callbackQueue)
     group.policy.Register(dcgm_structs.DCGM_POLICY_COND_NVLINK, c_callback)
 
+    # inject baseline sample first (required for delta detection)
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-    # set the injected data into the future
     field.ts = int((time.time() + INJECT_TS_OFFSET_SEC) * 1000000.0)
-    field.value.i64 = 1
+    field.value.i64 = 0  # baseline
+
+    ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    # inject an error (delta detection will see 0 -> 1)
+    field.ts = int((time.time() + INJECT_TS_OFFSET_SEC + 5) * 1000000.0)
+    field.value.i64 = 1  # new error
 
     ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
@@ -243,7 +278,7 @@ def test_dcgm_policy_inject_nvlinkerror_standalone(handle, gpuIds):
     assert (dcgm_structs.DCGM_POLICY_COND_NVLINK == callbackResp.condition), \
         ("NVLINK error callback was not for a NVLINK error, got: %s" %
          callbackResp.condition)
-    assert (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL == callbackResp.val.nvlink.fieldId), \
+    assert (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL == callbackResp.val.nvlink.fieldId), \
         ("Expected 130 fieldId but got %s" % callbackResp.val.nvlink.fieldId)
     assert (1 == callbackResp.val.nvlink.counter), 'Expected 1 PCI error but got %s' % callbackResp.val.nvlink.counter
 
@@ -264,7 +299,7 @@ def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
     devices = gpuIds
     for x in devices:
         fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(
-            handle, x, [dcgm_fields.DCGM_FI_DEV_XID_ERRORS, ])
+            handle, x, [dcgm_fields.DCGM_FI_DEV_XID_ERROR, ])
         if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
             validDeviceId = x
             break
@@ -273,7 +308,9 @@ def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
             "Can only run if at least one GPU that supports XID errors is present")
 
     group = pydcgm.DcgmGroup(
-        dcgmHandle, groupName="helper_test_dcgm_policy_inject_xiderror", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
+        dcgmHandle,
+        groupName="helper_test_dcgm_policy_inject_xiderror",
+        groupType=dcgm_structs.DCGM_GROUP_EMPTY)
     group.AddGpu(validDeviceId)
     group.policy.Set(newPolicy)
 
@@ -283,7 +320,7 @@ def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
 
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = dcgm_fields.DCGM_FI_DEV_XID_ERRORS
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_XID_ERROR
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     # set the injected data into the future
@@ -304,10 +341,14 @@ def helper_test_dcgm_policy_inject_xiderror(handle, gpuIds):
     assert (dcgm_structs.DCGM_POLICY_COND_XID == callbackResp.condition), \
         ("XID error callback was not for a XID error, got: %s" %
          callbackResp.condition)
-    assert (16 == callbackResp.val.xid.errnum), ('Expected XID error 16 but got %s' %
-                                                 callbackResp.val.xid.errnum)
+    assert (
+        16 == callbackResp.val.xid.errnum), ('Expected XID error 16 but got %s' %
+                                             callbackResp.val.xid.errnum)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_xiderror_standalone(handle, gpuIds):
@@ -327,8 +368,10 @@ def helper_dcgm_policy_inject_pcierror(handle, gpuIds):
 
     gpuId = gpuIds[0]
 
-    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(
-        handle), groupName="helper_dcgm_policy_inject_pcierror", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
+    group = pydcgm.DcgmGroup(
+        pydcgm.DcgmHandle(handle),
+        groupName="helper_dcgm_policy_inject_pcierror",
+        groupType=dcgm_structs.DCGM_GROUP_EMPTY)
     group.AddGpu(gpuId)
     group.policy.Set(newPolicy)
 
@@ -336,14 +379,21 @@ def helper_dcgm_policy_inject_pcierror(handle, gpuIds):
     c_callback = create_c_callback(callbackQueue)
     group.policy.Register(dcgm_structs.DCGM_POLICY_COND_PCI, c_callback)
 
+    # inject baseline sample first (required for delta detection)
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
-    # set the injected data into the future
     field.ts = int((time.time() + INJECT_TS_OFFSET_SEC) * 1000000.0)
-    field.value.i64 = 1
+    field.value.i64 = 0  # baseline
+
+    ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, field)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    # inject an error (delta detection will see 0 -> 1)
+    field.ts = int((time.time() + INJECT_TS_OFFSET_SEC + 5) * 1000000.0)
+    field.value.i64 = 1  # new error
 
     ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
@@ -361,12 +411,18 @@ def helper_dcgm_policy_inject_pcierror(handle, gpuIds):
     assert (1 == callbackResp.val.pci.counter), 'Expected 1 PCI error but got %s' % callbackResp.val.pci.counter
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_pcierror_standalone(handle, gpuIds):
     helper_dcgm_policy_inject_pcierror(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
@@ -380,7 +436,8 @@ def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
     newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_MAX_PAGES_RETIRED].tag = 1
     newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_MAX_PAGES_RETIRED].val.llval = 5
 
-    # find a GPU that supports ECC and retired pages (otherwise internal test will ignore it)
+    # find a GPU that supports ECC and retired pages (otherwise internal test
+    # will ignore it)
     dcgmHandle = pydcgm.DcgmHandle(handle)
     dcgmSystem = dcgmHandle.GetSystem()
     group = dcgmSystem.GetGroupWithGpuIds("test1", gpuIds)
@@ -396,7 +453,7 @@ def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
     numPages = 10
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = dcgm_fields.DCGM_FI_DEV_RETIRED_DBE
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     # set the injected data into the future
@@ -406,8 +463,9 @@ def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
     ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    # inject a SBE too so that the health check code gets past its internal checks
-    field.fieldId = dcgm_fields.DCGM_FI_DEV_RETIRED_SBE
+    # inject a SBE too so that the health check code gets past its internal
+    # checks
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL
 
     ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuIds[0], field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
@@ -427,6 +485,8 @@ def test_dcgm_policy_inject_retiredpages_standalone(handle, gpuIds):
             numPages, callbackResp.val.mpr.dbepages)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_standalone_host_engine(40)
 def test_dcgm_policy_get_with_no_gpus_standalone(handle):
     '''
@@ -439,9 +499,7 @@ def test_dcgm_policy_get_with_no_gpus_standalone(handle):
         policies = group.policy.Get()
 
 
-@test_utils.run_with_standalone_host_engine(40)
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_policy_get_with_some_gpus_standalone(handle, gpuIds):
+def helper_dcgm_policy_get_with_some_gpus_standalone(handle, gpuIds):
     '''
     Test that getting the policies returns the correct number of policies as GPUs in the system
     when "count" is not specified for policy.Get
@@ -452,6 +510,12 @@ def test_dcgm_policy_get_with_some_gpus_standalone(handle, gpuIds):
     group.AddGpu(gpuIds[0])
     policies = group.policy.Get()
     assert len(policies) == 1, len(policies)
+
+
+@test_utils.run_with_standalone_host_engine(40)
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_policy_get_with_some_gpus_standalone(handle, gpuIds):
+    helper_dcgm_policy_get_with_some_gpus_standalone(handle, gpuIds)
 
 
 def helper_dcgm_policy_inject_powererror(handle, gpuIds):
@@ -466,8 +530,10 @@ def helper_dcgm_policy_inject_powererror(handle, gpuIds):
 
     gpuId = gpuIds[0]
 
-    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(
-        handle), groupName="helper_dcgm_policy_inject_powererror", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
+    group = pydcgm.DcgmGroup(
+        pydcgm.DcgmHandle(handle),
+        groupName="helper_dcgm_policy_inject_powererror",
+        groupType=dcgm_structs.DCGM_GROUP_EMPTY)
     group.AddGpu(gpuId)
     group.policy.Set(newPolicy)
 
@@ -480,7 +546,7 @@ def helper_dcgm_policy_inject_powererror(handle, gpuIds):
     # inject an error into Power Violation
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = dcgm_fields.DCGM_FI_DEV_POWER_USAGE
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_DOUBLE)
     # set the injected data into the future
@@ -505,6 +571,9 @@ def helper_dcgm_policy_inject_powererror(handle, gpuIds):
         'Expected Power Violation at 210 but got %s' % callbackResp.val.power.powerViolation
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_powererror_standalone(handle, gpuIds):
@@ -523,8 +592,10 @@ def helper_dcgm_policy_inject_thermalerror(handle, gpuIds):
 
     gpuId = gpuIds[0]
 
-    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(
-        handle), groupName="helper_dcgm_policy_inject_thermalerror", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
+    group = pydcgm.DcgmGroup(
+        pydcgm.DcgmHandle(handle),
+        groupName="helper_dcgm_policy_inject_thermalerror",
+        groupType=dcgm_structs.DCGM_GROUP_EMPTY)
     group.AddGpu(gpuId)
     group.policy.Set(newPolicy)
 
@@ -537,7 +608,7 @@ def helper_dcgm_policy_inject_thermalerror(handle, gpuIds):
     # inject an error into Power Violation
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    field.fieldId = dcgm_fields.DCGM_FI_DEV_GPU_TEMP
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS
     field.status = 0
     field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     # set the injected data into the future
@@ -562,7 +633,237 @@ def helper_dcgm_policy_inject_thermalerror(handle, gpuIds):
         'Expected Thermal Violation at 95 but got %s' % callbackResp.val.power.powerViolation
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_policy_inject_thermalerror_standalone(handle, gpuIds):
     helper_dcgm_policy_inject_thermalerror(handle, gpuIds)
+
+
+# Helper functions for delta detection tests
+def helper_inject_field_value(handle, gpuId, field, value, tsOffset):
+    """Inject a field value with the given timestamp offset."""
+    field.ts = int((time.time() + INJECT_TS_OFFSET_SEC + tsOffset) * 1000000.0)
+    field.value.i64 = value
+    ret = dcgm_agent_internal.dcgmInjectFieldValue(handle, gpuId, field)
+    assert ret == dcgm_structs.DCGM_ST_OK
+
+
+def helper_assert_callback_received(
+        callbackQueue,
+        gpuId,
+        expectedValue,
+        valueGetter,
+        msg):
+    """Assert that a callback was received with expected gpuId and value.
+    Note: create_c_callback puts 2 items per callback (response + userData), so we consume both.
+    """
+    try:
+        callbackResp = callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+    except queue.Empty:
+        raise AssertionError(f"{msg}: callback never happened")
+    # Consume the userData that create_c_callback also puts in the queue
+    try:
+        callbackQueue.get(timeout=1)
+    except queue.Empty:
+        pass
+    assert callbackResp.gpuId == gpuId, (
+        f"{msg}: wrong gpuId {callbackResp.gpuId}"
+    )
+    actualValue = valueGetter(callbackResp)
+    assert actualValue == expectedValue, f"{msg}: expected {expectedValue}, got {actualValue}"
+
+
+def helper_assert_no_callback(callbackQueue, msg):
+    """Assert that no callback was received."""
+    try:
+        callbackQueue.get(timeout=POLICY_CALLBACK_TIMEOUT_SECS)
+        raise AssertionError(f"{msg}: got unexpected callback")
+    except queue.Empty:
+        pass  # Expected
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
+@test_utils.run_with_standalone_host_engine(40)
+@test_utils.run_with_injection_gpus(1)
+def test_dcgm_policy_pcie_delta_detection(handle, gpuIds):
+    """
+    Verifies PCIe policy uses delta-based detection.
+    Uses GetSamples() from cache - needs 2 samples before delta can be computed.
+    1st=5 (no callback - baseline), 2nd=5 (no callback), 3rd=10 (callback), 4th=3 (no callback), 5th=7 (callback)
+    """
+    gpuId = gpuIds[0]
+
+    newPolicy = dcgm_structs.c_dcgmPolicy_v1()
+    newPolicy.version = dcgm_structs.dcgmPolicy_version1
+    newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_PCI
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_PCI].tag = 1
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_PCI].val.llval = 0
+
+    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(handle),
+                             groupName="test_pcie_delta_detection",
+                             groupType=dcgm_structs.DCGM_GROUP_EMPTY)
+    group.AddGpu(gpuId)
+    group.policy.Set(newPolicy)
+
+    callbackQueue = queue.Queue()
+    c_callback = create_c_callback(callbackQueue)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_PCI, c_callback)
+
+    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
+    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL
+    field.status = 0
+    field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
+
+    def valueGetter(r):
+        return r.val.pci.counter
+
+    # 1st injection: value=5 -> no callback (establishes baseline, need 2
+    # samples for delta)
+    helper_inject_field_value(handle, gpuId, field, 5, 0)
+    helper_assert_no_callback(callbackQueue, "1st - baseline")
+
+    # 2nd injection: value=5 (same) -> no callback (no delta)
+    helper_inject_field_value(handle, gpuId, field, 5, 5)
+    helper_assert_no_callback(callbackQueue, "2nd - no change")
+
+    # 3rd injection: value=10 (increased) -> callback (delta=5)
+    helper_inject_field_value(handle, gpuId, field, 10, 10)
+    helper_assert_callback_received(
+        callbackQueue, gpuId, 10, valueGetter, "3rd")
+
+    # 4th injection: value=3 (decreased/reset) -> no callback
+    helper_inject_field_value(handle, gpuId, field, 3, 15)
+    helper_assert_no_callback(callbackQueue, "4th - reset")
+
+    # 5th injection: value=7 (increased from reset baseline) -> callback
+    helper_inject_field_value(handle, gpuId, field, 7, 20)
+    helper_assert_callback_received(
+        callbackQueue, gpuId, 7, valueGetter, "5th")
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
+@test_utils.run_with_standalone_host_engine(40)
+@test_utils.run_with_injection_gpus(1)
+def test_dcgm_policy_nvlink_delta_detection(handle, gpuIds):
+    """
+    Verifies NVLink error policy uses delta-based detection.
+    Uses GetSamples() from cache - needs 2 samples before delta can be computed.
+    1st=10 (no callback - baseline), 2nd=10 (no callback), 3rd=15 (callback), 4th=5 (no callback), 5th=8 (callback)
+    """
+    gpuId = gpuIds[0]
+
+    newPolicy = dcgm_structs.c_dcgmPolicy_v1()
+    newPolicy.version = dcgm_structs.dcgmPolicy_version1
+    newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_NVLINK
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_NVLINK].tag = 0
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_NVLINK].val.boolean = True
+
+    dcgmHandle = pydcgm.DcgmHandle(handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    group = dcgmSystem.GetGroupWithGpuIds('test_nvlink_delta', gpuIds)
+    group.policy.Set(newPolicy)
+
+    callbackQueue = queue.Queue()
+    c_callback = create_c_callback(callbackQueue)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_NVLINK, c_callback)
+
+    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
+    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL
+    field.status = 0
+    field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
+
+    def valueGetter(r):
+        return r.val.nvlink.counter
+
+    # 1st injection: value=10 -> no callback (establishes baseline, need 2
+    # samples for delta)
+    helper_inject_field_value(handle, gpuId, field, 10, 0)
+    helper_assert_no_callback(callbackQueue, "1st - baseline")
+
+    # 2nd injection: value=10 (same) -> no callback (no delta)
+    helper_inject_field_value(handle, gpuId, field, 10, 5)
+    helper_assert_no_callback(callbackQueue, "2nd - no change")
+
+    # 3rd injection: value=15 (increased) -> callback (delta=5)
+    helper_inject_field_value(handle, gpuId, field, 15, 10)
+    helper_assert_callback_received(
+        callbackQueue, gpuId, 15, valueGetter, "3rd")
+
+    # 4th injection: value=5 (decreased/reset) -> no callback
+    helper_inject_field_value(handle, gpuId, field, 5, 15)
+    helper_assert_no_callback(callbackQueue, "4th - reset")
+
+    # 5th injection: value=8 (increased from reset baseline) -> callback
+    helper_inject_field_value(handle, gpuId, field, 8, 20)
+    helper_assert_callback_received(
+        callbackQueue, gpuId, 8, valueGetter, "5th")
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
+@test_utils.run_with_standalone_host_engine(40)
+@test_utils.run_with_injection_gpus(1)
+def test_dcgm_policy_ecc_delta_detection(handle, gpuIds):
+    """
+    Verifies ECC error policy uses delta-based detection.
+    Uses GetSamples() from cache - needs 2 samples before delta can be computed.
+    1st=3 (no callback - baseline), 2nd=3 (no callback), 3rd=7 (callback), 4th=2 (no callback), 5th=4 (callback)
+    """
+    gpuId = gpuIds[0]
+
+    newPolicy = dcgm_structs.c_dcgmPolicy_v1()
+    newPolicy.version = dcgm_structs.dcgmPolicy_version1
+    newPolicy.condition = dcgm_structs.DCGM_POLICY_COND_DBE
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].tag = 0
+    newPolicy.parms[dcgm_structs.DCGM_POLICY_COND_IDX_DBE].val.boolean = True
+
+    dcgmHandle = pydcgm.DcgmHandle(handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    group = dcgmSystem.GetGroupWithGpuIds('test_ecc_delta', gpuIds)
+    group.policy.Set(newPolicy)
+
+    callbackQueue = queue.Queue()
+    c_callback = create_c_callback(callbackQueue)
+    group.policy.Register(dcgm_structs.DCGM_POLICY_COND_DBE, c_callback)
+
+    field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
+    field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
+    field.fieldId = dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_DEV
+    field.status = 0
+    field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
+
+    def valueGetter(r):
+        return r.val.dbe.numerrors
+
+    # 1st injection: value=3 -> no callback (establishes baseline, need 2
+    # samples for delta)
+    helper_inject_field_value(handle, gpuId, field, 3, 0)
+    helper_assert_no_callback(callbackQueue, "1st - baseline")
+
+    # 2nd injection: value=3 (same) -> no callback (no delta)
+    helper_inject_field_value(handle, gpuId, field, 3, 5)
+    helper_assert_no_callback(callbackQueue, "2nd - no change")
+
+    # 3rd injection: value=7 (increased) -> callback (delta=4)
+    helper_inject_field_value(handle, gpuId, field, 7, 10)
+    helper_assert_callback_received(
+        callbackQueue, gpuId, 7, valueGetter, "3rd")
+
+    # 4th injection: value=2 (decreased/reset) -> no callback
+    helper_inject_field_value(handle, gpuId, field, 2, 15)
+    helper_assert_no_callback(callbackQueue, "4th - reset")
+
+    # 5th injection: value=4 (increased from reset baseline) -> callback
+    helper_inject_field_value(handle, gpuId, field, 4, 20)
+    helper_assert_callback_received(
+        callbackQueue, gpuId, 4, valueGetter, "5th")

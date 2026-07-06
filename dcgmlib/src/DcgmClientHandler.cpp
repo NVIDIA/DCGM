@@ -168,7 +168,12 @@ void DcgmClientHandler::ProcessMessage(dcgm_connection_id_t connectionId, std::u
     }
 
     DCGM_LOG_DEBUG << "Processed persistent requestId " << msgHdr->requestId;
-    itP->second->ProcessMessage(std::move(dcgmMessage));
+    auto const processRet = static_cast<dcgmReturn_t>(itP->second->ProcessMessage(std::move(dcgmMessage)));
+    if (processRet != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "ProcessMessage for requestId " << msgHdr->requestId << " returned (" << processRet << ") "
+                       << errorString(processRet);
+    }
 }
 
 /*****************************************************************************/

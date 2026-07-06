@@ -17,15 +17,16 @@
 #ifndef MPI_RUNNER_H
 #define MPI_RUNNER_H
 
+#include <DcgmUtilities.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
-#include <fstream>
 #include <functional>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <string_view>
+#include <sys/types.h>
+#include <thread>
 #include <vector>
 
 #include "DcgmCoreProxyBase.h"
@@ -42,8 +43,9 @@ public:
      * @brief Constructor
      *
      * @param coreProxy The core proxy to use for the ChildProcess management
+     * @param effectiveUid The effective UID of the caller; used to determine the user to run the MPI process as
      */
-    MpiRunner(DcgmCoreProxyBase &coreProxy);
+    MpiRunner(DcgmCoreProxyBase &coreProxy, uid_t effectiveUid);
 
     /**
      * @brief Destructor
@@ -55,7 +57,7 @@ public:
      *
      * @param callback The function to process output from the MPI process
      */
-    void SetOutputCallback(std::function<dcgmReturn_t(std::istream &, void *, nodeInfoMap_t const &)> callback)
+    void SetOutputCallback(std::function<dcgmReturn_t(int, void *, nodeInfoMap_t const &)> callback)
     {
         m_outputCallback = std::move(callback);
     }
@@ -80,11 +82,12 @@ public:
     /**
      * @brief Default output callback handler
      *
-     * @param dataStream The stream to parse
+     * @param fd File descriptor to read MPI process output from
      * @param responseStruct Pointer to a structure that can be updated with parsed data (not used in default
      * implementation)
+     * @param nodeInfo The node info map (not used in default implementation)
      */
-    dcgmReturn_t DefaultOutputCallback(std::istream &dataStream, void *responseStruct, nodeInfoMap_t const &nodeInfo);
+    dcgmReturn_t DefaultOutputCallback(int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo);
 
     /**
      * @brief Get the exit code of the MPI process if it has exited
@@ -131,17 +134,6 @@ public:
     }
 
     /**
-     * @brief Set the user name and uid to run the MPI process as
-     *
-     * @param userInfo The user name and uid to run the MPI process as, or nullopt to run as the user running
-     * nv-hostengine
-     */
-    void SetUserInfo(std::pair<std::string, uid_t> userInfo)
-    {
-        m_userInfo = userInfo;
-    }
-
-    /**
      * @brief Set the log file names
      *
      * @param logFileNames The log file names for stdout and stderr
@@ -172,24 +164,41 @@ protected:
     }
 
     /**
-     * @brief Redirect the MPI process output to files or memory streams
+     * @brief Open or create the output files (user-specified or temp).
      *
-     * Redirects the MPI process output to files or memory streams based on the log file names set via SetLogFileNames.
-     * If no log file names are set, redirects to memory streams.
+     * Pure filesystem work with no child-process dependency, so it is
+     * called before ChildProcessSpawn.  Failures here (bad path,
+     * permissions, disk full) abort the launch without ever spawning
+     * a child process.
+     *
+     * @return dcgmReturn_t DCGM_ST_OK on success, error code otherwise
+     */
+    dcgmReturn_t PrepareOutputFiles();
+
+    /**
+     * @brief Wire up pipe fds from the child process and launch splice threads
+     *
+     * Must be called after ChildProcessSpawn since it retrieves pipe fds
+     * from the child process handle.
      *
      * @return dcgmReturn_t DCGM_ST_OK on success, error code otherwise
      */
     dcgmReturn_t RedirectMpiOutput();
 
     /**
-     * @brief Start threads to redirect output from MPI pipes to the target streams
+     * @brief Start threads to splice output from MPI pipes to output files
      *
      * @return dcgmReturn_t DCGM_ST_OK on success, error code otherwise
      */
     dcgmReturn_t StartRedirectThreads();
 
     /**
-     * @brief Stop redirecting the MPI process output
+     * @brief Stop redirect threads and close pipe file descriptors.
+     *
+     * Closing the pipe read-ends causes splice() to return EBADF, which
+     * unblocks the threads regardless of whether the child is still alive.
+     * The stop token lets the threads distinguish an intentional teardown
+     * from an unexpected fd closure.
      */
     void StopRedirectThreads();
 
@@ -202,41 +211,29 @@ protected:
     dcgmReturn_t SetMpiOutputPipeFd(bool isStderr);
 
     /**
-     * @brief Set the MPI output file stream
-     *
-     * @param isStderr True if stderr, false if stdout
-     * @param filename The filename to redirect to
-     * @return dcgmReturn_t DCGM_ST_OK on success, error code otherwise
+     * @brief Clean up temporary files created for output redirection
      */
-    dcgmReturn_t SetDiskOutputFileStream(bool isStderr, std::string const &filename);
+    void CleanupTempFiles();
 
     std::optional<std::pair<std::string, uid_t>> m_userInfo;
     std::vector<std::string> m_lastCommand;
-    std::function<dcgmReturn_t(std::istream &, void *, nodeInfoMap_t const &)> m_outputCallback;
+    std::function<dcgmReturn_t(int, void *, nodeInfoMap_t const &)> m_outputCallback;
     int m_pid { -1 };
     ChildProcessHandle_t m_childProcessHandle { INVALID_CHILD_PROCESS_HANDLE };
-    DcgmCoreProxyBase &m_coreProxy; // Holding a reference to the core proxy which is created by the MnDiagManager
+    DcgmCoreProxyBase &m_coreProxy;
 
-    // File handles for stdout and stderr from the child process's pipe
-    std::optional<int> m_stdoutFd;
-    std::optional<int> m_stderrFd;
+    DcgmNs::Utils::FileHandle m_stdoutFd;
+    DcgmNs::Utils::FileHandle m_stderrFd;
 
-    // File streams for capturing output to disk
-    std::ofstream m_stdoutDiskFileStream;
-    std::ofstream m_stderrDiskFileStream;
+    DcgmNs::Utils::FileHandle m_stdoutFileFd;
+    DcgmNs::Utils::FileHandle m_stderrFileFd;
+    std::string m_stdoutFilePath;
+    std::string m_stderrFilePath;
     std::optional<std::pair<std::string, std::string>> m_logFileNames;
+    bool m_ownsTempFiles { false };
 
-    // Memory streams for capturing output when not redirecting to disk
-    std::ostringstream m_stdoutMemoryStream;
-    std::ostringstream m_stderrMemoryStream;
-
-    // Pointers to the active output streams (either disk or memory)
-    std::ostream *m_stdoutStream { nullptr };
-    std::ostream *m_stderrStream { nullptr };
-
-    std::atomic<bool> m_stopRedirectFlag { false };
-    std::thread m_stdoutRedirectThread;
-    std::thread m_stderrRedirectThread;
+    std::jthread m_stdoutRedirectThread;
+    std::jthread m_stderrRedirectThread;
 };
 
 #endif // MPI_RUNNER_H

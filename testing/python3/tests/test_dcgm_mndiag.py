@@ -34,7 +34,8 @@ def helper_setup_and_run_mndiag(handle, config):
     """
     try:
         mock_controller = MockMnubergemmController(
-            test_utils.get_mock_mnubergemm_path(), test_utils.get_mock_nvidia_smi_path())
+            test_utils.get_mock_mnubergemm_path(),
+            test_utils.get_mock_nvidia_smi_path())
 
         if len(config["test_nodes"]) > 0:
             mock_controller.setup_multinode_mock_environment(config)
@@ -53,7 +54,10 @@ def helper_setup_and_run_mndiag(handle, config):
 
         # Run mndiag
         mndiag = DcgmMnDiag.DcgmMnDiag(
-            hostList=hostList, testName=testName, parameters=testParams, handle=handle)
+            hostList=hostList,
+            testName=testName,
+            parameters=testParams,
+            handle=handle)
         response = mndiag.Execute(handle)
 
     except Exception:
@@ -68,36 +72,62 @@ def helper_setup_and_run_mndiag(handle, config):
 # ------------------------------------------------------
 
 
-def helper_validate_response(response, config, testName="MNUBERGEMM", success=None, error_entities={}, driver_versions=[]):
+def helper_validate_response(
+        response,
+        config,
+        testName="MNUBERGEMM",
+        success=None,
+        error_entities={},
+        driver_versions=[]):
     """
     Helper to validate mndiag response structure
     """
     hostList = config["hostList"] + [node["ip"]
                                      for node in config["test_nodes"]]
+
+    # Cap expected count at the response struct's hardcoded capacity, i.e. DCGM_MN_DIAG_RESPONSE_ERRORS_MAX
+    # C++ silently truncates errors beyond this, the assertion below should reflect that
     expected_num_errors = config.get("expected_num_errors", 0)
+    expected_num_errors = min(
+        expected_num_errors, dcgm_structs.DCGM_MN_DIAG_RESPONSE_ERRORS_MAX)
 
     assert response is not None, "Response should not be None"
-    assert response.version == dcgm_structs.dcgmMnDiagResponse_version1, f"Got response version {response.version}, expected {dcgm_structs.dcgmMnDiagResponse_version1}"
+    assert response.version == dcgm_structs.dcgmMnDiagResponse_version1, (
+        f"Got response version {response.version}, "
+        f"expected {dcgm_structs.dcgmMnDiagResponse_version1}")
 
     # Validate host information
-    assert response.numHosts == len(
-        hostList), f"numHosts {response.numHosts} should match hostList length {len(hostList)}"
+    assert response.numHosts == len(hostList), (
+        f"numHosts {response.numHosts} should match hostList length "
+        f"{len(hostList)}")
     for i in range(response.numHosts):
         host = response.hosts[i]
         assert len(host.hostname) > 0, f"Host {i} has empty hostname"
-        assert host.hostname in hostList, f"Host {i} hostname {host.hostname} not in hostList"
+        assert host.hostname in hostList, (
+            f"Host {i} hostname {host.hostname} not in hostList")
 
     # Validate entity results
-    assert response.numEntities == response.numResults, f"numEntities {response.numEntities} should match numResults {response.numResults}"
-    assert response.numEntities == config[
-        "expected_number_of_entities"], f"numEntities {response.numEntities} should match expected_number_of_entities {config['expected_number_of_entities']}"
+    assert response.numEntities == response.numResults, (
+        f"numEntities {response.numEntities} should match numResults "
+        f"{response.numResults}")
+    assert response.numEntities == config["expected_number_of_entities"], (
+        f"numEntities {response.numEntities} should match "
+        f"expected_number_of_entities "
+        f"{config['expected_number_of_entities']}")
     for i in range(response.numResults):
         result = response.results[i]
-        assert result.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU, f"Entity {i} has invalid entityGroupId. Got {result.entity.entityGroupId}, expected {dcgm_fields.DCGM_FE_GPU}"
-        assert result.testId == 0, f"Entity {i} has invalid testId. Got {result.testId}, expected 0"
+        assert result.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU, (
+            f"Entity {i} has invalid entityGroupId. "
+            f"Got {result.entity.entityGroupId}, "
+            f"expected {dcgm_fields.DCGM_FE_GPU}")
+        assert result.testId == 0, (
+            f"Entity {i} has invalid testId. Got {result.testId}, "
+            f"expected 0")
 
         # Get hostname for this result
-        assert result.hostId < response.numHosts, f"Entity {i} has invalid hostId. Got {result.hostId}, expected < {response.numHosts}"
+        assert result.hostId < response.numHosts, (
+            f"Entity {i} has invalid hostId. Got {result.hostId}, "
+            f"expected < {response.numHosts}")
         hostname = response.hosts[result.hostId].hostname
         assert hostname in hostList, f"Entity {i} has hostname {hostname} not in hostList"
 
@@ -105,30 +135,53 @@ def helper_validate_response(response, config, testName="MNUBERGEMM", success=No
         if len(error_entities.keys()) > 0:
             entity_key = f"{hostname}:{result.entity.entityId}"
             if entity_key in error_entities.keys():
-                assert result.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"Entity {i} with key {entity_key} has invalid result: {result.result}. Expected {dcgm_structs.DCGM_DIAG_RESULT_FAIL}"
+                expected = dcgm_structs.DCGM_DIAG_RESULT_FAIL
+                assert result.result == expected, (
+                    f"Entity {i} with key {entity_key} has invalid "
+                    f"result: {result.result}. Expected {expected}")
             else:
-                assert result.result == dcgm_structs.DCGM_DIAG_RESULT_PASS, f"Entity {i} with key {entity_key} has invalid result: {result.result}. Expected {dcgm_structs.DCGM_DIAG_RESULT_PASS}"
+                expected = dcgm_structs.DCGM_DIAG_RESULT_PASS
+                assert result.result == expected, (
+                    f"Entity {i} with key {entity_key} has invalid "
+                    f"result: {result.result}. Expected {expected}")
 
     # Validate test results
     assert response.numTests == 1, "numTests should be 1"
     for i in range(response.numTests):
         test = response.tests[i]
-        assert test.name == testName, f"Test name mismatch: expected {testName}, got {test.name}"
+        assert test.name == testName, (
+            f"Test name mismatch: expected {testName}, got {test.name}")
         if success:
-            assert test.result == dcgm_structs.DCGM_DIAG_RESULT_PASS, f"Test result invalid: {test.result}. Expected {dcgm_structs.DCGM_DIAG_RESULT_PASS}"
+            expected = dcgm_structs.DCGM_DIAG_RESULT_PASS
+            assert test.result == expected, (
+                f"Test result invalid: {test.result}. Expected {expected}")
         else:
-            assert test.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, f"Test result invalid: {test.result}. Expected {dcgm_structs.DCGM_DIAG_RESULT_FAIL}"
+            expected = dcgm_structs.DCGM_DIAG_RESULT_FAIL
+            assert test.result == expected, (
+                f"Test result invalid: {test.result}. Expected {expected}")
 
     # Validate error count matches expected errors
-    assert response.numErrors == expected_num_errors, f"Expected {expected_num_errors} errors, got {response.numErrors}"
+    assert response.numErrors == expected_num_errors, (
+        f"Expected {expected_num_errors} errors, got {response.numErrors}")
     if not success:
         for i in range(response.numErrors):
             error = response.errors[i]
-            assert error.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU, f"Error {i} has invalid entityGroupId. Got {error.entity.entityGroupId}, expected {dcgm_fields.DCGM_FE_GPU}"
-            assert error.testId == 0, f"Error {i} has invalid testId. Got {error.testId}, expected 0"
-            assert error.code == dcgm_errors.DCGM_FR_UNKNOWN, f"Error {i} has invalid error code. Got {error.code}, expected {dcgm_errors.DCGM_FR_UNKNOWN}"
-            assert error.category == dcgm_errors.DCGM_FR_EC_HARDWARE_OTHER, f"Error {i} has invalid category. Got {error.category}, expected {dcgm_errors.DCGM_FR_EC_HARDWARE_OTHER}"
-            assert error.severity == dcgm_errors.DCGM_ERROR_TRIAGE, f"Error {i} has invalid severity. Got {error.severity}, expected {dcgm_errors.DCGM_ERROR_TRIAGE}"
+            assert error.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU, (
+                f"Error {i} has invalid entityGroupId. Got "
+                f"{error.entity.entityGroupId}, expected "
+                f"{dcgm_fields.DCGM_FE_GPU}")
+            assert error.testId == 0, (
+                f"Error {i} has invalid testId. Got {error.testId}, "
+                f"expected 0")
+            assert error.code == dcgm_errors.DCGM_FR_UNKNOWN, (
+                f"Error {i} has invalid error code. Got {error.code}, "
+                f"expected {dcgm_errors.DCGM_FR_UNKNOWN}")
+            assert error.category == dcgm_errors.DCGM_FR_EC_HARDWARE_OTHER, (
+                f"Error {i} has invalid category. Got {error.category}, "
+                f"expected {dcgm_errors.DCGM_FR_EC_HARDWARE_OTHER}")
+            assert error.severity == dcgm_errors.DCGM_ERROR_TRIAGE, (
+                f"Error {i} has invalid severity. Got {error.severity}, "
+                f"expected {dcgm_errors.DCGM_ERROR_TRIAGE}")
             assert len(error.msg) > 0, f"Error {i} has empty message"
 
             all_error_msgs = [m.strip()
@@ -145,9 +198,17 @@ def helper_validate_response(response, config, testName="MNUBERGEMM", success=No
     for i in range(response.numHosts):
         host = response.hosts[i]
         dcgm_version = test_utils.get_dcgm_version()
-        assert host.numEntities > 0, f"Host {i} has no entities. Got {host.numEntities}, expected > 0"
-        assert host.dcgmVersion == dcgm_version, f"Host {i} dcgmVersion mismatch: got '{host.dcgmVersion}', expected '{dcgm_version}'"
-        assert host.driverVersion in driver_versions, f"Host {i} driverVersion '{host.driverVersion}' not found in expected driver versions {driver_versions}"
+        assert host.numEntities > 0, (
+            f"Host {i} has no entities. Got {host.numEntities}, "
+            f"expected > 0")
+        assert host.dcgmVersion == dcgm_version, (
+            f"Host {i} dcgmVersion mismatch: got '{host.dcgmVersion}', "
+            f"expected '{dcgm_version}'")
+        injection_driver_version = test_helpers.helper_dcgm_mndiag.get_injection_values()[
+            "INJECTION_DRIVER_VERSION"]
+        assert host.driverVersion == injection_driver_version, (
+            f"Host {i} driverVersion '{host.driverVersion}' not equal to "
+            f"expected driver version {injection_driver_version}")
 
 # ------------------------------------------------------
 
@@ -165,7 +226,8 @@ def helper_validate_error_output(response, validation_config):
         error_msgs.extend(
             [msg.strip() for msg in response.errors[i].msg.split(';') if msg.strip()])
 
-    for gpu_id, required_error_msgs in validation_config.get("gpu_required_error", {}).items():
+    for gpu_id, required_error_msgs in validation_config.get(
+            "gpu_required_error", {}).items():
         for required_error in required_error_msgs:
             assert any(required_error in msg for msg in error_msgs), \
                 f"Required error substring '{required_error}' not found in error messages for GPU {gpu_id}"
@@ -187,22 +249,19 @@ def helper_check_generated_log_file(config, mnubergemm_log_file):
         log_lines = f.readlines()
         assert log_lines, f"Log file {mnubergemm_log_file} is empty"
 
-    # len([2025-07-01 15:43:39.392]<space>) = 26
-    timestamp_length = 26
-    # Collect all lines that start with 'MNUB [I]'
-    info_lines = [line.strip()
-                  for line in log_lines if line[timestamp_length:].startswith('MNUB [I]')]
-    error_lines = [line.strip(
-    ) for line in log_lines if line[timestamp_length:].startswith('MNUB [E]')]
+    info_lines = [line.strip() for line in log_lines if 'MNUB [I]' in line]
+    error_lines = [line.strip() for line in log_lines if 'MNUB [E]' in line]
 
     # Check required info substrings are present in info lines for head node
-    for gpu_id, required_info_msgs in config.get("gpu_required_info", {}).items():
+    for gpu_id, required_info_msgs in config.get(
+            "gpu_required_info", {}).items():
         for required_info in required_info_msgs:
             assert any(
                 required_info in line for line in info_lines), f"Required info substring '{required_info}' not found in MNUB [I] lines for head node GPU {gpu_id}"
 
     # Check required error substrings are present in error lines for head node
-    for gpu_id, required_error_msgs in config.get("gpu_required_error", {}).items():
+    for gpu_id, required_error_msgs in config.get(
+            "gpu_required_error", {}).items():
         for required_error in required_error_msgs:
             assert any(
                 required_error in line for line in error_lines), f"Required error substring '{required_error}' not found in MNUB [E] lines for head node GPU {gpu_id}"
@@ -212,16 +271,22 @@ def helper_check_generated_log_file(config, mnubergemm_log_file):
     if test_nodes:
         for node in test_nodes:
             # Check required info substrings for test node
-            for gpu_id, required_info_msgs in node.get("gpu_required_info", {}).items():
+            for gpu_id, required_info_msgs in node.get(
+                    "gpu_required_info", {}).items():
                 for required_info in required_info_msgs:
-                    assert any(
-                        required_info in line for line in info_lines), f"Required info substring '{required_info}' not found in MNUB [I] lines for test node {node['ip']} GPU {gpu_id}"
+                    assert any(required_info in line for line in info_lines), (
+                        f"Required info substring '{required_info}' not "
+                        f"found in MNUB [I] lines for test node "
+                        f"{node['ip']} GPU {gpu_id}")
 
             # Check required error substrings for test node
-            for gpu_id, required_error_msgs in node.get("gpu_required_error", {}).items():
+            for gpu_id, required_error_msgs in node.get(
+                    "gpu_required_error", {}).items():
                 for required_error in required_error_msgs:
-                    assert any(
-                        required_error in line for line in error_lines), f"Required error substring '{required_error}' not found in MNUB [E] lines for test node {node['ip']} GPU {gpu_id}"
+                    assert any(required_error in line for line in error_lines), (
+                        f"Required error substring '{required_error}' not "
+                        f"found in MNUB [E] lines for test node "
+                        f"{node['ip']} GPU {gpu_id}")
 
 
 # -----------------------------------------------------
@@ -245,8 +310,12 @@ def helper_run_and_validate_mndiag(handle, config, success=True):
         handle, config)
 
     # Validate the response
-    helper_validate_response(response=response, config=config, success=success,
-                             error_entities=error_entities, driver_versions=driver_versions)
+    helper_validate_response(
+        response=response,
+        config=config,
+        success=success,
+        error_entities=error_entities,
+        driver_versions=driver_versions)
     helper_validate_error_output(response=response, validation_config=config)
     helper_check_generated_log_file(
         config, test_utils.get_mnubergemm_log_file_path())
@@ -307,7 +376,12 @@ def helper_setup_multinode_config(config):
             f"Test config file {test_config_path} is unreadable or does not exist")
 
     for node in test_config["test_nodes"]:
-        if len(node["ip"]) == 0 or len(node["sku"]) == 0 or len(node["username"]) == 0 or len(node["hostengine_path"]) == 0:
+        if len(
+            node.get("ip", "")) == 0 or len(
+            node.get("sku", "")) == 0 or len(
+            node.get("username", "")) == 0 or len(
+                node.get("hostengine_path", "")) == 0 or len(
+                node.get("nvml_injection_yaml_file_path", "")) == 0:
             test_utils.skip_test("Test node config is missing required fields")
 
     # Setup test node
@@ -316,13 +390,14 @@ def helper_setup_multinode_config(config):
 # ------------------------------------------------------
 
 
-def helper_extract_mnubergemm_path_from_logs(log_path, hostname=None, ip=None, is_remote=False):
+def helper_extract_mnubergemm_path_from_logs(
+        log_path, hostname=None, ip=None, is_remote=False):
     """
     Helper method to extract mnubergemm path from log files.
     """
     custom_path_log_pattern = "Inferred custom mnubergemm path:"
     default_path_log_pattern = "Inferred default mnubergemm path:"
-    grep_pattern_remote = "Setting mnubergemm path to:"
+    grep_pattern_remote = "Setting expected test binary path to:"
 
     def extract_path_from_line(line):
         """Extract path from a log line that contains mnubergemm path"""
@@ -391,7 +466,10 @@ def helper_extract_mnubergemm_path_from_logs(log_path, hostname=None, ip=None, i
         return None
 
 
-def helper_validate_mnubergemm_path(config, head_node_log_path, remote_log_path):
+def helper_validate_mnubergemm_path(
+        config,
+        head_node_log_path,
+        remote_log_path):
     """
     Helper to validate mnubergemm path
     """
@@ -442,13 +520,7 @@ def helper_validate_mnubergemm_path(config, head_node_log_path, remote_log_path)
 # ------------------------------------------------------
 
 
-@test_utils.run_only_with_gpus_present()
-@test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_basic_success(handle, gpuIds):
+def helper_dcgm_mndiag_basic_success(handle, gpuIds):
     """Test basic successful mndiag execution with mock mnubergemm"""
     logger.info("Starting basic mndiag success test")
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -490,13 +562,17 @@ def test_dcgm_mndiag_basic_success(handle, gpuIds):
     logger.info("Basic mndiag success test completed successfully")
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_basic_failure(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_basic_success(handle, gpuIds):
+    helper_dcgm_mndiag_basic_success(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_basic_failure(handle, gpuIds):
     """Test mndiag when mock mnubergemm simulates all error messages"""
     logger.info("Starting mndiag basic failure test")
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -555,13 +631,17 @@ def test_dcgm_mndiag_basic_failure(handle, gpuIds):
     logger.info("Basic failure mndiag test completed successfully")
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_basic_failure(handle, gpuIds):
+    helper_dcgm_mndiag_basic_failure(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds):
     """Test mndiag mixed pass/fail scenario 1"""
 
     logger.info("Starting mixed pass/fail mndiag 1")
@@ -602,13 +682,17 @@ def test_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds):
     logger.info("Mixed pass/fail 1 mndiag test completed successfully")
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds):
+    helper_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds):
     """Test mndiag mixed pass/fail scenario 2"""
 
     logger.info("Starting mixed pass/fail mndiag 2")
@@ -648,17 +732,22 @@ def test_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds):
 
     logger.info("Mixed pass/fail mndiag test completed successfully")
 
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds):
+    helper_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds)
+
+
 # ------------------------------------------------------
 # Multinode tests
 
 
-@test_utils.run_only_with_gpus_present()
-@test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_multinode_basic_success(handle, gpuIds):
+def helper_dcgm_mndiag_multinode_basic_success(handle, gpuIds):
     """Test basic successful mndiag execution with mock mnubergemm on multiple nodes - pass on head node, pass on test nodes"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
 
@@ -709,13 +798,17 @@ def test_dcgm_mndiag_multinode_basic_success(handle, gpuIds):
     helper_run_and_validate_mndiag(handle, config, success=True)
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_multinode_basic_success(handle, gpuIds):
+    helper_dcgm_mndiag_multinode_basic_success(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds):
     """Test basic failure mndiag execution with mock mnubergemm on multiple nodes, fail on head node 1 gpu, fail on test nodes 6 gpus"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
 
@@ -788,13 +881,17 @@ def test_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds):
     helper_run_and_validate_mndiag(handle, config, success=False)
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds):
+    helper_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds):
     """Test basic failure mndiag execution with mock mnubergemm on multiple node, fail on head node 1 gpu, fail on test nodes 1 gpu, same error"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
 
@@ -836,13 +933,17 @@ def test_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds):
     helper_run_and_validate_mndiag(handle, config, success=False)
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds):
+    helper_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds):
     """Test basic failure mndiag execution with mock mnubergemm on multiple node, fail on head node 2 gpus, fail on test nodes 2 gpus, same error"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
 
@@ -896,13 +997,17 @@ def test_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds):
     helper_run_and_validate_mndiag(handle, config, success=False)
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds):
+    helper_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds):
     """Test basic successful headnode and failure testnodes mndiag execution with mock mnubergemm on multiple nodes, pass on head node, fail on test nodes 2 gpus, different error"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
     config = {}
@@ -946,13 +1051,17 @@ def test_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds):
     helper_run_and_validate_mndiag(handle, config, success=False)
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds):
+    helper_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds):
     """Test basic failure headnode and successful testnodes mndiag execution with mock mnubergemm on multiple nodes, fail on head node 2 gpus, pass on test nodes"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
 
@@ -997,13 +1106,17 @@ def test_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds):
     helper_run_and_validate_mndiag(handle, config, success=False)
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds):
+    helper_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds):
     """Test mixed pass/fail mndiag execution with mock mnubergemm on multiple nodes, pass on head node, pass on test nodes 1 gpu and fail on 2 gpus"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
 
@@ -1053,13 +1166,17 @@ def test_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds):
     helper_run_and_validate_mndiag(handle, config, success=False)
 
 
-@test_utils.run_only_with_gpus_present()
+# NO HARDWARE
+
 @test_utils.run_if_mpirun_exists()
-@test_utils.run_with_standalone_host_engine(120, heArgs=["--log-level", "debug"], heEnv=test_helpers.helper_dcgm_mndiag.HE_Env())
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_with_all_same_sku_gpus()
-@test_utils.run_only_if_mig_is_disabled()
-def test_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds):
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds):
+    helper_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds)
+
+
+def helper_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds):
     """Test mndiag validate mnubergemm path"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
 
@@ -1101,3 +1218,13 @@ def test_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds):
     helper_run_and_validate_mndiag(handle, config, success=True)
     helper_validate_mnubergemm_path(
         config, head_node_log_path, remote_log_path)
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heArgs=["--log-level", "debug"], heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds):
+    helper_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds)

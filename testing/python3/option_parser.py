@@ -17,6 +17,7 @@ import utils
 import sys
 import test_utils
 import logger
+import os
 import re
 
 
@@ -57,12 +58,6 @@ def parse_options():
         help="Prints additional information to stdout"
     )
     parser.add_option(
-        "--no-dcgm-trace-patching",
-        dest="no_dcgm_trace_patching",
-        action="store_true",
-        help="Disables trace log patching with information from data/dcgm_decode_db.txt. Use when target ncm version doesn't match exactly data/version.txt CL"
-    )
-    parser.add_option(
         "--burn",
         dest="burn",
         action="store_true",
@@ -81,13 +76,18 @@ def parse_options():
         help="Creates all logging files in the specified directory"
     )
     parser.add_option(
+        "--test-dirs",
+        dest="test_dirs",
+        default="tests",
+        help="Overrides tests test directory. Comma separated list. Useful for tests.mock tests."
+    )
+    parser.add_option(
         "--dev-mode",
         dest="developer_mode",
         action="store_true",
         help="Run the test framework in developer mode. This mode runs additional tests " +
         "that should only be run by DCGM developers, either due to intermittency " +
-        "or heavy reliance on environmental conditions."
-    )
+        "or heavy reliance on environmental conditions.")
     parser.add_option(
         "--no-lint",
         dest="lint",
@@ -95,6 +95,13 @@ def parse_options():
         default=True,
         help="[deprecated] noop preserved to avoid breaking script invocations"
 
+    )
+    parser.add_option(
+        "--no-hw",
+        dest="no_hw",
+        action="store_true",
+        default=False,
+        help="Run mocked hardware *_mock tests and don't initially validate hardware."
     )
     parser.add_option(
         "-c", "--clear-lint-artifacts",
@@ -108,14 +115,14 @@ def parse_options():
         "--profile",
         dest="profile",
         choices=apps.nv_hostengine_app.NvHostEngineApp.supported_profile_tools,
-        help="Can be one of: %s " % apps.nv_hostengine_app.NvHostEngineApp.supported_profile_tools +
+        help="Can be one of: %s " %
+        apps.nv_hostengine_app.NvHostEngineApp.supported_profile_tools +
         "Turns on profiling of nv-hostengine while tests are running.  " +
         "This only works for tests that run a standalone hostengine (not embedded).  " +
         "Valgrind must also be installed.  The selected tool will profile nv-hostengine and " +
         "generate files for each test that runs.  These files can then be examined using " +
         "other tools (like KCachegrind for callgrind files).  " +
-        "The tests will output the directory where these files can be found."
-    )
+        "The tests will output the directory where these files can be found.")
 
     parser.add_option(
         "--use-running-hostengine",
@@ -124,8 +131,7 @@ def parse_options():
         default=False,
         help="Can be used to run the test framework against a remote host engine that is already running on the system." +
         "This option is useful for debugging the stand-alone host engine, which can be started separately inside of" +
-        "valgrind or gdb. This will skip embedded-only tests due to the host engine already being running."
-    )
+        "valgrind or gdb. This will skip embedded-only tests due to the host engine already being running.")
     parser.add_option(
         "--coverage",
         dest="coverage",
@@ -145,6 +151,11 @@ def parse_options():
         "-d", "--device",
         dest="device",
         help="Run only on target device (DEVICE_NVML_ID) + global tests"
+    )
+    test_group.add_option(
+        "--cuda-gpus",
+        dest="cuda_gpus",
+        help="Run dcgmi diag tests only on specified GPUs"
     )
     test_group.add_option(
         "-f", "--filter-tests",
@@ -175,8 +186,7 @@ def parse_options():
         "--force-logging",
         dest="force_logging",
         action="store_true",
-        help="Force logging even for actions that have logging disabled by default"
-    )
+        help="Force logging even for actions that have logging disabled by default")
     parser.add_option_group(debug_group)
 
     parser.add_option(
@@ -276,6 +286,10 @@ def parse_options():
     if options.force_logging:
         test_utils.noLogging = False
 
+    # Enable logging for DVS-SC testing by default
+    if options.dvssc_testing:
+        test_utils.noLogging = False
+
     # Change the backup value as well
     test_utils.noLoggingBackup = test_utils.noLogging
 
@@ -291,11 +305,12 @@ class OptionParserStub():
         self.test_info = False
         self.non_root_user = None
         self.lint = False
+        self.no_hw = False
         self.clear_lint_artifacts = False
         self.burn = False
         self.log_dir = None
+        self.test_dirs = "tests"
         self.verbose = False
-        self.no_dcgm_trace_patching = True
         self.use_running_hostengine = False
         self.no_process_check = False
         self.developer_mode = False
@@ -311,6 +326,9 @@ class OptionParserStub():
         self.ignore_loadavg_checks = False
         self.ignore_mem_checks = False
         self.ignore_init_diag = False
+        self.cuda_gpus = None
+
+        self.test_dir_list = ["tests"]
 
 
 def initialize_as_stub():
@@ -343,6 +361,33 @@ def validate():
     if options.non_root_user and not utils.is_root():
         logger.fatal(
             "[-u | --non-root-user] flags are invalid when current user is not root")
+
+    options.test_dir_list = options.test_dirs.split(",")
+
+    if options.no_hw:
+        for idx, _ in enumerate(options.test_dir_list):
+            # In practice this shouldn't happen: If we are specifying explicit
+            # --test-dirs, we may have _mock and non-_mock directories and would
+            # not provide a blanket --no-hw unless none of the --test-dirs had
+            # _mock suffixes and we wanted ALL of them to get them.
+            #
+            # But, with this change, we would just suffix _mock to those
+            # that don't have them, so ALL tests come from hardware mocking
+            # directories with is what --no-hw means.
+            if not options.test_dir_list[idx].endswith("_mock"):
+                options.test_dir_list[idx] += "_mock"
+
+    for test_dir in options.test_dir_list:
+        full_path = os.path.join(utils.script_dir, test_dir)
+        normalized_path = os.path.abspath(full_path)
+
+        if not normalized_path.startswith(os.path.abspath(utils.script_dir + os.path.sep)):
+            logger.fatal(
+                f"--test-dirs {test_dir} is not under {utils.script_dir}")
+
+        if not os.path.isdir(normalized_path):
+            logger.fatal(
+                f"--test-dirs {test_dir} does not exist or is not a directory")
 
     if options.break_at_failure:
         options.debug = True

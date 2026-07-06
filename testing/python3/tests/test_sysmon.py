@@ -62,6 +62,8 @@ def helper_dcgm_sysmon_cpu_hierarchy(hierarchy):
             assert cpu_owns_core == expected_bool, f'''node {node_id} cpu {cpu_index} cpu_owns_core {cpu_owns_core} expected {expected_bool}'''
 
 
+# NO HARDWARE
+
 @test_utils.run_only_on_numa_systems()
 @test_utils.run_with_standalone_host_engine(5,
                                             heEnv={DCGM_SUPPORT_NON_NVIDIA_CPU: "1"})
@@ -72,6 +74,8 @@ def test_dcgm_sysmon_cpu_hierarchy(handle):
     hierarchy = dcgm_agent.dcgmGetCpuHierarchy(handle)
     helper_dcgm_sysmon_cpu_hierarchy(hierarchy)
 
+
+# NO HARDWARE
 
 @test_utils.run_only_on_numa_systems()
 @test_utils.run_with_standalone_host_engine(5,
@@ -84,17 +88,22 @@ def test_dcgm_sysmon_cpu_hierarchy_v2(handle):
     helper_dcgm_sysmon_cpu_hierarchy(hierarchy)
 
 
+# NO HARDWARE
+
+@test_utils.run_only_if_lshw_exists()
 @test_utils.run_with_standalone_host_engine(5)
 @test_utils.run_only_with_live_cpus()
 def test_dcgm_sysmon_cpu_hierarchy_serial_number(handle, cpuIds):
     """
-    Verifies that we can read the serial number of NVIDIA CPUs with the CPU hierarchy 
+    Verifies that we can read the serial number of NVIDIA CPUs with the CPU hierarchy
     """
     hierarchy = dcgm_agent.dcgmGetCpuHierarchy_v2(handle)
     for i in range(hierarchy.numCpus):
         serial_number = hierarchy.cpus[i].serial
         assert serial_number, "Read empty serial number"
 
+
+# NO HARDWARE
 
 @test_utils.run_with_embedded_host_engine(
     heEnv={DCGM_SUPPORT_NON_NVIDIA_CPU: "1"})
@@ -111,10 +120,10 @@ def test_sysmon_reading_injected_values(handle, cpuIds, coreIds):
                       [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_NICE, 66.0],
                       [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_SYS, 25.0],
                       [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_IRQ, 10.0],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_TEMP_CURRENT, 71.0],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_TEMP_CELSIUS, 71.0],
                       [dcgm_fields.DCGM_FI_DEV_CPU_CLOCK_CURRENT, 1294],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_POWER_LIMIT, 150.0],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT, 113.1],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS, 150.0],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_POWER_WATTS, 113.1],
                       ]
 
     fieldIds = []
@@ -128,9 +137,14 @@ def test_sysmon_reading_injected_values(handle, cpuIds, coreIds):
     dcgmGroup.samples.WatchFields(fieldGroup, 1000000, 3600.0, 0)
 
     for ii in injection_info:
-        dcgm_field_injection_helpers.inject_value(handle, entityPair.entityId, ii[0],
-                                                  ii[1], offset, verifyInsertion=True,
-                                                  entityType=entityPair.entityGroupId)
+        dcgm_field_injection_helpers.inject_value(
+            handle,
+            entityPair.entityId,
+            ii[0],
+            ii[1],
+            offset,
+            verifyInsertion=True,
+            entityType=entityPair.entityGroupId)
 
     entities = [entityPair]
     values = dcgm_agent.dcgmEntitiesGetLatestValues(
@@ -147,6 +161,8 @@ def test_sysmon_reading_injected_values(handle, cpuIds, coreIds):
             assert value.value.dbl == injection_info[index][1], "Expected %f but read %f" % (
                 injection_info[index][1], value.value.dbl)
 
+
+# NO HARDWARE
 
 @test_utils.run_only_on_numa_systems()
 @test_utils.run_with_standalone_host_engine(
@@ -177,7 +193,10 @@ def test_dcgm_sysmon_fields_with_dcgmreader(handle):
     sleepTime = updateFrequencyUsec / 1000000 * 2
 
     dr = DcgmReader.DcgmReader(
-        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=cpuEntities)
+        fieldIds=fieldIds,
+        updateFrequency=updateFrequencyUsec,
+        maxKeepAge=30.0,
+        entities=cpuEntities)
     dr.SetHandle(handle)
 
     for i in range(5):

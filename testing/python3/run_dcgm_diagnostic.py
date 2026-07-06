@@ -41,7 +41,7 @@ PASSED_COUNT = 0
 base_test_name = "run_dcgm_diag"
 test_name = ""
 
-################################################################################
+##########################################################################
 
 
 def print_parseable_status(phase_name, iteration):
@@ -50,7 +50,7 @@ def print_parseable_status(phase_name, iteration):
     else:
         print("&&&& %s %s_%d" % (phase_name, test_name, iteration))
 
-################################################################################
+##########################################################################
 
 
 def remove_file_yolo(filename):
@@ -59,11 +59,11 @@ def remove_file_yolo(filename):
     '''
     try:
         os.remove(filename)
-    except:
+    except BaseException:
         pass
 
 
-################################################################################
+##########################################################################
 def setupEnvironment(cmdArgs):
     """
     Function to prepare the test environment
@@ -95,7 +95,8 @@ def setupEnvironment(cmdArgs):
         print("\nWarning! Please make sure to enable persistence mode")
         time.sleep(1)
 
-    # Collects the output of "nvidia-smi -q" and prints it out on the screen for debugging
+    # Collects the output of "nvidia-smi -q" and prints it out on the screen
+    # for debugging
     print("\n###################### NVSMI OUTPUT FOR DEBUGGING ONLY ##########################")
 
     (message, error) = nvidia_smi_utils.get_output()
@@ -135,14 +136,15 @@ DIAG_MIG_MULTIPLE_GPU_SUGGEST = "You must run on only one GPU at a time when MIG
 
 class TestRunner():
 
-    ################################################################################
+    ##########################################################################
     def __init__(self, cycles, dcgmiDiag, verbose):
         self.cycles = int(cycles)
         self.dcgmiDiag = dcgmiDiag
         self.verbose = verbose
         self.failed_runs = 0
         self.failing_tests = {}
-        # The exclusion list is a list of [textToSearchFor, whatToPrintIfFound] entries
+        # The exclusion list is a list of [textToSearchFor, whatToPrintIfFound]
+        # entries
         self.exclusions = [
             [DIAG_INFOROM_WARNING, DIAG_INFOROM_SUGGEST],
             [DIAG_CLOCKS_EVENT_WARNING, DIAG_CLOCKS_EVENT_SUGGEST],
@@ -151,7 +153,7 @@ class TestRunner():
             [DIAG_MIG_MULTIPLE_GPU_WARNING, DIAG_MIG_MULTIPLE_GPU_SUGGEST],
         ]
 
-    ################################################################################
+    ##########################################################################
     def matchesExclusion(self, warnings):
         for exclusion in self.exclusions:
             for warning in warnings:
@@ -167,12 +169,12 @@ class TestRunner():
                 (runIndex, failureInfo.GetTestname(),
                  failureInfo.GetFullError(), recommendation)
         else:
-            msg = "Iteration %d test '%s' failed: '%s'" % \
-                (runIndex, failureInfo.GetTestname(), failureInfo.GetFullError())
+            msg = "Iteration %d test '%s' failed: '%s'" % (
+                runIndex, failureInfo.GetTestname(), failureInfo.GetFullError())
 
         return msg
 
-    ################################################################################
+    ##########################################################################
     def checkForErrors(self):
         '''
         Check the NVVS JSON output for errors, filtering out any errors that are environmental rather
@@ -207,19 +209,24 @@ class TestRunner():
 
         return [numErrors, numExclusions]
 
-    ################################################################################
+    ##########################################################################
     def run_command(self, cycles):
         """
         Helper method to run a give command
         """
 
-        print("Running command: %s " % " ".join(
-            self.dcgmiDiag.BuildDcgmiCommand()))
         ret = 0
         fail_total = 0
         exclusion_total = 0
         for runIndex in range(cycles):
             print_parseable_status("RUNNING", runIndex)
+            # Toggle heartbeat for each run so that we can test both cases
+            if runIndex % 2 == 0:
+                self.dcgmiDiag.SetEnableHeartbeat(True)
+            else:
+                self.dcgmiDiag.SetEnableHeartbeat(False)
+            logger.debug("Running command: %s " % " ".join(
+                self.dcgmiDiag.BuildDcgmiCommand()))
             self.dcgmiDiag.Run()
             if self.dcgmiDiag.failed_list:
                 self.failing_tests[runIndex] = self.dcgmiDiag.failed_list
@@ -246,8 +253,9 @@ class TestRunner():
 
         if (failCount != 0):
             if self.failed_runs > 0:
-                print("%d of %d runs Failed. Please attach %s and %s to your bug report."
-                      % (self.failed_runs, cycles, logFile, debugFile))
+                print(
+                    "%d of %d runs Failed. Please attach %s and %s to your bug report." %
+                    (self.failed_runs, cycles, logFile, debugFile))
             print("ExclusionCount: %d" % exclusion_total)
             print("FailCount: %d" % fail_total)
             from ctypes import c_int8
@@ -258,13 +266,13 @@ class TestRunner():
 
         return [0, exclusionCount]
 
-    ################################################################################
+    ##########################################################################
     def run(self):
         self.dcgmiDiag.SetConfigFile(None)
         failCount, exclusionCount = self.run_command(self.cycles)
         return [failCount, exclusionCount]
 
-################################################################################
+##########################################################################
 
 
 def checkCmdLine(cmdArgs, settings):
@@ -274,7 +282,9 @@ def checkCmdLine(cmdArgs, settings):
         if len(cmdArgs.device_id) > 1 and ("," in cmdArgs.device_id):
             gpuIds = cmdArgs.device_id.split(",")
             for gpuId in gpuIds:
-                if not gpuId.isdigit():  # despite being named isdigit(), ensures the string is a valid unsigned integer
+                if not gpuId.isdigit(
+                    # despite being named isdigit(), ensures the string is a valid unsigned integer
+                ):
                     print("Please specify a comma separated list of device IDs.")
                     sys.exit(1)
         elif len(cmdArgs.device_id) > 1 and ("," not in cmdArgs.device_id):
@@ -282,8 +292,9 @@ def checkCmdLine(cmdArgs, settings):
             sys.exit(1)
         elif len(cmdArgs.device_id) == 1:
             if not cmdArgs.device_id[0].isdigit():
-                print("\"{}\" is not a valid device ID, please provide a number instead.".format(
-                    cmdArgs.device_id[0]))
+                print(
+                    "\"{}\" is not a valid device ID, please provide a number instead.".format(
+                        cmdArgs.device_id[0]))
                 sys.exit(1)
         else:
             print("Device list validated successfully")
@@ -294,7 +305,7 @@ def checkCmdLine(cmdArgs, settings):
         settings['verbose'] = False
 
     global test_name
-    if cmdArgs.test_names is not "":
+    if cmdArgs.test_names != "":
         settings['run_mode'] = 0
         settings['test_names'] = cmdArgs.test_names
         test_name = "%s_%s" % (base_test_name, cmdArgs.test_names)
@@ -306,31 +317,40 @@ def checkCmdLine(cmdArgs, settings):
     settings['dev_id'] = cmdArgs.device_id
     settings['cycles'] = cmdArgs.cycles
 
-################################################################################
+##########################################################################
 
 
 def parseCommandLine():
 
     parser = argparse.ArgumentParser(
         description="DCGM DIAGNOSTIC TEST FRAMEWORK")
-    parser.add_argument("-c", "--cycles", required=True,
-                        help="Number of test cycles to run, all tests are one cycle.")
-    parser.add_argument("-v", "--vulcan", action="store_true",
-                        help="Deprecated flag for running in the eris environment")
+    parser.add_argument(
+        "-c",
+        "--cycles",
+        required=True,
+        help="Number of test cycles to run, all tests are one cycle.")
+    parser.add_argument(
+        "-v",
+        "--vulcan",
+        action="store_true",
+        help="Deprecated flag for running in the eris environment")
     parser.add_argument("--verbose", action="store_true",
                         help="Sets verbose mode")
     parser.add_argument("-d", "--device-id",
                         help="Comma separated list of nvml device ids.")
     parser.add_argument("-r", "--run-mode", default=4,
                         help="Specify the tests to run: (1,2,3, or 4")
-    parser.add_argument("-t", "--test-names", default="",
-                        help="Specify a comma-separated list of test names. Will override run mode")
+    parser.add_argument(
+        "-t",
+        "--test-names",
+        default="",
+        help="Specify a comma-separated list of test names. Will override run mode")
 
     args = parser.parse_args()
 
     return args
 
-################################################################################
+##########################################################################
 
 
 def main(cmdArgs):
@@ -354,8 +374,9 @@ def main(cmdArgs):
         gpuIds = dcgmHandle.GetSystem().discovery.GetAllSupportedGpuIds()
         gpuGroups = test_utils.group_gpu_ids_by_sku(dcgmHandle.handle, gpuIds)
         if len(gpuGroups) > 1:
-            print("This system has more than one GPU SKU; DCGM Diagnostics is defaulting to just GPU(s) %s" %
-                  gpuGroups[0])
+            print(
+                "This system has more than one GPU SKU; DCGM Diagnostics is defaulting to just GPU(s) %s" %
+                gpuGroups[0])
         gpuGroup = gpuGroups[0]
         gpuIdStr = ",".join(map(str, gpuGroup))
         del (dcgmHandle)
@@ -368,8 +389,14 @@ def main(cmdArgs):
     paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
     paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
 
-    dcgmiDiag = DcgmiDiag.DcgmiDiag(gpuIds=gpuIdStr, testNamesStr=settings['test_names'], paramsStr=paramsStr,
-                                    dcgmiPrefix=prefix, runMode=settings['run_mode'], debugLevel=5, debugFile=debugFile)
+    dcgmiDiag = DcgmiDiag.DcgmiDiag(
+        gpuIds=gpuIdStr,
+        testNamesStr=settings['test_names'],
+        paramsStr=paramsStr,
+        dcgmiPrefix=prefix,
+        runMode=settings['run_mode'],
+        debugLevel=5,
+        debugFile=debugFile)
 
     # Start tests
     run_test = TestRunner(settings['cycles'], dcgmiDiag, settings['verbose'])

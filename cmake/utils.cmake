@@ -41,3 +41,27 @@ function (find_library_ex nameVal valPrefix)
     set ("${valPrefix}_ABSPATH" ${REALLIBNAME} PARENT_SCOPE)
     set ("${valPrefix}_LIBNAME" ${LIBNAME} PARENT_SCOPE)
 endfunction()
+
+# print_corrosion_target_properties
+#
+# Debug helper to print key properties of a Corrosion-imported target.
+#
+# Parameters:
+#   corrosion_target - The Corrosion target name to inspect.
+#
+function(print_corrosion_target_properties corrosion_target)
+    include(CMakePrintHelpers)
+    set(_targets ${corrosion_target})
+    foreach(_target IN ITEMS ${corrosion_target}-static ${corrosion_target}-shared)
+        if(TARGET ${_target})
+            list(APPEND _targets ${_target})
+        endif()
+    endforeach()
+    
+    cmake_print_properties(TARGETS ${_targets} PROPERTIES
+        NAME
+        TYPE
+        IMPORTED
+        IMPORTED_LOCATION
+    )
+endfunction()

@@ -527,6 +527,11 @@ dcgmReturn_t DcgmModuleDiag::ProcessMessage(dcgm_module_command_header_t *module
     {
         retSt = ProcessCoreMessage(moduleCommand);
     }
+    else if (moduleCommand->moduleId != DcgmModuleIdDiag)
+    {
+        DCGM_LOG_ERROR << "Unexpected module command for module " << moduleCommand->moduleId;
+        return DCGM_ST_BADPARAM;
+    }
     else
     {
         /*

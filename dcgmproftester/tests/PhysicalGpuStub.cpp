@@ -21,8 +21,9 @@ namespace DcgmNs::ProfTester
 {
 
 // Global test configuration for PhysicalGpu stub behavior
-static bool g_testIsMIG        = false;
-static std::string g_testBusId = "0000:01:00.0";
+static bool g_testIsMIG         = false;
+static std::string g_testBusId  = "0000:01:00.0";
+static bool g_testIsSynchronous = false;
 
 /**
  * Set test configuration for PhysicalGpu stub
@@ -31,6 +32,11 @@ void SetPhysicalGpuTestConfig(bool isMIG, std::string const &busId)
 {
     g_testIsMIG = isMIG;
     g_testBusId = busId;
+}
+
+void SetPhysicalGpuSyncMode(bool isSynchronous)
+{
+    g_testIsSynchronous = isSynchronous;
 }
 
 /**
@@ -83,7 +89,7 @@ unsigned int PhysicalGpu::GetGpuId() const
 
 bool PhysicalGpu::IsSynchronous() const
 {
-    return false; // Disable synchronous mode for tests
+    return g_testIsSynchronous;
 }
 
 bool PhysicalGpu::UseCublas() const

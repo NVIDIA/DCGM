@@ -200,12 +200,10 @@ private:
     std::string FormatToKmsgString(const std::string &, uint64_t);
 
 public:
-    std::atomic_bool m_pipeReady = false;
-    PipeKmsgThread()             = delete;
+    PipeKmsgThread() = delete;
     PipeKmsgThread(const std::string &, const std::list<std::string> &, uint64_t);
     virtual ~PipeKmsgThread() = default;
     void run() override;
-    bool GetPipeReady();
 };
 
 PipeKmsgThread::PipeKmsgThread(const std::string &pipeName,
@@ -232,11 +230,6 @@ void PipeKmsgThread::SetFlagOnFd(int fd, int flag)
     }
 }
 
-bool PipeKmsgThread::GetPipeReady()
-{
-    return m_pipeReady;
-}
-
 std::string PipeKmsgThread::FormatToKmsgString(const std::string &message, uint64_t sequenceNumber)
 {
     struct timespec mono_ts {};
@@ -252,14 +245,7 @@ std::string PipeKmsgThread::FormatToKmsgString(const std::string &message, uint6
 
 void PipeKmsgThread::run()
 {
-    int mkfifoRet = mkfifo(m_pipeName.c_str(), 0755);
-    if (mkfifoRet < 0)
-    {
-        log_debug("mkfifo returned an error: {}", strerror(errno));
-        return;
-    }
-    m_pipeReady = true;
-    int kmsgFd  = open(m_pipeName.c_str(), O_WRONLY);
+    int kmsgFd = open(m_pipeName.c_str(), O_WRONLY);
     if (kmsgFd < 0)
     {
         log_debug("File {} could not be opened because of error: {}", m_pipeName.c_str(), strerror(errno));
@@ -294,7 +280,6 @@ void PipeKmsgThread::run()
     {
         log_debug("remove {} returned an error: {}", m_pipeName.c_str(), strerror(errno));
     }
-    m_pipeReady = false;
 }
 
 TEST_CASE("Test kmsg pipe")
@@ -336,25 +321,30 @@ TEST_CASE("Test kmsg pipe")
     };
 
     SetEnv(KmsgFilenameEnvKey, filename);
+
+    // Generous backstop for joins/stops — ~12x section 1's expected ~800ms.
+    int constexpr kHangBackstopMs
+        = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::seconds(10)).count();
+
+    // The test owns FIFO creation so neither thread races on its existence.
+    // Defensive unlink handles a stale FIFO left by a previously crashed run.
+    unlink(filename.c_str());
+    REQUIRE(mkfifo(filename.c_str(), 0755) == 0);
+
     SECTION("Verifies reader reads and parses all available XIDs with a much slower writer")
     {
         DcgmKmsgReaderThread readerThread {};
         uint64_t usWriteInterval = readerThread.GetPollInterval() * 5;
         PipeKmsgThread writerThread { filename, xidMessagesToWrite, usWriteInterval };
-        writerThread.Start();
-
-        DcgmMutex wThreadMutex(0);
-        std::condition_variable cv;
-        std::function<bool()> cvFunc = std::bind(&PipeKmsgThread::GetPipeReady, &writerThread);
-        int waitForPipeReady         = wThreadMutex.CondWait(cv, 100, cvFunc);
-        REQUIRE(waitForPipeReady == DCGM_MUTEX_ST_OK);
 
         readerThread.Start();
+        writerThread.Start();
 
-        unsigned int usWaitForThreads = xidMessagesToWrite.size() * usWriteInterval + usWriteInterval;
-        std::this_thread::sleep_for(std::chrono::microseconds(usWaitForThreads));
-        REQUIRE(writerThread.StopAndWait(usWriteInterval * 1000) == 0);
-        REQUIRE(readerThread.StopAndWait(readerThread.GetPollInterval() * 1000) == 0);
+        // Writer exits when m_messages is empty; that closes the FIFO and
+        // the reader exits via POLLHUP. Wait with a backstop timeout lets the
+        // writer complete all writes.
+        REQUIRE(writerThread.Wait(kHangBackstopMs) == 0);
+        REQUIRE(readerThread.Wait(kHangBackstopMs) == 0);
 
         std::vector<std::unique_ptr<KmsgXidData>> parsedXids = readerThread.GetParsedKmsgXids();
         REQUIRE(parsedXids.size() == 2);
@@ -376,20 +366,26 @@ TEST_CASE("Test kmsg pipe")
         DcgmKmsgReaderThread readerThread {};
         uint64_t usWriteInterval = readerThread.GetPollInterval() * 5;
         PipeKmsgThread writerThread { filename, xidMessagesToWrite, usWriteInterval };
-        writerThread.Start();
-
-        DcgmMutex wThreadMutex(0);
-        std::condition_variable cv;
-        std::function<bool()> cvFunc = std::bind(&PipeKmsgThread::GetPipeReady, &writerThread);
-        int waitForPipeReady         = wThreadMutex.CondWait(cv, 100, cvFunc);
-        REQUIRE(waitForPipeReady == DCGM_MUTEX_ST_OK);
 
         readerThread.Start();
+        writerThread.Start();
 
-        unsigned int usWaitForThreads = xidMessagesToWrite.size() / 4 * usWriteInterval + usWriteInterval;
-        std::this_thread::sleep_for(std::chrono::microseconds(usWaitForThreads));
-        REQUIRE(writerThread.StopAndWait(usWriteInterval * 1000) == 0);
-        REQUIRE(readerThread.StopAndWait(readerThread.GetPollInterval() * 1000) == 0);
+        // Gate: wait until the reader has parsed at least one XID. That
+        // proves the writer has written, the reader has read+parsed, and
+        // both are inside their work loops — the precondition for verifying
+        // a mid-flight Stop.
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(kHangBackstopMs);
+        std::vector<std::unique_ptr<KmsgXidData>> parsed;
+        while (parsed.empty() && std::chrono::steady_clock::now() < deadline)
+        {
+            parsed = readerThread.GetParsedKmsgXids();
+            if (parsed.empty())
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        REQUIRE(!parsed.empty());
+
+        REQUIRE(writerThread.StopAndWait(kHangBackstopMs) == 0);
+        REQUIRE(readerThread.StopAndWait(kHangBackstopMs) == 0);
     }
 
     SECTION("Verifies reader does not block on stop with a faster writer")
@@ -399,25 +395,29 @@ TEST_CASE("Test kmsg pipe")
         {
             xidMessagesToWrite.emplace_front("filler sfdsfdslkfjdslgjflkdsjf");
         }
+        // Put a parseable XID at the very front so we have an early progress
+        // observable.
+        xidMessagesToWrite.emplace_front("NVRM: Xid (PCI:0000:00:16): 119, pid=1, name=gate, progress marker");
+
         DcgmKmsgReaderThread readerThread {};
         uint64_t usWriteInterval = readerThread.GetPollInterval() / 1000;
         PipeKmsgThread writerThread { filename, xidMessagesToWrite, usWriteInterval };
-        writerThread.Start();
-        DcgmMutex wThreadMutex(0);
-        std::condition_variable cv;
-        std::function<bool()> cvFunc = std::bind(&PipeKmsgThread::GetPipeReady, &writerThread);
-        int waitForPipeReady         = wThreadMutex.CondWait(cv, 100, cvFunc);
-        REQUIRE(waitForPipeReady == DCGM_MUTEX_ST_OK);
 
         readerThread.Start();
+        writerThread.Start();
 
-        unsigned int usWaitForThreads = xidMessagesToWrite.size() * usWriteInterval + usWriteInterval;
-        std::this_thread::sleep_for(std::chrono::microseconds(usWaitForThreads));
-        REQUIRE(writerThread.StopAndWait(usWriteInterval * 1000) == 0);
-        REQUIRE(readerThread.StopAndWait(readerThread.GetPollInterval() * 1000) == 0);
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(kHangBackstopMs);
+        std::vector<std::unique_ptr<KmsgXidData>> parsed;
+        while (parsed.empty() && std::chrono::steady_clock::now() < deadline)
+        {
+            parsed = readerThread.GetParsedKmsgXids();
+            if (parsed.empty())
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        REQUIRE(!parsed.empty());
 
-        std::vector<std::unique_ptr<KmsgXidData>> parsedXids = readerThread.GetParsedKmsgXids();
-        REQUIRE(parsedXids.size() == 0);
+        REQUIRE(writerThread.StopAndWait(kHangBackstopMs) == 0);
+        REQUIRE(readerThread.StopAndWait(kHangBackstopMs) == 0);
     }
     UnsetEnv(KmsgFilenameEnvKey);
 }

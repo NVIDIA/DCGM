@@ -23,16 +23,21 @@
 #include <cstdlib>
 #include <dcgm_nvml.h>
 #include <dcgm_structs.h>
+#include <fstream>
 #include <memory>
 #include <ranges>
 
-#include "mocks/MockDcgmApi.h"
-#include "mocks/MockDcgmCoreProxy.h"
-#include "mocks/MockDcgmResourceHandle.h"
-#include "mocks/MockMnDiagMpiRunner.h"
-#include "mocks/MockMnDiagStateMachine.h"
-#include "mocks/MockTcpSSHTunnelManager.h"
-#include "mocks/MockUdsSSHTunnelManager.h"
+#include "MockDcgmApi.h"
+#include "MockDcgmCoreProxy.h"
+#include "MockDcgmResourceHandle.h"
+#include "MockMnDiagMpiRunner.h"
+#include "MockMnDiagStateMachine.h"
+#include "MockTcpSSHTunnelManager.h"
+#include "MockUdsSSHTunnelManager.h"
+
+// Force a UID of 0, corresponding to the root user. This is so that there will
+// always be a username associated with the UID
+static constexpr uid_t EFFECTIVE_UID = 0;
 
 // Mock implementation of processModuleCommandAtHostEngine for tests
 dcgmReturn_t processModuleCommandAtHostEngine(dcgmHandle_t,
@@ -152,24 +157,24 @@ public:
         return m_manager.GetStatus();
     }
 
-    dcgmReturn_t ReserveRemoteResources()
+    dcgmReturn_t ReserveRemoteResources(dcgmMultinodeTestType_t testType = dcgmMultinodeTestType_t::mnubergemm)
     {
-        return m_manager.ReserveRemoteResources();
+        return m_manager.ReserveRemoteResources(testType);
     }
 
-    dcgmReturn_t ReleaseRemoteResources()
+    dcgmReturn_t ReleaseRemoteResources(dcgmMultinodeTestType_t testType = dcgmMultinodeTestType_t::mnubergemm)
     {
-        return m_manager.ReleaseRemoteResources();
+        return m_manager.ReleaseRemoteResources(testType);
     }
 
-    dcgmReturn_t GetNodeInfo()
+    dcgmReturn_t GetNodeInfo(dcgmMultinodeTestType_t testType = dcgmMultinodeTestType_t::mnubergemm)
     {
-        return m_manager.GetNodeInfo();
+        return m_manager.GetNodeInfo(testType);
     }
 
-    dcgmReturn_t AuthorizeRemoteConnections()
+    dcgmReturn_t AuthorizeRemoteConnections(dcgmMultinodeTestType_t testType = dcgmMultinodeTestType_t::mnubergemm)
     {
-        return m_manager.AuthorizeRemoteConnections();
+        return m_manager.AuthorizeRemoteConnections(testType);
     }
 
     dcgmReturn_t RevokeRemoteAuthorizations()
@@ -205,14 +210,21 @@ public:
         return m_manager.GetSupportedSkus();
     }
 
-    dcgmReturn_t GetMnubergemmPathHeadNode(std::string &path)
-    {
-        return m_manager.GetMnubergemmPathHeadNode(path);
-    }
-
     int GetCudaVersion()
     {
         return m_manager.GetCudaVersion();
+    }
+
+    /**
+     * @brief Set process detection parameters for testing
+     *
+     * @param timeout Timeout for process detection
+     * @param retryInterval Interval between retry attempts
+     */
+    void SetProcessDetectionParams(std::chrono::seconds timeout, std::chrono::milliseconds retryInterval)
+    {
+        m_manager.m_processDetectionTimeout       = timeout;
+        m_manager.m_processDetectionRetryInterval = retryInterval;
     }
 
     std::vector<pid_t> FindSshZombieProcesses(std::filesystem::path const &procPath)
@@ -288,6 +300,11 @@ public:
     void SetCurrentNodeId(unsigned int currentNodeId)
     {
         m_manager.m_currentNodeId = currentNodeId;
+    }
+
+    void SetCurrentTestInfo(TestInfo testInfo)
+    {
+        m_manager.m_currentTestInfo = std::move(testInfo);
     }
 
     /**
@@ -373,7 +390,7 @@ public:
             connInfo.handle           = handle;
             connInfo.remotePort       = 5555 + i;
             connInfo.isLoopback       = false;
-            connInfo.uid              = 1000;
+            connInfo.uid              = EFFECTIVE_UID;
             connInfo.remoteSocketPath = "";
 
             m_manager.m_connections[hostname] = std::move(connInfo);
@@ -389,7 +406,7 @@ public:
         connInfo.handle           = 0;
         connInfo.remotePort       = 0;
         connInfo.isLoopback       = true;
-        connInfo.uid              = 1000;
+        connInfo.uid              = EFFECTIVE_UID;
         connInfo.remoteSocketPath = "";
 
         m_manager.m_connections["localhost"] = std::move(connInfo);
@@ -1419,6 +1436,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Mn Diag Handler Tests [mndiag]")
             // Set an initial status
             SetStatus(MnDiagStatus::RESERVED);
 
+            // Use short timeout for testing to avoid 60-second wait in retry loop
+            SetProcessDetectionParams(std::chrono::seconds(1), std::chrono::milliseconds(100));
+
             // Prepare message structure
             dcgm_mndiag_msg_resource_t resourceMsg {};
             resourceMsg.header.version    = dcgm_mndiag_msg_resource_version1;
@@ -1625,7 +1645,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             // Configure the second request to fail by setting up handle-specific callbacks
             GetDcgmApi()->SetHandleCommandCallback(11,
                                                    dcgmMultinodeRequestType_t::ReserveResources,
-                                                   [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_v1 *request) {
+                                                   [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t *request) {
                                                        request->requestData.resource.response = MnDiagStatus::FAILED;
                                                        return DCGM_ST_IN_USE;
                                                    });
@@ -1706,7 +1726,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             GetDcgmApi()->SetHandleCommandCallback(
                 11,
                 dcgmMultinodeRequestType_t::ReleaseResources,
-                [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_v1 * /* request */) {
+                [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t * /* request */) {
                     return DCGM_ST_CONNECTION_NOT_VALID;
                 });
 
@@ -1757,7 +1777,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "Remote Resources Management Tests with non
             GetDcgmApi()->SetHandleCommandCallback(
                 11,
                 dcgmMultinodeRequestType_t::GetNodeInfo,
-                [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_v1 * /* request */) {
+                [](dcgmHandle_t /* handle */, dcgmMultinodeRequest_t * /* request */) {
                     return DCGM_ST_DIAG_BAD_JSON;
                 });
 
@@ -1800,7 +1820,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
 
         // Test with a list of hosts using TCP connections
         std::vector<std::string> hostList = { "node1:5555", "node2:6666" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000); // uid 1000
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
 
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
@@ -1812,11 +1832,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         // Since connections are now synchronous, we can verify the order
         REQUIRE(std::get<0>(calls[0]) == "node1");
         REQUIRE(std::get<1>(calls[0]) == 5555);
-        REQUIRE(std::get<2>(calls[0]).value() == 1000);
+        REQUIRE(std::get<2>(calls[0]).value() == EFFECTIVE_UID);
 
         REQUIRE(std::get<0>(calls[1]) == "node2");
         REQUIRE(std::get<1>(calls[1]) == 6666);
-        REQUIRE(std::get<2>(calls[1]).value() == 1000);
+        REQUIRE(std::get<2>(calls[1]).value() == EFFECTIVE_UID);
 
         // Verify DCGM API was called correctly for connections only
         REQUIRE(GetDcgmApi()->GetConnectCallCount() == 2);
@@ -1856,7 +1876,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
 
         // Test with a list of hosts using UDS connections
         std::vector<std::string> hostList = { "node1:unix:///var/run/dcgm.socket", "node2:unix:///tmp/dcgm.socket" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000); // uid 1000
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
 
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
@@ -1868,11 +1888,11 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         // Since connections are now synchronous, we can verify the order
         REQUIRE(std::get<0>(calls[0]) == "node1");
         REQUIRE(std::get<1>(calls[0]) == "/var/run/dcgm.socket");
-        REQUIRE(std::get<2>(calls[0]).value() == 1000);
+        REQUIRE(std::get<2>(calls[0]).value() == EFFECTIVE_UID);
 
         REQUIRE(std::get<0>(calls[1]) == "node2");
         REQUIRE(std::get<1>(calls[1]) == "/tmp/dcgm.socket");
-        REQUIRE(std::get<2>(calls[1]).value() == 1000);
+        REQUIRE(std::get<2>(calls[1]).value() == EFFECTIVE_UID);
 
         // Verify DCGM API was called correctly for connections only
         REQUIRE(GetDcgmApi()->GetConnectCallCount() == 2);
@@ -1916,7 +1936,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
 
         // Test with a list of hosts using both TCP and UDS connections
         std::vector<std::string> hostList = { "node1:5555", "node2:unix:///tmp/dcgm.socket" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000); // uid 1000
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
 
         // Verify result
         REQUIRE(result == DCGM_ST_OK);
@@ -1929,7 +1949,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         bool foundTcpNode = false;
         for (const auto &call : tcpCalls)
         {
-            if (std::get<0>(call) == "node1" && std::get<1>(call) == 5555 && std::get<2>(call).value() == 1000)
+            if (std::get<0>(call) == "node1" && std::get<1>(call) == 5555 && std::get<2>(call).value() == EFFECTIVE_UID)
             {
                 foundTcpNode = true;
                 break;
@@ -1946,7 +1966,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
         for (const auto &call : udsCalls)
         {
             if (std::get<0>(call) == "node2" && std::get<1>(call) == "/tmp/dcgm.socket"
-                && std::get<2>(call).value() == 1000)
+                && std::get<2>(call).value() == EFFECTIVE_UID)
             {
                 foundUdsNode = true;
                 break;
@@ -2021,7 +2041,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
 
         // Test with a host that will fail to create a tunnel
         std::vector<std::string> hostList = { "node1:5555" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000); // uid 1000
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
 
         // Verify result indicates failure
         REQUIRE(result == DCGM_ST_REMOTE_SSH_CONNECTION_FAILED);
@@ -2053,7 +2073,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "ConnectRemoteNodes and DisconnectRemoteNod
 
         // Test with a host that will fail to connect to DCGM
         std::vector<std::string> hostList = { "node1:5555" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000); // uid 1000
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
 
         // Verify result indicates connection failure
         REQUIRE(result == DCGM_ST_CONNECTION_NOT_VALID);
@@ -2225,7 +2245,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "CleanupConnections Tests [mndiag]")
 
         // Connect to a mix of TCP and UDS nodes
         std::vector<std::string> hostList = { "node1:5555", "node2:unix:///tmp/dcgm.socket" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
         REQUIRE(result == DCGM_ST_OK);
 
         // Reset counters for cleanup phase
@@ -2284,7 +2304,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
 
         // Connect to a mix of TCP and UDS nodes
         std::vector<std::string> hostList = { "node1:5555", "node2:unix:///tmp/dcgm.socket" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000); // uid 1000
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0); // No authorization in ConnectRemoteNodes
 
@@ -2360,7 +2380,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "DisconnectRemoteNodes Tests [mndiag]")
         GetTcpSSHTunnelManager()->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
 
         std::vector<std::string> hostList = { "node1:5555" };
-        dcgmReturn_t result               = ConnectRemoteNodes(hostList, 1000);
+        dcgmReturn_t result               = ConnectRemoteNodes(hostList, EFFECTIVE_UID);
         REQUIRE(result == DCGM_ST_OK);
 
         // Authorize the connection first
@@ -2423,15 +2443,12 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
 
-        // Add path capture for validation from both StateMachine and MPI Runner
+        // Add path capture for validation from StateMachine
         std::string capturedStateMachinePath;
-        std::string capturedMpiRunnerPath;
         auto mockStateMachine
             = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
-        mockStateMachine->SetMnubergemmPathCallback(
+        mockStateMachine->SetExpectedBinaryPathCallback(
             [&capturedStateMachinePath](std::string const &path) { capturedStateMachinePath = path; });
-        mockMpiRunnerFactory->SetMnubergemmPathCallback(
-            [&capturedMpiRunnerPath](std::string const &path) { capturedMpiRunnerPath = path; });
 
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
 
@@ -2454,6 +2471,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
 
         // Configure MPI runner factory behavior
         // The mock factory's CreateMpiRunner method will return a MockMnDiagMpiRunner with default behaviors
+        mockMpiRunnerFactory->SetMockTestBinaryPath(GetMockPath());
 
         // Install mock objects
         SetDcgmApi(std::move(mockDcgmApi));
@@ -2465,6 +2483,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // Create test input parameters
         dcgmRunMnDiag_t params {};
         params.version = dcgmRunMnDiag_version;
+        SafeCopyTo(params.testName, "mnubergemm");
         SafeCopyTo(params.hostList[0], "localhost");
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
@@ -2479,7 +2498,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockCudaVersion(12000);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_OK);
@@ -2496,10 +2515,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().launchMpiProcessCount == 1);
         REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().waitCount == 1);
 
-        // Add new verification for mnubergemm path
+        // Verify state machine received the binary path
         std::string mockPath = GetMockPath();
         REQUIRE(capturedStateMachinePath.find(mockPath) != std::string::npos);
-        REQUIRE(capturedMpiRunnerPath.find(mockPath) != std::string::npos);
     }
 
     SECTION("Successful execution of RunHeadNode with custom mnubergemm path")
@@ -2511,15 +2529,12 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         auto mockTcpSSHTunnelManager = std::make_unique<MockTcpSSHTunnelManager>();
         auto mockMpiRunnerFactory    = std::make_unique<MockMnDiagMpiRunnerFactory>();
 
-        // Add path capture for validation from both StateMachine and MPI Runner
+        // Add path capture for validation from StateMachine
         std::string capturedStateMachinePath;
-        std::string capturedMpiRunnerPath;
         auto mockStateMachine
             = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
-        mockStateMachine->SetMnubergemmPathCallback(
+        mockStateMachine->SetExpectedBinaryPathCallback(
             [&capturedStateMachinePath](std::string const &path) { capturedStateMachinePath = path; });
-        mockMpiRunnerFactory->SetMnubergemmPathCallback(
-            [&capturedMpiRunnerPath](std::string const &path) { capturedMpiRunnerPath = path; });
 
         // Set env to custom path
         std::string customPath = "/bin/true";
@@ -2546,6 +2561,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
 
         // Configure MPI runner factory behavior
         // The mock factory's CreateMpiRunner method will return a MockMnDiagMpiRunner with default behaviors
+        mockMpiRunnerFactory->SetMockTestBinaryPath(customPath);
 
         // Install mock objects
         SetDcgmApi(std::move(mockDcgmApi));
@@ -2557,6 +2573,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // Create test input parameters
         dcgmRunMnDiag_t params {};
         params.version = dcgmRunMnDiag_version;
+        SafeCopyTo(params.testName, "mnubergemm");
         SafeCopyTo(params.hostList[0], "localhost");
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
@@ -2571,7 +2588,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockCudaVersion(12000);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_OK);
@@ -2588,9 +2605,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().launchMpiProcessCount == 1);
         REQUIRE(GetMpiRunnerFactory()->GetLastRunnerStats().waitCount == 1);
 
-        // Verify both StateMachine and MPI Runner received the same custom path
+        // Verify StateMachine received the custom path
         REQUIRE(capturedStateMachinePath == customPath);
-        REQUIRE(capturedMpiRunnerPath == customPath);
 
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedMnubergemmPath);
     }
@@ -2618,6 +2634,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // Create test input parameters
         dcgmRunMnDiag_t params {};
         params.version = dcgmRunMnDiag_version;
+        SafeCopyTo(params.testName, "mnubergemm");
         SafeCopyTo(params.hostList[0], "localhost");
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
@@ -2631,7 +2648,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_REMOTE_SSH_CONNECTION_FAILED);
@@ -2674,6 +2691,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // Create test input parameters
         dcgmRunMnDiag_t params {};
         params.version = dcgmRunMnDiag_version;
+        SafeCopyTo(params.testName, "mnubergemm");
         SafeCopyTo(params.hostList[0], "localhost");
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
@@ -2687,7 +2705,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_IN_USE);
@@ -2725,11 +2743,14 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         class CustomMockMpiRunnerFactory : public MockMnDiagMpiRunnerFactory
         {
         public:
-            std::unique_ptr<MnDiagMpiRunnerBase> CreateMpiRunner(DcgmCoreProxyBase & /* coreProxy */) override
+            std::unique_ptr<MnDiagMpiRunnerBase> CreateMpiRunner(DcgmCoreProxyBase & /* coreProxy */,
+                                                                 dcgmMultinodeTestType_t /* testType */,
+                                                                 uid_t /* effectiveUid */) override
             {
                 m_createMpiRunnerCount++;
                 auto runner                = std::make_unique<MockMnDiagMpiRunner>();
                 runner->m_mockLaunchResult = DCGM_ST_GENERIC_ERROR;
+                runner->SetMockTestBinaryPath("/fake/mnubergemm");
                 // Store the runner ID before returning it
                 m_lastRunnerId = static_cast<MockMnDiagMpiRunner *>(runner.get())->GetRunnerId();
                 return runner;
@@ -2748,6 +2769,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // Create test input parameters
         dcgmRunMnDiag_t params {};
         params.version = dcgmRunMnDiag_version;
+        SafeCopyTo(params.testName, "mnubergemm");
         SafeCopyTo(params.hostList[0], "localhost");
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
@@ -2761,7 +2783,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
 
         // Verify results
         REQUIRE(result == DCGM_ST_GENERIC_ERROR);
@@ -2813,6 +2835,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         // Create test input parameters
         dcgmRunMnDiag_t params {};
         params.version = dcgmRunMnDiag_version;
+        SafeCopyTo(params.testName, "mnubergemm");
         SafeCopyTo(params.hostList[0], "localhost");
         SafeCopyTo(params.hostList[1], "test-node-1:5555");
 
@@ -2829,7 +2852,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         dcgmReturn_t driverVersionResult = DCGM_ST_NVML_ERROR;
         GetDcgmCoreProxy()->SetMockDriverVersionResult(driverVersionResult);
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
 
         // Verify results. This should be the same as the mock driver version result since that is a
         // fatal error and will halt execution
@@ -2851,7 +2874,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         REQUIRE(GetMpiRunnerFactory()->m_createMpiRunnerCount == 0);
     }
 
-    SECTION("RunHeadNode fails when GetMnubergemmPathHeadNode returns error")
+    SECTION("RunHeadNode fails when factory returns null runner")
     {
         // Create mock objects
         auto mockDcgmApi             = std::make_unique<MockDcgmApi>();
@@ -2861,25 +2884,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
             = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
         auto mockCoreProxy = std::make_unique<MockDcgmCoreProxy>();
 
-        // Configure StateMachine behavior using Config struct
-        MockMnDiagStateMachine::Config config;
-        config.shouldReserveReturn         = true;
-        config.detectedProcessInfo         = { { 12345, "mnubergemm" } };
-        config.notifyProcessDetectedReturn = true;
-        mockStateMachine->SetConfig(config);
-
-        // Configure tunnel manager behavior
-        mockTcpSSHTunnelManager->SetDefaultRemotePort(12345);
-        mockTcpSSHTunnelManager->SetStartSessionResult(DcgmNs::Common::RemoteConn::detail::TunnelState::Active);
-
-        // Configure DCGM API behavior
-        mockDcgmApi->SetConnectResult(DCGM_ST_OK);
-        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
-        mockDcgmApi->SetReserveResourcesResponse(MnDiagStatus::RESERVED);
-        mockDcgmApi->SetDetectProcessResponse(MnDiagStatus::RUNNING);
-
-        // Configure CoreProxy to return error for CUDA version
-        mockCoreProxy->SetMockCudaVersion(0);
+        // Configure factory to return nullptr (simulates unknown test type)
+        mockMpiRunnerFactory->SetReturnNullNext();
 
         // Install mock objects
         SetDcgmApi(std::move(mockDcgmApi));
@@ -2892,7 +2898,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         dcgmRunMnDiag_t params {};
         params.version = dcgmRunMnDiag_version;
         SafeCopyTo(params.hostList[0], "localhost");
-        SafeCopyTo(params.hostList[1], "test-node-1:5555");
+        SafeCopyTo(params.testName, "mnubergemm");
 
         // Create response structure to be populated
         dcgmMnDiagResponse_t response {};
@@ -2904,13 +2910,13 @@ TEST_CASE_METHOD(MnDiagManagerTests, "RunHeadNode Tests [mndiag]")
         GetDcgmCoreProxy()->SetMockGpuIdsSameSku(true);
 
         // Call method under test
-        dcgmReturn_t result = m_manager.RunHeadNode(params, 1000, response);
+        dcgmReturn_t result = m_manager.RunHeadNode(params, EFFECTIVE_UID, response);
 
-        // Verify results - should fail because GetMnubergemmPathHeadNode returns DCGM_ST_NO_DATA
-        REQUIRE(result == DCGM_ST_NO_DATA);
+        // Verify results - should fail because factory returned null
+        REQUIRE(result == DCGM_ST_BADPARAM);
 
-        // Verify that MPI runner was not created since the path resolution failed early
-        REQUIRE(GetMpiRunnerFactory()->m_createMpiRunnerCount == 0);
+        // Verify factory was called once
+        REQUIRE(GetMpiRunnerFactory()->m_createMpiRunnerCount == 1);
     }
 }
 
@@ -3198,14 +3204,15 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
                 capturedTimeout = timeout;
             });
 
-        mockStateMachine->SetMnubergemmPathCallback([&capturedPath](std::string const &path) { capturedPath = path; });
+        mockStateMachine->SetExpectedBinaryPathCallback(
+            [&capturedPath](std::string const &path) { capturedPath = path; });
 
         SetStateMachine(std::move(mockStateMachine));
 
         // Create a parameter broadcast message
         dcgm_mndiag_msg_run_params_t paramMsg {};
         paramMsg.header.length     = sizeof(paramMsg);
-        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version1;
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
         paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
         paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
 
@@ -3218,7 +3225,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
 
         // Set the mnubergemm path
         std::string testPath = "/test/path/mnubergemm";
-        SafeCopyTo(paramMsg.runParams.mnubergemmPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnubergemm.");
 
         // Call the method under test
         dcgmReturn_t result = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&paramMsg);
@@ -3233,23 +3241,28 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
     SECTION("Valid parameter broadcast without time_to_run")
     {
         // Setup mock state machine
-        bool timeoutWasSet = false;
+        bool timeoutWasSet                   = false;
+        std::chrono::seconds capturedTimeout = std::chrono::seconds(0);
         std::string capturedPath;
 
         auto mockStateMachine
             = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
 
         mockStateMachine->SetProcessExecutionTimeoutCallback(
-            [&timeoutWasSet](std::chrono::seconds /* timeout */) { timeoutWasSet = true; });
+            [&timeoutWasSet, &capturedTimeout](std::chrono::seconds timeout) {
+                timeoutWasSet   = true;
+                capturedTimeout = timeout;
+            });
 
-        mockStateMachine->SetMnubergemmPathCallback([&capturedPath](std::string const &path) { capturedPath = path; });
+        mockStateMachine->SetExpectedBinaryPathCallback(
+            [&capturedPath](std::string const &path) { capturedPath = path; });
 
         SetStateMachine(std::move(mockStateMachine));
 
         // Create a parameter broadcast message
         dcgm_mndiag_msg_run_params_t paramMsg {};
         paramMsg.header.length     = sizeof(paramMsg);
-        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version1;
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
         paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
         paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
 
@@ -3262,14 +3275,16 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
 
         // Set the mnubergemm path
         std::string testPath = "/test/path/mnubergemm";
-        SafeCopyTo(paramMsg.runParams.mnubergemmPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnubergemm.");
 
         // Call the method under test
         dcgmReturn_t result = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&paramMsg);
 
         // Verify results
         REQUIRE(result == DCGM_ST_OK);
-        REQUIRE(timeoutWasSet == false); // No timeout should be set
+        REQUIRE(timeoutWasSet == true); // Timeout should always be set (to default when not specified)
+        REQUIRE(capturedTimeout == std::chrono::seconds(3600)); // Default timeout is 3600 seconds
         REQUIRE(capturedPath == testPath);
     }
 
@@ -3284,7 +3299,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
         // Create a parameter broadcast message
         dcgm_mndiag_msg_run_params_t paramMsg {};
         paramMsg.header.length     = sizeof(paramMsg);
-        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version1;
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
         paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
         paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
 
@@ -3296,7 +3311,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
 
         // Set the mnubergemm path
         std::string testPath = "/test/path/mnubergemm";
-        SafeCopyTo(paramMsg.runParams.mnubergemmPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnubergemm.");
 
         // Call the method under test
         dcgmReturn_t result = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&paramMsg);
@@ -3321,14 +3337,15 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
                 capturedTimeout = timeout;
             });
 
-        mockStateMachine->SetMnubergemmPathCallback([&capturedPath](std::string const &path) { capturedPath = path; });
+        mockStateMachine->SetExpectedBinaryPathCallback(
+            [&capturedPath](std::string const &path) { capturedPath = path; });
 
         SetStateMachine(std::move(mockStateMachine));
 
         // Create a parameter broadcast message
         dcgm_mndiag_msg_run_params_t paramMsg {};
         paramMsg.header.length     = sizeof(paramMsg);
-        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version1;
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
         paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
         paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
 
@@ -3341,7 +3358,8 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
 
         // Set the mnubergemm path
         std::string testPath = "/test/path/mnubergemm";
-        SafeCopyTo(paramMsg.runParams.mnubergemmPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnubergemm.");
 
         // Call the method under test
         dcgmReturn_t result = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&paramMsg);
@@ -3350,6 +3368,150 @@ TEST_CASE_METHOD(MnDiagManagerTests, "HandleBroadcastRunParameters [mndiag]")
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(timeoutWasSet == true);
         REQUIRE(capturedTimeout == std::chrono::seconds(100));
+        REQUIRE(capturedPath == testPath);
+    }
+
+    SECTION("Negative time_to_run value rejected")
+    {
+        // Setup mock state machine
+        auto mockStateMachine
+            = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
+
+        SetStateMachine(std::move(mockStateMachine));
+
+        // Create a parameter broadcast message
+        dcgm_mndiag_msg_run_params_t paramMsg {};
+        paramMsg.header.length     = sizeof(paramMsg);
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
+        paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
+        paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
+
+        paramMsg.runParams.headNodeId = 12345;
+
+        // Set up test parameters with negative time_to_run
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testName, "mnubergemm");
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testParms[0], "mnubergemm.time_to_run=-100");
+
+        std::string testPath = "/test/path/mnubergemm";
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnubergemm.");
+
+        // Call the method under test
+        dcgmReturn_t result = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&paramMsg);
+
+        // Verify results - negative value should be rejected
+        REQUIRE(result == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Zero time_to_run value rejected")
+    {
+        // Setup mock state machine
+        auto mockStateMachine
+            = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
+
+        SetStateMachine(std::move(mockStateMachine));
+
+        // Create a parameter broadcast message
+        dcgm_mndiag_msg_run_params_t paramMsg {};
+        paramMsg.header.length     = sizeof(paramMsg);
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
+        paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
+        paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
+
+        paramMsg.runParams.headNodeId = 12345;
+
+        // Set up test parameters with zero time_to_run
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testName, "mnubergemm");
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testParms[0], "mnubergemm.time_to_run=0");
+
+        std::string testPath = "/test/path/mnubergemm";
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnubergemm.");
+
+        // Call the method under test
+        dcgmReturn_t result = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&paramMsg);
+
+        // Verify results - zero value should be rejected
+        REQUIRE(result == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Non-numeric time_to_run value rejected")
+    {
+        // Setup mock state machine
+        auto mockStateMachine
+            = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
+
+        SetStateMachine(std::move(mockStateMachine));
+
+        // Create a parameter broadcast message
+        dcgm_mndiag_msg_run_params_t paramMsg {};
+        paramMsg.header.length     = sizeof(paramMsg);
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
+        paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
+        paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
+
+        paramMsg.runParams.headNodeId = 12345;
+
+        // Set up test parameters with non-numeric time_to_run
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testName, "mnubergemm");
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testParms[0], "mnubergemm.time_to_run=invalid");
+
+        std::string testPath = "/test/path/mnubergemm";
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnubergemm.");
+
+        // Call the method under test
+        dcgmReturn_t result = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&paramMsg);
+
+        // Verify results - non-numeric value should be rejected
+        REQUIRE(result == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("time_to_run with semicolon delimiter parsed correctly")
+    {
+        // Setup mock state machine to capture timeout setting
+        bool timeoutWasSet                   = false;
+        std::chrono::seconds capturedTimeout = std::chrono::seconds(0);
+        std::string capturedPath;
+
+        auto mockStateMachine
+            = std::make_unique<MockMnDiagStateMachine>([this](MnDiagStatus status) { SetStatus(status); });
+
+        mockStateMachine->SetProcessExecutionTimeoutCallback(
+            [&timeoutWasSet, &capturedTimeout](std::chrono::seconds timeout) {
+                timeoutWasSet   = true;
+                capturedTimeout = timeout;
+            });
+
+        mockStateMachine->SetExpectedBinaryPathCallback(
+            [&capturedPath](std::string const &path) { capturedPath = path; });
+
+        SetStateMachine(std::move(mockStateMachine));
+
+        // Create a parameter broadcast message
+        dcgm_mndiag_msg_run_params_t paramMsg {};
+        paramMsg.header.length     = sizeof(paramMsg);
+        paramMsg.header.version    = dcgm_mndiag_msg_run_params_version2;
+        paramMsg.header.moduleId   = DcgmModuleIdMnDiag;
+        paramMsg.header.subCommand = DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS;
+
+        paramMsg.runParams.headNodeId = 12345;
+
+        // Set up test parameters with time_to_run followed by semicolon and other params
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testName, "mnubergemm");
+        SafeCopyTo(paramMsg.runParams.runMnDiag.testParms[0], "mnubergemm.time_to_run=500;mnubergemm.other=123");
+
+        std::string testPath = "/test/path/mnubergemm";
+        SafeCopyTo(paramMsg.runParams.testBinaryPath, testPath.c_str());
+        SafeCopyTo(paramMsg.runParams.testPrefix, "mnubergemm.");
+
+        // Call the method under test
+        dcgmReturn_t result = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&paramMsg);
+
+        // Verify results - should parse 500, not "500;mnubergemm.other=123"
+        REQUIRE(result == DCGM_ST_OK);
+        REQUIRE(timeoutWasSet == true);
+        REQUIRE(capturedTimeout == std::chrono::seconds(500));
         REQUIRE(capturedPath == testPath);
     }
 }
@@ -3503,6 +3665,9 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         // Setup mock connections
         SetupMockConnections(2); // 1 remote + 1 loopback
 
+        // Set up test info as HandleRunHeadNode would before calling BroadcastRunParametersToRemoteNodes
+        SetCurrentTestInfo({ mnubergemm, "test_diagnostic", customPath, "test_diagnostic." });
+
         // Create test parameters
         dcgmRunMnDiag_t params {};
         SafeCopyTo(params.testName, "test_diagnostic");
@@ -3518,7 +3683,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(requestCaptured == true);
 
         // Verify request structure
-        REQUIRE(capturedRequest.version == dcgmMultinodeRequest_version1);
+        REQUIRE(capturedRequest.version == dcgmMultinodeRequest_version2);
         REQUIRE(capturedRequest.testType == MnDiagTestType::mnubergemm);
         REQUIRE(capturedRequest.requestType == MnDiagRequestType::BroadcastRunParameters);
 
@@ -3529,7 +3694,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(std::string(capturedRequest.requestData.runParams.runMnDiag.hostList[0]) == "node1");
 
         // Verify custom mnubergemm path is used
-        REQUIRE(std::string(capturedRequest.requestData.runParams.mnubergemmPath) == customPath);
+        REQUIRE(std::string(capturedRequest.requestData.runParams.testBinaryPath) == customPath);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
@@ -3562,6 +3727,10 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         // Setup mock connections
         SetupMockConnections(2); // 1 remote + 1 loopback
 
+        // Get default path and set up test info as HandleRunHeadNode would
+        std::string mockPath = GetMockPath();
+        SetCurrentTestInfo({ mnubergemm, "test_diagnostic", mockPath, "test_diagnostic." });
+
         // Create test parameters
         dcgmRunMnDiag_t params {};
         SafeCopyTo(params.testName, "test_diagnostic");
@@ -3577,7 +3746,7 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(requestCaptured == true);
 
         // Verify request structure
-        REQUIRE(capturedRequest.version == dcgmMultinodeRequest_version1);
+        REQUIRE(capturedRequest.version == dcgmMultinodeRequest_version2);
         REQUIRE(capturedRequest.testType == MnDiagTestType::mnubergemm);
         REQUIRE(capturedRequest.requestType == MnDiagRequestType::BroadcastRunParameters);
 
@@ -3588,165 +3757,97 @@ TEST_CASE_METHOD(MnDiagManagerTests, "BroadcastRunParametersToRemoteNodes [mndia
         REQUIRE(std::string(capturedRequest.requestData.runParams.runMnDiag.hostList[0]) == "node1");
 
         // Verify default mnubergemm path is used
-        std::string mockPath = GetMockPath();
-        REQUIRE(std::string(capturedRequest.requestData.runParams.mnubergemmPath).find(mockPath) != std::string::npos);
-
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
-    }
-}
-
-TEST_CASE_METHOD(MnDiagManagerTests, "GetMnubergemmPathHeadNode Tests")
-{
-    SetMockCudaVersion(12000);
-    InitMockCuda();
-
-    SECTION("Should use default path when no environment variable is set")
-    {
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-        unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-
-        // Call the method and verify path
-        std::string path;
-        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
-        CHECK(result == DCGM_ST_OK);
-        std::string mockPath = GetMockPath();
-        CHECK(path.find(mockPath) != std::string::npos);
+        REQUIRE(std::string(capturedRequest.requestData.runParams.testBinaryPath).find(mockPath) != std::string::npos);
 
         // Restore environment
         restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
     }
 
-    SECTION("Should use custom path when environment variable points to valid executable")
+    SECTION("Malformed time_to_run on head node returns early without broadcasting")
     {
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
+        // Setup mock DCGM API
+        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
+        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
+        SetDcgmApi(std::move(mockDcgmApi));
 
-        // Use a known executable that exists
-        std::string customPath = "/bin/true";
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), customPath.c_str(), 1);
+        // Setup mock connections
+        SetupMockConnections(3); // 3 remote connections
 
-        // Call the method and verify path
-        std::string path;
-        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
-        CHECK(result == DCGM_ST_OK);
-        CHECK(path == customPath);
+        SetCurrentTestInfo({ mnubergemm, "mnubergemm", "", "mnubergemm." });
 
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
+        // Create test parameters with malformed time_to_run value
+        dcgmRunMnDiag_t params {};
+        SafeCopyTo(params.testName, "mnubergemm");
+        SafeCopyTo(params.testParms[0], "mnubergemm.time_to_run=-100"); // Negative value - invalid
+        SafeCopyTo(params.hostList[0], "node1");
+        SafeCopyTo(params.hostList[1], "node2");
+
+        // Call the method under test
+        dcgmReturn_t result = BroadcastRunParametersToRemoteNodes(params);
+
+        // Verify results - should fail with BADPARAM
+        REQUIRE(result == DCGM_ST_BADPARAM);
+
+        // Verify that no remote MultinodeRequest calls were made (early return)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
     }
 
-    SECTION("Should fallback to default path when environment variable is empty")
+    SECTION("Zero time_to_run on head node returns early without broadcasting")
     {
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
+        // Setup mock DCGM API
+        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
+        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
+        SetDcgmApi(std::move(mockDcgmApi));
 
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), "", 1);
+        // Setup mock connections
+        SetupMockConnections(3); // 3 remote connections
 
-        // Call the method and verify path
-        std::string path;
-        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
-        CHECK(result == DCGM_ST_OK);
-        std::string mockPath = GetMockPath();
-        CHECK(path.find(mockPath) != std::string::npos);
+        SetCurrentTestInfo({ mnubergemm, "mnubergemm", "", "mnubergemm." });
 
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
+        // Create test parameters with zero time_to_run value
+        dcgmRunMnDiag_t params {};
+        SafeCopyTo(params.testName, "mnubergemm");
+        SafeCopyTo(params.testParms[0], "mnubergemm.time_to_run=0"); // Zero - invalid
+        SafeCopyTo(params.hostList[0], "node1");
+        SafeCopyTo(params.hostList[1], "node2");
+
+        // Call the method under test
+        dcgmReturn_t result = BroadcastRunParametersToRemoteNodes(params);
+
+        // Verify results - should fail with BADPARAM
+        REQUIRE(result == DCGM_ST_BADPARAM);
+
+        // Verify that no remote MultinodeRequest calls were made (early return)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
     }
 
-    SECTION("Should fallback to default path when environment variable points to non-existent file")
+    SECTION("Non-numeric time_to_run on head node returns early without broadcasting")
     {
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
+        // Setup mock DCGM API
+        auto mockDcgmApi = std::make_unique<MockDcgmApi>();
+        mockDcgmApi->SetSendRequestResult(DCGM_ST_OK);
+        SetDcgmApi(std::move(mockDcgmApi));
 
-        std::string nonExistentPath = "/path/to/nonexistent/binary";
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), nonExistentPath.c_str(), 1);
+        // Setup mock connections
+        SetupMockConnections(3); // 3 remote connections
 
-        // Call the method and verify path
-        std::string path;
-        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
-        CHECK(result == DCGM_ST_OK);
-        std::string mockPath = GetMockPath();
-        CHECK(path.find(mockPath) != std::string::npos);
+        SetCurrentTestInfo({ mnubergemm, "mnubergemm", "", "mnubergemm." });
 
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
-    }
+        // Create test parameters with non-numeric time_to_run value
+        dcgmRunMnDiag_t params {};
+        SafeCopyTo(params.testName, "mnubergemm");
+        SafeCopyTo(params.testParms[0], "mnubergemm.time_to_run=abc"); // Non-numeric - invalid
+        SafeCopyTo(params.hostList[0], "node1");
+        SafeCopyTo(params.hostList[1], "node2");
 
-    SECTION("Should fallback to default path when environment variable points to non-executable file")
-    {
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
+        // Call the method under test
+        dcgmReturn_t result = BroadcastRunParametersToRemoteNodes(params);
 
-        std::string nonExecutablePath = "/dev/null"; // Exists but not executable
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), nonExecutablePath.c_str(), 1);
+        // Verify results - should fail with BADPARAM
+        REQUIRE(result == DCGM_ST_BADPARAM);
 
-        // Call the method and verify path
-        std::string path;
-        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
-        CHECK(result == DCGM_ST_OK);
-        std::string mockPath = GetMockPath();
-        CHECK(path.find(mockPath) != std::string::npos);
-
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
-    }
-
-    SECTION("Should fallback to default path when environment variable points to directory")
-    {
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-
-        std::string directoryPath = "/tmp"; // A directory, not a file
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), directoryPath.c_str(), 1);
-
-        // Call the method and verify path
-        std::string path;
-        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
-        CHECK(result == DCGM_ST_OK);
-        std::string mockPath = GetMockPath();
-        CHECK(path.find(mockPath) != std::string::npos);
-
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
-    }
-
-    SECTION("Cuda version is zero, default path should throw error")
-    {
-        GetDcgmCoreProxy()->SetMockCudaVersion(0);
-
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-        unsetenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-
-        // Call the method and verify path
-        std::string path;
-        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
-        CHECK(result == DCGM_ST_NO_DATA);
-        CHECK(path.empty());
-
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
-    }
-
-    SECTION("Should throw error when env mnubergemm path is too long")
-    {
-        // Save current environment state
-        auto savedPath = saveEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-
-        // Create a string longer than DCGM_MAX_STR_LENGTH
-        std::string longPath(DCGM_MAX_STR_LENGTH + 10, 'a');
-        setenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), longPath.c_str(), 1);
-
-        // Call the method and verify path
-        std::string path;
-        dcgmReturn_t result = GetMnubergemmPathHeadNode(path);
-        CHECK(result == DCGM_ST_BADPARAM);
-        CHECK(path.empty());
-
-        // Restore environment
-        restoreEnvVar(MnDiagConstants::ENV_MNUBERGEMM_PATH.data(), savedPath);
+        // Verify that no remote MultinodeRequest calls were made (early return)
+        REQUIRE(GetDcgmApi()->GetSendRequestCallCount() == 0);
     }
 }
 

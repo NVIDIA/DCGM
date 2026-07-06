@@ -114,7 +114,7 @@ public:
      *          DCGM_ST_DUPLICATE_KEY if a field id collection already has the same name
      *
      */
-    dcgmReturn_t AddFieldGroup(std::string name,
+    dcgmReturn_t AddFieldGroup(std::string const &name,
                                std::vector<unsigned short> &fieldIds,
                                dcgmFieldGrp_t *fieldGrp,
                                DcgmWatcher watcher);

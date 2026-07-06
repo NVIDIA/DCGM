@@ -185,7 +185,7 @@ class ConstantPerf : public Plugin
 {
 public:
     ConstantPerf(dcgmHandle_t handle);
-    ~ConstantPerf();
+    virtual ~ConstantPerf();
 
     /*************************************************************************/
     void Go(std::string const &testName,
@@ -277,15 +277,17 @@ private:
     /*************************************************************************/
     /* Variables */
     std::unique_ptr<TestParameters> m_testParameters; /* Parameters for this test, passed in from the framework. */
-    bool m_dcgmCommErrorOccurred;                     /* Has there been a communication error with DCGM? */
-    bool m_dcgmRecorderInitialized;                   /* Has DcgmRecorder been initialized? */
-    DcgmRecorder m_dcgmRecorder;                      /* DCGM stats recording interfact object */
-    std::vector<CPerfDevice *> m_device;              /* Per-device data */
+    std::unique_ptr<TestParameters> m_defaultTestParameters; /* Owned default parameters for infoStruct */
+    bool m_dcgmCommErrorOccurred;                            /* Has there been a communication error with DCGM? */
+    bool m_dcgmRecorderInitialized;                          /* Has DcgmRecorder been initialized? */
+    DcgmRecorder m_dcgmRecorder;                             /* DCGM stats recording interfact object */
+    std::vector<CPerfDevice *> m_device;                     /* Per-device data */
 
     /* Cached parameters read from testParameters */
     double m_testDuration;        /* Test duration in seconds */
     double m_targetPerf;          /* Performance we are trying to target in gigaflops */
     int m_useDgemm;               /* Whether or not to use dgemm (or sgemm) 1=use dgemm */
+    bool m_useTensorAlways;       /* Whether to hint cuBLAS to use tensor cores */
     int m_atATime;                /* Number of ops to queue to the stream at a time */
     double m_sbeFailureThreshold; /* how many SBEs constitutes a failure */
     dcgmHandle_t m_handle;        /* Dcgm handle*/

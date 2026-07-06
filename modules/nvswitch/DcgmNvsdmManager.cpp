@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#include <cinttypes>
+#include <cstdio>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -34,6 +36,47 @@
 
 namespace DcgmNs
 {
+
+namespace
+{
+
+    /**
+     * Human-readable decode of a packed DCGM_FE_LINK entity id, for logging only.
+     *
+     * Example: "259 [type=SWITCH switchId=0 index=1]".
+     *
+     * Useful in error logs because a raw packed id like "259" or "16777219" is
+     * opaque to anyone reading the log; the decoded form makes user-input
+     * mistakes (wrong type byte, wrong switchId, wrong index) self-evident.
+     */
+    std::string FormatLinkEntityId(dcgm_field_eid_t entityId)
+    {
+        dcgm_link_t link {};
+        link.raw = entityId;
+
+        char const *typeStr = "UNKNOWN";
+        switch (link.parsed.type)
+        {
+            case DCGM_FE_GPU:
+                typeStr = "GPU";
+                break;
+            case DCGM_FE_SWITCH:
+                typeStr = "SWITCH";
+                break;
+            case DCGM_FE_CONNECTX:
+                typeStr = "CONNECTX";
+                break;
+            default:
+                break;
+        }
+        return fmt::format("{} [type={} parentId={} index={}]",
+                           entityId,
+                           typeStr,
+                           static_cast<unsigned>(link.parsed.switchId),
+                           static_cast<unsigned>(link.parsed.index));
+    }
+
+} // namespace
 
 template <typename taggedType>
 struct NvsdmDataCollector
@@ -84,6 +127,7 @@ static unsigned int getNvsdmPortFieldId(unsigned int dcgmFieldId)
 {
     switch (dcgmFieldId)
     {
+        // Throughput counters (64-bit extended versions)
         case DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX:
         case DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX:
             return NVSDM_PORT_TELEM_CTR_EXT_XMIT_DATA;
@@ -91,6 +135,13 @@ static unsigned int getNvsdmPortFieldId(unsigned int dcgmFieldId)
         case DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX:
         case DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX:
             return NVSDM_PORT_TELEM_CTR_EXT_RCV_DATA;
+
+        // Error counters
+        case DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERROR_TOTAL:
+            return NVSDM_PORT_TELEM_CTR_GRP_X22_XMIT_RETRY_EVENTS;
+
+        case DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERROR_TOTAL:
+            return NVSDM_PORT_TELEM_CTR_LNK_ERR_REC_CTR;
     }
 
     return NVSDM_PORT_TELEM_CTR_NONE;
@@ -104,10 +155,10 @@ static unsigned int getNvsdmPlatformFieldId(unsigned int dcgmFieldId)
         case DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT:
             return NVSDM_PLATFORM_TELEM_CTR_VOLTAGE;
 
-        case DCGM_FI_DEV_NVSWITCH_POWER_VDD:
+        case DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS:
             return NVSDM_PLATFORM_TELEM_CTR_POWER;
 
-        case DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT:
+        case DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS:
             return NVSDM_PLATFORM_TELEM_CTR_TEMPERATURE;
     }
 
@@ -130,11 +181,11 @@ static unsigned int getNvsdmConnextXFieldId(unsigned int dcgmFieldId)
             return NVSDM_CONNECTX_TELEM_CTR_CORRECTABLE_ERR_STATUS;
         case DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_MASK:
             return NVSDM_CONNECTX_TELEM_CTR_CORRECTABLE_ERR_MASK;
-        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS:
+        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_STATUS:
             return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_STATUS;
-        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK:
+        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_MASK:
             return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_MASK;
-        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY:
+        case DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_SEVERITY:
             return NVSDM_CONNECTX_TELEM_CTR_UNCORRECTABLE_ERR_SEVERITY;
         case DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE:
             return NVSDM_CONNECTX_TELEM_CTR_DEVICE_TEMPERATURE;
@@ -142,13 +193,17 @@ static unsigned int getNvsdmConnextXFieldId(unsigned int dcgmFieldId)
     return NVSDM_CONNECTX_TELEM_CTR_NONE;
 }
 
+// Forward declaration - defined after isCompositeFieldId
+static bool isInfoFieldId(unsigned short fieldId);
+
 /*************************************************************************/
 static inline bool isDcgmToNvsdmFieldAvailable(unsigned int dcgmFieldId)
 {
-    if (dcgmFieldId != DCGM_FI_DEV_NVSWITCH_DEVICE_UUID && dcgmFieldId != DCGM_FI_DEV_CONNECTX_HEALTH
+    // Check for special fields, telemetry fields, and info fields
+    if (dcgmFieldId != DCGM_FI_DEV_NVSWITCH_UUID && dcgmFieldId != DCGM_FI_DEV_CONNECTX_HEALTH
         && getNvsdmPortFieldId(dcgmFieldId) == NVSDM_PORT_TELEM_CTR_NONE
         && getNvsdmPlatformFieldId(dcgmFieldId) == NVSDM_PLATFORM_TELEM_CTR_NONE
-        && getNvsdmConnextXFieldId(dcgmFieldId) == NVSDM_CONNECTX_TELEM_CTR_NONE)
+        && getNvsdmConnextXFieldId(dcgmFieldId) == NVSDM_CONNECTX_TELEM_CTR_NONE && !isInfoFieldId(dcgmFieldId))
     {
         log_info("DCGM fieldId {} doesn't map to any of the nvsdm field ids.", dcgmFieldId);
         return false;
@@ -165,12 +220,52 @@ static bool isCompositeFieldId(unsigned short fieldId)
 {
     switch (fieldId)
     {
+        // Switch-level throughput (already working)
         case DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX:
         case DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX:
+        // Link-level throughput - aggregate when queried at switch level
+        case DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX:
+        case DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX:
+        // Link-level error counts - aggregate when queried at switch level
+        case DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERROR_TOTAL:
+        case DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERROR_TOTAL:
             log_debug("fieldId {} is composite, returning true.", fieldId);
             return true;
     }
 
+    return false;
+}
+
+/*************************************************************************/
+/**
+ * Info fields are non-telemetry fields that require querying NVSDM info APIs
+ * (e.g., nvsdmDeviceGetPCIInfo, nvsdmPortGetRemote) rather than telemetry counters.
+ * These values are cached during discovery and returned from cache.
+ */
+static bool isInfoFieldId(unsigned short fieldId)
+{
+    switch (fieldId)
+    {
+        // Switch-level info fields (DCGM_FE_SWITCH)
+        case DCGM_FI_DEV_NVSWITCH_PHYSICAL_ID:
+        case DCGM_FI_DEV_NVSWITCH_RESET_REQUIRED:
+        case DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION:
+        case DCGM_FI_DEV_NVSWITCH_PCIE_DOMAIN:
+        case DCGM_FI_DEV_NVSWITCH_PCIE_BUS:
+        case DCGM_FI_DEV_NVSWITCH_PCIE_DEVICE:
+        case DCGM_FI_DEV_NVSWITCH_PCIE_FUNCTION:
+        // Link-level info fields (DCGM_FE_LINK)
+        case DCGM_FI_DEV_NVSWITCH_LINK_ID:
+        case DCGM_FI_DEV_NVSWITCH_LINK_STATUS:
+        case DCGM_FI_DEV_NVSWITCH_LINK_TYPE:
+        case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DOMAIN:
+        case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_BUS:
+        case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DEVICE:
+        case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION:
+        case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_ID:
+        case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID:
+            return true;
+    }
     return false;
 }
 
@@ -198,93 +293,16 @@ bool DcgmNvsdmManager::IsValidNvSwitchId(dcgm_field_eid_t entityId)
 
 /*************************************************************************/
 
-/**
- * Result of validating NvLink ID
- */
-enum class ValidateNvLinkIdResult
-{
-    NoError,
-    NotInitialized,
-    ExceedsMax,
-    Invalid,
-    Unknown
-};
-
 /*************************************************************************/
 
-/* Core validation logic without logging
- * @param[in] entityId: The entity ID to validate
- * @returns: Detailed validation status
- */
-ValidateNvLinkIdResult DcgmNvsdmManager::ValidateNvLinkId(dcgm_field_eid_t entityId) const
+std::optional<size_t> DcgmNvsdmManager::FindPortVectorIndex(dcgm_field_eid_t entityId) const
 {
-    if (entityId >= m_numNvSwitchPorts)
+    auto const it = m_portIdToIndex.find(entityId);
+    if (it == m_portIdToIndex.end())
     {
-        return ValidateNvLinkIdResult::NotInitialized;
+        return std::nullopt;
     }
-    if (entityId >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH)
-    {
-        return ValidateNvLinkIdResult::ExceedsMax;
-    }
-    if (entityId >= m_nvSwitchPorts.size())
-    {
-        return ValidateNvLinkIdResult::Invalid;
-    }
-    return ValidateNvLinkIdResult::NoError;
-}
-
-/*************************************************************************/
-void DcgmNvsdmManager::LogNvLinkValidationError(ValidateNvLinkIdResult status,
-                                                dcgm_field_eid_t entityId,
-                                                std::optional<dcgm_field_eid_t> switchEid) const
-{
-    std::string const entityContext
-        = switchEid ? fmt::format("Port entityId [{}] of switch entityId [{}]", entityId, *switchEid)
-                    : fmt::format("entityId [{}]", entityId);
-
-    switch (status)
-    {
-        case ValidateNvLinkIdResult::NotInitialized:
-            log_error("{} is not initialized. Number of nvsdm ports are [{}].", entityContext, m_numNvSwitchPorts);
-            break;
-        case ValidateNvLinkIdResult::ExceedsMax:
-            log_error("{} for NvLink is more than max limit [{}].", entityContext, DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH);
-            break;
-        case ValidateNvLinkIdResult::Invalid:
-            log_error("{} for NvLink is invalid, max [{}].", entityContext, m_nvSwitchPorts.size());
-            break;
-        case ValidateNvLinkIdResult::Unknown:
-            log_error("{} status is unknown.", entityContext);
-            break;
-        case ValidateNvLinkIdResult::NoError:
-            // No logging needed for valid case
-            break;
-    }
-}
-
-/*************************************************************************/
-
-bool DcgmNvsdmManager::IsValidNvLinkId(dcgm_field_eid_t entityId) const
-{
-    if (auto const status = ValidateNvLinkId(entityId); status != ValidateNvLinkIdResult::NoError)
-    {
-        LogNvLinkValidationError(status, entityId);
-        return false;
-    }
-    return true;
-}
-
-/*************************************************************************/
-
-bool DcgmNvsdmManager::IsValidNvLinkId(dcgm_field_eid_t switchEid, dcgm_field_eid_t linkEid) const
-{
-    auto const status = ValidateNvLinkId(linkEid);
-    if (status != ValidateNvLinkIdResult::NoError)
-    {
-        LogNvLinkValidationError(status, linkEid, switchEid);
-        return false;
-    }
-    return true;
+    return it->second;
 }
 
 /*************************************************************************/
@@ -421,22 +439,16 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
                                                       timelib64_t now,
                                                       DcgmFvBuffer &buf)
 {
-    unsigned int portId;
     nvsdmVal_t compositeNvsdmVal;
     unsigned int nvsdmPortFieldId = getNvsdmPortFieldId(fieldId);
     compositeNvsdmVal.u64Val      = 0;
 
     for (unsigned int i = 0; i < m_nvSwitchDevices[entityId].numOfPorts; i++)
     {
-        portId = m_nvSwitchDevices[entityId].portIds[i];
-        if (!IsValidNvLinkId(entityId, portId))
-        {
-            // IsValidNvLinkId logs the error
-            return DCGM_ST_BADPARAM;
-        }
+        size_t const portIdx = m_nvSwitchDevices[entityId].portIndices[i];
 
         // Skip if link is not up
-        if (m_nvSwitchPorts[portId].state != DcgmNvLinkLinkStateUp)
+        if (m_nvSwitchPorts[portIdx].state != DcgmNvLinkLinkStateUp)
         {
             continue;
         }
@@ -446,7 +458,7 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
         param.telemValsArray[0].telemCtr   = nvsdmPortFieldId;
         param.telemValsArray[0].val.u64Val = 0;
 
-        nvsdmRet_t ret = m_nvsdm->nvsdmPortGetTelemetryValues(m_nvSwitchPorts[portId].port, &param);
+        nvsdmRet_t ret = m_nvsdm->nvsdmPortGetTelemetryValues(m_nvSwitchPorts[portIdx].port, &param);
         if (ret != NVSDM_SUCCESS || param.telemValsArray[0].status != NVSDM_SUCCESS)
         {
             log_error(
@@ -458,15 +470,87 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
             return DCGM_ST_NVML_ERROR;
         }
 
-        /* TODO: For stub we are only using u64Val. We will need to handle more val types for live testing. */
-        if ((UINT64_MAX - compositeNvsdmVal.u64Val) < param.telemValsArray[0].val.u64Val)
+        /* Extract value based on actual valType returned by NVSDM */
+        uint64_t portValue = 0;
+        bool overflow      = false;
+
+        /* Lambda for signed integer types: clamp negative to 0 with warning */
+        auto clampSigned = [&](auto val, const char *typeName) -> uint64_t {
+            if (val < 0)
+            {
+                log_warning("Negative {} {} for fieldId {}, treating as 0", typeName, val, fieldId);
+                return 0;
+            }
+            return static_cast<uint64_t>(val);
+        };
+
+        /* Lambda for floating point types: clamp negative to 0, check upper bound */
+        auto clampFloat = [&](auto val, const char *typeName) -> uint64_t {
+            if (val < 0)
+            {
+                log_warning("Negative {} {} for fieldId {}, treating as 0", typeName, val, fieldId);
+                return 0;
+            }
+            if (val >= static_cast<decltype(val)>(UINT64_MAX))
+            {
+                log_error("{} {} exceeds UINT64_MAX for fieldId {}", typeName, val, fieldId);
+                overflow = true;
+                return 0;
+            }
+            return static_cast<uint64_t>(val);
+        };
+
+        switch (param.telemValsArray[0].valType)
         {
-            log_error("Overflow detected for u64 addition while adding value [{}] to composite value [{}].",
-                      param.telemValsArray[0].val.u64Val,
-                      compositeNvsdmVal.u64Val);
+            case NVSDM_VAL_TYPE_UINT64:
+                portValue = param.telemValsArray[0].val.u64Val;
+                break;
+            case NVSDM_VAL_TYPE_INT64:
+                portValue = clampSigned(param.telemValsArray[0].val.s64Val, "s64Val");
+                break;
+            case NVSDM_VAL_TYPE_UINT32:
+                portValue = param.telemValsArray[0].val.u32Val;
+                break;
+            case NVSDM_VAL_TYPE_INT32:
+                portValue = clampSigned(param.telemValsArray[0].val.s32Val, "s32Val");
+                break;
+            case NVSDM_VAL_TYPE_UINT16:
+                portValue = param.telemValsArray[0].val.u16Val;
+                break;
+            case NVSDM_VAL_TYPE_INT16:
+                portValue = clampSigned(param.telemValsArray[0].val.s16Val, "s16Val");
+                break;
+            case NVSDM_VAL_TYPE_UINT8:
+                portValue = param.telemValsArray[0].val.u8Val;
+                break;
+            case NVSDM_VAL_TYPE_INT8:
+                portValue = clampSigned(param.telemValsArray[0].val.s8Val, "s8Val");
+                break;
+            case NVSDM_VAL_TYPE_DOUBLE:
+                portValue = clampFloat(param.telemValsArray[0].val.dVal, "dVal");
+                break;
+            case NVSDM_VAL_TYPE_FLOAT:
+                portValue = clampFloat(param.telemValsArray[0].val.fVal, "fVal");
+                break;
+            default:
+                log_warning(
+                    "Unsupported valType {} for fieldId {}, using u64Val", param.telemValsArray[0].valType, fieldId);
+                portValue = param.telemValsArray[0].val.u64Val;
+                break;
+        }
+
+        /* Check for overflow (from float conversion or addition) */
+        if (overflow || (UINT64_MAX - compositeNvsdmVal.u64Val) < portValue)
+        {
+            if (!overflow)
+            {
+                log_error("Overflow detected for u64 addition while adding value [{}] to composite value [{}].",
+                          portValue,
+                          compositeNvsdmVal.u64Val);
+            }
             return DCGM_ST_MAX_LIMIT;
         }
-        compositeNvsdmVal.u64Val += param.telemValsArray[0].val.u64Val;
+        compositeNvsdmVal.u64Val += portValue;
     }
 
     dcgmReturn_t dcgmReturn
@@ -485,13 +569,183 @@ dcgmReturn_t DcgmNvsdmManager::HandleCompositeFieldId(const dcgm_field_entity_gr
 }
 
 /*************************************************************************/
+/**
+ * Handles info/topology fieldIds that return cached values from discovery.
+ * These fields use NVSDM info APIs (not telemetry) like nvsdmDeviceGetPCIInfo.
+ * Always writes an entry to @p buf; per-entry status is DCGM_ST_NOT_SUPPORTED
+ * when the underlying info was unavailable at discovery time.
+ *
+ * @param[in]     entityGroupId  DCGM_FE_SWITCH or DCGM_FE_LINK.
+ * @param[in]     entityId       Index into the internal device/port array.
+ * @param[in]     fieldId        Info field ID (isInfoFieldId() == true).
+ * @param[in]     now            Timestamp in microseconds since epoch.
+ * @param[in,out] buf            Buffer to which the result entry is appended.
+ *
+ * @return DCGM_ST_OK            Entry written (value or NOT_SUPPORTED sentinel).
+ * @return DCGM_ST_BADPARAM      @p entityId out of range; no entry written.
+ * @return DCGM_ST_NOT_SUPPORTED Unsupported @p entityGroupId or @p fieldId;
+ *                               NOT_SUPPORTED entry written.
+ */
+dcgmReturn_t DcgmNvsdmManager::HandleInfoField(dcgm_field_entity_group_t entityGroupId,
+                                               unsigned int entityId,
+                                               unsigned short fieldId,
+                                               timelib64_t now,
+                                               DcgmFvBuffer &buf)
+{
+    int64_t value = 0;
+
+    if (entityGroupId == DCGM_FE_SWITCH)
+    {
+        // Switch-level info fields
+        if (entityId >= m_nvSwitchDevices.size())
+        {
+            log_error("Invalid switch entityId {} >= {}", entityId, m_nvSwitchDevices.size());
+            return DCGM_ST_BADPARAM;
+        }
+        auto const &device = m_nvSwitchDevices[entityId];
+
+        // Early return for PCI fields if PCI info not available
+        if (!device.pci && fieldId >= DCGM_FI_DEV_NVSWITCH_PCIE_DOMAIN && fieldId <= DCGM_FI_DEV_NVSWITCH_PCIE_FUNCTION)
+        {
+            buf.AddInt64Value(entityGroupId, entityId, fieldId, 0, now, DCGM_ST_NOT_SUPPORTED);
+            return DCGM_ST_OK;
+        }
+
+        switch (fieldId)
+        {
+            case DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION:
+                buf.AddStringValue(entityGroupId,
+                                   entityId,
+                                   fieldId,
+                                   device.firmwareVersion.empty() ? DCGM_STR_BLANK : device.firmwareVersion.c_str(),
+                                   now,
+                                   device.firmwareVersion.empty() ? DCGM_ST_NOT_SUPPORTED : DCGM_ST_OK);
+                return DCGM_ST_OK;
+            case DCGM_FI_DEV_NVSWITCH_PHYSICAL_ID:
+                value = static_cast<int64_t>(device.id);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_RESET_REQUIRED:
+                value = (m_nvSwitches[device.id].status == DcgmEntityStatusDisabled) ? 1 : 0;
+                break;
+            case DCGM_FI_DEV_NVSWITCH_PCIE_DOMAIN:
+                value = static_cast<int64_t>(device.pci->domain);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_PCIE_BUS:
+                value = static_cast<int64_t>(device.pci->bus);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_PCIE_DEVICE:
+                value = static_cast<int64_t>(device.pci->dev);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_PCIE_FUNCTION:
+                value = static_cast<int64_t>(device.pci->func);
+                break;
+            default:
+                log_error("Unhandled switch info fieldId {}", fieldId);
+                buf.AddInt64Value(entityGroupId, entityId, fieldId, 0, now, DCGM_ST_NOT_SUPPORTED);
+                return DCGM_ST_OK;
+        }
+    }
+    else if (entityGroupId == DCGM_FE_LINK)
+    {
+        // Boundary translation: raw entity id -> vector index. Done once on entry.
+        auto const portIdxOpt = FindPortVectorIndex(entityId);
+        if (!portIdxOpt.has_value())
+        {
+            log_error("Invalid link entityId {} for info field {}", FormatLinkEntityId(entityId), fieldId);
+            return DCGM_ST_BADPARAM;
+        }
+        auto const &port = m_nvSwitchPorts[*portIdxOpt];
+
+        // Early return for remote PCI fields if remote PCI info not available
+        if ((!port.remoteDevice || !port.remoteDevice->pci) && fieldId >= DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DOMAIN
+            && fieldId <= DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION)
+        {
+            buf.AddInt64Value(entityGroupId, entityId, fieldId, 0, now, DCGM_ST_NOT_SUPPORTED);
+            return DCGM_ST_OK;
+        }
+
+        // Early return for remote device info fields if remote device info not available
+        if (!port.remoteDevice
+            && (fieldId == DCGM_FI_DEV_NVSWITCH_LINK_TYPE || fieldId == DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_ID
+                || fieldId == DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID))
+        {
+            buf.AddBlankValue(entityGroupId, entityId, fieldId, DCGM_ST_NOT_SUPPORTED);
+            return DCGM_ST_OK;
+        }
+
+        switch (fieldId)
+        {
+            case DCGM_FI_DEV_NVSWITCH_LINK_ID:
+                value = static_cast<int64_t>(port.num);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_LINK_STATUS:
+                // Convert dcgmNvLinkLinkState_t to the expected status values
+                // UNKNOWN:-1 OFF:0 SAFE:1 ACTIVE:2 ERROR:3
+                switch (port.state)
+                {
+                    case DcgmNvLinkLinkStateUp:
+                        value = 2; // ACTIVE
+                        break;
+                    case DcgmNvLinkLinkStateDown:
+                        value = 0; // OFF
+                        break;
+                    case DcgmNvLinkLinkStateDisabled:
+                        value = 0; // OFF
+                        break;
+                    default:
+                        value = -1; // UNKNOWN
+                        break;
+                }
+                break;
+            case DCGM_FI_DEV_NVSWITCH_LINK_TYPE:
+                value = static_cast<int64_t>(port.remoteDevice->deviceType);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DOMAIN:
+                value = static_cast<int64_t>(port.remoteDevice->pci->domain);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_BUS:
+                value = static_cast<int64_t>(port.remoteDevice->pci->bus);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DEVICE:
+                value = static_cast<int64_t>(port.remoteDevice->pci->dev);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION:
+                value = static_cast<int64_t>(port.remoteDevice->pci->func);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_ID:
+                value = static_cast<int64_t>(port.remoteDevice->portNum);
+                break;
+            case DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID:
+            {
+                char guidStr[19]; /* "0x" + 16 hex digits + null terminator */
+                std::snprintf(guidStr, sizeof(guidStr), "0x%016" PRIx64, port.remoteDevice->deviceGuid);
+                buf.AddStringValue(entityGroupId, entityId, fieldId, guidStr, now, DCGM_ST_OK);
+                return DCGM_ST_OK;
+            }
+            default:
+                log_error("Unhandled link info fieldId {}", fieldId);
+                buf.AddInt64Value(entityGroupId, entityId, fieldId, 0, now, DCGM_ST_NOT_SUPPORTED);
+                return DCGM_ST_OK;
+        }
+    }
+    else
+    {
+        log_error("Unsupported entityGroupId {} for info field {}", entityGroupId, fieldId);
+        buf.AddInt64Value(entityGroupId, entityId, fieldId, 0, now, DCGM_ST_NOT_SUPPORTED);
+        return DCGM_ST_OK;
+    }
+
+    buf.AddInt64Value(entityGroupId, entityId, fieldId, value, now, DCGM_ST_OK);
+    return DCGM_ST_OK;
+}
+
+/*************************************************************************/
 dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fieldId,
                                                                DcgmFvBuffer &buf,
                                                                const std::vector<dcgm_field_update_info_t> &entities,
                                                                timelib64_t now)
 {
     nvsdmTelemParam_t param;
-    unsigned int nvsdmEntityId;
     dcgmReturn_t dcgmReturn;
     nvsdmRet_t nvsdmReturn;
 
@@ -508,23 +762,42 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
         return DCGM_ST_NOT_SUPPORTED;
     }
 
+    // Handle info/topology fields that use cached values from discovery
+    if (isInfoFieldId(fieldId))
+    {
+        for (auto &entity : entities)
+        {
+            dcgmReturn = HandleInfoField(entity.entityGroupId, entity.entityId, fieldId, now, buf);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                log_error(
+                    "Failed to handle info field {} for entity {}/{}", fieldId, entity.entityGroupId, entity.entityId);
+                return dcgmReturn;
+            }
+        }
+        return DCGM_ST_OK;
+    }
+
     for (auto &entity : entities)
     {
         log_debug(
             "Updating fields for eg {}, fieldId {}, entityId {}.", entity.entityGroupId, fieldId, entity.entityId);
         if (entity.entityGroupId == DCGM_FE_LINK)
         {
-            if (!IsValidNvLinkId(entity.entityId))
+            // Boundary translation: raw entity id -> vector index. Done once on entry.
+            auto const linkPortIdxOpt = FindPortVectorIndex(entity.entityId);
+            if (!linkPortIdxOpt.has_value())
             {
-                // IsValidNvLinkId logs the error
+                log_error("Invalid link entityId {} for field {}", FormatLinkEntityId(entity.entityId), fieldId);
                 return DCGM_ST_BADPARAM;
             }
+            size_t const linkPortIdx = *linkPortIdxOpt;
 
             /* Return cached link UUID and continue. */
-            if (fieldId == DCGM_FI_DEV_NVSWITCH_DEVICE_UUID)
+            if (fieldId == DCGM_FI_DEV_NVSWITCH_UUID)
             {
                 std::ostringstream os;
-                os << m_nvSwitchPorts[entity.entityId].guid;
+                os << m_nvSwitchPorts[linkPortIdx].guid;
                 const std::string &tmp = os.str();
                 buf.AddStringValue(entity.entityGroupId, entity.entityId, fieldId, tmp.c_str(), now, DCGM_ST_OK);
                 continue;
@@ -533,8 +806,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             unsigned int nvsdmPortFieldId     = getNvsdmPortFieldId(fieldId);
             param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PORT;
             param.telemValsArray[0].telemCtr  = nvsdmPortFieldId;
-            nvsdmEntityId                     = entity.entityId;
-            targetPort                        = m_nvSwitchPorts[nvsdmEntityId].port;
+            targetPort                        = m_nvSwitchPorts[linkPortIdx].port;
         }
         else if (entity.entityGroupId == DCGM_FE_SWITCH)
         {
@@ -564,7 +836,7 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             }
 
             /* Return cached switch UUID and continue. */
-            if (fieldId == DCGM_FI_DEV_NVSWITCH_DEVICE_UUID)
+            if (fieldId == DCGM_FI_DEV_NVSWITCH_UUID)
             {
                 std::ostringstream os;
                 os << m_nvSwitchDevices[entity.entityId].guid;
@@ -576,13 +848,16 @@ dcgmReturn_t DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary(unsigned short fi
             unsigned int nvsdmPlatformFieldId = getNvsdmPlatformFieldId(fieldId);
             param.telemValsArray[0].telemType = NVSDM_TELEM_TYPE_PLATFORM;
             param.telemValsArray[0].telemCtr  = nvsdmPlatformFieldId;
-            nvsdmEntityId                     = m_nvSwitchDevices[entity.entityId].portIds[0];
-            if (!IsValidNvLinkId(entity.entityId, nvsdmEntityId))
+
+            if (m_nvSwitchDevices[entity.entityId].numOfPorts == 0)
             {
-                // IsValidNvLinkId logs the error
-                continue;
+                log_error("Switch {} has no ports for platform telemetry", entity.entityId);
+                return DCGM_ST_BADPARAM;
             }
-            targetPort = m_nvSwitchPorts[nvsdmEntityId].port;
+
+            // Platform telemetry is queried via any port on the switch; use the first.
+            size_t const platformPortIdx = m_nvSwitchDevices[entity.entityId].portIndices[0];
+            targetPort                   = m_nvSwitchPorts[platformPortIdx].port;
         }
         else if (entity.entityGroupId == DCGM_FE_CONNECTX)
         {
@@ -721,6 +996,7 @@ dcgmReturn_t DcgmNvsdmManager::DetachFromNvsdm()
     }
     m_nvSwitchDevices.clear();
     m_nvSwitchPorts.clear();
+    m_portIdToIndex.clear();
     m_ibCxDevices.clear();
     m_numNvSwitchPorts = 0;
     m_numNvSwitches    = 0;
@@ -739,14 +1015,17 @@ std::optional<NvsdmDevice> DcgmNvsdmManager::InitNvsdmDevice(nvsdmDevice_t const
         log_error("NVSDM returned {}", nvsdmRet);
     }
 
-    NvsdmDevice newNvsdmDevice { .id         = 0,
-                                 .device     = device,
-                                 .longName   = name,
-                                 .portIds    = {},
-                                 .numOfPorts = 0,
-                                 .devID      = 0,
-                                 .vendorID   = 0,
-                                 .guid       = 0 };
+    NvsdmDevice newNvsdmDevice { .id              = 0,
+                                 .device          = device,
+                                 .longName        = name,
+                                 .portIndices     = {},
+                                 .numOfPorts      = 0,
+                                 .devID           = 0,
+                                 .vendorID        = 0,
+                                 .guid            = 0,
+                                 .pci             = std::nullopt,
+                                 .firmwareVersion = {} };
+
     nvsdmRet = m_nvsdm->nvsdmDeviceGetDevID(device, &newNvsdmDevice.devID);
     if (nvsdmRet != NVSDM_SUCCESS)
     {
@@ -765,6 +1044,37 @@ std::optional<NvsdmDevice> DcgmNvsdmManager::InitNvsdmDevice(nvsdmDevice_t const
         log_error("NVSDM returned {}", nvsdmRet);
         return std::nullopt;
     }
+
+    // Cache PCI info for topology fields
+    nvsdmPCIInfo_t pciInfo {};
+    pciInfo.version = nvsdmPCIInfo_v1;
+    nvsdmRet        = m_nvsdm->nvsdmDeviceGetPCIInfo(device, &pciInfo);
+    if (nvsdmRet == NVSDM_SUCCESS)
+    {
+        newNvsdmDevice.pci = DcgmNs::PciInfo {
+            .domain = pciInfo.domain, .bus = pciInfo.bus, .dev = pciInfo.dev, .func = pciInfo.func
+        };
+    }
+    else if (nvsdmRet != NVSDM_ERROR_NOT_SUPPORTED)
+    {
+        // Log error but continue - PCI info is optional
+        log_warning("Failed to get PCI info for device {}: NVSDM returned {}", name, nvsdmRet);
+    }
+
+    // Cache firmware version
+    nvsdmVersionInfo_t fwVersion {};
+    fwVersion.version = nvsdmVersionInfo_v1;
+    nvsdmRet          = m_nvsdm->nvsdmDeviceGetFirmwareVersion(device, &fwVersion);
+    if (nvsdmRet == NVSDM_SUCCESS)
+    {
+        newNvsdmDevice.firmwareVersion
+            = fmt::format("{}.{}.{}", fwVersion.majorVersion, fwVersion.minorVersion, fwVersion.patchVersion);
+    }
+    else if (nvsdmRet != NVSDM_ERROR_NOT_SUPPORTED && nvsdmRet != NVSDM_ERROR_FUNCTION_NOT_FOUND)
+    {
+        log_warning("Failed to get firmware version for device {}: NVSDM returned {}", name, nvsdmRet);
+    }
+
     return newNvsdmDevice;
 }
 
@@ -945,7 +1255,8 @@ std::optional<std::vector<NvsdmPort>> DcgmNvsdmManager::ScanPorts(NvsdmDevice co
                             .num           = 0,
                             .lid           = 0,
                             .guid          = 0,
-                            .gid           = {} };
+                            .gid           = {},
+                            .remoteDevice  = std::nullopt };
         nvsdmRet = m_nvsdm->nvsdmPortGetNum(port, &newPort.num);
         if (nvsdmRet != NVSDM_SUCCESS)
         {
@@ -970,6 +1281,67 @@ std::optional<std::vector<NvsdmPort>> DcgmNvsdmManager::ScanPorts(NvsdmDevice co
             log_error("NVSDM returned {}", nvsdmRet);
             return std::nullopt;
         }
+
+        // Cache remote port info for topology fields
+        nvsdmPort_t remotePort = nullptr;
+        nvsdmRet               = m_nvsdm->nvsdmPortGetRemote(port, &remotePort);
+        if (nvsdmRet == NVSDM_SUCCESS && remotePort != nullptr)
+        {
+            DcgmNs::RemoteDeviceInfo remoteDeviceInfo;
+            remoteDeviceInfo.port = remotePort;
+
+            bool gotPortNum    = false;
+            bool gotDeviceType = false;
+            bool gotDeviceGuid = false;
+
+            if (m_nvsdm->nvsdmPortGetNum(remotePort, &remoteDeviceInfo.portNum) == NVSDM_SUCCESS)
+            {
+                gotPortNum = true;
+            }
+            else
+            {
+                log_debug("Failed to get remote port number for port {}", newPort.id);
+            }
+
+            nvsdmDevice_t remoteDevice = nullptr;
+            if (m_nvsdm->nvsdmPortGetDevice(remotePort, &remoteDevice) == NVSDM_SUCCESS && remoteDevice != nullptr)
+            {
+                if (m_nvsdm->nvsdmDeviceGetType(remoteDevice, &remoteDeviceInfo.deviceType) == NVSDM_SUCCESS)
+                {
+                    gotDeviceType = true;
+                }
+                else
+                {
+                    log_debug("Failed to get remote device type for port {}", newPort.id);
+                }
+
+                if (m_nvsdm->nvsdmDeviceGetGUID(remoteDevice, &remoteDeviceInfo.deviceGuid) == NVSDM_SUCCESS)
+                {
+                    gotDeviceGuid = true;
+                }
+                else
+                {
+                    log_debug("Failed to get remote device GUID for port {}", newPort.id);
+                }
+
+                nvsdmPCIInfo_t remotePciInfo {};
+                remotePciInfo.version = nvsdmPCIInfo_v1;
+                if (m_nvsdm->nvsdmDeviceGetPCIInfo(remoteDevice, &remotePciInfo) == NVSDM_SUCCESS)
+                {
+                    remoteDeviceInfo.pci = DcgmNs::PciInfo { .domain = remotePciInfo.domain,
+                                                             .bus    = remotePciInfo.bus,
+                                                             .dev    = remotePciInfo.dev,
+                                                             .func   = remotePciInfo.func };
+                }
+            }
+
+            // Populate optional only when all three required fields are valid
+            if (gotPortNum && gotDeviceType && gotDeviceGuid)
+            {
+                newPort.remoteDevice = std::move(remoteDeviceInfo);
+            }
+        }
+
         ports.push_back(std::move(newPort));
     }
 
@@ -999,11 +1371,21 @@ dcgmReturn_t DcgmNvsdmManager::AttachNvLinks()
                 continue;
             }
 
-            port.id                           = m_numNvSwitchPorts;
-            device.portIds[devicePortIdIndex] = m_numNvSwitchPorts;
-            log_debug("Added link with id [{}] for device at index [{}].", m_numNvSwitchPorts, devicePortIdIndex);
+            dcgm_link_t linkEnc {};
+            linkEnc.parsed.type     = DCGM_FE_SWITCH;
+            linkEnc.parsed.switchId = static_cast<uint8_t>(device.id);
+            linkEnc.parsed.index    = static_cast<uint16_t>(port.num);
+            port.id                 = linkEnc.raw;
+
+            size_t const portIdx                  = m_nvSwitchPorts.size();
+            device.portIndices[devicePortIdIndex] = portIdx;
+            log_debug("Added link with id [{}] (vector index {}) for device at index [{}].",
+                      FormatLinkEntityId(linkEnc.raw),
+                      portIdx,
+                      devicePortIdIndex);
             devicePortIdIndex++;
 
+            m_portIdToIndex[linkEnc.raw] = portIdx;
             m_nvSwitchPorts.push_back(std::move(port));
             m_numNvSwitchPorts++;
         }
@@ -1066,14 +1448,14 @@ dcgmReturn_t DcgmNvsdmManager::GetNvSwitchStatus(dcgm_nvswitch_msg_get_entity_st
 
 dcgmReturn_t DcgmNvsdmManager::GetNvLinkStatus(dcgm_nvswitch_msg_get_entity_status_t *msg)
 {
-    for (unsigned int i = 0; i < std::min(static_cast<size_t>(m_numNvSwitchPorts), std::size(m_nvSwitchPorts)); i++)
+    // Boundary translation: raw entity id -> vector index. Presence == valid link.
+    if (!FindPortVectorIndex(msg->entityId).has_value())
     {
-        if (m_nvSwitchPorts[i].id == msg->entityId)
-        {
-            msg->entityStatus = DcgmEntityStatusOk;
-            break;
-        }
+        log_error("GetEntityStatus called for invalid NvLink entityId {}", FormatLinkEntityId(msg->entityId));
+        return DCGM_ST_BADPARAM;
     }
+
+    msg->entityStatus = DcgmEntityStatusOk;
     return DCGM_ST_OK;
 }
 

@@ -25,9 +25,12 @@ from _test_helpers import skip_test_if_no_dcgm_nvml
 
 g_latestDiagResponseVersion = dcgm_structs.dcgmDiagResponse_version12
 
-g_allValidations = [dcgm_structs.DCGM_POLICY_VALID_NONE, dcgm_structs.DCGM_POLICY_VALID_SV_SHORT,
-                    dcgm_structs.DCGM_POLICY_VALID_SV_MED, dcgm_structs.DCGM_POLICY_VALID_SV_LONG,
-                    dcgm_structs.DCGM_POLICY_VALID_SV_XLONG]
+g_allValidations = [
+    dcgm_structs.DCGM_POLICY_VALID_NONE,
+    dcgm_structs.DCGM_POLICY_VALID_SV_SHORT,
+    dcgm_structs.DCGM_POLICY_VALID_SV_MED,
+    dcgm_structs.DCGM_POLICY_VALID_SV_LONG,
+    dcgm_structs.DCGM_POLICY_VALID_SV_XLONG]
 
 
 def helper_validate_action(groupObj):
@@ -45,8 +48,16 @@ def helper_validate_action(groupObj):
         response = groupObj.action.Validate(validation)
 
         # Validate the contents
-        assert response.version == g_latestDiagResponseVersion, "Version mismatch. Expected %d. got %d" % \
-            (g_latestDiagResponseVersion, response.version)
+        assert response.version == g_latestDiagResponseVersion, "Version mismatch. Expected %d. got %d" % (
+            g_latestDiagResponseVersion, response.version)
+
+
+def helper_dcgm_action_validate_embedded(handle, gpuIds):
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetGroupWithGpuIds('actiongroup', gpuIds)
+
+    helper_validate_action(groupObj)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -55,6 +66,10 @@ def helper_validate_action(groupObj):
 @test_utils.run_only_as_root()
 @test_utils.run_with_max_power_limit_set()
 def test_dcgm_action_validate_embedded(handle, gpuIds):
+    helper_dcgm_action_validate_embedded(handle, gpuIds)
+
+
+def helper_dcgm_action_validate_remote(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetGroupWithGpuIds('actiongroup', gpuIds)
@@ -66,11 +81,7 @@ def test_dcgm_action_validate_embedded(handle, gpuIds):
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_dcgm_action_validate_remote(handle, gpuIds):
-    handleObj = pydcgm.DcgmHandle(handle=handle)
-    systemObj = handleObj.GetSystem()
-    groupObj = systemObj.GetGroupWithGpuIds('actiongroup', gpuIds)
-
-    helper_validate_action(groupObj)
+    helper_dcgm_action_validate_remote(handle, gpuIds)
 
 
 g_allDiagLevels = [dcgm_structs.DCGM_DIAG_LVL_SHORT,
@@ -91,16 +102,29 @@ def helper_validate_run_diag(groupObj):
         response = groupObj.action.RunDiagnostic(diagLevel)
 
         # Validate the contents
-        assert response.version == g_latestDiagResponseVersion, "Version mismatch. Expected %d. got %d" % \
-            (g_latestDiagResponseVersion, response.version)
+        assert response.version == g_latestDiagResponseVersion, "Version mismatch. Expected %d. got %d" % (
+            g_latestDiagResponseVersion, response.version)
+
+
+def helper_dcgm_action_run_diag_embedded(handle, gpuIds):
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetGroupWithGpuIds('actiongroup', gpuIds)
+
+    helper_validate_run_diag(groupObj)
 
 
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
+@test_utils.run_with_cuda_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 @test_utils.run_with_max_power_limit_set()
 def test_dcgm_action_run_diag_embedded(handle, gpuIds):
+    helper_dcgm_action_run_diag_embedded(handle, gpuIds)
+
+
+def helper_dcgm_action_run_diag_remote(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetGroupWithGpuIds('actiongroup', gpuIds)
@@ -110,15 +134,12 @@ def test_dcgm_action_run_diag_embedded(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
+@test_utils.run_with_cuda_gpus()
 @test_utils.for_all_same_sku_gpus()
 @test_utils.run_only_as_root()
 @test_utils.run_with_max_power_limit_set()
 def test_dcgm_action_run_diag_remote(handle, gpuIds):
-    handleObj = pydcgm.DcgmHandle(handle=handle)
-    systemObj = handleObj.GetSystem()
-    groupObj = systemObj.GetGroupWithGpuIds('actiongroup', gpuIds)
-
-    helper_validate_run_diag(groupObj)
+    helper_dcgm_action_run_diag_remote(handle, gpuIds)
 
 
 def helper_dcgm_action_run_diag_gpu_list(handle, gpuIds):
@@ -135,7 +156,8 @@ def helper_dcgm_action_run_diag_gpu_list(handle, gpuIds):
     drd = dcgm_structs.c_dcgmRunDiag_v10()
     drd.version = dcgm_structs.dcgmRunDiag_version10
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
-    # Initializing to DCGM_GROUP_NULL in case the constructor above doesn't and entityIds is specified.
+    # Initializing to DCGM_GROUP_NULL in case the constructor above doesn't
+    # and entityIds is specified.
     drd.groupId = dcgm_structs.DCGM_GROUP_NULL
     drd.entityIds = gpuIdStr
     # this will throw an exception on error
@@ -150,10 +172,7 @@ def test_dcgm_action_run_diag_gpu_list_standalone(handle, gpuIds):
     helper_dcgm_action_run_diag_gpu_list(handle, gpuIds)
 
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_live_gpus()
-@test_utils.for_all_same_sku_gpus()
-def test_dcgm_action_run_diag_bad_validation(handle, gpuIds):
+def helper_dcgm_action_run_diag_bad_validation(handle, gpuIds):
     gpuIdStr = ""
     for i, gpuId in enumerate(gpuIds):
         if i > 0:
@@ -162,13 +181,23 @@ def test_dcgm_action_run_diag_bad_validation(handle, gpuIds):
     drd = dcgm_structs.c_dcgmRunDiag_v10()
     drd.version = dcgm_structs.dcgmRunDiag_version10
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_XLONG + 1  # use an invalid value
-    # Initializing to DCGM_GROUP_NULL in case the constructor above doesn't and entityIds is specified.
+    # Initializing to DCGM_GROUP_NULL in case the constructor above doesn't
+    # and entityIds is specified.
     drd.groupId = dcgm_structs.DCGM_GROUP_NULL
     drd.entityIds = gpuIdStr
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM)):
         _ = test_utils.action_validate_wrapper(
             drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version10)
 
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_live_gpus()
+@test_utils.for_all_same_sku_gpus()
+def test_dcgm_action_run_diag_bad_validation(handle, gpuIds):
+    helper_dcgm_action_run_diag_bad_validation(handle, gpuIds)
+
+
+# NO HARDWARE
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('A100x4-and-DGX.yaml')
@@ -179,7 +208,8 @@ def test_dcgm_action_run_diag_on_heterogeneous_env(handle, gpuIds):
     drd = dcgm_structs.c_dcgmRunDiag_v10()
     drd.version = dcgm_structs.dcgmRunDiag_version10
     drd.validate = dcgm_structs.DCGM_POLICY_VALID_SV_SHORT
-    # Initializing to DCGM_GROUP_NULL in case the constructor above doesn't and entityIds is specified.
+    # Initializing to DCGM_GROUP_NULL in case the constructor above doesn't
+    # and entityIds is specified.
     drd.groupId = dcgm_structs.DCGM_GROUP_NULL
     drd.entityIds = "*"
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_GROUP_INCOMPATIBLE)):
@@ -196,6 +226,8 @@ def test_dcgm_action_run_diag_on_heterogeneous_env(handle, gpuIds):
             drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version10)
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('A100x4-and-DGX.yaml')
 @test_utils.run_with_standalone_host_engine(120)
@@ -207,7 +239,8 @@ def test_dcgm_action_run_diag_entity_and_group_specified(handle, gpuIds):
     drd.groupId = dcgm_structs.DCGM_GROUP_ALL_GPUS
     drd.entityIds = str(gpuIds[0])
     # When both entity id and group are specified, entity id will be ignored.
-    # It should return DCGM_ST_GROUP_INCOMPATIBLE as it is on heterogeneous env with group DCGM_GROUP_ALL_GPUS.
+    # It should return DCGM_ST_GROUP_INCOMPATIBLE as it is on heterogeneous
+    # env with group DCGM_GROUP_ALL_GPUS.
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_GROUP_INCOMPATIBLE)):
         _ = test_utils.action_validate_wrapper(
             drd, handle, runDiagVersion=dcgm_structs.dcgmRunDiag_version10)

@@ -29,9 +29,10 @@ from inspect import isclass
 DCGM_MAX_STR_LENGTH = 256
 DCGM_MAX_NUM_DEVICES = 32  # DCGM 2.0 and newer = 32. DCGM 1.8 and older = 16
 DCGM_MAX_NUM_SWITCHES = 12
-DCGM_NVLINK_MAX_LINKS_PER_GPU = 18
+DCGM_NVLINK_MAX_LINKS_PER_GPU = 36
 DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY1 = 6
 DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY2 = 12
+DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY3 = 18
 # Max NvLinks per NvSwitch pre-Hopper
 DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH_V1 = 36
 DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH = 256
@@ -49,7 +50,8 @@ DCGM_MAX_NUM_CPUS = 8
 DCGM_MAX_NUM_CPU_CORES = 1024
 DCGM_CHAR_BIT = 8
 
-# When more than one value is returned from a query, which order should it be returned in?
+# When more than one value is returned from a query, which order should it
+# be returned in?
 DCGM_ORDER_ASCENDING = 1
 DCGM_ORDER_DESCENDING = 2
 
@@ -93,7 +95,8 @@ DCGM_ST_FUNCTION_NOT_FOUND = -20  # Unable to find function
 # Connection to the host engine is not valid any longer
 DCGM_ST_CONNECTION_NOT_VALID = -21
 DCGM_ST_GPU_NOT_SUPPORTED = -22  # This GPU is not supported by DCGM
-# The GPUs of the provided group are not compatible with each other for the requested operation
+# The GPUs of the provided group are not compatible with each other for
+# the requested operation
 DCGM_ST_GROUP_INCOMPATIBLE = -23
 DCGM_ST_MAX_LIMIT = -24
 DCGM_ST_LIBRARY_NOT_FOUND = -25  # DCGM library could not be found
@@ -102,7 +105,8 @@ DCGM_ST_DUPLICATE_KEY = -26  # Duplicate key passed to the function
 DCGM_ST_GPU_IN_SYNC_BOOST_GROUP = -27
 # GPU is a not a part of sync boost group
 DCGM_ST_GPU_NOT_IN_SYNC_BOOST_GROUP = -28
-# This operation cannot be performed when the host engine is running as non-root
+# This operation cannot be performed when the host engine is running as
+# non-root
 DCGM_ST_REQUIRES_ROOT = -29
 # DCGM GPU Diagnostic was successfully executed, but reported an error.
 DCGM_ST_NVVS_ERROR = -30
@@ -111,9 +115,11 @@ DCGM_ST_INSUFFICIENT_SIZE = -31  # An input argument is not large enough
 DCGM_ST_FIELD_UNSUPPORTED_BY_API = -32
 # This request is serviced by a module of DCGM that is not currently loaded
 DCGM_ST_MODULE_NOT_LOADED = -33
-# The requested operation could not be completed because the affected resource is in use
+# The requested operation could not be completed because the affected
+# resource is in use
 DCGM_ST_IN_USE = -34
-# The specified group is empty and this operation is not valid with an empty group
+# The specified group is empty and this operation is not valid with an
+# empty group
 DCGM_ST_GROUP_IS_EMPTY = -35
 # Profiling is not supported for this group of GPUs or GPU
 DCGM_ST_PROFILING_NOT_SUPPORTED = -36
@@ -121,7 +127,8 @@ DCGM_ST_PROFILING_NOT_SUPPORTED = -36
 DCGM_ST_PROFILING_LIBRARY_ERROR = -37
 # The requested profiling metrics cannot be collected in a single pass
 DCGM_ST_PROFILING_MULTI_PASS = -38
-# A diag instance is already running, cannot run a new diag until the current one finishes.
+# A diag instance is already running, cannot run a new diag until the
+# current one finishes.
 DCGM_ST_DIAG_ALREADY_RUNNING = -39
 # The DCGM GPU Diagnostic returned JSON that cannot be parsed
 DCGM_ST_DIAG_BAD_JSON = -40
@@ -231,8 +238,33 @@ DCGM_TOPOLOGY_NVLINK9 = 0x10000
 DCGM_TOPOLOGY_NVLINK10 = 0x20000
 DCGM_TOPOLOGY_NVLINK11 = 0x40000
 DCGM_TOPOLOGY_NVLINK12 = 0x80000
+DCGM_TOPOLOGY_NVLINK13 = 0x100000
+DCGM_TOPOLOGY_NVLINK14 = 0x200000
+DCGM_TOPOLOGY_NVLINK15 = 0x400000
+DCGM_TOPOLOGY_NVLINK16 = 0x800000
+DCGM_TOPOLOGY_NVLINK17 = 0x1000000
+DCGM_TOPOLOGY_NVLINK18 = 0x2000000
+DCGM_TOPOLOGY_NVLINK19 = 0x4000000
+DCGM_TOPOLOGY_NVLINK20 = 0x8000000
+DCGM_TOPOLOGY_NVLINK21 = 0x10000000
+DCGM_TOPOLOGY_NVLINK22 = 0x20000000
+DCGM_TOPOLOGY_NVLINK23 = 0x40000000
+DCGM_TOPOLOGY_NVLINK24 = 0x80000000
+DCGM_TOPOLOGY_NVLINK25 = 0x100000000
+DCGM_TOPOLOGY_NVLINK26 = 0x200000000
+DCGM_TOPOLOGY_NVLINK27 = 0x400000000
+DCGM_TOPOLOGY_NVLINK28 = 0x800000000
+DCGM_TOPOLOGY_NVLINK29 = 0x1000000000
+DCGM_TOPOLOGY_NVLINK30 = 0x2000000000
+DCGM_TOPOLOGY_NVLINK31 = 0x4000000000
+DCGM_TOPOLOGY_NVLINK32 = 0x8000000000
+DCGM_TOPOLOGY_NVLINK33 = 0x10000000000
+DCGM_TOPOLOGY_NVLINK34 = 0x20000000000
+DCGM_TOPOLOGY_NVLINK35 = 0x40000000000
+DCGM_TOPOLOGY_NVLINK36 = 0x80000000000
 
-# Diagnostic per gpu tests - fixed indices for dcgmDiagResponsePerGpu_t.results[]
+# Diagnostic per gpu tests - fixed indices for
+# dcgmDiagResponsePerGpu_t.results[]
 DCGM_MEMORY_INDEX = 0
 DCGM_DIAGNOSTIC_INDEX = 1
 DCGM_PCI_INDEX = 2
@@ -372,7 +404,8 @@ class DCGMError(Exception):
                 DCGMError._error_code_to_string[self.value] = str(
                     _dcgmErrorString(self.value))
             msg = DCGMError._error_code_to_string[self.value]
-        # Ensure we catch all exceptions, otherwise the error code will be hidden in a traceback
+        # Ensure we catch all exceptions, otherwise the error code will be
+        # hidden in a traceback
         except BaseException:
             msg = "DCGM Error with code %d" % self.value
 
@@ -391,7 +424,7 @@ class DCGMError(Exception):
     def SetAdditionalInfo(self, msg):
         """
         Sets msg as additional information returned by the string representation of DCGMError and subclasses.
-        Example output for DCGMError_Uninitialized subclass, with msg set to 'more info msg here' is 
+        Example output for DCGMError_Uninitialized subclass, with msg set to 'more info msg here' is
         "DCGMError_Uninitialized: Object is in an undefined state: 'more info msg here'".
 
         Ensure that msg is a string or an object for which the __str__() method does not throw an error
@@ -676,9 +709,14 @@ def _LoadDcgmLibrary(libDcgmPath=None):
             if dcgmLib is None:
                 if sys.platform[:3] == "win":
                     # cdecl calling convention
-                    # load nvml.dll from %ProgramFiles%/NVIDIA Corporation/NVSMI/nvml.dll
-                    dcgmLib = CDLL(os.path.join(os.getenv(
-                        "ProgramFiles", "C:/Program Files"), "NVIDIA Corporation/NVSMI/dcgm.dll"))
+                    # load nvml.dll from %ProgramFiles%/NVIDIA
+                    # Corporation/NVSMI/nvml.dll
+                    dcgmLib = CDLL(
+                        os.path.join(
+                            os.getenv(
+                                "ProgramFiles",
+                                "C:/Program Files"),
+                            "NVIDIA Corporation/NVSMI/dcgm.dll"))
                 else:
                     libPaths = []
                     if libDcgmPath:
@@ -841,7 +879,9 @@ class c_dcgmGroupEntityPair_t(_PrintableStructure):
     ]
 
     def __eq__(self, other):
-        return (self.entityGroupId == other.entityGroupId) and (self.entityId == other.entityId)
+        return (
+            self.entityGroupId == other.entityGroupId) and (
+            self.entityId == other.entityId)
 
 # /**
 #  * Structure to store information for DCGM group (v3)
@@ -1855,7 +1895,8 @@ class c_dcgmFieldValue_v1(_PrintableStructure):
 
 dcgmFieldValue_version1 = make_dcgm_version(c_dcgmFieldValue_v1, 1)
 
-# This structure is used to represent value for the field to be queried (version 2)
+# This structure is used to represent value for the field to be queried
+# (version 2)
 
 
 class c_dcgmFieldValue_v2(_PrintableStructure):
@@ -2366,6 +2407,28 @@ class c_dcgmDeviceTopology_v1(_PrintableStructure):
 dcgmDeviceTopology_version1 = make_dcgm_version(c_dcgmDeviceTopology_v1, 1)
 
 
+class c_dcgmDeviceTopologyPath_v2(_PrintableStructure):
+    _fields_ = [
+        ('gpuId', c_uint32),
+        ('path', c_uint64),
+        ('localNvLinkIds', c_uint64)
+    ]
+
+
+class c_dcgmDeviceTopology_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint32),
+        ('cpuAffinityMask', c_ulong * DCGM_AFFINITY_BITMASK_ARRAY_SIZE),
+        ('numGpus', c_uint32),
+        ('gpuPaths', c_dcgmDeviceTopologyPath_v2 * (DCGM_MAX_NUM_DEVICES - 1))
+    ]
+
+
+dcgmDeviceTopology_version2 = make_dcgm_version(c_dcgmDeviceTopology_v2, 2)
+dcgmDeviceTopology_version = dcgmDeviceTopology_version2
+c_dcgmDeviceTopology_t = c_dcgmDeviceTopology_v2
+
+
 class c_dcgmGroupTopology_v1(_PrintableStructure):
     _fields_ = [
         ('version', c_uint32),
@@ -2376,6 +2439,20 @@ class c_dcgmGroupTopology_v1(_PrintableStructure):
 
 
 dcgmGroupTopology_version1 = make_dcgm_version(c_dcgmGroupTopology_v1, 1)
+
+
+class c_dcgmGroupTopology_v2(_PrintableStructure):
+    _fields_ = [
+        ('version', c_uint32),
+        ('groupCpuAffinityMask', c_ulong * DCGM_AFFINITY_BITMASK_ARRAY_SIZE),
+        ('numaOptimalFlag', c_uint32),
+        ('slowestPath', c_uint64)
+    ]
+
+
+dcgmGroupTopology_version2 = make_dcgm_version(c_dcgmGroupTopology_v2, 2)
+dcgmGroupTopology_version = dcgmGroupTopology_version2
+c_dcgmGroupTopology_t = c_dcgmGroupTopology_v2
 
 
 class c_dcgmCpuHierarchyOwnedCores_v1(_PrintableStructure):
@@ -2460,7 +2537,8 @@ dcgmAllFieldGroup_version1 = make_dcgm_version(c_dcgmAllFieldGroup_v1, 1)
 class c_dcgmIntrospectMemory_v1(_PrintableStructure):
     _fields_ = [
         ('version', c_uint32),
-        # The total number of bytes being used to store all of the fields being watched
+        # The total number of bytes being used to store all of the fields being
+        # watched
         ('bytesUsed', c_longlong)
     ]
 
@@ -2505,7 +2583,8 @@ DCGM_RUN_FLAGS_STATSONFAIL = 0x0002
 DCGM_RUN_FLAGS_TRAIN = 0x0004
 # UNUSED
 DCGM_RUN_FLAGS_FORCE_TRAIN = 0x0008
-# Enable fail early checks for the Targeted Stress, Targeted Power, SM Stress, and Diagnostic tests
+# Enable fail early checks for the Targeted Stress, Targeted Power, SM
+# Stress, and Diagnostic tests
 DCGM_RUN_FLAGS_FAIL_EARLY = 0x0010
 DCGM_RUN_FLAGS_ENABLE_HEARTBEAT = 0x0020  # Enable heartbeat for the diagnostic
 
@@ -2513,7 +2592,8 @@ DCGM_RUN_FLAGS_ENABLE_HEARTBEAT = 0x0020  # Enable heartbeat for the diagnostic
 class c_dcgmRunDiag_v7(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),  # version of this message
-        # flags specifying binary options for running it. Currently verbose and stats on fail
+        # flags specifying binary options for running it. Currently verbose and
+        # stats on fail
         ('flags', c_uint),
         # 0-5 for the debug level the GPU diagnostic will use for logging
         ('debugLevel', c_uint),
@@ -2522,9 +2602,11 @@ class c_dcgmRunDiag_v7(_PrintableStructure):
         ('validate', c_uint),  # 0-3 for which tests to run. Optional.
         # Specifed list of test names. Optional.
         ('testNames', (c_char * DCGM_MAX_TEST_NAMES_LEN) * DCGM_MAX_TEST_NAMES),
-        # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        # Parameters to set for specified tests in the format:
+        # testName.parameterName=parameterValue. Optional.
         ('testParms', (c_char * DCGM_MAX_TEST_PARMS_LEN) * DCGM_MAX_TEST_PARMS),
-        # Comma-separated list of fake gpus. Cannot be specified with the groupId or gpuList.
+        # Comma-separated list of fake gpus. Cannot be specified with the
+        # groupId or gpuList.
         ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN),
         # Comma-separated list of gpus. Cannot be specified with the groupId.
         ('gpuList', c_char * DCGM_GPU_LIST_LEN),
@@ -2534,7 +2616,8 @@ class c_dcgmRunDiag_v7(_PrintableStructure):
         ('statsPath', c_char * DCGM_PATH_LEN),
         # Contents of nvvs config file (likely yaml)
         ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN),
-        # Throttle reasons to ignore as either integer mask or csv list of reasons
+        # Throttle reasons to ignore as either integer mask or csv list of
+        # reasons
         ('clocksEventMask', c_char * DCGM_CLOCKS_EVENT_MASK_LEN),
         # Custom path to the diagnostic plugins
         ('pluginPath', c_char * DCGM_PATH_LEN),
@@ -2543,7 +2626,8 @@ class c_dcgmRunDiag_v7(_PrintableStructure):
         ('totalIterations', c_uint),  # The total iterations that will be executed
         ('timeoutSeconds', c_uint),  # The timeout for the diagnostic in seconds
         ('_unusedBuf', c_char * DCGM_PATH_LEN),  # Unused
-        # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
+        # How often the fail early checks should occur when
+        # DCGM_RUN_FLAGS_FAIL_EARLY is set.
         ('failCheckInterval', c_uint),
     ]
 
@@ -2554,7 +2638,8 @@ dcgmRunDiag_version7 = make_dcgm_version(c_dcgmRunDiag_v7, 7)
 class c_dcgmRunDiag_v8(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),  # version of this message
-        # flags specifying binary options for running it. Currently verbose and stats on fail
+        # flags specifying binary options for running it. Currently verbose and
+        # stats on fail
         ('flags', c_uint),
         # 0-5 for the debug level the GPU diagnostic will use for logging
         ('debugLevel', c_uint),
@@ -2563,9 +2648,11 @@ class c_dcgmRunDiag_v8(_PrintableStructure):
         ('validate', c_uint),  # 0-3 for which tests to run. Optional.
         # Specifed list of test names. Optional.
         ('testNames', c_char * DCGM_MAX_TEST_NAMES_LEN * DCGM_MAX_TEST_NAMES),
-        # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        # Parameters to set for specified tests in the format:
+        # testName.parameterName=parameterValue. Optional.
         ('testParms', c_char * DCGM_MAX_TEST_PARMS_LEN_V2 * DCGM_MAX_TEST_PARMS),
-        # Comma-separated list of fake gpus. Cannot be specified with the groupId or gpuList.
+        # Comma-separated list of fake gpus. Cannot be specified with the
+        # groupId or gpuList.
         ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN),
         # Comma-separated list of gpus. Cannot be specified with the groupId.
         ('gpuList', c_char * DCGM_GPU_LIST_LEN),
@@ -2575,7 +2662,8 @@ class c_dcgmRunDiag_v8(_PrintableStructure):
         ('statsPath', c_char * DCGM_PATH_LEN),
         # Contents of nvvs config file (likely yaml)
         ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN),
-        # Throttle reasons to ignore as either integer mask or csv list of reasons
+        # Throttle reasons to ignore as either integer mask or csv list of
+        # reasons
         ('throttleMask', c_char * DCGM_THROTTLE_MASK_LEN),
         # Custom path to the diagnostic plugins
         ('pluginPath', c_char * DCGM_PATH_LEN),
@@ -2584,7 +2672,8 @@ class c_dcgmRunDiag_v8(_PrintableStructure):
         ('totalIterations', c_uint),  # The total iterations that will be executed
         ('timeoutSeconds', c_uint),  # The timeout in seconds
         ('_unusedBuf', c_char * DCGM_PATH_LEN),  # Unused
-        # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
+        # How often the fail early checks should occur when
+        # DCGM_RUN_FLAGS_FAIL_EARLY is set.
         ('failCheckInterval', c_uint),
         # The expected number of entities the diag will run on.
         ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN),
@@ -2597,18 +2686,23 @@ dcgmRunDiag_version8 = make_dcgm_version(c_dcgmRunDiag_v8, 8)
 class c_dcgmRunDiag_v9(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),  # version of this message
-        # flags specifying binary options for running it. Currently verbose and stats on fail
+        # flags specifying binary options for running it. Currently verbose and
+        # stats on fail
         ('flags', c_uint),
         # 0-5 for the debug level the GPU diagnostic will use for logging
         ('debugLevel', c_uint),
-        # group of GPUs to verify. Cannot be specified together with entityIds. When entityIds is specified, this value should be set to DCGM_GROUP_NULL.
+        # group of GPUs to verify. Cannot be specified together with entityIds.
+        # When entityIds is specified, this value should be set to
+        # DCGM_GROUP_NULL.
         ('groupId', c_void_p),
         ('validate', c_uint),  # 0-3 for which tests to run. Optional.
         # Specifed list of test names. Optional.
         ('testNames', c_char * DCGM_MAX_TEST_NAMES_LEN * DCGM_MAX_TEST_NAMES),
-        # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        # Parameters to set for specified tests in the format:
+        # testName.parameterName=parameterValue. Optional.
         ('testParms', c_char * DCGM_MAX_TEST_PARMS_LEN_V2 * DCGM_MAX_TEST_PARMS),
-        # Comma-separated list of fake gpus. Cannot be specified with the groupId, entityIds or gpuList.
+        # Comma-separated list of fake gpus. Cannot be specified with the
+        # groupId, entityIds or gpuList.
         ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN),
         # Alternate name for the debug log file that should be used
         ('debugLogFile', c_char * DCGM_PATH_LEN),
@@ -2616,7 +2710,8 @@ class c_dcgmRunDiag_v9(_PrintableStructure):
         ('statsPath', c_char * DCGM_PATH_LEN),
         # Contents of nvvs config file (likely yaml)
         ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN),
-        # Clocks event reasons to ignore as either integer mask or csv list of reasons
+        # Clocks event reasons to ignore as either integer mask or csv list of
+        # reasons
         ('clocksEventMask', c_char * DCGM_CLOCKS_EVENT_MASK_LEN),
         # Custom path to the diagnostic plugins
         ('pluginPath', c_char * DCGM_PATH_LEN),
@@ -2625,11 +2720,13 @@ class c_dcgmRunDiag_v9(_PrintableStructure):
         ('totalIterations', c_uint),  # The total iterations that will be executed
         ('timeoutSeconds', c_uint),  # The timeout in seconds
         ('_unusedBuf', c_char * DCGM_PATH_LEN),  # Unused
-        # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
+        # How often the fail early checks should occur when
+        # DCGM_RUN_FLAGS_FAIL_EARLY is set.
         ('failCheckInterval', c_uint),
         # The expected number of entities the diag will run on.
         ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN),
-        # Comma-separated list of entity ids. Cannot be specified with the groupId.
+        # Comma-separated list of entity ids. Cannot be specified with the
+        # groupId.
         ('entityIds', c_char * DCGM_ENTITY_ID_LIST_LEN),
         # The watch frequency for fields being watched
         ('watchFrequency', c_uint),
@@ -2642,18 +2739,23 @@ dcgmRunDiag_version9 = make_dcgm_version(c_dcgmRunDiag_v9, 9)
 class c_dcgmRunDiag_v10(_PrintableStructure):
     _fields_ = [
         ('version', c_uint),  # version of this message
-        # flags specifying binary options for running it. Currently verbose and stats on fail
+        # flags specifying binary options for running it. Currently verbose and
+        # stats on fail
         ('flags', c_uint),
         # 0-5 for the debug level the GPU diagnostic will use for logging
         ('debugLevel', c_uint),
-        # group of GPUs to verify. Cannot be specified together with entityIds. When entityIds is specified, this value should be set to DCGM_GROUP_NULL.
+        # group of GPUs to verify. Cannot be specified together with entityIds.
+        # When entityIds is specified, this value should be set to
+        # DCGM_GROUP_NULL.
         ('groupId', c_void_p),
         ('validate', c_uint),  # 0-3 for which tests to run. Optional.
         # Specifed list of test names. Optional.
         ('testNames', c_char * DCGM_MAX_TEST_NAMES_LEN * DCGM_MAX_TEST_NAMES),
-        # Parameters to set for specified tests in the format: testName.parameterName=parameterValue. Optional.
+        # Parameters to set for specified tests in the format:
+        # testName.parameterName=parameterValue. Optional.
         ('testParms', c_char * DCGM_MAX_TEST_PARMS_LEN_V2 * DCGM_MAX_TEST_PARMS),
-        # Comma-separated list of fake gpus. Cannot be specified with the groupId, entityIds or gpuList.
+        # Comma-separated list of fake gpus. Cannot be specified with the
+        # groupId, entityIds or gpuList.
         ('fakeGpuList', c_char * DCGM_GPU_LIST_LEN),
         # Alternate name for the debug log file that should be used
         ('debugLogFile', c_char * DCGM_PATH_LEN),
@@ -2661,7 +2763,8 @@ class c_dcgmRunDiag_v10(_PrintableStructure):
         ('statsPath', c_char * DCGM_PATH_LEN),
         # Contents of nvvs config file (likely yaml)
         ('configFileContents', c_char * DCGM_MAX_CONFIG_FILE_LEN),
-        # Clocks event reasons to ignore as either integer mask or csv list of reasons
+        # Clocks event reasons to ignore as either integer mask or csv list of
+        # reasons
         ('clocksEventMask', c_char * DCGM_CLOCKS_EVENT_MASK_LEN),
         # Custom path to the diagnostic plugins
         ('pluginPath', c_char * DCGM_PATH_LEN),
@@ -2670,11 +2773,13 @@ class c_dcgmRunDiag_v10(_PrintableStructure):
         ('totalIterations', c_uint),  # The total iterations that will be executed
         ('timeoutSeconds', c_uint),  # The timeout in seconds
         ('_unusedBuf', c_char * DCGM_PATH_LEN),  # Unused
-        # How often the fail early checks should occur when DCGM_RUN_FLAGS_FAIL_EARLY is set.
+        # How often the fail early checks should occur when
+        # DCGM_RUN_FLAGS_FAIL_EARLY is set.
         ('failCheckInterval', c_uint),
         # The expected number of entities the diag will run on.
         ('expectedNumEntities', c_char * DCGM_EXPECTED_ENTITIES_LEN),
-        # Comma-separated list of entity ids. Cannot be specified with the groupId.
+        # Comma-separated list of entity ids. Cannot be specified with the
+        # groupId.
         ('entityIds', c_char * DCGM_ENTITY_ID_LIST_LEN),
         # The watch frequency for fields being watched
         ('watchFrequency', c_uint),
@@ -2695,7 +2800,7 @@ dcgmRunDiag_version = dcgmRunDiag_version10
 # Only return entities that are supported by DCGM.
 DCGM_GEGE_FLAG_ONLY_SUPPORTED = 0x00000001
 
-# Identifies a GPU NVLink error type returned by DCGM_FI_DEV_GPU_NVLINK_ERRORS
+# Identifies a GPU NVLink error type returned by DCGM_FI_DEV_NVLINK_ERROR
 # NVLink link recovery error occurred
 DCGM_GPU_NVLINK_ERROR_RECOVERY_REQUIRED = 1
 DCGM_GPU_NVLINK_ERROR_FATAL = 2  # NVLink link fatal error occurred
@@ -2723,7 +2828,8 @@ dcgmTopoSchedHint_version1 = make_dcgm_version(c_dcgmTopoSchedHint_v1, 1)
 # DCGM NvLink link states used by c_dcgmNvLinkGpuLinkStatus_v1 & 2 and c_dcgmNvLinkNvSwitchLinkStatus_t's linkState field
 # NvLink is unsupported by this GPU (Default for GPUs)
 DcgmNvLinkLinkStateNotSupported = 0
-# NvLink is supported for this link but this link is disabled (Default for NvSwitches)
+# NvLink is supported for this link but this link is disabled (Default for
+# NvSwitches)
 DcgmNvLinkLinkStateDisabled = 1
 DcgmNvLinkLinkStateDown = 2  # This NvLink link is down (inactive)
 DcgmNvLinkLinkStateUp = 3  # This NvLink link is up (active)
@@ -2752,6 +2858,14 @@ class c_dcgmNvLinkGpuLinkStatus_v3(_PrintableStructure):
     _fields_ = [
         ('entityId', c_uint32),   # Entity ID of the GPU (gpuId)
         # Link state of each link of this GPU
+        ('linkState', c_uint32 * DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY3),
+    ]
+
+
+class c_dcgmNvLinkGpuLinkStatus_v4(_PrintableStructure):
+    _fields_ = [
+        ('entityId', c_uint32),   # Entity ID of the GPU (gpuId)
+        # Link state of each link of this GPU
         ('linkState', c_uint32 * DCGM_NVLINK_MAX_LINKS_PER_GPU),
     ]
 
@@ -2771,7 +2885,7 @@ class c_dcgmNvLinkStatus_v2(_PrintableStructure):
     NvSwitch link status for all GPUs and NvSwitches in the system
     '''
     _fields_ = [
-        # version of this message. Should be dcgmNvLinkStatus_version1
+        # version of this message. Should be dcgmNvLinkStatus_version2
         ('version', c_uint32),
         ('numGpus', c_uint32),       # Number of GPUs populated in gpus[]
         # Per-GPU NvLink link statuses
@@ -2801,7 +2915,7 @@ class c_dcgmNvLinkStatus_v4(_PrintableStructure):
     NvSwitch link status for all GPUs and NvSwitches in the system
     '''
     _fields_ = [
-        # version of this message. Should be dcgmNvLinkStatus_version1
+        # version of this message. Should be dcgmNvLinkStatus_version4
         ('version', c_uint32),
         ('numGpus', c_uint32),       # Number of GPUs populated in gpus[]
         # Per-GPU NvLink link statuses
@@ -2814,6 +2928,28 @@ class c_dcgmNvLinkStatus_v4(_PrintableStructure):
 
 
 dcgmNvLinkStatus_version4 = make_dcgm_version(c_dcgmNvLinkStatus_v4, 4)
+
+
+class c_dcgmNvLinkStatus_v5(_PrintableStructure):
+    '''
+    NvSwitch link status for all GPUs and NvSwitches in the system
+    '''
+    _fields_ = [
+        # version of this message. Should be dcgmNvLinkStatus_version
+        ('version', c_uint32),
+        ('numGpus', c_uint32),       # Number of GPUs populated in gpus[]
+        # Per-GPU NvLink link statuses
+        ('gpus', c_dcgmNvLinkGpuLinkStatus_v4 * DCGM_MAX_NUM_DEVICES),
+        # Number of NvSwitches populated in nvSwitches[]
+        ('numNvSwitches', c_uint32),
+        ('nvSwitches', c_dcgmNvLinkNvSwitchLinkStatus_v2 *
+         DCGM_MAX_NUM_SWITCHES)  # Per-NvSwitch NvLink link statuses
+    ]
+
+
+dcgmNvLinkStatus_version5 = make_dcgm_version(c_dcgmNvLinkStatus_v5, 5)
+dcgmNvLinkStatus_version = dcgmNvLinkStatus_version5
+c_dcgmNvLinkStatus_t = c_dcgmNvLinkStatus_v5
 
 # Nvlink P2P link status.
 DcgmNvLinkP2PStatusOK = 0  # O.K.
@@ -2949,7 +3085,8 @@ dcgmModulesReloadable_version1 = make_dcgm_version(
 
 # Maximum number of metric ID groups that can exist in DCGM
 DCGM_PROF_MAX_NUM_GROUPS_V2 = 10
-# Maximum number of field IDs that can be in a single DCGM profiling metric group
+# Maximum number of field IDs that can be in a single DCGM profiling
+# metric group
 DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2 = 64
 
 
@@ -3008,7 +3145,8 @@ DcgmFMStatusSuccess = 3  # The Fabric Manager has started successfully
 DcgmFMStatusFailure = 4  # The Fabric Manager finished training, but failed
 # NVML returned an unrecognized status for the fabric manager
 DcgmFMStatusUnrecognized = 5
-# NVML returned NVML_ERROR_FUNCTION_NOT_FOUND when querying fabric manager status
+# NVML returned NVML_ERROR_FUNCTION_NOT_FOUND when querying fabric manager
+# status
 DcgmFMStatusNvmlTooOld = 6
 DcgmFMStatusCount = 7  # The count of valid statuses, always 1 more than the last status
 
@@ -3036,7 +3174,8 @@ DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX = 16
 # Maximum number of hosts that can be reported
 DCGM_MN_DIAG_RESPONSE_HOSTS_MAX = 72
 DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX = (
-    DCGM_MN_DIAG_RESPONSE_HOSTS_MAX * DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
+    DCGM_MN_DIAG_RESPONSE_HOSTS_MAX *
+    DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
 # Maximum number of per-entity errors
 DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX = 32
 # Maximum number of per-entity info messages

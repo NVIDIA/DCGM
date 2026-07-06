@@ -97,6 +97,7 @@ const std::string SW_SUBTEST_SRAM_THRESHOLD("SRAM Threshold Count");
 const std::string SW_SUBTEST_GRAPHICS("Graphics Processes");
 const std::string SW_SUBTEST_INFOROM("Inforom");
 const std::string SW_SUBTEST_FABRIC_MANAGER("Fabric Manager");
+std::string const SW_SUBTEST_GPU_RECOVERY_STATE = "GPU Recovery State";
 
 Software::Software(dcgmHandle_t handle, std::unique_ptr<DcgmSystemBase> dcgmSystem)
     : m_dcgmRecorder(handle)
@@ -201,6 +202,10 @@ void Software::Go(std::string const &testName,
     }
     else if (testParameters.GetString(SW_STR_DO_TEST) == "inforom")
         checkInforom();
+    else if (testParameters.GetString(SW_STR_DO_TEST) == "gpu_recovery_state")
+    {
+        checkGpuRecoveryState();
+    }
     else if (testParameters.GetString(SW_STR_DO_TEST) == "fabric_manager")
         checkFabricManager();
 }
@@ -525,7 +530,7 @@ int Software::checkForSramThreshold()
     for (auto const gpuId : gpuList)
     {
         dcgmReturn_t ret
-            = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_THRESHOLD_SRM, thresholdExceeded, flags);
+            = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_SRAM_EXCEEDED, thresholdExceeded, flags);
 
         if (ret != DCGM_ST_OK)
         {
@@ -672,7 +677,7 @@ int Software::checkPageRetirement()
     {
         // Check for pending page retirements
         ret = m_dcgmRecorder.GetCurrentFieldValue(
-            gpuId, DCGM_FI_DEV_RETIRED_PENDING, pendingRetirementsFieldValue, flags);
+            gpuId, DCGM_FI_DEV_PAGE_RETIRED_PENDING, pendingRetirementsFieldValue, flags);
         if (ret != DCGM_ST_OK)
         {
             DcgmError d { gpuId };
@@ -687,7 +692,7 @@ int Software::checkPageRetirement()
         {
             DCGM_LOG_WARNING << "gpuId " << gpuId << " returned status " << pendingRetirementsFieldValue.status
                              << ", value " << pendingRetirementsFieldValue.value.i64
-                             << "for DCGM_FI_DEV_RETIRED_PENDING. Skipping this check.";
+                             << "for DCGM_FI_DEV_PAGE_RETIRED_PENDING. Skipping this check.";
         }
         else if (pendingRetirementsFieldValue.value.i64 > 0)
         {
@@ -714,7 +719,7 @@ int Software::checkPageRetirement()
         retiredPagesTotal = 0;
 
         // DBE retired pages
-        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_RETIRED_DBE, dbeFieldValue, flags);
+        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, dbeFieldValue, flags);
         if (ret != DCGM_ST_OK)
         {
             DcgmError d { gpuId };
@@ -727,7 +732,8 @@ int Software::checkPageRetirement()
         if (dbeFieldValue.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(dbeFieldValue.value.i64))
         {
             DCGM_LOG_WARNING << "gpuId " << gpuId << " returned status " << dbeFieldValue.status << ", value "
-                             << dbeFieldValue.value.i64 << "for DCGM_FI_DEV_RETIRED_DBE. Skipping this check.";
+                             << dbeFieldValue.value.i64
+                             << "for DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL. Skipping this check.";
         }
         else
         {
@@ -735,7 +741,7 @@ int Software::checkPageRetirement()
         }
 
         // SBE retired pages
-        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_RETIRED_SBE, sbeFieldValue, flags);
+        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL, sbeFieldValue, flags);
         if (ret != DCGM_ST_OK)
         {
             DcgmError d { gpuId };
@@ -748,7 +754,8 @@ int Software::checkPageRetirement()
         if (sbeFieldValue.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(sbeFieldValue.value.i64))
         {
             DCGM_LOG_WARNING << "gpuId " << gpuId << " returned status " << sbeFieldValue.status << ", value "
-                             << sbeFieldValue.value.i64 << "for DCGM_FI_DEV_RETIRED_SBE. Skipping this check.";
+                             << sbeFieldValue.value.i64
+                             << "for DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL. Skipping this check.";
         }
         else
         {
@@ -772,6 +779,7 @@ int Software::checkRowRemapping()
 {
     dcgmFieldValue_v2 pendingRowRemap;
     dcgmFieldValue_v2 rowRemapFailure;
+    dcgmFieldValue_v2 uncRemap;
     dcgmReturn_t ret;
 
     /* Flags to pass to dcgmRecorder.GetCurrentFieldValue. Get live data since we're not watching the fields ahead of
@@ -792,7 +800,7 @@ int Software::checkRowRemapping()
         memset(&rowRemapFailure, 0, sizeof(rowRemapFailure));
 
         // Row remap failure
-        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ROW_REMAP_FAILURE, rowRemapFailure, flags);
+        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ROW_REMAP_FAILED, rowRemapFailure, flags);
         if (ret != DCGM_ST_OK)
         {
             DcgmError d { gpuId };
@@ -806,7 +814,7 @@ int Software::checkRowRemapping()
         if (rowRemapFailure.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(rowRemapFailure.value.i64))
         {
             DCGM_LOG_INFO << "gpuId " << gpuId << " returned status " << rowRemapFailure.status << ", value "
-                          << rowRemapFailure.value.i64 << "for DCGM_FI_DEV_ROW_REMAP_FAILURE. Skipping this check.";
+                          << rowRemapFailure.value.i64 << "for DCGM_FI_DEV_ROW_REMAP_FAILED. Skipping this check.";
         }
         else if (rowRemapFailure.value.i64 > 0)
         {
@@ -840,15 +848,25 @@ int Software::checkRowRemapping()
             continue;
         }
 
-        if (pendingRowRemap.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(pendingRowRemap.value.i64))
+        // Check for uncorrectable error remappings
+        memset(&uncRemap, 0, sizeof(uncRemap));
+        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ROW_REMAP_UNCORRECTABLE_TOTAL, uncRemap, flags);
+
+        if (ret == DCGM_ST_OK && !DCGM_INT64_IS_BLANK(uncRemap.value.i64)
+            && uncRemap.value.i64 >= DCGM_LIMIT_MAX_ROW_REMAP_UNCORRECTABLE)
+        {
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT, d, gpuId, uncRemap.value.i64);
+            addError(d);
+            SetResultForGpu(GetSoftwareTestName(), gpuId, NVVS_RESULT_FAIL);
+        }
+        else if (pendingRowRemap.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(pendingRowRemap.value.i64))
         {
             DCGM_LOG_INFO << "gpuId " << gpuId << " returned status " << pendingRowRemap.status << ", value "
                           << pendingRowRemap.value.i64 << "for DCGM_FI_DEV_ROW_REMAP_PENDING. Skipping this check.";
         }
         else if (pendingRowRemap.value.i64 > 0)
         {
-            dcgmFieldValue_v2 uncRemap = {};
-            ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_UNCORRECTABLE_REMAPPED_ROWS, uncRemap, flags);
             if (ret == DCGM_ST_OK && (uncRemap.value.i64 > 0 && !DCGM_INT64_IS_BLANK(uncRemap.value.i64)))
             {
                 DcgmError d { gpuId };
@@ -881,7 +899,7 @@ int Software::checkInforom()
     for (auto const gpuId : gpuList)
     {
         dcgmReturn_t ret
-            = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_INFOROM_CONFIG_VALID, inforomValidVal, flags);
+            = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_INFOROM_VALID, inforomValidVal, flags);
 
         if (ret != DCGM_ST_OK)
         {
@@ -1010,6 +1028,83 @@ void Software::checkFabricManager()
     }
 }
 
+void Software::checkGpuRecoveryState()
+{
+    dcgmFieldValue_v2 gpuRecoveryStateVal;
+    unsigned int flags = DCGM_FV_FLAG_LIVE_DATA;
+
+    setSubtestName(SW_SUBTEST_GPU_RECOVERY_STATE);
+    if (UsingFakeGpus(GetSoftwareTestName()))
+    {
+        /* fake gpus don't support live data */
+        flags = 0;
+    }
+
+    auto const &gpuList = m_tests.at(GetSoftwareTestName()).GetGpuList();
+    for (auto const gpuId : gpuList)
+    {
+        if (auto const ret
+            = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_GPU_RECOVERY_ACTION, gpuRecoveryStateVal, flags);
+            ret != DCGM_ST_OK)
+        {
+            log_error("Failed to read gpu recovery state for GPU {} with error {}", gpuId, ret);
+
+            DcgmError d { gpuId };
+            DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "gpu_recovery_action", gpuId);
+            addError(d);
+            SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
+            continue;
+        }
+
+        if (gpuRecoveryStateVal.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(gpuRecoveryStateVal.value.i64))
+        {
+            log_warning(
+                "gpuId {} returned status {}, value {} for DCGM_FI_DEV_GPU_RECOVERY_ACTION. Skipping this check.",
+                gpuId,
+                gpuRecoveryStateVal.status,
+                gpuRecoveryStateVal.value.i64);
+        }
+        else if (gpuRecoveryStateVal.value.i64 != 0)
+        {
+            dcgmError_t err = DCGM_FR_OK;
+
+            switch (static_cast<nvmlDeviceGpuRecoveryAction_t>(gpuRecoveryStateVal.value.i64))
+            {
+                case NVML_GPU_RECOVERY_ACTION_GPU_RESET:
+                    err = DCGM_FR_GPU_RECOVERY_RESET;
+                    break;
+                case NVML_GPU_RECOVERY_ACTION_NODE_REBOOT:
+                    err = DCGM_FR_GPU_RECOVERY_REBOOT;
+                    break;
+                case NVML_GPU_RECOVERY_ACTION_DRAIN_P2P:
+                    err = DCGM_FR_GPU_RECOVERY_DRAIN_P2P;
+                    break;
+                case NVML_GPU_RECOVERY_ACTION_DRAIN_AND_RESET:
+                    err = DCGM_FR_GPU_RECOVERY_DRAIN_RESET;
+                    break;
+                default:
+                {
+                    DcgmError d { gpuId };
+                    d.SetCode(DCGM_FR_UNKNOWN);
+                    d.SetMessage(
+                        fmt::format("Unknown GPU recovery action {} for GPU {}", gpuRecoveryStateVal.value.i64, gpuId));
+                    addError(d);
+                    SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
+                    continue;
+                }
+            }
+
+            if (err != DCGM_FR_OK)
+            {
+                DcgmError d { gpuId };
+                DCGM_ERROR_FORMAT_MESSAGE(err, d, gpuId, gpuRecoveryStateVal.value.i64);
+                addError(d);
+                SetResult(GetSoftwareTestName(), NVVS_RESULT_FAIL);
+            }
+        }
+    }
+}
+
 int Software::checkUnrepairableMemory()
 {
     dcgmFieldValue_v2 unrepairableFlagValue;
@@ -1031,8 +1126,7 @@ int Software::checkUnrepairableMemory()
     for (auto const gpuId : gpuList)
     {
         // Check for unrepairable memory flag
-        ret = m_dcgmRecorder.GetCurrentFieldValue(
-            gpuId, DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG, unrepairableFlagValue, flags);
+        ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_MEMORY_UNREPAIRABLE, unrepairableFlagValue, flags);
         if (ret != DCGM_ST_OK)
         {
             log_error("Failed to read unrepairable memory flag for GPU {} with error {}", gpuId, ret);
@@ -1047,17 +1141,16 @@ int Software::checkUnrepairableMemory()
         if (unrepairableFlagValue.status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(unrepairableFlagValue.value.i64))
         {
             log_warning(
-                "gpuId {} returned status {}, value {} for DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG. Skipping this check.",
+                "gpuId {} returned status {}, value {} for DCGM_FI_DEV_MEMORY_UNREPAIRABLE. Skipping this check.",
                 gpuId,
                 unrepairableFlagValue.status,
                 unrepairableFlagValue.value.i64);
         }
         else if (unrepairableFlagValue.value.i64 != 0)
         {
-            log_error(
-                "Unrepairable memory (DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG) flag is set for GPU {} with value {}.",
-                gpuId,
-                unrepairableFlagValue.value.i64);
+            log_error("Unrepairable memory (DCGM_FI_DEV_MEMORY_UNREPAIRABLE) flag is set for GPU {} with value {}.",
+                      gpuId,
+                      unrepairableFlagValue.value.i64);
 
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_FAULTY_MEMORY, d, unrepairableFlagValue.value.i64, gpuId);
@@ -1096,7 +1189,7 @@ void Software::LogAndSetFMError(unsigned int gpuId, dcgmFabricManagerStatus_t st
         case DcgmFMStatusFailure:
         {
             dcgmFieldValue_v2 fmErrorVal;
-            ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_FABRIC_MANAGER_ERROR_CODE, fmErrorVal, flags);
+            ret = m_dcgmRecorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_FABRIC_MANAGER_ERROR, fmErrorVal, flags);
             if (ret == DCGM_ST_OK)
             {
                 errorMessage = fmt::format("Training completed with an error: {}",

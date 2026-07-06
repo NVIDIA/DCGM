@@ -36,7 +36,7 @@ def helper_get_status_list(statusHandle):
 
     errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
-    while (errorInfo != None):
+    while (errorInfo is not None):
         errorList.append(errorInfo)
         errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
@@ -61,16 +61,20 @@ def helper_investigate_status(statusHandle):
 '''
 
 
-@test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_only_with_nvml()
-def test_dcgm_config_standalone_get_devices(handle):
+def helper_dcgm_config_standalone_get_devices(handle):
     """
     Verifies that DCGM Engine returns list of devices
     """
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     gpuIdList = systemObj.discovery.GetAllGpuIds()
-    assert len(gpuIdList) >= 0, "Not able to find devices for standalone case"
+    assert len(gpuIdList) > 0, "Not able to find devices for standalone case"
+
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_nvml()
+def test_dcgm_config_standalone_get_devices(handle):
+    helper_dcgm_config_standalone_get_devices(handle)
 
 
 def helper_dcgm_config_get_attributes(handle):
@@ -84,11 +88,11 @@ def helper_dcgm_config_get_attributes(handle):
         attributes = systemObj.discovery.GetGpuAttributes(gpuId)
         assert (attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_SUPPORTED
                 and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_FOUND
-                and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_SUPPORTED
                 and attributes.identifiers.deviceName != dcgmvalue.DCGM_STR_NOT_PERMISSIONED), "Not able to find attributes"
 
         # We used to assert that attributes.clockSets.count was > 0. This was because the NVML internal API that provided it
-        # bypassed the SKU check. If nvidia-smi -q -d SUPPORTED_CLOCKS returns N/A, we will no longer have clockSets.
+        # bypassed the SKU check. If nvidia-smi -q -d SUPPORTED_CLOCKS returns
+        # N/A, we will no longer have clockSets.
 
         for i in range(attributes.clockSets.count):
             memClock = attributes.clockSets.clockSet[i].memClock
@@ -103,8 +107,8 @@ def helper_dcgm_config_get_attributes(handle):
 @test_utils.run_with_standalone_host_engine(20)
 def test_dcgm_config_standalone_get_attributes(handle):
     """
-        Get Device attributes for each GPU ID
-        """
+    Get Device attributes for each GPU ID
+    """
     helper_dcgm_config_get_attributes(handle)
 
 
@@ -120,7 +124,8 @@ def helper_dcgm_config_set(handle):
     config_values.mPerfState.targetClocks.smClock = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     # Will throw an exception on error
@@ -150,18 +155,21 @@ def helper_dcgm_config_get(handle):
     config_values.mPerfState.targetClocks.smClock = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     # Will throw exception on error
     groupObj.config.Set(config_values)
 
-    # Get the target configuration to make sure that it's exact same as the one configured
+    # Get the target configuration to make sure that it's exact same as the
+    # one configured
     config_values = groupObj.config.Get(dcgm_structs.DCGM_CONFIG_TARGET_STATE)
 
     gpuIds = groupObj.GetGpuIds()
 
-    # Loop through config_values to to check for correctness of values fetched from the hostengine
+    # Loop through config_values to to check for correctness of values fetched
+    # from the hostengine
     for x in range(0, len(gpuIds)):
         assert config_values[x].mEccMode == dcgmvalue.DCGM_INT32_BLANK, "Failed to get matching value for ecc mode. Expected: %d Received: %d" % (
             dcgmvalue.DCGM_INT32_BLANK, config_values[x].mEccMode)
@@ -198,7 +206,8 @@ def helper_dcgm_config_enforce(handle):
     config_values.mPerfState.targetClocks.smClock = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     # Will throw exception on error
@@ -222,7 +231,8 @@ def test_dcgm_gpu_workload_power_profiles(handle, gpuIds):
     gpuIds = groupObj.GetGpuIds()  # Only reference GPUs we are testing against
 
     # this test expects a failure for now because Cuda 12.7 + Blackwell are required
-    # but we can at least verify that the function, versions, structs are all valid
+    # but we can at least verify that the function, versions, structs are all
+    # valid
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_ERROR)):
         _, _ = dcgm_agent.dcgmGetDeviceWorkloadPowerProfileInfo(
             handle, gpuIds[0], )
@@ -265,7 +275,8 @@ def helper_dcgm_config_powerbudget(handle, gpuIds):
     config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_BUDGET_GROUP
     config_values.mPowerLimit.val = powerLimit * \
         len(gpuIds)  # Assumes homogenous GPUs
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     groupObj.config.Set(config_values)
@@ -275,7 +286,8 @@ def helper_dcgm_config_powerbudget(handle, gpuIds):
         config_values) > 0, "Failed to get configuration using groupObj.config.Get"
 
     for x in range(0, len(gpuIds)):
-        if (config_values[x].mPowerLimit.val != dcgmvalue.DCGM_INT32_NOT_SUPPORTED):
+        if (config_values[x].mPowerLimit.val !=
+                dcgmvalue.DCGM_INT32_NOT_SUPPORTED):
             assert config_values[x].mPowerLimit.type == dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL, "The power limit type for gpuId %d is incorrect. Returned: %d Expected :%d" % (
                 x, config_values[x].mPowerLimit.type, dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL)
             assert config_values[x].mPowerLimit.val == powerLimit, "The power limit value for gpuID %d is incorrect. Returned: %d Expected: %s" % (
@@ -303,7 +315,8 @@ def helper_verify_power_value(groupObj, expected_power):
         config_values) > 0, "Failed to get configuration using dcgmClientConfigGet"
 
     for x in range(0, len(gpuIds)):
-        if (config_values[x].mPowerLimit.val != dcgmvalue.DCGM_INT32_NOT_SUPPORTED):
+        if (config_values[x].mPowerLimit.val !=
+                dcgmvalue.DCGM_INT32_NOT_SUPPORTED):
             assert config_values[x].mPowerLimit.type == dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL, \
                 "The power limit type for gpuId %d is incorrect. Returned: %d Expected :%d" \
                 % (x, config_values[x].mPowerLimit.type, dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL)
@@ -332,7 +345,9 @@ def helper_test_config_config_power_enforce(handle, gpuIds):
         test_utils.skip_test("Needs Power limit to be supported on the GPU")
 
     powerLimit_set_dcgmi = int(
-        (attributes.powerLimits.maxPowerLimit + attributes.powerLimits.minPowerLimit) / 2)
+        (attributes.powerLimits.maxPowerLimit +
+         attributes.powerLimits.minPowerLimit) /
+        2)
     powerLimit_set_nvsmi = attributes.powerLimits.maxPowerLimit
 
     config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
@@ -343,7 +358,8 @@ def helper_test_config_config_power_enforce(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL
     config_values.mPowerLimit.val = powerLimit_set_dcgmi
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     groupObj.config.Set(config_values)
@@ -352,8 +368,8 @@ def helper_test_config_config_power_enforce(handle, gpuIds):
     helper_verify_power_value(groupObj, powerLimit_set_dcgmi)
 
     # Change Power limit to max from external entity like nvidia-smi
-    assert 0 == apps.NvidiaSmiApp(["-pl", str(powerLimit_set_nvsmi), "-i", str(gpuIds[0])]).run(), \
-        "Nvidia smi couldn't set the power limit"
+    assert 0 == apps.NvidiaSmiApp(["-pl", str(powerLimit_set_nvsmi), "-i", str(
+        gpuIds[0])]).run(), "Nvidia smi couldn't set the power limit"
 
     logger.info("Verify if nvsmi configured value has taken effect")
     helper_verify_power_value(groupObj, powerLimit_set_nvsmi)
@@ -371,10 +387,7 @@ def test_dcgm_config_power_enforce_standalone(handle, gpuIds):
     helper_test_config_config_power_enforce(handle, gpuIds)
 
 
-@test_utils.run_with_standalone_host_engine(60)
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_default_status_handler(handle, gpuIds):
+def helper_dcgm_default_status_handler(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
     groupObj = systemObj.GetEmptyGroup("test1")
@@ -390,7 +403,8 @@ def test_dcgm_default_status_handler(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     groupObj.config.Set(config_values)
@@ -400,7 +414,15 @@ def test_dcgm_default_status_handler(handle, gpuIds):
 
     groupObj.config.Enforce()
 
-    # No need to test policy set/get with default status here. this is covered by test_policy.py that passes None as the status handler
+    # No need to test policy set/get with default status here. this is covered
+    # by test_policy.py that passes None as the status handler
+
+
+@test_utils.run_with_standalone_host_engine(60)
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_as_root()
+def test_dcgm_default_status_handler(handle, gpuIds):
+    helper_dcgm_default_status_handler(handle, gpuIds)
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -415,7 +437,7 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
     validDevice = -1
     for x in gpuIds:
         fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(
-            handle, x, [dcgm_fields.DCGM_FI_DEV_ECC_CURRENT, ])
+            handle, x, [dcgm_fields.DCGM_FI_DEV_ECC_MODE, ])
         if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
             validDevice = x
             break
@@ -435,7 +457,11 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
 
     # Get original ECC mode on the device
     config_values = dcgm_agent.dcgmConfigGet(
-        handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+        handle,
+        groupId,
+        dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+        groupInfo.count,
+        status_handle)
     assert len(
         config_values) > 0, "Failed to get configuration using dcgmConfigGet"
 
@@ -457,7 +483,8 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     # Clear the status handle to log the errors while setting the config
@@ -476,10 +503,12 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
         for error in errors:
             if error.status == dcgm_structs.DCGM_ST_RESET_REQUIRED:
                 test_utils.skip_test(
-                    "Skipping the test - Unable to reset the Gpu, FieldId - %d, Return - %d" % (error.fieldId, error.status))
+                    "Skipping the test - Unable to reset the Gpu, FieldId - %d, Return - %d" %
+                    (error.fieldId, error.status))
             else:
                 test_utils.skip_test(
-                    "Skipping the test - Unable to set the ECC mode. FieldId - %d, Return %d" % (error.fieldId, error.status))
+                    "Skipping the test - Unable to set the ECC mode. FieldId - %d, Return %d" %
+                    (error.fieldId, error.status))
 
     # Sleep after reset
     time.sleep(2)
@@ -490,30 +519,40 @@ def test_dcgm_configure_ecc_mode(handle, gpuIds):
 
     # Get the current configuration
     config_values = dcgm_agent.dcgmConfigGet(
-        handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+        handle,
+        groupId,
+        dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+        groupInfo.count,
+        status_handle)
     assert len(
         config_values) > 0, "Failed to get configuration using dcgmConfigGet"
 
-    fvs = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, validDevice, [
-                                                           dcgm_fields.DCGM_FI_DEV_ECC_PENDING, dcgm_fields.DCGM_FI_DEV_ECC_CURRENT])
+    fvs = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+        handle, validDevice, [
+            dcgm_fields.DCGM_FI_DEV_ECC_PENDING, dcgm_fields.DCGM_FI_DEV_ECC_MODE])
     if fvs[0].value.i64 != fvs[1].value.i64:
-        logger.warning("Pending ECC %d != Current ECC %d for gpuId %d. Box probably needs a reboot" % (
-            fvs[0].value.i64, fvs[1].value.i64, validDevice))
+        logger.warning(
+            "Pending ECC %d != Current ECC %d for gpuId %d. Box probably needs a reboot" %
+            (fvs[0].value.i64, fvs[1].value.i64, validDevice))
     else:
-        assert config_values[0].mEccMode == (eccmodeOnGroupToSet), "ECC mode %d different from the set value %d" % \
-                                                                   (config_values[0].mEccMode,
-                                                                    eccmodeOnGroupToSet)
+        assert config_values[0].mEccMode == (eccmodeOnGroupToSet), "ECC mode %d different from the set value %d" % (
+            config_values[0].mEccMode, eccmodeOnGroupToSet)
 
 
-@test_utils.run_with_standalone_host_engine(20, "127.0.0.1:5545", ["--port", "5545"])
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_port_standalone(handle, gpuIds):
+def helper_dcgm_port_standalone(handle, gpuIds):
     """
     Verifies that DCGM Engine works on different port
     """
     gpuIdList = dcgm_agent.dcgmGetAllDevices(handle)
     assert len(
-        gpuIdList) >= 0, "Standalone host engine using different port number failed."
+        gpuIdList) > 0, "Standalone host engine using different port number failed."
+
+
+@test_utils.run_with_standalone_host_engine(
+    20, "127.0.0.1:5545", ["--port", "5545"])
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_port_standalone(handle, gpuIds):
+    helper_dcgm_port_standalone(handle, gpuIds)
 
 
 def helper_dcgm_verify_sync_boost_single_gpu(handle, gpuIds):
@@ -534,7 +573,8 @@ def helper_dcgm_verify_sync_boost_single_gpu(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     # Config Set must return DCGM_ST_BADPARAM since we only have a single GPU
@@ -575,7 +615,8 @@ def helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds):
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.type = dcgmvalue.DCGM_INT32_BLANK
     config_values.mPowerLimit.val = dcgmvalue.DCGM_INT32_BLANK
-    for bitmapIndex in range(dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
+    for bitmapIndex in range(
+            dcgm_structs.DCGM_WORKLOAD_POWER_PROFILE_ARRAY_SIZE):
         config_values.mWorkloadPowerProfiles[bitmapIndex] = dcgmvalue.DCGM_INT32_BLANK
 
     # Enable sync boost - Will throw an exception on error
@@ -599,10 +640,7 @@ def test_dcgm_verify_sync_boost_multi_gpu_standalone(handle, gpuIds):
     helper_dcgm_verify_sync_boost_multi_gpu(handle, gpuIds)
 
 
-@test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_only_with_live_gpus()
-@test_utils.run_only_as_root()
-def test_dcgm_error_code_propagation(handle, gpuIds):
+def helper_dcgm_error_code_propagation(handle, gpuIds):
     """
     Verifies error code propagation behavior:
     1. When all config operations fail with the same error code, that specific error code is returned
@@ -619,7 +657,8 @@ def test_dcgm_error_code_propagation(handle, gpuIds):
     # 1. Invalid clock setting (known to return DCGM_ST_NOT_SUPPORTED)
     # 2. Invalid power limit setting (known to return DCGM_ST_NOT_SUPPORTED)
     config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
-    # This is required, otherwise error in dmesg log: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056)
+    # This is required, otherwise error in dmesg log: nvAssertOkFailedNoLog:
+    # Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056)
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     # Fail with DCGM_ST_NOT_SUPPORTED
     config_values.mPerfState.targetClocks.memClock = dcgmvalue.DCGM_INT32_BLANK
@@ -647,7 +686,8 @@ def test_dcgm_error_code_propagation(handle, gpuIds):
     # 1. Invalid clock setting (known to return DCGM_ST_NOT_SUPPORTED)
     # 2. SyncBoost=1 for single GPU (known to return DCGM_ST_BADPARAM)
     config_values = dcgm_structs.c_dcgmDeviceConfig_v2()
-    # This is required, otherwise error in dmesg log: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056)
+    # This is required, otherwise error in dmesg log: nvAssertOkFailedNoLog:
+    # Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056)
     config_values.mComputeMode = dcgmvalue.DCGM_INT32_BLANK
     config_values.mEccMode = dcgmvalue.DCGM_INT32_BLANK
     # Will fail with DCGM_ST_BADPARAM for single GPU
@@ -664,3 +704,10 @@ def test_dcgm_error_code_propagation(handle, gpuIds):
             f"Expected DCGM_ST_GENERIC_ERROR, got {e.value}"
 
     groupObj.Delete()
+
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_as_root()
+def test_dcgm_error_code_propagation(handle, gpuIds):
+    helper_dcgm_error_code_propagation(handle, gpuIds)

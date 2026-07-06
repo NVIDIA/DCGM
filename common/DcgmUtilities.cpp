@@ -41,6 +41,7 @@
 #include <sys/epoll.h>
 #include <sys/prctl.h>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 
 
@@ -182,36 +183,6 @@ static void EnableDeathSignalToChildProcesses()
         DCGM_LOG_WARNING << "Unable to set death signal to child processes";
     }
 }
-
-/**
- * @brief Writes the whole content of the buffer to the file.
- * This function is used to write the content of the buffer to the file defined by a non-blocking file descriptor.
- * Signal interruptions and EAGAIN errors are handled properly.
- * @param fd[in]    File descriptor to write to.
- * @param ptr[in]   Pointer to the buffer.
- * @param size[in]  Size of the buffer.
- * @return 0 on success, errno on failure.
- */
-static int WriteAll(int fd, void const *ptr, size_t const size)
-{
-    size_t totalWritten = 0;
-    ssize_t lastWritten = 0;
-    while (totalWritten < size)
-    {
-        if ((lastWritten = write(fd, static_cast<char const *>(ptr) + totalWritten, size - totalWritten)) < 0)
-        {
-            if (errno == EINTR || errno == EAGAIN)
-            {
-                continue;
-            }
-            return errno;
-        }
-
-        totalWritten += lastWritten;
-    }
-    return 0;
-}
-
 
 namespace
 {
@@ -780,7 +751,80 @@ pid_t ForkAndExecCommand(std::vector<std::string> const &args,
     return pid;
 }
 
-int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandle outputFd)
+bool IsProcessRunning(pid_t pid)
+{
+    return pid > 0 && kill(pid, 0) == 0;
+}
+
+dcgmReturn_t TerminateProcess(pid_t pid,
+                              LivenessCheckFn const &isAlive,
+                              unsigned int maxAttempts,
+                              std::chrono::milliseconds retryDelay)
+{
+    if (pid <= 0)
+    {
+        return DCGM_ST_OK;
+    }
+
+    unsigned int attempts = 0;
+    while (attempts < maxAttempts && isAlive(pid))
+    {
+        if (attempts < maxAttempts - 1)
+        {
+            kill(pid, SIGTERM);
+        }
+        else
+        {
+            log_warning("Unable to terminate process {} with SIGTERM after {} attempts, escalating to SIGKILL",
+                        pid,
+                        maxAttempts - 1);
+            kill(pid, SIGKILL);
+        }
+
+        if (attempts == 0)
+        {
+            std::this_thread::yield();
+        }
+        else
+        {
+            std::this_thread::sleep_for(retryDelay);
+        }
+        attempts++;
+    }
+
+    if (isAlive(pid))
+    {
+        return DCGM_ST_CHILD_NOT_KILLED;
+    }
+    return DCGM_ST_OK;
+}
+
+void KillAndReapChild(pid_t pid, unsigned int maxAttempts, std::chrono::milliseconds retryDelay)
+{
+    if (pid <= 0)
+    {
+        return;
+    }
+
+    TerminateProcess(pid, [](pid_t p) { return waitpid(p, nullptr, WNOHANG) == 0; }, maxAttempts, retryDelay);
+
+    waitpid(pid, nullptr, 0);
+}
+
+enum class ReadOutputStatus
+{
+    Success,
+    Timeout
+};
+
+/**
+ * @return ReadOutputStatus::Success or ReadOutputStatus::Timeout on the happy path,
+ *         or std::unexpected(errno) on system error.
+ */
+static std::expected<ReadOutputStatus, int> ReadProcessOutputWithDeadline(
+    fmt::memory_buffer &stdoutStream,
+    DcgmNs::Utils::FileHandle outputFd,
+    std::chrono::steady_clock::time_point deadline)
 {
     std::array<char, 1024> buff = {};
 
@@ -789,25 +833,36 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
     {
         auto const err = errno;
         DCGM_LOG_ERROR << "epoll_create1 failed. errno " << err;
-        return err;
+        return std::unexpected(err);
     }
     auto cleanupEpollFd = DcgmNs::Defer { [&]() { close(epollFd); } };
 
     struct epoll_event event = {};
-
-    event.events  = EPOLLIN | EPOLLHUP;
-    event.data.fd = outputFd.Get();
+    event.events             = EPOLLIN | EPOLLHUP;
+    event.data.fd            = outputFd.Get();
     if (epoll_ctl(epollFd, EPOLL_CTL_ADD, outputFd.Get(), &event) < 0)
     {
         auto const err = errno;
         DCGM_LOG_ERROR << "epoll_ctl failed. errno " << err;
-        return err;
+        return std::unexpected(err);
     }
 
     int pipesLeft = 1;
     while (pipesLeft > 0)
     {
-        int numEvents = epoll_wait(epollFd, &event, 1, -1);
+        int timeoutMs = -1;
+        if (deadline != std::chrono::steady_clock::time_point::max())
+        {
+            auto now       = std::chrono::steady_clock::now();
+            auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+            if (remaining.count() <= 0)
+            {
+                return ReadOutputStatus::Timeout;
+            }
+            timeoutMs = static_cast<int>(remaining.count());
+        }
+
+        int numEvents = epoll_wait(epollFd, &event, 1, timeoutMs);
         if (numEvents < 0)
         {
             auto const err = errno;
@@ -816,12 +871,15 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
                 continue;
             }
             DCGM_LOG_ERROR << "epoll_wait failed. errno " << err;
-            return err;
+            return std::unexpected(err);
         }
 
         if (numEvents == 0)
         {
-            // Timeout
+            if (deadline != std::chrono::steady_clock::time_point::max())
+            {
+                return ReadOutputStatus::Timeout;
+            }
             continue;
         }
 
@@ -836,7 +894,7 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
                     continue;
                 }
                 DCGM_LOG_ERROR << "read from stdout failed. errno " << err;
-                return err;
+                return std::unexpected(err);
             }
             if (bytesRead == 0)
             {
@@ -844,7 +902,7 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
                 {
                     auto const err = errno;
                     DCGM_LOG_ERROR << "epoll_ctl to remove outputFd failed. errno " << err;
-                    return err;
+                    return std::unexpected(err);
                 }
                 pipesLeft -= 1;
             }
@@ -855,52 +913,36 @@ int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandl
         }
     }
 
-    return 0;
+    return ReadOutputStatus::Success;
 }
 
-dcgmReturn_t RunCmdAndGetOutput(std::string const &cmd, std::string &output)
+static dcgmReturn_t CheckChildExitStatus(pid_t childPid,
+                                         int childStatus,
+                                         std::string const &cmd,
+                                         fmt::memory_buffer const &stdoutStream,
+                                         std::string &output)
 {
-    auto cmdArgs = dcgmTokenizeString(cmd, " ");
-    DcgmNs::Utils::FileHandle outputFd;
-
-    pid_t childPid = DcgmNs::Utils::ForkAndExecCommand(cmdArgs, nullptr, &outputFd, nullptr, true, nullptr, nullptr);
-
-    fmt::memory_buffer stdoutStream;
     std::string errmsg;
-    errmsg.reserve(1024);
-    char errbuf[1024] = { 0 };
-    int readOutputRet = DcgmNs::Utils::ReadProcessOutput(stdoutStream, std::move(outputFd));
-    if (readOutputRet)
+    if (WIFEXITED(childStatus))
     {
-        strerror_r(readOutputRet, errbuf, sizeof(errbuf));
-        errmsg = fmt::format("Output of '{}' couldn't be read: '{}'. ", cmd, errbuf);
-    }
-
-    int childStatus;
-    if (waitpid(childPid, &childStatus, 0) == -1)
-    {
-        strerror_r(errno, errbuf, sizeof(errbuf));
-        errmsg += fmt::format("\nError while waiting for child process ({}) to exit: '{}'", childPid, errbuf);
-    }
-    else if (WIFEXITED(childStatus))
-    {
-        // Exited normally - check for non-zero exit code
-        childStatus = WEXITSTATUS(childStatus);
-        if (childStatus)
+        int exitCode = WEXITSTATUS(childStatus);
+        if (exitCode)
         {
-            errmsg += fmt::format("\nA child process ({}) exited with non-zero status {}", childPid, childStatus);
+            errmsg = fmt::format("A child process ({}) exited with non-zero status {}", childPid, exitCode);
         }
-        log_debug("Child process ({}) terminated successfully.", childPid);
+        else
+        {
+            log_debug("Child process ({}) terminated successfully.", childPid);
+        }
     }
     else if (WIFSIGNALED(childStatus))
     {
-        // Child terminated due to signal
-        childStatus = WTERMSIG(childStatus);
-        errmsg += fmt::format("\nA child process ({}) terminated with signal {}", childPid, childStatus);
+        int sig = WTERMSIG(childStatus);
+        errmsg  = fmt::format("A child process ({}) terminated with signal {}", childPid, sig);
     }
     else
     {
-        errmsg += fmt::format("\nA child process ({}) is being traced or otherwise can't exit", childPid);
+        errmsg = fmt::format("A child process ({}) is being traced or otherwise can't exit", childPid);
     }
 
     output = fmt::to_string(stdoutStream);
@@ -909,13 +951,123 @@ dcgmReturn_t RunCmdAndGetOutput(std::string const &cmd, std::string &output)
         log_error("Error running cmd '{}': {}. \nStderr from the cmd: {}", cmd, errmsg, output);
         return DCGM_ST_INIT_ERROR;
     }
-
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t RunCmdAndGetOutputWithTimeout(std::string const &cmd,
+                                           std::string &output,
+                                           std::chrono::steady_clock::duration timeout)
+{
+    bool const hasTimeout = (timeout != std::chrono::steady_clock::duration::max());
+    auto const deadline
+        = hasTimeout ? std::chrono::steady_clock::now() + timeout : std::chrono::steady_clock::time_point::max();
+
+    auto cmdArgs = dcgmTokenizeString(cmd, " ");
+    DcgmNs::Utils::FileHandle outputFd;
+
+    pid_t childPid = DcgmNs::Utils::ForkAndExecCommand(cmdArgs, nullptr, &outputFd, nullptr, true, nullptr, nullptr);
+    if (childPid < 0)
+    {
+        output.clear();
+        log_error("Failed to fork for cmd '{}'", cmd);
+        return DCGM_ST_INIT_ERROR;
+    }
+
+    fmt::memory_buffer stdoutStream;
+    auto readResult = ReadProcessOutputWithDeadline(stdoutStream, std::move(outputFd), deadline);
+
+    if (!readResult.has_value())
+    {
+        KillAndReapChild(childPid);
+        output = fmt::to_string(stdoutStream);
+        log_error("Error reading output from cmd '{}': errno {}", cmd, readResult.error());
+        return DCGM_ST_INIT_ERROR;
+    }
+
+    if (*readResult == ReadOutputStatus::Timeout)
+    {
+        auto timeoutMs = std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count();
+        log_warning("Command '{}' timed out after {}ms, killing child process {}", cmd, timeoutMs, childPid);
+        KillAndReapChild(childPid);
+        output = fmt::to_string(stdoutStream);
+        return DCGM_ST_TIMEOUT;
+    }
+
+    int childStatus;
+
+    if (!hasTimeout)
+    {
+        if (waitpid(childPid, &childStatus, 0) == -1)
+        {
+            char errbuf[1024] = { 0 };
+            strerror_r(errno, errbuf, sizeof(errbuf));
+            output = fmt::to_string(stdoutStream);
+            log_error("Error running cmd '{}': waitpid error: '{}'", cmd, errbuf);
+            return DCGM_ST_INIT_ERROR;
+        }
+        return CheckChildExitStatus(childPid, childStatus, cmd, stdoutStream, output);
+    }
+
+    constexpr int pollIntervalMs = 50;
+    for (;;)
+    {
+        pid_t result = waitpid(childPid, &childStatus, WNOHANG);
+        if (result == childPid)
+        {
+            return CheckChildExitStatus(childPid, childStatus, cmd, stdoutStream, output);
+        }
+        if (result == -1)
+        {
+            if (errno == ECHILD)
+            {
+                log_warning("Child process {} already reaped (ECHILD) for cmd '{}'", childPid, cmd);
+                output = fmt::to_string(stdoutStream);
+                return DCGM_ST_INIT_ERROR;
+            }
+            char errbuf[1024] = { 0 };
+            strerror_r(errno, errbuf, sizeof(errbuf));
+            output = fmt::to_string(stdoutStream);
+            log_error("Error running cmd '{}': waitpid error: '{}'", cmd, errbuf);
+            return DCGM_ST_INIT_ERROR;
+        }
+        auto remaining
+            = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+        if (remaining.count() <= 0)
+        {
+            break;
+        }
+        usleep(pollIntervalMs * 1000);
+    }
+
+    auto timeoutMs = std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count();
+    log_warning("Command '{}' timed out during waitpid after {}ms, killing child process {}", cmd, timeoutMs, childPid);
+    KillAndReapChild(childPid);
+    output = fmt::to_string(stdoutStream);
+    return DCGM_ST_TIMEOUT;
+}
+
+int ReadProcessOutput(fmt::memory_buffer &stdoutStream, DcgmNs::Utils::FileHandle outputFd)
+{
+    auto result = ReadProcessOutputWithDeadline(
+        stdoutStream, std::move(outputFd), std::chrono::steady_clock::time_point::max());
+    return result.has_value() ? 0 : result.error();
+}
+
+dcgmReturn_t RunCmdAndGetOutput(std::string const &cmd, std::string &output)
+{
+    return RunCmdAndGetOutputWithTimeout(cmd, output, std::chrono::steady_clock::duration::max());
 }
 
 dcgmReturn_t RunCmdHelper::RunCmdAndGetOutput(std::string const &cmd, std::string &output) const
 {
     return DcgmNs::Utils::RunCmdAndGetOutput(cmd, output);
+}
+
+dcgmReturn_t RunCmdHelper::RunCmdAndGetOutputWithTimeout(std::string const &cmd,
+                                                         std::string &output,
+                                                         std::chrono::steady_clock::duration timeout) const
+{
+    return DcgmNs::Utils::RunCmdAndGetOutputWithTimeout(cmd, output, timeout);
 }
 
 FileHandle::FileHandle() noexcept
@@ -1135,6 +1287,22 @@ std::tuple<uint64_t, uint64_t, double> NvmlBerParser(int64_t ber)
     return std::make_tuple(mantissa, exponent, mantissa * std::pow(10.0, -1.0 * static_cast<double>(exponent)));
 }
 
+[[nodiscard]] bool IsEffectiveBerThresholdExceeded(uint64_t mantissa, uint64_t exponent)
+{
+    uint64_t constexpr berZeroMantissa                       = 15;
+    uint64_t constexpr berZeroExponent                       = 255;
+    uint64_t constexpr effectiveBerFailureExponent           = 12; // 1e-12 threshold
+    uint64_t constexpr effectiveBerMaxPassingMantissaAtExp12 = 1;
+    // For exp=13: 10e-13 equals 1e-12, so mantissa > 10 exceeds the threshold.
+    uint64_t constexpr effectiveBerMaxPassingMantissaAtExp13 = 10;
+
+    bool const isZeroBer = mantissa == berZeroMantissa && exponent == berZeroExponent;
+    return !isZeroBer
+           && ((exponent < effectiveBerFailureExponent)
+               || (exponent == effectiveBerFailureExponent && mantissa > effectiveBerMaxPassingMantissaAtExp12)
+               || (exponent == (effectiveBerFailureExponent + 1) && mantissa > effectiveBerMaxPassingMantissaAtExp13));
+}
+
 LogPaths GetLogFilePath(std::string_view testName)
 {
     std::filesystem::path logDir = []() -> std::filesystem::path {
@@ -1173,6 +1341,26 @@ std::expected<std::string, dcgmReturn_t> FindExecutable(std::string_view executa
         "Couldn't find the {} binary in the predefined search paths ({})", executableName, fmt::join(searchPaths, ":"));
 
     return std::unexpected(DCGM_ST_NO_DATA);
+}
+
+int WriteAll(int fd, void const *ptr, size_t const size)
+{
+    size_t totalWritten = 0;
+    ssize_t lastWritten = 0;
+    while (totalWritten < size)
+    {
+        if ((lastWritten = write(fd, static_cast<char const *>(ptr) + totalWritten, size - totalWritten)) < 0)
+        {
+            if (errno == EINTR || errno == EAGAIN)
+            {
+                continue;
+            }
+            return errno;
+        }
+
+        totalWritten += lastWritten;
+    }
+    return 0;
 }
 
 } // namespace DcgmNs::Utils

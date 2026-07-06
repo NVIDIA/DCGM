@@ -38,3 +38,52 @@ string(JOIN "|" CTEST_CUSTOM_COVERAGE_EXCLUDE
   ".*testing/.*")
 
 configure_file(cmake/CTestCustom.cmake.in CTestCustom.cmake @ONLY)
+
+find_package(Gcovr)
+if (NOT Gcovr_FOUND)
+  return()
+endif()
+
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/coverage/gcovr/html")
+
+string(REGEX REPLACE "(.)" "\\\\\\1"
+  CMAKE_SOURCE_DIR_PATTERN
+  "${CMAKE_SOURCE_DIR}")
+
+add_custom_target(gcovr-cobertura
+  COMMAND
+    Gcovr::gcovr
+    --cobertura "${CMAKE_BINARY_DIR}/coverage/gcovr/coverage.xml"
+    --cobertura-pretty
+    --exclude-unreachable-branches
+    --filter "${CMAKE_SOURCE_DIR_PATTERN}/.*"
+    --gcov-executable "${Gcov_EXECUTABLE}"
+    --gcov-ignore-parse-errors
+    --merge-mode-functions separate
+    --root "${CMAKE_SOURCE_DIR}"
+  COMMENT "Generating Cobertura-format coverage report")
+
+add_custom_target(gcovr-html
+  COMMAND
+    Gcovr::gcovr
+    --exclude-unreachable-branches
+    --filter "${CMAKE_SOURCE_DIR_PATTERN}/.*"
+    --gcov-executable "${Gcov_EXECUTABLE}"
+    --gcov-ignore-parse-errors
+    --html-details  "${CMAKE_BINARY_DIR}/coverage/gcovr/html/index.html"
+    --merge-mode-functions separate
+    --print-summary
+    --root "${CMAKE_SOURCE_DIR}"
+  COMMENT "Generating HTML coverage report")
+
+add_custom_target(gcovr-json
+  COMMAND
+    Gcovr::gcovr
+    --exclude-unreachable-branches
+    --filter "${CMAKE_SOURCE_DIR_PATTERN}/.*"
+    --gcov-executable "${Gcov_EXECUTABLE}"
+    --gcov-ignore-parse-errors
+    --json  "${CMAKE_BINARY_DIR}/coverage/gcovr/coverage.json"
+    --merge-mode-functions separate
+    --root "${CMAKE_SOURCE_DIR}"
+  COMMENT "Generating Gcovr-format JSON coverage report")

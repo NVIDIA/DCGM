@@ -37,6 +37,7 @@ ConstantPerf::ConstantPerf(dcgmHandle_t handle)
     , m_testDuration(.0)
     , m_targetPerf(.0)
     , m_useDgemm(0)
+    , m_useTensorAlways(false)
     , m_atATime(0)
     , m_sbeFailureThreshold(.0)
     , m_handle(handle)
@@ -62,10 +63,14 @@ ConstantPerf::ConstantPerf(dcgmHandle_t handle)
     m_testParameters->AddDouble(TS_STR_MAX_MEMORY_CLOCK, 0.0);
     m_testParameters->AddDouble(TS_STR_MAX_GRAPHICS_CLOCK, 0.0);
     m_testParameters->AddDouble(TS_STR_SBE_ERROR_THRESHOLD, DCGM_FP64_BLANK);
+    m_testParameters->AddString(TS_STR_ALWAYS_USE_TENSOR, "False");
     m_testParameters->AddString(PS_LOGFILE, "stats_targeted_stress.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_testParameters->AddString(PS_IGNORE_ERROR_CODES, "");
-    m_infoStruct.defaultTestParameters = new TestParameters(*m_testParameters);
+    m_testParameters->AddString(PS_USE_GENERIC_MODE, "False");
+
+    m_defaultTestParameters            = std::make_unique<TestParameters>(*m_testParameters);
+    m_infoStruct.defaultTestParameters = m_defaultTestParameters.get();
 }
 
 ConstantPerf::~ConstantPerf()
@@ -395,11 +400,22 @@ void ConstantPerf::Go(std::string const &testName,
 
     if (!m_testParameters->GetBoolFromString(TS_STR_IS_ALLOWED))
     {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, TS_PLUGIN_NAME);
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
-        return;
+        if (m_testParameters->GetBoolFromString(PS_USE_GENERIC_MODE) == false)
+        {
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, TS_PLUGIN_NAME);
+            AddInfo(testName, d.GetMessage());
+            SetResult(testName, NVVS_RESULT_SKIP);
+            return;
+        }
+        else
+        {
+            log_debug("Proceeding in generic mode.");
+            AddInfoVerbose(testName,
+                           "Running in generic mode: stress threshold disabled; "
+                           "result reflects stability, not calibrated performance.");
+            m_testParameters->SetDouble(TS_STR_TARGET_PERF_MIN_RATIO, 0.0);
+        }
     }
 
     ParseIgnoreErrorCodesParam(testName, m_testParameters->GetString(PS_IGNORE_ERROR_CODES));
@@ -407,6 +423,7 @@ void ConstantPerf::Go(std::string const &testName,
 
     /* Cache test parameters */
     m_useDgemm            = m_testParameters->GetBoolFromString(TS_STR_USE_DGEMM);
+    m_useTensorAlways     = m_testParameters->GetBoolFromString(TS_STR_ALWAYS_USE_TENSOR);
     m_testDuration        = m_testParameters->GetDouble(TS_STR_TEST_DURATION);
     m_targetPerf          = m_testParameters->GetDouble(TS_STR_TARGET_PERF);
     m_atATime             = m_testParameters->GetDouble(TS_STR_CUDA_OPS_PER_STREAM);
@@ -550,6 +567,7 @@ private:
     ConstantPerf &m_plugin;            /* ConstantPerf plugin for logging and failure checks */
     TestParameters *m_testParameters;  /* 'Read-only' test parameters */
     int m_useDgemm;                    /* Wheter to use dgemm (1) or sgemm (0) for operations */
+    bool m_useTensorAlways;            /* Whether to hint cuBLAS to use tensor cores */
     double m_targetPerf;               /* Target stress in gflops */
     double m_testDuration;             /* Target test duration in seconds */
     timelib64_t m_stopTime;            /* Timestamp when run() finished */
@@ -810,10 +828,11 @@ ConstantPerfWorker::ConstantPerfWorker(CPerfDevice *device,
     , m_failEarly(failEarly)
     , m_failCheckInterval(failCheckInterval)
 {
-    m_useDgemm     = tp->GetBoolFromString(TS_STR_USE_DGEMM);
-    m_targetPerf   = tp->GetDouble(TS_STR_TARGET_PERF);
-    m_testDuration = tp->GetDouble(TS_STR_TEST_DURATION);
-    m_atATime      = tp->GetDouble(TS_STR_CUDA_OPS_PER_STREAM);
+    m_useDgemm        = tp->GetBoolFromString(TS_STR_USE_DGEMM);
+    m_useTensorAlways = tp->GetBoolFromString(TS_STR_ALWAYS_USE_TENSOR);
+    m_targetPerf      = tp->GetDouble(TS_STR_TARGET_PERF);
+    m_testDuration    = tp->GetDouble(TS_STR_TEST_DURATION);
+    m_atATime         = tp->GetDouble(TS_STR_CUDA_OPS_PER_STREAM);
 }
 
 /****************************************************************************/
@@ -1056,6 +1075,17 @@ void ConstantPerfWorker::run(void)
 
     /* Lock to our assigned GPU */
     cudaSetDevice(m_device->cudaDeviceIdx);
+
+    if (m_useTensorAlways)
+    {
+        log_debug("Enabling tensor math for GPU {} because parameter settings request it.", m_device->gpuId);
+        cublasStatus_t mathModeSt = Dcgm::CublasProxy::CublasSetMathMode(m_device->cublasHandle, CUBLAS_TENSOR_OP_MATH);
+        if (mathModeSt != CUBLAS_STATUS_SUCCESS)
+        {
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(
+                &m_plugin, m_plugin.GetTargetedStressTestName(), "cublasSetMathMode", mathModeSt, m_device->gpuId);
+        }
+    }
 
     std::stringstream ss;
     ss << "Running for " << m_testDuration << " seconds";

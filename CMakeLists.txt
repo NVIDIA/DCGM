@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-cmake_minimum_required(VERSION 3.21.0)
+cmake_minimum_required(VERSION 4.0.0)
 
-project(datacenter-gpu-manager-4 VERSION 4.5.3)
+project(datacenter-gpu-manager-4 VERSION 4.6.0)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF CACHE BOOL
     "Specify whether to link the target in the build tree with the INSTALL_RPATH")
@@ -43,9 +43,14 @@ find_package(TCLAP REQUIRED)
 find_package(Yaml REQUIRED)
 
 include(Catch)
+include(CheckCCompilerFlag)
+include(CheckPIESupported)
+include(CheckIPOSupported)
 include(CMakePackageConfigHelpers)
 include(CTest)
 include(GNUInstallDirs)
+
+check_pie_supported(OUTPUT_VARIABLE PIE_SUPPORT_OUTPUT)
 
 set(DCGM_CONFIG_REVISION 0)
 
@@ -59,13 +64,32 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 
+# Enable LTO
+option(CMAKE_INTERPROCEDURAL_OPTIMIZATION "Enable interprocedural optimization for all targets" OFF)
+
+# Build targets in parallel where possible
+option(CMAKE_OPTIMIZE_DEPENDENCIES "Activates dependency optimization of static and object libraries" ON)
+
+# Disable modules, as we don't use them and ccache does not currently support them
+option(CMAKE_CXX_SCAN_FOR_MODULES "Whether CMake will scan C++ sources in the target for module dependencies" OFF)
+
+if (CMAKE_POSITION_INDEPENDENT_CODE)
+    if (NOT CMAKE_C_LINK_PIE_SUPPORTED OR NOT CMAKE_CXX_LINK_PIE_SUPPORTED)
+        message(FATAL_ERROR "${PIE_SUPPORT_OUTPUT}")
+    endif()
+else()
+    if (NOT CMAKE_C_LINK_NO_PIE_SUPPORTED OR NOT CMAKE_CXX_LINK_NO_PIE_SUPPORTED)
+        message(WARNING "${PIE_SUPPORT_OUTPUT}")
+    endif()
+endif()
+
+# Verify toolchain IPO support
+if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+  check_ipo_supported()
+endif()
+
 set(BUILD_NUMBER "$ENV{BUILD_NUMBER}" CACHE STRING
     "The build number associated with the generated build system")
-
-option(ENABLE_LTO "Enable LTO during the build" OFF)
-if (ENABLE_LTO)
-    set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -flto")
-endif ()
 
 option(ADDRESS_SANITIZER "Enable AddressSanitizer" OFF)
 if (ADDRESS_SANITIZER)
@@ -100,6 +124,12 @@ if (DCGM_BUILD_COVERAGE)
 endif ()
 
 set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fmax-errors=1 -Werror -fno-omit-frame-pointer")
+# Necessary for ccache to correctly handle debug builds
+string(JOIN " " DCGM_CXX_FLAGS
+    "${DCGM_CXX_FLAGS}"
+    "-fcanon-prefix-map"
+    "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}=."
+    "-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=/workspaces/dcgm")
 
 # Set common CXXFLAGS as a base for CFLAGS
 set(DCGM_C_FLAGS ${DCGM_CXX_FLAGS})
@@ -121,8 +151,6 @@ option(GCC_ANALYZER "Enable GCC static analyzer" OFF)
 if (GCC_ANALYZER)
     set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fanalyzer")
 endif ()
-
-include(CheckCCompilerFlag)
 
 # Set base flags but allow to override from the environment
 set(CMAKE_C_FLAGS "${DCGM_C_FLAGS} ${CMAKE_C_FLAGS}")
@@ -217,8 +245,6 @@ execute_process(COMMAND date -u -Idate
     OUTPUT_VARIABLE BUILD_DATE
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-add_compile_definitions(BUILD_BRANCH="${BUILD_BRANCH}")
-
 if (NOT HAS_UNCOMMITTED_CHANGES EQUAL 0)
     string(APPEND COMMIT_ID "(dirty)")
 
@@ -249,15 +275,8 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 list(APPEND DCGM_BUILD_INFO "crc:${BUILD_INFO_CRC}")
-
-include(artifactory)
-prepare_rt_props("dcgm")
-prepare_rt_props("config" REVISION "${DCGM_CONFIG_REVISION}")
-
 message("${DCGM_BUILD_INFO}")
 
-string(TIMESTAMP BUILD_DATE "%Y%m%d")
-add_compile_definitions(BUILD_DATE="${BUILD_DATE}")
 add_compile_definitions(INJECTION_LIBRARY_AVAILABLE)
 
 add_library(nvml_injection SHARED)
@@ -297,16 +316,12 @@ add_library(sysmon_interface INTERFACE)
 
 add_library(childprocess_interface INTERFACE)
 add_library(common_interface INTERFACE)
-add_library(mock_interface INTERFACE)
-add_library(cuda_mock_interface INTERFACE)
-add_library(cuda_lib_base_interface INTERFACE)
 add_library(cuda_common_interface INTERFACE)
 add_library(dcgm_interface INTERFACE)
 add_library(dcgm_thread_interface INTERFACE)
 add_library(dcgmi_interface INTERFACE)
 add_library(dcgmtest_interface INTERFACE)
 add_library(nvvs_interface INTERFACE)
-add_library(nvvs_mock_interface INTERFACE)
 add_library(nvvs_plugins INTERFACE)
 add_library(nvvs_plugins_interface INTERFACE)
 add_library(nvvs_plugins_cudaCommon_interface INTERFACE)
@@ -333,20 +348,17 @@ add_library(transport_interface INTERFACE)
 add_library(buildinfo_objects STATIC)
 add_library(childprocess STATIC)
 add_library(common_watch_objects STATIC)
+add_library(cuda_lib_base STATIC)
 add_library(dcgm_common STATIC)
 add_library(dcgm_cuda_worker11 STATIC)
 add_library(dcgm_cuda_worker12 STATIC)
 add_library(dcgm_cuda_worker13 STATIC)
-add_library(dcgm_cuda_lib11 STATIC)
-add_library(dcgm_cuda_lib12 STATIC)
-add_library(dcgm_cuda_lib13 STATIC)
 add_library(dcgm_entity_types STATIC)
 add_library(dcgm_logging STATIC)
 add_library(dcgm_mutex STATIC)
 add_library(dcgm_static_private STATIC)
 add_library(dcgm_stub STATIC)
 add_library(dcgm_thread STATIC)
-add_library(dcgmi_objects STATIC)
 add_library(dcgmi_objects_without_main STATIC)
 add_library(nvvs_without_main_objects OBJECT)
 add_library(nvvs_main_objects OBJECT)
@@ -529,25 +541,13 @@ add_subdirectory(sdk)
 add_subdirectory(sdk_samples)
 add_subdirectory(testing)
 
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt
-    COMMAND bash -c "find ${CMAKE_SOURCE_DIR} -iname '*.cpp' -or -iname '*.c' -not -ipath '*_out*' -exec grep -n -H -B1 -A4 -e '^\\sPRINT_' -e 'DEBUG_' {} \; > ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt"
-    VERBATIM
-)
-add_custom_target(dcgm_decode_db ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/dcgm_decode_db.txt)
-
 include(sanitizers)
-
-install(
-    FILES "${PROJECT_BINARY_DIR}/dcgm_decode_db.txt"
-    DESTINATION ${DCGM_TESTS_INSTALL_DIR}/data
-    COMPONENT Tests)
 
 install(
     EXPORT dcgm-export
     FILE DCGMConfig.cmake
     NAMESPACE DCGM::
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/cmake/DCGM" 
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/cmake/DCGM"
     COMPONENT Development)
 
 write_basic_package_version_file(
@@ -719,7 +719,7 @@ install(
     RUNTIME
         DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda12"
         COMPONENT Cuda12)
- 
+
  install(
     TARGETS
         BwChecker_13
@@ -738,7 +738,7 @@ install(
         NAMELINK_SKIP
     RUNTIME
         DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda13"
-        COMPONENT Cuda13)       
+        COMPONENT Cuda13)
 
 # Tests component
 install(
@@ -842,6 +842,25 @@ install(
     RUNTIME
         DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda13"
         COMPONENT Tests)
+
+if (DCGM_BUILD_COVERAGE)
+    if (CMAKE_INSTALL_PREFIX)
+       string(REGEX REPLACE "(.)" "[\\1]"
+           CMAKE_INSTALL_PREFIX_PATTERN
+           "${CMAKE_INSTALL_PREFIX}")
+    else()
+       set(CMAKE_INSTALL_PREFIX_PATTERN "$^") # Intentionally unmatchable
+    endif()
+
+    install(
+        DIRECTORY "${CMAKE_BINARY_DIR}/"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/coverage/gcov"
+        COMPONENT Tests
+        FILES_MATCHING
+            PATTERN "*.gcno"
+            REGEX ".*/_CPack_Packages/.*" EXCLUDE
+            REGEX "${CMAKE_INSTALL_PREFIX_PATTERN}/.*" EXCLUDE)
+endif()
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")

@@ -17,7 +17,6 @@
 #include "MnDiagProcessUtils.h"
 #include <DcgmStringHelpers.h>
 #include <algorithm>
-#include <csignal>
 #include <cstddef>
 #include <expected>
 #include <filesystem>
@@ -26,57 +25,10 @@
 #include <string>
 #include <string_view>
 #include <tclap/ArgException.h>
-#include <thread>
 #include <vector>
 
 namespace DcgmNs::Common::ProcessUtils
 {
-template <typename DurationType>
-dcgmReturn_t StopProcess(pid_t pid, unsigned int maxSigtermAttempts, DurationType sigtermRetryDelay)
-{
-    if (!IsProcessRunning(pid))
-    {
-        // No process to stop or process doesn't exist
-        return DCGM_ST_INSTANCE_NOT_FOUND;
-    }
-    unsigned int kill_count = 0;
-    bool sigkilled          = false;
-
-    while (kill_count <= maxSigtermAttempts && kill(pid, 0) == 0)
-    {
-        if (kill_count < maxSigtermAttempts)
-        {
-            kill(pid, SIGTERM);
-        }
-        else
-        {
-            if (!sigkilled)
-            {
-                log_error("Unable to kill process with {} SIGTERM attempts, escalating to SIGKILL. pid: {}",
-                          maxSigtermAttempts,
-                          pid);
-            }
-            kill(pid, SIGKILL);
-            sigkilled = true;
-        }
-        if (kill_count == 0)
-        {
-            std::this_thread::yield();
-        }
-        else
-        {
-            std::this_thread::sleep_for(sigtermRetryDelay);
-        }
-        kill_count++;
-    }
-    if (kill_count >= maxSigtermAttempts && kill(pid, 0) == 0)
-    {
-        log_error("Giving up attempting to kill process {} after {} retries.", pid, maxSigtermAttempts);
-        return DCGM_ST_CHILD_NOT_KILLED;
-    }
-    return DCGM_ST_OK;
-}
-
 std::vector<std::pair<pid_t, std::string>> GetMpiProcessInfo(CommandExecutor *executor)
 {
     std::vector<std::pair<pid_t, std::string>> processInfo;
@@ -128,13 +80,5 @@ std::vector<std::pair<pid_t, std::string>> GetMpiProcessInfo(CommandExecutor *ex
     log_debug("Found {} MPI processes running on GPUs", processInfo.size());
     return processInfo;
 }
-
-bool IsProcessRunning(pid_t pid)
-{
-    return pid > 0 && kill(pid, 0) == 0;
-}
-
-template dcgmReturn_t StopProcess<std::chrono::seconds>(pid_t, unsigned int, std::chrono::seconds);
-template dcgmReturn_t StopProcess<std::chrono::milliseconds>(pid_t, unsigned int, std::chrono::milliseconds);
 
 } // namespace DcgmNs::Common::ProcessUtils

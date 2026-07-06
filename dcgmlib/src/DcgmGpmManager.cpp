@@ -22,24 +22,20 @@
 #include <cmath>
 #include <ranges>
 
-namespace
-{
+constexpr timelib64_t maxJitterSlackUsec = 1000000;
 
-timelib64_t GetMaxSampleAge(timelib64_t maxUpdateInterval, timelib64_t maxSampleAge)
+timelib64_t GetDerivedMaxSampleAge(timelib64_t maxUpdateInterval)
 {
-    // To use nvmlGpmMetricsGet correctly, we need at least two samples. Specifically, we should maintain at least
-    // one sample that is older than m_maxUpdateInterval. Since we ideally take a sample every m_maxUpdateInterval,
-    // we can discard all samples older than 2 * m_maxUpdateInterval. This ensures that we always have at least one
-    // sample that is more than m_maxUpdateInterval old.
-    // For example, if our polling interval is 10 seconds and we ideally take a sample every 10 seconds, but the actual
-    // sampling time might not be precise. For instance, a sample might be taken at 0 seconds, and the next intended
-    // sample would be at 10 seconds, but it might actually occur at 10.1 seconds. If we don't consider 2 *
-    // m_maxUpdateInterval, the sample at 0 seconds could be discarded, leading to a situation where we never have two
-    // samples for calculation.
-    return std::max(maxUpdateInterval * 2, maxSampleAge);
+    /*
+     * nvmlGpmMetricsGet needs two samples spanning an update interval. One interval of
+     * retention is too tight: samples can be lost due to jitter. We use twice the nominal
+     * interval plus a small jitter slack so late polls still leave two usable samples.
+     */
+
+    timelib64_t derivedMaxSampleAge
+        = maxUpdateInterval == 0 ? 0 : (maxUpdateInterval * 2) + std::min(maxUpdateInterval, maxJitterSlackUsec);
+    return derivedMaxSampleAge;
 }
-
-} //namespace
 
 /****************************************************************************/
 /* DcgmGpmManagerEntity methods */
@@ -72,8 +68,8 @@ void DcgmGpmManagerEntity::AddWatcher(unsigned short fieldId,
                             maxAgeCalculated,
                             false);
     m_watchTable.GetMinAndMaxUpdateInterval(m_minUpdateInterval, m_maxUpdateInterval);
-    m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_maxSampleAge);
-    m_maxSampleAge = GetMaxSampleAge(m_maxUpdateInterval, m_maxSampleAge);
+    m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_watchMaxSampleAge);
+    m_derivedMaxSampleAge = GetDerivedMaxSampleAge(m_maxUpdateInterval);
 }
 
 /****************************************************************************/
@@ -84,17 +80,21 @@ void DcgmGpmManagerEntity::RemoveWatcher(unsigned short dcgmFieldId, DcgmWatcher
     m_watchTable.RemoveWatcher(m_entityPair.entityGroupId, m_entityPair.entityId, dcgmFieldId, watcher, nullptr);
 
     m_watchTable.GetMinAndMaxUpdateInterval(m_minUpdateInterval, m_maxUpdateInterval);
-    m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_maxSampleAge);
-    m_maxSampleAge = GetMaxSampleAge(m_maxUpdateInterval, m_maxSampleAge);
+    m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_watchMaxSampleAge);
+    m_derivedMaxSampleAge = GetDerivedMaxSampleAge(m_maxUpdateInterval);
 }
 
 /****************************************************************************/
 dcgmReturn_t DcgmGpmManagerEntity::RemoveConnectionWatches(dcgm_connection_id_t connectionId)
 {
+    timelib64_t _discard;
+
     m_watchTable.RemoveConnectionWatches(connectionId, nullptr);
 
     /* Update our max watch interval after any watch table changes */
     m_watchTable.GetMinAndMaxUpdateInterval(m_minUpdateInterval, m_maxUpdateInterval);
+    m_watchTable.GetMaxAgeUsecAllWatches(_discard, m_watchMaxSampleAge);
+    m_derivedMaxSampleAge = GetDerivedMaxSampleAge(m_maxUpdateInterval);
     return DCGM_ST_OK;
 }
 
@@ -116,8 +116,7 @@ void DcgmGpmManagerEntity::PruneOldSamples(timelib64_t now)
 {
     using namespace std::ranges;
 
-
-    timelib64_t cutOffMinimumExclusive = now - m_maxSampleAge;
+    timelib64_t cutOffMinimumExclusive = now - m_derivedMaxSampleAge;
     auto upperBound                    = m_gpmSamples.upper_bound(cutOffMinimumExclusive);
 
     move(subrange(begin(m_gpmSamples), upperBound) | views::values, std::back_inserter(m_freedGpmSamples));
@@ -220,6 +219,14 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(NvmlTaskRunner &nvmlDriver,
         case DCGM_FE_GPU:
             // All GPM metrics supported at the GPU level
             break;
+        case DCGM_FE_LINK:
+            // Per-link GPM fields keyed by a dcgm_link_t entity. The GPM sample is taken on the
+            // underlying GPU; the link index (resolved below) selects the per-link metric id.
+            if (fieldMeta->entityLevel != DCGM_FE_LINK)
+            {
+                return DCGM_ST_NO_DATA;
+            }
+            break;
         case DCGM_FE_GPU_I:
             if (fieldMeta->entityLevel != DCGM_FE_GPU_I && fieldMeta->entityLevel != DCGM_FE_GPU_CI)
             {
@@ -274,8 +281,17 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(NvmlTaskRunner &nvmlDriver,
     /* Upper bound returns first sample larger. prev() will be our first match */
     baselineSampleIt = std::prev(baselineSampleIt);
 
+    /* For per-link GPM fields the link index is carried in the dcgm_link_t entity id and selects
+       the per-link NVML GPM metric. For all other entities the link index is unused. */
+    unsigned int linkIndex = 0;
+    if (m_entityPair.entityGroupId == DCGM_FE_LINK)
+    {
+        dcgm_link_t const link { .raw = m_entityPair.entityId };
+        linkIndex = link.parsed.index;
+    }
+
     bool isPercentageField = false;
-    unsigned int metricId  = DcgmFieldIdToNvmlGpmMetricId(fieldId, isPercentageField);
+    unsigned int metricId  = DcgmFieldIdToNvmlGpmMetricId(fieldId, isPercentageField, linkIndex);
     if (!metricId)
     {
         /* Already logged by DcgmFieldIdToNvmlGpmMetricId() */

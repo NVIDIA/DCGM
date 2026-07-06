@@ -21,6 +21,7 @@
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
 #include "dcgm_test_apis.h"
+#include "dcgmi_common.h"
 
 #include <UniquePtrUtil.h>
 #include <array>
@@ -33,79 +34,80 @@
 #include <span>
 #include <stdexcept>
 #include <string.h>
+#include <vector>
 
 std::string DISPLAY_NVLINK_ERROR_COUNT_HEADER = "NVLINK Error Counts";
 
 constexpr auto NVLINK_ERROR_FIELD_IDS_HOPPER_OR_OLDER = std::to_array<unsigned short>(
-    { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L0,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L0,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0,
+    { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L0_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L0_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L0_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L0_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L1,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L1,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L1_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L1_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L1_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L1_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L2,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L2,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L2_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L2_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L2_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L2_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L3,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L3,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L3_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L3_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L3_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L3_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L4,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L4,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L4_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L4_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L4_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L4_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L5,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L5,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L5_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L5_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L5_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L5_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L6,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L6,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L6_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L6_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L6_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L6_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L7,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L7,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L7_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L7_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L7_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L7_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L8,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L8,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L8_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L8_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L8_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L8_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L9,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L9,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L9_TOTAL,  DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L9_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L9_TOTAL,    DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L9_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L10, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L10,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L10_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L10_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L10_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L10_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L11, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L11,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L11_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L11_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L11_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L11_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L12, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L12,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L12_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L12_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L12_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L12_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L13, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L13,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L13_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L13_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L13_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L13_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L14, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L14,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L14_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L14_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L14_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L14_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L15, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L15,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L15_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L15_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L15_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L15_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L16, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L16,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16,
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L16_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L16_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L16_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L16_TOTAL,
 
-      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L17, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L17,
-      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17 });
+      DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L17_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L17_TOTAL,
+      DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L17_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L17_TOTAL });
 static_assert(std::size(NVLINK_ERROR_FIELD_IDS_HOPPER_OR_OLDER)
-                  == DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU,
+                  == DCGM_NVLINK_ERROR_COUNT * DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY3,
               "hopper fields count mismatch");
 
 constexpr auto NVLINK_ERROR_FIELD_IDS_BLACKWELL_OR_NEWER
-    = std::to_array<unsigned short>({ DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS,
-                                      DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS,
-                                      DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS,
-                                      DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS,
-                                      DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS,
-                                      DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
-                                      DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS,
+    = std::to_array<unsigned short>({ DCGM_FI_DEV_NVLINK_RX_PACKET_MALFORMED_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_RX_PACKET_DROPPED_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_RX_REMOTE_ERROR_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL,
                                       DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS,
-                                      DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS,
-                                      DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT,
-                                      DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT });
+                                      DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL,
+                                      DCGM_FI_DEV_NVLINK_SYMBOL_BER_RATIO,
+                                      DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO });
 
 namespace
 {
@@ -160,108 +162,108 @@ Nvlink::Nvlink()
 Nvlink::~Nvlink()
 {}
 
-std::string Nvlink::HelperGetNvlinkErrorCountType(unsigned short fieldId)
+std::string DcgmNs::Dcgmi::NvlinkDetail::GetErrorCountType(unsigned short fieldId)
 {
     // Return the Nvlink error type string based on the fieldId
     switch (fieldId)
     {
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L0:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L1:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L2:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L3:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L4:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L5:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L6:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L7:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L8:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L9:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L10:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L11:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L12:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L13:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L14:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L15:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L16:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L17:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L0_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L1_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L2_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L3_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L4_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L5_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L6_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L7_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L8_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L9_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L10_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L11_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L12_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L13_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L14_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L15_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L16_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L17_TOTAL:
             return "CRC FLIT Error";
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L0:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L1:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L2:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L3:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L4:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L5:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L6:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L7:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L8:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L9:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L10:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L11:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L12:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L13:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L14:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L15:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L16:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L17:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L0_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L1_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L2_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L3_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L4_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L5_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L6_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L7_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L8_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L9_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L10_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L11_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L12_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L13_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L14_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L15_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L16_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L17_TOTAL:
             return "CRC Data Error";
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L0_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L1_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L2_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L3_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L4_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L5_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L6_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L7_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L8_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L9_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L10_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L11_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L12_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L13_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L14_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L15_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L16_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L17_TOTAL:
             return "Replay Error";
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L0_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L1_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L2_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L3_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L4_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L5_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L6_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L7_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L8_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L9_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L10_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L11_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L12_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L13_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L14_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L15_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L16_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L17_TOTAL:
             return "Recovery Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS:
+        case DCGM_FI_DEV_NVLINK_RX_PACKET_MALFORMED_TOTAL:
             return "Malformed Packet Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS:
+        case DCGM_FI_DEV_NVLINK_RX_PACKET_DROPPED_TOTAL:
             return "Buffer Overrun Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS:
+        case DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL:
             return "Rx Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS:
+        case DCGM_FI_DEV_NVLINK_RX_REMOTE_ERROR_TOTAL:
             return "Rx Remote Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS:
+        case DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL:
             return "Rx General Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS:
+        case DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL:
             return "Link Integrity Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS:
+        case DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL:
             return "Rx Symbol Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER:
-        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT:
+        case DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW:
+        case DCGM_FI_DEV_NVLINK_SYMBOL_BER_RATIO:
             return "Symbol BER";
-        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER:
-        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT:
+        case DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW:
+        case DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO:
             return "Effective BER";
-        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS:
+        case DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL:
             return "Effective Error";
         case DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS:
             return "Tx Discards";
@@ -364,7 +366,7 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
         for (auto [index, value] : std::views::enumerate(values))
         {
             unsigned int nvlink   = index / DCGM_NVLINK_ERROR_COUNT;
-            std::string fieldName = HelperGetNvlinkErrorCountType(value.fieldId);
+            std::string fieldName = DcgmNs::Dcgmi::NvlinkDetail::GetErrorCountType(value.fieldId);
 
             if (value.status == DCGM_ST_NOT_SUPPORTED)
             {
@@ -392,7 +394,7 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     {
         for (auto const &value : values)
         {
-            std::string fieldName = HelperGetNvlinkErrorCountType(value.fieldId);
+            std::string fieldName = DcgmNs::Dcgmi::NvlinkDetail::GetErrorCountType(value.fieldId);
 
             if (value.fieldType == DCGM_FT_INT64)
             {
@@ -465,14 +467,14 @@ static std::string getIndentation(int numIndents)
 }
 
 
-dcgmReturn_t Nvlink::DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle)
+dcgmReturn_t Nvlink::DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle, bool showEntityIds)
 {
     dcgmReturn_t result;
-    dcgmNvLinkStatus_v4 linkStatus;
+    dcgmNvLinkStatus_v5 linkStatus;
     unsigned int i, j;
 
     memset(&linkStatus, 0, sizeof(linkStatus));
-    linkStatus.version = dcgmNvLinkStatus_version4;
+    linkStatus.version = dcgmNvLinkStatus_version5;
 
     result = dcgmGetNvLinkLinkStatus(dcgmHandle, &linkStatus);
 
@@ -506,6 +508,16 @@ dcgmReturn_t Nvlink::DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle)
                 std::cout << nvLinkStateToCharacter(linkStatus.gpus[i].linkState[j]);
             }
             std::cout << std::endl;
+
+            if (showEntityIds)
+            {
+                std::string entityIds = HelperFormatLinkEntityIds(DCGM_FE_GPU,
+                                                                  linkStatus.gpus[i].entityId,
+                                                                  linkStatus.gpus[i].linkState,
+                                                                  DCGM_NVLINK_MAX_LINKS_PER_GPU);
+                std::cout << getIndentation(1) << "Link Entities: " << (entityIds.empty() ? "N/A" : entityIds)
+                          << std::endl;
+            }
         }
     }
 
@@ -528,6 +540,16 @@ dcgmReturn_t Nvlink::DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle)
                 std::cout << nvLinkStateToCharacter(linkStatus.nvSwitches[i].linkState[j]);
             }
             std::cout << std::endl;
+
+            if (showEntityIds)
+            {
+                std::string entityIds = HelperFormatLinkEntityIds(DCGM_FE_SWITCH,
+                                                                  linkStatus.nvSwitches[i].entityId,
+                                                                  linkStatus.nvSwitches[i].linkState,
+                                                                  DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH);
+                std::cout << getIndentation(1) << "Link Entities: " << (entityIds.empty() ? "N/A" : entityIds)
+                          << std::endl;
+            }
         }
     }
 
@@ -550,12 +572,119 @@ dcgmReturn_t GetGpuNvlinkErrorCounts::DoExecuteConnected()
 }
 
 
-GetNvLinkLinkStatuses::GetNvLinkLinkStatuses(std::string hostname)
+GetNvLinkLinkStatuses::GetNvLinkLinkStatuses(std::string hostname, bool showEntityIds)
+    : mShowEntityIds(showEntityIds)
 {
     m_hostName = std::move(hostname);
 }
 
 dcgmReturn_t GetNvLinkLinkStatuses::DoExecuteConnected()
 {
-    return mNvlinkObj.DisplayNvLinkLinkStatus(m_dcgmHandle);
+    return mNvlinkObj.DisplayNvLinkLinkStatus(m_dcgmHandle, mShowEntityIds);
+}
+
+/*****************************************************************************
+ * Encodes a link entity ID from entity type, entity ID, and port index
+ *****************************************************************************/
+dcgm_field_eid_t HelperEncodeLinkEntity(dcgm_field_entity_group_t entityType,
+                                        dcgm_field_eid_t entityId,
+                                        uint16_t portIndex)
+{
+    dcgm_link_t link {};
+    link.parsed.type  = entityType;
+    link.parsed.index = portIndex;
+
+    if (entityType == DCGM_FE_GPU)
+    {
+        link.parsed.gpuId = entityId;
+    }
+    else if (entityType == DCGM_FE_SWITCH)
+    {
+        link.parsed.switchId = entityId;
+    }
+
+    return link.raw;
+}
+
+std::string HelperFormatLinkEntityIds(dcgm_field_entity_group_t entityType,
+                                      dcgm_field_eid_t entityId,
+                                      const dcgmNvLinkLinkState_t *linkStates,
+                                      unsigned int numLinks)
+{
+    struct LinkInfo
+    {
+        unsigned int port;
+        dcgm_field_eid_t entityId;
+    };
+
+    std::vector<LinkInfo> supportedLinks;
+    unsigned int maxPortNumber = 0;
+
+    // First pass: collect supported links and find max port number
+    for (unsigned int port = 0; port < numLinks; ++port)
+    {
+        // Skip NotSupported links
+        if (linkStates[port] == DcgmNvLinkLinkStateNotSupported)
+        {
+            continue;
+        }
+
+        maxPortNumber = std::max(maxPortNumber, port);
+
+        // Encode the entity ID for this port
+        dcgm_field_eid_t entityIdForPort = HelperEncodeLinkEntity(entityType, entityId, port);
+        supportedLinks.push_back({ port, entityIdForPort });
+    }
+
+    if (supportedLinks.empty())
+    {
+        return "";
+    }
+
+    // Compute widths based on actual max values
+    dcgm_field_eid_t maxEntityId = HelperEncodeLinkEntity(entityType, entityId, maxPortNumber);
+    std::uint16_t portDigits     = std::to_string(maxPortNumber).length();
+    std::uint16_t entityDigits   = std::to_string(maxEntityId).length();
+    std::uint16_t itemWidth      = portDigits + 1 + entityDigits + 1; // "NN:ENTITYID "
+
+    // Format with consistent widths (space-pad ports, zero-pad entity IDs)
+    std::vector<std::string> formattedLinks;
+    formattedLinks.reserve(supportedLinks.size());
+    for (auto const &link : supportedLinks)
+    {
+        formattedLinks.push_back(fmt::format("{:{}d}:{:0{}d}", link.port, portDigits, link.entityId, entityDigits));
+    }
+
+    // Compute layout using generic terminal utility
+    using namespace DcgmNs::Terminal;
+    constexpr std::uint16_t indent = 19; // "    Link Entities: "
+
+    auto termDims = GetTermDimensions().value_or(TermDimensions {});
+    // Use 80% of terminal width for link entities (dense reference data), min 120 for compatibility
+    std::uint16_t termWidth      = std::max<std::uint16_t>(120, termDims.cols * 80 / 100);
+    std::uint16_t availableWidth = termWidth - indent;
+    std::uint16_t itemsPerLine   = ComputeItemsPerLine(itemWidth, availableWidth, 2, 20);
+
+    // Format with computed layout
+    std::string result;
+    std::string const indentStr(indent, ' ');
+
+    for (size_t i = 0; i < formattedLinks.size(); ++i)
+    {
+        if (i > 0)
+        {
+            if (i % itemsPerLine == 0)
+            {
+                result += "\n";
+                result += indentStr;
+            }
+            else
+            {
+                result += " ";
+            }
+        }
+        result += std::move(formattedLinks[i]);
+    }
+
+    return result;
 }

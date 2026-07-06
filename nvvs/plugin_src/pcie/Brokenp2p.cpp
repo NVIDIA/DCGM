@@ -63,20 +63,48 @@ bool Brokenp2p::PerformP2PWrite(void *bufferd1,
                                 size_t size,
                                 std::string &errStr)
 {
-    bool passed = true;
-    CHECKRT(cudaMemcpyPeer(bufferd1, cudaId1, bufferd2, cudaId2, size));
-    CHECKRT(cudaDeviceSynchronize());
-    CHECKRT(cudaMemcpy(hostBuf, bufferd1, size, cudaMemcpyDefault));
-    CHECKRT(cudaDeviceSynchronize());
-    return (memcmp(hostBuf, expected, size) == 0);
+    cudaError_t status = cudaMemcpyPeer(bufferd1, cudaId1, bufferd2, cudaId2, size);
+    if (status != cudaSuccess)
+    {
+        errStr = fmt::format("Failed on cudaMemcpyPeer when copying {} bytes: {}", size, cudaGetErrorName(status));
+        return false;
+    }
 
-cleanup:
-    return passed;
+    status = cudaDeviceSynchronize();
+    if (status != cudaSuccess)
+    {
+        errStr = fmt::format(
+            "Failed on cudaDeviceSynchronize after cudaMemcpyPeer ({} bytes): {}", size, cudaGetErrorName(status));
+        return false;
+    }
+
+    status = cudaMemcpy(hostBuf, bufferd1, size, cudaMemcpyDefault);
+    if (status != cudaSuccess)
+    {
+        errStr = fmt::format("Failed on cudaMemcpy when reading {} bytes to host (cudaMemcpyDefault): {}",
+                             size,
+                             cudaGetErrorName(status));
+        return false;
+    }
+
+    status = cudaDeviceSynchronize();
+    if (status != cudaSuccess)
+    {
+        errStr = fmt::format(
+            "Failed on cudaDeviceSynchronize after cudaMemcpy ({} bytes): {}", size, cudaGetErrorName(status));
+        return false;
+    }
+
+    if (memcmp(hostBuf, expected, size) != 0)
+    {
+        errStr = fmt::format("P2P write verification failed: buffer mismatch after {}-byte peer copy.", size);
+        return false;
+    }
+    return true;
 }
 
 bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr)
 {
-    std::string errStrInternal;
     cudaSetDevice(cudaId1);
     cudaError_t status = cudaDeviceEnablePeerAccess(cudaId2, 0);
     if (status != cudaSuccess)
@@ -128,21 +156,17 @@ bool Brokenp2p::CheckPairP2pWindow(int cudaId1, int cudaId2, std::string &errStr
 
     // Perform a small write from device 2 to device 1.
     static const int EIGHT_BYTES = 8;
-    if (PerformP2PWrite(
-            bufferd1, cudaId1, bufferd2, cudaId2, hostBufferDst, hostBufferSrc, EIGHT_BYTES, errStrInternal))
+    if (PerformP2PWrite(bufferd1, cudaId1, bufferd2, cudaId2, hostBufferDst, hostBufferSrc, EIGHT_BYTES, errStr))
     {
-        passed = PerformP2PWrite(
-            bufferd1, cudaId1, bufferd2, cudaId2, hostBufferDst, hostBufferSrc, m_size, errStrInternal);
+        passed = PerformP2PWrite(bufferd1, cudaId1, bufferd2, cudaId2, hostBufferDst, hostBufferSrc, m_size, errStr);
         if (!passed)
         {
-            errStr
-                = fmt::format("Failed when attempting to perform a write of {} bytes: '{}'.", m_size, errStrInternal);
+            log_error("Failed when attempting to perform a write of {} bytes: '{}'.", m_size, errStr);
         }
     }
     else
     {
-        errStr = fmt::format(
-            "Failed when attempting to perform a small write of {} bytes: '{}'.", EIGHT_BYTES, errStrInternal);
+        log_error("Failed when attempting to perform a small write of {} bytes: '{}'.", EIGHT_BYTES, errStr);
         passed = false;
     }
 
@@ -182,12 +206,12 @@ void GetP2PError(BusGrind *const bg,
 
     DCGM_LOG_DEBUG << "Requesting field summary max for field " << fieldId << " from start time " << startTime;
     dcgmReturn_t dcgmRet = dcgmGetFieldSummary(bg->GetHandle(), &nvlinkFieldRequest);
-    if (dcgmRet != DCGM_ST_OK && dcgmRet != DCGM_ST_NO_DATA)
+    if (dcgmRet == DCGM_ST_NOT_WATCHED)
     {
-        DCGM_LOG_ERROR << "Error getting field summary for field " << fieldId << " : " << dcgmRet;
+        log_debug("Field {} is not watched; cannot determine link type", fieldId);
         p2pLink = P2pLink::NoInfo;
     }
-    else
+    else if (dcgmRet == DCGM_ST_OK)
     {
         DCGM_LOG_DEBUG << "Field " << fieldId << " summary value read for GPU " << gpuId << " : "
                        << nvlinkFieldRequest.response.values[0].i64;
@@ -196,6 +220,15 @@ void GetP2PError(BusGrind *const bg,
         {
             p2pLink = P2pLink::NvLink;
         }
+    }
+    else if (dcgmRet == DCGM_ST_NO_DATA)
+    {
+        log_debug("No data available for field {} for GPU {}", fieldId, gpuId);
+    }
+    else
+    {
+        log_warning("Error getting field summary for field {} for GPU {}: {}", fieldId, gpuId, dcgmRet);
+        p2pLink = P2pLink::NoInfo;
     }
     switch (p2pLink)
     {

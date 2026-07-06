@@ -23,7 +23,10 @@ keys = ''
 
 
 def printUsage():
-    print str(sys.argv[0]) + ' [-i <inputfile>] [-o <outputfile>] -k <keys (comma separated)>'
+    print(
+        str(sys.argv[0])
+        + ' [-i <inputfile>] [-o <outputfile>] -k <keys (comma '
+        + 'separated))')
 
 
 def parseArgs(argv):
@@ -96,6 +99,6 @@ for gpu in gpusData:
             csvWriter.writerow(row)
 
     except KeyError:
-        print 'Key \"' + key + '\" not found in JSON file.'
+        print('Key \"' + key + '\" not found in JSON file.')
 
 cleanup()

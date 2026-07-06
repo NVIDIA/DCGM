@@ -56,6 +56,7 @@ public:
         m_startRemoteServer = false;
         m_listModules       = false;
         m_showUsage         = false;
+        m_fakeGpus          = false;
     }
 
     /*************************************************************************/
@@ -64,6 +65,17 @@ public:
         Cleanup();
     }
 
+
+    /*************************************************************************/
+    /**
+     * Returns whether usage information should be displayed.
+     *
+     * @return true if usage should be shown, false otherwise.
+     */
+    bool ShowUsage(void) const
+    {
+        return m_showUsage;
+    }
     /*************************************************************************/
     /** Helper that loads new modules. */
 
@@ -288,6 +300,10 @@ public:
             {
                 m_showUsage = true;
             }
+            else if (!strcmp(argv[i], "-f")) /* Fake GPUs only */
+            {
+                m_fakeGpus = true;
+            }
             else if (!strcmp(argv[i], "-x"))
             {
                 if (argc - i < 2)
@@ -318,6 +334,7 @@ public:
                    "usage: testdcgmunittests [OPTIONS]\n"
                    "Options are:\n"
                    "-a: Run all modules, including non-L0 ones\n"
+                   "-f: Use fake GPUs only\n"
                    "-h: Display this helpful message\n"
                    "-l: List all modules\n"
                    "-m <MODULE_TAG1,...>: Run module with specified MODULE_TAG\n"
@@ -335,28 +352,32 @@ public:
 
         int numDevices = DCGM_MAX_NUM_DEVICES;
         gpuIds.resize(numDevices);
-        dcgmReturn = dcgmGetAllDevices(m_dcgmHandle, gpuIds.data(), &numDevices);
-        if (dcgmReturn != DCGM_ST_OK)
-        {
-            fprintf(stderr, "Got unexpected dcgmReturn %d from dcgmGetAllDevices()", dcgmReturn);
-            return -1;
-        }
-        gpuIds.resize(numDevices);
 
-        if (gpuIds.size() < 1)
+        if (!m_fakeGpus)
         {
-            fprintf(stderr,
-                    "No GPUs found. If you are testing on GPUs not on the allowlist, "
-                    "set %s=1 in your environment",
-                    DCGM_ENV_WL_BYPASS);
-            return -1;
-        }
+            dcgmReturn = dcgmGetAllDevices(m_dcgmHandle, gpuIds.data(), &numDevices);
+            if (dcgmReturn != DCGM_ST_OK)
+            {
+                fprintf(stderr, "Got unexpected dcgmReturn %d from dcgmGetAllDevices()", dcgmReturn);
+                return -1;
+            }
+            gpuIds.resize(numDevices);
 
-        for (auto &gpuId : gpuIds)
-        {
-            /* Success. Record device */
-            printf("Using GpuId %u\n", gpuId);
-            m_moduleInitParams.liveGpuIds.push_back(gpuId);
+            if (gpuIds.size() < 1)
+            {
+                fprintf(stderr,
+                        "No GPUs found. If you are testing on GPUs not on the allowlist, "
+                        "set %s=1 in your environment",
+                        DCGM_ENV_WL_BYPASS);
+                return -1;
+            }
+
+            for (auto &gpuId : gpuIds)
+            {
+                /* Success. Record device */
+                printf("Using GpuId %u\n", gpuId);
+                m_moduleInitParams.liveGpuIds.push_back(gpuId);
+            }
         }
 
         /* Create two fake GPUs to test with as well */
@@ -521,26 +542,9 @@ public:
     /*
      * Main entry point for this class
      */
-    int Run(int argc, char *argv[])
+    int Run(void)
     {
         int st;
-
-        /* Parse command line before discovering GPUs in case we specify gpus on
-         * the command line
-         */
-        st = ParseCommandLine(argc, argv);
-        if (st || m_showUsage)
-        {
-            Usage();
-            if (st)
-            {
-                return -1;
-            }
-            else
-            {
-                return 0;
-            }
-        }
 
         if (m_listModules)
         {
@@ -572,6 +576,7 @@ private:
     bool m_runAllModules;      /* Should we run all modules discovered, even non-default modules? */
     bool m_listModules;        /* List test modules*/
     bool m_showUsage;          /* Show usage message */
+    bool m_fakeGpus;           /* Only use fake GPUs. */
 
     TestDcgmModuleInitParams m_moduleInitParams;       /* Parameters passed to each module's Init() method */
     std::map<std::string, TestDcgmModule *> m_modules; /* Test modules to run, indexed by each
@@ -591,6 +596,25 @@ int main(int argc, char *argv[])
 
     TestDcgmUnitTests *dcgmUnitTests = new TestDcgmUnitTests();
 
+    /* Parse command line before discovering GPUs in case we specify gpus on
+     * the command line
+     */
+    st = dcgmUnitTests->ParseCommandLine(argc, argv);
+    if (st || dcgmUnitTests->ShowUsage())
+    {
+        dcgmUnitTests->Usage();
+        delete dcgmUnitTests;
+
+        if (st)
+        {
+            return 1;
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
     /* Use fprintf(stderr) or printf() in this function because we're not sure if logging is initialized */
 
     st = dcgmUnitTests->Init();
@@ -598,13 +622,13 @@ int main(int argc, char *argv[])
     {
         fprintf(stderr, "dcgmUnitTests->Init() returned %d\n", st);
         delete dcgmUnitTests;
+
         return 1;
     }
 
     /* Actually run tests */
-    retSt = dcgmUnitTests->Run(argc, argv);
+    retSt = dcgmUnitTests->Run();
+    delete dcgmUnitTests;
 
-    delete (dcgmUnitTests);
-    dcgmUnitTests = 0;
     return retSt;
 }

@@ -107,6 +107,12 @@ DcgmModuleSysmon::~DcgmModuleSysmon()
 /*************************************************************************/
 dcgmReturn_t DcgmModuleSysmon::ProcessMessage(dcgm_module_command_header_t *moduleCommand)
 {
+    if (moduleCommand == nullptr)
+    {
+        log_debug("NULL module command seen");
+        return DCGM_ST_BADPARAM;
+    }
+
     dcgmReturn_t retSt       = DCGM_ST_OK;
     bool processInTaskRunner = false;
 
@@ -239,6 +245,12 @@ dcgmReturn_t DcgmModuleSysmon::ProcessWatchFields(WatchFieldsMessage msg)
     if (msg->numFieldIds >= SYSMON_MSG_WATCH_FIELDS_MAX_NUM_FIELDS || msg->numFieldIds == 0)
     {
         DCGM_LOG_ERROR << "Invalid numFields " << msg->numFieldIds;
+        return DCGM_ST_BADPARAM;
+    }
+
+    if (msg->numEntities > SYSMON_MSG_WATCH_FIELDS_MAX_NUM_ENTITIES || msg->numEntities == 0)
+    {
+        DCGM_LOG_ERROR << "Invalid numEntities " << msg->numEntities;
         return DCGM_ST_BADPARAM;
     }
 
@@ -950,13 +962,13 @@ double DcgmModuleSysmon::ReadTemperature(unsigned int cpuId, short fieldId)
     std::string path;
     switch (fieldId)
     {
-        case DCGM_FI_DEV_CPU_TEMP_CURRENT:
+        case DCGM_FI_DEV_CPU_TEMP_CELSIUS:
             path = m_socketTemperatureFileMap[cpuId];
             break;
-        case DCGM_FI_DEV_CPU_TEMP_WARNING:
+        case DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS:
             path = m_socketTemperatureWarnFileMap[cpuId];
             break;
-        case DCGM_FI_DEV_CPU_TEMP_CRITICAL:
+        case DCGM_FI_DEV_CPU_TEMP_CRITICAL_CELSIUS:
             path = m_socketTemperatureCritFileMap[cpuId];
             break;
         default:
@@ -1224,9 +1236,9 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
             case DCGM_FI_DEV_CPU_UTIL_SYS:
             case DCGM_FI_DEV_CPU_UTIL_IRQ:
                 break;
-            case DCGM_FI_DEV_CPU_TEMP_CURRENT:
-            case DCGM_FI_DEV_CPU_TEMP_WARNING:
-            case DCGM_FI_DEV_CPU_TEMP_CRITICAL:
+            case DCGM_FI_DEV_CPU_TEMP_CELSIUS:
+            case DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS:
+            case DCGM_FI_DEV_CPU_TEMP_CRITICAL_CELSIUS:
             {
                 unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
                 double temperature    = ReadTemperature(socketId, fieldToUpdate.fieldMeta->fieldId);
@@ -1252,7 +1264,7 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
 
                 break;
             }
-            case DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT:
+            case DCGM_FI_DEV_CPU_POWER_WATTS:
             {
                 double usage          = 0.0;
                 unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
@@ -1295,7 +1307,7 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
                 break;
             }
 
-            case DCGM_FI_DEV_CPU_POWER_LIMIT:
+            case DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS:
             {
                 double cap            = 0.0;
                 unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);

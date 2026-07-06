@@ -42,3 +42,9 @@ double NvmlErrorToDoubleValue(nvmlReturn_t nvmlReturn);
  * @return true if the field requires aggregate scopeId, false otherwise
  */
 [[nodiscard]] bool NvmlFieldRequiresNvLinkAggregate(unsigned short nvmlFieldId) noexcept;
+
+/**
+ * Check if a DCGM field ID is an NVLink COUNT field that supports per-link queries.
+ * These fields can be queried with DCGM_FE_LINK entity type for per-link values (NVLink5+ only).
+ */
+[[nodiscard]] bool DcgmFieldIsNvLinkCountField(unsigned short fieldId) noexcept;

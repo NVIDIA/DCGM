@@ -19,14 +19,14 @@ endif()
 add_executable(mocktests)
 target_sources(mocktests
     PRIVATE
-        DcgmLibMockTests.cpp
+        MockDcgmLibTests.cpp
 )
 
 target_link_libraries(mocktests
     PRIVATE
         Catch2::Catch2WithMain
         common_interface
-        mock_interface
+        mock_common
         dcgm_logging
         dcgm_common
         dcgm

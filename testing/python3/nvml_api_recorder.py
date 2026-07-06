@@ -452,7 +452,8 @@ def grid_license_parser(value):
             "licenseInfo": value.gridLicensableFeatures[i].licenseInfo,
             "productName": value.gridLicensableFeatures[i].productName,
             "featureEnabled": value.gridLicensableFeatures[i].featureEnabled,
-            "licenseExpiry": license_expiry_parser(value.gridLicensableFeatures[i].licenseExpiry),
+            "licenseExpiry": license_expiry_parser(
+                value.gridLicensableFeatures[i].licenseExpiry),
         }
         ret["gridLicensableFeatures"].append(feature)
     return ret
@@ -690,7 +691,12 @@ class NVMLSimpleArrayOutputFunc(object):
 
 
 class NVMLExtraKeyArrayOutputFunc(object):
-    def __init__(self, func_str, arr_size, possible_inputs: List[int], value_parser):
+    def __init__(
+            self,
+            func_str,
+            arr_size,
+            possible_inputs: List[int],
+            value_parser):
         self._func_str = func_str
         self._arr_size = arr_size
         self._possible_inputs = possible_inputs
@@ -705,7 +711,12 @@ class NVMLExtraKeyFunc(object):
 
 
 class NVMLTwoKeysFunc(object):
-    def __init__(self, func_str, key1_possible_inputs: List[int], key2_possible_inputs: List[int], value_parser):
+    def __init__(
+            self,
+            func_str,
+            key1_possible_inputs: List[int],
+            key2_possible_inputs: List[int],
+            value_parser):
         self._func_str = func_str
         self._key1_possible_inputs = key1_possible_inputs
         self._key2_possible_inputs = key2_possible_inputs
@@ -713,7 +724,13 @@ class NVMLTwoKeysFunc(object):
 
 
 class NVMLThreeKeysFunc(object):
-    def __init__(self, func_str, key1_possible_inputs: List[int], key2_possible_inputs: List[int], key3_possible_inputs: List[int], value_parser):
+    def __init__(
+            self,
+            func_str,
+            key1_possible_inputs: List[int],
+            key2_possible_inputs: List[int],
+            key3_possible_inputs: List[int],
+            value_parser):
         self._func_str = func_str
         self._key1_possible_inputs = key1_possible_inputs
         self._key2_possible_inputs = key2_possible_inputs
@@ -748,6 +765,7 @@ def fabric_infov_parser(value):
         "cliqueId": value.cliqueId,
         "state": value.state,
         "healthMask": value.healthMask,
+        "healthSummary": value.healthSummary,
     }
 
 
@@ -755,8 +773,13 @@ def nvmlDeviceGetGpuFabricInfoV(device):
     import dcgm_nvml as pynvml
     import nvml_injection_structs
     c_fabricInfo = nvml_injection_structs.c_nvmlGpuFabricInfoV_t_dcgm_ver()
-    c_fabricInfo.version = pynvml.nvmlGpuFabricInfo_v2
-    pynvml.nvmlDeviceGetGpuFabricInfoV(device, byref(c_fabricInfo))
+    c_fabricInfo.version = pynvml.nvmlGpuFabricInfo_v3
+    try:
+        pynvml.nvmlDeviceGetGpuFabricInfoV(device, byref(c_fabricInfo))
+    except pynvml.NVMLError:
+        c_fabricInfo.version = pynvml.nvmlGpuFabricInfo_v2
+        pynvml.nvmlDeviceGetGpuFabricInfoV(device, byref(c_fabricInfo))
+        c_fabricInfo.healthSummary = pynvml.NVML_GPU_FABRIC_HEALTH_SUMMARY_NOT_SUPPORTED
     return c_fabricInfo
 
 
@@ -955,79 +978,174 @@ class NVMLApiRecorder(object):
 
     # which has one device input and another input indicated in possible_inputs
     _nvml_device_extra_key_attr_funcs = [
-        NVMLExtraKeyFunc("nvmlDeviceGetClockInfo", range(
-            NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetMaxClockInfo", range(
-            NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetInforomVersion", range(
-            NVML_INFOROM_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetViolationStatus", [NVML_PERF_POLICY_POWER, NVML_PERF_POLICY_THERMAL, NVML_PERF_POLICY_SYNC_BOOST, NVML_PERF_POLICY_BOARD_LIMIT,
-                         NVML_PERF_POLICY_LOW_UTILIZATION, NVML_PERF_POLICY_RELIABILITY, NVML_PERF_POLICY_TOTAL_APP_CLOCKS, NVML_PERF_POLICY_TOTAL_BASE_CLOCKS], violation_status_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetTemperature", range(
-            NVML_TEMPERATURE_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetTemperatureThreshold", range(
-            NVML_TEMPERATURE_THRESHOLD_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetApplicationsClock", range(
-            NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetMaxCustomerBoostClock",
-                         range(NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetDefaultApplicationsClock", range(
-            NVML_CLOCK_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetRetiredPages", range(
-            NVML_PAGE_RETIREMENT_CAUSE_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetRetiredPages_v2", range(
-            NVML_PAGE_RETIREMENT_CAUSE_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetAPIRestriction", range(
-            NVML_RESTRICTED_API_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetPcieThroughput", range(
-            NVML_PCIE_UTIL_COUNT), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetTopologyNearestGpus", [NVML_TOPOLOGY_INTERNAL, NVML_TOPOLOGY_SINGLE,
-                         NVML_TOPOLOGY_MULTIPLE, NVML_TOPOLOGY_HOSTBRIDGE, NVML_TOPOLOGY_NODE, NVML_TOPOLOGY_SYSTEM], topology_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkState", range(
-            NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkVersion", range(
-            NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkRemotePciInfo",
-                         range(NVML_NVLINK_MAX_LINKS), pci_info_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetNvLinkRemoteDeviceType", range(
-            NVML_NVLINK_MAX_LINKS), basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetVgpuUtilization",
-                         [0], vgpu_utilization_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetEncoderCapacity", [
-                         NVML_ENCODER_QUERY_H264, NVML_ENCODER_QUERY_HEVC, NVML_ENCODER_QUERY_AV1], basic_type_value_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetVgpuProcessUtilization", [
-                         0], vgpu_process_utilization_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetProcessUtilization",
-                         [0], process_utilization_parser),
-        NVMLExtraKeyFunc("nvmlDeviceGetGpuInstanceProfileInfo", range(
-            NVML_GPU_INSTANCE_PROFILE_COUNT), instance_profile_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetClockInfo",
+            range(NVML_CLOCK_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetMaxClockInfo",
+            range(NVML_CLOCK_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetInforomVersion",
+            range(NVML_INFOROM_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetViolationStatus",
+            [
+                NVML_PERF_POLICY_POWER,
+                NVML_PERF_POLICY_THERMAL,
+                NVML_PERF_POLICY_SYNC_BOOST,
+                NVML_PERF_POLICY_BOARD_LIMIT,
+                NVML_PERF_POLICY_LOW_UTILIZATION,
+                NVML_PERF_POLICY_RELIABILITY,
+                NVML_PERF_POLICY_TOTAL_APP_CLOCKS,
+                NVML_PERF_POLICY_TOTAL_BASE_CLOCKS],
+            violation_status_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetTemperature",
+            range(NVML_TEMPERATURE_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetTemperatureThreshold",
+            range(NVML_TEMPERATURE_THRESHOLD_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetApplicationsClock",
+            range(NVML_CLOCK_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetMaxCustomerBoostClock",
+            range(NVML_CLOCK_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetDefaultApplicationsClock",
+            range(NVML_CLOCK_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetRetiredPages",
+            range(NVML_PAGE_RETIREMENT_CAUSE_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetRetiredPages_v2",
+            range(NVML_PAGE_RETIREMENT_CAUSE_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetAPIRestriction",
+            range(NVML_RESTRICTED_API_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetPcieThroughput",
+            range(NVML_PCIE_UTIL_COUNT),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetTopologyNearestGpus",
+            [
+                NVML_TOPOLOGY_INTERNAL,
+                NVML_TOPOLOGY_SINGLE,
+                NVML_TOPOLOGY_MULTIPLE,
+                NVML_TOPOLOGY_HOSTBRIDGE,
+                NVML_TOPOLOGY_NODE,
+                NVML_TOPOLOGY_SYSTEM],
+            topology_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetNvLinkState",
+            range(NVML_NVLINK_MAX_LINKS),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetNvLinkVersion",
+            range(NVML_NVLINK_MAX_LINKS),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetNvLinkRemotePciInfo",
+            range(NVML_NVLINK_MAX_LINKS),
+            pci_info_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetNvLinkRemoteDeviceType",
+            range(NVML_NVLINK_MAX_LINKS),
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetVgpuUtilization",
+            [0],
+            vgpu_utilization_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetEncoderCapacity",
+            [
+                NVML_ENCODER_QUERY_H264,
+                NVML_ENCODER_QUERY_HEVC,
+                NVML_ENCODER_QUERY_AV1],
+            basic_type_value_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetVgpuProcessUtilization",
+            [0],
+            vgpu_process_utilization_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetProcessUtilization",
+            [0],
+            process_utilization_parser),
+        NVMLExtraKeyFunc(
+            "nvmlDeviceGetGpuInstanceProfileInfo",
+            range(NVML_GPU_INSTANCE_PROFILE_COUNT),
+            instance_profile_parser),
     ]
 
-    # which has one device input and another two input indicated in key1_possible_inputs, key2_possible_inputs
+    # which has one device input and another two input indicated in
+    # key1_possible_inputs, key2_possible_inputs
     _nvml_device_two_keys_attr_funcs = [
-        NVMLTwoKeysFunc("nvmlDeviceGetDetailedEccErrors", range(
-            NVML_MEMORY_ERROR_TYPE_COUNT), range(NVML_ECC_COUNTER_TYPE_COUNT), ecc_error_count_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetTotalEccErrors", range(NVML_MEMORY_ERROR_TYPE_COUNT), range(
-            NVML_ECC_COUNTER_TYPE_COUNT), basic_type_value_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetMemoryAffinity", [
-                        8], range(2), affinity_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetCpuAffinityWithinScope",
-                        [8], range(2), affinity_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetClock", range(NVML_CLOCK_COUNT), range(
-            NVML_CLOCK_ID_COUNT), basic_type_value_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetSamples", range(
-            NVML_SAMPLINGTYPE_COUNT), [0], sample_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkCapability", range(
-            NVML_NVLINK_MAX_LINKS), range(NVML_NVLINK_CAP_COUNT), basic_type_value_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkErrorCounter", range(
-            NVML_NVLINK_MAX_LINKS), range(NVML_NVLINK_ERROR_COUNT), basic_type_value_parser),
-        NVMLTwoKeysFunc("nvmlDeviceGetNvLinkUtilizationCounter", range(
-            NVML_NVLINK_MAX_LINKS), range(2), basic_type_value_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetDetailedEccErrors",
+            range(NVML_MEMORY_ERROR_TYPE_COUNT),
+            range(NVML_ECC_COUNTER_TYPE_COUNT),
+            ecc_error_count_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetTotalEccErrors",
+            range(NVML_MEMORY_ERROR_TYPE_COUNT),
+            range(NVML_ECC_COUNTER_TYPE_COUNT),
+            basic_type_value_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetMemoryAffinity",
+            [8],
+            range(2),
+            affinity_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetCpuAffinityWithinScope",
+            [8],
+            range(2),
+            affinity_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetClock",
+            range(NVML_CLOCK_COUNT),
+            range(NVML_CLOCK_ID_COUNT),
+            basic_type_value_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetSamples",
+            range(NVML_SAMPLINGTYPE_COUNT),
+            [0],
+            sample_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetNvLinkCapability",
+            range(NVML_NVLINK_MAX_LINKS),
+            range(NVML_NVLINK_CAP_COUNT),
+            basic_type_value_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetNvLinkErrorCounter",
+            range(NVML_NVLINK_MAX_LINKS),
+            range(NVML_NVLINK_ERROR_COUNT),
+            basic_type_value_parser),
+        NVMLTwoKeysFunc(
+            "nvmlDeviceGetNvLinkUtilizationCounter",
+            range(NVML_NVLINK_MAX_LINKS),
+            range(2),
+            basic_type_value_parser),
     ]
 
     _nvml_device_three_keys_attr_funcs = [
-        NVMLThreeKeysFunc("nvmlDeviceGetMemoryErrorCounter", range(NVML_MEMORY_ERROR_TYPE_COUNT), range(
-            NVML_ECC_COUNTER_TYPE_COUNT), range(NVML_MEMORY_LOCATION_COUNT), basic_type_value_parser),
+        NVMLThreeKeysFunc(
+            "nvmlDeviceGetMemoryErrorCounter",
+            range(NVML_MEMORY_ERROR_TYPE_COUNT),
+            range(NVML_ECC_COUNTER_TYPE_COUNT),
+            range(NVML_MEMORY_LOCATION_COUNT),
+            basic_type_value_parser),
     ]
 
     # which has one device input along with expected array size
@@ -1039,19 +1157,27 @@ class NVMLApiRecorder(object):
     # which has one device input along with expected array size with extra key
     _nvml_device_array_size_as_input_extra_key_funcs = [
         NVMLExtraKeyArrayOutputFunc(
-            "nvmlDeviceGetMemoryAffinity", 8, range(2), affinity_parser),
+            "nvmlDeviceGetMemoryAffinity",
+            8,
+            range(2),
+            affinity_parser),
         NVMLExtraKeyArrayOutputFunc(
-            "nvmlDeviceGetCpuAffinityWithinScope", 8, range(2), affinity_parser),
+            "nvmlDeviceGetCpuAffinityWithinScope",
+            8,
+            range(2),
+            affinity_parser),
     ]
 
-    # which has two devices input, framework will iterate all possible combination for produing results
+    # which has two devices input, framework will iterate all possible
+    # combination for produing results
     _nvml_device_two_devices_input_funcs = [
         NVMLSimpleFunc("nvmlDeviceOnSameBoard", basic_type_value_parser),
         NVMLSimpleFunc("nvmlDeviceGetTopologyCommonAncestor",
                        basic_type_value_parser),
     ]
 
-    # which has two devices input along with an extra key, framework will iterate all possible combination for produing results
+    # which has two devices input along with an extra key, framework will
+    # iterate all possible combination for produing results
     _nvml_device_two_devices_input_and_extra_key_funcs = [
         NVMLExtraKeyFunc("nvmlDeviceGetP2PStatus", range(
             NVML_P2P_CAPS_INDEX_UNKNOWN), basic_type_value_parser),
@@ -1074,13 +1200,15 @@ class NVMLApiRecorder(object):
                        basic_type_value_parser),
     ]
 
-    # which takes one vGPU type and a possible_inputs. It then produces one result
+    # which takes one vGPU type and a possible_inputs. It then produces one
+    # result
     _nvml_vgpu_type_extra_key_attrs_funcs = [
         NVMLExtraKeyFunc("nvmlVgpuTypeGetCapabilities", range(
             NVML_VGPU_CAP_COUNT), basic_type_value_parser),
     ]
 
-    # which takes one vGPU type and a possible_inputs. It then produces two result
+    # which takes one vGPU type and a possible_inputs. It then produces two
+    # result
     _nvml_vgpu_type_extra_key_two_attrs_funcs = [
     ]
 
@@ -1219,7 +1347,8 @@ class NVMLApiRecorder(object):
         "nvmlDeviceGetHandleByIndex_v2",
 
         # function not found
-        # in PyNVML, version is passed by parameter but it still shows not found
+        # in PyNVML, version is passed by parameter but it still shows not
+        # found
         "nvmlDeviceGetMemoryInfo_v2",
 
         # deprecated functions
@@ -1303,9 +1432,11 @@ class NVMLApiRecorder(object):
 
     def __enter__(self):
         self._attrs = {}
-        # mapping all fake nvmlGpuInstance_t to (parent device uuid, real nvmlGpuInstance_t)
+        # mapping all fake nvmlGpuInstance_t to (parent device uuid, real
+        # nvmlGpuInstance_t)
         self._gpu_instances_mapping = {}
-        # mapping all fake nvmlComputeInstance_t to (parent device uuid, fake nvmlGpuInstance_t, real nvmlComputeInstance_t)
+        # mapping all fake nvmlComputeInstance_t to (parent device uuid, fake
+        # nvmlGpuInstance_t, real nvmlComputeInstance_t)
         self._compute_instance_mapping = {}
         # an array of (mig device uuid, mig device)
         self._mig_devices_collector = []
@@ -1363,7 +1494,8 @@ class NVMLApiRecorder(object):
                 device_attr[suffix_key][input][RETURN_VAL] = extra_key_func._value_parser(
                     ret_val)
 
-    def _record_device_supported_graphics_clocks(self, nvml_device, device_attr):
+    def _record_device_supported_graphics_clocks(
+            self, nvml_device, device_attr):
         func_ret, memory_clocks = run_nvml_func(
             nvmlDeviceGetSupportedMemoryClocks, nvml_device)
         suffix_key = nvml_func_key_suffix_extract(
@@ -1452,7 +1584,11 @@ class NVMLApiRecorder(object):
             if suffix_key not in device_attr:
                 device_attr[suffix_key] = {}
             func_ret = run_nvml_no_output_func_str(
-                "nvmlDeviceGetGpuInstances", nvml_device, profile_info.id, c_profile_instances, byref(c_count))
+                "nvmlDeviceGetGpuInstances",
+                nvml_device,
+                profile_info.id,
+                c_profile_instances,
+                byref(c_count))
             device_attr[suffix_key][profile_info.id] = {}
             device_attr[suffix_key][profile_info.id][FUNC_RETURN] = func_ret
             if func_ret != NVML_SUCCESS:
@@ -1478,7 +1614,8 @@ class NVMLApiRecorder(object):
             nvmlDeviceGetMaxMigDeviceCount, nvml_device)
         if func_ret != NVML_SUCCESS:
             return
-        # Actual NVML APIs don't provide this, we add this one for the fake mig device handle in c++
+        # Actual NVML APIs don't provide this, we add this one for the fake mig
+        # device handle in c++
         suffix = "MigDeviceUUID"
         device_attr[suffix] = []
         for mig_idx in range(mig_count):
@@ -1542,7 +1679,7 @@ class NVMLApiRecorder(object):
         if not support:
             return
         sample1, sample2 = self._get_two_gpm_samples(nvml_device)
-        if sample1 == None or sample2 == None:
+        if sample1 is None or sample2 is None:
             return
         device_attr["GpmMetrics"] = {}
         mg = c_nvmlGpmMetricsGet_t()
@@ -1916,10 +2053,12 @@ class NVMLApiRecorder(object):
                 "nvmlGpuInstanceGetComputeInstanceProfileInfo")
             self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key] = {}
             all_ci_profile_ids = []
-            for ci_instance_profile in range(NVML_COMPUTE_INSTANCE_PROFILE_COUNT):
+            for ci_instance_profile in range(
+                    NVML_COMPUTE_INSTANCE_PROFILE_COUNT):
                 self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile] = {
                 }
-                for ci_engine_profile in range(NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_COUNT):
+                for ci_engine_profile in range(
+                        NVML_COMPUTE_INSTANCE_ENGINE_PROFILE_COUNT):
                     self._attrs[GPU_INSTANCE][fake_gpu_instance][suffix_key][ci_instance_profile][ci_engine_profile] = {
                     }
                     func_ret, ci_profile_info = run_nvml_func(
@@ -1954,7 +2093,11 @@ class NVMLApiRecorder(object):
                 c_count = c_uint()
                 c_profile_instances = InstancesArray()
                 func_ret = run_nvml_no_output_func_str(
-                    "nvmlGpuInstanceGetComputeInstances", real_gpu_instance, ci_profile_id, c_profile_instances, byref(c_count))
+                    "nvmlGpuInstanceGetComputeInstances",
+                    real_gpu_instance,
+                    ci_profile_id,
+                    c_profile_instances,
+                    byref(c_count))
                 if func_ret != NVML_SUCCESS:
                     continue
                 for i in range(c_count.value):

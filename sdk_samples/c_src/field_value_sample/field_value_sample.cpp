@@ -231,8 +231,8 @@ int main(int argc, char **argv)
     dcgmFieldGrp_t fieldGroupId;
     unsigned short fieldIds[2];
 
-    fieldIds[0] = DCGM_FI_DEV_POWER_USAGE;
-    fieldIds[1] = DCGM_FI_DEV_GPU_TEMP;
+    fieldIds[0] = DCGM_FI_DEV_BOARD_POWER_WATTS;
+    fieldIds[1] = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
 
     result = dcgmFieldGroupCreate(dcgmHandle, 2, &fieldIds[0], (char *)"interesting_fields", &fieldGroupId);
     if (result != DCGM_ST_OK)
@@ -431,7 +431,7 @@ int list_field_values(unsigned int /* gpuId */, dcgmFieldValue_v1 *values, int n
         std::cout << "Value => ";
 
         dcgm_field_meta_p field = DcgmFieldGetById((it->second).fieldId);
-        unsigned char fieldType = field == nullptr ? DCGM_FI_UNKNOWN : field->fieldType;
+        unsigned char fieldType = field == nullptr ? DCGM_FI_SYSTEM_FIELD_UNKNOWN : field->fieldType;
         switch (fieldType)
         {
             case DCGM_FT_BINARY:

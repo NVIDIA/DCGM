@@ -22,8 +22,8 @@ import sys
 def get_branch_names(commit):
     process = subprocess.run(["git", "branch", "-a", "--no-abbrev",
                               "--contains", commit, "--format",
-                              "%(refname:lstrip=2)"], text=True,
-                             capture_output=True)
+                              "%(refname:lstrip=2)"], universal_newlines=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out = process.stdout
     status = process.returncode
 

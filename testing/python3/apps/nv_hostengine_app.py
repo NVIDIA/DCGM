@@ -54,7 +54,7 @@ class NvHostEngineApp(app_runner.AppRunner):
     def __init__(self, args=None, profile_dir=None, heEnv=None, pid_dir=None):
         '''
         args: special args to execute nv-hostengine with
-        profile_dir: output directory to create which will contain 
+        profile_dir: output directory to create which will contain
                      profiling files if profiling is enabled.
         heEnv: Dictionary of environmental variables to set for the host engine's process
         '''
@@ -82,12 +82,14 @@ class NvHostEngineApp(app_runner.AppRunner):
             logger.info('profiling output files available under %s' %
                         utils.shorten_path(self.output_dir, 3))
 
-        # Make sure we're writing to a local .pid file in case we're running as non-root
+        # Make sure we're writing to a local .pid file in case we're running as
+        # non-root
         pidArgs = []
         if args is not None and '--pid' in args:
             if self._pidFilename not in args:  # When we retry, --pid self._pidFilename is already there. Don't fail in that case
                 raise Exception(
-                    "Custom --pid parameter is not supported at this time. You must update _terminate_hostengine() as well. args: " + str(args))
+                    "Custom --pid parameter is not supported at this time. You must update _terminate_hostengine() as well. args: " +
+                    str(args))
         else:
             pidArgs = ['--pid', self._pidFilename]
 
@@ -99,6 +101,11 @@ class NvHostEngineApp(app_runner.AppRunner):
         super(NvHostEngineApp, self).__init__(path, args, cwd=None, env=heEnv)
 
         if not test_utils.noLogging and not option_parser.options.profile:
+            self.nvml_trace_fname = os.path.join(
+                logger.log_dir, "app_%03d_nvml_trace.log" % (self.process_nb))
+            self.env["__NVML_DBG_FILE"] = self.nvml_trace_fname
+            self.env["__NVML_DBG_LVL"] = test_utils.loggingLevel
+
             self.dcgm_trace_fname = os.path.join(
                 logger.log_dir, "app_%03d_dcgm_trace.log" % (self.process_nb))
             self.env["__DCGM_DBG_FILE"] = self.dcgm_trace_fname
@@ -107,6 +114,7 @@ class NvHostEngineApp(app_runner.AppRunner):
                 logger.log_dir, "app_%03d_nvvs_trace.log" % (self.process_nb))
         else:
             self.dcgm_trace_fname = None
+            self.nvml_trace_fname = None
             logger.nvvs_trace_log_filename = None
 
         # logger.error("env: %s; heEnv: %s" % (str(self.env), str(heEnv)))
@@ -114,8 +122,9 @@ class NvHostEngineApp(app_runner.AppRunner):
     def _check_valgrind_installed(self):
         output = subprocess.check_output('which valgrind', shell=True).strip()
         if output == '':
-            raise Exception('Valgrind must be installed in order to run profiling. ' +
-                            '"which valgrind" could not find it.')
+            raise Exception(
+                'Valgrind must be installed in order to run profiling. ' +
+                '"which valgrind" could not find it.')
 
     def _create_output_dir(self, profile_tool, profile_dir=None):
         ''' Create and return the output directory for the callgrind files '''
@@ -125,7 +134,8 @@ class NvHostEngineApp(app_runner.AppRunner):
         if profile_dir is not None:
             output_dir = os.path.join(base_output_dir, profile_dir)
         else:
-            # if no name specified, store in a folder for the current datetime, including microseconds
+            # if no name specified, store in a folder for the current datetime,
+            # including microseconds
             dir_name = datetime.datetime.fromtimestamp(
                 time.time()).strftime('%Y-%m-%dT%H:%M:%S.%f')
             output_dir = os.path.join(base_output_dir, dir_name)
@@ -134,8 +144,8 @@ class NvHostEngineApp(app_runner.AppRunner):
         return output_dir
 
     def _create_profile_command(self, args, path, valgrind_tool):
-        ''' 
-        Return the proper (args, path) to initialize the AppRunner with in order 
+        '''
+        Return the proper (args, path) to initialize the AppRunner with in order
         to run the hostengine under callgrind
         '''
         if valgrind_tool not in self.supported_profile_tools:
@@ -158,11 +168,13 @@ class NvHostEngineApp(app_runner.AppRunner):
 
             tool_args = [
                 '--separate-threads=yes',
-                # allow to look at profiling data at machine instr lvl instead of src lines
+                # allow to look at profiling data at machine instr lvl instead
+                # of src lines
                 '--dump-instr=yes',
                 '--collect-jumps=yes',      # conditional jump info is collected
                 '--collect-systime=yes',    # collect system call times
-                # collect atomic instr. calls.  Useful for finding excessive locking
+                # collect atomic instr. calls.  Useful for finding excessive
+                # locking
                 '--collect-bus=yes',
                 '--cache-sim=yes',          # collect memory and cache miss/hit info
                 '--callgrind-out-file=%s' % tool_log_file,
@@ -186,7 +198,8 @@ class NvHostEngineApp(app_runner.AppRunner):
         if logger.log_dir is None:
             return
 
-        # Verify that nv_hostengine doesn't print any strings that should never be printed on a working system
+        # Verify that nv_hostengine doesn't print any strings that should never
+        # be printed on a working system
         stdout = "\n".join(self.stdout_lines)
         for forbidden_text in NvHostEngineApp.forbidden_strings:
             assert stdout.find(
@@ -200,19 +213,22 @@ class NvHostEngineApp(app_runner.AppRunner):
         self._kill_hostengine(self._getpid())
 
         # Don't timeout nv-hostengine for now. We already call it from
-        # RunStandaloneHostEngine, which will start and stop the host engine between tests
+        # RunStandaloneHostEngine, which will start and stop the host engine
+        # between tests
         timeout = None
 
         super(NvHostEngineApp, self).start(timeout=timeout)
 
         # get and cache the pid
-        waitTime = 10.0
+        waitTime = default_timeout
         start = time.time()
-        while time.time() - start < waitTime:
+        now = time.time()
+        while now - start < waitTime:
             self._pid = self._getpid()
             if self._pid is not None:
                 break
             time.sleep(0.050)
+            now = time.time()
 
         if self._pid is None:
             # Use super method to check status of subprocess object
@@ -231,6 +247,9 @@ class NvHostEngineApp(app_runner.AppRunner):
                 logger.error(line)
             raise RuntimeError('Failed to start hostengine app')
 
+        logger.info(
+            f"Started hostengine app after {now - start:.2f} out of {waitTime} seconds.")
+
     def _kill_hostengine(self, pid):
         if pid is None:
             return
@@ -241,17 +260,22 @@ class NvHostEngineApp(app_runner.AppRunner):
     def _getpid_old(self):
         # assuming that only one hostengine exists we do a pgrep for it
         # we have to specify --P=1 (init process) or else we will also get the PID of
-        # the pgrep shell command.  Use -P instead of --parent because some versions of pgrep only have -P
+        # the pgrep shell command.  Use -P instead of --parent because some
+        # versions of pgrep only have -P
         try:
-            pid = subprocess.check_output('pgrep -P 1 -f "%s"' % os.path.basename(self.hostengine_executable),
-                                          stderr=subprocess.PIPE,
-                                          shell=True).strip()
+            pid = subprocess.check_output(
+                'pgrep -P 1 -f "%s"' %
+                os.path.basename(
+                    self.hostengine_executable),
+                stderr=subprocess.PIPE,
+                shell=True).strip()
 
             # verify only one hostengine exists
             pids = pid.split()
             if len(pids) > 1:
                 logger.warning(
-                    'Multiple hostengine pids found: "%s".  Using the last one and hoping for the best.' % pid)
+                    'Multiple hostengine pids found: "%s".  Using the last one and hoping for the best.' %
+                    pid)
 
             return int(pids[len(pids) - 1])
         except CalledProcessError:
@@ -277,8 +301,9 @@ class NvHostEngineApp(app_runner.AppRunner):
         procPath = "/proc/" + pidStr + "/"
         # logger.error("exists? %s : %s" % (procPath, str(os.path.exists(procPath))))
         if not os.path.exists(procPath):
-            logger.debug("Found pid file %s with pid %s but /proc/%s did not exist" %
-                         (self._pidFilename, pidStr, pidStr))
+            logger.debug(
+                "Found pid file %s with pid %s but /proc/%s did not exist" %
+                (self._pidFilename, pidStr, pidStr))
             return None
 
         return int(pidStr)
@@ -316,20 +341,25 @@ class NvHostEngineApp(app_runner.AppRunner):
 
     def _terminate_hostengine(self):
         try:
-            subprocess.check_output([self.hostengine_executable, '--term', '--pid', self._pidFilename],
+            subprocess.check_output([self.hostengine_executable,
+                                     '--term',
+                                     '--pid',
+                                     self._pidFilename],
                                     stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             # We do not want to propogate this error because it will obscure the actual reason why a test fails
             # in some cases when an assertion fails for a test
             logger.error("Failed to terminate host engine! (PID %s)" %
                          self._getpid())
-            logger.error("Command: '%s' returned non-zero exit status %s.\nOutput:%s"
-                         % (e.cmd, e.returncode, e.output))
-            # Log information about any running hostengine processes for better debugging info when failures occur
+            logger.error(
+                "Command: '%s' returned non-zero exit status %s.\nOutput:%s" %
+                (e.cmd, e.returncode, e.output))
+            # Log information about any running hostengine processes for better
+            # debugging info when failures occur
             test_utils.check_for_running_hostengine_and_log_details(False)
 
     def _remove_useless_profiling_files(self, profiling_tool):
-        ''' 
+        '''
         Remove any callgrind files that are not useful.
         This happens since starting the nv-hostengine executable creates a new process
         so the initial starting process also is profiled by the profiling tool

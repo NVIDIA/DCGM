@@ -182,8 +182,8 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
         }
         else if (!m_absoluteTolerance.IsDefault())
         {
-            minValue = m_matchValue.Value() + m_absoluteTolerance.Value();
-            maxValue = m_matchValue.Value() - m_absoluteTolerance.Value();
+            minValue = m_matchValue.Value() - m_absoluteTolerance.Value();
+            maxValue = m_matchValue.Value() + m_absoluteTolerance.Value();
         }
         else
         {
@@ -353,7 +353,7 @@ dcgmReturn_t ArgumentSet_t::ProcessFieldIds(void)
                                      std::shared_ptr<Arguments_t> arguments,
                                      bool useDefaults,
                                      unsigned int fieldId) mutable -> dcgmReturn_t {
-                                      if ((fieldId < DCGM_FI_PROF_FIRST_ID) || (fieldId > DCGM_FI_PROF_LAST_ID))
+                                      if (!DCGM_FIELD_ID_IS_PROF_FIELD(fieldId))
                                       {
                                           DCGM_LOG_ERROR << "Arguments -- bad fieldId " << fieldId;
 

@@ -156,7 +156,7 @@ int TestDiagManager::TestPositiveDummyExecutable()
         return -1;
     }
 
-    DcgmGroupManager dgm { &dcm };
+    DcgmGroupManager dgm { &dcm, HostEngineHandler {} };
     DcgmCoreCommunication dcc;
     dcc.Init(&dcm, &dgm);
     g_coreCallbacks.poster = &dcc;
@@ -230,6 +230,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     DcgmDiagManager am(g_coreCallbacks);
 
     std::string nvvsBinPath;
+    DcgmDiagManager::ConfigFileGuard configFileGuard;
     std::vector<std::string> expected;
 
     const char *nvvsPathEnv = std::getenv("NVVS_BIN_PATH");
@@ -249,7 +250,7 @@ int TestDiagManager::TestCreateNvvsCommand()
 
     // When no test names are specified, none isn't valid
     drd.validate = DCGM_POLICY_VALID_NONE;
-    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12);
+    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12, configFileGuard);
     if (result == 0)
     {
         // Should've failed
@@ -259,7 +260,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     // Check a valid scenario
     cmdArgs.clear();
     drd.validate = DCGM_POLICY_VALID_SV_LONG;
-    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12);
+    result       = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12, configFileGuard);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -276,7 +277,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     snprintf(drd.testNames[1], sizeof(drd.testNames[1]), "sm stress");
     snprintf(drd.testNames[2], sizeof(drd.testNames[2]), "targeted stress");
     drd.debugLevel = DcgmLoggingSeverityWarning;
-    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12);
+    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12, configFileGuard);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -294,7 +295,7 @@ int TestDiagManager::TestCreateNvvsCommand()
     snprintf(drd.testParms[2], sizeof(drd.testParms[2]), "targeted stress.test_duration=600");
     // Invalid severity to test default value
     drd.debugLevel = 20; // TODO (nik, aalsuldani): this is UB. Let's find a better way
-    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12);
+    result         = am.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12, configFileGuard);
     if (result == DCGM_ST_OK)
     {
         command = ConvertVectorToCommandString(cmdArgs);
@@ -859,7 +860,7 @@ int TestDiagManager::TestInvalidVersion()
     dcm.AddFakeGpu();
     dcm.AddFakeGpu();
 
-    DcgmGroupManager dgm { &dcm };
+    DcgmGroupManager dgm { &dcm, HostEngineHandler {} };
 
     DcgmCoreCommunication dcc;
     dcc.Init(&dcm, &dgm);
@@ -923,7 +924,7 @@ int TestDiagManager::TestPerformExternalCommand()
         return -1;
     }
 
-    DcgmGroupManager dgm { &dcm };
+    DcgmGroupManager dgm { &dcm, HostEngineHandler {} };
     DcgmCoreCommunication dcc;
     dcc.Init(&dcm, &dgm);
     g_coreCallbacks.poster = &dcc;

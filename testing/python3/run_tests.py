@@ -30,7 +30,7 @@ from test_utils import TestSkipped
 
 
 def log_environment_info():
-    if utils.is_linux():
+    if utils.is_linux() and not option_parser.options.no_hw:
         logger.info("Xorg running:        %s" % test_utils.is_xorg_running())
     logger.info("Python version:      %s" % python_version.split(None, 1)[0])
     logger.info("Platform identifier: %s" % utils.platform_identifier)
@@ -39,14 +39,16 @@ def log_environment_info():
 
     rawVersionInfo = dcgm_agent.dcgmVersionInfo()
     logger.info("Build info:          %s" % rawVersionInfo.rawBuildInfoString)
-    logger.info("Mig:                 %s" % test_utils.is_mig_mode_enabled())
+    if utils.is_linux() and not option_parser.options.no_hw:
+        logger.info("Mig:                 %s" %
+                    test_utils.is_mig_mode_enabled())
     logger.debug("ENV : %s" % "\n".join(
         list(map(str, sorted(os.environ.items())))))
 
-##################################################################################
+##########################################################################
 # Kills the specified processes. If murder is specified, then they are kill -9'ed
 # instead of nicely killed.
-##################################################################################
+##########################################################################
 
 
 def kill_process_ids(process_ids, murder):
@@ -60,15 +62,18 @@ def kill_process_ids(process_ids, murder):
         else:
             cmd = 'kill %s' % pid
             runner = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True)
             output, error = runner.communicate()
 
     return running
 
-##################################################################################
+##########################################################################
 # Cleans up the hostengine if needed. If we can't clean it up, then we will
 # abort the testing framework.
-##################################################################################
+##########################################################################
 
 
 def kill_hostengine_if_needed():
@@ -79,7 +84,7 @@ def kill_hostengine_if_needed():
             True)
         running = kill_process_ids(process_ids, False)
 
-        if running == False:
+        if not running:
             break
         need_to_validate = True
         time.sleep(.5)
@@ -107,13 +112,16 @@ class WithWrapper:
     """
 
     def __init__(self, hostgengine=None, handle=None):
-        self.item = handle
+        self.handle = handle
 
     def __enter__(self):
-        return self.item
+        return self
 
     def __exit__(self, exception_type, exception, trace):
         pass
+
+    def Handle(self):
+        return self.handle
 
 
 def run_tests():
@@ -158,14 +166,17 @@ def run_tests():
                 handle = hostengine.Handle()
                 initFn = WithWrapper
 
-            with initFn(hostengine, handle=handle) as handle:
+            with initFn(hostengine, handle=handle) as wrapper:
+                handle = wrapper.Handle()
+
                 try:
                     dcgmGpuCount = test_utils.log_gpu_information(handle)
                 except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
                     logger.debug('NVML not loaded')
                     test_utils.nvmlNotLoaded = True
 
-                # We do this to cache it for tests/test_dcgm_mndiag.py decorator.
+                # We do this to cache it for tests/test_dcgm_mndiag.py
+                # decorator.
                 currentSkusEnv = test_utils.get_current_skus_env(handle)
                 test_utils.save_current_skus_env(currentSkusEnv)
 
@@ -242,7 +253,8 @@ def run_tests():
                             """
 
                             try:
-                                f(testDataObj, test_utils.with_amortized_decorators)
+                                f(testDataObj,
+                                  test_utils.with_amortized_decorators)
                             except Exception as ex:
                                 test_utils.unwrap(f)(
                                     testDataObj, test_utils.with_amortized_exception_decorators, exception=ex)
@@ -258,10 +270,12 @@ def run_tests():
                                 testDataObj.addTestStatus("FAILED")
                             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
                                 testDataObj.addMessage(
-                                    "Test %s cannot run since NVML isn't present on this machine" % str(function))
+                                    "Test %s cannot run since NVML isn't present on this machine" %
+                                    str(function))
                                 testDataObj.addTestStatus("FAILED")
                                 logger.info(
-                                    "Test %s cannot run since NVML isn't present on this machine" % str(function))
+                                    "Test %s cannot run since NVML isn't present on this machine" %
+                                    str(function))
 
                                 with test_utils.SubTest("%s - restore state" % (function.__name__), quiet=True):
                                     test_utils.RestoreDefaultEnvironment.restore()
@@ -303,7 +317,8 @@ def print_test_info():
     """
     testDir: Subdirectory to look for tests in
     """
-    # Convert module subdirectory into module dot path like tests/nvvs/x => tests.nvvs.x
+    # Convert module subdirectory into module dot path like tests/nvvs/x =>
+    # tests.nvvs.x
     testDirWithDots = test_utils.test_directory.replace("/", ".")
 
     test_content = test_utils.get_test_content()
@@ -327,10 +342,12 @@ def print_test_info():
                 print("%s.%s:\n%s\n" %
                       (module_name, function_name, function_doc))
             else:
-                # It's non verbose output so just take the first part of the description (up to first double empty line)
+                # It's non verbose output so just take the first part of the
+                # description (up to first double empty line)
                 function_doc = _test_info_split_non_verbose.split(function_doc)[
                     0]
-                # remove spaces at beginning of each line (map strip), remove empty lines (filter bool) and make it one line (string join)
+                # remove spaces at beginning of each line (map strip), remove
+                # empty lines (filter bool) and make it one line (string join)
                 function_doc = " ".join(
                     list(filter(bool, list(map(str.strip, function_doc.split("\n"))))))
                 print("%s.%s:\n\t%s" %

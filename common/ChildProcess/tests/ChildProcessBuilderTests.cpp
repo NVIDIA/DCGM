@@ -311,8 +311,10 @@ TEST_CASE("ChildProcess Stop(force = true) ends process with SIGKILL")
     proc.Run();
     REQUIRE(proc.IsAlive());
     proc.Stop(true);
-    // Use a smaller timeout since a SIGKILL should kill the process immediately
-    proc.Wait(std::chrono::milliseconds(10));
+    // Stop(force = true) will issue a SIGKILL and not wait for the process to exit.
+    // We wait for a maximum of 200ms to verify the process was killed correctly.
+    // This is to ensure that we do not block indefinitely if the process does not exit.
+    proc.Wait(std::chrono::milliseconds(200));
     CHECK(!proc.IsAlive());
     CHECK(proc.ReceivedSignal() != std::nullopt);
     CHECK(*proc.ReceivedSignal() == SIGKILL);

@@ -40,4 +40,5 @@ target_link_libraries(childprocess PUBLIC
     Boost::filesystem
 )
 
+add_subdirectory(mock)
 add_subdirectory(tests)

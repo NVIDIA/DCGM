@@ -23,7 +23,7 @@ try:
     import dcgm_fields
     import dcgm_agent
     import dcgmvalue
-except:
+except BaseException:
     pass
     print("Unable to find python bindings, please refer to the exmaple below: ")
     print("PYTHONPATH=/usr/share/datacenter-gpu-manager-4/bindings/python3 python3 dcgm_example.py")
@@ -42,10 +42,9 @@ def convert_value_to_string(value):
             return "N/A"
         else:
             return v.__str__()
-    except:
+    except BaseException:
         # Exception is generally thorwn when int32 is
         # passed as an input. Use additional methods to fix it
-        sys.exc_clear()
         v = dcgmvalue.DcgmValue(0)
         v.SetFromInt32(value)
 
@@ -64,7 +63,7 @@ def helper_investigate_status(statusHandle):
     errorCount = 0
     errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
-    while (errorInfo != None):
+    while (errorInfo is not None):
         errorCount += 1
         print("Error%d" % errorCount)
         print(("  GPU Id: %d" % errorInfo.gpuId))
@@ -160,11 +159,12 @@ def dcgm_diag_test_index_to_name(index):
 
 def should_ignore_error(diagException):
     if diagException.info:
-        if diagException.info.find("MIG configuration is incompatible with the diagnostic because it prevents access to the entire GPU."
-                                   ) != -1:
+        if diagException.info.find(
+                "MIG configuration is incompatible with the diagnostic because it prevents access to the entire GPU.") != -1:
             return True
 
-        if diagException.info.find("Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode enabled") == 0:
+        if diagException.info.find(
+                "Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode enabled") == 0:
             return True
 
     return False
@@ -184,7 +184,8 @@ def main(manualOpMode=False, embeddedHostengine=True):
         # to a "standalone" hostengine (one that is running separately) but can also be done on an
         # embedded hostengine.  In this mode, fields are updated
         # periodically based on their configured frequency.  When watching new fields you must still manually
-        # trigger an update if you wish to view these new fields' values right away.
+        # trigger an update if you wish to view these new fields' values right
+        # away.
         opMode = dcgm_structs.DCGM_OPERATION_MODE_AUTO
 
     if embeddedHostengine:
@@ -208,7 +209,9 @@ def main(manualOpMode=False, embeddedHostengine=True):
     # Create an empty group. Let's call the group as "one_gpus_group".
     # We will add the first supported GPU in the system to this group.
     dcgmGroup = pydcgm.DcgmGroup(
-        dcgmHandle, groupName="one_gpu_group", groupType=dcgm_structs.DCGM_GROUP_EMPTY)
+        dcgmHandle,
+        groupName="one_gpu_group",
+        groupType=dcgm_structs.DCGM_GROUP_EMPTY)
 
     # Skip the test if no supported gpus are available
     if len(supportedGPUs) < 1:
@@ -220,7 +223,8 @@ def main(manualOpMode=False, embeddedHostengine=True):
     # Invoke method to get gpu IDs of the members of the newly-created group
     groupGpuIds = dcgmGroup.GetGpuIds()
 
-    # Trigger field updates since we just started DCGM (always necessary in MANUAL mode to get recent values)
+    # Trigger field updates since we just started DCGM (always necessary in
+    # MANUAL mode to get recent values)
     dcgmSystem.UpdateAllFields(waitForUpdate=True)
 
     # Get the current configuration for the group
@@ -248,7 +252,8 @@ def main(manualOpMode=False, embeddedHostengine=True):
     dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_ALL)
 
     # Ensure that the newly watched health fields are updated since we wish to access them right away.
-    # Needed in manual mode and only needed in auto mode if we want to see the values right away
+    # Needed in manual mode and only needed in auto mode if we want to see the
+    # values right away
     dcgmSystem.UpdateAllFields(waitForUpdate=True)
 
     # Invoke Health checks
@@ -271,7 +276,6 @@ def main(manualOpMode=False, embeddedHostengine=True):
     except dcgm_structs.DCGMError as e:
         errorCode = e.value
         print("dcgmHealthCheck returned error %d: %s" % (errorCode, e))
-        sys.exc_clear()
 
     print("")
 
@@ -280,7 +284,8 @@ def main(manualOpMode=False, embeddedHostengine=True):
         # to make sure everything is ready to run
         # currently this calls an outside diagnostic binary but eventually
         # that binary will be merged into the DCGM framework
-        # The "response" is a dcgmDiagResponse structure that can be parsed for errors.
+        # The "response" is a dcgmDiagResponse structure that can be parsed for
+        # errors.
         try:
             response = dcgmGroup.action.RunDiagnostic(
                 dcgm_structs.DCGM_DIAG_LVL_SHORT)
@@ -307,7 +312,8 @@ def main(manualOpMode=False, embeddedHostengine=True):
             if swTest:
                 if dcgm_diag_test_didnt_pass(swTest.result):
                     isHealthy = False
-                    # Print any errors tied to a GPU and any global errors not tied to any entity
+                    # Print any errors tied to a GPU and any global errors not
+                    # tied to any entity
                     testErrors = map(lambda errIdx: errors[errIdx], swTest.errorIndices[:min(
                         swTest.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)])
                     delim = ""
@@ -315,8 +321,10 @@ def main(manualOpMode=False, embeddedHostengine=True):
                         if err.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU:
                             print(delim, end="")
                             delim = "\n"
-                            print(textwrap.fill("Gpu %d failed with error: %s" % (
-                                err.entity.entityId, err.msg)))
+                            print(
+                                textwrap.fill(
+                                    "Gpu %d failed with error: %s" %
+                                    (err.entity.entityId, err.msg)))
                         elif err.entity.entityGroupId == dcgm_fields.DCGM_FE_NONE and err.entity.entityId == 0:
                             print(delim, end="")
                             delim = "\n"
@@ -342,7 +350,8 @@ def main(manualOpMode=False, embeddedHostengine=True):
     # in parallel to the job without impacting application's performance
     ####################################################################
 
-    # Initialized to 0 for now. Change it to PID of the CUDA process if there is a process to run
+    # Initialized to 0 for now. Change it to PID of the CUDA process if there
+    # is a process to run
     pid = 0
 
     try:
@@ -357,13 +366,14 @@ def main(manualOpMode=False, embeddedHostengine=True):
         print("Avg. SM util    : %d" % pidInfo.summary.smUtilization.average)
         print("Avg. mem util   : %d" %
               pidInfo.summary.memoryUtilization.average)
-    except:
+    except BaseException:
         print("There was no CUDA job running to collect the stats")
         pass
 
     # Nvidia Validation Suite is required when performing "validate" actions
     if nvvs_installed():
-        # Now that the process has completed we perform an "epilogue" diagnostic that will stress the system
+        # Now that the process has completed we perform an "epilogue"
+        # diagnostic that will stress the system
         try:
             response = dcgmGroup.action.RunDiagnostic(
                 dcgm_structs.DCGM_DIAG_LVL_MED)
@@ -375,7 +385,8 @@ def main(manualOpMode=False, embeddedHostengine=True):
             else:
                 print(str(e))
         else:
-            # Check the response and do any actions desired based on the results.
+            # Check the response and do any actions desired based on the
+            # results.
             pass
 
     else:
@@ -396,19 +407,26 @@ def main(manualOpMode=False, embeddedHostengine=True):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Script for showing off how to use DCGM python bindings')
-    parser.add_argument('-o', '--opmode',
-                        choices=['manual', 'auto'],
-                        default='manual',
-                        help='Operation mode for the hostengine. Must be auto if a standalone hostengine ' +
-                              'is used. Defaults to auto.')
+    parser.add_argument(
+        '-o',
+        '--opmode',
+        choices=[
+            'manual',
+            'auto'],
+        default='manual',
+        help='Operation mode for the hostengine. Must be auto if a standalone hostengine ' +
+        'is used. Defaults to auto.')
 
-    parser.add_argument('-t', '--type',
-                        choices=['embedded', 'standalone'],
-                        default='embedded',
-                        help='Type of hostengine.  Embedded mode starts a hostengine within the ' +
-                             'same process. Standalone means that a separate hostengine process ' +
-                             'is already running that will be connected to. '
-                        )
+    parser.add_argument(
+        '-t',
+        '--type',
+        choices=[
+            'embedded',
+            'standalone'],
+        default='embedded',
+        help='Type of hostengine.  Embedded mode starts a hostengine within the ' +
+        'same process. Standalone means that a separate hostengine process ' +
+        'is already running that will be connected to. ')
 
     args = parser.parse_args()
     manualOpMode = args.opmode == 'manual'

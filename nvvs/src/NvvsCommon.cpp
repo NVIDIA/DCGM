@@ -241,6 +241,8 @@ std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex)
             return std::string(NVBANDWIDTH_PLUGIN_NAME);
         case DCGM_NCCL_TESTS_INDEX:
             return std::string(NCCL_TESTS_PLUGIN_NAME);
+        case DCGM_RIST_TEST_INDEX:
+            return std::string(RIST_PLUGIN_NAME);
         default:
             return std::string("Unknown");
     }
@@ -302,6 +304,10 @@ dcgmPerGpuTestIndices_t GetTestIndex(const std::string &name)
     else if (testName == NVBANDWIDTH_PLUGIN_NAME)
     {
         return DCGM_NVBANDWIDTH_INDEX;
+    }
+    else if (testName == RIST_PLUGIN_NAME)
+    {
+        return DCGM_RIST_TEST_INDEX;
     }
 
     return DCGM_UNKNOWN_INDEX;

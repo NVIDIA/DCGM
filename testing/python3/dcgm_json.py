@@ -19,27 +19,27 @@ import dcgm_fields
 import json
 import dcgm_structs
 import time
-import logger
 
-ignore_List = [dcgm_fields.DCGM_FI_DEV_PCI_BUSID, dcgm_fields.DCGM_FI_DEV_UUID]
+ignore_List = [dcgm_fields.DCGM_FI_DEV_PCI_BUS_ID,
+               dcgm_fields.DCGM_FI_DEV_GPU_UUID]
 
 
 publishFieldIds = [
-    dcgm_fields.DCGM_FI_DEV_PCI_BUSID,  # Needed for plugin_instance
-    dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
-    dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
+    dcgm_fields.DCGM_FI_DEV_PCI_BUS_ID,  # Needed for plugin_instance
+    dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS,
+    dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS,
     dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
-    dcgm_fields.DCGM_FI_DEV_GPU_UTIL,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
+    dcgm_fields.DCGM_FI_DEV_GPU_UTIL_RATIO,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
     dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
     dcgm_fields.DCGM_FI_DEV_ECC_DBE_AGG_TOTAL,
     dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
     dcgm_fields.DCGM_FI_DEV_FB_FREE,
     dcgm_fields.DCGM_FI_DEV_FB_USED,
-    dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-    dcgm_fields.DCGM_FI_DEV_UUID
+    dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_GPU_UUID
 ]
 
 
@@ -55,11 +55,11 @@ class DcgmJson(DcgmReader):
     The customDataHandler creates a json from the fvs dictionary. All jsons are appended to a list which is then returned from
     the function.
 
-    @params: 
+    @params:
     fvs : The fieldvalue dictionary that contains info about the values of field Ids for each gpuId.
 
     @return :
-    list of all the jsons for each gpuID. 
+    list of all the jsons for each gpuID.
 
     '''
 
@@ -74,7 +74,7 @@ class DcgmJson(DcgmReader):
 
                 self.m_jsonData = {
                     "GpuId": typeInstance,
-                    "UUID": (gpuFv[dcgm_fields.DCGM_FI_DEV_UUID][-1]).value,
+                    "UUID": (gpuFv[dcgm_fields.DCGM_FI_DEV_GPU_UUID][-1]).value,
                     "FieldTag": self.m_fieldIdToInfo[fieldId].tag,
                     "FieldValues": json.dumps(gpuFv[fieldId], cls=FieldValueEncoder),
                 }

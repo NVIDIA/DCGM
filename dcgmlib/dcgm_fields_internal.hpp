@@ -33,7 +33,7 @@
  * @return Nonzero Nvml metric ID on success.
  *         0 on failure
  */
-unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercentageField);
+unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercentageField, unsigned int linkIndex = 0);
 
 /********************************************************************************/
 /*
@@ -75,13 +75,46 @@ int DcgmFieldGetAllFieldIds(std::vector<unsigned short> &fieldIds);
 /* Field ID ranges                                                              */
 /********************************************************************************/
 
-/* Profiling field IDs */
-#define DCGM_FI_PROF_FIRST_ID DCGM_FI_PROF_GR_ENGINE_ACTIVE
-#define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_PEERMEM_CACHE_MISS
+/* Profiling field ID ranges */
+#define DCGM_FI_PROF_FIRST_ID DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO
+#define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL
 
 /* Sysmon field IDs */
 #define DCGM_FI_SYSMON_FIRST_ID DCGM_FI_DEV_CPU_UTIL_TOTAL
 #define DCGM_FI_SYSMON_LAST_ID  DCGM_FI_DEV_CPU_MODEL
 
 /* Macro to get whether a given fieldId is a profiling field or not */
-#define DCGM_FIELD_ID_IS_PROF_FIELD(fieldId) ((fieldId) >= DCGM_FI_PROF_FIRST_ID && (fieldId) <= DCGM_FI_PROF_LAST_ID)
+#define DCGM_FIELD_ID_IS_PROF_FIELD(fieldId)                                   \
+    (((fieldId) >= DCGM_FI_PROF_FIRST_ID && (fieldId) <= DCGM_FI_PROF_LAST_ID) \
+     || ((fieldId) >= DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK && (fieldId) <= DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK))
+
+/* PCIe throughput field range (returns MiB/s from NVML GPM). */
+#define DCGM_FI_PROF_PCIE_THROUGHPUT_FIRST DCGM_FI_PROF_PCIE_TX_BYTES
+#define DCGM_FI_PROF_PCIE_THROUGHPUT_LAST  DCGM_FI_PROF_PCIE_RX_BYTES
+
+/* NVLink aggregate throughput field range (returns MiB/s from NVML GPM). */
+#define DCGM_FI_PROF_NVLINK_AGG_THROUGHPUT_FIRST DCGM_FI_PROF_NVLINK_TX_BYTES
+#define DCGM_FI_PROF_NVLINK_AGG_THROUGHPUT_LAST  DCGM_FI_PROF_NVLINK_RX_BYTES
+
+/* Legacy per-link NVLink throughput field range L0-L17 (returns MiB/s from NVML GPM). */
+#define DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST DCGM_FI_PROF_NVLINK_L0_TX_BYTES
+#define DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_LAST  DCGM_FI_PROF_NVLINK_L17_RX_BYTES
+
+/* Per-link NVLink throughput fields keyed by dcgm_link_t (returns MiB/s from NVML GPM). */
+#define DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_FIRST DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK
+#define DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_LAST  DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK
+
+/* C2C throughput field range (returns MiB/s from NVML GPM). */
+#define DCGM_FI_PROF_C2C_THROUGHPUT_FIRST DCGM_FI_PROF_C2C_TX_ALL_BYTES
+#define DCGM_FI_PROF_C2C_THROUGHPUT_LAST  DCGM_FI_PROF_C2C_RX_DATA_BYTES
+
+/* GPM INT64 fields that NVML returns in MiB/s and must be scaled to bytes before caching. */
+#define DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(fieldId)                                                      \
+    (((fieldId) >= DCGM_FI_PROF_PCIE_THROUGHPUT_FIRST && (fieldId) <= DCGM_FI_PROF_PCIE_THROUGHPUT_LAST) \
+     || ((fieldId) >= DCGM_FI_PROF_NVLINK_AGG_THROUGHPUT_FIRST                                           \
+         && (fieldId) <= DCGM_FI_PROF_NVLINK_AGG_THROUGHPUT_LAST)                                        \
+     || ((fieldId) >= DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST                                        \
+         && (fieldId) <= DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_LAST)                                     \
+     || ((fieldId) >= DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_FIRST                                      \
+         && (fieldId) <= DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_LAST)                                   \
+     || ((fieldId) >= DCGM_FI_PROF_C2C_THROUGHPUT_FIRST && (fieldId) <= DCGM_FI_PROF_C2C_THROUGHPUT_LAST))

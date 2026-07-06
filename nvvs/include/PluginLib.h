@@ -33,13 +33,13 @@ class HangDetectMonitor;
  */
 typedef struct
 {
-    dcgmDiagGetPluginInterfaceVersion_f getPluginInterfaceVersionCB;
-    dcgmDiagGetPluginInfo_f getPluginInfoCB;
-    dcgmDiagInitializePlugin_f initializeCB;
-    dcgmDiagRunTest_f runTestCB;
-    dcgmDiagRetrieveCustomStats_f retrieveStatsCB;
-    dcgmDiagRetrieveResults_f retrieveResultsCB;
-    dcgmDiagShutdownPlugin_f shutdownPluginCB;
+    dcgmDiagGetPluginInterfaceVersion_f getPluginInterfaceVersionCB; //!< Required. Get plugin interface version.
+    dcgmDiagGetPluginInfo_f getPluginInfoCB;                         //!< Required. Get plugin info.
+    dcgmDiagInitializePlugin_f initializeCB;                         //!< Required. Initialize the plugin.
+    dcgmDiagRunTest_f runTestCB;                                     //!< Required. Run the test.
+    dcgmDiagRetrieveCustomStats_f retrieveStatsCB;                   //!< Required. Retrieve custom stats.
+    dcgmDiagRetrieveResults_f retrieveResultsCB;                     //!< Required. Retrieve results.
+    dcgmDiagShutdownPlugin_f shutdownPluginCB;                       //!< Optional. Shutdown the plugin.
 } PluginCallbacks_v1;
 
 class PluginLib
@@ -170,7 +170,36 @@ private:
     std::unordered_map<std::string, PluginLibTest> m_tests;
 
     PluginCoreFunctionality m_coreFunctionality;
-    void *LoadFunction(const char *funcname);
+
+    /**
+     * The type of function to load
+     */
+    enum class LoadFunctionType
+    {
+        REQUIRED, //!< The function is required and must be defined in the plugin
+        OPTIONAL  //!< The function is optional and may not be defined in the plugin
+    };
+
+    /**
+     * Loads a function from the plugin library
+     *
+     * @param[in] funcname The name of the function to load
+     * @param[in] type The type of function to load
+     * @return A pointer to the function if found, nullptr otherwise
+     */
+    [[nodiscard]] void *LoadFunction(char const *funcname, LoadFunctionType const type);
+
+    /**
+     * Loads required functions from the plugin library
+     *
+     * @return DCGM_ST_OK on success, appropriate error code otherwise
+     */
+    [[nodiscard]] dcgmReturn_t LoadRequiredFuncs();
+
+    /**
+     * Loads optional functions from the plugin library
+     */
+    void LoadOptionalFuncs();
 
     std::string GetFullLogFileName() const;
     dcgmReturn_t HangDetectRegisterTask(pid_t pid = getpid(), pid_t tid = getpid());

@@ -254,6 +254,16 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddBlankValue(dcgm_field_entity_group_t entityGr
                                               unsigned short fieldId,
                                               dcgmReturn_t status)
 {
+    return AddBlankValue(entityGroupId, entityId, fieldId, 0, status);
+}
+
+/******************************************************************************/
+dcgmBufferedFv_t *DcgmFvBuffer::AddBlankValue(dcgm_field_entity_group_t entityGroupId,
+                                              dcgm_field_eid_t entityId,
+                                              unsigned short fieldId,
+                                              long long timestamp,
+                                              dcgmReturn_t status)
+{
     dcgm_field_meta_p fieldMeta = DcgmFieldGetById(fieldId);
     if (fieldMeta == nullptr)
     {
@@ -266,17 +276,17 @@ dcgmBufferedFv_t *DcgmFvBuffer::AddBlankValue(dcgm_field_entity_group_t entityGr
         case DCGM_FT_BINARY:
         {
             char emptyBlob = 0;
-            return AddBlobValue(entityGroupId, entityId, fieldId, &emptyBlob, sizeof(emptyBlob), 0, status);
+            return AddBlobValue(entityGroupId, entityId, fieldId, &emptyBlob, sizeof(emptyBlob), timestamp, status);
         }
 
         case DCGM_FT_INT64:
-            return AddInt64Value(entityGroupId, entityId, fieldId, DCGM_INT64_BLANK, 0, status);
+            return AddInt64Value(entityGroupId, entityId, fieldId, DCGM_INT64_BLANK, timestamp, status);
 
         case DCGM_FT_DOUBLE:
-            return AddDoubleValue(entityGroupId, entityId, fieldId, DCGM_FP64_BLANK, 0, status);
+            return AddDoubleValue(entityGroupId, entityId, fieldId, DCGM_FP64_BLANK, timestamp, status);
 
         case DCGM_FT_STRING:
-            return AddStringValue(entityGroupId, entityId, fieldId, DCGM_STR_BLANK, 0, status);
+            return AddStringValue(entityGroupId, entityId, fieldId, DCGM_STR_BLANK, timestamp, status);
 
         default:
             log_warning("Unhandled fieldType: {} for fieldId: {}", fieldMeta->fieldType, fieldId);

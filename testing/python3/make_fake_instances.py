@@ -51,7 +51,8 @@ def create_fake_gpu_instances(handle, gpuIds, instanceCount):
             cfe.entityList[cfe.numToCreate].entity.entityGroupId = dcgm_fields.DCGM_FE_GPU_I
             cfe.numToCreate += 1
 
-        # Create the instances first so we can control which GPU the compute instances are placed on
+        # Create the instances first so we can control which GPU the compute
+        # instances are placed on
         updated = dcgm_agent_internal.dcgmCreateFakeEntities(handle, cfe)
         for i in range(0, updated.numToCreate):
             if updated.entityList[i].entity.entityGroupId == dcgm_fields.DCGM_FE_GPU_I:
@@ -85,12 +86,27 @@ def create_fake_compute_instances(handle, parentIds, ciCount):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-g', '--gpu-count', type=int, default=1, dest='gpuCount',
-                        help='Specify the number of fake GPUs to create')
-    parser.add_argument('-i', '--gpu-instance-count', type=int, default=2, dest='gpuInstanceCount',
-                        help='Specify the number of fake GPU instances to create')
-    parser.add_argument('-c', '--compute-instance-count', type=int, default=2, dest='ciCount',
-                        help='Specify the number of fake compute instances to create')
+    parser.add_argument(
+        '-g',
+        '--gpu-count',
+        type=int,
+        default=1,
+        dest='gpuCount',
+        help='Specify the number of fake GPUs to create')
+    parser.add_argument(
+        '-i',
+        '--gpu-instance-count',
+        type=int,
+        default=2,
+        dest='gpuInstanceCount',
+        help='Specify the number of fake GPU instances to create')
+    parser.add_argument(
+        '-c',
+        '--compute-instance-count',
+        type=int,
+        default=2,
+        dest='ciCount',
+        help='Specify the number of fake compute instances to create')
     args = parser.parse_args()
 
     if args.gpuCount < 1:
@@ -114,8 +130,11 @@ def main():
             create_fake_compute_instances(
                 handle.handle, list(instanceMap.keys()), args.ciCount)
 
-    print("Created {} fake GPUs, {} fake GPU instances, and {} fake compute instances".format(
-        args.gpuCount, args.gpuInstanceCount, args.ciCount))
+    print(
+        "Created {} fake GPUs, {} fake GPU instances, and {} fake compute instances".format(
+            args.gpuCount,
+            args.gpuInstanceCount,
+            args.ciCount))
 
 
 if __name__ == "__main__":

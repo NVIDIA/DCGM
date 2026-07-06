@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e -o pipefail -o nounset -x
+set -e -o pipefail -o nounset
 
 if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -eq 0 ]]; then
     "$(dirname "$(realpath "${0}")")/intodocker.sh" --pull -- "${0}" "$@"
@@ -27,7 +27,7 @@ readonly BATCH_SIZE=$(nproc)
 
 # Python exclusion pattern matching .pep8 config and autopep8 defaults
 # Manual exclusions required: autopep8 has no --assume-filename equivalent for stdin
-readonly PYTHON_EXCLUDE_PATTERN='(^|/)(_out|sdk|PerfWorks|__pycache__)(/|$)|testing/python3/libs_3rdparty/|(^|/)\.'
+readonly PYTHON_EXCLUDE_PATTERN='(^|/)(_out|sdk|PerfWorks|__pycache__)(/|$)|testing/python3/libs_3rdparty/|(^|/)\.|\.md$'
 
 function GetChangedFiles(){
     case ${files_from} in
@@ -44,7 +44,7 @@ function GetChangedFiles(){
 }
 
 function GetCppFiles(){
-    GetChangedFiles | grep -E "\.(cpp|h|hpp|c)$" || true
+    GetChangedFiles | grep -E "\.(c|cpp|h|hpp|inl)$" || true
 }
 
 function DetectPythonFiles(){
@@ -125,7 +125,7 @@ Usage: ${0} [options]
         -m --merged     : Check merged files instead of staged files (for Jenkins)
         -h --help       : This information
 
-    Without --merged argument this script will validate staged C/CPP/H/HPP and Python files."
+    Without --merged argument this script will validate staged C, C++, and Python files."
 }
 
 LONG_OPTS=merged,diff,help

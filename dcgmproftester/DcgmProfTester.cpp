@@ -75,7 +75,7 @@ DcgmProfTester::DcgmProfTester()
     m_dcgmHandle        = (dcgmHandle_t) nullptr;
     m_groupId           = (dcgmGpuGrp_t) nullptr;
     m_fieldGroupId      = (dcgmFieldGrp_t) nullptr;
-    m_testFieldId       = DCGM_FI_PROF_SM_ACTIVE;
+    m_testFieldId       = DCGM_FI_PROF_SM_UTIL_RATIO;
     m_sinceTimestamp    = 0;
     m_startDcgm         = true;
     m_dvsOutput         = false;
@@ -95,8 +95,8 @@ DcgmProfTester::~DcgmProfTester()
 /*****************************************************************************/
 dcgmReturn_t DcgmProfTester::ParseCommandLine(int argc, char *argv[])
 {
-    m_argumentSet.AddDefault(DCGM_FI_PROF_PIPE_FP64_ACTIVE, ValueRange_t(0.50, 1.0));
-    m_argumentSet.AddDefault(DCGM_FI_PROF_PIPE_FP16_ACTIVE, ValueRange_t(0.50, 1.0));
+    m_argumentSet.AddDefault(DCGM_FI_PROF_FP64_UTIL_RATIO, ValueRange_t(0.50, 1.0));
+    m_argumentSet.AddDefault(DCGM_FI_PROF_FP16_UTIL_RATIO, ValueRange_t(0.50, 1.0));
 
     /**
      * We don't set a default for FP32_ACTIVE because it depends on the CUDA

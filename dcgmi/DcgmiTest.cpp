@@ -233,7 +233,7 @@ dcgmReturn_t DcgmiTest::HelperInitFieldValue(dcgmInjectFieldValue_t &injectField
     fieldMeta = DcgmFieldGetById(injectFieldValue.fieldId);
 
     injectFieldValue.version   = dcgmInjectFieldValue_version;
-    injectFieldValue.fieldType = fieldMeta == nullptr ? DCGM_FI_UNKNOWN : fieldMeta->fieldType;
+    injectFieldValue.fieldType = fieldMeta == nullptr ? DCGM_FI_SYSTEM_FIELD_UNKNOWN : fieldMeta->fieldType;
     injectFieldValue.status    = DCGM_ST_OK;
 
     // wrap in try catch

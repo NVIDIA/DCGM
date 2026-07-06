@@ -74,11 +74,11 @@ def cuDeviceGetBusId(c_dev):
     c_domain = ctypes.c_uint()
     c_bus = ctypes.c_uint()
     c_device = ctypes.c_uint()
-    assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(c_domain),
-                                                  ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID), c_dev)
-    assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(c_bus),
-                                                  ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_BUS_ID), c_dev)
-    assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(c_device),
-                                                  ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID), c_dev)
+    assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(
+        c_domain), ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_DOMAIN_ID), c_dev)
+    assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(
+        c_bus), ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_BUS_ID), c_dev)
+    assert CUDA_SUCCESS == cuDeviceGetAttributeFn(ctypes.byref(
+        c_device), ctypes.c_uint(CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID), c_dev)
     _unloadCuda()
     return "%04x:%02x:%02x.0" % (c_domain.value, c_bus.value, c_device.value)

@@ -20,8 +20,13 @@
 #include "DcgmLogging.h"
 #include "DcgmStringHelpers.h"
 #include "dcgm_agent.h"
+#include "dcgm_structs.h"
 #include <algorithm>
+#include <charconv>
+#include <limits>
+#include <optional>
 #include <sstream>
+#include <string_view>
 #include <tuple>
 #include <unordered_set>
 
@@ -49,6 +54,170 @@ bool AllDigits(std::string const &str)
         }
     }
     return true;
+}
+
+/**
+ * Parses a single link component (deviceId or linkIndex) from either a plain
+ * decimal string "N" or a brace-enclosed range "{N-M}".
+ *
+ * @param[in]  part           The component string to parse (e.g. "3" or "{0-5}")
+ * @param[in]  componentName  Human-readable name used in error messages (e.g. "gpuId")
+ * @param[in]  fullSpec       The full original entity spec, used in error messages for context
+ * @param[out] out            Parsed value(s) are appended here on success
+ * @return An empty string on success, or a non-empty error message on failure
+ */
+std::string ParseLinkComponent(std::string const &part,
+                               std::string const &componentName,
+                               std::string const &fullSpec,
+                               std::vector<unsigned int> &out)
+{
+    if (!part.empty() && part.front() == '{')
+    {
+        size_t close = part.find('}');
+        if (close == std::string::npos)
+        {
+            return fmt::format("Error: malformed range (no closing '}}') in {} {}: {}", fullSpec, componentName, part);
+        }
+        if (close != part.size() - 1)
+        {
+            return fmt::format("Error: unexpected characters after '}}' in {} {}: {}", fullSpec, componentName, part);
+        }
+        if (ParseRangeString(part.substr(1, close - 1), out) != DCGM_ST_OK)
+        {
+            return fmt::format("Error: invalid range in {} {}: {}", fullSpec, componentName, part);
+        }
+    }
+    else if (AllDigits(part))
+    {
+        unsigned int val = 0;
+        auto [_, ec]     = std::from_chars(part.data(), part.data() + part.size(), val);
+        if (ec != std::errc {})
+        {
+            return fmt::format("Error: value out of range in {} {}: {}", fullSpec, componentName, part);
+        }
+        out.push_back(val);
+    }
+    else
+    {
+        return fmt::format("Error: invalid {} {} (expected digits or {{N-M}}): {}", fullSpec, componentName, part);
+    }
+    return {};
+}
+
+/**
+ * Shared implementation for "gpu_link" and "switch_link" entity parsing.
+ *
+ * Parses "<deviceId>:<linkIndex>" from @p remainder (the text after the first colon in the
+ * original entity spec), validates that both components fit their field widths, then
+ * appends one dcgmGroupEntityPair_t per (deviceId, linkIndex) combination to @p entityGroups.
+ *
+ * @param[in]  remainder     Text after "gpu_link:" / "switch_link:", e.g. "0:5" or "{0-1}:{0-3}".
+ * @param[in]  fullSpec      Full original entity spec (e.g. "gpu_link:0:5") — used in errors.
+ * @param[in]  keyword       Human-readable keyword for error messages ("gpu_link" or "switch_link").
+ * @param[in]  deviceIdName  Human-readable component name ("gpuId" or "switchId").
+ * @param[in]  linkType      DCGM_FE_GPU or DCGM_FE_SWITCH — written into dcgm_link_t.parsed.type.
+ * @param[out] entityGroups  Parsed entities are appended here on success.
+ * @return An empty string on success, or a non-empty error message on failure.
+ */
+std::string ParseDeviceLink(std::string const &remainder,
+                            std::string const &fullSpec,
+                            std::string const &keyword,
+                            std::string const &deviceIdName,
+                            dcgm_field_entity_group_t linkType,
+                            std::vector<dcgmGroupEntityPair_t> &entityGroups)
+{
+    size_t sep = remainder.find(':');
+    if (sep == std::string::npos)
+    {
+        log_error("Error: {} requires {}:<{}>:<linkIndex>, got: {}", keyword, keyword, deviceIdName, fullSpec);
+        return fmt::format(
+            "Error: invalid {} format: {}, expected {}:<{}>:<linkIndex> where each component is N or {{{{N-M}}}}",
+            keyword,
+            fullSpec,
+            keyword,
+            deviceIdName);
+    }
+
+    std::string devPart = remainder.substr(0, sep);
+    std::string lnkPart = remainder.substr(sep + 1);
+
+    std::vector<unsigned int> deviceIds, linkIndices;
+    if (auto err = ParseLinkComponent(devPart, deviceIdName, fullSpec, deviceIds); !err.empty())
+    {
+        log_error(err);
+        return err;
+    }
+    if (auto err = ParseLinkComponent(lnkPart, "linkIndex", fullSpec, linkIndices); !err.empty())
+    {
+        log_error(err);
+        return err;
+    }
+
+    // Validate all values before writing anything, to avoid
+    // leaving entityGroups in a partially-populated state on error.
+    for (auto const devIdVal : deviceIds)
+    {
+        if (devIdVal > std::numeric_limits<uint8_t>::max())
+        {
+            log_error("Error: {} out of range in: {}", deviceIdName, fullSpec);
+            return fmt::format("Error: values out of range in: {}", fullSpec);
+        }
+    }
+    for (auto const linkIdxVal : linkIndices)
+    {
+        if (linkIdxVal > std::numeric_limits<uint16_t>::max())
+        {
+            log_error("Error: linkIndex out of range in: {}", fullSpec);
+            return fmt::format("Error: values out of range in: {}", fullSpec);
+        }
+    }
+
+    for (auto const devIdVal : deviceIds)
+    {
+        for (auto const linkIdxVal : linkIndices)
+        {
+            dcgm_link_t link {};
+            link.parsed.type  = linkType;
+            link.parsed.gpuId = static_cast<uint8_t>(devIdVal); // gpuId and switchId are the same union field
+            link.parsed.index = static_cast<uint16_t>(linkIdxVal);
+            entityGroups.push_back({ DCGM_FE_LINK, link.raw });
+        }
+    }
+    return {};
+}
+
+/**
+ * Parses a decimal or hex ("0x"/"0X" prefix) entity id into a dcgm_field_eid_t.
+ * Rejects malformed input and values outside [0, UINT32_MAX].
+ */
+std::optional<dcgm_field_eid_t> ParseIntegerEntityId(std::string_view s)
+{
+    if (s.empty())
+    {
+        return std::nullopt;
+    }
+
+    unsigned long parsed   = 0;
+    char const *const data = s.data();
+    auto const *const end  = data + s.size();
+
+    constexpr size_t c_hexPrefixLen = 2; // length of "0x" / "0X"
+    bool const isHex                = s.size() >= c_hexPrefixLen && s[0] == '0' && (s[1] == 'x' || s[1] == 'X');
+
+    // from_chars does not accept the "0x" prefix — skip it for hex literals.
+    auto const result = std::from_chars(isHex ? data + c_hexPrefixLen : data, end, parsed, isHex ? 16 : 10);
+
+    if (result.ec != std::errc {} || result.ptr != end)
+    {
+        return std::nullopt;
+    }
+
+    if (parsed > std::numeric_limits<dcgm_field_eid_t>::max())
+    {
+        return std::nullopt;
+    }
+
+    return static_cast<dcgm_field_eid_t>(parsed);
 }
 
 } //namespace
@@ -474,11 +643,47 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
             switch (lowered.at(0))
             {
                 case 'g':
+                {
+                    if (lowered == "gpu_link")
+                    {
+                        auto err = ParseDeviceLink(entityIdStr.substr(colonPos + 1),
+                                                   entityIdStr,
+                                                   "gpu_link",
+                                                   "gpuId",
+                                                   DCGM_FE_GPU,
+                                                   entityGroups);
+                        if (!err.empty())
+                        {
+                            return err;
+                        }
+                        continue;
+                    }
                     insertElem.entityGroupId = DCGM_FE_GPU;
                     break;
+                }
                 case 'n':
                     insertElem.entityGroupId = DCGM_FE_SWITCH;
                     break;
+                case 's':
+                {
+                    if (lowered == "switch_link")
+                    {
+                        auto err = ParseDeviceLink(entityIdStr.substr(colonPos + 1),
+                                                   entityIdStr,
+                                                   "switch_link",
+                                                   "switchId",
+                                                   DCGM_FE_SWITCH,
+                                                   entityGroups);
+                        if (!err.empty())
+                        {
+                            return err;
+                        }
+                        continue;
+                    }
+                    std::string err = fmt::format("Error: invalid entity type: {}", entityIdStr);
+                    log_error(err);
+                    return err;
+                }
                 case 'v':
                     insertElem.entityGroupId = DCGM_FE_VGPU;
                     break;
@@ -531,6 +736,15 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
 
         if (entityIdStr.at(0) == '{')
         {
+            if (insertElem.entityGroupId == DCGM_FE_LINK)
+            {
+                std::string err
+                    = fmt::format("Error: range syntax {{N-M}} is not supported for link entity IDs. "
+                                  "Use link:<decimal raw id>, or gpu_link:<gpuId>:<linkIndex> for per-device links.");
+                log_error(err);
+                return err;
+            }
+
             size_t closeBracket = entityIdStr.find('}');
 
             if (closeBracket == std::string::npos)
@@ -579,9 +793,12 @@ std::string EntityListParser(std::string const &entityList, std::vector<dcgmGrou
         }
         else
         {
-            if (AllDigits(entityIdStr))
+            // Unified numeric-id path for all entity groups (GPU, SWITCH, LINK, CPU core, ...).
+            // Accepts decimal and hex (0x/0X prefix). Stricter than AllDigits + std::stol:
+            // enforces dcgm_field_eid_t (uint32_t) range, which matters for packed DCGM_FE_LINK ids.
+            if (auto const eid = ParseIntegerEntityId(entityIdStr); eid.has_value())
             {
-                insertElem.entityId = std::stol(entityIdStr);
+                insertElem.entityId = *eid;
                 entityGroups.push_back(insertElem);
             }
             else

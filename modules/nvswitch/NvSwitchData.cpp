@@ -15,6 +15,9 @@
  */
 #include "NvSwitchData.h"
 
+#include <cinttypes>
+#include <cstdio>
+#include <cstring>
 #include <nscq.h>
 #include <sstream>
 #include <string>
@@ -90,6 +93,33 @@ std::string Uint64Data::Str(void) const
     os << value;
 
     return os.str();
+}
+
+/**
+ * GuidHexData implementation.
+ */
+GuidHexData::GuidHexData(void)
+{
+    std::memset(value, 0, sizeof(value));
+}
+
+GuidHexData::GuidHexData(uint64_t guid)
+{
+    std::snprintf(value, sizeof(value), "0x%016" PRIx64, guid);
+}
+
+void GuidHexData::BufferAdd(dcgm_field_entity_group_t entityGroupId,
+                            dcgm_field_eid_t entityId,
+                            unsigned short fieldId,
+                            timelib64_t now,
+                            DcgmFvBuffer &buf) const
+{
+    buf.AddStringValue(entityGroupId, entityId, fieldId, value, now, DCGM_ST_OK);
+}
+
+std::string GuidHexData::Str(void) const
+{
+    return std::string(value);
 }
 
 /**

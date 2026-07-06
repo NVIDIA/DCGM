@@ -16,7 +16,9 @@
 
 #include "MockFileSystemOperator.h"
 #include <catch2/catch_all.hpp>
+#include <sys/stat.h>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 TEST_CASE("MockFileSystemOperator Read")
@@ -117,6 +119,99 @@ TEST_CASE("MockFileSystemOperator Edge Cases")
         std::string specialPath = "/mock/path/!@#$%^&*()_+.txt";
         auto result             = mockFs.Read(specialPath);
         REQUIRE(!result.has_value());
+    }
+}
+
+TEST_CASE("MockFileSystemOperator Unlink")
+{
+    MockFileSystemOperator mockFs;
+
+    SECTION("fails without mock (no parent delegation)")
+    {
+        CHECK(mockFs.Unlink("/not/configured"));
+    }
+
+    SECTION("Unlink removes all mocked attributes for path")
+    {
+        std::string const path    = "/mock/path/multi.txt";
+        std::string const content = "data";
+        struct stat st            = {};
+        st.st_mode                = S_IFREG | 0644;
+        mockFs.MockFileContent(path, content);
+        mockFs.MockStat(path, st);
+
+        REQUIRE(mockFs.Read(path).has_value());
+        struct stat stOut = {};
+        REQUIRE(mockFs.Stat(path.c_str(), &stOut) == 0);
+
+        CHECK(mockFs.Unlink(path));
+        REQUIRE_FALSE(mockFs.Read(path).has_value());
+        REQUIRE(mockFs.Stat(path.c_str(), &stOut) == -1);
+    }
+
+    SECTION("Unlink failure retains mock when MockUnlink returns false")
+    {
+        std::string const path    = "/mock/path/keep.txt";
+        std::string const content = "keep";
+        mockFs.MockFileContent(path, content);
+        mockFs.MockUnlink(path, false);
+
+        CHECK_FALSE(mockFs.Unlink(path));
+        auto after = mockFs.Read(path);
+        REQUIRE(after.has_value());
+        REQUIRE(after.value() == content);
+    }
+}
+
+TEST_CASE("MockFileSystemOperator ReadLink")
+{
+    MockFileSystemOperator mockFs;
+    char buf[64] = {};
+
+    SECTION("fails without mock (no parent delegation)")
+    {
+        CHECK(mockFs.ReadLink("/not/configured", buf, sizeof(buf)) == -1);
+    }
+}
+
+TEST_CASE("MockFileSystemOperator Stat")
+{
+    MockFileSystemOperator mockFs;
+
+    SECTION("fails without mock (no parent delegation)")
+    {
+        struct stat st = {};
+        CHECK(mockFs.Stat("/not/configured", &st) == -1);
+    }
+}
+
+TEST_CASE("MockFileSystemOperator Access")
+{
+    MockFileSystemOperator mockFs;
+
+    SECTION("fails without mock (no parent delegation)")
+    {
+        CHECK(mockFs.Access("/not/configured", F_OK) == -1);
+    }
+}
+
+TEST_CASE("MockFileSystemOperator IsDirectory")
+{
+    MockFileSystemOperator mockFs;
+
+    SECTION("fails without mock (no parent delegation)")
+    {
+        CHECK_FALSE(mockFs.IsDirectory("/not/configured"));
+    }
+}
+
+TEST_CASE("MockFileSystemOperator ListDirectoryEntries")
+{
+    MockFileSystemOperator mockFs;
+
+    SECTION("fails without mock (no parent delegation)")
+    {
+        CHECK_FALSE(mockFs.ListDirectoryEntries("/not/configured").has_value());
     }
 }
 

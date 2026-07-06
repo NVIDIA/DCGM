@@ -22,7 +22,7 @@ if [[ ${DEBUG_BUILD_SCRIPT:-0} -eq 1 ]]; then
     set -v          # to see actual lines and not just side effects
 fi
 
-SCRIPTPATH="$(realpath "$(cat /proc/$$/cmdline | cut --delimiter="" --fields=2)")"
+SCRIPTPATH="$(realpath "${BASH_SOURCE[0]}")"
 DIR="$(dirname "$SCRIPTPATH")"
 PROJECT="$(basename "$DIR")"
 
@@ -48,6 +48,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
         -a --arch <arch>                                   : Make build for specified architecture. Supported are: amd64, aarch64
         -n --no-tests                                      : Do not run build-time tests
            --no-install                                    : Do not perform local installation to the _out directory
+           --no-ccache                                     : Do not use ccache and sccache (for Rust) during the build
            --address-san                                   : Turn on AddressSanitizer
            --thread-san                                    : Turn on ThreadSanitizer
            --ub-san                                        : Turn on UndefinedSanitizer
@@ -78,7 +79,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
           sanitizers compatibility."
 }
 
-LONGOPTS=address-san,arch:,clean,coverage,deb,debug,debug-find,debug-find-pkg:,gcc-analyzer,help,leak-san,no-install,no-tests,packages,release,rpm,thread-san,ub-san,vmware
+LONGOPTS=address-san,arch:,clean,coverage,deb,debug,debug-find,debug-find-pkg:,gcc-analyzer,help,leak-san,no-ccache,no-install,no-tests,packages,release,rpm,thread-san,ub-san,vmware
 SHORTOPTS=drsa:pchn
 
 ! PARSED=$(getopt --options=${SHORTOPTS} --longoptions=${LONGOPTS} --name "${0}" -- "$@")
@@ -101,6 +102,7 @@ do
     fi
 done
 
+CCACHE=1
 CLEAN=0
 COVERAGE=0
 DEB=0
@@ -153,6 +155,9 @@ while [[ $# -ne 0 ]]; do
         --leak-san)
             cmake_arguments+=(-D LEAK_SANITIZER=ON)
             ;;
+        --no-ccache)
+            CCACHE=0
+            ;;
         --no-install)
             INSTALL=0
             ;;
@@ -192,6 +197,11 @@ while [[ $# -ne 0 ]]; do
     shift
 done
 
+# Handle ccache
+if [[ $CCACHE -eq 1 ]]; then
+    intodocker_arguments+=(--ccache)
+fi
+
 cmake_arguments+=(-D BUILD_TESTING=$TESTS)
 
 if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -eq 0 ]]; then
@@ -216,6 +226,17 @@ test -v ARCHITECTURE || die "
 Required ARCHITECTURE environment variable is not defined in the build
 environment. Please check if you are using the proper DCGM build container."
 
+# Docker can run this script as a numeric UID without a writable HOME. In that
+# case Cargo falls back to /.cargo and fails while updating the registry cache.
+export CARGO_HOME="${CARGO_HOME:-$DIR/_out/cargo-home}"
+mkdir --parents "$CARGO_HOME"
+
+if [[ "${RUSTC_WRAPPER:-}" == *sccache* ]] && command -v sccache > /dev/null; then
+    # Start the daemon before Ninja launches Cargo custom commands. If sccache
+    # daemonizes from inside a Ninja rule, it can keep that rule's output pipe
+    # open after Cargo exits and make Ninja appear hung on a defunct shell.
+    sccache --start-server 2>/dev/null || true
+fi
 export CMAKE_BUILD_PARALLEL_LEVEL=${NPROC:-$(nproc)}
 
 CMAKE_SOURCE_DIR="$DIR"
@@ -252,7 +273,8 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
            -D CMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
            -D CMAKE_INSTALL_PREFIX=$CMAKE_INSTALL_PREFIX \
            -D CMAKE_INSTALL_SO_NO_EXE=FALSE \
-           "${cmake_arguments[@]}")
+           "${cmake_arguments[@]}" \
+           "$@")
 
     cp --force "$CMAKE_BINARY_DIR/compile_commands.json" "$CMAKE_SOURCE_DIR/"
 
@@ -268,25 +290,12 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
             popd
         fi
 
-        (set -x; ctest --output-on-failure --test-dir "$CMAKE_BINARY_DIR")
+        (set -x; ctest --output-on-failure --parallel "${NPROC:-$(nproc)}" --test-dir "$CMAKE_BINARY_DIR")
 
         if [[ $COVERAGE -eq 1 ]]; then
-            (set -x;
-             mkdir --parents $CMAKE_BINARY_DIR/html;
-             GCOV_EXECUTABLE="$(
-                 sed --regexp-extended \
-                     --quiet \
-                     's/CoverageCommand: (.*)/\1/p' \
-                     "$CMAKE_BINARY_DIR/DartConfiguration.tcl")"
-
-             gcovr --cobertura "$CMAKE_BINARY_DIR/coverage.xml" \
-                   --cobertura-pretty \
-                   --exclude-unreachable-branches \
-                   --filter "$CMAKE_SOURCE_DIR/.*" \
-                   --gcov-executable "$GCOV_EXECUTABLE" \
-                   --gcov-ignore-parse-errors \
-                   --html-details "$CMAKE_BINARY_DIR/html/index.html" \
-                   --root "$CMAKE_SOURCE_DIR")
+            cmake --build "$CMAKE_BINARY_DIR" \
+                  --target gcovr-cobertura gcovr-html gcovr-json \
+                  --parallel 1
         fi
     fi
 

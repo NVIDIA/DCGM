@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-sys.path.insert(0, '../')
-import dcgm_structs
-import dcgm_fields
-import dcgm_agent
-import dcgmvalue
 from threading import Thread
 from time import sleep
+
+sys.path.insert(0, '../')
+import dcgm_structs  # noqa: E402
+import dcgm_fields  # noqa: E402
+import dcgm_agent  # noqa: E402
+import dcgmvalue  # noqa: E402
 
 # Look at __name__ == "__main__" for entry point to the script
 
@@ -107,19 +108,22 @@ def agent_worker_function(dcgmHandle, groupId):
             for index in range(0, group_health.gpuCount):
                 print("GPU ID : %d" % group_health.gpu[index].gpuId)
 
-                for incident in range(0, group_health.gpu[index].incidentCount):
+                for incident in range(
+                        0, group_health.gpu[index].incidentCount):
                     print("system tested     : %d" %
                           group_health.gpu[index].systems[incident].system)
-                    print("system health     : %s" % convert_overall_health_to_string(
-                        group_health.gpu[index].systems[incident].health))
-                    print("system health err : %s" %
-                          group_health.gpu[index].systems[incident].errorString)
+                    print(
+                        "system health     : %s" %
+                        convert_overall_health_to_string(
+                            group_health.gpu[index].systems[incident].health))
+                    print(
+                        "system health err : %s" %
+                        group_health.gpu[index].systems[incident].errorString)
                     print("\n")
 
         except dcgm_structs.DCGMError as e:
             errorCode = e.value
             print("dcgmEngineHelathCheck returned error: %d" % errorCode)
-            sys.exc_clear()
 
         count = count + 1
 

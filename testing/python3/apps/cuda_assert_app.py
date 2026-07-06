@@ -45,4 +45,5 @@ class RunCudaAssert(app_runner.AppRunner):
                 lambda x: x == "Assertion `false` failed")
 
     def __str__(self):
-        return "RunCudaAssert on device " + super(RunCudaAssert, self).__str__()
+        return "RunCudaAssert on device " + \
+            super(RunCudaAssert, self).__str__()

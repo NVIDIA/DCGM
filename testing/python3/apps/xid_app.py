@@ -42,4 +42,5 @@ class XidApp(app_runner.AppRunner):
         self.stdout_readtillmatch(lambda x: x == "All done. Finishing.")
 
     def __str__(self):
-        return "XidApp on device " + str(self.device) + " with " + super(XidApp, self).__str__()
+        return ("XidApp on device " + str(self.device) + " with " +
+                super(XidApp, self).__str__())

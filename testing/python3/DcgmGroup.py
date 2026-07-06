@@ -21,12 +21,9 @@ import threading
 import os
 from DcgmHandle import DcgmHandle
 
-# logger is test infrastructure module and is only available when testing
-# framework is active
-if ('__DCGM_TESTING_FRAMEWORK_ACTIVE' in os.environ and
-        os.environ['__DCGM_TESTING_FRAMEWORK_ACTIVE'] == '1'):
+try:
     import logger
-else:
+except ImportError:
     logger = None
 
 
@@ -74,7 +71,11 @@ class DcgmGroupConfig:
 
         gpuIds = self._dcgmGroup.GetGpuIds()
         configList = dcgm_agent.dcgmConfigGet(
-            self._dcgmHandle.handle, self._groupId, configType, len(gpuIds), status.handle)
+            self._dcgmHandle.handle,
+            self._groupId,
+            configType,
+            len(gpuIds),
+            status.handle)
         # Throw specific errors before return error
         status.ThrowExceptionOnErrors()
         return configList
@@ -122,7 +123,12 @@ class DcgmGroupSamples:
 
     def WatchFields(self, fieldGroup, updateFreq, maxKeepAge, maxKeepSamples):
         ret = dcgm_agent.dcgmWatchFields(
-            self._dcgmHandle.handle, self._groupId, fieldGroup.fieldGroupId, updateFreq, maxKeepAge, maxKeepSamples)
+            self._dcgmHandle.handle,
+            self._groupId,
+            fieldGroup.fieldGroupId,
+            updateFreq,
+            maxKeepAge,
+            maxKeepSamples)
         dcgm_structs._dcgmCheckReturn(ret)
 
     '''
@@ -178,7 +184,7 @@ class DcgmGroupSamples:
     '''
 
     def GetAllSinceLastCall(self, dfvc, fieldGroup):
-        if dfvc == None:
+        if dfvc is None:
             dfvc = dcgm_field_helpers.DcgmFieldValueCollection(
                 self._dcgmHandle.handle, self._groupId)
             dfvc.GetLatestValues(fieldGroup)
@@ -206,7 +212,7 @@ class DcgmGroupSamples:
     '''
 
     def GetAllSinceLastCall_v2(self, dfvec, fieldGroup):
-        if dfvec == None:
+        if dfvec is None:
             dfvec = dcgm_field_helpers.DcgmFieldValueEntityCollection(
                 self._dcgmHandle.handle, self._groupId)
             dfvec.GetLatestValues(fieldGroup)
@@ -250,7 +256,11 @@ class DcgmGroupHealth:
                 self._dcgmHandle.handle, self._groupId, systems)
         else:
             ret = dcgm_agent.dcgmHealthSet_v2(
-                self._dcgmHandle.handle, self._groupId, systems, updateInterval, maxKeepAge)
+                self._dcgmHandle.handle,
+                self._groupId,
+                systems,
+                updateInterval,
+                maxKeepAge)
         dcgm_structs._dcgmCheckReturn(ret)
 
     '''
@@ -270,7 +280,7 @@ class DcgmGroupHealth:
     about all of the enabled watches within a group is created but no error results are
     provided.  On subsequent calls, any error information will be returned.
 
-    @param version    IN: Allows the caller to use an older version of this request. Should be 
+    @param version    IN: Allows the caller to use an older version of this request. Should be
                           dcgm_structs.dcgmHealthResponse_version5
 
     Returns a dcgm_structs.c_dcgmHealthResponse_* object that contains results for each GPU/entity
@@ -291,13 +301,13 @@ class DcgmGroupPolicy:
         self._condition = 0
 
     '''
-    Get the current violation policy inside the policy manager. Given a groupId, a number of 
+    Get the current violation policy inside the policy manager. Given a groupId, a number of
     policy structures are retrieved.
 
-    @param statusHandle              IN/OUT: pydcgm.DcgmStatus for the resulting status of the operation. Pass it as None 
+    @param statusHandle              IN/OUT: pydcgm.DcgmStatus for the resulting status of the operation. Pass it as None
                                              if the detailed error information for the operation is not needed (default).
 
-    Returns a list of dcgm_structs.c_dcgmPolicy_v1 with the same length as the number of GPUs in the group.  
+    Returns a list of dcgm_structs.c_dcgmPolicy_v1 with the same length as the number of GPUs in the group.
     The index of an entry corresponds to a given GPU ID in the group.  Throws an exception on error.
     '''
 
@@ -308,18 +318,22 @@ class DcgmGroupPolicy:
         if count <= 0:
             raise pydcgm.DcgmException(
                 "This group has no GPUs, cannot retrieve policies")
-        return dcgm_agent.dcgmPolicyGet(self._dcgmHandle.handle, self._groupId, count, statusHandle)
+        return dcgm_agent.dcgmPolicyGet(
+            self._dcgmHandle.handle,
+            self._groupId,
+            count,
+            statusHandle)
 
     '''
-    Set the current violation policy inside the policy manager.  Given the conditions within "policy", 
-    if a violation has occurred, subsequent action(s) may be performed to either 
+    Set the current violation policy inside the policy manager.  Given the conditions within "policy",
+    if a violation has occurred, subsequent action(s) may be performed to either
     report or contain the failure.
 
     This API is only supported on Tesla GPUs and will throw DCGMError_NotSupported if called on non-Tesla GPUs.
 
     @param policy                        IN: dcgm_structs.c_dcgmPolicy_v1 that will be applied to all GPUs in the group
 
-    @param statusHandle              IN/OUT: pydcgm.DcgmStatus for the resulting status for the operation. Pass it as 
+    @param statusHandle              IN/OUT: pydcgm.DcgmStatus for the resulting status for the operation. Pass it as
                                              None if the detailed error information for the operation is not needed (default).
 
     Returns Nothing. Throws an exception on error
@@ -333,14 +347,14 @@ class DcgmGroupPolicy:
         self._policy = policy
 
     '''
-    Register a function to be called when a specific policy condition (see dcgm_structs.c_dcgmPolicy_v1.condition) 
+    Register a function to be called when a specific policy condition (see dcgm_structs.c_dcgmPolicy_v1.condition)
     has been violated.  This callback will be called automatically when in DCGM_OPERATION_MODE_AUTO mode and only after
-    DcgmPolicy.Trigger when in DCGM_OPERATION_MODE_MANUAL mode.  
+    DcgmPolicy.Trigger when in DCGM_OPERATION_MODE_MANUAL mode.
     Callback is made within a separate thread.
 
     This API is only supported on Tesla GPUs and will throw DCGMError_NotSupported if called on non-Tesla GPUs.
 
-    @param condition                     IN: The set of conditions specified as an OR'd list 
+    @param condition                     IN: The set of conditions specified as an OR'd list
                                              (see dcgm_structs.DCGM_POLICY_COND_*)
                                              for which to register a callback function
 
@@ -359,15 +373,19 @@ class DcgmGroupPolicy:
             raise pydcgm.DcgmException(
                 "Callback must be provided to register that is not None")
         dcgm_agent.dcgmPolicyRegister_v2(
-            self._dcgmHandle.handle, self._groupId, condition, callback, userData)
+            self._dcgmHandle.handle,
+            self._groupId,
+            condition,
+            callback,
+            userData)
         self._condition |= condition
 
     '''
     Unregister a function to be called for a specific policy condition (see dcgm_structs.c_dcgmPolicy_v1.condition) .
     This function will unregister all callbacks for a given condition.
 
-    @param condition                     IN: The set of conditions specified as an OR'd list 
-                                             (see dcgm_structs.DCGM_POLICY_COND_*) 
+    @param condition                     IN: The set of conditions specified as an OR'd list
+                                             (see dcgm_structs.DCGM_POLICY_COND_*)
                                              for which to unregister a callback function
 
     Returns Nothing. Throws an exception on error.
@@ -376,16 +394,17 @@ class DcgmGroupPolicy:
     def Unregister(self, condition):
         dcgm_agent.dcgmPolicyUnregister(
             self._dcgmHandle.handle, self._groupId, condition)
+        self._condition &= ~condition
 
     '''
     Inform the policy manager loop to perform an iteration and trigger the callbacks of any
     registered functions. Callback functions will be called from a separate thread as the calling function.
 
-    Note: The GPU monitoring and management agent must call this method periodically if the operation 
-    mode is set to manual mode (DCGM_OPERATION_MODE_MANUAL) during initialization 
+    Note: The GPU monitoring and management agent must call this method periodically if the operation
+    mode is set to manual mode (DCGM_OPERATION_MODE_MANUAL) during initialization
     (\ref DcgmHandle.__init__).
 
-    Returns Nothing. Throws an exception if there is a generic error that the 
+    Returns Nothing. Throws an exception if there is a generic error that the
     policy manager was unable to perform another iteration.
     '''
 
@@ -402,7 +421,6 @@ class DcgmGroupPolicy:
                 logger.debug(
                     f"DcgmGroup Unregistering {self._condition} "
                     f"for group {self._groupId}")
-
             # This may fail if hostengine is gone. So, we silently allow that.
             try:
                 dcgm_agent.dcgmPolicyUnregister(
@@ -425,9 +443,10 @@ class DcgmGroupPolicy:
             # This may fail if hostengine is gone. So, we silently allow that.
             try:
                 self.Set(newPolicy)
-            except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
+            except (dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID),
+                    dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NOT_CONFIGURED)):
                 if logger:
-                    logger.debug("... hostengine disconnected")
+                    logger.debug("... hostengine already cleared policy")
 
             self._policy = None
 
@@ -441,11 +460,12 @@ class DcgmGroupDiscovery:
     '''
     Get the topology for this group
 
-    Returns a c_dcgmGroupTopology_v1 object representing the topology for this group
+    Returns a c_dcgmGroupTopology_t object representing the topology for this group
     '''
 
     def GetTopology(self):
-        return dcgm_agent.dcgmGetGroupTopology(self._dcgmHandle.handle, self._groupId)
+        return dcgm_agent.dcgmGetGroupTopology(
+            self._dcgmHandle.handle, self._groupId)
 
 
 class DcgmGroupStats:
@@ -468,7 +488,11 @@ class DcgmGroupStats:
 
     def WatchPidFields(self, updateFreq, maxKeepAge, maxKeepSamples):
         ret = dcgm_agent.dcgmWatchPidFields(
-            self._dcgmHandle.handle, self._groupId, updateFreq, maxKeepAge, maxKeepSamples)
+            self._dcgmHandle.handle,
+            self._groupId,
+            updateFreq,
+            maxKeepAge,
+            maxKeepSamples)
         dcgm_structs._dcgmCheckReturn(ret)
 
     '''
@@ -480,7 +504,8 @@ class DcgmGroupStats:
     '''
 
     def GetPidInfo(self, pid):
-        return dcgm_agent.dcgmGetPidInfo(self._dcgmHandle.handle, self._groupId, pid)
+        return dcgm_agent.dcgmGetPidInfo(
+            self._dcgmHandle.handle, self._groupId, pid)
 
     '''
     Tell DCGM to start recording samples for fields returned from GetJobStats()
@@ -496,7 +521,11 @@ class DcgmGroupStats:
 
     def WatchJobFields(self, updateFreq, maxKeepAge, maxKeepSamples):
         ret = dcgm_agent.dcgmWatchJobFields(
-            self._dcgmHandle.handle, self._groupId, updateFreq, maxKeepAge, maxKeepSamples)
+            self._dcgmHandle.handle,
+            self._groupId,
+            updateFreq,
+            maxKeepAge,
+            maxKeepSamples)
         dcgm_structs._dcgmCheckReturn(ret)
 
     '''
@@ -680,7 +709,8 @@ class DcgmGroup:
     groupType is the type of group to create. See dcgm_structs.DCGM_GROUP_? constants.
     '''
 
-    def __init__(self, dcgmHandle, groupId=None, groupName=None, groupType=dcgm_structs.DCGM_GROUP_EMPTY):
+    def __init__(self, dcgmHandle, groupId=None, groupName=None,
+                 groupType=dcgm_structs.DCGM_GROUP_EMPTY):
         self._dcgmHandle = dcgmHandle
 
         if groupId is None and groupName is None:
@@ -740,7 +770,8 @@ class DcgmGroup:
         del self.profiling
         self.profiling = None
 
-        # Delete the group we created if we're not using the special all-GPU group
+        # Delete the group we created if we're not using the special all-GPU
+        # group
         if self._groupId is not None and not self._IsGroupIdStatic():
             ret = dcgm_agent.dcgmGroupDestroy(
                 self._dcgmHandle.handle, self._groupId)

@@ -22,7 +22,10 @@ set(SRCS
     DcgmApi.cpp
     DcgmClientHandler.cpp
     DcgmGroupManager.cpp
+    DcgmGroupManager.inl
     DcgmHostEngineHandler.cpp
+    mocks/HostEngineHandler.cpp
+    mocks/HostEngineHandler.h
     DcgmImexManager.cpp
     DcgmInjectionNvmlManager.cpp
     DcgmGpuInstance.cpp
@@ -32,6 +35,8 @@ set(SRCS
     DcgmTopology.cpp
     DcgmGpmManager.cpp
     DcgmVgpu.cpp
+    DcgmVgpuOps.cpp
+    DcgmVgpuOps.hpp
     DcgmKmsgReader.cpp
     dcgm.c
     dcgm_errors.c

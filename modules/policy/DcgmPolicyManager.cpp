@@ -146,10 +146,10 @@ void DcgmPolicyManager::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
 
         switch (fv->fieldId)
         {
-            case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL:
-            case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL:
-            case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL:
-            case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL:
+            case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL:
+            case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL:
+            case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL:
+            case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL:
                 CheckNVLinkErrors(fv);
                 break;
 
@@ -157,24 +157,24 @@ void DcgmPolicyManager::OnFieldValuesUpdate(DcgmFvBuffer *fvBuffer)
                 CheckEccErrors(fv);
                 break;
 
-            case DCGM_FI_DEV_RETIRED_SBE:
-            case DCGM_FI_DEV_RETIRED_DBE:
+            case DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL:
+            case DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL:
                 CheckRetiredPages(fv);
                 break;
 
-            case DCGM_FI_DEV_GPU_TEMP:
+            case DCGM_FI_DEV_GPU_TEMP_CELSIUS:
                 CheckThermalValues(fv);
                 break;
 
-            case DCGM_FI_DEV_XID_ERRORS:
+            case DCGM_FI_DEV_XID_ERROR:
                 CheckXIDErrors(fv);
                 break;
 
-            case DCGM_FI_DEV_POWER_USAGE:
+            case DCGM_FI_DEV_BOARD_POWER_WATTS:
                 CheckPowerValues(fv);
                 break;
 
-            case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
+            case DCGM_FI_DEV_PCIE_REPLAY_TOTAL:
                 CheckPcieErrors(fv);
                 break;
 
@@ -269,12 +269,65 @@ dcgmReturn_t DcgmPolicyManager::UnregisterForPolicy(dcgm_policy_msg_unregister_t
 }
 
 /*****************************************************************************/
+bool DcgmPolicyManager::GetCounterDelta(unsigned int entityId,
+                                        unsigned short fieldId,
+                                        int64_t timestamp,
+                                        unsigned int &currentCount,
+                                        unsigned int &prevCount)
+{
+    dcgmcm_sample_t samples[2];
+    int count = 2;
+
+    dcgmReturn_t ret = mpCoreProxy.GetSamples(DCGM_FE_GPU,
+                                              entityId,
+                                              fieldId,
+                                              samples,
+                                              &count,
+                                              0,                      // startTime = beginning
+                                              timestamp,              // endTime = current
+                                              DCGM_ORDER_DESCENDING); // Latest first
+
+    if (ret != DCGM_ST_OK || count < 2)
+    {
+        log_debug("GetCounterDelta: Not enough samples for gpuId {} fieldId {} (ret={}, count={})",
+                  entityId,
+                  fieldId,
+                  ret,
+                  count);
+        return false;
+    }
+
+    if (DCGM_INT64_IS_BLANK(samples[0].val.i64) || DCGM_INT64_IS_BLANK(samples[1].val.i64))
+    {
+        log_debug("GetCounterDelta: Blank value for gpuId {} fieldId {}", entityId, fieldId);
+        return false;
+    }
+
+    if (samples[0].val.i64 > UINT_MAX || samples[1].val.i64 > UINT_MAX || samples[0].val.i64 < 0
+        || samples[1].val.i64 < 0)
+    {
+        log_debug("GetCounterDelta: Value out of range for gpuId {} fieldId {}", entityId, fieldId);
+        return false;
+    }
+
+    currentCount = static_cast<unsigned int>(samples[0].val.i64);
+    prevCount    = static_cast<unsigned int>(samples[1].val.i64);
+    return true;
+}
+
+/*****************************************************************************/
 dcgmReturn_t DcgmPolicyManager::CheckEccErrors(dcgmBufferedFv_t *fv)
 {
     if (fv->status != DCGM_ST_OK || DCGM_INT64_IS_BLANK(fv->value.i64))
     {
         log_debug("Skipping gpuId {} ECC fieldId {} with status {}", fv->entityId, fv->fieldId, fv->status);
         return DCGM_ST_OK;
+    }
+
+    if (fv->entityId >= DCGM_MAX_NUM_DEVICES)
+    {
+        log_debug("Invalid entityId {} for ECC check", fv->entityId);
+        return DCGM_ST_BADPARAM;
     }
 
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_DBE))
@@ -286,10 +339,13 @@ dcgmReturn_t DcgmPolicyManager::CheckEccErrors(dcgmBufferedFv_t *fv)
         return DCGM_ST_OK;
     }
 
-    unsigned int errorCount = fv->value.i64;
-    log_debug("CheckEccErrors gpuId {}, errorCount {}", fv->entityId, errorCount);
+    unsigned int currentCount, prevCount;
+    if (!GetCounterDelta(fv->entityId, fv->fieldId, fv->timestamp, currentCount, prevCount))
+    {
+        return DCGM_ST_OK; // Not enough samples yet
+    }
 
-    if (errorCount > 0) // violation has occurred
+    if (currentCount > prevCount)
     {
         dcgmPolicyCallbackResponse_t callbackResponse;
         dcgmPolicyConditionDbe_t dbeResponse;
@@ -299,12 +355,23 @@ dcgmReturn_t DcgmPolicyManager::CheckEccErrors(dcgmBufferedFv_t *fv)
         callbackResponse.gpuId     = fv->entityId;
         dbeResponse.timestamp      = fv->timestamp;
         dbeResponse.location       = dcgmPolicyConditionDbe_t::DEVICE;
-        dbeResponse.numerrors      = errorCount;
+        dbeResponse.numerrors      = currentCount;
 
         callbackResponse.val.dbe = dbeResponse;
 
-        log_error("gpuId {} has > 0 ECC double-bit errors: {}", fv->entityId, errorCount);
+        log_error("gpuId {} has {} new ECC double-bit errors (total: {})",
+                  fv->entityId,
+                  currentCount - prevCount,
+                  currentCount);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_ECC_DBE, fv->entityId, fv->timestamp, &callbackResponse);
+    }
+    else if (currentCount < prevCount)
+    {
+        log_debug("Counter reset detected for gpuId {} ECC fieldId {}, currentCount: {}, prevCount: {}",
+                  fv->entityId,
+                  fv->fieldId,
+                  currentCount,
+                  prevCount);
     }
 
     return DCGM_ST_OK;
@@ -319,6 +386,12 @@ dcgmReturn_t DcgmPolicyManager::CheckPcieErrors(dcgmBufferedFv_t *fv)
         return DCGM_ST_OK;
     }
 
+    if (fv->entityId >= DCGM_MAX_NUM_DEVICES)
+    {
+        log_debug("Invalid entityId {} for PCIe check", fv->entityId);
+        return DCGM_ST_BADPARAM;
+    }
+
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_PCI))
     {
         log_debug("Skipping gpuId {} PCIe fieldId {} with condition mask x{:X}",
@@ -328,8 +401,13 @@ dcgmReturn_t DcgmPolicyManager::CheckPcieErrors(dcgmBufferedFv_t *fv)
         return DCGM_ST_OK;
     }
 
-    unsigned int errorCount = (unsigned int)fv->value.i64;
-    if (errorCount > 0)
+    unsigned int currentCount, prevCount;
+    if (!GetCounterDelta(fv->entityId, fv->fieldId, fv->timestamp, currentCount, prevCount))
+    {
+        return DCGM_ST_OK; // Not enough samples yet
+    }
+
+    if (currentCount > prevCount)
     {
         dcgmPolicyCallbackResponse_t callbackResponse;
         dcgmPolicyConditionPci_t pciResponse;
@@ -338,13 +416,23 @@ dcgmReturn_t DcgmPolicyManager::CheckPcieErrors(dcgmBufferedFv_t *fv)
         callbackResponse.condition = DCGM_POLICY_COND_PCI;
         callbackResponse.gpuId     = fv->entityId;
         pciResponse.timestamp      = fv->timestamp;
-        pciResponse.counter        = errorCount;
+        pciResponse.counter        = currentCount;
 
         callbackResponse.val.pci = pciResponse;
 
-        log_error(
-            "gpuId {} has > 0 PCIe replays: {}. This may be causing throughput issues.", fv->entityId, errorCount);
+        log_error("gpuId {} has {} new PCIe replays (total: {}). This may be causing throughput issues.",
+                  fv->entityId,
+                  currentCount - prevCount,
+                  currentCount);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_PCIE, fv->entityId, fv->timestamp, &callbackResponse);
+    }
+    else if (currentCount < prevCount)
+    {
+        log_debug("Counter reset detected for gpuId {} PCIe fieldId {}, currentCount: {}, prevCount: {}",
+                  fv->entityId,
+                  fv->fieldId,
+                  currentCount,
+                  prevCount);
     }
 
     return DCGM_ST_OK;
@@ -374,12 +462,13 @@ dcgmReturn_t DcgmPolicyManager::CheckRetiredPages(dcgmBufferedFv_t *fv)
     int64_t sbeTimestamp, dbeTimestamp, timestamp;
 
     /* One value was passed in as FV. We will need to retrieve the other */
-    if (fv->fieldId == DCGM_FI_DEV_RETIRED_DBE)
+    if (fv->fieldId == DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL)
     {
         pageCountDbe = (unsigned int)fv->value.i64;
         dbeTimestamp = fv->timestamp;
 
-        dcgmReturn = mpCoreProxy.GetLatestSample(DCGM_FE_GPU, fv->entityId, DCGM_FI_DEV_RETIRED_SBE, &sample, 0);
+        dcgmReturn
+            = mpCoreProxy.GetLatestSample(DCGM_FE_GPU, fv->entityId, DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL, &sample, 0);
         if (dcgmReturn)
         {
             if (dcgmReturn == DCGM_ST_NOT_SUPPORTED)
@@ -406,7 +495,8 @@ dcgmReturn_t DcgmPolicyManager::CheckRetiredPages(dcgmBufferedFv_t *fv)
         pageCountSbe = (unsigned int)fv->value.i64;
         sbeTimestamp = fv->timestamp;
 
-        dcgmReturn = mpCoreProxy.GetLatestSample(DCGM_FE_GPU, fv->entityId, DCGM_FI_DEV_RETIRED_DBE, &sample, 0);
+        dcgmReturn
+            = mpCoreProxy.GetLatestSample(DCGM_FE_GPU, fv->entityId, DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, &sample, 0);
         if (dcgmReturn)
         {
             log_warning("Get latest sample of DBE pending retired pages failed with error {}", (int)dcgmReturn);
@@ -545,6 +635,12 @@ dcgmReturn_t DcgmPolicyManager::CheckNVLinkErrors(dcgmBufferedFv_t *fv)
         return DCGM_ST_OK;
     }
 
+    if (fv->entityId >= DCGM_MAX_NUM_DEVICES)
+    {
+        log_debug("Invalid entityId {} for NVLink check", fv->entityId);
+        return DCGM_ST_BADPARAM;
+    }
+
     if (!(m_gpus[fv->entityId].currentPolicies.condition & DCGM_POLICY_COND_NVLINK))
     {
         log_debug("Skipping gpuId {} NvLink counter fieldId {} with condition mask x{:X}",
@@ -554,7 +650,13 @@ dcgmReturn_t DcgmPolicyManager::CheckNVLinkErrors(dcgmBufferedFv_t *fv)
         return DCGM_ST_OK;
     }
 
-    if (fv->value.i64 > 0)
+    unsigned int currentCount, prevCount;
+    if (!GetCounterDelta(fv->entityId, fv->fieldId, fv->timestamp, currentCount, prevCount))
+    {
+        return DCGM_ST_OK; // Not enough samples yet
+    }
+
+    if (currentCount > prevCount)
     {
         dcgmPolicyCallbackResponse_t callbackResponse;
         dcgmPolicyConditionNvlink_t nvlinkResponse;
@@ -563,17 +665,27 @@ dcgmReturn_t DcgmPolicyManager::CheckNVLinkErrors(dcgmBufferedFv_t *fv)
         callbackResponse.condition = DCGM_POLICY_COND_NVLINK;
         callbackResponse.gpuId     = fv->entityId;
         nvlinkResponse.timestamp   = fv->timestamp;
-        nvlinkResponse.fieldId     = (unsigned short)fv->fieldId;
-        nvlinkResponse.counter     = fv->value.i64;
+        nvlinkResponse.fieldId     = static_cast<unsigned short>(fv->fieldId);
+        nvlinkResponse.counter     = currentCount;
 
         callbackResponse.val.nvlink = nvlinkResponse;
 
-        log_error("gpuId {} has > 0 Nvlink {}: {}. This may be causing throughput issues.",
+        log_error("gpuId {} has {} new NVLink {} errors (total: {}). This may be causing throughput issues.",
                   fv->entityId,
+                  currentCount - prevCount,
                   ConvertNVLinkCounterTypeToString(fv->fieldId),
-                  (long long)fv->value.i64);
+                  currentCount);
         SetViolation(DCGM_VIOLATION_POLICY_FAIL_NVLINK, fv->entityId, fv->timestamp, &callbackResponse);
     }
+    else if (currentCount < prevCount)
+    {
+        log_debug("Counter reset detected for gpuId {} NVLink fieldId {}, currentCount: {}, prevCount: {}",
+                  fv->entityId,
+                  fv->fieldId,
+                  currentCount,
+                  prevCount);
+    }
+
     return DCGM_ST_OK;
 }
 
@@ -617,13 +729,13 @@ char *DcgmPolicyManager::ConvertNVLinkCounterTypeToString(unsigned short fieldId
     // Return the Nvlink error type string based on the fieldId
     switch (fieldId)
     {
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL:
             return (char *)"CRC FLIT Error";
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL:
             return (char *)"CRC Data Error";
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL:
             return (char *)"Replay Error";
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL:
             return (char *)"Recovery Error";
         default:
             return (char *)"Unknown";
@@ -634,17 +746,17 @@ char *DcgmPolicyManager::ConvertNVLinkCounterTypeToString(unsigned short fieldId
 dcgmReturn_t DcgmPolicyManager::WatchFields(dcgm_connection_id_t connectionId)
 {
     int numFieldIds                    = 11; /* Should be same value as size of fieldIds */
-    static unsigned short fieldIds[11] = { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL,
-                                           DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
+    static unsigned short fieldIds[11] = { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL,
+                                           DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL,
+                                           DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL,
+                                           DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL,
                                            DCGM_FI_DEV_ECC_DBE_VOL_DEV,
-                                           DCGM_FI_DEV_RETIRED_SBE,
-                                           DCGM_FI_DEV_RETIRED_DBE,
-                                           DCGM_FI_DEV_GPU_TEMP,
-                                           DCGM_FI_DEV_XID_ERRORS,
-                                           DCGM_FI_DEV_POWER_USAGE,
-                                           DCGM_FI_DEV_PCIE_REPLAY_COUNTER };
+                                           DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
+                                           DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
+                                           DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                                           DCGM_FI_DEV_XID_ERROR,
+                                           DCGM_FI_DEV_BOARD_POWER_WATTS,
+                                           DCGM_FI_DEV_PCIE_REPLAY_TOTAL };
     int i;
     dcgmReturn_t dcgmReturn;
     DcgmWatcher watcher(DcgmWatcherTypePolicyManager, connectionId);

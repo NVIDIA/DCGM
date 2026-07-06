@@ -22,7 +22,7 @@ curl --location --fail --output git-lfs.tar.gz --retry 5 $URL
 echo "$SHA512SUM git-lfs.tar.gz" | sha512sum --check -
 
 mkdir git-lfs
-tar xf git-lfs.tar.gz -C git-lfs
+tar xf git-lfs.tar.gz -C git-lfs --strip-components=1
 git-lfs/install.sh
 
 rm -rf git-lfs.tar.gz git-lfs

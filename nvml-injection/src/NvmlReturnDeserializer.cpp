@@ -115,6 +115,7 @@ nvmlConfComputeGpuAttestationReport_t *nvmlConfComputeGpuAttestationReport_tDese
 nvmlConfComputeSetKeyRotationThresholdInfo_v1_t *nvmlConfComputeSetKeyRotationThresholdInfo_v1_tDeserializer(const YAML::Node &node);
 nvmlConfComputeGetKeyRotationThresholdInfo_v1_t *nvmlConfComputeGetKeyRotationThresholdInfo_v1_tDeserializer(const YAML::Node &node);
 nvmlGpuFabricInfo_t *nvmlGpuFabricInfo_tDeserializer(const YAML::Node &node);
+nvmlGpuFabricInfo_v2_t *nvmlGpuFabricInfo_v2_tDeserializer(const YAML::Node &node);
 nvmlGpuFabricInfoV_t *nvmlGpuFabricInfoV_tDeserializer(const YAML::Node &node);
 nvmlSystemDriverBranchInfo_t *nvmlSystemDriverBranchInfo_tDeserializer(const YAML::Node &node);
 nvmlTemperature_t *nvmlTemperature_tDeserializer(const YAML::Node &node);
@@ -4114,6 +4115,73 @@ nvmlGpuFabricInfo_t *nvmlGpuFabricInfo_tDeserializer(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_deserializer_definition
+nvmlGpuFabricInfo_v2_t *nvmlGpuFabricInfo_v2_tDeserializer(const YAML::Node &node)
+{
+    auto *gpuFabricInfo_v2 = reinterpret_cast<nvmlGpuFabricInfo_v2_t *>(malloc(sizeof(nvmlGpuFabricInfo_v2_t)));
+    if (gpuFabricInfo_v2 == nullptr)
+    {
+        return nullptr;
+    }
+    memset(gpuFabricInfo_v2, 0, sizeof(*gpuFabricInfo_v2));
+    if (node["version"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        gpuFabricInfo_v2->version = node["version"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing version for struct nvmlGpuFabricInfo_v2_t");
+    }
+    if (node["clusterUuid"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        auto clusterUuid = node["clusterUuid"].as<std::string>();
+        std::memcpy(&gpuFabricInfo_v2->clusterUuid, clusterUuid.data(), std::min(clusterUuid.size(), sizeof(gpuFabricInfo_v2->clusterUuid)));
+    }
+    else
+    {
+        NVML_LOG_ERR("missing clusterUuid for struct nvmlGpuFabricInfo_v2_t");
+    }
+    if (node["status"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        gpuFabricInfo_v2->status = static_cast<nvmlReturn_t>(node["status"].as<int>());
+    }
+    else
+    {
+        NVML_LOG_ERR("missing status for struct nvmlGpuFabricInfo_v2_t");
+    }
+    if (node["cliqueId"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        gpuFabricInfo_v2->cliqueId = node["cliqueId"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing cliqueId for struct nvmlGpuFabricInfo_v2_t");
+    }
+    if (node["state"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        gpuFabricInfo_v2->state = static_cast<nvmlGpuFabricState_t>(node["state"].as<int>());
+    }
+    else
+    {
+        NVML_LOG_ERR("missing state for struct nvmlGpuFabricInfo_v2_t");
+    }
+    if (node["healthMask"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        gpuFabricInfo_v2->healthMask = node["healthMask"].as<unsigned int>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing healthMask for struct nvmlGpuFabricInfo_v2_t");
+    }
+    return gpuFabricInfo_v2;
+}
+
+// The following snippet is generated from write_deserializer_definition
 nvmlGpuFabricInfoV_t *nvmlGpuFabricInfoV_tDeserializer(const YAML::Node &node)
 {
     auto *gpuFabricInfoV = reinterpret_cast<nvmlGpuFabricInfoV_t *>(malloc(sizeof(nvmlGpuFabricInfoV_t)));
@@ -4178,6 +4246,15 @@ nvmlGpuFabricInfoV_t *nvmlGpuFabricInfoV_tDeserializer(const YAML::Node &node)
     else
     {
         NVML_LOG_ERR("missing healthMask for struct nvmlGpuFabricInfoV_t");
+    }
+    if (node["healthSummary"])
+    {
+        // The following snippet is generated from write_deserializer_definition
+        gpuFabricInfoV->healthSummary = node["healthSummary"].as<unsigned char>();
+    }
+    else
+    {
+        NVML_LOG_ERR("missing healthSummary for struct nvmlGpuFabricInfoV_t");
     }
     return gpuFabricInfoV;
 }
@@ -7121,6 +7198,26 @@ std::optional<NvmlFuncReturn> GpuFabricInfoParser(const YAML::Node &node)
 }
 
 // The following snippet is generated from write_known_struct_parser
+std::optional<NvmlFuncReturn> GpuFabricInfo_v2Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    auto *gpuFabricInfo_v2 = nvmlGpuFabricInfo_v2_tDeserializer(node["ReturnValue"]);
+    if (gpuFabricInfo_v2 == nullptr)
+    {
+        return std::nullopt;
+    }
+    return NvmlFuncReturn(ret, {gpuFabricInfo_v2, true});
+}
+
+// The following snippet is generated from write_known_struct_parser
 std::optional<NvmlFuncReturn> GpuFabricInfoVParser(const YAML::Node &node)
 {
     if (!node || !node["FunctionReturn"])
@@ -8347,6 +8444,229 @@ std::optional<NvmlFuncReturn> MigModeParser(const YAML::Node &node)
     // The following snippet is generated from write_two_attrs_funcs_parser
     args.emplace_back(node["ReturnValue"]["currentMode"].as<unsigned int>());
     args.emplace_back(node["ReturnValue"]["pendingMode"].as<unsigned int>());
+    return NvmlFuncReturn(ret, std::move(args));
+}
+
+// The following snippet is generated from write_two_attrs_funcs_parser
+std::optional<NvmlFuncReturn> ComputeRunningProcessesParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    std::vector<InjectionArgument> args;
+    // The following snippet is generated from write_two_attrs_funcs_parser
+    auto size = static_cast<unsigned int>(node["ReturnValue"].size());
+    int idx = 0;
+    auto *valPtr = reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size));
+    for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
+    {
+    // The following snippet is generated from write_two_attrs_funcs_parser
+        auto *tmp = nvmlProcessInfo_v1_tDeserializer(*it);
+        if (!tmp)
+        {
+            free(valPtr);
+            return std::nullopt;
+        }
+        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
+        free(tmp);
+    }
+    args.emplace_back(size);
+    args.emplace_back(valPtr, size, true);
+    return NvmlFuncReturn(ret, std::move(args));
+}
+
+// The following snippet is generated from write_two_attrs_funcs_parser
+std::optional<NvmlFuncReturn> ComputeRunningProcesses_v2Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    std::vector<InjectionArgument> args;
+    // The following snippet is generated from write_two_attrs_funcs_parser
+    auto size = static_cast<unsigned int>(node["ReturnValue"].size());
+    int idx = 0;
+    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
+    {
+    // The following snippet is generated from write_two_attrs_funcs_parser
+        auto *tmp = nvmlProcessInfo_tDeserializer(*it);
+        if (!tmp)
+        {
+            free(valPtr);
+            return std::nullopt;
+        }
+        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        free(tmp);
+    }
+    args.emplace_back(size);
+    args.emplace_back(valPtr, size, true);
+    return NvmlFuncReturn(ret, std::move(args));
+}
+
+// The following snippet is generated from write_two_attrs_funcs_parser
+std::optional<NvmlFuncReturn> GraphicsRunningProcessesParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    std::vector<InjectionArgument> args;
+    // The following snippet is generated from write_two_attrs_funcs_parser
+    auto size = static_cast<unsigned int>(node["ReturnValue"].size());
+    int idx = 0;
+    auto *valPtr = reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size));
+    for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
+    {
+    // The following snippet is generated from write_two_attrs_funcs_parser
+        auto *tmp = nvmlProcessInfo_v1_tDeserializer(*it);
+        if (!tmp)
+        {
+            free(valPtr);
+            return std::nullopt;
+        }
+        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
+        free(tmp);
+    }
+    args.emplace_back(size);
+    args.emplace_back(valPtr, size, true);
+    return NvmlFuncReturn(ret, std::move(args));
+}
+
+// The following snippet is generated from write_two_attrs_funcs_parser
+std::optional<NvmlFuncReturn> GraphicsRunningProcesses_v2Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    std::vector<InjectionArgument> args;
+    // The following snippet is generated from write_two_attrs_funcs_parser
+    auto size = static_cast<unsigned int>(node["ReturnValue"].size());
+    int idx = 0;
+    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
+    {
+    // The following snippet is generated from write_two_attrs_funcs_parser
+        auto *tmp = nvmlProcessInfo_tDeserializer(*it);
+        if (!tmp)
+        {
+            free(valPtr);
+            return std::nullopt;
+        }
+        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        free(tmp);
+    }
+    args.emplace_back(size);
+    args.emplace_back(valPtr, size, true);
+    return NvmlFuncReturn(ret, std::move(args));
+}
+
+// The following snippet is generated from write_two_attrs_funcs_parser
+std::optional<NvmlFuncReturn> MPSComputeRunningProcessesParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    std::vector<InjectionArgument> args;
+    // The following snippet is generated from write_two_attrs_funcs_parser
+    auto size = static_cast<unsigned int>(node["ReturnValue"].size());
+    int idx = 0;
+    auto *valPtr = reinterpret_cast<nvmlProcessInfo_v1_t *>(malloc(sizeof(nvmlProcessInfo_v1_t) * size));
+    for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
+    {
+    // The following snippet is generated from write_two_attrs_funcs_parser
+        auto *tmp = nvmlProcessInfo_v1_tDeserializer(*it);
+        if (!tmp)
+        {
+            free(valPtr);
+            return std::nullopt;
+        }
+        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_v1_t));
+        free(tmp);
+    }
+    args.emplace_back(size);
+    args.emplace_back(valPtr, size, true);
+    return NvmlFuncReturn(ret, std::move(args));
+}
+
+// The following snippet is generated from write_two_attrs_funcs_parser
+std::optional<NvmlFuncReturn> MPSComputeRunningProcesses_v2Parser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    std::vector<InjectionArgument> args;
+    // The following snippet is generated from write_two_attrs_funcs_parser
+    auto size = static_cast<unsigned int>(node["ReturnValue"].size());
+    int idx = 0;
+    auto *valPtr = reinterpret_cast<nvmlProcessInfo_t *>(malloc(sizeof(nvmlProcessInfo_t) * size));
+    for (YAML::const_iterator it = node["ReturnValue"].begin(); it != node["ReturnValue"].end(); ++it)
+    {
+    // The following snippet is generated from write_two_attrs_funcs_parser
+        auto *tmp = nvmlProcessInfo_tDeserializer(*it);
+        if (!tmp)
+        {
+            free(valPtr);
+            return std::nullopt;
+        }
+        std::memcpy(&valPtr[idx++], tmp, sizeof(nvmlProcessInfo_t));
+        free(tmp);
+    }
+    args.emplace_back(size);
+    args.emplace_back(valPtr, size, true);
+    return NvmlFuncReturn(ret, std::move(args));
+}
+
+// The following snippet is generated from write_two_attrs_funcs_parser
+std::optional<NvmlFuncReturn> DriverModelParser(const YAML::Node &node)
+{
+    if (!node || !node["FunctionReturn"])
+    {
+        return NvmlFuncReturn(NVML_ERROR_UNKNOWN);
+    }
+    auto ret = static_cast<nvmlReturn_t>(node["FunctionReturn"].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node["ReturnValue"])
+    {
+        return NvmlFuncReturn(ret);
+    }
+    std::vector<InjectionArgument> args;
+    // The following snippet is generated from write_two_attrs_funcs_parser
+    args.emplace_back(static_cast<nvmlDriverModel_t>(node["ReturnValue"]["current"].as<int>()));
+    args.emplace_back(static_cast<nvmlDriverModel_t>(node["ReturnValue"]["pending"].as<int>()));
     return NvmlFuncReturn(ret, std::move(args));
 }
 

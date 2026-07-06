@@ -171,7 +171,8 @@ def setupEnvironment():
 
     test_utils.set_nvvs_bin_path()
 
-    # Collects the output of "nvidia-smi -q" and prints it out on the screen for debugging
+    # Collects the output of "nvidia-smi -q" and prints it out on the screen
+    # for debugging
     print("\n###################### NVSMI OUTPUT FOR DEBUGGING ONLY ##########################")
 
     (message, error) = nvidia_smi_utils.get_output()
@@ -293,10 +294,12 @@ class RunHostEngine(apps.NvHostEngineApp):
             resident_avg = sum(rmem) / len(rmem)
 
             hm.write("%s\n" % time.asctime())
-            hm.write("Virtual Memory info in MB, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (
-                virtual_min, virtual_max, virtual_avg))
-            hm.write("Resident Memory info in MB, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (
-                resident_min, resident_max, resident_avg))
+            hm.write(
+                "Virtual Memory info in MB, Min: %.4f, Max: %.4f, Avg: %.4f\n" %
+                (virtual_min, virtual_max, virtual_avg))
+            hm.write(
+                "Resident Memory info in MB, Min: %.4f, Max: %.4f, Avg: %.4f\n" %
+                (resident_min, resident_max, resident_avg))
             hm.write(
                 "\n.........................................................\n\n")
             time.sleep(loopTime)
@@ -328,8 +331,9 @@ class RunHostEngine(apps.NvHostEngineApp):
             cpu_avg = sum(cpu) / len(cpu)
 
             hc.write("%s\n" % time.asctime())
-            hc.write("CPU %% used for HostEngine, Min: %.4f, Max: %.4f, Avg: %.4f\n" % (
-                cpu_min, cpu_max, cpu_avg))
+            hc.write(
+                "CPU %% used for HostEngine, Min: %.4f, Max: %.4f, Avg: %.4f\n" %
+                (cpu_min, cpu_max, cpu_avg))
             hc.write(
                 "\n.........................................................\n\n")
         hc.close()
@@ -352,7 +356,8 @@ class BurnInHandle(object):
 
     def Connect(self):
         self.dcgmHandle = pydcgm.DcgmHandle(
-            ipAddress=self.hostEngineIp, opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO)
+            ipAddress=self.hostEngineIp,
+            opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO)
         self.dcgmSystem = self.dcgmHandle.GetSystem()
 
     def __del__(self):
@@ -364,7 +369,8 @@ class BurnInHandle(object):
             # not when you lose the last reference to an object and not when you execute del object.
             # Therefore, we need to call Shutdown() explicitly to ensure that the embedded host engine is closed.
             # This is a temporary fix for the issue that the embedded host engine is not properly closed and can cause
-            # the CHILD_SUBREAPER (Set by the embedded host engine) not being reset.
+            # the CHILD_SUBREAPER (Set by the embedded host engine) not being
+            # reset.
             self.dcgmHandle.Shutdown()
             del (self.dcgmHandle)
             self.dcgmHandle = None
@@ -380,7 +386,8 @@ class BurnInHandle(object):
         assert len(
             groupGpuIds) > 0, "DCGM doesn't see any enabled GPUs. Set __DCGM_WL_BYPASS=1 in your environment to bypass DCGM's allowlist"
 
-        # See if the user provided the GPU IDs they care about. If so, return those
+        # See if the user provided the GPU IDs they care about. If so, return
+        # those
         if len(self.burnInCfg.onlyGpuIds) < 1:
             return groupGpuIds
 
@@ -433,7 +440,7 @@ class BurnInHandle(object):
         Returns whether (True) or not (False) a gpu supports ECC
         '''
         value = self.GetValueForFieldId(
-            gpuId, dcgm_fields.DCGM_FI_DEV_ECC_CURRENT)
+            gpuId, dcgm_fields.DCGM_FI_DEV_ECC_MODE)
         if dcgmvalue.DCGM_INT64_IS_BLANK(value.value.i64):
             return False
         else:
@@ -584,7 +591,8 @@ class GroupTests:
 
     def test1_create_group(self, gpuIds):
         """ Test to create groups using the subsystem groups """
-        # Intentionally create the group as empty so that test5_add_device_to_group doesn't fail
+        # Intentionally create the group as empty so that
+        # test5_add_device_to_group doesn't fail
         self.group_id = self.groups_op.create_group(None, [])
         print("Creating a default test group: %s" % self.group_id)
         return self.group_id > 0
@@ -699,7 +707,9 @@ class ConfigTests:
             print(
                 "Only the default power limit is available for this device, skipping minimum power limit test")
             RunDcgmi.print_test_footer(
-                inspect.currentframe().f_code.co_name, "SKIPPED", bcolors.PURPLE)
+                inspect.currentframe().f_code.co_name,
+                "SKIPPED",
+                bcolors.PURPLE)
             return ""
         else:
             # +1 to address fractions lost in data type conversion
@@ -743,7 +753,9 @@ class ConfigTests:
         # Trying to enforce previous "--set" configurations for each device
         args = ["config", "--host", self.host_ip,
                 "-g", str(self.group_id), "--enforce"]
-        print("Trying to enforce last configuration used via \"--set\": %s" % args)
+        print(
+            "Trying to enforce last configuration used via \"--set\": %s" %
+            args)
         time.sleep(1)
 
         return args
@@ -766,7 +778,9 @@ class ConfigTests:
 
         for gpuId in gpuIds:
             if not self.burnInHandle.GpuSupportsEcc(gpuId):
-                print("Skipping ECC tests for GPU %d that doesn't support ECC" % gpuId)
+                print(
+                    "Skipping ECC tests for GPU %d that doesn't support ECC" %
+                    gpuId)
                 RunDcgmi.print_test_footer(
                     "ECC tests", "SKIPPED", bcolors.PURPLE)
                 return ""
@@ -1032,10 +1046,11 @@ class PolicyTests:
 
         for action in actions:
             for val in validations:
-                args = ["policy", "--host", self.host_ip, "-g", str(self.group_id),
-                        "--set", "%s,%s" % (action, val), "-p"]
-                print("Setting PCI errors sviolation policy list action %s, validation %s: %s " % (
-                    action, val, args))
+                args = ["policy", "--host", self.host_ip, "-g",
+                        str(self.group_id), "--set", "%s,%s" % (action, val), "-p"]
+                print(
+                    "Setting PCI errors sviolation policy list action %s, validation %s: %s " %
+                    (action, val, args))
 
         return args
 
@@ -1048,10 +1063,11 @@ class PolicyTests:
 
         for action in actions:
             for val in validations:
-                args = ["policy", "--host", self.host_ip, "-g", str(self.group_id),
-                        "--set", "%s,%s" % (action, val), "-e"]
-                print("Setting ECC errors violation policy list action %s, validation %s: %s " % (
-                    action, val, args))
+                args = ["policy", "--host", self.host_ip, "-g",
+                        str(self.group_id), "--set", "%s,%s" % (action, val), "-e"]
+                print(
+                    "Setting ECC errors violation policy list action %s, validation %s: %s " %
+                    (action, val, args))
 
         return args
 
@@ -1065,9 +1081,22 @@ class PolicyTests:
         max_pwr = str(deviceAttrib.powerLimits.maxPowerLimit)
         max_pages = str(60)
 
-        args = ["policy", "--host", self.host_ip, "-g",
-                str(self.group_id), "--set", "1,1", "-T", max_temp, "-P", max_pwr, "-M", max_pages]
-        print("Setting max power and max temperature for policy list: %s " % args)
+        args = ["policy",
+                "--host",
+                self.host_ip,
+                "-g",
+                str(self.group_id),
+                "--set",
+                "1,1",
+                "-T",
+                max_temp,
+                "-P",
+                max_pwr,
+                "-M",
+                max_pages]
+        print(
+            "Setting max power and max temperature for policy list: %s " %
+            args)
 
         return args
 
@@ -1125,8 +1154,12 @@ class ProcessStatsTests:
     def test3_get_pid_stats(self, gpuIds):
         """ Gets the process stats using the stats subsystem """
 
-        app = RunCudaCtxCreate(self.gpuIds, self.burnInHandle,
-                               runTimeSeconds=10, timeoutSeconds=(20 * len(gpuIds)))
+        app = RunCudaCtxCreate(
+            self.gpuIds,
+            self.burnInHandle,
+            runTimeSeconds=10,
+            timeoutSeconds=(
+                20 * len(gpuIds)))
         app.start()
 
         pids = app.getpids()
@@ -1186,7 +1219,8 @@ class NvlinkTests:
         for gpuId in gpuIds:
             args = ["nvlink", "--host", self.host_ip, "-g", str(gpuId), "-e"]
             print(
-                "Running queries to get errors for various nvlinks on the system: %s" % args)
+                "Running queries to get errors for various nvlinks on the system: %s" %
+                args)
         return args
 
     def test4_query_nvlink_errors_json_output(self, gpuIds):
@@ -1194,7 +1228,8 @@ class NvlinkTests:
             args = ["nvlink", "--host", self.host_ip,
                     "-g", str(gpuId), "-e", "-j"]
             print(
-                "Running queries to get errors for various nvlinks on the system in Json format: %s" % args)
+                "Running queries to get errors for various nvlinks on the system in Json format: %s" %
+                args)
         return args
 
     def test5_delete_group(self, gpuIds):
@@ -1381,21 +1416,27 @@ class DmonTests:
     def test4_dmon_field_group_dcgm_internal_30sec(self, gpuIds):
         args = ["dmon", "--host", self.host_ip,
                 "-f", "1", "-c", "10", "-d", "100"]
-        print("Running dmon on a group to monitor data on field group DCGM_INTERNAL_30SEC:  %s" % args)
+        print(
+            "Running dmon on a group to monitor data on field group DCGM_INTERNAL_30SEC:  %s" %
+            args)
         return args
 
     def test5_dmon_field_group_dcgm_internal_hourly(self, gpuIds):
         "dcgmi dmon -f 3 -c 10 -d 100"
         args = ["dmon", "--host", self.host_ip,
                 "-f", "2", "-c", "10", "-d", "100"]
-        print("Running dmon on a group to monitor data on field group DCGM_INTERNAL_HOURLY:  %s" % args)
+        print(
+            "Running dmon on a group to monitor data on field group DCGM_INTERNAL_HOURLY:  %s" %
+            args)
         return args
 
     def test6_dmon_field_group_dcgm_internal_job(self, gpuIds):
         "dcgmi dmon -f 3 -c 10 -d 100"
         args = ["dmon", "--host", self.host_ip,
                 "-f", "3", "-c", "10", "-d", "100"]
-        print("Running dmon on a group to monitor data on field group DCGM_INTERNAL_JOB:  %s" % args)
+        print(
+            "Running dmon on a group to monitor data on field group DCGM_INTERNAL_JOB:  %s" %
+            args)
         return args
 
     def test5_delete_group(self, gpuIds):
@@ -1468,7 +1509,8 @@ class RunDcgmi():
             sorted(filter(lambda x:x[0].startswith("test"), inspect.getmembers(obj)) -> Filters and sorts each members from the class that startswith "test"
             key=lambda x:int(x[0][4:x[0].find('_')])) -> key modifies the object to compare the items by their integer value found after the "_"
         """
-        return sorted([x for x in inspect.getmembers(obj) if x[0].startswith("test")], key=lambda x: int(x[0][4:x[0].find('_')]))
+        return sorted([x for x in inspect.getmembers(obj) if x[0].startswith(
+            "test")], key=lambda x: int(x[0][4:x[0].find('_')]))
 
     def get_group_tests(self):
         return self._get_sorted_tests(self.group_tests)
@@ -1577,11 +1619,11 @@ class RunDcgmi():
                                     testName, "SKIPPED", bcolors.PURPLE)
                                 continue
 
-                            if type(exec_test) == str:
+                            if isinstance(exec_test, str):
                                 # The test itself reported.
                                 continue
 
-                            if type(exec_test) == bool:
+                            if isinstance(exec_test, bool):
                                 if exec_test:
                                     RunDcgmi.print_test_footer(
                                         testName, "PASSED", bcolors.BLUE)
@@ -1602,13 +1644,17 @@ class RunDcgmi():
                             if diagTest:
                                 nsc = nvidia_smi_utils.NvidiaSmiJob()
                                 nsc.start()
-                                # Skip checks for nvlinks and pci width to avoid QA bugs
+                                # Skip checks for nvlinks and pci width to
+                                # avoid QA bugs
                                 paramsStr = "pcie.test_nvlink_status=false"
                                 paramsStr += ";pcie.h2d_d2h_single_unpinned.min_pci_width=1"
                                 paramsStr += ";pcie.h2d_d2h_single_pinned.min_pci_width=1"
 
-                                dd = DcgmiDiag.DcgmiDiag(dcgmiPrefix=get_dcgmi_bin_directory(
-                                ), runMode=diagTest, gpuIds=gpuIds, paramsStr=paramsStr)
+                                dd = DcgmiDiag.DcgmiDiag(
+                                    dcgmiPrefix=get_dcgmi_bin_directory(),
+                                    runMode=diagTest,
+                                    gpuIds=gpuIds,
+                                    paramsStr=paramsStr)
                                 diagPassed = not dd.Run()
                                 if dd.failed_list:
                                     """
@@ -1647,7 +1693,9 @@ class RunDcgmi():
                                 self._subprocess.wait()
                                 rc = self._subprocess.returncode
 
-                            # DCGM returns an undeflowed int8 as the status. So -3 is returned as 253. Convert it to the negative value
+                            # DCGM returns an undeflowed int8 as the status. So
+                            # -3 is returned as 253. Convert it to the negative
+                            # value
                             if rc != 0:
                                 rc -= 256
                             print("Got rc %d" % rc)
@@ -1662,7 +1710,7 @@ class RunDcgmi():
                                     testName, "WAIVED", bcolors.YELLOW)
                                 updateTestResults("WAIVED")
                                 updateTestResults("COUNT")
-                            elif diagPassed == True:
+                            elif diagPassed:
                                 # If we reach here, it means the diag detected a problem we consider legitimate.
                                 # Mark this test as waived instead of failed
                                 RunDcgmi.print_test_footer(
@@ -1686,7 +1734,8 @@ class RunDcgmi():
                             print(err)
                             updateTestResults("SKIPPED")
 
-        return ("\n".join(self.stdout_lines), self._subprocess.returncode), str(gpuIds)
+        return ("\n".join(self.stdout_lines),
+                self._subprocess.returncode), str(gpuIds)
 
     def retvalue(self):
         """
@@ -1705,15 +1754,17 @@ class RunDcgmi():
         # Check if child process has terminated.
         if self._subprocess.returncode is not None:
             if self._subprocess.returncode == 0:
-                message = ("PASSED - DCGMI is running normally, returned %d\n" %
-                           self._subprocess.returncode)
+                message = (
+                    "PASSED - DCGMI is running normally, returned %d\n" %
+                    self._subprocess.returncode)
                 self.log.writelines(message)
             else:
                 message = (
                     "FAILED - DCGMI failed with returned non-zero %s \n") % self._subprocess.returncode
                 self.log.writelines(message)
 
-        # Verify that dcgmi doesn't print any strings that should never be printed on a working system
+        # Verify that dcgmi doesn't print any strings that should never be
+        # printed on a working system
         stdout = "\n".join(self.stdout_lines)
         for forbidden_text in RunDcgmi.forbidden_strings:
             assert stdout.find(
@@ -1763,7 +1814,7 @@ def run_local_host_engine(burnInCfg):
             lambda: host_engine.mem_usage(burnInCfg.runtime), ())
         _thread.start_new_thread(
             lambda: host_engine.cpu_usage(burnInCfg.runtime), ())
-    except:
+    except BaseException:
         print("Error: unable to create thread")
     time.sleep(1)
 
@@ -1840,7 +1891,8 @@ def run_tests(burnInCfg):
 
     color = bcolors()
 
-    # Start an embedded host engine first to make sure we even have GPUs configured
+    # Start an embedded host engine first to make sure we even have GPUs
+    # configured
     burnInHandle = BurnInHandle(None, burnInCfg)
 
     # Gets gpuId list
@@ -1871,7 +1923,7 @@ def run_tests(burnInCfg):
                 lambda: host_engine.mem_usage(burnInCfg.runtime), ())
             _thread.start_new_thread(
                 lambda: host_engine.cpu_usage(burnInCfg.runtime), ())
-        except:
+        except BaseException:
             print("Error: unable to create thread")
         time.sleep(1)
     else:
@@ -1924,7 +1976,8 @@ class BurnInGlobalConfig:
         self.onlyGpuIds = []  # Only GPU IDs this framework should run on
         self.dvssc_testing = False  # Display color on output
 
-        # Undocumented globals I'm pulling out of the global namespace for sanity's sake
+        # Undocumented globals I'm pulling out of the global namespace for
+        # sanity's sake
         self.srv = None
         self.ip = None
         self.nodes = []
@@ -1948,16 +2001,26 @@ def parseCommandLine():
     parser.add_argument("-t", "--runtime", required=True,
                         help="Number of seconds to keep the test running")
     # nargs="+" means no args or any number of arguments
-    parser.add_argument("-a", "--address", nargs="+",
-                        help="One or more IP addresses separated by spaces where DCGMI Clients will run on ")
     parser.add_argument(
-        "-n", "--nodesfile", help="File with list of IP address or hostnames where DCGMI Clients will run on")
+        "-a",
+        "--address",
+        nargs="+",
+        help="One or more IP addresses separated by spaces where DCGMI Clients will run on ")
     parser.add_argument(
-        "-s", "--server", help="Server IP address where DCGM HostEngines will running on")
+        "-n",
+        "--nodesfile",
+        help="File with list of IP address or hostnames where DCGMI Clients will run on")
+    parser.add_argument(
+        "-s",
+        "--server",
+        help="Server IP address where DCGM HostEngines will running on")
     parser.add_argument("-ne", "--noeud", action="store_true",
                         help="Runs without the EUD Diagnostics test")
-    parser.add_argument("-i", "--indexes", nargs=1,
-                        help="One or more GPU IDs to run the burn-in tests on, separated by commas. These come from 'dcgmi discovery -l'")
+    parser.add_argument(
+        "-i",
+        "--indexes",
+        nargs=1,
+        help="One or more GPU IDs to run the burn-in tests on, separated by commas. These come from 'dcgmi discovery -l'")
     parser.add_argument("-d", "--debug", action="store_true",
                         help="Write debug logs from nv-hostengine")
     parser.add_argument("-D", "--dvssc-testing", action="store_true",
@@ -1979,17 +2042,25 @@ def parseCommandLine():
         burnInCfg.runtime = str(args.runtime)
         if args.runtime.isdigit():
             print("\n...................................................")
-            print(color.YELLOW + " ##### DCGM BURN-IN STRESS TEST ##### " + color.ENDC)
+            print(
+                color.YELLOW +
+                " ##### DCGM BURN-IN STRESS TEST ##### " +
+                color.ENDC)
             print("...................................................\n")
         else:
             print(
-                color.RED + "\nPlease enter a decimal number for the time option.\n" + color.ENDC)
+                color.RED +
+                "\nPlease enter a decimal number for the time option.\n" +
+                color.ENDC)
             sys.exit(1)
 
     # Runs without EUD tests
     if args.noeud:
         burnInCfg.eud = False
-        print(color.PURPLE + "## Running without Diagnostics Tests ##\n" + color.ENDC)
+        print(
+            color.PURPLE +
+            "## Running without Diagnostics Tests ##\n" +
+            color.ENDC)
 
     # Parsing server arguments
     burnInCfg.server = []
@@ -2000,7 +2071,9 @@ def parseCommandLine():
             burnInCfg.server.append(burnInCfg.srv)
         else:
             print(
-                color.RED + "\n%s is invalid. Please enter a valid IP address.\n" + color.ENDC)
+                color.RED +
+                "\n%s is invalid. Please enter a valid IP address.\n" +
+                color.ENDC)
             sys.exit(1)
 
     # Parsing IP address arguments
@@ -2031,7 +2104,10 @@ def parseCommandLine():
         if args.nodesfile:
             burnInCfg.remote = True
             if not args.server:
-                print(color.RED + "The server IP was not informed" + color.ENDC)
+                print(
+                    color.RED +
+                    "The server IP was not informed" +
+                    color.ENDC)
                 sys.exit(1)
             # Parsing hostfile argument
             location = os.path.abspath(os.path.join(args.nodesfile))
@@ -2088,7 +2164,9 @@ def main_wrapped():
     try:
         dcgm_structs._dcgmInit(utils.get_testing_framework_library_path())
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_LIBRARY_NOT_FOUND):
-        print("DCGM Library hasn't been found in the system, is the driver correctly installed?", file=sys.stderr)
+        print(
+            "DCGM Library hasn't been found in the system, is the driver correctly installed?",
+            file=sys.stderr)
         sys.exit(1)
 
     if not burnInCfg.remote:

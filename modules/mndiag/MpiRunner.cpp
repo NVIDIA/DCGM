@@ -18,45 +18,55 @@
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
 #include <algorithm>
-#include <cstddef>
-#include <ctime>
+#include <fcntl.h>
 #include <filesystem>
-#include <fmt/chrono.h>
 #include <fmt/format.h>
+
 #include <functional>
+#include <pwd.h>
 #include <signal.h>
 #include <string>
 #include <string_view>
+#include <unistd.h>
 #include <vector>
 
-MpiRunner::MpiRunner(DcgmCoreProxyBase &coreProxy)
+MpiRunner::MpiRunner(DcgmCoreProxyBase &coreProxy, uid_t effectiveUid)
     : m_coreProxy(coreProxy)
-{}
+{
+    std::string userName;
+    if (auto const *pw = getpwuid(effectiveUid); pw != nullptr)
+    {
+        userName = pw->pw_name;
+    }
+    m_userInfo = std::make_pair(std::move(userName), effectiveUid);
+}
 
 MpiRunner::~MpiRunner()
 {
-    // First stop the redirection (which will close streams and join threads)
-    StopRedirectThreads();
-
-    // Then ensure we clean up any running process
     StopMpiProcess();
+    StopRedirectThreads();
+    CleanupTempFiles();
 }
 
 dcgmReturn_t MpiRunner::LaunchMpiProcess()
 {
-    // Check if we have a valid command to execute
     if (m_lastCommand.empty())
     {
         log_error("Cannot launch MPI process: No command has been constructed");
         return DCGM_ST_BADPARAM;
     }
 
-    // If no output callback is set, use the default
     if (!m_outputCallback)
     {
-        SetOutputCallback([this](std::istream &dataStream, void *responseStruct, nodeInfoMap_t const &nodeInfo) {
-            return this->DefaultOutputCallback(dataStream, responseStruct, nodeInfo);
+        SetOutputCallback([this](int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo) {
+            return this->DefaultOutputCallback(fd, responseStruct, nodeInfo);
         });
+    }
+
+    dcgmReturn_t result = PrepareOutputFiles();
+    if (result != DCGM_ST_OK)
+    {
+        return result;
     }
 
     log_debug("Launching: {} ", GetLastCommand());
@@ -75,13 +85,13 @@ dcgmReturn_t MpiRunner::LaunchMpiProcess()
     params.args       = args.data();
     params.numArgs    = args.size();
 
-    if (m_userInfo.has_value() && !m_userInfo->first.empty())
+    // Only set the user name if it's different from the current effective user id
+    if (m_userInfo.has_value() && !m_userInfo->first.empty() && m_userInfo->second != geteuid())
     {
         params.userName = m_userInfo->first.c_str();
     }
 
-    dcgmReturn_t result = m_coreProxy.ChildProcessSpawn(params, m_childProcessHandle, m_pid);
-
+    result = m_coreProxy.ChildProcessSpawn(params, m_childProcessHandle, m_pid);
     if (result != DCGM_ST_OK)
     {
         log_error("Failed to create MPI process instance");
@@ -90,24 +100,43 @@ dcgmReturn_t MpiRunner::LaunchMpiProcess()
 
     log_debug("Successfully launched MPI process with PID: {}", m_pid);
 
-    // Redirect MPI output to either files or memory streams
     result = RedirectMpiOutput();
     if (result != DCGM_ST_OK)
     {
-        log_error("Failed to redirect MPI output. Stopping MPI process.");
+        log_error("Failed to redirect MPI output, stopping MPI process");
+        StopMpiProcess();
         return result;
     }
 
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t MpiRunner::DefaultOutputCallback(std::istream &dataStream,
-                                              void * /* responseStruct */,
-                                              nodeInfoMap_t const & /* nodeInfo */)
+dcgmReturn_t MpiRunner::DefaultOutputCallback(int fd, void * /* responseStruct */, nodeInfoMap_t const & /* nodeInfo */)
 {
-    std::string output;
-    dataStream >> output;
-    log_debug("MPI stdout: {}", output);
+    int dupFd = dup(fd);
+    if (dupFd < 0)
+    {
+        log_error("DefaultOutputCallback: dup failed: {}", strerror(errno));
+        return DCGM_ST_FILE_IO_ERROR;
+    }
+
+    auto fileCloser = [](FILE *f) {
+        fclose(f);
+    };
+    std::unique_ptr<FILE, decltype(fileCloser)> fp(fdopen(dupFd, "r"), fileCloser);
+    if (!fp)
+    {
+        close(dupFd);
+        log_error("DefaultOutputCallback: fdopen failed: {}", strerror(errno));
+        return DCGM_ST_FILE_IO_ERROR;
+    }
+
+    char buf[4096];
+    while (fgets(buf, sizeof(buf), fp.get()))
+    {
+        log_debug("MPI stdout: {}", buf);
+    }
+
     return DCGM_ST_OK;
 }
 
@@ -243,8 +272,8 @@ dcgmReturn_t MpiRunner::Wait(int timeoutSec)
 
 dcgmReturn_t MpiRunner::SetMpiOutputPipeFd(bool isStderr)
 {
-    std::optional<int> &pipeFd = isStderr ? m_stderrFd : m_stdoutFd;
-    if (pipeFd.has_value())
+    auto &pipeFd = isStderr ? m_stderrFd : m_stdoutFd;
+    if (pipeFd.Get() >= 0)
     {
         return DCGM_ST_OK;
     }
@@ -265,97 +294,136 @@ dcgmReturn_t MpiRunner::SetMpiOutputPipeFd(bool isStderr)
         log_error("Failed to get file descriptor for {} stream: {}", isStderr ? "stderr" : "stdout", result);
         return result;
     }
-    // Set non-blocking mode for reading
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    constexpr int DESIRED_PIPE_BUF_SIZE = 1048576;
+    int actual                          = fcntl(fd, F_SETPIPE_SZ, DESIRED_PIPE_BUF_SIZE);
+    if (actual < 0)
     {
-        log_error("Failed to set pipe file descriptor to non-blocking mode: {}", strerror(errno));
-        return DCGM_ST_FILE_IO_ERROR;
+        log_warning("Failed to increase pipe buffer size: {}", strerror(errno));
     }
-    pipeFd = fd;
+    else
+    {
+        log_debug("Pipe buffer size set to {} bytes for {} stream", actual, isStderr ? "stderr" : "stdout");
+    }
+
+    pipeFd = DcgmNs::Utils::FileHandle(fd);
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t MpiRunner::SetDiskOutputFileStream(bool isStderr, std::string const &filename)
+void MpiRunner::CleanupTempFiles()
 {
-    std::ofstream &stream = isStderr ? m_stderrDiskFileStream : m_stdoutDiskFileStream;
-    if (stream.is_open())
+    if (!m_ownsTempFiles)
     {
-        return DCGM_ST_OK;
+        return;
     }
-    // Create directory if it doesn't exist
-    std::filesystem::path filePath(filename);
-    std::filesystem::path dirPath = filePath.parent_path();
-    if (!dirPath.empty())
+
+    if (!m_stdoutFilePath.empty())
     {
-        try
+        std::error_code ec;
+        std::filesystem::remove(m_stdoutFilePath, ec);
+        if (ec)
         {
-            std::filesystem::create_directories(dirPath);
+            log_warning("Failed to remove temp file '{}': {}", m_stdoutFilePath, ec.message());
         }
-        catch (const std::filesystem::filesystem_error &e)
+        m_stdoutFilePath.clear();
+    }
+    if (!m_stderrFilePath.empty())
+    {
+        std::error_code ec;
+        std::filesystem::remove(m_stderrFilePath, ec);
+        if (ec)
         {
-            log_error("Failed to create directory '{}': {}", dirPath.string(), e.what());
+            log_warning("Failed to remove temp file '{}': {}", m_stderrFilePath, ec.message());
+        }
+        m_stderrFilePath.clear();
+    }
+    m_ownsTempFiles = false;
+}
+
+dcgmReturn_t MpiRunner::PrepareOutputFiles()
+{
+    if (m_logFileNames.has_value())
+    {
+        m_stdoutFilePath = m_logFileNames->first;
+        m_stderrFilePath = m_logFileNames->second;
+        m_ownsTempFiles  = false;
+
+        for (auto const &path : { m_stdoutFilePath, m_stderrFilePath })
+        {
+            std::filesystem::path dirPath = std::filesystem::path(path).parent_path();
+            if (!dirPath.empty())
+            {
+                try
+                {
+                    std::filesystem::create_directories(dirPath);
+                }
+                catch (std::filesystem::filesystem_error const &e)
+                {
+                    log_error("Failed to create directory '{}': {}", dirPath.string(), e.what());
+                    return DCGM_ST_FILE_IO_ERROR;
+                }
+            }
+        }
+
+        int stdoutFd = open(m_stdoutFilePath.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (stdoutFd < 0)
+        {
+            log_error("Failed to open '{}': {}", m_stdoutFilePath, strerror(errno));
             return DCGM_ST_FILE_IO_ERROR;
         }
+        m_stdoutFileFd = DcgmNs::Utils::FileHandle(stdoutFd);
+
+        int stderrFd = open(m_stderrFilePath.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (stderrFd < 0)
+        {
+            log_error("Failed to open '{}': {}", m_stderrFilePath, strerror(errno));
+            m_stdoutFileFd = {};
+            return DCGM_ST_FILE_IO_ERROR;
+        }
+        m_stderrFileFd = DcgmNs::Utils::FileHandle(stderrFd);
     }
-    stream.open(filename, std::ios::out | std::ios::trunc);
-    if (!stream.is_open())
+    else
     {
-        log_error("Failed to open file: {}", filename);
-        return DCGM_ST_FILE_IO_ERROR;
+        char stdoutTmpl[] = "/tmp/dcgm_mpirunner_stdout_XXXXXX";
+        int stdoutFd      = mkstemp(stdoutTmpl);
+        if (stdoutFd < 0)
+        {
+            log_error("Failed to create temp file: {}", strerror(errno));
+            return DCGM_ST_FILE_IO_ERROR;
+        }
+        m_stdoutFilePath = stdoutTmpl;
+        m_stdoutFileFd   = DcgmNs::Utils::FileHandle(stdoutFd);
+
+        char stderrTmpl[] = "/tmp/dcgm_mpirunner_stderr_XXXXXX";
+        int stderrFd      = mkstemp(stderrTmpl);
+        if (stderrFd < 0)
+        {
+            log_error("Failed to create temp file: {}", strerror(errno));
+            m_stdoutFileFd = {};
+            unlink(stdoutTmpl);
+            m_stdoutFilePath.clear();
+            return DCGM_ST_FILE_IO_ERROR;
+        }
+        m_stderrFilePath = stderrTmpl;
+        m_stderrFileFd   = DcgmNs::Utils::FileHandle(stderrFd);
+        m_ownsTempFiles  = true;
     }
+
+    log_debug("Output files prepared: {} and {}", m_stdoutFilePath, m_stderrFilePath);
     return DCGM_ST_OK;
 }
 
 dcgmReturn_t MpiRunner::RedirectMpiOutput()
 {
-    // Set up file descriptors for stdout and stderr
-    dcgmReturn_t result = SetMpiOutputPipeFd(false); // stdout
+    dcgmReturn_t result = SetMpiOutputPipeFd(false);
     if (result != DCGM_ST_OK)
     {
         return result;
     }
 
-    result = SetMpiOutputPipeFd(true); // stderr
+    result = SetMpiOutputPipeFd(true);
     if (result != DCGM_ST_OK)
     {
         return result;
-    }
-
-    // Set up output streams based on whether log file names are provided
-    if (m_logFileNames.has_value())
-    {
-        // Redirect to files
-        result = SetDiskOutputFileStream(false, m_logFileNames.value().first);
-        if (result != DCGM_ST_OK)
-        {
-            log_error("Failed to redirect stdout to file: {}", m_logFileNames.value().first);
-            return result;
-        }
-
-        result = SetDiskOutputFileStream(true, m_logFileNames.value().second);
-        if (result != DCGM_ST_OK)
-        {
-            log_error("Failed to redirect stderr to file: {}", m_logFileNames.value().second);
-            return result;
-        }
-
-        m_stdoutStream = &m_stdoutDiskFileStream;
-        m_stderrStream = &m_stderrDiskFileStream;
-
-        log_debug(
-            "Redirecting MPI output to files: {} and {}", m_logFileNames.value().first, m_logFileNames.value().second);
-    }
-    else
-    {
-        // Redirect to memory streams
-        m_stdoutMemoryStream.str("");
-        m_stderrMemoryStream.str("");
-
-        m_stdoutStream = &m_stdoutMemoryStream;
-        m_stderrStream = &m_stderrMemoryStream;
-
-        log_debug("Redirecting MPI output to memory streams");
     }
 
     return StartRedirectThreads();
@@ -363,10 +431,17 @@ dcgmReturn_t MpiRunner::RedirectMpiOutput()
 
 void MpiRunner::StopRedirectThreads()
 {
-    // Signal threads to stop
-    m_stopRedirectFlag.store(true, std::memory_order_relaxed);
+    // Request stop so the threads know the upcoming EBADF is intentional.
+    m_stdoutRedirectThread.request_stop();
+    m_stderrRedirectThread.request_stop();
 
-    // Wait for threads to complete
+    // Close the pipe read-ends to unblock splice().  If the child already
+    // exited, splice() has already returned 0 (EOF) and this is a no-op.
+    m_stdoutFd = {};
+    m_stderrFd = {};
+
+    // jthread destructor would join automatically, but we join explicitly here
+    // so callers like PopulateResponse can rely on output being fully flushed.
     if (m_stdoutRedirectThread.joinable())
     {
         m_stdoutRedirectThread.join();
@@ -375,187 +450,68 @@ void MpiRunner::StopRedirectThreads()
     {
         m_stderrRedirectThread.join();
     }
-
-    // Close pipe file descriptors
-    if (m_stdoutFd.has_value())
-    {
-        close(*m_stdoutFd);
-        m_stdoutFd = std::nullopt;
-    }
-
-    if (m_stderrFd.has_value())
-    {
-        close(*m_stderrFd);
-        m_stderrFd = std::nullopt;
-    }
-
-    // Close file streams if they're open
-    if (m_stdoutDiskFileStream.is_open())
-    {
-        m_stdoutDiskFileStream.close();
-    }
-
-    if (m_stderrDiskFileStream.is_open())
-    {
-        m_stderrDiskFileStream.close();
-    }
-
-    // Reset stream pointers
-    m_stdoutStream = nullptr;
-    m_stderrStream = nullptr;
 }
 
 dcgmReturn_t MpiRunner::StartRedirectThreads()
 {
-    // Reset the stop flag
-    m_stopRedirectFlag.store(false, std::memory_order_relaxed);
+    auto splicePipeToFile = [](std::stop_token stopToken, int pipeFd, int fileFd) {
+        log_debug("Starting splice redirection thread");
+        constexpr size_t SPLICE_CHUNK_SIZE = 1048576;
+        while (true)
+        {
+            ssize_t bytes = splice(pipeFd, nullptr, fileFd, nullptr, SPLICE_CHUNK_SIZE, SPLICE_F_MOVE);
+            if (bytes > 0)
+            {
+                continue;
+            }
+            if (bytes == 0)
+            {
+                log_debug("Pipe writer closed, splice redirection complete");
+                break;
+            }
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            if (errno == EBADF)
+            {
+                if (stopToken.stop_requested())
+                {
+                    log_debug("Pipe fd closed during intentional shutdown");
+                }
+                else
+                {
+                    log_warning("Pipe fd closed unexpectedly during splice redirection");
+                }
+                break;
+            }
+            log_error("splice error: {}", strerror(errno));
+            break;
+        }
+        log_debug("Splice redirection thread completed");
+    };
 
-    // Create two threads to read from the pipe and write to the appropriate streams
-    auto RedirectPipeToStreamFunc
-        = [](int pipeFd, std::ostream &stream, std::atomic<bool> &stopFlag, bool addTimestamps = false) {
-              log_debug("Starting pipe redirection thread");
-              std::array<char, 4096> buffer;
-              std::string lineBuffer; // Buffer for partial lines
-
-              // Set a reasonable upper limit for line buffer to prevent unbounded growth
-              constexpr size_t MAX_LINE_BUFFER_SIZE = 2 * 1024 * 1024; // 2MB limit
-
-              // Helper lambda to read from pipe to stream while a condition is met
-              auto redirectPipeToStreamWhile
-                  = [&buffer, &stream, &pipeFd, &lineBuffer, addTimestamps](std::function<bool()> shouldContinue) {
-                        auto helperAddTimestamps = [](std::string_view line) -> std::string {
-                            // Add timestamp to the line
-                            auto now = std::chrono::system_clock::now();
-                            auto ms
-                                = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-                            auto time_t_val = std::chrono::system_clock::to_time_t(now);
-                            std::tm tm_info = *std::localtime(&time_t_val);
-                            return fmt::format("[{:%Y-%m-%d %H:%M:%S}.{:03d}] {}\n", tm_info, ms.count(), line);
-                        };
-                        while (shouldContinue())
-                        {
-                            ssize_t bytesRead = read(pipeFd, buffer.data(), buffer.size());
-                            if (bytesRead > 0)
-                            {
-                                if (addTimestamps)
-                                {
-                                    // Process data line by line with timestamps
-                                    std::string_view data(buffer.data(), bytesRead);
-                                    // Check if adding this data would exceed the buffer limit
-                                    if (lineBuffer.size() + data.size() > MAX_LINE_BUFFER_SIZE)
-                                    {
-                                        // Force output the current buffer content as a truncated line
-                                        if (!lineBuffer.empty())
-                                        {
-                                            std::string truncatedLine = lineBuffer + " [TRUNCATED - line too long]";
-                                            stream << helperAddTimestamps(truncatedLine);
-                                            lineBuffer.clear();
-                                        }
-
-                                        // If even the new data alone exceeds the limit, truncate it
-                                        if (data.size() > MAX_LINE_BUFFER_SIZE)
-                                        {
-                                            std::string truncatedData(data.substr(0, MAX_LINE_BUFFER_SIZE - 50));
-                                            truncatedData += " [TRUNCATED - data too large]";
-                                            stream << helperAddTimestamps(truncatedData);
-                                            continue;
-                                        }
-                                    }
-                                    lineBuffer += data;
-
-                                    // Process complete lines
-                                    size_t pos = 0;
-                                    while ((pos = lineBuffer.find('\n')) != std::string::npos)
-                                    {
-                                        std::string line = lineBuffer.substr(0, pos);
-                                        stream << helperAddTimestamps(line);
-                                        lineBuffer.erase(0, pos + 1);
-                                    }
-                                }
-                                else
-                                {
-                                    // Original behavior - write raw data
-                                    stream.write(buffer.data(), bytesRead);
-                                }
-                                stream.flush();
-                            }
-                            else if (bytesRead == 0)
-                            {
-                                log_debug("The writer has closed the pipe, stop redirecting");
-                                // If we have a partial line in the buffer, write it with timestamp
-                                if (addTimestamps && !lineBuffer.empty())
-                                {
-                                    stream << helperAddTimestamps(lineBuffer);
-                                    stream.flush();
-                                }
-                                break;
-                            }
-                            else if (bytesRead == -1 && (errno == EAGAIN || errno == EINTR))
-                            {
-                                // No data available right now, continue
-                                // or the thread was interrupted, continue
-                            }
-                            else if (bytesRead == -1)
-                            {
-                                log_error("Error reading from pipe: {}", strerror(errno));
-                                break;
-                            }
-
-                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                        }
-                    };
-
-              // Main loop - read while not stopped
-              redirectPipeToStreamWhile([&stopFlag]() { return !stopFlag.load(std::memory_order_relaxed); });
-
-              // Drain the pipe after stopFlag is set
-              redirectPipeToStreamWhile([]() { return true; });
-
-              log_debug("Pipe redirection thread completed");
-          };
-
-    bool useTimestamps = m_logFileNames.has_value();
-
-    // std::ref is required to pass the reference to the streams and stop flag to the thread
-    log_debug("Starting pipe redirection threads");
-    m_stdoutRedirectThread = std::thread(RedirectPipeToStreamFunc,
-                                         m_stdoutFd.value(),
-                                         std::ref(*m_stdoutStream),
-                                         std::ref(m_stopRedirectFlag),
-                                         useTimestamps);
-    m_stderrRedirectThread = std::thread(RedirectPipeToStreamFunc,
-                                         m_stderrFd.value(),
-                                         std::ref(*m_stderrStream),
-                                         std::ref(m_stopRedirectFlag),
-                                         useTimestamps);
+    log_debug("Starting splice redirection threads");
+    m_stdoutRedirectThread = std::jthread(splicePipeToFile, m_stdoutFd.Get(), m_stdoutFileFd.Get());
+    m_stderrRedirectThread = std::jthread(splicePipeToFile, m_stderrFd.Get(), m_stderrFileFd.Get());
 
     return DCGM_ST_OK;
 }
 
 dcgmReturn_t MpiRunner::PopulateResponse(void *responseStruct, nodeInfoMap_t const &nodeInfo)
 {
-    // Stop the redirection threads
     StopRedirectThreads();
 
     dcgmReturn_t result { DCGM_ST_OK };
 
-    // Choose the appropriate input stream for the callback based on whether we're using files or memory
-    if (m_logFileNames.has_value())
+    if (m_stdoutFileFd.Get() >= 0)
     {
-        // We were redirecting to files, so use the file as input
-        std::ifstream stdoutFileStream(m_logFileNames.value().first);
-        if (!stdoutFileStream.is_open())
+        if (lseek(m_stdoutFileFd.Get(), 0, SEEK_SET) == -1)
         {
-            log_error("Failed to open file: {}", m_logFileNames.value().first);
+            log_error("Failed to lseek stdout file fd: {}", strerror(errno));
             return DCGM_ST_FILE_IO_ERROR;
         }
-        result = m_outputCallback(stdoutFileStream, responseStruct, nodeInfo);
-    }
-    else
-    {
-        // We were redirecting to memory, so use the string stream as input
-        std::istringstream stdoutMemStream(m_stdoutMemoryStream.str());
-        result = m_outputCallback(stdoutMemStream, responseStruct, nodeInfo);
+        result = m_outputCallback(m_stdoutFileFd.Get(), responseStruct, nodeInfo);
     }
 
     return result;

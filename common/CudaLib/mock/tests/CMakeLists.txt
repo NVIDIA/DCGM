@@ -19,7 +19,7 @@ endif()
 add_executable(cudalibmocktests)
 target_sources(cudalibmocktests
     PRIVATE
-        CudaLibMockTests.cpp)
+        MockCudaLibTests.cpp)
 
 target_include_directories(cudalibmocktests PRIVATE ${CUDA12_INCLUDE_DIR})
 
@@ -27,7 +27,7 @@ target_link_libraries(cudalibmocktests
     PRIVATE
         ${CMAKE_THREAD_LIBS_INIT}
         Catch2::Catch2WithMain
-        cuda_mock_interface
+        mock_cuda_lib
         dcgm_common
         dcgm_logging
         dl

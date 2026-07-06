@@ -36,7 +36,7 @@ class DcgmFieldValue():
 
     def __init__(self, rawValue):
         # Make sure the class passed in is an expected type
-        if not type(rawValue) == dcgm_structs.c_dcgmFieldValue_v1:
+        if not isinstance(rawValue, dcgm_structs.c_dcgmFieldValue_v1):
             raise Exception("Unexpected rawValue type %s" %
                             str(type(rawValue)))
 
@@ -60,19 +60,23 @@ class DcgmFieldValue():
             self.value = str(rawValue.value.str)
             self.isBlank = dcgmvalue.DCGM_STR_IS_BLANK(self.value)
         elif self.fieldType == dcgm_fields.DCGM_FT_BINARY:
-            if self.fieldId == dcgm_fields.DCGM_FI_DEV_ACCOUNTING_DATA:
+            if self.fieldId == dcgm_fields.DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS:
                 accStats = dcgm_structs.c_dcgmDevicePidAccountingStats_v1()
                 ctypes.memmove(ctypes.addressof(accStats),
                                rawValue.value.blob, accStats.FieldsSizeof())
-            if self.fieldId in [dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS, dcgm_fields_internal.DCGM_FI_DEV_GRAPHICS_PIDS]:
+            if self.fieldId in [
+                    dcgm_fields_internal.DCGM_FI_DEV_COMPUTE_PIDS,
+                    dcgm_fields_internal.DCGM_FI_DEV_GRAPHICS_PIDS]:
                 processStats = dcgm_structs.c_dcgmRunningProcess_t()
-                ctypes.memmove(ctypes.addressof(processStats),
-                               rawValue.value.blob, processStats.FieldsSizeof())
+                ctypes.memmove(
+                    ctypes.addressof(processStats),
+                    rawValue.value.blob,
+                    processStats.FieldsSizeof())
                 self.value = processStats
                 self.fieldType = dcgm_fields.DCGM_FT_BINARY
                 # This should always be false
                 self.isBlank = dcgmvalue.DCGM_INT64_IS_BLANK(processStats.pid)
-            elif self.fieldId == dcgm_fields.DCGM_FI_SYNC_BOOST:
+            elif self.fieldId == dcgm_fields.DCGM_FI_SYSTEM_GPU_SYNC_BOOST:
                 # Not exposed publicly for now
                 self.value = None
             else:
@@ -97,7 +101,8 @@ class DcgmFieldValueTimeSeries:
             self.values.append(value)
             return
 
-        # Otherwise, we need to insert the value in the correct place. Find the place
+        # Otherwise, we need to insert the value in the correct place. Find the
+        # place
         for i, existingValue in enumerate(self.values):
             if value.ts < existingValue.ts:
                 self.values.insert(i, value)
@@ -107,7 +112,8 @@ class DcgmFieldValueTimeSeries:
 
 
 class FieldValueEncoder(json.JSONEncoder):
-    # Pylint does not link overloading the default method, so the comment below is WAR for the linting problem
+    # Pylint does not link overloading the default method, so the comment
+    # below is WAR for the linting problem
     def default(self, obj):  # pylint: disable=E0202
         nested_json = []
         i = 0
@@ -123,7 +129,8 @@ class FieldValueEncoder(json.JSONEncoder):
         return nested_json
 
 
-def py_helper_dcgm_field_values_since_callback(gpuId, values, numValues, userData):
+def py_helper_dcgm_field_values_since_callback(
+        gpuId, values, numValues, userData):
 
     userData = ctypes.cast(userData, ctypes.py_object).value
     userData._ProcessValues(gpuId, values[0:numValues])
@@ -134,7 +141,8 @@ helper_dcgm_field_values_since_callback = dcgm_agent.dcgmFieldValueEnumeration_f
     py_helper_dcgm_field_values_since_callback)
 
 
-def py_helper_dcgm_field_values_since_callback_v2(entityGroupId, entityId, values, numValues, userData):
+def py_helper_dcgm_field_values_since_callback_v2(
+        entityGroupId, entityId, values, numValues, userData):
     userData = ctypes.cast(userData, ctypes.py_object).value
     userData._ProcessValuesV2(entityGroupId, entityId, values[0:numValues])
     return 0
@@ -152,7 +160,8 @@ class DcgmFieldValueCollection:
     def __init__(self, handle, groupId):
         # 2D dictionary of [gpuId][fieldId](DcgmFieldValueTimeSeries)
         self.values = {}
-        # 3D dictionary of [entityGroupId][entityId][fieldId](DcgmFieldValueTimeSeries)
+        # 3D dictionary of
+        # [entityGroupId][entityId][fieldId](DcgmFieldValueTimeSeries)
         self.entityValues = {}
         self._handle = handle
         self._groupId = groupId
@@ -210,7 +219,11 @@ class DcgmFieldValueCollection:
 
     def GetLatestValues(self, fieldGroup):
         ret = dcgm_agent.dcgmGetLatestValues(
-            self._handle, self._groupId, fieldGroup.fieldGroupId, helper_dcgm_field_values_since_callback, self)
+            self._handle,
+            self._groupId,
+            fieldGroup.fieldGroupId,
+            helper_dcgm_field_values_since_callback,
+            self)
         # Will throw exception on error
         dcgm_structs._dcgmCheckReturn(ret)
 
@@ -222,13 +235,22 @@ class DcgmFieldValueCollection:
     def GetAllSinceLastCall(self, fieldGroup):
         beforeCount = self._numValuesSeen
         self._nextSinceTimestamp = dcgm_agent.dcgmGetValuesSince(
-            self._handle, self._groupId, fieldGroup.fieldGroupId, self._nextSinceTimestamp, helper_dcgm_field_values_since_callback, self)
+            self._handle,
+            self._groupId,
+            fieldGroup.fieldGroupId,
+            self._nextSinceTimestamp,
+            helper_dcgm_field_values_since_callback,
+            self)
         afterCount = self._numValuesSeen
         return afterCount - beforeCount
 
     def GetLatestValues_v2(self, fieldGroup):
         ret = dcgm_agent.dcgmGetLatestValues_v2(
-            self._handle, self._groupId, fieldGroup.fieldGroupId, helper_dcgm_field_values_since_callback_v2, self)
+            self._handle,
+            self._groupId,
+            fieldGroup.fieldGroupId,
+            helper_dcgm_field_values_since_callback_v2,
+            self)
         # Will throw exception on error
         dcgm_structs._dcgmCheckReturn(ret)
 
@@ -239,7 +261,12 @@ class DcgmFieldValueCollection:
     def GetAllSinceLastCall_v2(self, fieldGroup):
         beforeCount = self._numValuesSeen
         self._nextSinceTimestamp = dcgm_agent.dcgmGetValuesSince_v2(
-            self._handle, self._groupId, fieldGroup.fieldGroupId, self._nextSinceTimestamp, helper_dcgm_field_values_since_entity_callback, self)
+            self._handle,
+            self._groupId,
+            fieldGroup.fieldGroupId,
+            self._nextSinceTimestamp,
+            helper_dcgm_field_values_since_entity_callback,
+            self)
         afterCount = self._numValuesSeen
         return afterCount - beforeCount
 
@@ -274,7 +301,16 @@ class DcgmFieldGroupWatcher(DcgmFieldValueCollection):
                    0=start with all cached data
     '''
 
-    def __init__(self, handle, groupId, fieldGroup, operationMode, updateFreq, maxKeepAge, maxKeepSamples, startTimestamp):
+    def __init__(
+            self,
+            handle,
+            groupId,
+            fieldGroup,
+            operationMode,
+            updateFreq,
+            maxKeepAge,
+            maxKeepSamples,
+            startTimestamp):
         self._fieldGroup = fieldGroup
         self._operationMode = operationMode
         self._updateFreq = updateFreq
@@ -295,8 +331,13 @@ class DcgmFieldGroupWatcher(DcgmFieldValueCollection):
     '''
 
     def _WatchFieldGroup(self):
-        ret = dcgm_agent.dcgmWatchFields(self._handle, self._groupId, self._fieldGroup.fieldGroupId,
-                                         self._updateFreq, self._maxKeepAge, self._maxKeepSamples)
+        ret = dcgm_agent.dcgmWatchFields(
+            self._handle,
+            self._groupId,
+            self._fieldGroup.fieldGroupId,
+            self._updateFreq,
+            self._maxKeepAge,
+            self._maxKeepSamples)
         dcgm_structs._dcgmCheckReturn(ret)  # Will throw exception on error
 
         # Force an update of the fields so that we can fetch initial values.
@@ -320,7 +361,8 @@ class DcgmFieldGroupWatcher(DcgmFieldValueCollection):
         return super().GetAllSinceLastCall(self._fieldGroup)
 
 
-def py_helper_dcgm_field_values_since_entity_callback(entityGroupId, entityId, values, numValues, userData):
+def py_helper_dcgm_field_values_since_entity_callback(
+        entityGroupId, entityId, values, numValues, userData):
 
     userData = ctypes.cast(userData, ctypes.py_object).value
     userData._ProcessValues(entityGroupId, entityId, values[0:numValues])
@@ -337,7 +379,8 @@ Helper class for handling field value update callbacks and storing them in a .va
 
 class DcgmFieldValueEntityCollection:
     def __init__(self, handle, groupId):
-        # 3D dictionary of [entityGroupId][entityId][fieldId](DcgmFieldValueTimeSeries)
+        # 3D dictionary of
+        # [entityGroupId][entityId][fieldId](DcgmFieldValueTimeSeries)
         self.values = {}
         self._handle = handle
         self._groupId = groupId
@@ -376,7 +419,11 @@ class DcgmFieldValueEntityCollection:
 
     def GetLatestValues(self, fieldGroup):
         ret = dcgm_agent.dcgmGetLatestValues_v2(
-            self._handle, self._groupId, fieldGroup.fieldGroupId, helper_dcgm_field_values_since_entity_callback, self)
+            self._handle,
+            self._groupId,
+            fieldGroup.fieldGroupId,
+            helper_dcgm_field_values_since_entity_callback,
+            self)
         # Will throw exception on error
         dcgm_structs._dcgmCheckReturn(ret)
 
@@ -388,7 +435,12 @@ class DcgmFieldValueEntityCollection:
     def GetAllSinceLastCall(self, fieldGroup):
         beforeCount = self._numValuesSeen
         self._nextSinceTimestamp = dcgm_agent.dcgmGetValuesSince_v2(
-            self._handle, self._groupId, fieldGroup.fieldGroupId, self._nextSinceTimestamp, helper_dcgm_field_values_since_entity_callback, self)
+            self._handle,
+            self._groupId,
+            fieldGroup.fieldGroupId,
+            self._nextSinceTimestamp,
+            helper_dcgm_field_values_since_entity_callback,
+            self)
         afterCount = self._numValuesSeen
         return afterCount - beforeCount
 
@@ -423,7 +475,16 @@ class DcgmFieldGroupEntityWatcher(DcgmFieldValueEntityCollection):
                    0=start with all cached data
     '''
 
-    def __init__(self, handle, groupId, fieldGroup, operationMode, updateFreq, maxKeepAge, maxKeepSamples, startTimestamp):
+    def __init__(
+            self,
+            handle,
+            groupId,
+            fieldGroup,
+            operationMode,
+            updateFreq,
+            maxKeepAge,
+            maxKeepSamples,
+            startTimestamp):
         self._fieldGroup = fieldGroup
         self._operationMode = operationMode
         self._updateFreq = updateFreq
@@ -444,8 +505,13 @@ class DcgmFieldGroupEntityWatcher(DcgmFieldValueEntityCollection):
     '''
 
     def _WatchFieldGroup(self):
-        ret = dcgm_agent.dcgmWatchFields(self._handle, self._groupId, self._fieldGroup.fieldGroupId,
-                                         self._updateFreq, self._maxKeepAge, self._maxKeepSamples)
+        ret = dcgm_agent.dcgmWatchFields(
+            self._handle,
+            self._groupId,
+            self._fieldGroup.fieldGroupId,
+            self._updateFreq,
+            self._maxKeepAge,
+            self._maxKeepSamples)
         dcgm_structs._dcgmCheckReturn(ret)  # Will throw exception on error
 
         # Force an update of the fields so that we can fetch initial values.
@@ -490,10 +556,24 @@ def main():
     maxKeepSamples = 0  # unlimited. maxKeepAge will enforce quota
     startTimestamp = 0  # beginning of time
 
-    dfcw = DcgmFieldGroupWatcher(handle, groupId, fieldGroup, operationMode,
-                                 updateFreq, maxKeepAge, maxKeepSamples, startTimestamp)
+    dfcw = DcgmFieldGroupWatcher(
+        handle,
+        groupId,
+        fieldGroup,
+        operationMode,
+        updateFreq,
+        maxKeepAge,
+        maxKeepSamples,
+        startTimestamp)
     dfcw2 = DcgmFieldGroupEntityWatcher(
-        handle, groupId, fieldGroup, operationMode, updateFreq, maxKeepAge, maxKeepSamples, startTimestamp)
+        handle,
+        groupId,
+        fieldGroup,
+        operationMode,
+        updateFreq,
+        maxKeepAge,
+        maxKeepSamples,
+        startTimestamp)
 
     while (True):
         newUpdateCount = dfcw.GetAllSinceLastCall()
@@ -503,16 +583,19 @@ def main():
         for gpuId in list(dfcw.values.keys()):
             print("gpuId %d" % gpuId)
             for fieldId in list(dfcw.values[gpuId].keys()):
-                print("    fieldId %d: %d values. latest timestamp %d" %
-                      (fieldId, len(dfcw.values[gpuId][fieldId]), dfcw.values[gpuId][fieldId][-1].ts))
+                print("    fieldId %d: %d values. latest timestamp %d" % (fieldId, len(
+                    dfcw.values[gpuId][fieldId]), dfcw.values[gpuId][fieldId][-1].ts))
 
         for entityGroupId in list(dfcw2.values.keys()):
             print("entityGroupId %d" % entityGroupId)
             for entityId in list(dfcw2.values[entityGroupId].keys()):
                 print("    entityId %d" % entityId)
-                for fieldId in list(dfcw2.values[entityGroupId][entityId].keys()):
-                    print("        fieldId %d: %d values. latest timestamp %d" %
-                          (fieldId, len(dfcw2.values[entityGroupId][entityId][fieldId]), dfcw2.values[entityGroupId][entityId][fieldId][-1].ts))
+                for fieldId in list(
+                        dfcw2.values[entityGroupId][entityId].keys()):
+                    print("        fieldId %d: %d values. latest timestamp %d" % (fieldId,
+                                                                                  len(
+                                                                                      dfcw2.values[entityGroupId][entityId][fieldId]),
+                                                                                  dfcw2.values[entityGroupId][entityId][fieldId][-1].ts))
 
         time.sleep(timeStep)
 

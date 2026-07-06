@@ -187,6 +187,124 @@ static dcgmReturn_t helperNvSwitchRemoveFieldWatch(DcgmWatcher watcher)
     return pDcgmHandle->ProcessModuleCommand(&msg.header);
 }
 
+struct NvLinkFieldRange
+{
+    unsigned int firstFieldId;
+    unsigned int lastFieldId;
+    unsigned int firstLinkId;
+};
+
+template <std::size_t N>
+static bool TryGetLinkIdFromRanges(unsigned int fieldId,
+                                   std::array<NvLinkFieldRange, N> const &ranges,
+                                   unsigned int &linkId)
+{
+    for (auto const &range : ranges)
+    {
+        if (fieldId >= range.firstFieldId && fieldId <= range.lastFieldId)
+        {
+            linkId = range.firstLinkId + fieldId - range.firstFieldId;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool TryGetNvLinkBandwidthFieldInfo(unsigned int fieldId, unsigned int &linkId, DcgmcmDirection_t &direction)
+{
+    /* Legacy per-link throughput fields (L0-L17). Links 18+ are served by the
+       dcgm_link_t-keyed DCGM_FI_DEV_NVLINK_*THROUGHPUT fields via ReadAndCacheNvLinkFields. */
+    static constexpr std::array<NvLinkFieldRange, 4> allRanges = { {
+        { DCGM_FI_DEV_NVLINK_THROUGHPUT_L0, DCGM_FI_DEV_NVLINK_THROUGHPUT_L5, 0 },
+        { DCGM_FI_DEV_NVLINK_THROUGHPUT_L6, DCGM_FI_DEV_NVLINK_THROUGHPUT_L11, 6 },
+        { DCGM_FI_DEV_NVLINK_THROUGHPUT_L12, DCGM_FI_DEV_NVLINK_THROUGHPUT_L14, 12 },
+        { DCGM_FI_DEV_NVLINK_THROUGHPUT_L15, DCGM_FI_DEV_NVLINK_THROUGHPUT_L17, 15 },
+    } };
+    static constexpr std::array<NvLinkFieldRange, 1> txRanges  = { {
+        { DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_L0, DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_L17, 0 },
+    } };
+    static constexpr std::array<NvLinkFieldRange, 1> rxRanges  = { {
+        { DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_L0, DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_L17, 0 },
+    } };
+
+    if (TryGetLinkIdFromRanges(fieldId, allRanges, linkId))
+    {
+        direction = DcgmcmDirectionAll;
+        return true;
+    }
+
+    if (TryGetLinkIdFromRanges(fieldId, txRanges, linkId))
+    {
+        direction = DcgmcmDirectionTx;
+        return true;
+    }
+
+    if (TryGetLinkIdFromRanges(fieldId, rxRanges, linkId))
+    {
+        direction = DcgmcmDirectionRx;
+        return true;
+    }
+
+    return false;
+}
+
+static bool TryGetNvLinkErrorFieldInfo(unsigned int fieldId, unsigned int &linkId, nvmlNvLinkErrorCounter_t &counter)
+{
+    /* Legacy per-link error counters (L0-L17). Links 18+ are served by the
+       dcgm_link_t-keyed DCGM_FI_DEV_NVLINK_*_ERROR fields via ReadAndCacheNvLinkFields. */
+    static constexpr std::array<NvLinkFieldRange, 4> flitRanges     = { {
+        { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L0_TOTAL, DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L5_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L6_TOTAL, DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L11_TOTAL, 6 },
+        { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L12_TOTAL, DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L14_TOTAL, 12 },
+        { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L15_TOTAL, DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L17_TOTAL, 15 },
+    } };
+    static constexpr std::array<NvLinkFieldRange, 4> dataRanges     = { {
+        { DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L0_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L5_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L6_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L11_TOTAL, 6 },
+        { DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L12_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L14_TOTAL, 12 },
+        { DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L15_TOTAL, DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_L17_TOTAL, 15 },
+    } };
+    static constexpr std::array<NvLinkFieldRange, 4> replayRanges   = { {
+        { DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L0_TOTAL, DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L5_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L6_TOTAL, DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L11_TOTAL, 6 },
+        { DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L12_TOTAL, DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L14_TOTAL, 12 },
+        { DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L15_TOTAL, DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L17_TOTAL, 15 },
+    } };
+    static constexpr std::array<NvLinkFieldRange, 4> recoveryRanges = { {
+        { DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L0_TOTAL, DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L5_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L6_TOTAL, DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L11_TOTAL, 6 },
+        { DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L12_TOTAL, DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L14_TOTAL, 12 },
+        { DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L15_TOTAL, DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L17_TOTAL, 15 },
+    } };
+
+    if (TryGetLinkIdFromRanges(fieldId, flitRanges, linkId))
+    {
+        counter = NVML_NVLINK_ERROR_DL_CRC_FLIT;
+        return true;
+    }
+
+    if (TryGetLinkIdFromRanges(fieldId, dataRanges, linkId))
+    {
+        counter = NVML_NVLINK_ERROR_DL_CRC_DATA;
+        return true;
+    }
+
+    if (TryGetLinkIdFromRanges(fieldId, replayRanges, linkId))
+    {
+        counter = NVML_NVLINK_ERROR_DL_REPLAY;
+        return true;
+    }
+
+    if (TryGetLinkIdFromRanges(fieldId, recoveryRanges, linkId))
+    {
+        counter = NVML_NVLINK_ERROR_DL_RECOVERY;
+        return true;
+    }
+
+    return false;
+}
+
 /*****************************************************************************/
 bool DcgmCacheManager::IsGpuMigEnabled(unsigned int gpuId)
 {
@@ -939,6 +1057,7 @@ DcgmCacheManager::DcgmCacheManager()
     , m_maxSampleAgeUsec((timelib64_t)3600 * 1000000)
     , m_driverIsR450OrNewer(false)
     , m_driverIsR520OrNewer(false)
+    , m_driverSupportsFabricInfoV3(true)
     , m_driverMajorVersion(0)
     , m_numGpus(0)
     , m_numFakeGpus(0)
@@ -983,7 +1102,7 @@ DcgmCacheManager::DcgmCacheManager()
     for (unsigned short fieldId = 1; fieldId < DCGM_FI_MAX_FIELDS; ++fieldId)
     {
         dcgm_field_meta_p fieldMeta = DcgmFieldGetById(fieldId);
-        if (fieldMeta && fieldMeta->fieldId != DCGM_FI_UNKNOWN)
+        if (fieldMeta && fieldMeta->fieldId != DCGM_FI_SYSTEM_FIELD_UNKNOWN)
         {
             m_allValidFieldIds.push_back(fieldId);
         }
@@ -1520,11 +1639,11 @@ dcgmReturn_t DcgmCacheManager::AttachGpus(bool nvmlLoaded)
 std::vector<dcgm_topology_helper_t> DcgmCacheManager::GetTopologyHelper(bool includeLinkStatus)
 {
     std::vector<dcgm_topology_helper_t> gpuInfo;
-    dcgmNvLinkStatus_v4 linkStatus;
+    dcgmNvLinkStatus_v5 linkStatus;
 
     memset(&linkStatus, 0, sizeof(linkStatus));
 
-    if (m_numGpus > 2 && includeLinkStatus)
+    if (m_numGpus >= 2 && includeLinkStatus)
     {
         PopulateNvLinkLinkStatus(linkStatus);
     }
@@ -1672,7 +1791,7 @@ unsigned int DcgmCacheManager::AddFakeGpu(unsigned int pciDeviceId, unsigned int
     sample.timestamp = timelib_usecSince1970();
     sample.val.i64   = 1;
 
-    dcgmReturn = InjectSamples(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_ECC_CURRENT, &sample, 1);
+    dcgmReturn = InjectSamples(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_ECC_MODE, &sample, 1);
     if (dcgmReturn != DCGM_ST_OK)
         log_error("Error {} from InjectSamples()", (int)dcgmReturn);
 
@@ -2850,7 +2969,7 @@ dcgmReturn_t DcgmCacheManager::ManageDeviceEvents(unsigned int /* addWatchOnGpuI
             }
 
 #else
-            watchInfo = GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_XID_ERRORS);
+            watchInfo = GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_XID_ERROR);
             if (watchInfo->isWatched || ((gpuId == addWatchOnGpuId) && (addWatchOnFieldId == watchInfo->fieldId)))
             {
                 log_debug("gpuId {} wants nvmlEventTypeXidCriticalError", gpuId);
@@ -3029,7 +3148,7 @@ dcgmReturn_t DcgmCacheManager::NvmlPreWatch(unsigned int gpuId, unsigned short d
     }
     switch (dcgmFieldId)
     {
-        case DCGM_FI_DEV_ACCOUNTING_DATA:
+        case DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS:
         {
             if (m_gpus[gpuId].status == DcgmEntityStatusDetached)
             {
@@ -3075,8 +3194,8 @@ dcgmReturn_t DcgmCacheManager::NvmlPreWatch(unsigned int gpuId, unsigned short d
             log_debug("nvmlDeviceSetAccountingMode successful for gpuId {}", gpuId);
             break;
         }
-        case DCGM_FI_DEV_XID_ERRORS:
-        case DCGM_FI_DEV_GPU_NVLINK_ERRORS:
+        case DCGM_FI_DEV_XID_ERROR:
+        case DCGM_FI_DEV_NVLINK_ERROR:
             ManageDeviceEvents(gpuId, dcgmFieldId);
             break;
 
@@ -3098,8 +3217,8 @@ dcgmReturn_t DcgmCacheManager::NvmlPostWatch(unsigned int /* gpuId */, unsigned 
 
     switch (dcgmFieldId)
     {
-        case DCGM_FI_DEV_XID_ERRORS:
-        case DCGM_FI_DEV_GPU_NVLINK_ERRORS:
+        case DCGM_FI_DEV_XID_ERROR:
+        case DCGM_FI_DEV_NVLINK_ERROR:
             ManageDeviceEvents(DCGM_GPU_ID_BAD, 0);
             break;
 
@@ -3133,9 +3252,21 @@ dcgmReturn_t DcgmCacheManager::AddFieldWatch(dcgm_field_entity_group_t entityGro
             case DCGM_FE_VGPU:   // Fall through
             case DCGM_FE_GPU_I:  // Fall through
             case DCGM_FE_GPU_CI: // Fall through
-            case DCGM_FE_LINK:   // Fall through
                 log_debug("Cannot watch requested field ID {} because NVML is not loaded.", dcgmFieldId);
                 return DCGM_ST_NVML_NOT_LOADED;
+                break;
+            case DCGM_FE_LINK:
+                /*
+                 * DCGM_FE_LINK is shared by GPU NVLink fields and NvSwitch link fields.
+                 * NvSwitch link fields in the NvSwitch field range are pushed by the
+                 * NvSwitch module and can be serviced by NSCQ/NVSDM without NVML.
+                 */
+                if (dcgmFieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID || dcgmFieldId > DCGM_FI_LAST_NVSWITCH_FIELD_ID
+                    || !IsModulePushedFieldId(dcgmFieldId))
+                {
+                    log_debug("Cannot watch requested field ID {} because NVML is not loaded.", dcgmFieldId);
+                    return DCGM_ST_NVML_NOT_LOADED;
+                }
                 break;
             default:
                 // NO-OP
@@ -3389,7 +3520,7 @@ dcgmReturn_t DcgmCacheManager::AddEntityFieldWatch(dcgm_field_entity_group_t ent
 
     if (dcgmFieldId >= DCGM_FI_MAX_FIELDS)
         return DCGM_ST_BADPARAM;
-    else if (dcgmFieldId == DCGM_FI_DEV_INFOROM_CONFIG_CHECK || dcgmFieldId == DCGM_FI_DEV_INFOROM_CONFIG_VALID)
+    else if (dcgmFieldId == DCGM_FI_DEV_INFOROM_CHECKSUM || dcgmFieldId == DCGM_FI_DEV_INFOROM_VALID)
     {
         /* For inforom checks, enforce a 30-second minumum to avoid excessive CPU cycles */
         const timelib64_t minMonitorFrequenceUsec = 30000000;
@@ -3553,6 +3684,7 @@ bool DcgmCacheManager::EntityPairSupportsGpm(dcgmGroupEntityPair_t const &entity
         case DCGM_FE_GPU:
         case DCGM_FE_GPU_I:
         case DCGM_FE_GPU_CI:
+        case DCGM_FE_LINK:
             break;
         default:
             return false;
@@ -3560,7 +3692,22 @@ bool DcgmCacheManager::EntityPairSupportsGpm(dcgmGroupEntityPair_t const &entity
 
     std::unique_ptr<DcgmLockGuard> dlg = std::make_unique<DcgmLockGuard>(m_mutex);
     unsigned int gpuId                 = m_numGpus; // Initialize to an invalid value for check below
-    dcgmReturn_t ret                   = GetGpuId(entityPair.entityGroupId, entityPair.entityId, gpuId);
+    dcgmReturn_t ret                   = DCGM_ST_OK;
+
+    if (entityPair.entityGroupId == DCGM_FE_LINK)
+    {
+        /* Per-link GPM fields are keyed by a dcgm_link_t entity; the GPU lives in the packed id. */
+        dcgm_link_t const link { .raw = entityPair.entityId };
+        if (link.parsed.type != DCGM_FE_GPU)
+        {
+            return false;
+        }
+        gpuId = link.parsed.gpuId;
+    }
+    else
+    {
+        ret = GetGpuId(entityPair.entityGroupId, entityPair.entityId, gpuId);
+    }
 
     if (ret != DCGM_ST_OK || gpuId >= m_numGpus)
     {
@@ -4280,7 +4427,7 @@ dcgmReturn_t DcgmCacheManager::GetLatestProcessInfo(unsigned int gpuId,
 
     dcgm_mutex_lock(m_mutex);
 
-    watchInfo = GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_ACCOUNTING_DATA, 0);
+    watchInfo = GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS, 0);
 
     dcgmReturn_t dcgmReturn = PrecheckWatchInfoForSamples(watchInfo);
     if (dcgmReturn != DCGM_ST_OK)
@@ -4293,7 +4440,7 @@ dcgmReturn_t DcgmCacheManager::GetLatestProcessInfo(unsigned int gpuId,
     {
         auto tsType = watchInfo->timeSeries->tsType;
         dcgm_mutex_unlock(m_mutex);
-        log_error("Expected type TS_TYPE_BLOB for DCGM_FI_DEV_ACCOUNTING_DATA. Got {}", tsType);
+        log_error("Expected type TS_TYPE_BLOB for DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS. Got {}", tsType);
         return DCGM_ST_GENERIC_ERROR;
     }
 
@@ -5242,7 +5389,7 @@ dcgmReturn_t DcgmCacheManager::SetValueImpl(int gpuId, unsigned short dcgmFieldI
 
     switch (fieldMeta->fieldId)
     {
-        case DCGM_FI_DEV_AUTOBOOST:
+        case DCGM_FI_DEV_CLOCKS_AUTOBOOST_MODE:
         {
             nvmlEnableState_t enabledState;
 
@@ -5261,8 +5408,8 @@ dcgmReturn_t DcgmCacheManager::SetValueImpl(int gpuId, unsigned short dcgmFieldI
             break;
         }
 
-        case DCGM_FI_DEV_ENFORCED_POWER_LIMIT: /* Fall through is intentional */
-        case DCGM_FI_DEV_POWER_MGMT_LIMIT:
+        case DCGM_FI_DEV_BOARD_POWER_LIMIT_ENFORCED_WATTS: /* Fall through is intentional */
+        case DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS:
         {
             unsigned int currLimit, minLimit, maxLimit, newPowerLimit;
 
@@ -5399,7 +5546,7 @@ dcgmReturn_t DcgmCacheManager::SetValueImpl(int gpuId, unsigned short dcgmFieldI
             break;
         }
 
-        case DCGM_FI_DEV_ECC_CURRENT: // Fall-through is intentional
+        case DCGM_FI_DEV_ECC_MODE: // Fall-through is intentional
         case DCGM_FI_DEV_ECC_PENDING:
         {
             nvmlEnableState_t nvmlState;
@@ -5420,7 +5567,7 @@ dcgmReturn_t DcgmCacheManager::SetValueImpl(int gpuId, unsigned short dcgmFieldI
         }
 
 
-        case DCGM_FI_DEV_COMPUTE_MODE:
+        case DCGM_FI_DEV_GPU_COMPUTE_MODE:
         {
             nvmlComputeMode_t computeMode;
 
@@ -5448,7 +5595,7 @@ dcgmReturn_t DcgmCacheManager::SetValueImpl(int gpuId, unsigned short dcgmFieldI
             break;
         }
 
-        case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
+        case DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK:
         {
             dcgmReturn_t ret = SetWorkloadPowerProfile(safeNvmlHandle, *value);
             if (ret != DCGM_ST_OK)
@@ -5810,61 +5957,41 @@ dcgmReturn_t DcgmCacheManager::SubscribeForEvent(const dcgmcmEventSubscription_t
 /*****************************************************************************/
 bool DcgmCacheManager::IsModulePushedFieldId(unsigned int fieldId)
 {
-    if (fieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID)
+    /* Fields are module-pushed if they belong to a module that delivers values
+     * independently (NvSwitch manager, profiling module, sysmon module).
+     * All other fields — including GPU device fields with IDs above the
+     * NvSwitch boundary — are polled by the cache manager itself and must return
+     * false so the background update loop does not skip them.
+     *
+     * Defaulting to false (not module-pushed) is the safe direction: the worst
+     * outcome is an unnecessary NVML call that returns NOT_SUPPORTED.  Defaulting
+     * to true (module-pushed) silently drops fields from the update loop, which
+     * was the root cause of DCGM-6546.
+     */
+
+    if ((fieldId >= DCGM_FI_FIRST_NVSWITCH_FIELD_ID && fieldId < DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_L0)
+        || (fieldId > DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_TOTAL && fieldId < DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_L0)
+        || (fieldId > DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_TOTAL && fieldId <= DCGM_FI_LAST_NVSWITCH_FIELD_ID))
     {
-        return false;
+        return true;
     }
 
-    switch (fieldId)
+    if (DCGM_FIELD_ID_IS_PROF_FIELD(fieldId))
     {
-        case DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS:
-        case DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES:
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS:
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_BYTES:
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS:
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS:
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS:
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS:
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS:
-        case DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS:
-        case DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS:
-        case DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS:
-        case DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS:
-        case DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS:
-        case DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS:
-        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER:
-        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT:
-        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER:
-        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT:
-        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS:
-        case DCGM_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL:
-        case DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG:
-        case DCGM_FI_DEV_NVLINK_GET_STATE:
-        case DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT:
-        case DCGM_FI_DEV_C2C_LINK_ERROR_INTR:
-        case DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY:
-        case DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B:
-        case DCGM_FI_DEV_C2C_LINK_POWER_STATE:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14:
-        case DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15:
-            return false;
-        default:
-            return true;
+        return true;
     }
+
+    if (fieldId >= DCGM_FI_SYSMON_FIRST_ID && fieldId <= DCGM_FI_SYSMON_LAST_ID)
+    {
+        return true;
+    }
+
+    if (fieldId >= DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID && fieldId <= DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 std::optional<SafeVgpuInstance> DcgmCacheManager::GetSafeVgpuInstance(nvmlVgpuInstance_t vgpuId)
@@ -6095,7 +6222,7 @@ static bool FieldSupportsLiveUpdates(dcgm_field_entity_group_t entityGroupId, un
     /* Any fieldIds that result in multiple samples need to be excluded from live updates */
     switch (fieldId)
     {
-        case DCGM_FI_DEV_SUPPORTED_TYPE_INFO:
+        case DCGM_FI_DEV_VGPU_SUPPORTED_INFO:
         case DCGM_FI_DEV_GRAPHICS_PIDS:
         case DCGM_FI_DEV_COMPUTE_PIDS:
         case DCGM_FI_DEV_GPU_UTIL_SAMPLES:
@@ -6590,7 +6717,7 @@ dcgmReturn_t DcgmCacheManager::ActuallyUpdateGpuFieldValues(dcgmcm_update_thread
         /* WAR for NVML Bug 2032468. Force the valueType to unsigned long long for ECC fields, because NVML
          * isn't setting them and it's defaulting to a double which doesn't get stored properly. */
         if ((threadCtx.entityKey.fieldId <= DCGM_FI_DEV_ECC_DBE_AGG_TEX)
-            && (threadCtx.entityKey.fieldId >= DCGM_FI_DEV_ECC_CURRENT))
+            && (threadCtx.entityKey.fieldId >= DCGM_FI_DEV_ECC_MODE))
         {
             fv->valueType = NVML_VALUE_TYPE_UNSIGNED_LONG_LONG;
         }
@@ -7405,7 +7532,7 @@ void DcgmCacheManager::RecordXidForGpu(unsigned int gpuId,
 {
     // If the instance and compute instance IDs are set to blank, that means the XID is
     // at the GPU level, so store it there.
-    dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_XID_ERRORS, 1);
+    dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_XID_ERROR, 1);
     if (watchInfo == nullptr)
     {
         DCGM_LOG_ERROR << "Got watchInfo == null from GetEntityWatchInfo";
@@ -7438,7 +7565,7 @@ void DcgmCacheManager::RecordXidForComputeInstance(unsigned int gpuId,
         gpuId, ComputeInstanceId { eventData.computeInstanceId }, GpuInstanceId { eventData.gpuInstanceId });
     if (entityId != DCGM_BLANK_ENTITY_ID)
     {
-        dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_GPU_CI, entityId, DCGM_FI_DEV_XID_ERRORS, 1);
+        dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_GPU_CI, entityId, DCGM_FI_DEV_XID_ERROR, 1);
         if (watchInfo != nullptr)
         {
             threadCtx.entityKey    = watchInfo->watchKey;
@@ -7473,7 +7600,7 @@ void DcgmCacheManager::RecordXidForGpuInstance(unsigned int gpuId,
     dcgm_field_eid_t entityId = GetInstanceEntityId(gpuId, GpuInstanceId { eventData.gpuInstanceId });
     if (entityId != DCGM_BLANK_ENTITY_ID)
     {
-        dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_GPU_I, entityId, DCGM_FI_DEV_XID_ERRORS, 1);
+        dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_GPU_I, entityId, DCGM_FI_DEV_XID_ERROR, 1);
         if (watchInfo != nullptr)
         {
             threadCtx.entityKey    = watchInfo->watchKey;
@@ -7880,7 +8007,7 @@ void DcgmCacheManager::RemoveMetaGroupWatchedField(dcgmGpuGrp_t groupId, unsigne
 /*****************************************************************************/
 void DcgmCacheManager::RecordBindUnbindEvent(dcgmBindUnbindEventState_t state)
 {
-    dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_NONE, DCGM_FE_NONE, DCGM_FI_BIND_UNBIND_EVENT, 1);
+    dcgmcm_watch_info_p watchInfo = GetEntityWatchInfo(DCGM_FE_NONE, DCGM_FE_NONE, DCGM_FI_SYSTEM_GPU_BIND_EVENT, 1);
     if (watchInfo == nullptr)
     {
         log_error("Got watchInfo == null from GetEntityWatchInfo");
@@ -8131,10 +8258,19 @@ dcgmReturn_t DcgmCacheManager::ReadFabricManagerStatusField(dcgmcm_update_thread
                                                             timelib64_t expireTime)
 {
     nvmlGpuFabricInfoV_t gpuFabricInfo {};
-    gpuFabricInfo.version   = nvmlGpuFabricInfo_v2;
+    gpuFabricInfo.version   = m_driverSupportsFabricInfoV3 ? nvmlGpuFabricInfo_v3 : nvmlGpuFabricInfo_v2;
     nvmlReturn_t nvmlReturn = (nvmlDevice.nvmlDevice == nullptr)
                                   ? NVML_ERROR_INVALID_ARGUMENT
                                   : m_nvmlDriver->NvmlDeviceGetGpuFabricInfoV(nvmlDevice, &gpuFabricInfo);
+
+    if (m_driverSupportsFabricInfoV3
+        && (nvmlReturn == NVML_ERROR_ARGUMENT_VERSION_MISMATCH || nvmlReturn == NVML_ERROR_FUNCTION_NOT_FOUND))
+    {
+        log_debug("The v3 Fabric Info struct is not supported by the driver, falling back to v2.");
+        m_driverSupportsFabricInfoV3 = false;
+        gpuFabricInfo.version        = nvmlGpuFabricInfo_v2;
+        nvmlReturn                   = m_nvmlDriver->NvmlDeviceGetGpuFabricInfoV(nvmlDevice, &gpuFabricInfo);
+    }
 
     if (threadCtx.watchInfo)
     {
@@ -8157,6 +8293,18 @@ dcgmReturn_t DcgmCacheManager::ReadFabricManagerStatusField(dcgmcm_update_thread
         else if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_HEALTH_MASK)
         {
             AppendEntityInt64(threadCtx, gpuFabricInfo.healthMask, 0, now, expireTime);
+        }
+        else if (fieldMeta->fieldId == DCGM_FI_DEV_FABRIC_HEALTH_SUMMARY)
+        {
+            if (gpuFabricInfo.version == nvmlGpuFabricInfo_v3)
+            {
+                AppendEntityInt64(threadCtx, gpuFabricInfo.healthSummary, 0, now, expireTime);
+            }
+            else
+            {
+                log_debug("v3 health summary field is not supported, reporting NOT_SUPPORTED.");
+                AppendEntityInt64(threadCtx, DCGM_INT64_NOT_SUPPORTED, 0, now, expireTime);
+            }
         }
         else
         {
@@ -8526,10 +8674,10 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkBer(dcgmcm_update_thread_t &thr
 
     switch (fieldId)
     {
-        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT:
+        case DCGM_FI_DEV_NVLINK_SYMBOL_BER_RATIO:
             rawNvmlFieldId = NVML_FI_DEV_NVLINK_COUNT_SYMBOL_BER;
             break;
-        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT:
+        case DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO:
             rawNvmlFieldId = NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER;
             break;
         default:
@@ -8670,28 +8818,6 @@ static void ppcntPackFunc_i(uint8_t *buffer, unsigned localPort, unsigned grp)
 }
 
 /**
- * Pack PPRM register data with network byte order conversion
- *
- * @deprecated This function is expected to be removed in the near future.
- */
-static void pprmPackFunc_i(uint8_t *buffer, unsigned localPort)
-{
-    nvmlPprm_t pprm = {};
-
-    // Only interested in local_port
-    pprm.local_port = localPort;
-
-    // Convert to network byte order
-    uint32_t const *src = (uint32_t *)&pprm;
-    uint32_t *dst       = (uint32_t *)buffer;
-
-    for (unsigned i = 0; i < sizeof(nvmlPprm_t) / sizeof(uint32_t); ++i)
-    {
-        *dst++ = htonl(*src++);
-    }
-}
-
-/**
  * Creates and concatenates OpTLV and RegTLV into an output buffer for PPCNT register access.
  *
  * The request can be configured to read different PPCNT counter groups including:
@@ -8766,54 +8892,6 @@ static unsigned getOpStatus(TLVBase const *opTLV)
 {
     uint32_t reserved = opTLV->u.fields.reserved;
     return (reserved >> 8) & 0x7F;
-}
-
-/**
- * Unpack and validate TLV response for PPRM register data
- *
- * @param[in] inputBuffer Binary buffer containing TLV response from GPU
- * @param[out] pprm Extracted PPRM register data
- * @return DCGM_ST_OK on successful parsing, DCGM_ST_GENERIC_ERROR on validation failure
- */
-static dcgmReturn_t unpackPprmTlv(uint8_t const *inputBuffer, nvmlPprm_t *pprm)
-{
-    if (!inputBuffer || !pprm)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    size_t unpackedSize = 0;
-    OpTLV opTLV         = {};
-    RegTLV regTLV       = {};
-
-    // Unpack and validate OpTLV
-    unpackedSize += unpackTLVHeader_i((TLVBase *)&opTLV, &inputBuffer[unpackedSize], OP_TLV_LEN_DWORDS);
-    if (opTLV.base.u.fields.type != TLV_TYPE_OP || getOpStatus((TLVBase *)&opTLV) != OP_TLV_STATUS_OK)
-    {
-        log_warning("OpTLV validation failed: status=0x{:X}", getOpStatus((TLVBase *)&opTLV));
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    // Unpack and validate RegTLV header
-    unpackedSize += unpackTLVHeader_i((TLVBase *)&regTLV, &inputBuffer[unpackedSize], REG_TLV_HEADER_LEN_DWORDS);
-    if (regTLV.base.u.fields.type != TLV_TYPE_REG)
-    {
-        uint32_t const regType = regTLV.base.u.fields.type;
-        log_warning("RegTLV validation failed: type=0x{:X}", regType);
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    // Parse PPRM register data
-    uint32_t const *src = (uint32_t const *)&inputBuffer[unpackedSize];
-    uint32_t *dst       = (uint32_t *)pprm;
-
-    // Convert from network byte order
-    for (unsigned i = 0; i < sizeof(nvmlPprm_t) / sizeof(uint32_t); ++i)
-    {
-        *dst++ = ntohl(*src++);
-    }
-
-    return DCGM_ST_OK;
 }
 
 /**
@@ -9008,37 +9086,6 @@ static dcgmReturn_t unpackPpcntTlvWithPlrData(uint8_t const *inputBuffer, nvmlPl
     return DCGM_ST_OK;
 }
 
-/**
- * Pack PPRM TLV for register 0x5059 access
- *
- * @deprecated This function is expected to be removed in the near future.
- */
-static size_t packPprmTlv(unsigned const localPort, uint8_t *outputBuffer)
-{
-    // Create TLVs
-    OpTLV opTLV   = createOpTLV(PRM_REG_PPRM, true /*is read*/);
-    RegTLV regTLV = createRegTLV(sizeof(nvmlPprm_t));
-
-    // Copy TLVs to output buffer
-    size_t packedSize = 0;
-
-    // Pack OpTLV
-    // coverity[overrun]: We are passing an OpTLV, not a TLV base
-    packedSize += packTLVHeader_i(&outputBuffer[packedSize], &opTLV.base, OP_TLV_LEN_DWORDS);
-
-    // Pack RegTLV header
-    // coverity[overrun]: We are passing a RegTLV, not a TLV base
-    packedSize += packTLVHeader_i(&outputBuffer[packedSize], &regTLV.base, REG_TLV_HEADER_LEN_DWORDS);
-
-    // Pack RegTLV data
-    pprmPackFunc_i(&outputBuffer[packedSize], localPort);
-    packedSize += sizeof(nvmlPprm_t);
-
-    // EndTLV packing omitted (optional)
-
-    return packedSize;
-}
-
 // PRM Register Group Metadata
 namespace
 {
@@ -9062,16 +9109,6 @@ struct PrmRegisterGroup
 
 // Single data structure defining all PRM register groups and their fields
 static std::vector<PrmRegisterGroup> const prmRegisterGroups = {
-    // PPRM register group
-    { PRM_REG_PPRM,
-      0,
-      sizeof(nvmlPprm_t),
-      [](uint8_t const *data, void *out) { return unpackPprmTlv(data, (nvmlPprm_t *)out); },
-      { { DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
-          [](void const *data) { //
-              return static_cast<uint64_t>(((nvmlPprm_t const *)data)->oper_recovery);
-          } } } },
-
     // PPCNT Recovery counter group
     { PRM_REG_PPCNT,
       PPCNT_GRP_RECOVERY,
@@ -9089,7 +9126,7 @@ static std::vector<PrmRegisterGroup> const prmRegisterGroups = {
               return static_cast<uint64_t>(
                   ((nvmlPhysicalLayerRecoveryCounters_t const *)data)->time_between_last_2_recoveries);
           } },
-        { DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TOTAL_SUCCESSFUL_EVENTS,
+        { DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SUCCESSFUL_TOTAL,
           [](void const *data) {
               return static_cast<uint64_t>(
                   ((nvmlPhysicalLayerRecoveryCounters_t const *)data)->total_successful_recovery_events);
@@ -9102,11 +9139,11 @@ static std::vector<PrmRegisterGroup> const prmRegisterGroups = {
       [](uint8_t const *data, void *out) {
           return unpackPpcntTlvWithPhysicalData(data, (nvmlPhysicalLayerCounters_t *)out);
       },
-      { { DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_SUCCESSFUL_RECOVERY_EVENTS,
+      { { DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_RECOVERY_SUCCESSFUL_TOTAL,
           [](void const *data) {
               return static_cast<uint64_t>(((nvmlPhysicalLayerCounters_t const *)data)->successful_recovery_events);
           } },
-        { DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_COUNTER,
+        { DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_TOTAL,
           [](void const *data) {
               return static_cast<uint64_t>(((nvmlPhysicalLayerCounters_t const *)data)->link_down_events);
           } } } },
@@ -9116,40 +9153,40 @@ static std::vector<PrmRegisterGroup> const prmRegisterGroups = {
       PPCNT_GRP_PLR,
       sizeof(nvmlPlrCounters_t),
       [](uint8_t const *data, void *out) { return unpackPpcntTlvWithPlrData(data, (nvmlPlrCounters_t *)out); },
-      { { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODES,
+      { { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_TOTAL,
           [](void const *data) {
-              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              auto const *plr = (nvmlPlrCounters_t const *)data;
               return (static_cast<uint64_t>(plr->plr_rcv_codes_high) << 32) | plr->plr_rcv_codes_low;
           } },
-        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_CODE_ERR,
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_ERROR_TOTAL,
           [](void const *data) {
-              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              auto const *plr = (nvmlPlrCounters_t const *)data;
               return (static_cast<uint64_t>(plr->plr_rcv_code_err_high) << 32) | plr->plr_rcv_code_err_low;
           } },
-        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RCV_UNCORRECTABLE_CODE,
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_UNCORRECTABLE_TOTAL,
           [](void const *data) {
-              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              auto const *plr = (nvmlPlrCounters_t const *)data;
               return (static_cast<uint64_t>(plr->plr_rcv_uncorrectable_code_high) << 32)
                      | plr->plr_rcv_uncorrectable_code_low;
           } },
-        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_CODES,
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_CODE_TOTAL,
           [](void const *data) {
-              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              auto const *plr = (nvmlPlrCounters_t const *)data;
               return (static_cast<uint64_t>(plr->plr_xmit_codes_high) << 32) | plr->plr_xmit_codes_low;
           } },
-        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_CODES,
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_CODE_TOTAL,
           [](void const *data) {
-              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              auto const *plr = (nvmlPlrCounters_t const *)data;
               return (static_cast<uint64_t>(plr->plr_xmit_retry_codes_high) << 32) | plr->plr_xmit_retry_codes_low;
           } },
-        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_XMIT_RETRY_EVENTS,
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_EVENT_TOTAL,
           [](void const *data) {
-              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              auto const *plr = (nvmlPlrCounters_t const *)data;
               return (static_cast<uint64_t>(plr->plr_xmit_retry_events_high) << 32) | plr->plr_xmit_retry_events_low;
           } },
-        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENTS,
+        { DCGM_FI_DEV_NVLINK_PPCNT_PLR_SYNC_EVENT_TOTAL,
           [](void const *data) {
-              auto const *plr                                = (nvmlPlrCounters_t const *)data;
+              auto const *plr = (nvmlPlrCounters_t const *)data;
               return (static_cast<uint64_t>(plr->plr_sync_events_high) << 32) | plr->plr_sync_events_low;
           } } } }
 };
@@ -9173,7 +9210,60 @@ static std::map<unsigned short, PrmRegisterGroup const *> buildprmFieldToGroupMa
 
 static std::map<unsigned short, PrmRegisterGroup const *> const fieldToGroupMap = buildprmFieldToGroupMap();
 
+// DCGM FE_LINK GPU ports map to PRM local_port + 1; the IB PRM field uses unshifted ports.
+unsigned int constexpr NVLINK_PRM_MAX_ENTITY_PORT    = DCGM_NVLINK_MAX_LINKS_PER_GPU - 1;
+unsigned int constexpr NVLINK_PRM_IB_MAX_ENTITY_PORT = DCGM_NVLINK_MAX_LINKS_PER_GPU;
+
 } // anonymous namespace
+
+bool DcgmCacheManager::IsNvLinkPrmIbField(unsigned short fieldId) const
+{
+    return fieldId == DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT;
+}
+
+DcgmResult<unsigned int> DcgmCacheManager::TranslateNvLinkPrmEntityPortToLocalPort(unsigned short fieldId,
+                                                                                   unsigned int entityPortIndex) const
+{
+    unsigned int localPort = 0;
+
+    if (IsNvLinkPrmIbField(fieldId))
+    {
+        if (entityPortIndex > NVLINK_PRM_IB_MAX_ENTITY_PORT)
+        {
+            log_warning("Port {} outside valid DCGM PRM range 0..{} for field {}",
+                        entityPortIndex,
+                        NVLINK_PRM_IB_MAX_ENTITY_PORT,
+                        fieldId);
+            return std::unexpected(DCGM_ST_BADPARAM);
+        }
+
+        localPort = entityPortIndex;
+    }
+    else
+    {
+        if (entityPortIndex > NVLINK_PRM_MAX_ENTITY_PORT)
+        {
+            log_warning("Port {} outside valid DCGM PRM range 0..{} for field {}",
+                        entityPortIndex,
+                        NVLINK_PRM_MAX_ENTITY_PORT,
+                        fieldId);
+            return std::unexpected(DCGM_ST_BADPARAM);
+        }
+
+        localPort = entityPortIndex + PRM_LOCAL_PORT_MIN;
+    }
+
+    if (localPort > PRM_LOCAL_PORT_MAX)
+    {
+        log_debug("Translated NVML localPort {} exceeds valid PRM local_port max {} for field {}",
+                  localPort,
+                  PRM_LOCAL_PORT_MAX,
+                  fieldId);
+        return std::unexpected(DCGM_ST_BADPARAM);
+    }
+
+    return localPort;
+}
 
 /**
  * Helper function to cache a single PRM field value if it's actively watched
@@ -9189,46 +9279,30 @@ static std::map<unsigned short, PrmRegisterGroup const *> const fieldToGroupMap 
  * @param[in] value Field value to cache
  * @param[in] now Current timestamp
  */
-void DcgmCacheManager::CachePrmField(dcgmcm_update_thread_t const &threadCtx,
+void DcgmCacheManager::CachePrmField(dcgmcm_update_thread_t &threadCtx,
                                      dcgm_field_eid_t linkEntityId,
                                      unsigned short fieldId,
                                      unsigned short requestedFieldId,
                                      uint64_t value,
                                      timelib64_t now)
 {
-    // If this is the originally requested field and we're in live data mode, add to fvBuffer
-    if (fieldId == requestedFieldId && threadCtx.fvBuffer)
-    {
-        threadCtx.fvBuffer->AddInt64Value(
-            DCGM_FE_LINK, linkEntityId, fieldId, static_cast<long long>(value), now, DCGM_ST_OK);
+    dcgmcm_watch_info_p wi = GetEntityWatchInfo(DCGM_FE_LINK, linkEntityId, fieldId, 0);
 
-        log_debug("Added requested PRM field {} value {} to fvBuffer for link {}", fieldId, value, linkEntityId);
+    if (fieldId != requestedFieldId && !wi)
         return;
-    }
 
-    // Check if this field is actively watched (uses recursive locking safely)
-    dcgmcm_watch_info_p fieldWatchInfo = GetEntityWatchInfo(DCGM_FE_LINK, linkEntityId, fieldId, 0);
+    timelib64_t expireTime = (wi && wi->maxAgeUsec) ? now - wi->maxAgeUsec : 0;
 
-    if (fieldWatchInfo)
-    {
-        // Field is watched - create temporary context and cache it
-        dcgmcm_update_thread_t tempCtx  = {};
-        tempCtx.watchInfo               = fieldWatchInfo;
-        tempCtx.entityKey.entityGroupId = DCGM_FE_LINK;
-        tempCtx.entityKey.entityId      = linkEntityId;
-        tempCtx.entityKey.fieldId       = fieldId;
+    dcgmcm_update_thread_t tempCtx {};
+    tempCtx.watchInfo               = wi;
+    tempCtx.entityKey.entityGroupId = DCGM_FE_LINK;
+    tempCtx.entityKey.entityId      = linkEntityId;
+    tempCtx.entityKey.fieldId       = fieldId;
+    if (fieldId == requestedFieldId)
+        tempCtx.fvBuffer = threadCtx.fvBuffer;
 
-        timelib64_t fieldExpireTime = 0;
-        if (fieldWatchInfo->maxAgeUsec)
-        {
-            fieldExpireTime = now - fieldWatchInfo->maxAgeUsec;
-        }
-
-        // Cache the value (uses recursive locking safely)
-        AppendEntityInt64(tempCtx, static_cast<long long>(value), 0, now, fieldExpireTime);
-
-        log_debug("Cached related PRM field {} for link {} with value {}", fieldId, linkEntityId, value);
-    }
+    AppendEntityInt64(tempCtx, static_cast<long long>(value), 0, now, expireTime);
+    threadCtx.affectedSubscribers |= tempCtx.affectedSubscribers;
 }
 
 dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkFields(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta)
@@ -9244,18 +9318,441 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkFields(dcgmcm_update_thread_t &
         return ReadAndCacheNvLinkState(threadCtx, fieldMeta);
     }
 
+    switch (fieldMeta->fieldId)
+    {
+        case DCGM_FI_DEV_NVLINK_THROUGHPUT_PER_LINK:
+        case DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_PER_LINK:
+        case DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_PER_LINK:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_PER_LINK_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_PER_LINK_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_PER_LINK_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_PER_LINK_TOTAL:
+            return ReadAndCacheNvLinkPerLinkMetric(threadCtx, fieldMeta);
+        case DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK:
+        case DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK:
+            return ReadAndCacheNvLinkGpmBytes(threadCtx, fieldMeta);
+        default:
+            break;
+    }
+
+    if (DcgmFieldIsNvLinkCountField(fieldMeta->fieldId))
+    {
+        return ReadAndCacheNvLinkCountField(threadCtx, fieldMeta);
+    }
+
     return ReadAndCacheNvLinkPrm(threadCtx, fieldMeta);
+}
+
+dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkPerLinkMetric(dcgmcm_update_thread_t &threadCtx,
+                                                               dcgm_field_meta_p fieldMeta)
+{
+    /* Caller already validated fieldMeta */
+    timelib64_t const now = timelib_usecSince1970();
+    auto watchInfo        = threadCtx.watchInfo;
+
+    timelib64_t expireTime = 0;
+    if (watchInfo && watchInfo->maxAgeUsec > 0)
+    {
+        expireTime = now - watchInfo->maxAgeUsec;
+    }
+
+    // Live FE_LINK reads must write exactly one FV and return DCGM_ST_OK so that
+    // GetMultipleLatestLiveSamples does not write a second FV on non-OK return.
+    auto cacheBlank = [&](long long value = DCGM_INT64_BLANK) {
+        AppendEntityInt64(threadCtx, value, 0, now, expireTime);
+    };
+
+    auto getBufferedElementCount = [&]() {
+        size_t elementCount = 0;
+        if (threadCtx.fvBuffer)
+        {
+            threadCtx.fvBuffer->GetSize(nullptr, &elementCount);
+        }
+        return elementCount;
+    };
+
+    auto cacheBlankIfLiveReadDidNotAppend = [&](size_t elementCountBefore) {
+        if (threadCtx.fvBuffer && getBufferedElementCount() == elementCountBefore)
+        {
+            cacheBlank();
+        }
+    };
+
+    if (!m_nvmlLoaded.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        log_info("Cannot retrieve value for field ID {} because NVML isn't loaded.", fieldMeta->fieldId);
+        if (watchInfo)
+        {
+            watchInfo->lastStatus = NVML_ERROR_UNINITIALIZED;
+        }
+        cacheBlank();
+        return DCGM_ST_OK;
+    }
+
+    if (m_skipDriverCalls.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        if (watchInfo)
+        {
+            watchInfo->lastStatus = NVML_ERROR_UNKNOWN;
+        }
+        cacheBlank();
+        return DCGM_ST_OK;
+    }
+
+    /* Decode the GPU and link index from the dcgm_link_t entity */
+    dcgm_field_eid_t const linkEntityId = watchInfo ? watchInfo->watchKey.entityId : threadCtx.entityKey.entityId;
+    dcgm_link_t const link { .raw = linkEntityId };
+
+    if (link.parsed.type != DCGM_FE_GPU)
+    {
+        log_warning("Invalid link type {} for NVLink field {}",
+                    static_cast<uint8_t>(link.parsed.type & 0xFF),
+                    fieldMeta->fieldId);
+        cacheBlank(DCGM_INT64_NOT_SUPPORTED);
+        return DCGM_ST_OK;
+    }
+
+    unsigned int const gpuId     = link.parsed.gpuId;
+    unsigned int const linkIndex = link.parsed.index;
+
+    if (!GetIsValidEntityId(DCGM_FE_GPU, gpuId))
+    {
+        log_error("Invalid GPU ID {} for NVLink field {}", gpuId, fieldMeta->fieldId);
+        cacheBlank();
+        return DCGM_ST_OK;
+    }
+
+    auto safeNvmlDeviceResult = GetSafeNvmlHandle(gpuId);
+    if (safeNvmlDeviceResult.is_error())
+    {
+        cacheBlank();
+        return DCGM_ST_OK;
+    }
+    SafeNvmlHandle safeNvmlDevice = *safeNvmlDeviceResult;
+
+    size_t const elementCountBefore = getBufferedElementCount();
+
+    switch (fieldMeta->fieldId)
+    {
+        case DCGM_FI_DEV_NVLINK_THROUGHPUT_PER_LINK:
+            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, linkIndex, DcgmcmDirectionAll, expireTime);
+            break;
+        case DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_PER_LINK:
+            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, linkIndex, DcgmcmDirectionTx, expireTime);
+            break;
+        case DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_PER_LINK:
+            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, linkIndex, DcgmcmDirectionRx, expireTime);
+            break;
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_PER_LINK_TOTAL:
+            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, linkIndex, expireTime);
+            break;
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_PER_LINK_TOTAL:
+            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, linkIndex, expireTime);
+            break;
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_PER_LINK_TOTAL:
+            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, linkIndex, expireTime);
+            break;
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_PER_LINK_TOTAL:
+            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, linkIndex, expireTime);
+            break;
+        default:
+            return DCGM_ST_NOT_SUPPORTED;
+    }
+
+    cacheBlankIfLiveReadDidNotAppend(elementCountBefore);
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkGpmBytes(dcgmcm_update_thread_t &threadCtx,
+                                                          dcgm_field_meta_p fieldMeta)
+{
+    /* Caller already validated fieldMeta. These are per-link GPM throughput byte counters keyed by
+       a dcgm_link_t entity; the GPM sample is taken on the underlying GPU and the link index in the
+       entity selects the per-link metric (handled inside DcgmGpmManager). */
+    timelib64_t const now = timelib_usecSince1970();
+    auto watchInfo        = threadCtx.watchInfo;
+
+    /* GPM samples are only produced for watched entities. A live, unwatched request has no GPM
+       watch in the gpm manager, so emit a blank value (matching the GPU-entity GPM behavior). */
+    if (watchInfo == nullptr)
+    {
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, 0);
+        return DCGM_ST_OK;
+    }
+
+    timelib64_t expireTime = 0;
+    if (watchInfo->maxAgeUsec > 0)
+    {
+        expireTime = now - watchInfo->maxAgeUsec;
+    }
+
+    if (!m_nvmlLoaded.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        log_info("Cannot retrieve value for field ID {} because NVML isn't loaded.", fieldMeta->fieldId);
+        watchInfo->lastStatus = NVML_ERROR_UNINITIALIZED;
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, expireTime);
+        return DCGM_ST_OK;
+    }
+
+    if (m_skipDriverCalls.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        watchInfo->lastStatus = NVML_ERROR_UNKNOWN;
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, expireTime);
+        return DCGM_ST_OK;
+    }
+
+    if (!EntityKeySupportsGpm(watchInfo->watchKey))
+    {
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, expireTime);
+        return DCGM_ST_OK;
+    }
+
+    dcgm_link_t const link { .raw = watchInfo->watchKey.entityId };
+    if (link.parsed.type != DCGM_FE_GPU)
+    {
+        log_warning("Invalid link type {} for NVLink GPM field {}",
+                    static_cast<uint8_t>(link.parsed.type & 0xFF),
+                    fieldMeta->fieldId);
+        AppendEntityInt64(threadCtx, DCGM_INT64_NOT_SUPPORTED, 0, now, expireTime);
+        return DCGM_ST_OK;
+    }
+
+    unsigned int const gpuId = link.parsed.gpuId;
+    if (!GetIsValidEntityId(DCGM_FE_GPU, gpuId))
+    {
+        log_error("Invalid GPU ID {} for NVLink GPM field {}", gpuId, fieldMeta->fieldId);
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, expireTime);
+        return DCGM_ST_OK;
+    }
+
+    auto safeNvmlDeviceResult = GetSafeNvmlHandle(gpuId);
+    if (safeNvmlDeviceResult.is_error())
+    {
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, expireTime);
+        return DCGM_ST_OK;
+    }
+    SafeNvmlHandle safeNvmlDevice = *safeNvmlDeviceResult;
+
+    double value = DCGM_FP64_BLANK;
+    {
+        DcgmLockGuard dlg(m_mutex);
+        dcgmReturn_t dcgmReturn
+            = m_gpmManager.GetLatestSample(*m_nvmlDriver, watchInfo->watchKey, safeNvmlDevice, nullptr, value, now);
+        if (dcgmReturn != DCGM_ST_OK)
+        {
+            log_debug("GetLatestSample returned {} for NVLink GPM field {}", dcgmReturn, fieldMeta->fieldId);
+        }
+
+        long long i64Value = DCGM_INT64_BLANK;
+        if (value != DCGM_FP64_BLANK)
+        {
+            /* NVML returns per-link NVLink throughput in MiB/s; scale to bytes to match the
+               other GPM byte counters (DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH). */
+            i64Value = static_cast<long long>(value * 1024.0 * 1024.0);
+        }
+        AppendEntityInt64(threadCtx, i64Value, 0, now, expireTime);
+    }
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkCountField(dcgmcm_update_thread_t &threadCtx,
+                                                            dcgm_field_meta_p fieldMeta)
+{
+    auto const now     = timelib_usecSince1970();
+    auto const isFloat = (fieldMeta->fieldType == DCGM_FT_DOUBLE);
+    auto watchInfo     = threadCtx.watchInfo;
+    dcgm_link_t link { .raw = watchInfo ? watchInfo->watchKey.entityId : threadCtx.entityKey.entityId };
+
+    // Calculate expiry time based on maxAgeUsec
+    timelib64_t expireTime = 0;
+    if (watchInfo && watchInfo->maxAgeUsec > 0)
+    {
+        expireTime = now - watchInfo->maxAgeUsec;
+    }
+
+    // Always writes exactly one FV and returns DCGM_ST_OK so that
+    // GetMultipleLatestLiveSamples does not write a second FV on non-OK return.
+    auto cacheBlank = [&](int64_t i64, double fp64) {
+        isFloat ? AppendEntityDouble(threadCtx, fp64, 0, now, expireTime)
+                : AppendEntityInt64(threadCtx, i64, 0, now, expireTime);
+    };
+
+    if (!m_nvmlLoaded.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        log_error("Cannot retrieve value for field ID {} because NVML isn't loaded.", fieldMeta->fieldId);
+        cacheBlank(DCGM_INT64_BLANK, DCGM_FP64_BLANK);
+        return DCGM_ST_OK;
+    }
+
+    if (m_skipDriverCalls.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        if (watchInfo)
+        {
+            watchInfo->lastStatus = NVML_ERROR_UNKNOWN;
+        }
+        cacheBlank(DCGM_INT64_BLANK, DCGM_FP64_BLANK);
+        return DCGM_ST_OK;
+    }
+
+    // Validate link entity type
+    if (link.parsed.type != DCGM_FE_GPU) [[unlikely]]
+    {
+        log_warning("Invalid link type {} for field {}", link.parsed.type & 0xFF, fieldMeta->fieldId);
+        cacheBlank(DCGM_INT64_NOT_SUPPORTED, DCGM_FP64_NOT_SUPPORTED);
+        return DCGM_ST_OK;
+    }
+
+    unsigned int const gpuId     = link.parsed.gpuId;
+    unsigned int const linkIndex = link.parsed.index;
+
+    // Validate GPU ID
+    if (!GetIsValidEntityId(DCGM_FE_GPU, gpuId)) [[unlikely]]
+    {
+        log_error("Invalid GPU ID {}", gpuId);
+        cacheBlank(DCGM_INT64_BLANK, DCGM_FP64_BLANK);
+        return DCGM_ST_OK;
+    }
+
+    // Check NVLink5+ architecture required for per-link queries
+    if (m_gpus[gpuId].arch < DCGM_CHIP_ARCH_BLACKWELL)
+    {
+        log_debug("Per-link queries unsupported on pre-NVLink5 for GPU {}", gpuId);
+        if (watchInfo)
+        {
+            watchInfo->lastStatus = NVML_ERROR_NOT_SUPPORTED;
+        }
+        cacheBlank(DCGM_INT64_NOT_SUPPORTED, DCGM_FP64_NOT_SUPPORTED);
+        return DCGM_ST_OK;
+    }
+
+    // Get NVML device handle
+    auto nvmlHandle = GetSafeNvmlHandle(gpuId);
+    if (nvmlHandle.is_error())
+    {
+        log_error("Failed to get NVML device handle for GPU while ReadAndCacheNvLinkCountField for field {}: {}",
+                  fieldMeta->fieldId,
+                  nvmlHandle.error());
+        cacheBlank(DCGM_INT64_BLANK, DCGM_FP64_BLANK);
+        return DCGM_ST_OK;
+    }
+
+    // Map DCGM BER_FLOAT fields to raw NVML BER fields
+    unsigned short nvmlFieldId = fieldMeta->nvmlFieldId;
+    if (fieldMeta->fieldId == DCGM_FI_DEV_NVLINK_SYMBOL_BER_RATIO)
+    {
+        nvmlFieldId = NVML_FI_DEV_NVLINK_COUNT_SYMBOL_BER;
+    }
+    else if (fieldMeta->fieldId == DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO)
+    {
+        nvmlFieldId = NVML_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER;
+    }
+
+    // Validate NVML field mapping exists
+    if (nvmlFieldId == 0) [[unlikely]]
+    {
+        log_error("Field {} has no NVML mapping", fieldMeta->fieldId);
+        cacheBlank(DCGM_INT64_NOT_SUPPORTED, DCGM_FP64_NOT_SUPPORTED);
+        return DCGM_ST_OK;
+    }
+
+    // Query NVML with scopeId = linkIndex for per-link value
+    nvmlFieldValue_t fv = {};
+    fv.fieldId          = nvmlFieldId;
+    fv.scopeId          = linkIndex;
+    auto nvmlDev        = *nvmlHandle;
+    auto nvmlRet
+        = nvmlDev.nvmlDevice ? m_nvmlDriver->NvmlDeviceGetFieldValues(nvmlDev, 1, &fv) : NVML_ERROR_INVALID_ARGUMENT;
+
+    // Handle NVML errors
+    if (nvmlRet != NVML_SUCCESS || fv.nvmlReturn != NVML_SUCCESS) [[unlikely]]
+    {
+        auto err = (nvmlRet == NVML_SUCCESS) ? fv.nvmlReturn : nvmlRet;
+        log_error("nvmlDeviceGetFieldValues failed GPU {} link {}: nvmlRet={} fv.nvmlReturn={}",
+                  gpuId,
+                  linkIndex,
+                  int(nvmlRet),
+                  int(fv.nvmlReturn));
+        if (watchInfo)
+        {
+            watchInfo->lastStatus = err;
+        }
+        cacheBlank(NvmlErrorToInt64Value(err), NvmlErrorToDoubleValue(err));
+        return DCGM_ST_OK;
+    }
+
+    // Update lastStatus on success
+    if (watchInfo)
+    {
+        watchInfo->lastStatus = NVML_SUCCESS;
+    }
+
+    // Use NVML timestamp if available, otherwise use host time
+    timelib64_t timestamp = (fv.timestamp != 0) ? fv.timestamp : now;
+
+    // Cache the retrieved value
+    if (isFloat)
+    {
+        AppendEntityDouble(
+            threadCtx, std::get<2>(DcgmNs::Utils::NvmlBerParser(fv.value.ullVal)), 0, timestamp, expireTime);
+    }
+    else
+    {
+        AppendEntityInt64(threadCtx, static_cast<int64_t>(fv.value.ullVal), 0, timestamp, expireTime);
+    }
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmCacheManager::CacheUnsupportedNvLinkPrmPort(dcgmcm_update_thread_t &threadCtx,
+                                                             dcgm_field_eid_t linkEntityId,
+                                                             unsigned short fieldId,
+                                                             timelib64_t now)
+{
+    dcgmcm_watch_info_p watchInfo = threadCtx.watchInfo;
+    if (!watchInfo)
+    {
+        watchInfo = GetEntityWatchInfo(DCGM_FE_LINK, linkEntityId, fieldId, 0);
+    }
+
+    timelib64_t expireTime = (watchInfo && watchInfo->maxAgeUsec) ? now - watchInfo->maxAgeUsec : 0;
+
+    if (watchInfo)
+    {
+        watchInfo->lastStatus = NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    dcgmcm_update_thread_t tempCtx {};
+    tempCtx.watchInfo               = watchInfo;
+    tempCtx.entityKey.entityGroupId = DCGM_FE_LINK;
+    tempCtx.entityKey.entityId      = linkEntityId;
+    tempCtx.entityKey.fieldId       = fieldId;
+    tempCtx.fvBuffer                = threadCtx.fvBuffer;
+
+    AppendEntityInt64(tempCtx, DCGM_INT64_NOT_SUPPORTED, 0, now, expireTime);
+    threadCtx.affectedSubscribers |= tempCtx.affectedSubscribers;
+
+    return DCGM_ST_OK;
 }
 
 dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta)
 {
     /* Caller already validated fieldMeta */
 
+    if (!m_nvmlLoaded.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        log_error("Cannot retrieve value for field ID {} because NVML isn't loaded.", fieldMeta->fieldId);
+        timelib64_t now = timelib_usecSince1970();
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, 0);
+        return DCGM_ST_OK;
+    }
+
     // Fast O(1) lookup using pre-built field-to-group map
     auto groupIt = fieldToGroupMap.find(fieldMeta->fieldId);
     if (groupIt == fieldToGroupMap.end())
     {
-        if (fieldMeta->fieldId == DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT)
+        if (fieldMeta->fieldId == DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT
+            || fieldMeta->fieldId == DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY)
         {
             return ReadAndCacheNvLinkPrmCounters(threadCtx, fieldMeta);
         }
@@ -9295,14 +9792,12 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &thr
         return DCGM_ST_BADPARAM;
     }
 
-    /* A valid FE_LINK port may not be a valid PRM port */
-    if (portIndex < PRM_LOCAL_PORT_MIN || portIndex > PRM_LOCAL_PORT_MAX)
+    auto localPortResult = TranslateNvLinkPrmEntityPortToLocalPort(fieldMeta->fieldId, portIndex);
+    if (localPortResult.is_error())
     {
-        log_error(
-            "port {} outside valid range for local_port {}..{}", portIndex, PRM_LOCAL_PORT_MIN, PRM_LOCAL_PORT_MAX);
-        AppendEntityInt64(threadCtx, DCGM_INT64_NOT_SUPPORTED, 0, now, 0);
-        return DCGM_ST_BADPARAM;
+        return CacheUnsupportedNvLinkPrmPort(threadCtx, linkEntityId, fieldMeta->fieldId, now);
     }
+    unsigned int localPort = *localPortResult;
 
     auto safeNvmlDeviceResult = GetSafeNvmlHandle(gpuId);
     if (safeNvmlDeviceResult.is_error())
@@ -9317,15 +9812,7 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &thr
 
     // Prepare and execute hardware read
     nvmlPRMTLV_v1_t tlvBuffer = {};
-    if (group.registerId == PRM_REG_PPRM)
-    {
-        tlvBuffer.dataSize = packPprmTlv(portIndex, tlvBuffer.inData);
-    }
-    else
-    {
-        tlvBuffer.dataSize
-            = packPpcntTlv(group.registerId, group.groupId, portIndex, group.structSize, tlvBuffer.inData);
-    }
+    tlvBuffer.dataSize = packPpcntTlv(group.registerId, group.groupId, localPort, group.structSize, tlvBuffer.inData);
 
     nvmlReturn_t nvmlResult = m_nvmlDriver->NvmlDeviceReadWritePRM_v1(safeNvmlDevice, &tlvBuffer);
     if (nvmlResult != NVML_SUCCESS)
@@ -9366,10 +9853,31 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkState(dcgmcm_update_thread_t &t
     /* Caller already validated fieldMeta */
 
     timelib64_t now = timelib_usecSince1970();
+    auto watchInfo  = threadCtx.watchInfo;
+
+    if (!m_nvmlLoaded.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        log_error("Cannot retrieve value for field ID {} because NVML isn't loaded.", fieldMeta->fieldId);
+        if (watchInfo)
+        {
+            watchInfo->lastStatus = NVML_ERROR_UNKNOWN;
+        }
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, 0);
+        return DCGM_ST_OK;
+    }
+
+    if (m_skipDriverCalls.load(std::memory_order_acquire)) [[unlikely]]
+    {
+        if (watchInfo)
+        {
+            watchInfo->lastStatus = NVML_ERROR_UNKNOWN;
+        }
+        AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, 0);
+        return DCGM_ST_OK;
+    }
 
     // Get entity info
-    dcgm_field_eid_t linkEntityId
-        = threadCtx.watchInfo ? threadCtx.watchInfo->watchKey.entityId : threadCtx.entityKey.entityId;
+    dcgm_field_eid_t linkEntityId = watchInfo ? watchInfo->watchKey.entityId : threadCtx.entityKey.entityId;
 
     dcgm_link_t link { .raw = linkEntityId };
 
@@ -9467,13 +9975,12 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkPrmCounters(dcgmcm_update_threa
         return DCGM_ST_BADPARAM;
     }
 
-    if (portIndex < PRM_LOCAL_PORT_MIN || portIndex > PRM_LOCAL_PORT_MAX)
+    auto localPortResult = TranslateNvLinkPrmEntityPortToLocalPort(fieldMeta->fieldId, portIndex);
+    if (localPortResult.is_error())
     {
-        log_error(
-            "Port {} outside valid range for local_port {}..{}", portIndex, PRM_LOCAL_PORT_MIN, PRM_LOCAL_PORT_MAX);
-        AppendEntityInt64(threadCtx, DCGM_INT64_NOT_SUPPORTED, 0, now, 0);
-        return DCGM_ST_BADPARAM;
+        return CacheUnsupportedNvLinkPrmPort(threadCtx, linkEntityId, fieldMeta->fieldId, now);
     }
+    unsigned int localPort = *localPortResult;
 
     auto safeNvmlDeviceResult = GetSafeNvmlHandle(gpuId);
     if (safeNvmlDeviceResult.is_error())
@@ -9483,11 +9990,26 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkPrmCounters(dcgmcm_update_threa
     }
     SafeNvmlHandle safeNvmlDevice = *safeNvmlDeviceResult;
 
-    log_debug("Reading PRM counter for field {} on GPU {} port {}", fieldMeta->fieldId, gpuId, portIndex);
+    log_debug("Reading PRM counter for field {} on GPU {} entity port {} (NVML localPort {})",
+              fieldMeta->fieldId,
+              gpuId,
+              portIndex,
+              localPort);
 
     nvmlPRMCounter_v1_t counter = {};
-    counter.counterId           = NVML_PRM_COUNTER_ID_PPCNT_PORTCOUNTERS_PORT_XMIT_WAIT;
-    counter.inData.localPort    = portIndex;
+    counter.inData.localPort    = localPort;
+    switch (fieldMeta->fieldId)
+    {
+        case DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT:
+            counter.counterId = NVML_PRM_COUNTER_ID_PPCNT_PORTCOUNTERS_PORT_XMIT_WAIT;
+            break;
+        case DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY:
+            counter.counterId = NVML_PRM_COUNTER_ID_PPRM_OPER_RECOVERY;
+            break;
+        default:
+            log_error("Unsupported PRM counter field ID {}", fieldMeta->fieldId);
+            return DCGM_ST_NOT_SUPPORTED;
+    }
 
     nvmlPRMCounterList_v1_t counterList = {};
     counterList.numCounters             = 1;
@@ -9521,7 +10043,9 @@ dcgmReturn_t DcgmCacheManager::ReadAndCacheNvLinkPrmCounters(dcgmcm_update_threa
             value = counter.counterValue.outputValue.ullVal;
             break;
         default:
-            log_warning("Unexpected value type {} for PORT_XMIT_WAIT counter", counter.counterValue.outputType);
+            log_warning("Unexpected value type {} for PRM counter field {}",
+                        counter.counterValue.outputType,
+                        fieldMeta->fieldId);
             AppendEntityInt64(threadCtx, DCGM_INT64_BLANK, 0, now, 0);
             return DCGM_ST_OK;
     }
@@ -9598,18 +10122,18 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 timelib64_t now        = timelib_usecSince1970();
                 timelib64_t expireTime = 0; // Cached values don't expire
 
-                if (fieldMeta->fieldId == DCGM_FI_DEV_UUID && m_gpus[gpuId].uuid[0] != '\0')
+                if (fieldMeta->fieldId == DCGM_FI_DEV_GPU_UUID && m_gpus[gpuId].uuid[0] != '\0')
                 {
                     UnlockAndAppendEntityString(std::move(lockGuard), threadCtx, m_gpus[gpuId].uuid, now, expireTime);
                     return DCGM_ST_OK;
                 }
-                else if (fieldMeta->fieldId == DCGM_FI_DEV_NAME && m_gpus[gpuId].deviceName[0] != '\0')
+                else if (fieldMeta->fieldId == DCGM_FI_DEV_GPU_NAME && m_gpus[gpuId].deviceName[0] != '\0')
                 {
                     UnlockAndAppendEntityString(
                         std::move(lockGuard), threadCtx, m_gpus[gpuId].deviceName, now, expireTime);
                     return DCGM_ST_OK;
                 }
-                else if (fieldMeta->fieldId == DCGM_FI_DEV_PCI_BUSID && m_gpus[gpuId].pciInfo.busId[0] != '\0')
+                else if (fieldMeta->fieldId == DCGM_FI_DEV_PCI_BUS_ID && m_gpus[gpuId].pciInfo.busId[0] != '\0')
                 {
                     UnlockAndAppendEntityString(
                         std::move(lockGuard), threadCtx, m_gpus[gpuId].pciInfo.busId, now, expireTime);
@@ -9652,9 +10176,25 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         watchInfo->lastQueriedUsec = now;
     }
 
+    unsigned int nvLinkId                 = 0;
+    DcgmcmDirection_t nvLinkDirection     = DcgmcmDirectionAll;
+    nvmlNvLinkErrorCounter_t errorCounter = NVML_NVLINK_ERROR_DL_CRC_FLIT;
+
+    if (TryGetNvLinkBandwidthFieldInfo(fieldMeta->fieldId, nvLinkId, nvLinkDirection))
+    {
+        ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, nvLinkId, nvLinkDirection, expireTime);
+        return DCGM_ST_OK;
+    }
+
+    if (TryGetNvLinkErrorFieldInfo(fieldMeta->fieldId, nvLinkId, errorCounter))
+    {
+        ReadAndCacheNvLinkData(threadCtx, errorCounter, safeNvmlDevice, nvLinkId, expireTime);
+        return DCGM_ST_OK;
+    }
+
     switch (fieldMeta->fieldId)
     {
-        case DCGM_FI_DRIVER_VERSION:
+        case DCGM_FI_SYSTEM_DRIVER_VERSION:
         {
             char buf[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE] = { 0 };
             nvmlReturn = m_nvmlDriver->NvmlSystemGetDriverVersion(buf, sizeof(buf));
@@ -9669,7 +10209,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_NVML_VERSION:
+        case DCGM_FI_SYSTEM_NVML_VERSION:
         {
             char buf[NVML_SYSTEM_NVML_VERSION_BUFFER_SIZE] = { 0 };
             nvmlReturn                                     = m_nvmlDriver->NvmlSystemGetNVMLVersion(buf, sizeof(buf));
@@ -9684,7 +10224,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_PROCESS_NAME:
+        case DCGM_FI_SYSTEM_PROCESS_NAME:
         {
             char buf[128] = { 0 };
             nvmlReturn    = m_nvmlDriver->NvmlSystemGetProcessName((unsigned int)getpid(), buf, sizeof(buf) - 1);
@@ -9699,7 +10239,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_COUNT:
+        case DCGM_FI_SYSTEM_GPU_QUANTITY:
         {
             unsigned int deviceCount = 0;
 
@@ -9747,7 +10287,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_NAME:
+        case DCGM_FI_DEV_GPU_NAME:
         {
             char buf[NVML_DEVICE_NAME_BUFFER_SIZE] = { 0 };
 
@@ -9881,7 +10421,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_BRAND:
+        case DCGM_FI_DEV_GPU_BRAND:
         {
             nvmlBrandType_t brand;
             const char *brandString = nullptr;
@@ -9979,7 +10519,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_SERIAL:
+        case DCGM_FI_DEV_BOARD_SERIAL:
         {
             char buf[NVML_DEVICE_SERIAL_BUFFER_SIZE] = { 0 };
 
@@ -10027,14 +10567,14 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_MEM_AFFINITY_0:
-        case DCGM_FI_DEV_MEM_AFFINITY_1:
-        case DCGM_FI_DEV_MEM_AFFINITY_2:
-        case DCGM_FI_DEV_MEM_AFFINITY_3:
+        case DCGM_FI_DEV_MEMORY_AFFINITY_0:
+        case DCGM_FI_DEV_MEMORY_AFFINITY_1:
+        case DCGM_FI_DEV_MEMORY_AFFINITY_2:
+        case DCGM_FI_DEV_MEMORY_AFFINITY_3:
         {
             long long values[4] = { 0 };
             unsigned int Nlongs = (sizeof(long) == 8) ? 4 : 8;
-            int affinityIndex   = fieldMeta->fieldId - DCGM_FI_DEV_MEM_AFFINITY_0;
+            int affinityIndex   = fieldMeta->fieldId - DCGM_FI_DEV_MEMORY_AFFINITY_0;
 
             if (safeNvmlDevice.nvmlDevice == nullptr)
             {
@@ -10061,7 +10601,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_UUID:
+        case DCGM_FI_DEV_GPU_UUID:
         {
             if (m_gpus[gpuId].status == DcgmEntityStatusFake)
             {
@@ -10121,7 +10661,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_MINOR_NUMBER:
+        case DCGM_FI_DEV_GPU_MINOR_NUMBER:
         {
             unsigned int minorNumber = 0;
             nvmlReturn               = (safeNvmlDevice.nvmlDevice == nullptr)
@@ -10139,7 +10679,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY:
+        case DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY:
         {
             int major     = 0;
             int minor     = 0;
@@ -10161,7 +10701,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_P2P_NVLINK_STATUS:
+        case DCGM_FI_DEV_NVLINK_P2P_STATUS:
         {
             long long p2pBitmap = 0;
             dcgmReturn_t ret    = CreateNvlinkP2PStatusBitmap(safeNvmlDevice, gpuId, p2pBitmap, nvmlReturn);
@@ -10179,7 +10719,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_OEM_INFOROM_VER:
+        case DCGM_FI_DEV_INFOROM_OEM_VERSION:
         {
             char buf[NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE] = { 0 };
 
@@ -10199,7 +10739,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_ECC_INFOROM_VER:
+        case DCGM_FI_DEV_INFOROM_ECC_VERSION:
         {
             char buf[NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE] = { 0 };
 
@@ -10219,7 +10759,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_POWER_INFOROM_VER:
+        case DCGM_FI_DEV_INFOROM_POWER_VERSION:
         {
             char buf[NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE] = { 0 };
 
@@ -10239,7 +10779,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_INFOROM_IMAGE_VER:
+        case DCGM_FI_DEV_INFOROM_IMAGE_VERSION:
         {
             char buf[NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE] = { 0 };
 
@@ -10258,7 +10798,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_INFOROM_CONFIG_CHECK:
+        case DCGM_FI_DEV_INFOROM_CHECKSUM:
         {
             unsigned int checksum = 0;
 
@@ -10277,7 +10817,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_INFOROM_CONFIG_VALID:
+        case DCGM_FI_DEV_INFOROM_VALID:
         {
             nvmlReturn = (safeNvmlDevice.nvmlDevice == nullptr)
                              ? NVML_ERROR_INVALID_ARGUMENT
@@ -10351,7 +10891,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_PCI_BUSID:
+        case DCGM_FI_DEV_PCI_BUS_ID:
         case DCGM_FI_DEV_PCI_COMBINED_ID:
         case DCGM_FI_DEV_PCI_SUBSYS_ID:
         {
@@ -10384,7 +10924,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             /* Success. Append the correct value */
             switch (fieldMeta->fieldId)
             {
-                case DCGM_FI_DEV_PCI_BUSID:
+                case DCGM_FI_DEV_PCI_BUS_ID:
                     AppendEntityString(threadCtx, pciInfo.busId, now, expireTime);
                     break;
                 case DCGM_FI_DEV_PCI_COMBINED_ID:
@@ -10402,7 +10942,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_GPU_TEMP:
+        case DCGM_FI_DEV_GPU_TEMP_CELSIUS:
         {
             unsigned int tempUint;
 
@@ -10431,7 +10971,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_MEMORY_TEMP:
+        case DCGM_FI_DEV_MEMORY_TEMP_CELSIUS:
         {
             unsigned int temp;
             nvmlFieldValue_t value = {};
@@ -10456,7 +10996,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG:
+        case DCGM_FI_DEV_MEMORY_UNREPAIRABLE:
         {
             nvmlUnrepairableMemoryStatus_v1_t unrepairableMemoryStatus {};
             unrepairableMemoryStatus.version = nvmlUnrepairableMemoryStatus_v1;
@@ -10479,26 +11019,26 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_GPU_MAX_OP_TEMP: // Fall through is intentional
-        case DCGM_FI_DEV_MEM_MAX_OP_TEMP: // Fall through is intentional
-        case DCGM_FI_DEV_SLOWDOWN_TEMP:   /* Fall through is intentional */
-        case DCGM_FI_DEV_SHUTDOWN_TEMP:
+        case DCGM_FI_DEV_GPU_MAX_OP_TEMP_CELSIUS:    // Fall through is intentional
+        case DCGM_FI_DEV_MEMORY_MAX_OP_TEMP_CELSIUS: // Fall through is intentional
+        case DCGM_FI_DEV_GPU_TEMP_SLOWDOWN_CELSIUS:  /* Fall through is intentional */
+        case DCGM_FI_DEV_GPU_TEMP_SHUTDOWN_CELSIUS:
         {
             nvmlTemperatureThresholds_t thresholdType = NVML_TEMPERATURE_THRESHOLD_COUNT;
             unsigned int temp;
 
             switch (fieldMeta->fieldId)
             {
-                case DCGM_FI_DEV_GPU_MAX_OP_TEMP:
+                case DCGM_FI_DEV_GPU_MAX_OP_TEMP_CELSIUS:
                     thresholdType = NVML_TEMPERATURE_THRESHOLD_GPU_MAX;
                     break;
-                case DCGM_FI_DEV_MEM_MAX_OP_TEMP:
+                case DCGM_FI_DEV_MEMORY_MAX_OP_TEMP_CELSIUS:
                     thresholdType = NVML_TEMPERATURE_THRESHOLD_MEM_MAX;
                     break;
-                case DCGM_FI_DEV_SLOWDOWN_TEMP:
+                case DCGM_FI_DEV_GPU_TEMP_SLOWDOWN_CELSIUS:
                     thresholdType = NVML_TEMPERATURE_THRESHOLD_SLOWDOWN;
                     break;
-                case DCGM_FI_DEV_SHUTDOWN_TEMP:
+                case DCGM_FI_DEV_GPU_TEMP_SHUTDOWN_CELSIUS:
                     thresholdType = NVML_TEMPERATURE_THRESHOLD_SHUTDOWN;
                     break;
                 default:
@@ -10522,7 +11062,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
             break;
         }
-        case DCGM_FI_DEV_GPU_TEMP_LIMIT:
+        case DCGM_FI_DEV_GPU_TEMP_MARGIN_CELSIUS:
         {
             nvmlMarginTemperature_v1_t temp {};
 
@@ -10543,7 +11083,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_POWER_USAGE:
+        case DCGM_FI_DEV_BOARD_POWER_WATTS:
         {
             unsigned int powerUint;
             double powerDbl;
@@ -10564,7 +11104,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_POWER_USAGE_INSTANT:
+        case DCGM_FI_DEV_BOARD_POWER_RAW_WATTS:
         {
             double powerDbl;
 
@@ -10712,7 +11252,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
         }
 
-        case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
+        case DCGM_FI_DEV_PCIE_REPLAY_TOTAL:
         {
             unsigned int counter = 0;
 
@@ -10731,7 +11271,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_GPU_UTIL:
+        case DCGM_FI_DEV_GPU_UTIL_RATIO:
         case DCGM_FI_DEV_MEM_COPY_UTIL:
         {
             nvmlUtilization_t utilization;
@@ -10748,7 +11288,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
 
-            if (fieldMeta->fieldId == DCGM_FI_DEV_GPU_UTIL)
+            if (fieldMeta->fieldId == DCGM_FI_DEV_GPU_UTIL_RATIO)
                 valueI32 = utilization.gpu;
             else
                 valueI32 = utilization.memory;
@@ -10810,7 +11350,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_AUTOBOOST:
+        case DCGM_FI_DEV_CLOCKS_AUTOBOOST_MODE:
         {
             nvmlEnableState_t isEnabled, defaultIsEnabled;
             nvmlReturn = (safeNvmlDevice.nvmlDevice == nullptr) ? NVML_ERROR_INVALID_ARGUMENT
@@ -10828,7 +11368,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_POWER_MGMT_LIMIT:
+        case DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS:
         {
             unsigned int powerLimitInt;
             double powerLimitDbl;
@@ -10851,7 +11391,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         }
 
 
-        case DCGM_FI_DEV_POWER_MGMT_LIMIT_DEF:
+        case DCGM_FI_DEV_BOARD_POWER_LIMIT_DEFAULT_WATTS:
         {
             unsigned int defaultPowerLimitInt;
             double defaultPowerLimitDbl;
@@ -10875,8 +11415,8 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         }
 
 
-        case DCGM_FI_DEV_POWER_MGMT_LIMIT_MAX: /* fall-through is intentional */
-        case DCGM_FI_DEV_POWER_MGMT_LIMIT_MIN:
+        case DCGM_FI_DEV_BOARD_POWER_LIMIT_MAX_WATTS: /* fall-through is intentional */
+        case DCGM_FI_DEV_BOARD_POWER_LIMIT_MIN_WATTS:
         {
             unsigned int maxLimitInt, minLimitInt;
 
@@ -10892,7 +11432,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
 
-            if (fieldMeta->fieldId == DCGM_FI_DEV_POWER_MGMT_LIMIT_MAX)
+            if (fieldMeta->fieldId == DCGM_FI_DEV_BOARD_POWER_LIMIT_MAX_WATTS)
             {
                 AppendEntityDouble(threadCtx, maxLimitInt / 1000, 0, now, expireTime);
             }
@@ -10967,7 +11507,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_SUPPORTED_CLOCKS:
+        case DCGM_FI_DEV_CLOCKS_SUPPORTED:
         {
             AppendDeviceSupportedClocks(threadCtx, safeNvmlDevice, now, expireTime);
             break;
@@ -11036,12 +11576,12 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_DEV_FB_USED:
         case DCGM_FI_DEV_FB_FREE:
         case DCGM_FI_DEV_FB_RESERVED:
-        case DCGM_FI_DEV_FB_USED_PERCENT:
+        case DCGM_FI_DEV_FB_USED_RATIO:
 
             ReadAndCacheFBMemoryInfo(gpuId, safeNvmlDevice, threadCtx, watchInfo, expireTime, fieldMeta->fieldId);
             break;
 
-        case DCGM_FI_DEV_VIRTUAL_MODE:
+        case DCGM_FI_DEV_GPU_VIRTUAL_MODE:
         {
             /* Just save the static property of the GPU */
             if (watchInfo)
@@ -11057,7 +11597,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_SUPPORTED_TYPE_INFO:
+        case DCGM_FI_DEV_VGPU_SUPPORTED_INFO:
         {
             unsigned int vgpuCount = 0, i;
             std::vector<SafeVgpuTypeId> supportedVgpuTypeIds;
@@ -11211,7 +11751,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_SUPPORTED_VGPU_TYPE_IDS:
+        case DCGM_FI_DEV_VGPU_SUPPORTED_IDS:
         {
             unsigned int vgpuCount = 0;
             unsigned int i;
@@ -11687,7 +12227,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_CREATABLE_VGPU_TYPE_IDS:
+        case DCGM_FI_DEV_VGPU_CREATABLE_IDS:
         {
             unsigned int vgpuCount                 = 0;
             nvmlVgpuTypeId_t *creatableVgpuTypeIds = NULL;
@@ -11742,7 +12282,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_VGPU_INSTANCE_IDS:
+        case DCGM_FI_DEV_VGPU_INSTANCE_INFO:
         {
             unsigned int vgpuCount = 0;
             std::vector<SafeVgpuInstance> vgpuInstanceIds;
@@ -11793,7 +12333,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_VGPU_UTILIZATIONS:
+        case DCGM_FI_DEV_VGPU_UTIL_INFO:
         {
             unsigned int vgpuSamplesCount        = 0;
             unsigned long long lastSeenTimeStamp = 0;
@@ -11845,7 +12385,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_VGPU_PER_PROCESS_UTILIZATION:
+        case DCGM_FI_DEV_VGPU_PROCESS_UTIL_INFO:
         {
             unsigned int vgpuProcessSamplesCount                       = 0;
             unsigned long long lastSeenTimeStamp                       = 0;
@@ -12128,7 +12668,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_COMPUTE_MODE:
+        case DCGM_FI_DEV_GPU_COMPUTE_MODE:
         {
             nvmlComputeMode_t currentComputeMode;
 
@@ -12151,7 +12691,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_PERSISTENCE_MODE:
+        case DCGM_FI_DEV_GPU_PERSISTENCE_MODE:
         {
             nvmlEnableState_t persistenceMode;
             nvmlReturn = (safeNvmlDevice.nvmlDevice == nullptr)
@@ -12230,7 +12770,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_CUDA_VISIBLE_DEVICES_STR:
+        case DCGM_FI_CUDA_GPU_VISIBLE_DEVICES:
         {
             std::stringstream valbuf;
             char buffer[512];
@@ -12512,7 +13052,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_SYNC_BOOST:
+        case DCGM_FI_SYSTEM_GPU_SYNC_BOOST:
         {
             nvmlReturn = NVML_ERROR_NOT_SUPPORTED;
             if (watchInfo)
@@ -12520,7 +13060,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_ENFORCED_POWER_LIMIT:
+        case DCGM_FI_DEV_BOARD_POWER_LIMIT_ENFORCED_WATTS:
         {
             unsigned int powerLimitInt;
             double powerLimitDbl;
@@ -12542,9 +13082,10 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
         case DCGM_FI_DEV_FABRIC_MANAGER_STATUS:
-        case DCGM_FI_DEV_FABRIC_MANAGER_ERROR_CODE:
+        case DCGM_FI_DEV_FABRIC_MANAGER_ERROR:
         case DCGM_FI_DEV_FABRIC_CLUSTER_UUID:
         case DCGM_FI_DEV_FABRIC_HEALTH_MASK:
+        case DCGM_FI_DEV_FABRIC_HEALTH_SUMMARY:
             [[fallthrough]];
         case DCGM_FI_DEV_FABRIC_CLIQUE_ID:
         {
@@ -12652,7 +13193,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_ACCOUNTING_DATA:
+        case DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS:
         {
             unsigned int i;
             unsigned int maxPidCount = 0;
@@ -13031,7 +13572,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
              * End of memory error fields.
              */
 
-        case DCGM_FI_DEV_THRESHOLD_SRM:
+        case DCGM_FI_DEV_SRAM_EXCEEDED:
         {
             nvmlEccSramErrorStatus_t status;
 
@@ -13058,7 +13599,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_RETIRED_SBE:
+        case DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL:
         {
             nvmlPageRetirementCause_t cause = NVML_PAGE_RETIREMENT_CAUSE_MULTIPLE_SINGLE_BIT_ECC_ERRORS;
             unsigned int pageCount          = 0; /* must be 0 to retrieve count */
@@ -13079,11 +13620,11 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_MAX:
-        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_HIGH:
-        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_PARTIAL:
-        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_LOW:
-        case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_NONE:
+        case DCGM_FI_DEV_BANK_REMAP_AVAIL_MAX:
+        case DCGM_FI_DEV_BANK_REMAP_AVAIL_HIGH:
+        case DCGM_FI_DEV_BANK_REMAP_AVAIL_PARTIAL:
+        case DCGM_FI_DEV_BANK_REMAP_AVAIL_LOW:
+        case DCGM_FI_DEV_BANK_REMAP_AVAIL_NONE:
         {
             nvmlRowRemapperHistogramValues_t hist = {};
             unsigned int value                    = 0;
@@ -13101,19 +13642,19 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
             switch (fieldMeta->fieldId)
             {
-                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_MAX:
+                case DCGM_FI_DEV_BANK_REMAP_AVAIL_MAX:
                     value = hist.max;
                     break;
-                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_HIGH:
+                case DCGM_FI_DEV_BANK_REMAP_AVAIL_HIGH:
                     value = hist.high;
                     break;
-                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_PARTIAL:
+                case DCGM_FI_DEV_BANK_REMAP_AVAIL_PARTIAL:
                     value = hist.partial;
                     break;
-                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_LOW:
+                case DCGM_FI_DEV_BANK_REMAP_AVAIL_LOW:
                     value = hist.low;
                     break;
-                case DCGM_FI_DEV_BANKS_REMAP_ROWS_AVAIL_NONE:
+                case DCGM_FI_DEV_BANK_REMAP_AVAIL_NONE:
                     value = hist.none;
                     break;
             }
@@ -13190,7 +13731,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_PSTATE:
+        case DCGM_FI_DEV_GPU_PSTATE:
         {
             nvmlPstates_t value = NVML_PSTATE_UNKNOWN;
             nvmlReturn          = (safeNvmlDevice.nvmlDevice == nullptr)
@@ -13207,13 +13748,13 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_XID_ERRORS:
-        case DCGM_FI_DEV_GPU_NVLINK_ERRORS:
+        case DCGM_FI_DEV_XID_ERROR:
+        case DCGM_FI_DEV_NVLINK_ERROR:
             break; /* These are handled by the NVML event thread (m_eventThread) */
 
-        case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
-        case DCGM_FI_DEV_VALID_POWER_PROFILE_MASK:
-        case DCGM_FI_DEV_ENFORCED_POWER_PROFILE_MASK:
+        case DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK:
+        case DCGM_FI_DEV_BOARD_POWER_PROFILE_SUPPORTED_MASK:
+        case DCGM_FI_DEV_BOARD_POWER_PROFILE_ENFORCED_MASK:
         {
             nvmlWorkloadPowerProfileCurrentProfiles_t profiles = {};
             unsigned int mask[DCGM_POWER_PROFILE_ARRAY_SIZE]   = {};
@@ -13238,11 +13779,11 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
             }
 
-            if (fieldMeta->fieldId == DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK)
+            if (fieldMeta->fieldId == DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK)
             {
                 memcpy(&mask, profiles.requestedProfilesMask.mask, sizeof(mask));
             }
-            else if (fieldMeta->fieldId == DCGM_FI_DEV_ENFORCED_POWER_PROFILE_MASK)
+            else if (fieldMeta->fieldId == DCGM_FI_DEV_BOARD_POWER_PROFILE_ENFORCED_MASK)
             {
                 memcpy(&mask, profiles.enforcedProfilesMask.mask, sizeof(mask));
             }
@@ -13256,7 +13797,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_GPU_TOPOLOGY_AFFINITY:
+        case DCGM_FI_SYSTEM_GPU_AFFINITY:
         {
             ret = CacheTopologyAffinity(threadCtx, now, expireTime);
 
@@ -13265,7 +13806,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
             break;
         }
-        case DCGM_FI_GPU_TOPOLOGY_NVLINK:
+        case DCGM_FI_SYSTEM_NVLINK_TOPOLOGY:
         {
             ret = CacheTopologyNvLink(threadCtx, now, expireTime);
 
@@ -13274,7 +13815,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
 
             break;
         }
-        case DCGM_FI_GPU_TOPOLOGY_PCI:
+        case DCGM_FI_SYSTEM_PCI_TOPOLOGY:
         {
             unsigned int elementArraySize = 0;
             unsigned int topologySize     = 0;
@@ -13320,7 +13861,7 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                 DCGM_LOG_ERROR << "Out of memory";
                 return DCGM_ST_MEMORY;
             }
-            topology_p->version = dcgmTopology_version1;
+            topology_p->version = dcgmTopology_version2;
             /* NVML topology isn't thread safe */
             DcgmLockGuard dlg = DcgmLockGuard(m_nvmlTopoMutex);
             for (unsigned int index1 = 0; index1 < gpus.size(); index1++)
@@ -13374,634 +13915,58 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             break;
         }
 
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L0:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 0, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L1:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 1, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L2:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 2, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L3:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 3, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L4:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 4, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L5:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 5, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L6:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 6, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L7:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 7, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L8:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 8, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L9:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 9, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L10:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 10, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L11:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 11, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L12:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 12, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L13:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 13, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L14:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 14, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L15:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 15, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L16:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 16, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_L17:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 17, DcgmcmDirectionAll, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL:
+        case DCGM_FI_DEV_NVLINK_THROUGHPUT_TOTAL:
             // std::numeric_limits<unsigned>::max() represents all NvLinks of the GPU and is passed verbatim to nvml
             ReadAndCacheNvLinkBandwidth(
                 threadCtx, safeNvmlDevice, std::numeric_limits<unsigned>::max(), DcgmcmDirectionAll, expireTime);
             break;
 
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L0:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 0, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L1:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 1, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L2:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 2, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L3:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 3, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L4:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 4, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L5:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 5, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L6:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 6, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L7:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 7, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L8:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 8, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L9:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 9, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L10:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 10, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L11:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 11, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L12:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 12, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L13:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 13, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L14:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 14, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L15:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 15, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L16:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 16, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_L17:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 17, DcgmcmDirectionTx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_TX_BANDWIDTH_TOTAL:
+        case DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_TOTAL:
             // std::numeric_limits<unsigned>::max() represents all NvLinks of the GPU and is passed verbatim to nvml
             ReadAndCacheNvLinkBandwidth(
                 threadCtx, safeNvmlDevice, std::numeric_limits<unsigned>::max(), DcgmcmDirectionTx, expireTime);
             break;
 
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L0:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 0, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L1:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 1, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L2:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 2, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L3:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 3, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L4:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 4, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L5:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 5, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L6:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 6, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L7:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 7, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L8:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 8, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L9:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 9, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L10:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 10, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L11:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 11, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L12:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 12, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L13:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 13, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L14:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 14, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L15:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 15, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L16:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 16, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_L17:
-            ReadAndCacheNvLinkBandwidth(threadCtx, safeNvmlDevice, 17, DcgmcmDirectionRx, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RX_BANDWIDTH_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_TOTAL:
             // std::numeric_limits<unsigned>::max() represents all NvLinks of the GPU and is passed verbatim to nvml
             ReadAndCacheNvLinkBandwidth(
                 threadCtx, safeNvmlDevice, std::numeric_limits<unsigned>::max(), DcgmcmDirectionRx, expireTime);
             break;
 
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L0:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 0, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L1:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 1, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L2:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 2, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L3:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 3, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L4:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 4, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L5:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 5, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L6:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 6, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L7:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 7, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L8:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 8, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L9:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 9, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L10:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 10, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L11:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 11, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L12:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 12, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L13:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 13, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L14:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 14, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L15:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 15, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L16:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 16, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_L17:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_FLIT, safeNvmlDevice, 17, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L0:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 0, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L1:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 1, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L2:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 2, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L3:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 3, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L4:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 4, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L5:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 5, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L6:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 6, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L7:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 7, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L8:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 8, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L9:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 9, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L10:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 10, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L11:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 11, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L12:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 12, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L13:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 13, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L14:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 14, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L15:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 15, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L16:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 16, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_L17:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_CRC_DATA, safeNvmlDevice, 17, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 0, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 1, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 2, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 3, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 4, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 5, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 6, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 7, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 8, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 9, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 10, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 11, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L12:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 12, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L13:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 13, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L14:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 14, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L15:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 15, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L16:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 16, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L17:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_REPLAY, safeNvmlDevice, 17, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 0, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 1, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 2, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 3, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 4, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 5, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 6, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 7, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 8, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 9, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 10, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 11, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L12:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 12, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L13:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 13, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L14:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 14, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L15:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 15, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L16:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 16, expireTime);
-            break;
-
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L17:
-
-            ReadAndCacheNvLinkData(threadCtx, NVML_NVLINK_ERROR_DL_RECOVERY, safeNvmlDevice, 17, expireTime);
-            break;
-
-        case DCGM_FI_PROF_GR_ENGINE_ACTIVE:
-        case DCGM_FI_PROF_SM_ACTIVE:
-        case DCGM_FI_PROF_SM_OCCUPANCY:
-        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
-        case DCGM_FI_PROF_DRAM_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+        case DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO:
+        case DCGM_FI_PROF_SM_UTIL_RATIO:
+        case DCGM_FI_PROF_SM_OCCUPANCY_RATIO:
+        case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
+        case DCGM_FI_PROF_DRAM_UTIL_RATIO:
+        case DCGM_FI_PROF_FP64_UTIL_RATIO:
+        case DCGM_FI_PROF_FP32_UTIL_RATIO:
+        case DCGM_FI_PROF_FP16_UTIL_RATIO:
         case DCGM_FI_PROF_PCIE_TX_BYTES:
         case DCGM_FI_PROF_PCIE_RX_BYTES:
         case DCGM_FI_PROF_NVLINK_TX_BYTES:
         case DCGM_FI_PROF_NVLINK_RX_BYTES:
-        case DCGM_FI_PROF_PIPE_TENSOR_IMMA_ACTIVE:
-        case DCGM_FI_PROF_PIPE_TENSOR_HMMA_ACTIVE:
-        case DCGM_FI_PROF_PIPE_TENSOR_DFMA_ACTIVE:
-        case DCGM_FI_PROF_PIPE_INT_ACTIVE:
-        case DCGM_FI_PROF_NVDEC0_ACTIVE:
-        case DCGM_FI_PROF_NVDEC1_ACTIVE:
-        case DCGM_FI_PROF_NVDEC2_ACTIVE:
-        case DCGM_FI_PROF_NVDEC3_ACTIVE:
-        case DCGM_FI_PROF_NVDEC4_ACTIVE:
-        case DCGM_FI_PROF_NVDEC5_ACTIVE:
-        case DCGM_FI_PROF_NVDEC6_ACTIVE:
-        case DCGM_FI_PROF_NVDEC7_ACTIVE:
-        case DCGM_FI_PROF_NVJPG0_ACTIVE:
-        case DCGM_FI_PROF_NVJPG1_ACTIVE:
-        case DCGM_FI_PROF_NVJPG2_ACTIVE:
-        case DCGM_FI_PROF_NVJPG3_ACTIVE:
-        case DCGM_FI_PROF_NVJPG4_ACTIVE:
-        case DCGM_FI_PROF_NVJPG5_ACTIVE:
-        case DCGM_FI_PROF_NVJPG6_ACTIVE:
-        case DCGM_FI_PROF_NVJPG7_ACTIVE:
-        case DCGM_FI_PROF_NVOFA0_ACTIVE:
-        case DCGM_FI_PROF_NVOFA1_ACTIVE:
+        case DCGM_FI_PROF_IMMA_UTIL_RATIO:
+        case DCGM_FI_PROF_HMMA_UTIL_RATIO:
+        case DCGM_FI_PROF_DFMA_UTIL_RATIO:
+        case DCGM_FI_PROF_INT_UTIL_RATIO:
+        case DCGM_FI_PROF_NVDEC_UTIL_0_RATIO:
+        case DCGM_FI_PROF_NVDEC_UTIL_1_RATIO:
+        case DCGM_FI_PROF_NVDEC_UTIL_2_RATIO:
+        case DCGM_FI_PROF_NVDEC_UTIL_3_RATIO:
+        case DCGM_FI_PROF_NVDEC_UTIL_4_RATIO:
+        case DCGM_FI_PROF_NVDEC_UTIL_5_RATIO:
+        case DCGM_FI_PROF_NVDEC_UTIL_6_RATIO:
+        case DCGM_FI_PROF_NVDEC_UTIL_7_RATIO:
+        case DCGM_FI_PROF_NVJPG_UTIL_0_RATIO:
+        case DCGM_FI_PROF_NVJPG_UTIL_1_RATIO:
+        case DCGM_FI_PROF_NVJPG_UTIL_2_RATIO:
+        case DCGM_FI_PROF_NVJPG_UTIL_3_RATIO:
+        case DCGM_FI_PROF_NVJPG_UTIL_4_RATIO:
+        case DCGM_FI_PROF_NVJPG_UTIL_5_RATIO:
+        case DCGM_FI_PROF_NVJPG_UTIL_6_RATIO:
+        case DCGM_FI_PROF_NVJPG_UTIL_7_RATIO:
+        case DCGM_FI_PROF_NVOFA_UTIL_0_RATIO:
+        case DCGM_FI_PROF_NVOFA_UTIL_1_RATIO:
         case DCGM_FI_PROF_NVLINK_L0_TX_BYTES:
         case DCGM_FI_PROF_NVLINK_L0_RX_BYTES:
         case DCGM_FI_PROF_NVLINK_L1_TX_BYTES:
@@ -14046,13 +14011,26 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
         case DCGM_FI_PROF_HOSTMEM_CACHE_MISS:
         case DCGM_FI_PROF_PEERMEM_CACHE_HIT:
         case DCGM_FI_PROF_PEERMEM_CACHE_MISS:
+        case DCGM_FI_PROF_SM_CYCLES_ELAPSED_TOTAL:
+        case DCGM_FI_PROF_SM_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_MMA_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_DMMA_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_HMMA_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_IMMA_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_DFMA_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_PCIE_TX_BYTES_TOTAL:
+        case DCGM_FI_PROF_PCIE_RX_BYTES_TOTAL:
+        case DCGM_FI_PROF_INT_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_FP64_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_FP32_CYCLES_ACTIVE_TOTAL:
+        case DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL:
         {
             bool entityKeySupportsGpm = EntityKeySupportsGpm(watchInfo->watchKey);
 
             DcgmLockGuard dlg(m_mutex);
 
             /* Need to add new prof fields to this case */
-            static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_PEERMEM_CACHE_MISS);
+            static_assert(DCGM_FI_PROF_LAST_ID == DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL);
 
             /* Set lastQueriedUsec unconditionally so we don't wake up instantly again */
             if (watchInfo == nullptr)
@@ -14116,11 +14094,21 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             {
                 long long i64Value = DCGM_INT64_BLANK;
 
-                /* All of the int64 GPM metrics are bandwidth values returned in MiB. DCGM's are in bytes.
-                   Hence the multiplication here. Verified this in the NVML code as well. */
-                if (!DCGM_FP64_IS_BLANK(value))
+                /* Use exact-sentinel equality rather than DCGM_FP64_IS_BLANK (val >= 1.4e14):
+                   cumulative GPM counters can legitimately exceed that threshold. DcgmGpmManager
+                   stores exactly DCGM_FP64_BLANK both for NaN values and for the
+                   unmodified-on-error case. */
+                if (value != DCGM_FP64_BLANK)
                 {
-                    i64Value = (long long)(value * 1024.0 * 1024.0);
+                    if (DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(fieldMeta->fieldId))
+                    {
+                        /* PCIe, NVLink, and C2C throughput fields are returned in MiB/s by NVML. */
+                        i64Value = (long long)(value * 1024.0 * 1024.0);
+                    }
+                    else
+                    {
+                        i64Value = (long long)value;
+                    }
                 }
 
                 AppendEntityInt64(threadCtx, i64Value, 0.0, now, expireTime);
@@ -14149,8 +14137,8 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
             }
             break;
         }
-        case DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER_FLOAT:
-        case DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT:
+        case DCGM_FI_DEV_NVLINK_SYMBOL_BER_RATIO:
+        case DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO:
             /*
              * These fields are not available in NVML.
              * We need to read the raw value and convert it to a float.
@@ -14318,7 +14306,7 @@ void DcgmCacheManager::ReadAndCacheFBMemoryInfo(unsigned int gpuId,
             AppendEntityInt64(threadCtx, reserved, 0, now, expireTime);
         }
     }
-    else if (fieldId == DCGM_FI_DEV_FB_USED_PERCENT)
+    else if (fieldId == DCGM_FI_DEV_FB_USED_RATIO)
     {
         if (nvTotal != 0 && nvReserved != nvTotal)
         {
@@ -14703,7 +14691,7 @@ dcgmReturn_t DcgmCacheManager::ManageVgpuList(unsigned int gpuId, SafeVgpuInstan
         bool wereFirstWatcher = false;
         AddFieldWatch(DCGM_FE_GPU,
                       gpuId,
-                      DCGM_FI_DEV_VGPU_UTILIZATIONS,
+                      DCGM_FI_DEV_VGPU_UTIL_INFO,
                       1000000,
                       600.0,
                       600,
@@ -14713,7 +14701,7 @@ dcgmReturn_t DcgmCacheManager::ManageVgpuList(unsigned int gpuId, SafeVgpuInstan
                       wereFirstWatcher);
         AddFieldWatch(DCGM_FE_GPU,
                       gpuId,
-                      DCGM_FI_DEV_VGPU_PER_PROCESS_UTILIZATION,
+                      DCGM_FI_DEV_VGPU_PROCESS_UTIL_INFO,
                       1000000,
                       600.0,
                       600,
@@ -14738,8 +14726,8 @@ dcgmReturn_t DcgmCacheManager::ManageVgpuList(unsigned int gpuId, SafeVgpuInstan
     }
     else if ((initialVgpuListState) && (!finalVgpuListState))
     {
-        RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_VGPU_UTILIZATIONS, 1, watcher);
-        RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_VGPU_PER_PROCESS_UTILIZATION, 1, watcher);
+        RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_VGPU_UTIL_INFO, 1, watcher);
+        RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_VGPU_PROCESS_UTIL_INFO, 1, watcher);
         RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_ENC_STATS, 1, watcher);
         RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_FBC_STATS, 1, watcher);
         RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_FBC_SESSIONS_INFO, 1, watcher);
@@ -15183,7 +15171,7 @@ dcgmReturn_t DcgmCacheManager::CheckValidGlobalField(unsigned short dcgmFieldId)
     dcgm_field_meta_p fieldMeta = DcgmFieldGetById(dcgmFieldId);
 
     fieldMeta = DcgmFieldGetById(dcgmFieldId);
-    if (!fieldMeta || fieldMeta->fieldId == DCGM_FI_UNKNOWN)
+    if (!fieldMeta || fieldMeta->fieldId == DCGM_FI_SYSTEM_FIELD_UNKNOWN)
     {
         log_error("dcgmFieldId is invalid: {}", dcgmFieldId);
         return DCGM_ST_UNKNOWN_FIELD;
@@ -15203,7 +15191,7 @@ dcgmReturn_t DcgmCacheManager::CheckValidGpuField(unsigned int gpuId, unsigned s
     dcgm_field_meta_p fieldMeta = DcgmFieldGetById(dcgmFieldId);
 
     fieldMeta = DcgmFieldGetById(dcgmFieldId);
-    if (!fieldMeta || fieldMeta->fieldId == DCGM_FI_UNKNOWN)
+    if (!fieldMeta || fieldMeta->fieldId == DCGM_FI_SYSTEM_FIELD_UNKNOWN)
     {
         log_error("dcgmFieldId does not exist: {}", dcgmFieldId);
         return DCGM_ST_UNKNOWN_FIELD;
@@ -15251,7 +15239,7 @@ void DcgmCacheManager::GetValidFieldIds(std::vector<unsigned short> &validFieldI
         if (IsModulePushedFieldId(m_allValidFieldIds[i]))
             continue;
 
-        if (migEnabled && i == DCGM_FI_DEV_ACCOUNTING_DATA)
+        if (migEnabled && m_allValidFieldIds[i] == DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS)
         {
             continue;
         }
@@ -15438,7 +15426,7 @@ void DcgmCacheManager::WatchVgpuFields(nvmlVgpuInstance_t vgpuId)
                         wereFirstWatcher);
     AddEntityFieldWatch(DCGM_FE_VGPU,
                         vgpuId,
-                        DCGM_FI_DEV_VGPU_VM_GPU_INSTANCE_ID,
+                        DCGM_FI_DEV_VGPU_GPU_INSTANCE_ID,
                         3600000000,
                         3600.0,
                         1,
@@ -15448,7 +15436,7 @@ void DcgmCacheManager::WatchVgpuFields(nvmlVgpuInstance_t vgpuId)
                         wereFirstWatcher);
     AddEntityFieldWatch(DCGM_FE_VGPU,
                         vgpuId,
-                        DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE,
+                        DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATUS,
                         1000000,
                         600.0,
                         600,
@@ -15520,7 +15508,7 @@ dcgmReturn_t DcgmCacheManager::UnwatchVgpuFields(nvmlVgpuInstance_t vgpuId)
 dcgmReturn_t DcgmCacheManager::PopulateCpuAffinity(dcgmAffinity_t &affinity)
 {
     dcgmcm_sample_t sample = {};
-    dcgmReturn_t ret       = GetLatestSample(DCGM_FE_GPU, 0, DCGM_FI_GPU_TOPOLOGY_AFFINITY, &sample, 0);
+    dcgmReturn_t ret       = GetLatestSample(DCGM_FE_GPU, 0, DCGM_FI_SYSTEM_GPU_AFFINITY, &sample, 0);
 
     if (ret != DCGM_ST_OK)
     {
@@ -15548,7 +15536,7 @@ dcgmTopology_t *DcgmCacheManager::GetNvLinkTopologyInformation()
     dcgmTopology_t *topPtr    = NULL;
     dcgmcm_sample_t sample;
 
-    dcgmReturn_t ret = GetLatestSample(DCGM_FE_GPU, 0, DCGM_FI_GPU_TOPOLOGY_NVLINK, &sample, 0);
+    dcgmReturn_t ret = GetLatestSample(DCGM_FE_GPU, 0, DCGM_FI_SYSTEM_NVLINK_TOPOLOGY, &sample, 0);
 
     if (ret != DCGM_ST_OK)
     {
@@ -15616,10 +15604,9 @@ dcgmReturn_t DcgmCacheManager::SelectGpusByTopologyImpl(std::vector<unsigned int
     return HelperSelectGpusByTopology(gpuIds, numGpus, outputGpus, affinity, topology);
 }
 
-/*****************************************************************************/
-dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v4 &nvLinkStatus)
+template <typename NvLinkStatus>
+dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatusImpl(NvLinkStatus &nvLinkStatus, unsigned int version)
 {
-    int j;
     std::vector<unsigned int> toUpdateGpuIds;
     toUpdateGpuIds.reserve(DCGM_MAX_NUM_DEVICES);
 
@@ -15635,7 +15622,7 @@ dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v4 &nvL
         }
     }
 
-    nvLinkStatus.version = dcgmNvLinkStatus_version4;
+    nvLinkStatus.version = version;
     for (auto const gpuId : toUpdateGpuIds)
     {
         /* Make sure the GPU NvLink states are up to date before we return them to users */
@@ -15653,7 +15640,9 @@ dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v4 &nvL
             }
 
             nvLinkStatus.gpus[numGpus].entityId = gpu.gpuId;
-            for (j = 0; j < DCGM_NVLINK_MAX_LINKS_PER_GPU; j++)
+            constexpr size_t maxLinks
+                = sizeof(nvLinkStatus.gpus[numGpus].linkState) / sizeof(nvLinkStatus.gpus[numGpus].linkState[0]);
+            for (size_t j = 0; j < maxLinks; j++)
             {
                 nvLinkStatus.gpus[numGpus].linkState[j] = gpu.nvLinkLinkState[j];
             }
@@ -15663,6 +15652,18 @@ dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v4 &nvL
     }
 
     return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v4 &nvLinkStatus)
+{
+    return PopulateNvLinkLinkStatusImpl(nvLinkStatus, dcgmNvLinkStatus_version4);
+}
+
+/*****************************************************************************/
+dcgmReturn_t DcgmCacheManager::PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v5 &nvLinkStatus)
+{
+    return PopulateNvLinkLinkStatusImpl(nvLinkStatus, dcgmNvLinkStatus_version5);
 }
 
 /*****************************************************************************/

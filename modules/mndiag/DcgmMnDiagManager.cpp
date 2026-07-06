@@ -24,10 +24,12 @@
 #include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <pwd.h>
 #include <ranges>
 #include <sstream>
+#include <thread>
 #include <unordered_set>
 
 #include <arpa/inet.h>
@@ -160,7 +162,9 @@ DcgmMnDiagManager::DcgmMnDiagManager(dcgmCoreCallbacks_t &dcc)
         // Release resources callback
         [this]() { return this->ReleaseResources(); },
         // Set status callback
-        [this](MnDiagStatus status) { this->SetStatus(status); });
+        [this](MnDiagStatus status) { this->SetStatus(status); },
+        // Get MPI process info callback
+        []() { return DcgmNs::Common::ProcessUtils::GetMpiProcessInfo(); });
 
     // Start the state machine
     m_stateMachine->Start();
@@ -223,6 +227,15 @@ dcgmReturn_t DcgmMnDiagManager::HandleRunHeadNode(dcgmRunMnDiag_t const &params,
     return RunHeadNode(params, effectiveUid, response);
 }
 
+std::expected<dcgmMultinodeTestType_t, dcgmReturn_t> GetTestTypeFromName(std::string_view testName)
+{
+    if (testName == "mnubergemm")
+    {
+        return dcgmMultinodeTestType_t::mnubergemm;
+    }
+    return std::unexpected(DCGM_ST_BADPARAM);
+}
+
 dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
                                             uid_t effectiveUid,
                                             dcgmMnDiagResponse_t &response)
@@ -233,6 +246,14 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
         log_error("MnDiag is not supported on the current GPU devices");
         return DCGM_ST_NOT_SUPPORTED;
     }
+
+    auto testTypeResult = GetTestTypeFromName(params.testName);
+    if (!testTypeResult.has_value())
+    {
+        log_error("Unknown test name '{}': {}", params.testName, errorString(testTypeResult.error()));
+        return testTypeResult.error();
+    }
+    dcgmMultinodeTestType_t const testType = testTypeResult.value();
 
     std::vector<std::string> hostList;
     for (int i = 0; i < DCGM_MAX_NUM_HOSTS && params.hostList[i][0] != '\0'; i++)
@@ -251,7 +272,7 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
     }
 
     // Then authorize all connections
-    result = AuthorizeRemoteConnections();
+    result = AuthorizeRemoteConnections(testType);
     if (result != DCGM_ST_OK)
     {
         log_error("Failed to authorize remote connections");
@@ -260,7 +281,7 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
     }
 
     // Get dcgm and driver versions from all remote nodes
-    result = GetNodeInfo();
+    result = GetNodeInfo(testType);
     if (result != DCGM_ST_OK)
     {
         log_error("Failed to get node info from remote nodes");
@@ -269,7 +290,7 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
     }
 
     // If all resource checks passed, reserve resources
-    result = ReserveRemoteResources();
+    result = ReserveRemoteResources(testType);
     if (result != DCGM_ST_OK)
     {
         log_error("Resource reservation failed");
@@ -277,7 +298,47 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
         return result;
     }
 
-    result = BroadcastRunParametersToRemoteNodes(params);
+    // Create a runner for the requested test type
+    auto mpiRunner = m_mpiRunnerFactory->CreateMpiRunner(*m_coreProxy, testType, effectiveUid);
+    if (!mpiRunner)
+    {
+        log_error("Factory could not create a runner for test type {}", static_cast<int>(testType));
+        StopHeadNode();
+        return DCGM_ST_BADPARAM;
+    }
+
+    std::string testBinaryPath;
+    result = mpiRunner->GetTestBinaryPath(testBinaryPath);
+    if (testBinaryPath.empty() || result != DCGM_ST_OK)
+    {
+        log_error("Failed to get test binary path");
+        StopHeadNode();
+        return DCGM_ST_INIT_ERROR;
+    }
+
+    m_currentTestInfo = {
+        .testType       = testType,
+        .testName       = params.testName,
+        .testBinaryPath = testBinaryPath,
+        .testPrefix     = std::string(mpiRunner->GetTestPrefix()),
+    };
+
+    // Generate the MPI command directly from the dcgmRunMnDiag_t struct
+    mpiRunner->ConstructMpiCommand(&params);
+    log_debug("Generated MPI command: {}", mpiRunner->GetLastCommand());
+
+    // Get the test run time from the mpi runner
+    auto testRunTimeResult = mpiRunner->GetTestRunTime(params);
+    if (!testRunTimeResult.has_value())
+    {
+        log_error("Invalid time_to_run in run params: {}", errorString(testRunTimeResult.error()));
+        StopHeadNode();
+        return testRunTimeResult.error();
+    }
+    unsigned int const timeToRunSeconds
+        = static_cast<unsigned int>(std::chrono::duration_cast<std::chrono::seconds>(*testRunTimeResult).count());
+
+    result = BroadcastRunParametersToRemoteNodes(params, timeToRunSeconds);
     if (result != DCGM_ST_OK)
     {
         log_error("Failed to broadcast parameters to remote nodes");
@@ -285,42 +346,16 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
         return result;
     }
 
-    // Create a new MpiRunner for this run
-    auto mpiRunner = m_mpiRunnerFactory->CreateMpiRunner(*m_coreProxy);
-
-    // Set the user info
-    {
-        auto userName = GetUsernameFromUid(effectiveUid);
-        if (userName.has_value())
-        {
-            mpiRunner->SetUserInfo(std::make_pair(*userName, effectiveUid));
-        }
-    }
+    m_stateMachine->SetProcessExecutionTimeout(std::chrono::seconds(timeToRunSeconds));
 
     // Redirect MPI output to files
-    DcgmNs::Utils::LogPaths logPaths = DcgmNs::Utils::GetLogFilePath("mndiag_mnubergemm");
+    DcgmNs::Utils::LogPaths logPaths = DcgmNs::Utils::GetLogFilePath(mpiRunner->GetLogFilePrefix());
     mpiRunner->SetLogFileNames(std::make_pair(logPaths.stdoutFileName.string(), logPaths.stderrFileName.string()));
 
-    // Set the mnubergemm path for the MPI runner on head node
-    // This makes sure that MPI runner gets the same path which is broadcasted across nodes
-    std::string mnubergemmPath;
-    result = GetMnubergemmPathHeadNode(mnubergemmPath);
-    if (result != DCGM_ST_OK)
-    {
-        StopHeadNode();
-        return result;
-    }
-    mpiRunner->SetMnubergemmPath(mnubergemmPath);
-
-    // Generate the MPI command directly from the dcgmRunMnDiag_t struct
-    mpiRunner->ConstructMpiCommand(&params);
-    log_debug("Generated MPI command: {}", mpiRunner->GetLastCommand());
-
     // Set the output callback without the response struct - we'll pass it directly in ProcessAndGetMpiOutput
-    mpiRunner->SetOutputCallback(
-        [&mpiRunner](std::istream &dataStream, void *responseStruct, nodeInfoMap_t const &nodeInfo) {
-            return mpiRunner->MnDiagOutputCallback(dataStream, responseStruct, nodeInfo);
-        });
+    mpiRunner->SetOutputCallback([&mpiRunner](int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo) {
+        return mpiRunner->MnDiagOutputCallback(fd, responseStruct, nodeInfo);
+    });
 
     // Launch the MPI process
     result = mpiRunner->LaunchMpiProcess();
@@ -342,50 +377,51 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
 
     log_debug("Started MPI diagnostic process with PID: {}", *mpiPID);
 
-    // Look up the stdout log file and make sure all processes are launched on worker nodes
-    auto allLaunched = mpiRunner->HasMpiLaunchedEnoughProcesses();
-    if (!allLaunched.has_value())
-    {
-        log_error("Not all MPI processes were launched on worker nodes");
-        PopulateMpiFailureResponseStruct(mpiRunner.get(), response, *mpiPID, logPaths);
-        StopHeadNode();
-        return allLaunched.error();
-    }
-
-    // Wait for remote nodes to report RUNNING status
-    // Confirm the MPI process is running on all remote nodes, otherwise some node either failed or timed out
+    // Wait for all nodes (head + workers) to detect MPI processes running on GPUs
+    // Each node uses nvidia-smi detection with retry logic to handle the startup delay
+    // All nodes are checked in parallel to minimize total detection time
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
     bool anyFailure = false;
 
-    // Handle the head node first
-    // Directly call the detect process function on the head node
-    dcgm_mndiag_msg_resource_t dummyMsgOnHeadNode {};
-    HandleDetectProcess((dcgm_module_command_header_t *)&dummyMsgOnHeadNode);
-    if (dummyMsgOnHeadNode.resource.response != MnDiagStatus::RUNNING)
-    {
-        log_error("No MPI process running on head node");
-
-        PopulateMpiFailureResponseStruct(mpiRunner.get(), response, *mpiPID, logPaths);
-        StopHeadNode();
-        return DCGM_ST_CHILD_SPAWN_FAILED;
-    }
+    // Head node detection result storage
+    dcgm_mndiag_msg_resource_t headNodeMsg {};
 
     {
         std::vector<std::jthread> threads;
+
+        // Launch head node detection in parallel with worker nodes
+        threads.emplace_back([this, &headNodeMsg, &resultMutex, &results, &anyFailure]() {
+            HandleDetectProcess((dcgm_module_command_header_t *)&headNodeMsg);
+
+            bool const success      = (headNodeMsg.resource.response == MnDiagStatus::RUNNING);
+            dcgmReturn_t const code = success ? DCGM_ST_OK : DCGM_ST_CHILD_SPAWN_FAILED;
+
+            {
+                DcgmLockGuard lg(&resultMutex);
+                results.emplace_back(m_localHostInfo.hostname, code);
+                anyFailure = anyFailure || !success;
+            }
+
+            if (!success)
+            {
+                log_error("No MPI process running on head node");
+            }
+        });
+
         // Launch threads for remote nodes
         for (auto const &[hostname, connInfo] : m_connections)
         {
             if (connInfo.isLoopback)
             {
-                continue; // Already handled above
+                continue; // Head node is handled by the thread above
             }
 
             // Launch a thread for each remote node
             threads.emplace_back([this, hostname, connInfo, &resultMutex, &results, &anyFailure]() {
                 dcgmMultinodeRequest_t request {};
-                request.version                         = dcgmMultinodeRequest_version1;
-                request.testType                        = MnDiagTestType::mnubergemm;
+                request.version                         = dcgmMultinodeRequest_version;
+                request.testType                        = m_currentTestInfo.testType;
                 request.requestType                     = MnDiagRequestType::DetectProcess;
                 request.requestData.resource.headNodeId = m_currentNodeId;
                 request.requestData.resource.response   = MnDiagStatus::UNKNOWN;
@@ -418,10 +454,13 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
         // threads will automatically join when it goes out of scope at the end of this block
     }
 
-    // Check if any failures occurred
+    // Check if any failures occurred (head or worker nodes)
     if (anyFailure)
     {
+        PopulateMpiFailureResponseStruct(mpiRunner.get(), response, *mpiPID, logPaths);
         StopHeadNode();
+
+        // Return first error found in results (head node will be first if it failed)
         for (auto const &[hostname, result] : results)
         {
             if (result != DCGM_ST_OK)
@@ -429,7 +468,7 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
                 return result;
             }
         }
-        return DCGM_ST_GENERIC_ERROR; // Default error if specific error code not found
+        return DCGM_ST_CHILD_SPAWN_FAILED; // Default error for detection failure
     }
     // Block and wait for the MPI process to complete
     log_debug("Waiting for MPI process with PID {} to complete...", *mpiPID);
@@ -457,14 +496,57 @@ dcgmReturn_t DcgmMnDiagManager::StopHeadNode()
 {
     dcgmReturn_t finalResult = DCGM_ST_OK;
 
-    // Continue cleanup even if individual steps fail, but track errors
-    dcgmReturn_t releaseResult = ReleaseRemoteResources();
+    // Release resources first - this calls NotifyDiagnosticFinished()
+    dcgmReturn_t releaseResult = ReleaseRemoteResources(m_currentTestInfo.testType);
     if (releaseResult != DCGM_ST_OK)
     {
         log_error("Failed to release remote resources: {}", errorString(releaseResult));
         finalResult = releaseResult; // Remember first error
     }
 
+    // IMPORTANT: Wait for state machine to fully transition to WAITING/READY state
+    // This prevents race conditions with the next run
+    log_debug("Waiting for state machine to stabilize to READY state");
+
+    // Use condition variable to wait for READY status
+    auto startTime = std::chrono::steady_clock::now();
+
+    bool stateStabilized = false;
+    {
+        // Acquire lock for CondWait
+        DcgmLockGuard lg(&m_resourceMutex);
+
+        dcgmMutexReturn_t waitResult = m_resourceMutex.CondWait(
+            m_statusCV, MnDiagConstants::MAX_WAIT_MS.count(), [this]() { return m_status == MnDiagStatus::READY; });
+
+        auto elapsed   = std::chrono::steady_clock::now() - startTime;
+        auto elapsedMS = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+
+        if (waitResult == DCGM_MUTEX_ST_OK)
+        {
+            stateStabilized = true;
+            log_debug("State machine stabilized to READY state after {}ms", elapsedMS);
+        }
+        else if (waitResult == DCGM_MUTEX_ST_TIMEOUT)
+        {
+            log_error("State machine did not stabilize to WAITING/READY within {}ms timeout",
+                      MnDiagConstants::MAX_WAIT_MS.count());
+            if (finalResult == DCGM_ST_OK)
+            {
+                finalResult = DCGM_ST_TIMEOUT;
+            }
+        }
+        else
+        {
+            log_error("Error waiting for state machine to stabilize: {}", waitResult);
+            if (finalResult == DCGM_ST_OK)
+            {
+                finalResult = DCGM_ST_GENERIC_ERROR;
+            }
+        }
+    } // Release lock after CondWait
+
+    // Now proceed with connection cleanup
     dcgmReturn_t disconnectResult = DisconnectRemoteNodes();
     if (disconnectResult != DCGM_ST_OK)
     {
@@ -488,12 +570,18 @@ dcgmReturn_t DcgmMnDiagManager::StopHeadNode()
     {
         log_error("Failed to reset ChildProcessManager: {}", errorString(resetResult));
         if (finalResult == DCGM_ST_OK)
+        {
             finalResult = resetResult;
+        }
     }
     else
     {
         log_debug("Successfully reset ChildProcessManager");
     }
+
+    // Additional safety: Small delay to ensure kernel-level process cleanup
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    log_debug("StopHeadNode completed, state machine stabilized: {}", stateStabilized);
 
     return finalResult; // Let caller decide how to handle partial cleanup failures
 }
@@ -558,7 +646,7 @@ dcgmReturn_t DcgmMnDiagManager::ConnectRemoteNodes(std::vector<std::string> cons
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmMnDiagManager::ReserveRemoteResources()
+dcgmReturn_t DcgmMnDiagManager::ReserveRemoteResources(dcgmMultinodeTestType_t testType)
 {
     // First set all remote nodes to RESERVED status
     DcgmMutex resultMutex(0);
@@ -588,10 +676,10 @@ dcgmReturn_t DcgmMnDiagManager::ReserveRemoteResources()
             }
 
             // Launch a thread for each remote node
-            threads.emplace_back([this, hostname, connInfo, &resultMutex, &results, &anyFailure]() {
+            threads.emplace_back([this, hostname, connInfo, testType, &resultMutex, &results, &anyFailure]() {
                 dcgmMultinodeRequest_t request {};
-                request.version                         = dcgmMultinodeRequest_version1;
-                request.testType                        = MnDiagTestType::mnubergemm;
+                request.version                         = dcgmMultinodeRequest_version;
+                request.testType                        = testType;
                 request.requestType                     = MnDiagRequestType::ReserveResources;
                 request.requestData.resource.headNodeId = m_currentNodeId;
                 request.requestData.resource.response   = MnDiagStatus::UNKNOWN;
@@ -626,7 +714,7 @@ dcgmReturn_t DcgmMnDiagManager::ReserveRemoteResources()
     // Check if any failures occurred
     if (anyFailure)
     {
-        ReleaseRemoteResources();
+        ReleaseRemoteResources(testType);
         for (auto const &[hostname, result] : results)
         {
             if (result != DCGM_ST_OK)
@@ -640,7 +728,7 @@ dcgmReturn_t DcgmMnDiagManager::ReserveRemoteResources()
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmMnDiagManager::ReleaseRemoteResources()
+dcgmReturn_t DcgmMnDiagManager::ReleaseRemoteResources(dcgmMultinodeTestType_t testType)
 {
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
@@ -658,10 +746,10 @@ dcgmReturn_t DcgmMnDiagManager::ReleaseRemoteResources()
             }
 
             // Launch a thread for each remote node
-            threads.emplace_back([this, hostname, connInfo, &resultMutex, &results, &anyFailure]() {
+            threads.emplace_back([this, hostname, connInfo, testType, &resultMutex, &results, &anyFailure]() {
                 dcgmMultinodeRequest_t request {};
-                request.version                         = dcgmMultinodeRequest_version1;
-                request.testType                        = MnDiagTestType::mnubergemm;
+                request.version                         = dcgmMultinodeRequest_version;
+                request.testType                        = testType;
                 request.requestType                     = MnDiagRequestType::ReleaseResources;
                 request.requestData.resource.headNodeId = m_currentNodeId;
                 request.requestData.resource.response   = MnDiagStatus::UNKNOWN;
@@ -720,10 +808,11 @@ dcgmReturn_t DcgmMnDiagManager::ReleaseRemoteResources()
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmMnDiagManager::GetNodeInfo()
+dcgmReturn_t DcgmMnDiagManager::GetNodeInfo(dcgmMultinodeTestType_t testType)
 {
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
+    results.reserve(m_connections.size());
     bool anyFailure = false;
     // Handle the head node first
     // Directly call the reserve resources function on the head node
@@ -747,27 +836,20 @@ dcgmReturn_t DcgmMnDiagManager::GetNodeInfo()
                           hostname,
                           localDcgmVersion,
                           localDriverVersion);
+                DcgmLockGuard lg(&resultMutex);
                 m_nodeInfo[hostname].dcgmVersion   = localDcgmVersion;
                 m_nodeInfo[hostname].driverVersion = localDriverVersion;
                 continue; // Already handled above
             }
 
             // Launch a thread for each remote node
-            threads.emplace_back([this, hostname, connInfo, &resultMutex, &results, &anyFailure]() {
+            threads.emplace_back([this, hostname, connInfo, testType, &resultMutex, &results, &anyFailure]() {
                 dcgmMultinodeRequest_t request {};
-                request.version     = dcgmMultinodeRequest_version1;
-                request.testType    = MnDiagTestType::mnubergemm;
+                request.version     = dcgmMultinodeRequest_version;
+                request.testType    = testType;
                 request.requestType = MnDiagRequestType::GetNodeInfo;
 
                 dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
-                {
-                    DcgmLockGuard lg(&resultMutex);
-                    results.emplace_back(hostname, threadResult);
-                    if (threadResult != DCGM_ST_OK)
-                    {
-                        anyFailure = true;
-                    }
-                }
                 // Log errors for failed messages
                 if (threadResult != DCGM_ST_OK)
                 {
@@ -782,8 +864,20 @@ dcgmReturn_t DcgmMnDiagManager::GetNodeInfo()
                               hostname,
                               request.requestData.nodeInfo.dcgmVersion,
                               request.requestData.nodeInfo.driverVersion);
-                    m_nodeInfo[hostname].dcgmVersion   = request.requestData.nodeInfo.dcgmVersion;
-                    m_nodeInfo[hostname].driverVersion = request.requestData.nodeInfo.driverVersion;
+                }
+                auto resultEntry = std::make_pair(hostname, threadResult);
+                {
+                    DcgmLockGuard lg(&resultMutex);
+                    results.emplace_back(std::move(resultEntry));
+                    if (threadResult != DCGM_ST_OK)
+                    {
+                        anyFailure = true;
+                    }
+                    else
+                    {
+                        m_nodeInfo[hostname].dcgmVersion   = request.requestData.nodeInfo.dcgmVersion;
+                        m_nodeInfo[hostname].driverVersion = request.requestData.nodeInfo.driverVersion;
+                    }
                 }
             });
         }
@@ -864,16 +958,36 @@ dcgmReturn_t DcgmMnDiagManager::HandleDetectProcess(dcgm_module_command_header_t
     // Cast to our new struct type
     dcgm_mndiag_msg_resource_t *resourceMsg = std::bit_cast<dcgm_mndiag_msg_resource_t *>(moduleCommand);
 
-    // Try to get the detected MPI process PID from the state machine
-    // Head node has noticed processes running on worker nodes,
-    // so worker nodes need to verify the processes are occupying GPUs
-    if (auto ret = m_stateMachine->TryGetDetectedMpiPid(); ret == DCGM_ST_OK)
+    // Retry logic: MPI processes may take time to start and attach to GPUs
+    // We retry detection at intervals until timeout
+    auto const timeout       = m_processDetectionTimeout;
+    auto const retryInterval = m_processDetectionRetryInterval;
+    auto const startTime     = std::chrono::steady_clock::now();
+
+    bool detected = false;
+    int attempt   = 0;
+
+    while (std::chrono::steady_clock::now() - startTime < timeout)
     {
-        log_debug("MPI process detected");
+        attempt++;
+        // Try to get the detected MPI process PID from the state machine
+        // This uses nvidia-smi to detect processes running on GPUs
+        if (auto ret = m_stateMachine->TryGetDetectedMpiPid(); ret == DCGM_ST_OK)
+        {
+            log_debug("MPI process detected on attempt {}", attempt);
+            detected = true;
+            break;
+        }
+
+        // Wait before next retry
+        std::this_thread::sleep_for(retryInterval);
     }
-    else
+
+    if (!detected)
     {
-        log_error("No MPI process related to this run has been detected on compute nodes");
+        log_error("No MPI process related to this run detected after {} attempts ({} seconds)",
+                  attempt,
+                  std::chrono::duration_cast<std::chrono::seconds>(timeout).count());
         // Let the state machine handle the resource release
         m_stateMachine->NotifyDiagnosticFinished();
     }
@@ -889,60 +1003,68 @@ dcgmReturn_t DcgmMnDiagManager::HandleBroadcastRunParameters(dcgm_module_command
     // Cast to our parameter broadcast struct type
     dcgm_mndiag_msg_run_params_t *paramMsg = std::bit_cast<dcgm_mndiag_msg_run_params_t *>(moduleCommand);
 
+    // Version incompatibility is not supported between the head node and the remote nodes
+    if (paramMsg->header.version != dcgm_mndiag_msg_run_params_version2)
+    {
+        log_error("Unsupported version of broadcast run parameters message: {}", paramMsg->header.version);
+        return DCGM_ST_VER_MISMATCH;
+    }
+
     log_debug("Handling broadcast parameters request from head node {}, current node ID - {}",
               paramMsg->runParams.headNodeId,
               static_cast<unsigned int>(m_currentNodeId));
 
-    // Process the time_to_run parameter
-    std::optional<unsigned int> time_to_run;
-    size_t testParmsLen
-        = std::min(static_cast<size_t>(DCGM_MAX_TEST_PARMS), std::size(paramMsg->runParams.runMnDiag.testParms));
-    std::span<std::remove_reference_t<decltype(paramMsg->runParams.runMnDiag.testParms[0])>> testParmsSpan(
-        paramMsg->runParams.runMnDiag.testParms, testParmsLen);
-    for (auto const &param_cstr : testParmsSpan)
+    // Resolve the run time to use for the process execution timeout.
+    // timeToRunSeconds > 0: pre-validated by the head node (normal production path).
+    // timeToRunSeconds == 0: fall back to testParms parsing (unit tests / legacy callers).
+    std::optional<unsigned int> timeToRun;
+    if (paramMsg->runParams.timeToRunSeconds > 0)
     {
-        if (param_cstr[0] == '\0')
-        {
-            break; // Stop at first empty parameter
-        }
-
-        std::string_view param(param_cstr);
-        // param is in the format "mnubergemm.param=value;mnubergemm.flag;mnubergemm.time_to_run=value;"
-        if (auto posKey = param.find("mnubergemm.time_to_run"); posKey != std::string::npos)
-        {
-            // we've found mnubergemm.time_to_run, now we need to find the value
-            if (auto posValue = param.find("=", posKey); posValue != std::string::npos)
-            {
-                time_to_run = std::stoi(std::string(param.substr(posValue + 1)));
-                log_debug("Received time_to_run parameter: {}", *time_to_run);
-            }
-            else
-            {
-                log_error("Invalid time_to_run parameter format: {}", param);
-                return DCGM_ST_BADPARAM;
-            }
-            break;
-        }
-    }
-
-    if (time_to_run.has_value())
-    {
-        m_stateMachine->SetProcessExecutionTimeout(std::chrono::seconds(*time_to_run));
-    }
-
-    // Set the mnubergemm path in the state machine
-    if (paramMsg->runParams.mnubergemmPath[0] == '\0')
-    {
-        log_warning("Received empty mnubergemm path on node {}, not setting path.",
-                    static_cast<unsigned int>(m_currentNodeId));
-        m_stateMachine->SetMnubergemmPath("");
+        timeToRun = paramMsg->runParams.timeToRunSeconds;
+        log_debug("Using pre-validated time_to_run from message: {} seconds", *timeToRun);
     }
     else
     {
-        log_debug("Setting mnubergemm path to: {} on node: {}",
-                  paramMsg->runParams.mnubergemmPath,
+        std::string const timeToRunKey = std::string(paramMsg->runParams.testPrefix) + "time_to_run";
+        auto result                    = ParseTimeToRunSeconds(paramMsg->runParams.runMnDiag, timeToRunKey);
+        if (!result.has_value())
+        {
+            log_error("Failed to parse time_to_run from testParms: {}", errorString(result.error()));
+            return result.error();
+        }
+        if (*result > 0)
+        {
+            timeToRun = static_cast<unsigned int>(*result);
+            log_debug("Extracted time_to_run from testParms: {} seconds", *timeToRun);
+        }
+    }
+
+    // Always set the process execution timeout, defaulting to 3600 seconds if not specified.
+    // This ensures the timeout is reset between runs.
+    if (timeToRun.has_value())
+    {
+        m_stateMachine->SetProcessExecutionTimeout(std::chrono::seconds(*timeToRun));
+    }
+    else
+    {
+        auto timeout = MnDiagConstants::DEFAULT_TIME_TO_RUN_SECONDS;
+        log_debug("No time_to_run parameter specified, using default: {} seconds", timeout.count());
+        m_stateMachine->SetProcessExecutionTimeout(timeout);
+    }
+
+    // Set the expected test binary path in the state machine
+    if (paramMsg->runParams.testBinaryPath[0] == '\0')
+    {
+        log_warning("Received empty test binary path on node {}, not setting path.",
+                    static_cast<unsigned int>(m_currentNodeId));
+        m_stateMachine->SetExpectedBinaryPath("");
+    }
+    else
+    {
+        log_debug("Setting expected test binary path to: {} on node: {}",
+                  paramMsg->runParams.testBinaryPath,
                   static_cast<unsigned int>(m_currentNodeId));
-        m_stateMachine->SetMnubergemmPath(paramMsg->runParams.mnubergemmPath);
+        m_stateMachine->SetExpectedBinaryPath(paramMsg->runParams.testBinaryPath);
     }
 
     log_debug("Successfully processed broadcast parameters");
@@ -1100,6 +1222,9 @@ void DcgmMnDiagManager::SetStatus(MnDiagStatus status)
     // This is the callback used by the StateMachine
     DcgmLockGuard lg(&m_resourceMutex);
     m_status = status;
+
+    // Notify any threads waiting for status changes
+    m_statusCV.notify_all();
 }
 
 MnDiagStatus DcgmMnDiagManager::GetStatus()
@@ -1317,7 +1442,8 @@ bool DcgmMnDiagManager::IsLoopback(std::string_view host)
     return false;
 }
 
-dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDiag_t const &params)
+dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDiag_t const &params,
+                                                                    unsigned int timeToRunSeconds)
 {
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
@@ -1326,18 +1452,21 @@ dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDia
     // Handle the head node first (local processing)
     // Create a dummy message for local processing
     dcgm_mndiag_msg_run_params_t dummyMsgOnHeadNode {};
-    dummyMsgOnHeadNode.runParams.headNodeId = m_currentNodeId;
+    dummyMsgOnHeadNode.header.version             = dcgm_mndiag_msg_run_params_version2;
+    dummyMsgOnHeadNode.header.length              = sizeof(dummyMsgOnHeadNode);
+    dummyMsgOnHeadNode.runParams.headNodeId       = m_currentNodeId;
+    dummyMsgOnHeadNode.runParams.timeToRunSeconds = timeToRunSeconds;
     memcpy(&dummyMsgOnHeadNode.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v1));
 
-    std::string mnubergemmPath;
-    dcgmReturn_t result = GetMnubergemmPathHeadNode(mnubergemmPath);
-    if (result != DCGM_ST_OK)
-    {
-        return result;
-    }
-    SafeCopyTo(dummyMsgOnHeadNode.runParams.mnubergemmPath, mnubergemmPath.c_str());
+    SafeCopyTo(dummyMsgOnHeadNode.runParams.testBinaryPath, m_currentTestInfo.testBinaryPath.c_str());
+    SafeCopyTo(dummyMsgOnHeadNode.runParams.testPrefix, m_currentTestInfo.testPrefix.c_str());
 
-    HandleBroadcastRunParameters((dcgm_module_command_header_t *)&dummyMsgOnHeadNode);
+    auto headResult = HandleBroadcastRunParameters((dcgm_module_command_header_t *)&dummyMsgOnHeadNode);
+    if (headResult != DCGM_ST_OK)
+    {
+        log_error("Failed to apply broadcast run parameters on head node: {}", errorString(headResult));
+        return headResult;
+    }
 
     {
         std::vector<std::jthread> threads;
@@ -1352,14 +1481,16 @@ dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDia
 
             // Launch a thread for each remote node
             threads.emplace_back(
-                [this, hostname, connInfo, &params, &resultMutex, &results, &anyFailure, &mnubergemmPath]() {
+                [this, hostname, connInfo, &params, timeToRunSeconds, &resultMutex, &results, &anyFailure]() {
                     dcgmMultinodeRequest_t request {};
-                    request.version                          = dcgmMultinodeRequest_version1;
-                    request.testType                         = MnDiagTestType::mnubergemm;
-                    request.requestType                      = MnDiagRequestType::BroadcastRunParameters;
-                    request.requestData.runParams.headNodeId = m_currentNodeId;
+                    request.version                                = dcgmMultinodeRequest_version;
+                    request.testType                               = m_currentTestInfo.testType;
+                    request.requestType                            = MnDiagRequestType::BroadcastRunParameters;
+                    request.requestData.runParams.headNodeId       = m_currentNodeId;
+                    request.requestData.runParams.timeToRunSeconds = timeToRunSeconds;
                     memcpy(&request.requestData.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v1));
-                    SafeCopyTo(request.requestData.runParams.mnubergemmPath, mnubergemmPath.c_str());
+                    SafeCopyTo(request.requestData.runParams.testBinaryPath, m_currentTestInfo.testBinaryPath.c_str());
+                    SafeCopyTo(request.requestData.runParams.testPrefix, m_currentTestInfo.testPrefix.c_str());
 
                     dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
 
@@ -1591,72 +1722,6 @@ void DcgmMnDiagManager::PopulateMpiFailureResponseStruct(MnDiagMpiRunnerBase *mp
     }
 }
 
-dcgmReturn_t DcgmMnDiagManager::GetMnubergemmPathHeadNode(std::string &path)
-{
-    // Check if env variable is present and valid
-    log_debug("Checking for custom mnubergemm path in environment variable");
-    char const *customBinPath = std::getenv(MnDiagConstants::ENV_MNUBERGEMM_PATH.data());
-    if (customBinPath && *customBinPath != '\0')
-    {
-        try
-        {
-            if (strlen(customBinPath) >= DCGM_MAX_STR_LENGTH)
-            {
-                log_error(
-                    "mnubergemmPath length set in environment variable {} exceeds destination buffer size {}. Truncation would occur.",
-                    strlen(customBinPath),
-                    DCGM_MAX_STR_LENGTH);
-                return DCGM_ST_BADPARAM;
-            }
-
-            if (!std::filesystem::exists(customBinPath) || !std::filesystem::is_regular_file(customBinPath))
-            {
-                log_error("Custom binary path '{}' is invalid (not a readable, executable, regular file)",
-                          customBinPath);
-            }
-            else if (access(customBinPath, R_OK | X_OK) != 0)
-            {
-                log_error(
-                    "Custom binary path '{}' is not accessible (errno {}: {}).", customBinPath, errno, strerror(errno));
-            }
-            else
-            {
-                path = customBinPath;
-                log_debug("Inferred custom mnubergemm path: {}", path);
-                return DCGM_ST_OK;
-            }
-        }
-        catch (const std::exception &e)
-        {
-            log_error("Exception while validating custom binary path '{}': {}", customBinPath, e.what());
-        }
-    }
-
-    // Fall back to default
-    log_debug("No custom binary path found, falling back to default");
-    std::string defaultBinPath;
-    dcgmReturn_t result = infer_mnubergemm_default_path(defaultBinPath, GetCudaVersion());
-    if (result != DCGM_ST_OK)
-    {
-        log_error("Failed to infer mnubergemm default path: {}", result);
-        return result;
-    }
-
-    log_debug("Inferred default mnubergemm path: {}", defaultBinPath);
-    path = std::move(defaultBinPath);
-
-    if (path.length() >= DCGM_MAX_STR_LENGTH)
-    {
-        log_error(
-            "mnubergemmPath length from introspection {} exceeds destination buffer size {}. Truncation would occur.",
-            path.length(),
-            DCGM_MAX_STR_LENGTH);
-        return DCGM_ST_BADPARAM;
-    }
-
-    return DCGM_ST_OK;
-}
-
 int DcgmMnDiagManager::GetCudaVersion()
 {
     int cudaVersion = 0;
@@ -1664,7 +1729,7 @@ int DcgmMnDiagManager::GetCudaVersion()
     return cudaVersion;
 }
 
-dcgmReturn_t DcgmMnDiagManager::AuthorizeRemoteConnections()
+dcgmReturn_t DcgmMnDiagManager::AuthorizeRemoteConnections(dcgmMultinodeTestType_t testType)
 {
     log_debug("Starting authorization of remote connections");
 
@@ -1686,8 +1751,8 @@ dcgmReturn_t DcgmMnDiagManager::AuthorizeRemoteConnections()
 
         // Send authorization request to remote node
         dcgmMultinodeRequest_t request {};
-        request.version                              = dcgmMultinodeRequest_version1;
-        request.testType                             = MnDiagTestType::mnubergemm;
+        request.version                              = dcgmMultinodeRequest_version;
+        request.testType                             = testType;
         request.requestType                          = MnDiagRequestType::AuthorizeConnection;
         request.requestData.authorization.headNodeId = m_currentNodeId;
 
@@ -1727,8 +1792,8 @@ dcgmReturn_t DcgmMnDiagManager::RevokeRemoteAuthorizations()
 
         // Send revocation request to remote node
         dcgmMultinodeRequest_t request {};
-        request.version                              = dcgmMultinodeRequest_version1;
-        request.testType                             = MnDiagTestType::mnubergemm;
+        request.version                              = dcgmMultinodeRequest_version;
+        request.testType                             = m_currentTestInfo.testType;
         request.requestType                          = MnDiagRequestType::RevokeAuthorization;
         request.requestData.authorization.headNodeId = m_currentNodeId;
 

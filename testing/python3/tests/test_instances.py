@@ -49,7 +49,8 @@ def create_fake_gpu_instances(handle, gpuId, instanceCount):
             cfe.entityList[cfe.numToCreate].entity.entityGroupId = dcgm_fields.DCGM_FE_GPU_I
             cfe.numToCreate += 1
 
-        # Create the instances first so we can control which GPU the compute instances are placed on
+        # Create the instances first so we can control which GPU the compute
+        # instances are placed on
         updated = dcgm_agent_internal.dcgmCreateFakeEntities(handle, cfe)
         for i in range(0, updated.numToCreate):
             if updated.entityList[i].entity.entityGroupId == dcgm_fields.DCGM_FE_GPU_I:
@@ -144,6 +145,9 @@ def ensure_instance_ids(handle, gpuId, minInstances, minCIs):
     return instanceMap, ciMap
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(gpuCount=8)
 def test_instances_large_mig_topology_getlatestvalues_v2(handle, gpuIds):
@@ -161,7 +165,7 @@ def test_instances_large_mig_topology_getlatestvalues_v2(handle, gpuIds):
     logger.debug("Got gpuInstances: " + str(instanceIds))
     logger.debug("Got computeInstanceIds: " + str(computeInstanceIds))
 
-    fieldId = dcgm_fields.DCGM_FI_PROF_GR_ENGINE_ACTIVE
+    fieldId = dcgm_fields.DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO
 
     # Build up a list of up the max entity group size
     entities = []
@@ -210,9 +214,14 @@ def test_instances_large_mig_topology_getlatestvalues_v2(handle, gpuIds):
     offset = 5
     for entityPair in entities:
         value = expectedValues[entityPair.entityGroupId][entityPair.entityId][fieldId]
-        dcgm_field_injection_helpers.inject_value(handle, entityPair.entityId, fieldId,
-                                                  value, offset, verifyInsertion=True,
-                                                  entityType=entityPair.entityGroupId)
+        dcgm_field_injection_helpers.inject_value(
+            handle,
+            entityPair.entityId,
+            fieldId,
+            value,
+            offset,
+            verifyInsertion=True,
+            entityType=entityPair.entityGroupId)
 
     dfvc = dcgm_field_helpers.DcgmFieldValueCollection(
         handle, dcgmGroup._groupId)
@@ -230,6 +239,9 @@ def test_instances_large_mig_topology_getlatestvalues_v2(handle, gpuIds):
             str(expectedValue), str(readValue))
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(gpuCount=1)
 def test_instances_fetch_global_fields(handle, gpuIds):
@@ -247,7 +259,7 @@ def test_instances_fetch_global_fields(handle, gpuIds):
     logger.debug("Got gpuInstances: " + str(instanceIds))
     logger.debug("Got computeInstanceIds: " + str(computeInstanceIds))
 
-    fieldId = dcgm_fields.DCGM_FI_DEV_COUNT
+    fieldId = dcgm_fields.DCGM_FI_SYSTEM_GPU_QUANTITY
 
     # Build up a list of up the max entity group size
     entities = []
@@ -287,9 +299,14 @@ def test_instances_fetch_global_fields(handle, gpuIds):
     entityId = 0  # Globals ignore entityId
     offset = 0
     entityGroupId = dcgm_fields.DCGM_FE_NONE
-    dcgm_field_injection_helpers.inject_value(handle, entityId, fieldId,
-                                              injectedValue, offset, verifyInsertion=True,
-                                              entityType=entityGroupId)
+    dcgm_field_injection_helpers.inject_value(
+        handle,
+        entityId,
+        fieldId,
+        injectedValue,
+        offset,
+        verifyInsertion=True,
+        entityType=entityGroupId)
 
     dfvc = dcgm_field_helpers.DcgmFieldValueCollection(
         handle, dcgmGroup._groupId)
@@ -341,13 +358,21 @@ def helper_test_inject_instance_fields(handle, gpuIds):
         handle, groupId, dcgm_fields.DCGM_FE_GPU_CI, lastCIId)
     dcgm_agent.dcgmWatchFields(handle, groupId, fieldGroupId, 1, 100, 100)
 
-    dcgm_field_injection_helpers.inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                              2, 5, verifyInsertion=True,
-                                              entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=5)
+    dcgm_field_injection_helpers.inject_value(
+        handle,
+        gpuIds[0],
+        dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
+        2,
+        5,
+        verifyInsertion=True,
+        entityType=dcgm_fields.DCGM_FE_GPU,
+        repeatCount=5)
 
     # Read the values to make sure they were stored properly
-    entities = [dcgm_structs.c_dcgmGroupEntityPair_t(), dcgm_structs.c_dcgmGroupEntityPair_t(),
-                dcgm_structs.c_dcgmGroupEntityPair_t()]
+    entities = [
+        dcgm_structs.c_dcgmGroupEntityPair_t(),
+        dcgm_structs.c_dcgmGroupEntityPair_t(),
+        dcgm_structs.c_dcgmGroupEntityPair_t()]
 
     entities[0].entityGroupId = dcgm_fields.DCGM_FE_GPU_I
     entities[0].entityId = firstInstanceId
@@ -370,6 +395,9 @@ def helper_test_inject_instance_fields(handle, gpuIds):
                 v.value.i64, v.entityId, v.entityGroupId)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(240)
 @test_utils.run_with_injection_gpus()
 def test_inject_instance_fields_standalone(handle, gpuIds):
@@ -377,7 +405,7 @@ def test_inject_instance_fields_standalone(handle, gpuIds):
 
 
 def verify_fake_profile_names(handle, fakeEntities, isGpuInstance):
-    fieldIds = [dcgm_fields.DCGM_FI_DEV_NAME]
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_GPU_NAME]
     entities = []
     for entityId in fakeEntities:
         entity = dcgm_structs.c_dcgmGroupEntityPair_t()
@@ -402,7 +430,7 @@ def verify_fake_profile_names(handle, fakeEntities, isGpuInstance):
 
 
 def verify_profile_names_exist(handle, migEntityList, isGpuInstance):
-    fieldIds = [dcgm_fields.DCGM_FI_DEV_NAME]
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_GPU_NAME]
     entities = []
     for entityId in migEntityList:
         entity = dcgm_structs.c_dcgmGroupEntityPair_t()
@@ -434,6 +462,8 @@ def helper_test_fake_mig_device_profile_names(handle, gpuIds):
     verify_fake_profile_names(handle, list(fakeCIMap.keys()), False)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_fake_mig_device_profile_names_standalone(handle, gpuIds):
@@ -461,9 +491,15 @@ def helper_test_health_check_instances(handle, gpuIds):
         test_utils.skip_test("Cannot test on unhealthy systems.")
 
     # Inject one error per system
-    dcgm_field_injection_helpers.inject_value(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                              2, 5, verifyInsertion=True,
-                                              entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=5)
+    dcgm_field_injection_helpers.inject_value(
+        handle,
+        gpuIds[0],
+        dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
+        2,
+        5,
+        verifyInsertion=True,
+        entityType=dcgm_fields.DCGM_FE_GPU,
+        repeatCount=5)
 
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
@@ -481,6 +517,9 @@ def helper_test_health_check_instances(handle, gpuIds):
             dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_instances_standalone(handle, gpuIds):
@@ -525,18 +564,28 @@ def create_small_mig_objects(handle, gpuIds, numToCreate):
     for gpuId in gpuIds:
         try:
             dcgm_agent.dcgmCreateMigEntity(
-                handle, gpuId, dcgm_structs.DcgmMigProfileGpuInstanceSlice1, dcgm_structs.DcgmMigCreateGpuInstance, 0)
+                handle,
+                gpuId,
+                dcgm_structs.DcgmMigProfileGpuInstanceSlice1,
+                dcgm_structs.DcgmMigCreateGpuInstance,
+                0)
             numInstancesCreated = numInstancesCreated + 1
             if numInstancesCreated >= numToCreate:
                 break
-        except:
+        except BaseException:
             # There may not be space; ignore this.
             continue
 
     return numInstancesCreated
 
 
-def verifyMigUpdates(handle, oGpuInstances, oGpuCIIds, numInstancesCreated, numCIsCreated, retries=19):
+def verifyMigUpdates(
+        handle,
+        oGpuInstances,
+        oGpuCIIds,
+        numInstancesCreated,
+        numCIsCreated,
+        retries=19):
     newGpuInstances = []
     newComputeInstances = []
 
@@ -574,13 +623,13 @@ def verifyMigUpdates(handle, oGpuInstances, oGpuCIIds, numInstancesCreated, numC
                 for ciId in gpuCIIds[key]:
                     newComputeInstances.append(ciId)
 
-        if len(newGpuInstances) >= numInstancesCreated and len(newComputeInstances) >= numCIsCreated:
+        if len(newGpuInstances) >= numInstancesCreated and len(
+                newComputeInstances) >= numCIsCreated:
             errMsg = ''
             break
         elif len(newGpuInstances) < numInstancesCreated and len(newComputeInstances) < numCIsCreated:
-            errMsg = 'Expected %d new GPU instances and %d new compute instances but only found %d and %d' % \
-                     (numInstancesCreated, numCIsCreated, len(
-                         newGpuInstances), len(newComputeInstances))
+            errMsg = 'Expected %d new GPU instances and %d new compute instances but only found %d and %d' % (
+                numInstancesCreated, numCIsCreated, len(newGpuInstances), len(newComputeInstances))
         elif len(newGpuInstances) < numInstancesCreated:
             errMsg = "Expected %d new GPU instances but only found %d" % (
                 numInstancesCreated, len(newGpuInstances))
@@ -616,11 +665,15 @@ def delete_gpu_instances(handle, newGpuInstances, flags):
 def delete_gpu_instances_no_fail(handle, newGpuInstances, flags):
     try:
         delete_gpu_instances(handle, newGpuInstances, flags)
-    except:
+    except BaseException:
         pass
 
 
-def create_mig_entities_and_verify(handle, gpuIds, instanceCreateCount, minInstanceCreateCount):
+def create_mig_entities_and_verify(
+        handle,
+        gpuIds,
+        instanceCreateCount,
+        minInstanceCreateCount):
     # get mig hierarchy
     hierarchy = dcgm_agent.dcgmGetGpuInstanceHierarchy(handle)
     oGpus, oGpuInstances, oGpuCIIds = populate_counts_per_gpu(hierarchy)
@@ -639,13 +692,21 @@ def create_mig_entities_and_verify(handle, gpuIds, instanceCreateCount, minInsta
     numCIsCreated = 0
     try:
         for instanceId in newGpuInstances[:-1]:
-            dcgm_agent.dcgmCreateMigEntity(handle, instanceId, dcgm_structs.DcgmMigProfileComputeInstanceSlice1,
-                                           dcgm_structs.DcgmMigCreateComputeInstance, flags)
+            dcgm_agent.dcgmCreateMigEntity(
+                handle,
+                instanceId,
+                dcgm_structs.DcgmMigProfileComputeInstanceSlice1,
+                dcgm_structs.DcgmMigCreateComputeInstance,
+                flags)
             numCIsCreated = numCIsCreated + 1
 
-        # For the last one, send a flag to ask hostengine to process the reconfiguring
-        dcgm_agent.dcgmCreateMigEntity(handle, newGpuInstances[-1], dcgm_structs.DcgmMigProfileComputeInstanceSlice1,
-                                       dcgm_structs.DcgmMigCreateComputeInstance, 0)
+        # For the last one, send a flag to ask hostengine to process the
+        # reconfiguring
+        dcgm_agent.dcgmCreateMigEntity(handle,
+                                       newGpuInstances[-1],
+                                       dcgm_structs.DcgmMigProfileComputeInstanceSlice1,
+                                       dcgm_structs.DcgmMigCreateComputeInstance,
+                                       0)
         numCIsCreated = numCIsCreated + 1
     except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_INSUFFICIENT_RESOURCES) as e:
         delete_gpu_instances_no_fail(handle, newGpuInstances, flags)
@@ -790,11 +851,12 @@ def test_mig_cuda_visible_devices_string_standalone(handle, gpuIds):
 
 
 def helper_test_mig_value_reporting(handle, gpuIds):
-    # These fields should report the same value for GPUs, instances, and compute instances
+    # These fields should report the same value for GPUs, instances, and
+    # compute instances
     sameValueFieldIds = [
-        dcgm_fields.DCGM_FI_DEV_COMPUTE_MODE,
+        dcgm_fields.DCGM_FI_DEV_GPU_COMPUTE_MODE,
         dcgm_fields.DCGM_FI_DEV_MIG_MODE,
-        dcgm_fields.DCGM_FI_DEV_SHUTDOWN_TEMP,
+        dcgm_fields.DCGM_FI_DEV_GPU_TEMP_SHUTDOWN_CELSIUS,
     ]
 
     differentValueFieldIds = [
@@ -804,7 +866,8 @@ def helper_test_mig_value_reporting(handle, gpuIds):
     gpus, newGpuInstances, newComputeInstances = create_mig_entities_and_verify(
         handle, gpuIds, 1, 1)
 
-    # Make sure we get the same values for these fields on the GPU, instances, and compute instances
+    # Make sure we get the same values for these fields on the GPU, instances,
+    # and compute instances
 
     # Build the entity list
     entities = []
@@ -825,7 +888,8 @@ def helper_test_mig_value_reporting(handle, gpuIds):
         handle, entities, fieldIds, dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
     gpuValues = {}
 
-    # Make a map of a map the values reported by the GPUs: gpuId -> fieldId -> value
+    # Make a map of a map the values reported by the GPUs: gpuId -> fieldId ->
+    # value
     for value in values:
         if value.entityGroupId == dcgm_fields.DCGM_FE_GPU:
             if value.entityId not in gpuValues:
@@ -843,8 +907,8 @@ def helper_test_mig_value_reporting(handle, gpuIds):
             if value.entityGroupId == dcgm_fields.DCGM_FE_GPU_I:
                 same = gpuValues[gpuId][value.fieldId] == value.value.i64
                 if not same and value.fieldId in sameValueFieldIds:
-                    errMsg = errMsg + "\nExpected %d but found %d for field %d GPU instance %d on GPU %d" \
-                        % (gpuValues[gpuId][value.fieldId], value.value.i64, value.fieldId, value.entityId, gpuId)
+                    errMsg = errMsg + "\nExpected %d but found %d for field %d GPU instance %d on GPU %d" % (
+                        gpuValues[gpuId][value.fieldId], value.value.i64, value.fieldId, value.entityId, gpuId)
                 elif same and value.fieldId in differentValueFieldIds:
                     errMsg = errMsg + "\nExpected different values but found %d for field %d for GPU instance %d on GPU %d" \
                         % (value.value.i64, value.fieldId, value.entityId, gpuId)
@@ -866,7 +930,8 @@ def helper_test_mig_value_reporting(handle, gpuIds):
             "The compute instances didn't clean up correctly: %s" % ciFailMsg)
     if instanceFailMsg != '':
         logger.warning(
-            "The GPU instances didn't clean up correctly: %s" % instanceFailMsg)
+            "The GPU instances didn't clean up correctly: %s" %
+            instanceFailMsg)
 
     assert errMsg == '', errMsg
 

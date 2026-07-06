@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,11 @@
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 
+#include <cerrno>
+#include <csignal>
+#include <cstring>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -72,6 +76,96 @@ private:
     plog::Record record;
 };
 } // namespace DcgmNs::Dcgmi::Logging
+
+namespace DcgmNs::Dcgmi
+{
+namespace detail
+{
+    /**
+     * Describes one process signal handler registration to install transactionally.
+     */
+    struct SignalHandlerRegistration
+    {
+        int signum;                 //!< Signal number to install a handler for.
+        char const *signalName;     //!< Human-readable signal name for log messages.
+        struct sigaction oldAction; //!< Previous action captured by sigaction().
+    };
+
+    /**
+     * Restores a sequence of signal handlers to their previous actions.
+     *
+     * @param[in] registrations Signal registrations to restore. The registrations must contain valid oldAction values.
+     * @param[in] context Human-readable context used in log messages.
+     *
+     * @return Nothing.
+     *
+     * @note This function logs and continues if restoring an individual handler fails.
+     */
+    inline void RestoreSignalHandlers(std::span<SignalHandlerRegistration> registrations, char const *context)
+    {
+        for (auto const &registration : registrations)
+        {
+            if (sigaction(registration.signum, &registration.oldAction, nullptr) != 0)
+            {
+                log_warning("Failed to restore previous {} signal handler for {}: {}",
+                            context,
+                            registration.signalName,
+                            std::strerror(errno));
+            }
+        }
+    }
+
+} // namespace detail
+
+/**
+ * Installs the diagnostic signal handlers once.
+ *
+ * If any registration fails, previously installed handlers from this call are restored before the function returns.
+ *
+ * @param[in,out] installed Whether these signal handlers were already installed.
+ * @param[in] handler Signal handler to install.
+ * @param[in] context Human-readable context used in log messages.
+ *
+ * @return DCGM_ST_OK if the signal handlers are installed or were already installed.
+ * @return DCGM_ST_GENERIC_ERROR if any handler could not be installed.
+ */
+inline dcgmReturn_t InstallSigHandlers(bool &installed, void (*handler)(int), char const *context)
+{
+    if (installed)
+    {
+        return DCGM_ST_OK;
+    }
+
+    detail::SignalHandlerRegistration registrations[] = {
+        { SIGHUP, "SIGHUP", {} },
+        { SIGINT, "SIGINT", {} },
+        { SIGQUIT, "SIGQUIT", {} },
+        { SIGTERM, "SIGTERM", {} },
+    };
+
+    size_t installedCount = 0;
+    for (auto &registration : registrations)
+    {
+        struct sigaction action = {};
+        action.sa_handler       = handler;
+        sigemptyset(&action.sa_mask);
+        sigaddset(&action.sa_mask, registration.signum);
+        if (sigaction(registration.signum, &action, &registration.oldAction) != 0)
+        {
+            log_error("Failed to install {} signal handler for {}: {}",
+                      context,
+                      registration.signalName,
+                      std::strerror(errno));
+            detail::RestoreSignalHandlers(std::span(registrations).first(installedCount), context);
+            return DCGM_ST_GENERIC_ERROR;
+        }
+        ++installedCount;
+    }
+
+    installed = true;
+    return DCGM_ST_OK;
+}
+} // namespace DcgmNs::Dcgmi
 
 #define __SHOW_AND_LOG_ERROR(FUNC, LINE, FILE) \
     if (true)                                  \
@@ -235,6 +329,21 @@ namespace Terminal
      * @return TermDimensions if it's possible to get interactive terminal size.
      */
     std::optional<TermDimensions> GetTermDimensions();
+
+    /**
+     * Computes optimal items per line for grid layout
+     *
+     * @param[in] itemWidth      Width of each item (including spacing)
+     * @param[in] availableWidth Total width available for content
+     * @param[in] minItems       Minimum items per line (default: 2)
+     * @param[in] maxItems       Maximum items per line (default: 8)
+     *
+     * @return Number of items that fit per line, clamped to [minItems, maxItems]
+     */
+    std::uint16_t ComputeItemsPerLine(std::uint16_t itemWidth,
+                                      std::uint16_t availableWidth,
+                                      std::uint16_t minItems = 2,
+                                      std::uint16_t maxItems = 8);
 } // namespace Terminal
 
 } // namespace DcgmNs

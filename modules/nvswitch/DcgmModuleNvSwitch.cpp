@@ -95,6 +95,12 @@ DcgmModuleNvSwitch::~DcgmModuleNvSwitch()
 /*************************************************************************/
 dcgmReturn_t DcgmModuleNvSwitch::ProcessMessage(dcgm_module_command_header_t *moduleCommand)
 {
+    if (moduleCommand == nullptr)
+    {
+        log_debug("NULL module command seen");
+        return DCGM_ST_BADPARAM;
+    }
+
     dcgmReturn_t retSt       = DCGM_ST_OK;
     bool processInTaskRunner = false;
 

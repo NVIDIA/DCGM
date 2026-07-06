@@ -55,12 +55,12 @@ public:
         static constexpr std::chrono::milliseconds RESERVATION_TIMEOUT_MS { std::chrono::minutes(1) };
 
         // Latency of the mnubergemm process on when it starts time_to_run timing counter
-        static constexpr std::chrono::seconds MNUBERGEMM_LATENCY_SEC { 60 };
+        static constexpr std::chrono::seconds STARTUP_LATENCY { 60 };
 
-        // Timeout for process execution before termination, 60 seconds more than the default mnubergemm timeout of 3600
-        // seconds
-        static constexpr std::chrono::milliseconds PROCESS_EXECUTION_TIMEOUT_MS { std::chrono::seconds(3600)
-                                                                                  + MNUBERGEMM_LATENCY_SEC };
+        // Default timeout for process execution before termination
+        static constexpr std::chrono::milliseconds PROCESS_EXECUTION_TIMEOUT_MS {
+            MnDiagConstants::DEFAULT_TIME_TO_RUN_SECONDS + STARTUP_LATENCY
+        };
     };
 
     /**
@@ -81,6 +81,7 @@ public:
                        std::function<dcgmReturn_t()> acquireResourcesCallback,
                        std::function<dcgmReturn_t()> releaseResourcesCallback,
                        std::function<void(MnDiagStatus)> setStatusCallback,
+                       std::function<std::vector<std::pair<pid_t, std::string>>()> getMpiProcessInfoCallback,
                        std::chrono::milliseconds reservationTimeout      = TimeoutValues::RESERVATION_TIMEOUT_MS,
                        std::chrono::milliseconds processExecutionTimeout = TimeoutValues::PROCESS_EXECUTION_TIMEOUT_MS);
 
@@ -142,10 +143,10 @@ public:
      */
     void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds)
     {
-        // A latency value is added to the timeout to account for the time it takes to run the diagnostic
-        std::chrono::seconds timeoutInSecondsWithBuffer = timeoutInSeconds + TimeoutValues::MNUBERGEMM_LATENCY_SEC;
-        log_debug("Set StateMachine's process execution timeout to {} seconds", timeoutInSecondsWithBuffer.count());
-        m_processExecutionTimeout = std::chrono::milliseconds(timeoutInSecondsWithBuffer);
+        constexpr std::chrono::seconds STARTUP_LATENCY = std::chrono::seconds(60);
+        m_processExecutionTimeout                      = std::chrono::milliseconds(timeoutInSeconds + STARTUP_LATENCY);
+        log_debug("Set StateMachine's process execution timeout to {} seconds",
+                  std::chrono::duration_cast<std::chrono::seconds>(m_processExecutionTimeout).count());
     }
 
     /**
@@ -153,9 +154,9 @@ public:
      *
      * @param path The path to the mnubergemm binary
      */
-    void SetMnubergemmPath(std::string const &path)
+    void SetExpectedBinaryPath(std::string const &path)
     {
-        m_mnubergemmPath = path;
+        m_expectedBinaryPath = path;
     }
 
 private:
@@ -204,15 +205,21 @@ private:
 
     // Helper methods
     bool TransitionTo(State newState);
+    bool TransitionToLocked(State newState); // Assumes m_mutex is already held
     bool AcquireResources();
     void ReleaseResources();
 
     /**
-     * Check if the MPI process is running
+     * Check if any of the given MPI processes are running.
      *
-     * @return true if the MPI process is running, false otherwise
+     * Callers must pass a snapshot of m_processInfo taken under m_mutex.
+     * This function does not acquire m_mutex itself to avoid deadlocking
+     * callers that already hold the lock (e.g. NotifyDiagnosticFinished).
+     *
+     * @param processInfo snapshot of the process map to check
+     * @return true if at least one process is still running, false otherwise
      */
-    bool IsMpiProcessRunning();
+    bool IsMpiProcessRunning(std::vector<std::pair<pid_t, std::string>> const &processInfo);
 
     /**
      * Convert a state to a string
@@ -228,6 +235,7 @@ private:
     std::function<dcgmReturn_t()> m_acquireResourcesCallback;
     std::function<dcgmReturn_t()> m_releaseResourcesCallback;
     std::function<void(MnDiagStatus)> m_setStatusCallback;
+    std::function<std::vector<std::pair<pid_t, std::string>>()> m_getMpiProcessInfoCallback;
 
     // Current state
     std::atomic<State> m_state { State::WAITING };
@@ -242,6 +250,9 @@ private:
     // Mutex for thread safety
     mutable DcgmMutex m_mutex { 0 };
 
+    // Condition variable for state change notifications
+    std::condition_variable m_stateCV;
+
     // Reservation details
     std::chrono::steady_clock::time_point m_reservationTime;      // Time the reservation was made
     std::chrono::steady_clock::time_point m_processDetectionTime; // Time the process was detected
@@ -249,5 +260,5 @@ private:
     std::chrono::milliseconds m_reservationTimeout { TimeoutValues::RESERVATION_TIMEOUT_MS };
     std::chrono::milliseconds m_processExecutionTimeout { TimeoutValues::PROCESS_EXECUTION_TIMEOUT_MS };
 
-    std::string m_mnubergemmPath;
+    std::string m_expectedBinaryPath;
 };

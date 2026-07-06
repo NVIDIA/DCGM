@@ -18,6 +18,7 @@
 
 #include "CommandOutputController.h"
 #include "MigTestsHelper.hpp"
+#include "TestHelpers.hpp"
 
 #include <Query.h>
 
@@ -167,6 +168,106 @@ TEST_CASE("DCGMI: CommandOutputController")
         {
             std::string result = coc.HelperDisplayValue("There's weird\nspacing\n\there.");
             REQUIRE(result == "There's weird spacing  here.");
+        }
+
+        SECTION("numeric blank conversions")
+        {
+            GIVEN("integer and floating point blank DCGM values")
+            {
+                WHEN("they are formatted for display")
+                {
+                    THEN("the CLI-friendly labels are returned")
+                    {
+                        CHECK(coc.HelperDisplayValue(DCGM_INT32_BLANK) == "Not Specified");
+                        CHECK(coc.HelperDisplayValue(DCGM_INT32_NOT_FOUND) == "Not Found");
+                        CHECK(coc.HelperDisplayValue(DCGM_INT32_NOT_SUPPORTED) == "Not Supported");
+                        CHECK(coc.HelperDisplayValue(DCGM_INT32_NOT_PERMISSIONED) == "Insf. Permission");
+                        CHECK(coc.HelperDisplayValue(7) == "7");
+
+                        CHECK(coc.HelperDisplayValue(static_cast<unsigned int>(DCGM_INT32_BLANK)) == "Not Specified");
+                        CHECK(coc.HelperDisplayValue(static_cast<unsigned int>(DCGM_INT32_NOT_FOUND)) == "Not Found");
+                        CHECK(coc.HelperDisplayValue(static_cast<unsigned int>(DCGM_INT32_NOT_SUPPORTED))
+                              == "Not Supported");
+                        CHECK(coc.HelperDisplayValue(static_cast<unsigned int>(DCGM_INT32_NOT_PERMISSIONED))
+                              == "Insf. Permission");
+                        CHECK(coc.HelperDisplayValue(9U) == "9");
+
+                        CHECK(coc.HelperDisplayValue(static_cast<long long>(DCGM_INT64_BLANK)) == "Not Specified");
+                        CHECK(coc.HelperDisplayValue(static_cast<long long>(DCGM_INT64_NOT_FOUND)) == "Not Found");
+                        CHECK(coc.HelperDisplayValue(static_cast<long long>(DCGM_INT64_NOT_SUPPORTED))
+                              == "Not Supported");
+                        CHECK(coc.HelperDisplayValue(static_cast<long long>(DCGM_INT64_NOT_PERMISSIONED))
+                              == "Insf. Permission");
+                        CHECK(coc.HelperDisplayValue(11LL) == "11");
+
+                        CHECK(coc.HelperDisplayValue(DCGM_FP64_BLANK) == "Not Specified");
+                        CHECK(coc.HelperDisplayValue(DCGM_FP64_NOT_FOUND) == "Not Found");
+                        CHECK(coc.HelperDisplayValue(DCGM_FP64_NOT_SUPPORTED) == "Not Supported");
+                        CHECK(coc.HelperDisplayValue(DCGM_FP64_NOT_PERMISSIONED) == "Insf. Permission");
+                        CHECK(coc.HelperDisplayValue(12.5) == "12.5");
+                    }
+                }
+            }
+        }
+    }
+
+    SECTION("display")
+    {
+        GIVEN("a display stencil with multiple tags")
+        {
+            CommandOutputController coc;
+            coc.setDisplayStencil("| <GPU   > | <VALUE     >|\n");
+            coc.addDisplayParameter("<GPU", 3);
+            coc.addDisplayParameter("<VALUE", "line\tone");
+
+            WHEN("the stencil is displayed")
+            {
+                CoutCapture capture;
+                coc.display();
+
+                THEN("tags are replaced and parameters are cleared")
+                {
+                    CHECK(capture.str() == "| 3        | line one    |\n");
+
+                    CoutCapture secondCapture;
+                    coc.display();
+                    CHECK(secondCapture.str() == "| <GPU   > | <VALUE     >|\n");
+                }
+            }
+        }
+    }
+
+    SECTION("ReplaceTag error handling")
+    {
+        GIVEN("malformed or missing tags")
+        {
+            WHEN("the tag start is not present")
+            {
+                std::string value = "plain text";
+                CoutCapture capture;
+
+                CommandOutputController::ReplaceTag(value, "<GPU", "%s", "0");
+
+                THEN("the buffer is unchanged and a debug message is emitted")
+                {
+                    CHECK(value == "plain text");
+                    CHECK(capture.str().find("unable to find a tag start") != std::string::npos);
+                }
+            }
+
+            WHEN("the tag has no closing bracket")
+            {
+                std::string value = "| <GPU";
+                CoutCapture capture;
+
+                CommandOutputController::ReplaceTag(value, "<GPU", "%s", "0");
+
+                THEN("the buffer is unchanged and a debug message is emitted")
+                {
+                    CHECK(value == "| <GPU");
+                    CHECK(capture.str().find("unable to find tag end") != std::string::npos);
+                }
+            }
         }
     }
 }

@@ -30,3 +30,5 @@ target_sources(dcgmmoduleintrospect
     dcgm_introspect_structs.h
     DcgmMetadataMgr.h
 )
+
+add_subdirectory(tests)

@@ -57,3 +57,19 @@ std::expected<std::filesystem::path, std::system_error> get_executable_path();
 /*****************************************************************************/
 std::expected<std::string, std::system_error> get_mnubergemm_binary_path(int cudaVersion,
                                                                          auto const &supportedCudaVersions);
+
+/**
+ * @brief Parse the time_to_run value from a testParms array.
+ *
+ * Scans params.testParms for an entry whose text is exactly `key=<value>`,
+ * anchored at the start, and returns the validated integer value in seconds.
+ * Semicolons are treated as delimiters: only the text between '=' and the
+ * first ';' (if any) is interpreted as the value.
+ *
+ * @param params  The run parameters struct whose testParms array is scanned.
+ * @param key     Full parameter key to match (e.g. "mnubergemm.time_to_run").
+ * @return On success: 0 if the key is absent, or a positive integer (seconds) if found and valid.
+ *         On error: std::unexpected(DCGM_ST_BADPARAM) if the entry is
+ *         present but malformed or has a non-positive value.
+ */
+std::expected<int, dcgmReturn_t> ParseTimeToRunSeconds(dcgmRunMnDiag_t const &params, std::string_view key);

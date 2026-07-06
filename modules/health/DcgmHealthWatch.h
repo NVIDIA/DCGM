@@ -22,15 +22,25 @@
 #include "DcgmHealthResponse.h"
 #include "dcgm_core_communication.h"
 #include "dcgm_test_apis.h"
+#include <DcgmLogging.h>
+#include <optional>
+#include <string_view>
 #include <unordered_set>
+#include <vector>
 
-// Maps XID numbers to health subsystems and severity
+/** Maps XID numbers to health subsystems, severity, and optional architecture constraints. */
 struct XidHealthInfo
 {
-    dcgmHealthWatchResults_t severity; // WARN or FAIL level
-    dcgmHealthSystems_t healthSystem;  // Which subsystem this belongs to
-    std::string errorMessage;          // Human-readable error message
-    dcgmError_t errorCode;             // Specific error code from dcgmError_enum, defaults to DCGM_FR_XID_ERROR
+    dcgmHealthWatchResults_t severity; //!< WARN or FAIL level
+    dcgmHealthSystems_t healthSystem;  //!< Which subsystem this belongs to
+    std::string errorMessage;          //!< Human-readable error message
+    dcgmError_t errorCode;             //!< Specific error code from dcgmError_enum, defaults to DCGM_FR_XID_ERROR
+
+    /**
+     * When set, this XID is only raised for GPUs whose chip architecture exactly matches
+     * this value. Leave as std::nullopt to apply to all architectures.
+     */
+    std::optional<dcgmChipArchitecture_t> requiredArch = std::nullopt;
 };
 
 struct HealthWatchState
@@ -137,6 +147,26 @@ private:
 
     // Get GPU architecture (compute capability major version)
     DcgmResult<int> GetCudaComputeCapabilityMajorVersion(dcgm_field_eid_t entityId);
+
+    /**
+     * Resolve the parent GPU ID for GPU, GPU instance, and compute instance entities.
+     *
+     * @param[in] entityGroupId Entity group of the health target.
+     * @param[in] entityId Entity ID of the health target.
+     * @return Parent GPU ID on success, or an error if the entity cannot be resolved.
+     */
+    DcgmResult<dcgm_field_eid_t> GetParentGpuIdForEntity(dcgm_field_entity_group_t entityGroupId,
+                                                         dcgm_field_eid_t entityId);
+
+    /**
+     * Determine if GPU is Blackwell or newer, using chip arch from GetAllGpuInfo
+     * when available; otherwise CUDA compute capability.
+     *
+     * @param[in] gpuId The GPU ID
+     * @return true if the GPU is Blackwell or newer, false if it is known older,
+     *         or an error if architecture could not be determined.
+     */
+    DcgmResult<bool> IsGpuBlackwellOrNewer(dcgm_field_eid_t gpuId);
 
     /* Build internal lists of fieldIds to be used by other methods */
     void BuildFieldLists(void);
@@ -342,6 +372,9 @@ private:
                                             long long startTime,
                                             long long endTime,
                                             DcgmHealthResponse &response);
+    dcgmReturn_t MonitorMemRowRemapUncorrectable(dcgm_field_entity_group_t entityGroupId,
+                                                 dcgm_field_eid_t entityId,
+                                                 DcgmHealthResponse &response);
 
     dcgmReturn_t MonitorMemUnrepairableFlag(dcgm_field_entity_group_t entityGroupId,
                                             dcgm_field_eid_t entityId,
@@ -364,6 +397,12 @@ private:
 
     bool FitsGpuHardwareCheck(dcgm_field_entity_group_t entityGroupId);
 
+    /**
+     * Check if any GPU in the given entity list has at least one active or down NVLink.
+     * Used to skip IMEX health checks on systems without NVLinks.
+     */
+    bool SystemHasNvLinks(std::vector<dcgmGroupEntityPair_t> const &entities);
+
     /* Helpers called by MonitorPcie() */
     dcgmReturn_t GetExpectedPcieReplayRate(dcgm_field_entity_group_t entityGroupId,
                                            dcgm_field_eid_t entityId,
@@ -379,7 +418,6 @@ private:
                                 dcgm_field_eid_t entityId,
                                 DcgmHealthResponse &response);
 
-
     // Monitored XIDs regardless of enabled subsystems
     std::unordered_map<uint64_t, XidHealthInfo> m_devastatingXids;
 
@@ -392,6 +430,7 @@ private:
     // Friend class for testing
     friend class DcgmHealthWatchTestHelper;
 
+    static constexpr int computeCapabilityAmpere    = 8;
     static constexpr int computeCapabilityBlackWell = 10;
 };
 

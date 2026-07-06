@@ -26,38 +26,38 @@ namespace DcgmNs
 /**
  * Map fieldId to FieldIdControlType<fieldId> singleton reference.
  */
-const FieldIdControlType<DCGM_FI_UNKNOWN> *FieldIdFind(unsigned short fieldId)
+const FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN> *FieldIdFind(unsigned short fieldId)
 {
 #define map_entry(fieldId)                           \
     {                                                \
         fieldId, FieldIdControlType<fieldId>::Self() \
     }
 
-    static std::map<unsigned short, const FieldIdControlType<DCGM_FI_UNKNOWN> &> map
-        = { map_entry(DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT),
-            map_entry(DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SLOWDOWN),
-            map_entry(DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SHUTDOWN),
+    static std::map<unsigned short, const FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN> &> map
+        = { map_entry(DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS),
+            map_entry(DCGM_FI_DEV_NVSWITCH_TEMP_SLOWDOWN_CELSIUS),
+            map_entry(DCGM_FI_DEV_NVSWITCH_TEMP_SHUTDOWN_CELSIUS),
             map_entry(DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX),
             map_entry(DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX),
-            map_entry(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS),
-            map_entry(DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERRORS),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERRORS),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERRORS),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS),
+            map_entry(DCGM_FI_DEV_SXID_FATAL_ERROR),
+            map_entry(DCGM_FI_DEV_SXID_NON_FATAL_ERROR),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERROR_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERROR_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERROR_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_TOTAL),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_NON_FATAL_ERRORS),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L0_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L1_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L2_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L3_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L0_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L1_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L2_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L3_TOTAL),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2),
@@ -74,11 +74,11 @@ const FieldIdControlType<DCGM_FI_UNKNOWN> *FieldIdFind(unsigned short fieldId)
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3),
-            map_entry(DCGM_FI_DEV_NVSWITCH_PHYS_ID),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL),
+            map_entry(DCGM_FI_DEV_NVSWITCH_PHYSICAL_ID),
             map_entry(DCGM_FI_DEV_NVSWITCH_RESET_REQUIRED),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_ID),
             map_entry(DCGM_FI_DEV_NVSWITCH_PCIE_BUS),
@@ -91,17 +91,17 @@ const FieldIdControlType<DCGM_FI_UNKNOWN> *FieldIdFind(unsigned short fieldId)
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_BUS),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DEVICE),
             map_entry(DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_ID),
-            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_SID),
-            map_entry(DCGM_FI_DEV_NVSWITCH_DEVICE_UUID),
-            map_entry(DCGM_FI_DEV_UUID),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_ID),
+            map_entry(DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID),
+            map_entry(DCGM_FI_DEV_NVSWITCH_UUID),
+            map_entry(DCGM_FI_DEV_GPU_UUID),
             map_entry(DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT),
             map_entry(DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ),
             map_entry(DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV),
             map_entry(DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD),
-            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_VDD),
-            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_DVDD),
-            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_HVDD) };
+            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS),
+            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS),
+            map_entry(DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS) };
 
 #undef map_entry
 
@@ -119,7 +119,7 @@ dcgmReturn_t DcgmNscqManager::UpdateFields(unsigned short fieldId,
                                            const std::vector<dcgm_field_update_info_t> &entities,
                                            timelib64_t now)
 {
-    const FieldIdControlType<DCGM_FI_UNKNOWN> *internalFieldId = FieldIdFind(fieldId);
+    const FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN> *internalFieldId = FieldIdFind(fieldId);
 
     if (internalFieldId == nullptr)
     {

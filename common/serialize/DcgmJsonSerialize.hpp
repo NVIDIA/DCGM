@@ -125,7 +125,8 @@ auto TryDeserialize(std::string_view jsonStr)
     builder["rejectDupKeys"]       = true;
     builder["allowSpecialFloats"]  = true;
     builder["skipBom"]             = false;
-    if (builder.newCharReader()->parse(jsonStr.data(), jsonStr.data() + jsonStr.size(), &root, &errors))
+    std::unique_ptr<::Json::CharReader> reader(builder.newCharReader());
+    if (reader->parse(jsonStr.data(), jsonStr.data() + jsonStr.size(), &root, &errors))
     {
         return ParseJson(root, To<T>());
     }
@@ -153,7 +154,8 @@ auto Deserialize(std::string_view jsonStr) -> T
     builder["rejectDupKeys"]       = true;
     builder["allowSpecialFloats"]  = true;
     builder["skipBom"]             = false;
-    if (builder.newCharReader()->parse(jsonStr.data(), jsonStr.data() + jsonStr.size(), &root, &errors))
+    std::unique_ptr<::Json::CharReader> reader(builder.newCharReader());
+    if (reader->parse(jsonStr.data(), jsonStr.data() + jsonStr.size(), &root, &errors))
     {
         return ParseJson(root, To<T>()).value();
     }

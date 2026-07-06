@@ -38,7 +38,15 @@ std::string TestGroupManager::GetTag()
 /*************************************************************************/
 int TestGroupManager::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = initParams.liveGpuIds;
+    if (initParams.liveGpuIds.size() == 0)
+    {
+        m_gpus = initParams.fakeGpuIds;
+    }
+    else
+    {
+        m_gpus = initParams.liveGpuIds;
+    }
+
     return 0;
 }
 
@@ -175,7 +183,8 @@ int TestGroupManager::TestGroupCreation()
     {
         return -1;
     }
-    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager = std::make_unique<DcgmGroupManager>(cacheManager.get());
+    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager
+        = std::make_unique<DcgmGroupManager>(cacheManager.get(), HostEngineHandler {});
 
     st = pDcgmGrpManager->AddNewGroup(0, "Test1", DCGM_GROUP_DEFAULT, &groupId);
     if (DCGM_ST_OK != st)
@@ -200,7 +209,7 @@ CLEANUP:
 /*****************************************************************************/
 int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
                                               unsigned int groupId,
-                                              std::string groupName)
+                                              std::string const &groupName)
 {
     int st;
     std::string str;
@@ -247,7 +256,6 @@ int TestGroupManager::HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager,
         return 4;
     }
 
-
     str = pDcgmGrpManager->GetGroupName(0, groupId);
     if (str.compare(groupName))
     {
@@ -266,12 +274,25 @@ int TestGroupManager::TestGroupManageGpus()
     unsigned int numGroups = 20;
     std::vector<dcgmGroupEntityPair_t> groupEntities;
 
-    std::unique_ptr<DcgmCacheManager> cacheManager = GetCacheManagerInstance();
-    if (cacheManager == nullptr)
+    /* We need to use the host engine handler directly or we'll be injecting
+       entities into the wrong cache manager */
+    DcgmHostEngineHandler *heHandler = DcgmHostEngineHandler::Instance();
+
+    if (heHandler == nullptr)
     {
+        fprintf(stderr, "TestGroupManager::TestGroupManageGpus could not get a DcgmHostEngineHandler\n");
+
         return -1;
     }
-    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager = std::make_unique<DcgmGroupManager>(cacheManager.get());
+
+    DcgmGroupManager *pDcgmGrpManager = heHandler->GetGroupManager();
+
+    if (pDcgmGrpManager == nullptr)
+    {
+        fprintf(stderr, "TestGroupManager::TestGroupManageGpus could not get a DcgmGroupManager\n");
+
+        return -1;
+    }
 
     for (unsigned int g = 0; g < numGroups; ++g)
     {
@@ -300,7 +321,7 @@ int TestGroupManager::TestGroupManageGpus()
             goto CLEANUP;
         }
 
-        st = HelperOperationsOnGroup(pDcgmGrpManager.get(), groupId, std::move(groupName));
+        st = HelperOperationsOnGroup(pDcgmGrpManager, groupId, std::move(groupName));
         if (DCGM_ST_OK != st)
         {
             retSt = 4;
@@ -334,7 +355,8 @@ int TestGroupManager::TestGroupReportErrOnDuplicate()
     {
         return -1;
     }
-    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager = std::make_unique<DcgmGroupManager>(cacheManager.get());
+    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager
+        = std::make_unique<DcgmGroupManager>(cacheManager.get(), HostEngineHandler {});
 
     st = pDcgmGrpManager->AddNewGroup(0, "Test1", DCGM_GROUP_EMPTY, &groupId);
     if (DCGM_ST_OK != st)
@@ -385,12 +407,14 @@ int TestGroupManager::TestGroupGetAllGrpIds()
     {
         return -1;
     }
-    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager = std::make_unique<DcgmGroupManager>(cacheManager.get());
+    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager
+        = std::make_unique<DcgmGroupManager>(cacheManager.get(), HostEngineHandler {});
 
     unsigned int max_groups = 10;
+    std::string const testGroupName { "Test" };
     for (index = 0; index < max_groups; index++)
     {
-        st = pDcgmGrpManager->AddNewGroup(0, "Test", DCGM_GROUP_EMPTY, &groupId);
+        st = pDcgmGrpManager->AddNewGroup(0, testGroupName, DCGM_GROUP_EMPTY, &groupId);
         if (DCGM_ST_OK != st)
         {
             fprintf(stderr, "pDcgmGrpManager->AddNewGroup returned %d\n", st);
@@ -535,7 +559,8 @@ int TestGroupManager::TestGroupLimits()
     std::unique_ptr<DcgmCacheManager> cacheManager = GetCacheManagerInstance();
     CHECK(cacheManager != nullptr, "expected cacheManager != nullptr\n");
 
-    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager = std::make_unique<DcgmGroupManager>(cacheManager.get());
+    std::unique_ptr<DcgmGroupManager> pDcgmGrpManager
+        = std::make_unique<DcgmGroupManager>(cacheManager.get(), HostEngineHandler {});
     CHECK(pDcgmGrpManager != nullptr, "expected pDcgmGrpManager != nullptr\n");
 
     /* Verify default groups */
@@ -545,9 +570,10 @@ int TestGroupManager::TestGroupLimits()
 
     /* Test group maximum */
 
+    std::string const testGroupName { "Test" };
     for (index = 2; index < DCGM_MAX_NUM_GROUPS; index++)
     {
-        st = pDcgmGrpManager->AddNewGroup(0, "Test", DCGM_GROUP_EMPTY, &groupId);
+        st = pDcgmGrpManager->AddNewGroup(0, testGroupName, DCGM_GROUP_EMPTY, &groupId);
         CHECK(st == DCGM_ST_OK, "expected AddNewGroup[%d] st %d, got %d\n", index, DCGM_ST_OK, st);
     }
 

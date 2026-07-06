@@ -297,6 +297,14 @@ dcgmReturn_t DenylistModule::DoExecuteConnected()
         {
             moduleId = DcgmModuleIdMnDiag;
         }
+        else if (lowerModule == toLower(MODULE_PROFILING_NAME))
+        {
+            moduleId = DcgmModuleIdProfiling;
+        }
+        else if (lowerModule == toLower(MODULE_SYSMON_NAME))
+        {
+            moduleId = DcgmModuleIdSysmon;
+        }
         else
         {
             throw TCLAP::CmdLineParseException(usage());

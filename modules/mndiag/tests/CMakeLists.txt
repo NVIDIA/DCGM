@@ -22,14 +22,15 @@ target_sources(mndiag_tests
     PRIVATE
         MnDiagCommonTests.cpp
         MpiRunnerTests.cpp
-        MnDiagMpiRunnerTests.cpp
+        MnDiagMpiMnubergemmRunnerTests.cpp
         MnDiagStateMachineTests.cpp
         MnDiagProcessUtilsTests.cpp
         MnDiagManagerTests.cpp
+        DcgmModuleMnDiagTests.cpp
 )
 
-target_include_directories(mndiag_tests 
-    PRIVATE 
+target_include_directories(mndiag_tests
+    PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
@@ -55,6 +56,7 @@ target_link_libraries(mndiag_tests
         remoteconn
         modules_objects
         mndiag_interface
+        mock_mndiag
 )
 
 # Add only necessary system libraries

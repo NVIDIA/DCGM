@@ -12,11 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(tests)
+if (NOT BUILD_TESTING)
+    return()
+endif()
 
-target_include_directories(mock_interface INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_sources(mock_interface INTERFACE
-    DcgmLibMock.cpp
-    DcgmLibMock.h
-    FileHandleMock.cpp
-    FileHandleMock.h)
+add_library(mock_common STATIC)
+target_sources(mock_common PRIVATE
+    MockDcgmLib.cpp
+    MockDcgmLib.h
+    MockFileHandle.cpp
+    MockFileHandle.h
+    MockDynamicLibraryLoader.h
+    MockFileSystemOperator.h)
+
+target_include_directories(mock_common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(mock_common PUBLIC
+    dcgm_common
+    dcgm
+    common_interface
+    fmt::fmt)
+
+add_subdirectory(tests)

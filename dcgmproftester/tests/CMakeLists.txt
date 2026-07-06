@@ -21,6 +21,8 @@ add_executable(dcgmproftester_tests)
 target_sources(dcgmproftester_tests
     PRIVATE
         DistributedCudaContextTests.cpp
+        ArgumentsTests.cpp
+        FieldWorkersTests.cpp
         PhysicalGpuStub.cpp  # Minimal stub for PhysicalGpu inheritance
         ../DistributedCudaContext.cpp
         ../Entity.cpp
@@ -54,6 +56,7 @@ target_include_directories(dcgmproftester_tests
         ${CUDA12_INCLUDE_DIR}          # Include CUDA headers for compilation
         ${PROJECT_SOURCE_DIR}/cublas_proxy  # Include cublas_proxy headers
         ${PROJECT_SOURCE_DIR}/common   # Include common headers
+        ${PROJECT_SOURCE_DIR}/common/tests  # Include common test helpers
         ${PROJECT_SOURCE_DIR}/common/CudaWorker  # Include CudaWorker headers
         ${PROJECT_SOURCE_DIR}/dcgmlib  # Include dcgmlib headers
         ${PROJECT_SOURCE_DIR}/logging  # Include logging headers

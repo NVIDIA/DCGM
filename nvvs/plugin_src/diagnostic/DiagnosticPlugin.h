@@ -458,6 +458,32 @@ public:
     {
         return gbp.GetIndicesBelowMinThreshold(values, minThresh);
     }
+
+    /*
+     * Provides access to the device list for testing
+     *
+     * @param[in] gbp         The GpuBurnPlugin instance
+     * @return Reference to the internal device list
+     */
+    static std::vector<GpuBurnDevice *> &GetDeviceList(GpuBurnPlugin &gbp)
+    {
+        return gbp.m_device;
+    }
+
+    /*
+     * Invokes CheckPassFail for testing without full initialization
+     *
+     * @param[in] gbp         The GpuBurnPlugin instance
+     * @param[in] errorCount  Vector of error counts per GPU
+     * @param[in] nanCount    Vector of NaN counts per GPU
+     * @return true if all GPUs passed, false otherwise
+     */
+    static bool CheckPassFail(GpuBurnPlugin &gbp,
+                              std::vector<long long> const &errorCount,
+                              std::vector<long long> const &nanCount)
+    {
+        return gbp.CheckPassFail(errorCount, nanCount);
+    }
 };
 
 /*************************************************************************/

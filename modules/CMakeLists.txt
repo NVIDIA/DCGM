@@ -48,6 +48,7 @@ function(define_dcgm_module lib_name)
 endfunction()
 
 add_subdirectory(common)
+add_subdirectory(core/tests)
 add_subdirectory(config)
 add_subdirectory(diag)
 add_subdirectory(health)

@@ -22,37 +22,57 @@
 TEST_CASE("WatchTable: adding a few watches")
 {
     DcgmWatchTable wt;
-    REQUIRE(wt.AddWatcher(
-                DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeCacheManager), 10000, 1000000, false)
+    REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
+                          0,
+                          DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                          DcgmWatcher(DcgmWatcherTypeCacheManager),
+                          10000,
+                          1000000,
+                          false)
             == true);
-    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP) == 10000);
-    REQUIRE(wt.GetMaxAgeUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP) == 1000000);
-    REQUIRE(wt.GetIsSubscribed(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP) == false);
-    REQUIRE(wt.AddWatcher(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeClient), 1000, 1000000, true)
+    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 10000);
+    REQUIRE(wt.GetMaxAgeUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 1000000);
+    REQUIRE(wt.GetIsSubscribed(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == false);
+    REQUIRE(wt.AddWatcher(
+                DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS, DcgmWatcher(DcgmWatcherTypeClient), 1000, 1000000, true)
             == false);
-    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP) == 1000);
-    REQUIRE(wt.GetMaxAgeUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP) == 1000000);
-    REQUIRE(wt.GetIsSubscribed(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP) == true);
+    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 1000);
+    REQUIRE(wt.GetMaxAgeUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 1000000);
+    REQUIRE(wt.GetIsSubscribed(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == true);
 
     wt.ClearWatches();
-    REQUIRE(wt.AddWatcher(
-                DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeCacheManager), 10000, 1000000, false)
+    REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
+                          0,
+                          DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                          DcgmWatcher(DcgmWatcherTypeCacheManager),
+                          10000,
+                          1000000,
+                          false)
             == true);
     REQUIRE(wt.ClearEntityWatches(DCGM_FE_GPU, 0) == DCGM_ST_OK);
-    REQUIRE(wt.AddWatcher(
-                DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeCacheManager), 1000, 1000000, false)
+    REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
+                          0,
+                          DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                          DcgmWatcher(DcgmWatcherTypeCacheManager),
+                          1000,
+                          1000000,
+                          false)
             == true);
-    REQUIRE(
-        wt.AddWatcher(
-            DCGM_FE_SWITCH, 0, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeCacheManager), 10000, 1000000, false)
-        == true);
-    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP) == 1000);
-    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_SWITCH, 0, DCGM_FI_DEV_GPU_TEMP) == 10000);
+    REQUIRE(wt.AddWatcher(DCGM_FE_SWITCH,
+                          0,
+                          DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                          DcgmWatcher(DcgmWatcherTypeCacheManager),
+                          10000,
+                          1000000,
+                          false)
+            == true);
+    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 1000);
+    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_SWITCH, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 10000);
     REQUIRE(wt.ClearEntityWatches(DCGM_FE_GPU, 0) == DCGM_ST_OK);
-    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP) == 0);
-    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_SWITCH, 0, DCGM_FI_DEV_GPU_TEMP) == 10000);
+    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 0);
+    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_SWITCH, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 10000);
     REQUIRE(wt.ClearEntityWatches(DCGM_FE_SWITCH, 0) == DCGM_ST_OK);
-    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_SWITCH, 0, DCGM_FI_DEV_GPU_TEMP) == 0);
+    REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_SWITCH, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 0);
 }
 
 TEST_CASE("WatchTable: RemoveConnectionWatches")
@@ -62,23 +82,38 @@ TEST_CASE("WatchTable: RemoveConnectionWatches")
 
     for (unsigned int i = 0; i < 4; i++)
     {
-        REQUIRE(wt.AddWatcher(
-                    DCGM_FE_GPU, i, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeClient, 1), 10000, 1000000, false)
+        REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
+                              i,
+                              DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                              DcgmWatcher(DcgmWatcherTypeClient, 1),
+                              10000,
+                              1000000,
+                              false)
                 == true);
-        REQUIRE(wt.AddWatcher(
-                    DCGM_FE_GPU, i, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeClient, 2), 5000, 1000000, false)
+        REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
+                              i,
+                              DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                              DcgmWatcher(DcgmWatcherTypeClient, 2),
+                              5000,
+                              1000000,
+                              false)
                 == false);
-        REQUIRE(wt.AddWatcher(
-                    DCGM_FE_GPU, i, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeClient, 3), 1000, 1000000, false)
+        REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
+                              i,
+                              DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                              DcgmWatcher(DcgmWatcherTypeClient, 3),
+                              1000,
+                              1000000,
+                              false)
                 == false);
 
-        REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, i, DCGM_FI_DEV_GPU_TEMP) == 1000);
+        REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, i, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 1000);
     }
 
     REQUIRE(wt.RemoveConnectionWatches(3, nullptr) == DCGM_ST_OK);
     for (unsigned int i = 0; i < 4; i++)
     {
-        REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, i, DCGM_FI_DEV_GPU_TEMP) == 5000);
+        REQUIRE(wt.GetUpdateIntervalUsec(DCGM_FE_GPU, i, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == 5000);
     }
 
     // Make sure postWatchInfo isn't populated while it is still watched
@@ -89,7 +124,7 @@ TEST_CASE("WatchTable: RemoveConnectionWatches")
     for (size_t i = 0; i < postWatchInfo.size(); i++)
     {
         REQUIRE(postWatchInfo[i].size() == 1);
-        REQUIRE(postWatchInfo[i][0] == DCGM_FI_DEV_GPU_TEMP);
+        REQUIRE(postWatchInfo[i][0] == DCGM_FI_DEV_GPU_TEMP_CELSIUS);
     }
 }
 
@@ -101,13 +136,17 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
     DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
     for (unsigned int i = 0; i < 4; i++)
     {
-        REQUIRE(
-            wt.AddWatcher(
-                DCGM_FE_GPU, i, DCGM_FI_DEV_GPU_TEMP, DcgmWatcher(DcgmWatcherTypeCacheManager, 1), 10, 1000000, false)
-            == true);
         REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
                               i,
-                              DCGM_FI_DEV_MEMORY_TEMP,
+                              DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                              DcgmWatcher(DcgmWatcherTypeCacheManager, 1),
+                              10,
+                              1000000,
+                              false)
+                == true);
+        REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
+                              i,
+                              DCGM_FI_DEV_MEMORY_TEMP_CELSIUS,
                               DcgmWatcher(DcgmWatcherTypeCacheManager, 1),
                               1000000,
                               1000000,
@@ -115,7 +154,7 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
                 == true);
         REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
                               i,
-                              DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS,
+                              DCGM_FI_DEV_SXID_NON_FATAL_ERROR,
                               DcgmWatcher(DcgmWatcherTypeCacheManager, 1),
                               100,
                               1000000,
@@ -123,7 +162,7 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
                 == true);
         REQUIRE(wt.AddWatcher(DCGM_FE_GPU,
                               i,
-                              DCGM_FI_PROF_GR_ENGINE_ACTIVE,
+                              DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO,
                               DcgmWatcher(DcgmWatcherTypeCacheManager, 1),
                               1,
                               1000000,
@@ -146,7 +185,7 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
     REQUIRE(toUpdate.size() == 4);
     for (size_t i = 0; i < toUpdate.size(); i++)
     {
-        CHECK(toUpdate[i].fieldMeta->fieldId == DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS);
+        CHECK(toUpdate[i].fieldMeta->fieldId == DCGM_FI_DEV_SXID_NON_FATAL_ERROR);
     }
     CHECK(earliestNextUpdate == now + 100);
 
@@ -157,7 +196,7 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
     REQUIRE(toUpdate.size() == 4);
     for (size_t i = 0; i < toUpdate.size(); i++)
     {
-        CHECK(toUpdate[i].fieldMeta->fieldId == DCGM_FI_PROF_GR_ENGINE_ACTIVE);
+        CHECK(toUpdate[i].fieldMeta->fieldId == DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO);
     }
     CHECK(earliestNextUpdate == now + 1);
 
@@ -171,15 +210,15 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
     unsigned int grActiveCount = 0;
     for (size_t i = 0; i < toUpdate.size(); i++)
     {
-        if (toUpdate[i].fieldMeta->fieldId == DCGM_FI_DEV_GPU_TEMP)
+        if (toUpdate[i].fieldMeta->fieldId == DCGM_FI_DEV_GPU_TEMP_CELSIUS)
         {
             gpuTempCount++;
         }
-        else if (toUpdate[i].fieldMeta->fieldId == DCGM_FI_DEV_MEMORY_TEMP)
+        else if (toUpdate[i].fieldMeta->fieldId == DCGM_FI_DEV_MEMORY_TEMP_CELSIUS)
         {
             memTempCount++;
         }
-        else if (toUpdate[i].fieldMeta->fieldId == DCGM_FI_PROF_GR_ENGINE_ACTIVE)
+        else if (toUpdate[i].fieldMeta->fieldId == DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO)
         {
             grActiveCount++;
         }
@@ -188,7 +227,7 @@ TEST_CASE("WatchTable: GetFieldsToUpdate")
     CHECK(memTempCount == 4);
     CHECK(grActiveCount
           == 0); /* This is expected because the section before this already updated the profiling fields */
-    CHECK(earliestNextUpdate == now + 1); /* Expects, DCGM_FI_PROF_GR_ENGINE_ACTIVE, which updates every usec */
+    CHECK(earliestNextUpdate == now + 1); /* Expects, DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO, which updates every usec */
 }
 
 TEST_CASE("WatchTable: Removing watches recalculates updateInterval")

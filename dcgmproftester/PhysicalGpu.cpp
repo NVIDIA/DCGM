@@ -210,7 +210,7 @@ void PhysicalGpu::SetParameters(const Arguments_t::Parameters &parameters)
 dcgmReturn_t PhysicalGpu::CheckVirtualizationMode(void)
 {
     dcgmGroupEntityPair_t entity { DCGM_FE_GPU, m_gpuId };
-    unsigned short fieldId { DCGM_FI_DEV_VIRTUAL_MODE };
+    unsigned short fieldId { DCGM_FI_DEV_GPU_VIRTUAL_MODE };
     dcgmFieldValue_v2 value {};
 
     dcgmReturn_t dcgmReturn
@@ -370,7 +370,7 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
              * Note that foundGiCudaContext can only not be nullptr in the MIG
              * case so we don't have to gate on it again.
              */
-            if (m_parameters.m_fieldId == DCGM_FI_PROF_DRAM_ACTIVE)
+            if (m_parameters.m_fieldId == DCGM_FI_PROF_DRAM_UTIL_RATIO)
             {
                 /**
                  * We found a matching GI, but not CI, and we don't allow
@@ -430,7 +430,7 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
         if (m_workers == 0)
         {
             dcgmGroupEntityPair_t entity;
-            unsigned short fieldId { DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY };
+            unsigned short fieldId { DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY };
             dcgmFieldValue_v2 value {};
 
             entity.entityGroupId = DCGM_FE_GPU;
@@ -475,7 +475,7 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
             /**
              * In the case of Dram Util tests, we only allow one CI per GI,
              */
-            if ((m_parameters.m_fieldId == DCGM_FI_PROF_DRAM_ACTIVE) && !firstCi)
+            if ((m_parameters.m_fieldId == DCGM_FI_PROF_DRAM_UTIL_RATIO) && !firstCi)
             {
                 m_inactiveCudaContexts.insert(std::pair(entity_id_t(gi, ci), *cudaContextIt));
                 m_dcgmCudaContexts.erase(cudaContextIt);
@@ -893,21 +893,21 @@ dcgmReturn_t PhysicalGpu::RunTests(void)
 
     switch (m_parameters.m_fieldId)
     {
-        case DCGM_FI_PROF_GR_ENGINE_ACTIVE:
+        case DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO:
             if (m_parameters.m_targetMaxValue)
                 rtSt = RunSubtestSmOccupancyTargetMax();
             else
                 rtSt = RunSubtestGrActivity();
             break;
 
-        case DCGM_FI_PROF_SM_ACTIVE:
+        case DCGM_FI_PROF_SM_UTIL_RATIO:
             if (m_parameters.m_targetMaxValue)
                 rtSt = RunSubtestSmOccupancyTargetMax();
             else
                 rtSt = RunSubtestSmActivity();
             break;
 
-        case DCGM_FI_PROF_SM_OCCUPANCY:
+        case DCGM_FI_PROF_SM_OCCUPANCY_RATIO:
             if (m_parameters.m_targetMaxValue)
                 rtSt = RunSubtestSmOccupancyTargetMax();
             else
@@ -919,17 +919,17 @@ dcgmReturn_t PhysicalGpu::RunTests(void)
             rtSt = RunSubtestPcieBandwidth();
             break;
 
-        case DCGM_FI_PROF_DRAM_ACTIVE:
+        case DCGM_FI_PROF_DRAM_UTIL_RATIO:
             rtSt = RunSubtestDramUtil();
             break;
 
-        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+        case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
             rtSt = RunSubtestGemmUtil();
             break;
 
-        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+        case DCGM_FI_PROF_FP64_UTIL_RATIO:
+        case DCGM_FI_PROF_FP32_UTIL_RATIO:
+        case DCGM_FI_PROF_FP16_UTIL_RATIO:
             rtSt = UseCublas() ? RunSubtestGemmUtil() : RunSubtestDataTypeActive();
             break;
 
@@ -2530,8 +2530,8 @@ dcgmReturn_t PhysicalGpu::HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs,
 {
     int i;
 
-    dcgmDeviceTopology_v1 deviceTopo {
-        .version = dcgmDeviceTopology_version1, .cpuAffinityMask = {}, .numGpus = 0, .gpuPaths = {}
+    dcgmDeviceTopology_v2 deviceTopo {
+        .version = dcgmDeviceTopology_version2, .cpuAffinityMask = {}, .numGpus = 0, .gpuPaths = {}
     };
 
     if (entity.entityGroupId == DCGM_FE_GPU) // A physical GPU
@@ -2570,7 +2570,7 @@ dcgmReturn_t PhysicalGpu::HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs,
         dcgmGroupEntityPair_t tmpEntity { entity.entityGroupId,
                                           i < 0 ? entity.entityId : deviceTopo.gpuPaths[i].gpuId };
 
-        unsigned short fieldId { DCGM_FI_DEV_CUDA_VISIBLE_DEVICES_STR };
+        unsigned short fieldId { DCGM_FI_CUDA_GPU_VISIBLE_DEVICES };
 
         dcgmFieldValue_v2 value {};
 
@@ -2606,9 +2606,9 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
 {
     int i;
 
-    dcgmDeviceTopology_v1 deviceTopo;
+    dcgmDeviceTopology_v2 deviceTopo;
     memset(&deviceTopo, 0, sizeof(deviceTopo));
-    deviceTopo.version = dcgmDeviceTopology_version1;
+    deviceTopo.version = dcgmDeviceTopology_version2;
 
     dcgmReturn_t dcgmReturn = dcgmGetDeviceTopology(m_dcgmHandle, m_gpuId, &deviceTopo);
     if (dcgmReturn != DCGM_ST_OK)
@@ -2619,22 +2619,16 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
         return DCGM_ST_NOT_SUPPORTED;
     }
 
-    int nvLinkMasks = DCGM_TOPOLOGY_NVLINK1 | DCGM_TOPOLOGY_NVLINK2 | DCGM_TOPOLOGY_NVLINK3 | DCGM_TOPOLOGY_NVLINK4
-                      | DCGM_TOPOLOGY_NVLINK5 | DCGM_TOPOLOGY_NVLINK6 | DCGM_TOPOLOGY_NVLINK7 | DCGM_TOPOLOGY_NVLINK8
-                      | DCGM_TOPOLOGY_NVLINK9 | DCGM_TOPOLOGY_NVLINK10 | DCGM_TOPOLOGY_NVLINK11 | DCGM_TOPOLOGY_NVLINK12
-                      | DCGM_TOPOLOGY_NVLINK13 | DCGM_TOPOLOGY_NVLINK14 | DCGM_TOPOLOGY_NVLINK15
-                      | DCGM_TOPOLOGY_NVLINK16 | DCGM_TOPOLOGY_NVLINK17 | DCGM_TOPOLOGY_NVLINK18;
-
     /* Find the GPU we have the most NvLink connections to */
     unsigned int bestGpuId   = 0;
     unsigned int maxNumLinks = 0;
     for (i = 0; i < (int)deviceTopo.numGpus; i++)
     {
-        if (!(deviceTopo.gpuPaths[i].path & nvLinkMasks))
+        if (!DCGM_TOPOLOGY_PATH_NVLINK(deviceTopo.gpuPaths[i].path))
             continue;
 
         /* More links = higher mask value */
-        unsigned int numNvLinks = __builtin_popcount(deviceTopo.gpuPaths[i].localNvLinkIds);
+        unsigned int numNvLinks = __builtin_popcountll(deviceTopo.gpuPaths[i].localNvLinkIds);
 
         if (numNvLinks < maxNumLinks)
             continue;
@@ -3013,8 +3007,8 @@ bool PhysicalGpu::IsComputeUnoptimized(unsigned int fieldId)
 #if (CUDA_VERSION_USED >= 11)
     switch (fieldId)
     {
-        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
-        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+        case DCGM_FI_PROF_FP32_UTIL_RATIO:
+        case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
             return (((m_majorComputeCapability == 8) && (m_minorComputeCapability >= 6))
                     || (m_majorComputeCapability > 8));
 
@@ -3035,7 +3029,7 @@ bool PhysicalGpu::IsHardwareNonDeterministic(unsigned int fieldId)
 {
     switch (fieldId)
     {
-        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+        case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
             return ((m_majorComputeCapability == 8) && (m_minorComputeCapability == 6))
                    || ((m_majorComputeCapability == 7) && (m_minorComputeCapability == 5));
 
@@ -3054,15 +3048,15 @@ dcgmReturn_t PhysicalGpu::RunSubtestDataTypeActive(void)
 
     switch (m_parameters.m_fieldId)
     {
-        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+        case DCGM_FI_PROF_FP32_UTIL_RATIO:
             testHeader = "Fp32EngineActive";
             testTag    = "fp32_active";
             break;
-        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+        case DCGM_FI_PROF_FP64_UTIL_RATIO:
             testHeader = "Fp64EngineActive";
             testTag    = "fp64_active";
             break;
-        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+        case DCGM_FI_PROF_FP16_UTIL_RATIO:
             testHeader = "Fp16EngineActive";
             testTag    = "fp16_active";
             break;
@@ -3181,19 +3175,19 @@ dcgmReturn_t PhysicalGpu::RunSubtestGemmUtil(void)
 
     switch (m_parameters.m_fieldId)
     {
-        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+        case DCGM_FI_PROF_FP32_UTIL_RATIO:
             testHeader = "Fp32EngineActive";
             testTag    = "fp32_active";
             break;
-        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+        case DCGM_FI_PROF_FP64_UTIL_RATIO:
             testHeader = "Fp64EngineActive";
             testTag    = "fp64_active";
             break;
-        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+        case DCGM_FI_PROF_FP16_UTIL_RATIO:
             testHeader = "Fp16EngineActive";
             testTag    = "fp16_active";
             break;
-        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+        case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
             testHeader = "TensorEngineActive";
             testTag    = "tensor_active";
             break;

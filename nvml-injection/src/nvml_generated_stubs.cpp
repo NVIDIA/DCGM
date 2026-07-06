@@ -12058,10 +12058,11 @@ nvmlReturn_t nvmlGpmMetricsGet(nvmlGpmMetricsGet_t *metricsGet)
             return NVML_ERROR_UNINITIALIZED;
         }
         injectedNvml->AddFuncCallCount("nvmlGpmMetricsGet");
-        // The following snippet is generated from generate_getter_functions
-        InjectionArgument arg(metricsGet);
-        arg.SetValueFrom(injectedNvml->ObjectlessGet("Metrics"));
-        return NVML_SUCCESS;
+        // The following snippet is generated from generate_gpm_functions
+        std::vector<InjectionArgument> args;
+        std::vector<InjectionArgument> preparedValues;
+        preparedValues.push_back(InjectionArgument(metricsGet));
+        return injectedNvml->GpmApiWrapper(__func__, args, preparedValues);
     }
     return NVML_SUCCESS;
 }
@@ -12087,23 +12088,11 @@ nvmlReturn_t nvmlGpmSampleAlloc(nvmlGpmSample_t *gpmSample)
             return NVML_ERROR_UNINITIALIZED;
         }
         injectedNvml->AddFuncCallCount("nvmlGpmSampleAlloc");
-        // The following snippet is generated from write_function
+        // The following snippet is generated from generate_gpm_functions
         std::vector<InjectionArgument> args;
         std::vector<InjectionArgument> preparedValues;
         preparedValues.push_back(InjectionArgument(gpmSample));
-
-        if (injectedNvml->IsGetter(__func__))
-        {
-            return injectedNvml->GetWrapper(__func__, "SampleAlloc", args, preparedValues);
-        }
-        else if (injectedNvml->IsEventApi(__func__))
-        {
-            return injectedNvml->EventApiWrapper(__func__, "SampleAlloc", args, preparedValues);
-        }
-        else
-        {
-            return injectedNvml->SetWrapper(__func__, "SampleAlloc", args, preparedValues);
-        }
+        return injectedNvml->GpmApiWrapper(__func__, args, preparedValues);
     }
     return NVML_SUCCESS;
 }
@@ -12129,23 +12118,11 @@ nvmlReturn_t nvmlGpmSampleFree(nvmlGpmSample_t gpmSample)
             return NVML_ERROR_UNINITIALIZED;
         }
         injectedNvml->AddFuncCallCount("nvmlGpmSampleFree");
-        // The following snippet is generated from write_function
+        // The following snippet is generated from generate_gpm_functions
         std::vector<InjectionArgument> args;
         std::vector<InjectionArgument> preparedValues;
         args.push_back(InjectionArgument(gpmSample));
-
-        if (injectedNvml->IsGetter(__func__))
-        {
-            return injectedNvml->GetWrapper(__func__, "SampleFree", args, preparedValues);
-        }
-        else if (injectedNvml->IsEventApi(__func__))
-        {
-            return injectedNvml->EventApiWrapper(__func__, "SampleFree", args, preparedValues);
-        }
-        else
-        {
-            return injectedNvml->SetWrapper(__func__, "SampleFree", args, preparedValues);
-        }
+        return injectedNvml->GpmApiWrapper(__func__, args, preparedValues);
     }
     return NVML_SUCCESS;
 }
@@ -12171,24 +12148,12 @@ nvmlReturn_t nvmlGpmSampleGet(nvmlDevice_t device, nvmlGpmSample_t gpmSample)
             return NVML_ERROR_UNINITIALIZED;
         }
         injectedNvml->AddFuncCallCount("nvmlGpmSampleGet");
-        // The following snippet is generated from write_function
+        // The following snippet is generated from generate_gpm_functions
         std::vector<InjectionArgument> args;
         std::vector<InjectionArgument> preparedValues;
         args.push_back(InjectionArgument(device));
         args.push_back(InjectionArgument(gpmSample));
-
-        if (injectedNvml->IsGetter(__func__))
-        {
-            return injectedNvml->GetWrapper(__func__, "Sample", args, preparedValues);
-        }
-        else if (injectedNvml->IsEventApi(__func__))
-        {
-            return injectedNvml->EventApiWrapper(__func__, "Sample", args, preparedValues);
-        }
-        else
-        {
-            return injectedNvml->SetWrapper(__func__, "Sample", args, preparedValues);
-        }
+        return injectedNvml->GpmApiWrapper(__func__, args, preparedValues);
     }
     return NVML_SUCCESS;
 }
@@ -12214,25 +12179,13 @@ nvmlReturn_t nvmlGpmMigSampleGet(nvmlDevice_t device, unsigned int gpuInstanceId
             return NVML_ERROR_UNINITIALIZED;
         }
         injectedNvml->AddFuncCallCount("nvmlGpmMigSampleGet");
-        // The following snippet is generated from write_function
+        // The following snippet is generated from generate_gpm_functions
         std::vector<InjectionArgument> args;
         std::vector<InjectionArgument> preparedValues;
         args.push_back(InjectionArgument(device));
         args.push_back(InjectionArgument(gpuInstanceId));
         args.push_back(InjectionArgument(gpmSample));
-
-        if (injectedNvml->IsGetter(__func__))
-        {
-            return injectedNvml->GetWrapper(__func__, "MigSample", args, preparedValues);
-        }
-        else if (injectedNvml->IsEventApi(__func__))
-        {
-            return injectedNvml->EventApiWrapper(__func__, "MigSample", args, preparedValues);
-        }
-        else
-        {
-            return injectedNvml->SetWrapper(__func__, "MigSample", args, preparedValues);
-        }
+        return injectedNvml->GpmApiWrapper(__func__, args, preparedValues);
     }
     return NVML_SUCCESS;
 }

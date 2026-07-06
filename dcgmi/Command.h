@@ -24,7 +24,6 @@
 
 #include <string>
 
-
 class Command
 {
 public:

@@ -31,6 +31,7 @@ cmake \
     -B catch2/build \
     -D BUILD_TESTING=OFF \
     -D CATCH_INSTALL_DOCS=OFF \
+    -D CMAKE_POSITION_INDEPENDENT_CODE=ON \
     -D CMAKE_STAGING_PREFIX=$CMAKE_STAGING_PREFIX
 
 cmake --build catch2/build

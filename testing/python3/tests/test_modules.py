@@ -168,8 +168,8 @@ def test_dcgm_modules_paused(handle):
     # Make sure the module was loaded
     ms = dcgmSystem.modules.GetStatuses()
     status = ms.statuses[moduleId].status
-    assert status == dcgm_structs.DcgmModuleStatusPaused, "{} != {}".format(status,
-                                                                            dcgm_structs.DcgmModuleStatusPaused)
+    assert status == dcgm_structs.DcgmModuleStatusPaused, "{} != {}".format(
+        status, dcgm_structs.DcgmModuleStatusPaused)
 
     dcgmSystem.ResumeTelemetryForDiag()
 
@@ -205,5 +205,5 @@ def test_dcgm_library_existence():
             name_to_found[filename] = True
 
     for name in name_to_found:
-        assert name_to_found[name] == True, "Didn't find required library '%s' in library path '%s'" % (
+        assert name_to_found[name], "Didn't find required library '%s' in library path '%s'" % (
             name, lib_path)

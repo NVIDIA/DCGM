@@ -43,7 +43,7 @@ target_link_libraries(contextcreatetests
         testing_dcgm_cublas_stubs
         cuda_common_interface
         common_interface
-        mock_interface
+        mock_common
 )
 target_link_libraries(contextcreatetests PUBLIC nvvs_interface)
 target_link_libraries(contextcreatetests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)

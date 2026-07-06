@@ -60,12 +60,12 @@ int TestFieldGroups::TestFieldGroupObject(void)
     std::vector<unsigned short> fieldIdsBefore;
     std::vector<unsigned short> fieldIdsAfter;
 
-    fieldIdsBefore.push_back(DCGM_FI_DEV_OEM_INFOROM_VER);
+    fieldIdsBefore.push_back(DCGM_FI_DEV_INFOROM_OEM_VERSION);
     fieldIdsBefore.push_back(DCGM_FI_DEV_SM_CLOCK);
     fieldIdsBefore.push_back(DCGM_FI_DEV_MEM_CLOCK);
-    fieldIdsBefore.push_back(DCGM_FI_DRIVER_VERSION);
-    fieldIdsBefore.push_back(DCGM_FI_DEV_COUNT);
-    fieldIdsBefore.push_back(DCGM_FI_DEV_NAME);
+    fieldIdsBefore.push_back(DCGM_FI_SYSTEM_DRIVER_VERSION);
+    fieldIdsBefore.push_back(DCGM_FI_SYSTEM_GPU_QUANTITY);
+    fieldIdsBefore.push_back(DCGM_FI_DEV_GPU_NAME);
 
     DcgmWatcher watcher(DcgmWatcherTypeClient);
     DcgmWatcher watcher2(DcgmWatcherTypeHostEngine);
@@ -139,13 +139,13 @@ int TestFieldGroups::TestFieldGroupManager(void)
 
     std::string groupNameBefore = "bestgroupever";
 
-    fieldIdsBefore.push_back(DCGM_FI_DEV_OEM_INFOROM_VER);
+    fieldIdsBefore.push_back(DCGM_FI_DEV_INFOROM_OEM_VERSION);
     fieldIdsBefore.push_back(DCGM_FI_DEV_SM_CLOCK);
     fieldIdsBefore.push_back(DCGM_FI_DEV_MEM_CLOCK);
-    fieldIdsBefore.push_back(DCGM_FI_DRIVER_VERSION);
-    fieldIdsBefore.push_back(DCGM_FI_DEV_COUNT);
-    fieldIdsBefore.push_back(DCGM_FI_DEV_NAME);
-    fieldIdsBefore.push_back(DCGM_FI_DEV_INFOROM_IMAGE_VER);
+    fieldIdsBefore.push_back(DCGM_FI_SYSTEM_DRIVER_VERSION);
+    fieldIdsBefore.push_back(DCGM_FI_SYSTEM_GPU_QUANTITY);
+    fieldIdsBefore.push_back(DCGM_FI_DEV_GPU_NAME);
+    fieldIdsBefore.push_back(DCGM_FI_DEV_INFOROM_IMAGE_VERSION);
 
     fieldGroupManager = new DcgmFieldGroupManager();
 

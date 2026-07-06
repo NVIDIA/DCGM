@@ -190,7 +190,7 @@ std::expected<bool, dcgmReturn_t> HangDetect::IsHungImpl(pid_t pid, std::optiona
     auto fpRet = m_store.ComputeForTask(pid, tid);
     if (fpRet.status != DCGM_ST_OK)
     {
-        log_error("Failed to compute current fingerprint for {}/{}", pid, tid.value_or(0));
+        log_verbose("Failed to compute current fingerprint for {}/{}", pid, tid.value_or(0));
         return std::unexpected(fpRet.status);
     }
 

@@ -22,6 +22,8 @@ target_sources(healthtests
         DcgmHealthWatchTests.cpp
         ../DcgmHealthWatch.cpp
         ../DcgmHealthResponse.cpp
+        ../DcgmModuleHealth.cpp
+        DcgmModuleHealthTests.cpp
 )
 
 target_include_directories(healthtests PRIVATE ${YAML_INCLUDE_DIR})
@@ -43,7 +45,8 @@ target_link_libraries(healthtests
         module_common_objects
         dcgm
         dcgm_mutex
-        mock_interface
+        mock_common
+        modules_objects
 )
 target_link_libraries(healthtests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
 target_link_libraries(healthtests PRIVATE ${CMAKE_THREAD_LIBS_INIT})

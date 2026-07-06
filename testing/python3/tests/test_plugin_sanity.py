@@ -60,6 +60,8 @@ OUTPUT_DIR = "./test_plugin_sanity_out"
 # Helpers
 
 
+# NO HARDWARE
+
 @test_utils.run_first()
 def test_create_output_dir():
     """
@@ -110,10 +112,11 @@ def no_errors_run(handle, gpuIds, name, testname, parms=None):
     gpu_list = ",".join(map(str, gpuIds))
 
     # Note: Although using the dcgmActionValidate api (via DcgmDiag.Execute()) would allow for some automatic
-    # verification, we use dcgmi diag and log output to a file for easier debugging when something goes wrong.
+    # verification, we use dcgmi diag and log output to a file for easier
+    # debugging when something goes wrong.
     args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v",
             "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
-    if parms != None:
+    if parms is not None:
         args.extend(["-p", "%s" % parms])
     dcgmi = DcgmiApp(args=args)
 
@@ -132,13 +135,13 @@ def no_errors_run(handle, gpuIds, name, testname, parms=None):
 
 def with_error_run(handle, gpuIds, name, testname, parms=None):
     """
-    Runs the given test (testname) and inserts throttling / REPLAY_COUNTER errors depending on the test.
+    Runs the given test (testname) and inserts throttling / REPLAY_TOTAL errors depending on the test.
     name is the name of the plugin in nvvs (e.g. constant_perf)
 
     Logs an error (but does not fail the test) if the dcgmi return code is not 226 (lower 8 bits of
     -30/DCGM_ST_NVVS_ERROR) which is expected since the test should fail due to inserted errors.
 
-    Since busgrind/PCIe does a diff for the REPLAY_COUNTER field we need to insert errors after busgrind has read 
+    Since busgrind/PCIe does a diff for the REPLAY_TOTAL field we need to insert errors after busgrind has read
     some zero values for the field. As a result, the hardcoded delay of 15 seconds must be adjusted on different
     systems (currently a delay of 15 seconds works for the bstolle-dgx machine).
     """
@@ -148,15 +151,15 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
 
     args = ["diag", "-r", "%s" % testname, "-i", gpu_list, "-j", "-v",
             "--debugLevel", "DEBUG", "--debugLogFile", "/tmp/nvvs.log"]
-    if parms != None:
+    if parms is not None:
         args.extend(["-p", "%s" % parms])
     dcgmi = DcgmiApp(args=args)
 
-    field_id = dcgm_fields.DCGM_FI_DEV_GPU_TEMP
+    field_id = dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS
     value = 1000
     delay = 0
     if name == "busgrind":
-        field_id = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER
+        field_id = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL
         value = 1000
         delay = 15
 
@@ -172,8 +175,9 @@ def with_error_run(handle, gpuIds, name, testname, parms=None):
     copy_nvvs_log("/tmp/nvvs.log", log_file)
     expected_retcode = ctypes.c_uint8(dcgm_structs.DCGM_ST_NVVS_ERROR).value
     if retcode != expected_retcode:
-        logger.error("Expected retcode to be %s, but retcode of dcgmi is %s" % (
-            expected_retcode, retcode))
+        logger.error(
+            "Expected retcode to be %s, but retcode of dcgmi is %s" %
+            (expected_retcode, retcode))
     dcgmi.validate()  # Validate because dcgmi returns non zero when the diag fails (expected)
     log_app_output_to_file(dcgmi, output_file)
 
@@ -268,7 +272,8 @@ def test_memory_no_errors(handle, gpuIds):
 
 # No run for memory plugin with inserted errors - memory test completes too quickly for reliably simulating a DBE
 # For manual verification, a good WaR is to add a sleep(5) just before the memory plugin performs a memory allocation,
-# create a temp build with this change, and then try inserting a DBE after launching the diag.
+# create a temp build with this change, and then try inserting a DBE after
+# launching the diag.
 
 
 # memory bandwidth
@@ -349,6 +354,7 @@ def test_short_with_error(handle, gpuIds):
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
+@test_utils.run_with_cuda_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_medium_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "medium", "medium")
@@ -357,6 +363,7 @@ def test_medium_no_errors(handle, gpuIds):
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
+@test_utils.run_with_cuda_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_medium_with_error(handle, gpuIds):
     with_error_run(handle, gpuIds, "medium", "medium")
@@ -366,6 +373,7 @@ def test_medium_with_error(handle, gpuIds):
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
+@test_utils.run_with_cuda_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_long_no_errors(handle, gpuIds):
     no_errors_run(handle, gpuIds, "long", "long")
@@ -374,6 +382,7 @@ def test_long_no_errors(handle, gpuIds):
 @test_utils.run_with_developer_mode(msg=DEV_MODE_MSG)
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_live_gpus()
+@test_utils.run_with_cuda_gpus()
 @test_utils.for_all_same_sku_gpus()
 def test_long_with_error(handle, gpuIds):
     with_error_run(handle, gpuIds, "long", "long")

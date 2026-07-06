@@ -79,7 +79,6 @@ private:
     bool checkPermissions(bool checkFileCreation, bool skipDevTest);
     bool checkLibraries(libraryCheck_t libs);
     bool checkDenylist();
-    bool findLib(std::string, std::string &error);
     int checkDriverPathDenylist(std::string, std::vector<std::string> const &);
     int checkPersistenceMode(dcgmDiagPluginEntityList_v1 const &entityList);
     int checkForSramThreshold();
@@ -90,6 +89,7 @@ private:
     int checkUnrepairableMemory();
     int checkInforom();
     void checkFabricManager();
+    void checkGpuRecoveryState();
     void LogAndSetFMError(unsigned int gpuId, dcgmFabricManagerStatus_t status);
     void setSubtestName(std::string const &name);
 
@@ -99,6 +99,15 @@ private:
         static std::string const deviceDir = "/dev";
         return deviceDir;
     }
+
+    /**
+     * Attempts to locate and load the specified library.
+     *
+     * @param[in]  library  Name of the library to find.
+     * @param[out] error    Populated with an error message on failure.
+     * @return true if the library was found, false otherwise.
+     */
+    virtual bool findLib(std::string library, std::string &error);
 };
 
 std::vector<dcgmDiagPluginParameterInfo_t> GetSwParameterInfo();

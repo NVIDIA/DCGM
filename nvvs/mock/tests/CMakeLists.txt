@@ -19,13 +19,13 @@ endif()
 add_executable(nvvsMockTests)
 target_sources(nvvsMockTests
     PRIVATE
-        DcgmSystemMockTests.cpp
+        MockDcgmSystemTests.cpp
 )
 
 target_link_libraries(nvvsMockTests
     PRIVATE
         Catch2::Catch2WithMain
-        nvvs_mock_interface
+        mock_nvvs
         nvvs_without_main_objects
         rt
         ${YAML_STATIC_LIBS}

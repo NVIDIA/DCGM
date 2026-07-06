@@ -56,6 +56,7 @@ NcclTestsPlugin::NcclTestsPlugin(dcgmHandle_t handle)
     // NCCL Tests only run if the environment variable is set. Therefore, default to is_allowed
     m_testParameters.AddString(NCCL_TESTS_STR_IS_ALLOWED, "True");
     m_testParameters.AddString(PS_IGNORE_ERROR_CODES, "");
+    m_testParameters.AddString(PS_USE_GENERIC_MODE, "False");
 
     m_infoStruct.shortDescription      = NCCL_TESTS_DESCRIPTION;
     m_infoStruct.testCategories        = NCCL_TESTS_PLUGIN_CATEGORY;
@@ -89,11 +90,19 @@ void NcclTestsPlugin::Go(std::string const &testName,
 
     if (!m_testParameters.GetBoolFromString(NCCL_TESTS_STR_IS_ALLOWED))
     {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, NCCL_TESTS_PLUGIN_NAME);
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
-        return;
+        if (m_testParameters.GetBoolFromString(PS_USE_GENERIC_MODE) == false)
+        {
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, NCCL_TESTS_PLUGIN_NAME);
+            AddInfo(testName, d.GetMessage());
+            SetResult(testName, NVVS_RESULT_SKIP);
+            return;
+        }
+        else
+        {
+            log_debug("Proceeding in generic mode.");
+            AddInfoVerbose(testName, "Running in generic mode per user request.");
+        }
     }
 
     ParseIgnoreErrorCodesParam(testName, m_testParameters.GetString(PS_IGNORE_ERROR_CODES));

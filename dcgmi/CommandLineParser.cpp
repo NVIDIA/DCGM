@@ -65,13 +65,19 @@ static const std::string g_hostnameHelpText
     = "Connects to specified IP or fully-qualified domain name. To connect to a host engine that was started with -d (unix socket), prefix the unix socket filename with 'unix://'. [default = localhost]";
 
 static const std::string g_supportedEntitiesAndExamples
-    = "\nSupported entities: compute_instance, core, cpu, cx, gpu, instance, link, nvswitch, vgpu."
+    = "\nSupported entities: compute_instance, core, cpu, cx, gpu, gpu_link, instance, link, switch_link, nvswitch, vgpu."
       "\nExamples:"
       "\n- Basic GPU IDs: '0,1,2' (GPUs 0, 1, and 2)"
       "\n- Mixed entities: 'gpu:7,instance:1,compute_instance:2,nvswitch:5,cpu:3,core:4'"
-      "\n- Full names: 'gpu:3,instance:1,compute_instance:2,vgpu:1,nvswitch:0,cpu:0,core:0,cx:0,link:0'"
-      "\n- Short names: 'g:0,i:1,c:2,v:1,n:0,cpu:0,core:0,cx:0,l:0'"
+      "\n- Full names: 'gpu:3,instance:1,compute_instance:2,vgpu:1,nvswitch:0,cpu:0,core:0,cx:0,link:0,gpu_link:0:5,switch_link:0:5'"
+      "\n- Short names: 'g:0,i:1,c:2,v:1,n:0,cpu:0,core:0,cx:0,l:0,gpu_link:0:5,switch_link:0:5'"
       "\n- Range syntax: '{0-2},instance:{0-1},cpu:{0-3}'"
+      "\n- GPU NVLink per-port: 'gpu_link:0:5' (GPU 0, link index 5)"
+      "\n- GPU NVLink range: 'gpu_link:0:{0-5}' (GPU 0, links 0-5), 'gpu_link:{0-1}:{0-3}' (GPUs 0-1, links 0-3)"
+      "\n- NvSwitch NVLink per-port: 'switch_link:0:5' (NvSwitch 0, link index 5)"
+      "\n- NvSwitch NVLink range: 'switch_link:0:{0-5}' (NvSwitch 0, links 0-5), "
+      "'switch_link:{0-1}:{0-3}' (NvSwitches 0-1, links 0-3)"
+      "\n- Hex raw link ID: 'link:0x103' (same as link:259)"
       "\n- Wildcards:"
       "\n\t'*,cpu:*' (all available GPUs and CPUs)"
       "\n\t'*/*' (all MIG GPU instances)"
@@ -318,29 +324,29 @@ dcgmReturn_t CommandLineParser::ProcessQueryCommandLine(int argc, char const *co
 
     if (getList.isSet())
     {
-        result = QueryDeviceList(hostAddress.getValue(), allGpus.isSet()).Execute();
+        result = ExecuteCommand(QueryDeviceList(hostAddress.getValue(), allGpus.isSet()));
     }
     else if (computeInstances.isSet())
     {
-        result = QueryHierarchyInfo(hostAddress.getValue()).Execute();
+        result = ExecuteCommand(QueryHierarchyInfo(hostAddress.getValue()));
     }
     else if (gpuId.isSet())
     {
-        result = QueryDeviceInfo(hostAddress.getValue(), gpuId.getValue(), getInfo.getValue()).Execute();
+        result = ExecuteCommand(QueryDeviceInfo(hostAddress.getValue(), gpuId.getValue(), getInfo.getValue()));
     }
     else if (groupId.isSet())
     {
-        result
-            = QueryGroupInfo(hostAddress.getValue(), groupId.getValue(), getInfo.getValue(), verbose.isSet()).Execute();
+        result = ExecuteCommand(
+            QueryGroupInfo(hostAddress.getValue(), groupId.getValue(), getInfo.getValue(), verbose.isSet()));
     }
     else if (cpuId.isSet())
     {
-        result = QueryCpuInfo(hostAddress.getValue(), cpuId.getValue(), getInfo.getValue()).Execute();
+        result = ExecuteCommand(QueryCpuInfo(hostAddress.getValue(), cpuId.getValue(), getInfo.getValue()));
     }
     else if (getInfo.isSet())
     {
-        result = QueryGroupInfo(hostAddress.getValue(), DCGM_GROUP_ALL_GPUS, getInfo.getValue(), verbose.isSet())
-                     .Execute();
+        result = ExecuteCommand(
+            QueryGroupInfo(hostAddress.getValue(), DCGM_GROUP_ALL_GPUS, getInfo.getValue(), verbose.isSet()));
     }
 
     return result;
@@ -484,7 +490,8 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
 
     if (getPolicy.getValue())
     {
-        result = GetPolicy(hostAddress.getValue(), groupId.getValue(), verbose.isSet(), json.getValue()).Execute();
+        result
+            = ExecuteCommand(GetPolicy(hostAddress.getValue(), groupId.getValue(), verbose.isSet(), json.getValue()));
     }
 
     int buffer = 0;
@@ -501,7 +508,7 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
         setPolicy.validation = DCGM_POLICY_VALID_NONE;
         setPolicy.response   = DCGM_POLICY_FAILURE_NONE; // ignored for now
 
-        result = SetPolicy(hostAddress.getValue(), setPolicy, groupId.getValue()).Execute();
+        result = ExecuteCommand(SetPolicy(hostAddress.getValue(), setPolicy, groupId.getValue()));
     }
     else if (setPolicyArg.isSet())
     {
@@ -559,7 +566,7 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
         setPol.validation = (dcgmPolicyValidation_t)(setPolicyArg.getValue().at(2) - '0');
         setPol.response   = DCGM_POLICY_FAILURE_NONE; // ignored for now
 
-        result = SetPolicy(hostAddress.getValue(), setPol, groupId.getValue()).Execute();
+        result = ExecuteCommand(SetPolicy(hostAddress.getValue(), setPol, groupId.getValue()));
     }
     else if (regPolicy.isSet())
     {
@@ -591,7 +598,7 @@ dcgmReturn_t CommandLineParser::ProcessPolicyCommandLine(int argc, char const *c
         {
             buffer += DCGM_POLICY_COND_XID;
         }
-        result = RegPolicy(hostAddress.getValue(), groupId.getValue(), buffer).Execute();
+        result = ExecuteCommand(RegPolicy(hostAddress.getValue(), groupId.getValue(), buffer));
     }
 
     return result;
@@ -717,7 +724,7 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
 
     if (listGroup.isSet())
     {
-        result = GroupList(hostAddress.getValue(), json.getValue()).Execute();
+        result = ExecuteCommand(GroupList(hostAddress.getValue(), json.getValue()));
     }
     else if (createGroup.isSet())
     {
@@ -739,12 +746,12 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
         {
             groupType = DCGM_GROUP_DEFAULT_NVSWITCHES;
         }
-        result = GroupCreate(hostAddress.getValue(), groupObj, groupType).Execute();
+        result = ExecuteCommand(GroupCreate(hostAddress.getValue(), groupObj, groupType));
     }
     else if (deleteGroup.isSet())
     {
         groupObj.SetGroupId(deleteGroup.getValue());
-        result = GroupDestroy(hostAddress.getValue(), groupObj).Execute();
+        result = ExecuteCommand(GroupDestroy(hostAddress.getValue(), groupObj));
     }
     else if (groupId.isSet())
     {
@@ -752,17 +759,17 @@ dcgmReturn_t CommandLineParser::ProcessGroupCommandLine(int argc, char const *co
 
         if (infoGroup.isSet())
         {
-            result = GroupInfo(hostAddress.getValue(), groupObj, json.getValue()).Execute();
+            result = ExecuteCommand(GroupInfo(hostAddress.getValue(), groupObj, json.getValue()));
         }
         else if (addDevice.isSet())
         {
             groupObj.SetGroupInfo(addDevice.getValue());
-            result = GroupAddTo(hostAddress.getValue(), groupObj).Execute();
+            result = ExecuteCommand(GroupAddTo(hostAddress.getValue(), groupObj));
         }
         else if (removeDevice.isSet())
         {
             groupObj.SetGroupInfo(removeDevice.getValue());
-            result = GroupDeleteFrom(hostAddress.getValue(), groupObj).Execute();
+            result = ExecuteCommand(GroupDeleteFrom(hostAddress.getValue(), groupObj));
         }
     }
 
@@ -849,7 +856,7 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
     /* Decide on which command to run and do argument validation */
     if (listGroup.isSet())
     {
-        result = FieldGroupListAll(hostAddress.getValue(), json.getValue()).Execute();
+        result = ExecuteCommand(FieldGroupListAll(hostAddress.getValue(), json.getValue()));
     }
     else if (infoGroup.isSet())
     {
@@ -858,7 +865,7 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
             throw TCLAP::CmdLineParseException("No fieldGroupId given (specify with --fieldgroup)", "info");
         }
 
-        result = FieldGroupInfo(hostAddress.getValue(), fieldGroupObj, json.getValue()).Execute();
+        result = ExecuteCommand(FieldGroupInfo(hostAddress.getValue(), fieldGroupObj, json.getValue()));
     }
     else if (createFieldGroup.isSet())
     {
@@ -867,7 +874,7 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
             throw TCLAP::CmdLineParseException("No field IDs given (specify with --fieldids)", "create");
         }
 
-        result = FieldGroupCreate(hostAddress.getValue(), fieldGroupObj).Execute();
+        result = ExecuteCommand(FieldGroupCreate(hostAddress.getValue(), fieldGroupObj));
     }
     else if (deleteFieldGroup.isSet())
     {
@@ -876,7 +883,7 @@ dcgmReturn_t CommandLineParser::ProcessFieldGroupCommandLine(int argc, char cons
             throw TCLAP::CmdLineParseException("No fieldGroupId given (specify with --fieldgroup)", "delete");
         }
 
-        result = FieldGroupDestroy(hostAddress.getValue(), fieldGroupObj).Execute();
+        result = ExecuteCommand(FieldGroupDestroy(hostAddress.getValue(), fieldGroupObj));
     }
     else
     {
@@ -1120,7 +1127,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
             dcgmWorkloadPowerProfile_t mWorkloadPowerProfile = HelperProcessWorkloadPowerProfileCommandLine(
                 workloadPowerProfile.getValue(), workloadPowerProfileAction.getValue(), groupId.getValue());
             configObj.SetWorkloadPowerProfileArg(&mWorkloadPowerProfile);
-            result = SetConfigWorkloadPowerProfile(hostAddress.getValue(), configObj).Execute();
+            result = ExecuteCommand(SetConfigWorkloadPowerProfile(hostAddress.getValue(), configObj));
             if (result != DCGM_ST_OK)
             {
                 return result;
@@ -1129,7 +1136,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
 
         configObj.SetArgs(groupId.getValue(), &mDeviceConfig);
 
-        result = SetConfig(hostAddress.getValue(), configObj).Execute();
+        result = ExecuteCommand(SetConfig(hostAddress.getValue(), configObj));
     }
     else if (getConfig.isSet())
     {
@@ -1139,7 +1146,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
         }
 
         configObj.SetArgs(groupId.getValue(), 0);
-        result = GetConfig(hostAddress.getValue(), configObj, verbose.isSet(), json.isSet()).Execute();
+        result = ExecuteCommand(GetConfig(hostAddress.getValue(), configObj, verbose.isSet(), json.isSet()));
     }
     else if (enforceConfig.isSet())
     {
@@ -1149,7 +1156,7 @@ dcgmReturn_t CommandLineParser::ProcessConfigCommandLine(int argc, char const *c
         }
 
         configObj.SetArgs(groupId.getValue(), 0); // Set the required Args (groupId in this case)
-        result = EnforceConfig { hostAddress.getValue(), configObj }.Execute();
+        result = ExecuteCommand(EnforceConfig { hostAddress.getValue(), configObj });
     }
 
     return result;
@@ -1286,12 +1293,12 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
     // Process Get Command
     if (getWatches.isSet())
     {
-        result = GetHealth(hostAddress.getValue(), groupId, json.getValue()).Execute();
+        result = ExecuteCommand(GetHealth(hostAddress.getValue(), groupId, json.getValue()));
     }
     else if (clearWatches.isSet())
     {
-        result
-            = SetHealth(hostAddress.getValue(), groupId, 0, updateInterval.getValue(), maxKeepAge.getValue()).Execute();
+        result = ExecuteCommand(
+            SetHealth(hostAddress.getValue(), groupId, 0, updateInterval.getValue(), maxKeepAge.getValue()));
     }
     else if (setWatches.isSet())
     {
@@ -1380,13 +1387,12 @@ dcgmReturn_t CommandLineParser::ProcessHealthCommandLine(int argc, char const *c
             throw TCLAP::CmdLineParseException("No flags detected", "set");
         }
 
-        result = SetHealth(
-                     hostAddress.getValue(), groupId, bitwiseWatches, updateInterval.getValue(), maxKeepAge.getValue())
-                     .Execute();
+        result = ExecuteCommand(SetHealth(
+            hostAddress.getValue(), groupId, bitwiseWatches, updateInterval.getValue(), maxKeepAge.getValue()));
     }
     else if (checkWatches.isSet())
     {
-        result = CheckHealth(hostAddress.getValue(), groupId, json.getValue()).Execute();
+        result = ExecuteCommand(CheckHealth(hostAddress.getValue(), groupId, json.getValue()));
     }
 
     return result;
@@ -1956,7 +1962,7 @@ dcgmReturn_t CommandLineParser::ProcessMnDiagCommandLine(int argc, char const *c
 
     ProcessAndValidateMnDiagParams(argc, argv, drmnd, hostEngineAddressValue, hostAddressWasOverridden, jsonOutput);
 
-    return StartMnDiag(hostEngineAddressValue, hostAddressWasOverridden, drmnd, jsonOutput).Execute();
+    return ExecuteCommand(StartMnDiag(hostEngineAddressValue, hostAddressWasOverridden, drmnd, jsonOutput));
 }
 
 dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *const *argv)
@@ -1966,7 +1972,7 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
     if (value != nullptr)
     {
         AbortDiag abortDiag = AbortDiag(std::string(value));
-        return abortDiag.Execute();
+        return ExecuteCommand(abortDiag);
     }
 
     dcgmReturn_t result = DCGM_ST_OK;
@@ -2355,10 +2361,13 @@ dcgmReturn_t CommandLineParser::ProcessDiagCommandLine(int argc, char const *con
 
     bool hostAddressWasOverridden = hostAddress.isSet();
 
-    return StartDiag { hostAddress.getValue(), hostAddressWasOverridden, concatenatedParams,
-                       config.getValue(),      json.getValue(),          drd,
-                       iterations.getValue() }
-        .Execute();
+    return ExecuteCommand(StartDiag { hostAddress.getValue(),
+                                      hostAddressWasOverridden,
+                                      concatenatedParams,
+                                      config.getValue(),
+                                      json.getValue(),
+                                      drd,
+                                      iterations.getValue() });
 }
 
 dcgmReturn_t CommandLineParser::ProcessStatsCommandLine(int argc, char const *const *argv)
@@ -2499,38 +2508,37 @@ dcgmReturn_t CommandLineParser::ProcessStatsCommandLine(int argc, char const *co
 
     if (enableWatches.isSet())
     {
-        result = EnableWatches(
-                     hostAddress.getValue(), groupId.getValue(), updateInterval.getValue(), maxKeepAge.getValue())
-                     .Execute();
+        result = ExecuteCommand(EnableWatches(
+            hostAddress.getValue(), groupId.getValue(), updateInterval.getValue(), maxKeepAge.getValue()));
     }
     else if (disableWatches.isSet())
     {
-        result = DisableWatches(hostAddress.getValue(), groupId.getValue()).Execute();
+        result = ExecuteCommand(DisableWatches(hostAddress.getValue(), groupId.getValue()));
     }
     else if (pid.isSet())
     {
-        result = ViewProcessStats(hostAddress.getValue(), groupId.getValue(), pid.getValue(), verbose.getValue())
-                     .Execute();
+        result = ExecuteCommand(
+            ViewProcessStats(hostAddress.getValue(), groupId.getValue(), pid.getValue(), verbose.getValue()));
     }
     else if (jobStart.isSet())
     {
-        result = StartJob(hostAddress.getValue(), groupId.getValue(), jobStart.getValue()).Execute();
+        result = ExecuteCommand(StartJob(hostAddress.getValue(), groupId.getValue(), jobStart.getValue()));
     }
     else if (jobStop.isSet())
     {
-        result = StopJob(hostAddress.getValue(), jobStop.getValue()).Execute();
+        result = ExecuteCommand(StopJob(hostAddress.getValue(), jobStop.getValue()));
     }
     else if (jobStats.isSet())
     {
-        result = ViewJobStats(hostAddress.getValue(), jobStats.getValue(), verbose.getValue()).Execute();
+        result = ExecuteCommand(ViewJobStats(hostAddress.getValue(), jobStats.getValue(), verbose.getValue()));
     }
     else if (jobRemove.isSet())
     {
-        result = RemoveJob(hostAddress.getValue(), jobRemove.getValue()).Execute();
+        result = ExecuteCommand(RemoveJob(hostAddress.getValue(), jobRemove.getValue()));
     }
     else if (jobRemoveAll.isSet())
     {
-        result = RemoveAllJobs(hostAddress.getValue()).Execute();
+        result = ExecuteCommand(RemoveAllJobs(hostAddress.getValue()));
     }
 
     return result;
@@ -2576,11 +2584,11 @@ dcgmReturn_t CommandLineParser::ProcessTopoCommandLine(int argc, char const *con
 
     if (gpuId.isSet())
     {
-        result = GetGPUTopo(hostAddress.getValue(), gpuId.getValue(), json.getValue()).Execute();
+        result = ExecuteCommand(GetGPUTopo(hostAddress.getValue(), gpuId.getValue(), json.getValue()));
     }
     else
     {
-        result = GetGroupTopo(hostAddress.getValue(), groupId.getValue(), json.getValue()).Execute();
+        result = ExecuteCommand(GetGroupTopo(hostAddress.getValue(), groupId.getValue(), json.getValue()));
     }
 
     return result;
@@ -2631,7 +2639,7 @@ dcgmReturn_t CommandLineParser::ProcessIntrospectCommandLine(int argc, char cons
                                                "See \"dcgmi introspect --help\"");
         }
 
-        result = DisplayIntrospectSummary(hostAddress.getValue(), hostengineTarget.getValue()).Execute();
+        result = ExecuteCommand(DisplayIntrospectSummary(hostAddress.getValue(), hostengineTarget.getValue()));
     }
 
     return result;
@@ -2650,6 +2658,7 @@ dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc, char const *c
     TCLAP::ValueArg<int> gpuId("g", "gpuid", "The GPU ID to query. Required for -e", false, 1, "gpuId", cmd);
     TCLAP::ValueArg<std::string> hostAddress("", "host", g_hostnameHelpText, false, "localhost", "IP/FQDN", cmd);
     TCLAP::SwitchArg json("j", "json", "Print the output in a json format", cmd, false);
+    TCLAP::SwitchArg showEntityIds("", "show-entity-ids", "Show dcgm_link_t entity IDs for each link.", cmd, false);
 
     TCLAP::SwitchArg printNvLinkErrors("e", "errors", "Print NvLink errors for a given gpuId (-g).", false);
     TCLAP::SwitchArg printLinkStatus(
@@ -2677,6 +2686,7 @@ dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc, char const *c
 
     helpOutput.addToGroup("2", &hostAddress);
     helpOutput.addToGroup("2", &printLinkStatus);
+    helpOutput.addToGroup("2", &showEntityIds);
 
     cmd.parse(argc, argv);
 
@@ -2692,11 +2702,16 @@ dcgmReturn_t CommandLineParser::ProcessNvlinkCommandLine(int argc, char const *c
             throw TCLAP::CmdLineParseException("GPU ID is required (--gpuid)", "errors");
         }
 
-        result = GetGpuNvlinkErrorCounts(hostAddress.getValue(), gpuId.getValue(), json.getValue()).Execute();
+        if (showEntityIds.isSet())
+        {
+            throw TCLAP::CmdLineParseException("--show-entity-ids is only supported with -s (link-status)");
+        }
+
+        result = ExecuteCommand(GetGpuNvlinkErrorCounts(hostAddress.getValue(), gpuId.getValue(), json.getValue()));
     }
     else if (printLinkStatus.isSet())
     {
-        result = GetNvLinkLinkStatuses(hostAddress.getValue()).Execute();
+        result = ExecuteCommand(GetNvLinkLinkStatuses(hostAddress.getValue(), showEntityIds.getValue()));
     }
 
     return result;
@@ -2787,15 +2802,14 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
 
     if (list.isSet())
     {
-        return DeviceMonitor(hostAddress.getValue(),
-                             std::move(entityIdsStr),
-                             groupId.getValue(),
-                             fieldId.getValue(),
-                             fieldGroupId.getValue(),
-                             std::chrono::milliseconds(delay.getValue()),
-                             count.getValue(),
-                             true)
-            .Execute();
+        return ExecuteCommand(DeviceMonitor(hostAddress.getValue(),
+                                            std::move(entityIdsStr),
+                                            groupId.getValue(),
+                                            fieldId.getValue(),
+                                            fieldGroupId.getValue(),
+                                            std::chrono::milliseconds(delay.getValue()),
+                                            count.getValue(),
+                                            true));
     }
 
     // Check for negative + invalid inputs
@@ -2810,15 +2824,14 @@ dcgmReturn_t CommandLineParser::ProcessDmonCommandLine(int argc, char const *con
         throw TCLAP::CmdLineParseException("Invalid value", "field-id");
     }
 
-    return DeviceMonitor(hostAddress.getValue(),
-                         std::move(entityIdsStr),
-                         groupId.getValue(),
-                         fieldId.getValue(),
-                         fieldGroupId.getValue(),
-                         std::chrono::milliseconds(delay.getValue()),
-                         count.getValue(),
-                         false)
-        .Execute();
+    return ExecuteCommand(DeviceMonitor(hostAddress.getValue(),
+                                        std::move(entityIdsStr),
+                                        groupId.getValue(),
+                                        fieldId.getValue(),
+                                        fieldGroupId.getValue(),
+                                        std::chrono::milliseconds(delay.getValue()),
+                                        count.getValue(),
+                                        false));
 }
 
 dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *const *argv)
@@ -2882,16 +2895,16 @@ dcgmReturn_t CommandLineParser::ProcessProfileCommandLine(int argc, char const *
 
     if (pauseArg.isSet())
     {
-        result = DcgmiProfileSetPause(hostAddress.getValue(), true).Execute();
+        result = ExecuteCommand(DcgmiProfileSetPause(hostAddress.getValue(), true));
     }
     else if (resumeArg.isSet())
     {
-        result = DcgmiProfileSetPause(hostAddress.getValue(), false).Execute();
+        result = ExecuteCommand(DcgmiProfileSetPause(hostAddress.getValue(), false));
     }
     else if (list.isSet())
     {
-        result = DcgmiProfileList(hostAddress.getValue(), std::move(entityIdsStr), groupId.getValue(), json.getValue())
-                     .Execute();
+        result = ExecuteCommand(
+            DcgmiProfileList(hostAddress.getValue(), std::move(entityIdsStr), groupId.getValue(), json.getValue()));
     }
     else
     {
@@ -2914,7 +2927,7 @@ dcgmReturn_t CommandLineParser::ProcessVersionInfoCommandLine(int argc, char con
 
     cmd.parse(argc, argv);
 
-    return VersionInfo(hostAddress.getValue()).Execute();
+    return ExecuteCommand(VersionInfo(hostAddress.getValue()));
 }
 
 dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const *const *argv)
@@ -2958,9 +2971,8 @@ dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const 
 
     if (targetSeverity.isSet())
     {
-        return DcgmiSettingsSetLoggingSeverity(
-                   hostAddress.getValue(), targetLogger.getValue(), targetSeverity.getValue(), json.getValue())
-            .Execute();
+        return ExecuteCommand(DcgmiSettingsSetLoggingSeverity(
+            hostAddress.getValue(), targetLogger.getValue(), targetSeverity.getValue(), json.getValue()));
     }
 
     if (attachDriver.isSet() && detachDriver.isSet())
@@ -2971,7 +2983,7 @@ dcgmReturn_t CommandLineParser::ProcessSettingsCommandLine(int argc, char const 
 
     if (attachDriver.isSet() || detachDriver.isSet())
     {
-        return DcgmiSettingsAttachDetachDriver(hostAddress.getValue(), attachDriver.isSet()).Execute();
+        return ExecuteCommand(DcgmiSettingsAttachDetachDriver(hostAddress.getValue(), attachDriver.isSet()));
     }
 
     throw TCLAP::CmdLineParseException(
@@ -3004,11 +3016,11 @@ dcgmReturn_t CommandLineParser::ProcessModuleCommandLine(int argc, char const *c
 
     if (list.isSet())
     {
-        result = ListModule { hostAddress.getValue(), json.getValue() }.Execute();
+        result = ExecuteCommand(ListModule { hostAddress.getValue(), json.getValue() });
     }
     else if (denylist.isSet())
     {
-        result = DenylistModule { hostAddress.getValue(), denylist.getValue(), json.getValue() }.Execute();
+        result = ExecuteCommand(DenylistModule { hostAddress.getValue(), denylist.getValue(), json.getValue() });
     }
     // No else clause since xors ensures one of list or denylist is always set
 
@@ -3082,11 +3094,11 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
 
     if (pause.isSet())
     {
-        return ModulesPauseResume(hostAddress.getValue(), true).Execute();
+        return ExecuteCommand(ModulesPauseResume(hostAddress.getValue(), true));
     }
     if (resume.isSet())
     {
-        return ModulesPauseResume(hostAddress.getValue(), false).Execute();
+        return ExecuteCommand(ModulesPauseResume(hostAddress.getValue(), false));
     }
 
     if (gpuId.isSet() && groupId.isSet())
@@ -3102,7 +3114,7 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
     if (introspect.isSet())
     {
         unsigned int gId = groupId.isSet() ? groupId.getValue() : gpuId.getValue();
-        result           = IntrospectCache(hostAddress.getValue(), gId, fieldId.getValue(), groupId.isSet()).Execute();
+        result = ExecuteCommand(IntrospectCache(hostAddress.getValue(), gId, fieldId.getValue(), groupId.isSet()));
     }
     else if (inject.isSet())
     {
@@ -3116,12 +3128,8 @@ dcgmReturn_t CommandLineParser::ProcessAdminCommandLine(int argc, char const *co
             throw TCLAP::CmdLineParseException("The -v/--value argument is required for --inject");
         }
 
-        result = InjectCache(hostAddress.getValue(),
-                             gpuId.getValue(),
-                             fieldId.getValue(),
-                             timeVal.getValue(),
-                             injectValue.getValue())
-                     .Execute();
+        result = ExecuteCommand(InjectCache(
+            hostAddress.getValue(), gpuId.getValue(), fieldId.getValue(), timeVal.getValue(), injectValue.getValue()));
     }
 
     return result;

@@ -18,6 +18,7 @@
 
 #include <DcgmLogging.h>
 #include <dcgm_api_export.h>
+#include <unordered_map>
 
 
 DcgmModuleMnDiag::DcgmModuleMnDiag(dcgmCoreCallbacks_t &dcc)
@@ -47,6 +48,13 @@ dcgmReturn_t DcgmModuleMnDiag::ProcessHeadNodeMsg(dcgm_module_command_header_t *
                 return DCGM_ST_PAUSED;
             }
 
+            if (moduleCommand->length < sizeof(dcgm_mndiag_msg_run_v1))
+            {
+                log_error("ProcessHeadNodeMsg: message too small ({} < {})",
+                          moduleCommand->length,
+                          sizeof(dcgm_mndiag_msg_run_v1));
+                return DCGM_ST_BADPARAM;
+            }
             auto *msg = (dcgm_mndiag_msg_run_v1 *)moduleCommand;
             result    = CheckVersion(&msg->header, dcgm_mndiag_msg_run_version1);
             if (result != DCGM_ST_OK)
@@ -92,59 +100,62 @@ dcgmReturn_t DcgmModuleMnDiag::ProcessHeadNodeMsg(dcgm_module_command_header_t *
  */
 dcgmReturn_t DcgmModuleMnDiag::ProcessComputeNodeMsg(dcgm_module_command_header_t *moduleCommand)
 {
-    dcgmReturn_t result = DCGM_ST_OK;
+    static const std::unordered_map<unsigned int, size_t> kMinSizes = {
+        { DCGM_MNDIAG_SR_AUTHORIZE_CONNECTION, sizeof(dcgm_mndiag_msg_authorization_t) },
+        { DCGM_MNDIAG_SR_REVOKE_AUTHORIZATION, sizeof(dcgm_mndiag_msg_authorization_t) },
+        { DCGM_MNDIAG_SR_GET_NODE_INFO, sizeof(dcgm_mndiag_msg_node_info_t) },
+        { DCGM_MNDIAG_SR_RESERVE_RESOURCES, sizeof(dcgm_mndiag_msg_resource_t) },
+        { DCGM_MNDIAG_SR_RELEASE_RESOURCES, sizeof(dcgm_mndiag_msg_resource_t) },
+        { DCGM_MNDIAG_SR_DETECT_PROCESS, sizeof(dcgm_mndiag_msg_resource_t) },
+        { DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS, sizeof(dcgm_mndiag_msg_run_params_t) },
+    };
 
-    // Handle authorization and node info commands without authorization check
+    auto it = kMinSizes.find(moduleCommand->subCommand);
+    if (it == kMinSizes.end())
+    {
+        log_error("Unknown compute node subcommand: {}", moduleCommand->subCommand);
+        return DCGM_ST_FUNCTION_NOT_FOUND;
+    }
+    if (moduleCommand->length < it->second)
+    {
+        log_error("ProcessComputeNodeMsg subCommand {}: message too small ({} < {})",
+                  moduleCommand->subCommand,
+                  moduleCommand->length,
+                  it->second);
+        return DCGM_ST_BADPARAM;
+    }
+
+    // Commands that bypass authorization
     if (moduleCommand->subCommand == DCGM_MNDIAG_SR_AUTHORIZE_CONNECTION)
     {
-        // Cast to our new struct type
-        dcgm_mndiag_msg_authorization_t *authMsg = reinterpret_cast<dcgm_mndiag_msg_authorization_t *>(moduleCommand);
-
-        // Use the headNodeId from the struct instead of connectionId
-        result = m_mnDiagManager->HandleAuthorizeConnection(authMsg->authorization.headNodeId);
-        return result;
+        auto *authMsg = reinterpret_cast<dcgm_mndiag_msg_authorization_t *>(moduleCommand);
+        return m_mnDiagManager->HandleAuthorizeConnection(authMsg->authorization.headNodeId);
     }
-
     if (moduleCommand->subCommand == DCGM_MNDIAG_SR_REVOKE_AUTHORIZATION)
     {
-        // Cast to our new struct type
-        dcgm_mndiag_msg_authorization_t *authMsg = reinterpret_cast<dcgm_mndiag_msg_authorization_t *>(moduleCommand);
-
-        // Use the headNodeId from the struct instead of connectionId
-        result = m_mnDiagManager->HandleRevokeAuthorization(authMsg->authorization.headNodeId);
-        return result;
+        auto *authMsg = reinterpret_cast<dcgm_mndiag_msg_authorization_t *>(moduleCommand);
+        return m_mnDiagManager->HandleRevokeAuthorization(authMsg->authorization.headNodeId);
     }
-
+    // No authorization check as subcommand only provides version info
+    // Implement authorization if sensitive fields are added in the future
     if (moduleCommand->subCommand == DCGM_MNDIAG_SR_GET_NODE_INFO)
     {
-        result = m_mnDiagManager->HandleGetNodeInfo(moduleCommand);
-        return result;
+        return m_mnDiagManager->HandleGetNodeInfo(moduleCommand);
     }
 
-    // For all other commands, verify the connection is authorized
-    // We need to extract the headNodeId based on the command type
+    // All remaining commands require an authorized connection — extract headNodeId first
     size_t headNodeId = 0;
-
-    // Determine the appropriate struct type based on the command
     switch (moduleCommand->subCommand)
     {
         case DCGM_MNDIAG_SR_RESERVE_RESOURCES:
         case DCGM_MNDIAG_SR_RELEASE_RESOURCES:
         case DCGM_MNDIAG_SR_DETECT_PROCESS:
-        {
-            dcgm_mndiag_msg_resource_t *resourceMsg = reinterpret_cast<dcgm_mndiag_msg_resource_t *>(moduleCommand);
-            headNodeId                              = resourceMsg->resource.headNodeId;
+            headNodeId = reinterpret_cast<dcgm_mndiag_msg_resource_t *>(moduleCommand)->resource.headNodeId;
             break;
-        }
         case DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS:
-        {
-            dcgm_mndiag_msg_run_params_t *paramMsg = reinterpret_cast<dcgm_mndiag_msg_run_params_t *>(moduleCommand);
-            headNodeId                             = paramMsg->runParams.headNodeId;
+            headNodeId = reinterpret_cast<dcgm_mndiag_msg_run_params_t *>(moduleCommand)->runParams.headNodeId;
             break;
-        }
-
         default:
-            log_error("Unknown compute node subcommand: {}. Couldn't verify head node ID.", moduleCommand->subCommand);
             return DCGM_ST_FUNCTION_NOT_FOUND;
     }
 
@@ -158,27 +169,16 @@ dcgmReturn_t DcgmModuleMnDiag::ProcessComputeNodeMsg(dcgm_module_command_header_
     switch (moduleCommand->subCommand)
     {
         case DCGM_MNDIAG_SR_RESERVE_RESOURCES:
-            result = m_mnDiagManager->HandleReserveResources(moduleCommand);
-            break;
-
+            return m_mnDiagManager->HandleReserveResources(moduleCommand);
         case DCGM_MNDIAG_SR_RELEASE_RESOURCES:
-            result = m_mnDiagManager->HandleReleaseResources(moduleCommand);
-            break;
+            return m_mnDiagManager->HandleReleaseResources(moduleCommand);
         case DCGM_MNDIAG_SR_DETECT_PROCESS:
-            result = m_mnDiagManager->HandleDetectProcess(moduleCommand);
-            break;
-
+            return m_mnDiagManager->HandleDetectProcess(moduleCommand);
         case DCGM_MNDIAG_SR_BROADCAST_RUN_PARAMETERS:
-            result = m_mnDiagManager->HandleBroadcastRunParameters(moduleCommand);
-            break;
-
+            return m_mnDiagManager->HandleBroadcastRunParameters(moduleCommand);
         default:
-            log_error("Unknown compute node subcommand: {}", moduleCommand->subCommand);
-            result = DCGM_ST_FUNCTION_NOT_FOUND;
-            break;
+            return DCGM_ST_FUNCTION_NOT_FOUND;
     }
-
-    return result;
 }
 
 /**
@@ -228,6 +228,11 @@ dcgmReturn_t DcgmModuleMnDiag::ProcessMessage(dcgm_module_command_header_t *modu
     if (moduleCommand->moduleId == DcgmModuleIdCore)
     {
         return ProcessCoreMessage(moduleCommand);
+    }
+    else if (moduleCommand->moduleId != DcgmModuleIdMnDiag)
+    {
+        DCGM_LOG_ERROR << "Unexpected module command for module " << moduleCommand->moduleId;
+        return DCGM_ST_BADPARAM;
     }
 
     // Determine if this is a head node or compute node message based on the command type

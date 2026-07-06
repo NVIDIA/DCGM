@@ -15,9 +15,11 @@
  */
 #pragma once
 
+#include "DcgmUtilities.h"
 #include "dcgm_structs.h"
 #include "timelib.h"
 
+#include <chrono>
 #include <expected>
 #include <memory>
 #include <mutex>
@@ -94,6 +96,13 @@ public:
      * Destructor
      */
     ~DcgmImexManager() = default;
+
+    /**
+     * Set a custom command runner for dependency injection (used by tests)
+     *
+     * @param runCmdHelper Custom command runner
+     */
+    void SetRunCmdHelper(std::unique_ptr<DcgmNs::Utils::RunCmdHelper> runCmdHelper);
 
     /**
      * Get the current IMEX domain status
@@ -189,7 +198,11 @@ private:
 
     static constexpr timelib64_t CACHE_EXPIRY_USEC = 60 * 1000000;      //!< Cache expiry: 60 seconds
     static constexpr const char *IMEX_CTL_COMMAND  = "nvidia-imex-ctl"; //!< Command name
+    static constexpr std::chrono::steady_clock::duration CMD_TIMEOUT
+        = std::chrono::seconds { 30 }; //!< Timeout for nvidia-imex-ctl commands
 
-    mutable std::mutex m_mutex;    //!< Mutex for thread safety
-    DcgmImexStatus m_cachedStatus; //!< Cached IMEX status
+    mutable std::mutex m_mutex;                                  //!< Mutex for thread safety
+    DcgmImexStatus m_cachedStatus;                               //!< Cached IMEX status
+    std::unique_ptr<DcgmNs::Utils::RunCmdHelper> m_runCmdHelper; //!< Command runner (injectable for tests)
+    std::optional<std::string> m_overrideExecutablePath;         //!< Override for tests to bypass filesystem check
 };

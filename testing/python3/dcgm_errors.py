@@ -165,7 +165,10 @@ DCGM_FR_GPU_RECOVERY_DRAIN_P2P = 127  # Peer-to-peer traffic must be drained
 DCGM_FR_GPU_RECOVERY_DRAIN_RESET = 128
 DCGM_FR_NCCL_ERROR = 129
 DCGM_FR_RETEST_REQUESTED = 130  # Retest requested before providing results
-DCGM_FR_ERROR_SENTINEL = 131  # MUST BE THE LAST ERROR CODE
+DCGM_FR_CONTAINED_ERROR = 131  # GPU contained error
+# Uncorrectable row remap threshold exceeded
+DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT = 132
+DCGM_FR_ERROR_SENTINEL = 133  # MUST BE THE LAST ERROR CODE
 
 # Deprecated throttling-related events
 # Deprecated: Use DCGM_FR_CLOCKS_EVENT_THERMAL instead
@@ -349,9 +352,11 @@ DCGM_FR_L1TAG_UNSUPPORTED_MSG = "This card does not support the L1 cache test. S
 DCGM_FR_L1TAG_MISCOMPARE_MSG = "The L1 cache test failed with a miscompare."
 DCGM_FR_ROW_REMAP_FAILURE_MSG = "Row remapping failed."
 DCGM_FR_UNCONTAINED_ERROR_MSG = "GPU had an uncontained error (XID 95)"
+DCGM_FR_CONTAINED_ERROR_MSG = "GPU had a contained error."
 DCGM_FR_EMPTY_GPU_LIST_MSG = "No valid GPUs passed to plugin"
 DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_MSG = "Pending page retirements together with a DBE were detected on GPU %u."
 DCGM_FR_UNCORRECTABLE_ROW_REMAP_MSG = "GPU %u has uncorrectable row remappings"
+DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT_MSG = "GPU %u exceeded uncorrectable row remap limit with %u remapped rows"
 DCGM_FR_PENDING_ROW_REMAP_MSG = "GPU %u has pending row remappings"
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_MSG = "GPU %u was unsuccessfully written to by GPU %u in a peer-to-peer test: %s"
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE_MSG = "GPU %u unsuccessfully wrote data to GPU %u in a peer-to-peer test: %s"
@@ -484,9 +489,11 @@ DCGM_FR_L1TAG_UNSUPPORTED_NEXT = ""
 DCGM_FR_L1TAG_MISCOMPARE_NEXT = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_ROW_REMAP_FAILURE_NEXT = DCGM_FR_VOLATILE_DBE_DETECTED_NEXT
 DCGM_FR_UNCONTAINED_ERROR_NEXT = DCGM_FR_VOLATILE_DBE_DETECTED_NEXT
+DCGM_FR_CONTAINED_ERROR_NEXT = "Restart the application that encountered the error. Other applications on the GPU can continue running. GPU reset can be deferred until a convenient time."
 DCGM_FR_EMPTY_GPU_LIST_NEXT = ""
 DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_NEXT = "Drain the GPU and reset it or reboot the node to resolve this issue."
 DCGM_FR_UNCORRECTABLE_ROW_REMAP_NEXT = ""
+DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT_NEXT = TRIAGE_RUN_FIELD_DIAG_MSG
 DCGM_FR_PENDING_ROW_REMAP_NEXT = ""
 DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT = BUG_REPORT_MSG
 DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT = BUG_REPORT_MSG

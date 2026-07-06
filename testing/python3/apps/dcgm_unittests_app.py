@@ -64,7 +64,8 @@ class TestDcgmUnittestsApp(app_runner.AppRunner):
         if logger.log_dir is None:
             return
 
-        # Verify that nv_hostengine doesn't print any strings that should never be printed on a working system
+        # Verify that nv_hostengine doesn't print any strings that should never
+        # be printed on a working system
         stdout = "\n".join(self.stdout_lines)
         for forbidden_text in TestDcgmUnittestsApp.forbidden_strings:
             assert stdout.find(

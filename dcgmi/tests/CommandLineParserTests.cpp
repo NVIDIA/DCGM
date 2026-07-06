@@ -20,7 +20,10 @@
 #include <dcgm_errors.h>
 #include <dcgm_structs.h>
 
+#include <vector>
+
 #define DCGMI_TESTS
+#include <Command.h>
 #include <CommandLineParser.h>
 #include <NvcmTCLAP.h>
 #include <tclap/ArgException.h>
@@ -31,6 +34,58 @@ namespace
 std::string const defaultPort       = std::to_string(DCGM_HE_PORT_NUMBER);
 std::string const defaultSocketPath = DCGM_DEFAULT_SOCKET_PATH;
 std::string const unixSocketPrefix  = DCGM_UNIX_SOCKET_PREFIX;
+
+using ParserFunction = dcgmReturn_t (*)(int, char const *const *);
+
+class ScopedCommandExecutor
+{
+public:
+    ScopedCommandExecutor()
+        : m_previousExecutor(CommandLineParser::m_commandExecutor)
+    {
+        CommandLineParser::m_commandExecutor = [this](Command &) {
+            m_callCount++;
+            return DCGM_ST_OK;
+        };
+    }
+
+    ~ScopedCommandExecutor()
+    {
+        CommandLineParser::m_commandExecutor = m_previousExecutor;
+    }
+
+    int CallCount() const
+    {
+        return m_callCount;
+    }
+
+private:
+    CommandLineParser::CommandExecutor m_previousExecutor;
+    int m_callCount = 0;
+};
+
+void RequireParserThrows(ParserFunction parser, std::vector<char const *> const &argv)
+{
+    REQUIRE_THROWS_AS(parser(static_cast<int>(argv.size()), argv.data()), TCLAP::CmdLineParseException);
+}
+
+void RequireParserOkAndExecuted(ScopedCommandExecutor const &executeHook,
+                                ParserFunction parser,
+                                std::vector<char const *> const &argv,
+                                int expectedExecuteCalls = 1)
+{
+    int const callCount = executeHook.CallCount();
+    dcgmReturn_t result = DCGM_ST_GENERIC_ERROR;
+
+    CHECK_NOTHROW(result = parser(static_cast<int>(argv.size()), argv.data()));
+    CHECK(result == DCGM_ST_OK);
+    CHECK(executeHook.CallCount() == callCount + expectedExecuteCalls);
+}
+
+dcgmReturn_t ProcessCommandLine(std::vector<char const *> const &argv)
+{
+    return CommandLineParser::ProcessCommandLine(static_cast<int>(argv.size()), argv.data());
+}
 } //namespace
 
 // -----------------------------------------------------------------
@@ -288,6 +343,131 @@ TEST_CASE("CommandLineParser: ValidateParameters")
         std::string value(DCGM_MAX_TEST_PARMS_LEN_V2 - params.size(), '6');
         params += value;
         REQUIRE_THROWS(CommandLineParser::ValidateParameters(params));
+    }
+}
+
+TEST_CASE("CommandLineParser: CheckGroupIdArgument")
+{
+    SECTION("Named built-in groups are accepted")
+    {
+        REQUIRE(CommandLineParser::CheckGroupIdArgument("g") == DCGM_GROUP_ALL_GPUS);
+        REQUIRE(CommandLineParser::CheckGroupIdArgument("s") == DCGM_GROUP_ALL_NVSWITCHES);
+        REQUIRE(CommandLineParser::CheckGroupIdArgument("i") == DCGM_GROUP_ALL_INSTANCES);
+        REQUIRE(CommandLineParser::CheckGroupIdArgument("c") == DCGM_GROUP_ALL_COMPUTE_INSTANCES);
+        REQUIRE(CommandLineParser::CheckGroupIdArgument("a") == DCGM_GROUP_ALL_ENTITIES);
+    }
+
+    SECTION("Numeric group ids are parsed")
+    {
+        REQUIRE(CommandLineParser::CheckGroupIdArgument("0") == 0);
+        REQUIRE(CommandLineParser::CheckGroupIdArgument("17") == 17);
+    }
+
+    SECTION("Unsupported group ids throw")
+    {
+        REQUIRE_THROWS_AS(CommandLineParser::CheckGroupIdArgument("x"), TCLAP::CmdLineParseException);
+        REQUIRE_THROWS_AS(CommandLineParser::CheckGroupIdArgument("-1"), TCLAP::CmdLineParseException);
+    }
+}
+
+TEST_CASE("CommandLineParser: ValidateClocksEventMask")
+{
+    SECTION("Numeric masks accept valid bits and additive combinations")
+    {
+        REQUIRE_NOTHROW(CommandLineParser::ValidateClocksEventMask("0"));
+        REQUIRE_NOTHROW(CommandLineParser::ValidateClocksEventMask("8"));
+        REQUIRE_NOTHROW(CommandLineParser::ValidateClocksEventMask("232"));
+    }
+
+    SECTION("String masks accept known reason names case-insensitively")
+    {
+        REQUIRE_NOTHROW(CommandLineParser::ValidateClocksEventMask("hw_slowdown"));
+        REQUIRE_NOTHROW(CommandLineParser::ValidateClocksEventMask("HW_SLOWDOWN,sw_thermal,hw_thermal,hw_power_brake"));
+    }
+
+    SECTION("Invalid masks throw")
+    {
+        REQUIRE_THROWS_AS(CommandLineParser::ValidateClocksEventMask("1"), TCLAP::CmdLineParseException);
+        REQUIRE_THROWS_AS(CommandLineParser::ValidateClocksEventMask("8,hw_slowdown"), TCLAP::CmdLineParseException);
+        REQUIRE_THROWS_AS(CommandLineParser::ValidateClocksEventMask("bad_reason"), TCLAP::CmdLineParseException);
+        REQUIRE_THROWS_AS(CommandLineParser::ValidateClocksEventMask(std::string(DCGM_CLOCKS_EVENT_MASK_LEN, '8')),
+                          TCLAP::CmdLineParseException);
+    }
+}
+
+TEST_CASE("CommandLineParser: Host normalization helpers")
+{
+    SECTION("NormalizeIpAddress appends the default port")
+    {
+        std::string host = "node-a";
+
+        CommandLineParser::NormalizeIpAddress(host, host);
+
+        REQUIRE(host == "node-a:" + defaultPort);
+    }
+
+    SECTION("NormalizeIpAddress accepts boundary ports")
+    {
+        std::string host = "node-a:0";
+        REQUIRE_NOTHROW(CommandLineParser::NormalizeIpAddress(host, host));
+        CHECK(host == "node-a:0");
+
+        host = "node-a:65535";
+        REQUIRE_NOTHROW(CommandLineParser::NormalizeIpAddress(host, host));
+        CHECK(host == "node-a:65535");
+    }
+
+    SECTION("NormalizeUnixSocketPath appends the default socket when no path is provided")
+    {
+        std::string host = "node-a:" + unixSocketPrefix;
+
+        CommandLineParser::NormalizeUnixSocketPath(host, host);
+
+        REQUIRE(host == "node-a:" + unixSocketPrefix + defaultSocketPath);
+    }
+
+    SECTION("NormalizeUnixSocketPath keeps an explicit absolute socket path")
+    {
+        std::string host = "node-a:" + unixSocketPrefix + "/var/run/dcgm.sock";
+
+        CommandLineParser::NormalizeUnixSocketPath(host, host);
+
+        REQUIRE(host == "node-a:" + unixSocketPrefix + "/var/run/dcgm.sock");
+    }
+
+    SECTION("NormalizeUnixSocketPath rejects embedded colons in socket paths")
+    {
+        std::string host = "node-a:" + unixSocketPrefix + "/var/run:dcgm.sock";
+
+        REQUIRE_THROWS_AS(CommandLineParser::NormalizeUnixSocketPath(host, host), TCLAP::CmdLineParseException);
+    }
+
+    SECTION("NormalizeUnixSocketPath rejects missing host and relative paths")
+    {
+        std::string missingHost = ":" + unixSocketPrefix + "/var/run/dcgm.sock";
+        REQUIRE_THROWS_AS(CommandLineParser::NormalizeUnixSocketPath(missingHost, missingHost),
+                          TCLAP::CmdLineParseException);
+
+        std::string relativePath = "node-a:" + unixSocketPrefix + "relative.sock";
+        REQUIRE_THROWS_AS(CommandLineParser::NormalizeUnixSocketPath(relativePath, relativePath),
+                          TCLAP::CmdLineParseException);
+    }
+
+    SECTION("NormalizeIpAddress rejects malformed host and port values")
+    {
+        std::string emptyHost;
+        REQUIRE_THROWS_AS(CommandLineParser::NormalizeIpAddress(emptyHost, emptyHost), TCLAP::CmdLineParseException);
+
+        std::string tooManyColons = "node-a:123:extra";
+        REQUIRE_THROWS_AS(CommandLineParser::NormalizeIpAddress(tooManyColons, tooManyColons),
+                          TCLAP::CmdLineParseException);
+
+        std::string emptyPort = "node-a:";
+        REQUIRE_THROWS_AS(CommandLineParser::NormalizeIpAddress(emptyPort, emptyPort), TCLAP::CmdLineParseException);
+
+        std::string outOfRangePort = "node-a:18446744073709551616";
+        REQUIRE_THROWS_AS(CommandLineParser::NormalizeIpAddress(outOfRangePort, outOfRangePort),
+                          TCLAP::CmdLineParseException);
     }
 }
 
@@ -670,3 +850,747 @@ SCENARIO("MnDiag Command Line Arguments - Valid Cases")
         REQUIRE(jsonOutput == true);
     }
 }
+
+TEST_CASE("CommandLineParser: ProcessCommandLine rejects invalid subsystem")
+{
+    GIVEN("a dcgmi command with an unknown subsystem")
+    {
+        std::vector<char const *> argv { "dcgmi", "not-a-subsystem" };
+
+        WHEN("the command line is processed")
+        {
+            CHECK(ProcessCommandLine(argv) == DCGM_ST_BADPARAM);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessQueryCommandLine invalid argument combinations")
+{
+    GIVEN("query command line validation")
+    {
+        SECTION("Negative GPU id")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--info", "a", "--gpuid", "-1" };
+
+            WHEN("the query command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessQueryCommandLine, argv);
+            }
+        }
+
+        SECTION("Group and GPU are mutually exclusive")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--info", "a", "--group", "1", "--gpuid", "2" };
+
+            WHEN("the query command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessQueryCommandLine, argv);
+            }
+        }
+
+        SECTION("Group and CPU are mutually exclusive")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--info", "a", "--group", "1", "--cpuid", "2" };
+
+            WHEN("the query command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessQueryCommandLine, argv);
+            }
+        }
+
+        SECTION("Compute hierarchy must be used alone")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--compute-hierarchy", "--gpuid", "2" };
+
+            WHEN("the query command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessQueryCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessQueryCommandLine valid execution branches")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("discovery command line actions that parse successfully")
+    {
+        SECTION("List branch")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--list", "--all" };
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessQueryCommandLine, argv);
+        }
+
+        SECTION("Compute hierarchy branch")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--compute-hierarchy" };
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessQueryCommandLine, argv);
+        }
+
+        SECTION("GPU info branch")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--info", "aptcw", "--gpuid", "0" };
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessQueryCommandLine, argv);
+        }
+
+        SECTION("Group info branch")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--info", "a", "--group", "0", "--verbose" };
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessQueryCommandLine, argv);
+        }
+
+        SECTION("CPU info branch")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--info", "a", "--cpuid", "0" };
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessQueryCommandLine, argv);
+        }
+
+        SECTION("Default group info branch")
+        {
+            std::vector<char const *> argv { "dcgmi", "discovery", "--info", "a" };
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessQueryCommandLine, argv);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessPolicyCommandLine invalid argument combinations")
+{
+    GIVEN("policy command line validation")
+    {
+        SECTION("Negative max pages")
+        {
+            std::vector<char const *> argv { "dcgmi", "policy", "--set", "0,1", "--maxpages", "-1" };
+
+            WHEN("the policy command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessPolicyCommandLine, argv);
+            }
+        }
+
+        SECTION("Set requires at least one condition")
+        {
+            std::vector<char const *> argv { "dcgmi", "policy", "--set", "0,1" };
+
+            WHEN("the policy command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessPolicyCommandLine, argv);
+            }
+        }
+
+        SECTION("Set action and validation must be CSV")
+        {
+            std::vector<char const *> argv { "dcgmi", "policy", "--set", "01", "--eccerrors" };
+
+            WHEN("the policy command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessPolicyCommandLine, argv);
+            }
+        }
+
+        SECTION("Set action must be 0 or 1")
+        {
+            std::vector<char const *> argv { "dcgmi", "policy", "--set", "2,1", "--eccerrors" };
+
+            WHEN("the policy command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessPolicyCommandLine, argv);
+            }
+        }
+
+        SECTION("Set validation must be between 0 and 3")
+        {
+            std::vector<char const *> argv { "dcgmi", "policy", "--set", "1,4", "--eccerrors" };
+
+            WHEN("the policy command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessPolicyCommandLine, argv);
+            }
+        }
+
+        SECTION("Verbose is only valid with get")
+        {
+            std::vector<char const *> argv { "dcgmi", "policy", "--set", "1,1", "--eccerrors", "--verbose" };
+
+            WHEN("the policy command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessPolicyCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessPolicyCommandLine valid execution branches")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("policy command line actions that parse successfully")
+    {
+        SECTION("Get policy branch")
+        {
+            std::vector<char const *> argv { "dcgmi", "policy", "--get", "--json" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessPolicyCommandLine, argv);
+        }
+
+        SECTION("Clear policy branch")
+        {
+            std::vector<char const *> argv { "dcgmi", "policy", "--clear" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessPolicyCommandLine, argv);
+        }
+
+        SECTION("Set policy branch with every condition")
+        {
+            std::vector<char const *> argv { "dcgmi",          "policy",      "--set",      "1,3",
+                                             "--eccerrors",    "--pcierrors", "--maxpages", "4",
+                                             "--maxtemp",      "85",          "--maxpower", "300",
+                                             "--nvlinkerrors", "--xiderrors" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessPolicyCommandLine, argv);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessGroupCommandLine invalid argument combinations")
+{
+    GIVEN("group command line validation")
+    {
+        SECTION("Negative group id")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--group", "-1", "--info" };
+
+            WHEN("the group command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessGroupCommandLine, argv);
+            }
+        }
+
+        SECTION("Group id requires an action")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--group", "1" };
+
+            WHEN("the group command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessGroupCommandLine, argv);
+            }
+        }
+
+        SECTION("Add cannot be combined with info")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--group", "1", "--info", "--add", "gpu:0" };
+
+            WHEN("the group command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessGroupCommandLine, argv);
+            }
+        }
+
+        SECTION("Remove cannot be combined with info")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--group", "1", "--info", "--remove", "gpu:0" };
+
+            WHEN("the group command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessGroupCommandLine, argv);
+            }
+        }
+
+        SECTION("Add and remove are mutually exclusive")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--group", "1", "--add", "gpu:0", "--remove", "gpu:1" };
+
+            WHEN("the group command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessGroupCommandLine, argv);
+            }
+        }
+
+        SECTION("Default GPU and default NvSwitch groups are mutually exclusive")
+        {
+            std::vector<char const *> argv {
+                "dcgmi", "group", "--create", "mixed", "--default", "--defaultnvswitches"
+            };
+
+            WHEN("the group command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessGroupCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessGroupCommandLine valid execution branches")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("valid group command lines")
+    {
+        SECTION("list groups")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--list", "--json" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessGroupCommandLine, argv);
+        }
+
+        SECTION("create default GPU group")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--create", "gpus", "--default" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessGroupCommandLine, argv);
+        }
+
+        SECTION("create group with explicit entities")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--create", "mixed", "--add", "gpu:0,cpu:0" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessGroupCommandLine, argv);
+        }
+
+        SECTION("delete group")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--delete", "7" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessGroupCommandLine, argv);
+        }
+
+        SECTION("show group info")
+        {
+            std::vector<char const *> argv { "dcgmi", "group", "--group", "3", "--info", "--json" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessGroupCommandLine, argv);
+        }
+
+        SECTION("add and remove entities")
+        {
+            std::vector<char const *> addArgv { "dcgmi", "group", "--group", "3", "--add", "gpu:0" };
+            std::vector<char const *> removeArgv { "dcgmi", "group", "--group", "3", "--remove", "gpu:0" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessGroupCommandLine, addArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessGroupCommandLine, removeArgv);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessFieldGroupCommandLine invalid argument combinations")
+{
+    GIVEN("fieldgroup command line validation")
+    {
+        SECTION("Info requires field group id")
+        {
+            std::vector<char const *> argv { "dcgmi", "fieldgroup", "--info" };
+
+            WHEN("the fieldgroup command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessFieldGroupCommandLine, argv);
+            }
+        }
+
+        SECTION("Create requires field IDs")
+        {
+            std::vector<char const *> argv { "dcgmi", "fieldgroup", "--create", "fields" };
+
+            WHEN("the fieldgroup command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessFieldGroupCommandLine, argv);
+            }
+        }
+
+        SECTION("Delete requires field group id")
+        {
+            std::vector<char const *> argv { "dcgmi", "fieldgroup", "--delete" };
+
+            WHEN("the fieldgroup command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessFieldGroupCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessFieldGroupCommandLine valid execution branches")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("valid fieldgroup command lines")
+    {
+        SECTION("list field groups")
+        {
+            std::vector<char const *> argv { "dcgmi", "fieldgroup", "--list", "--json" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessFieldGroupCommandLine, argv);
+        }
+
+        SECTION("create field group")
+        {
+            std::vector<char const *> argv { "dcgmi", "fieldgroup", "--create", "temps", "--fieldids", "150,155" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessFieldGroupCommandLine, argv);
+        }
+
+        SECTION("show and delete field group")
+        {
+            std::vector<char const *> infoArgv { "dcgmi", "fieldgroup", "--info", "--fieldgroup", "2", "--json" };
+            std::vector<char const *> deleteArgv { "dcgmi", "fieldgroup", "--delete", "--fieldgroup", "2" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessFieldGroupCommandLine, infoArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessFieldGroupCommandLine, deleteArgv);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessConfigCommandLine invalid argument combinations")
+{
+    GIVEN("config command line validation")
+    {
+        SECTION("Set requires at least one configuration option")
+        {
+            std::vector<char const *> argv { "dcgmi", "config", "--set" };
+
+            WHEN("the config command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessConfigCommandLine, argv);
+            }
+        }
+
+        SECTION("Set rejects malformed application clocks")
+        {
+            std::vector<char const *> argv { "dcgmi", "config", "--set", "--appclocks", "1000" };
+
+            WHEN("the config command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessConfigCommandLine, argv);
+            }
+        }
+
+        SECTION("Get rejects set-only options")
+        {
+            std::vector<char const *> argv { "dcgmi", "config", "--get", "--powerlimit", "250" };
+
+            WHEN("the config command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessConfigCommandLine, argv);
+            }
+        }
+
+        SECTION("Enforce rejects set-only options")
+        {
+            std::vector<char const *> argv { "dcgmi", "config", "--enforce", "--compmode", "1" };
+
+            WHEN("the config command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessConfigCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessConfigCommandLine valid execution branches")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("valid config command lines")
+    {
+        SECTION("set scalar config values")
+        {
+            std::vector<char const *> argv { "dcgmi", "config",      "--set",     "--group",
+                                             "3",     "--eccmode",   "1",         "--syncboost",
+                                             "0",     "--appclocks", "5000,1500", "--powerlimit",
+                                             "250",   "--compmode",  "2" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessConfigCommandLine, argv);
+        }
+
+        SECTION("set workload power profile")
+        {
+            std::vector<char const *> argv { "dcgmi", "config",
+                                             "--set", "--group",
+                                             "3",     "--workloadpowerprofile",
+                                             "4",     "--workloadpowerprofileaction",
+                                             "o" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessConfigCommandLine, argv, 2);
+        }
+
+        SECTION("get and enforce config")
+        {
+            std::vector<char const *> getArgv { "dcgmi", "config", "--get", "--group", "3", "--verbose", "--json" };
+            std::vector<char const *> enforceArgv { "dcgmi", "config", "--enforce", "--group", "3" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessConfigCommandLine, getArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessConfigCommandLine, enforceArgv);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessHealthCommandLine invalid argument combinations")
+{
+    GIVEN("health command line validation")
+    {
+        SECTION("Invalid group alias is rejected")
+        {
+            std::vector<char const *> argv { "dcgmi", "health", "--fetch", "--group", "unknown" };
+
+            WHEN("the health command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessHealthCommandLine, argv);
+            }
+        }
+
+        SECTION("Duplicate set flags are rejected")
+        {
+            std::vector<char const *> argv { "dcgmi", "health", "--set", "pp" };
+
+            WHEN("the health command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessHealthCommandLine, argv);
+            }
+        }
+
+        SECTION("All-watch flag cannot be combined with specific flags")
+        {
+            std::vector<char const *> argv { "dcgmi", "health", "--set", "ap" };
+
+            WHEN("the health command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessHealthCommandLine, argv);
+            }
+        }
+
+        SECTION("Unknown set flags are rejected")
+        {
+            std::vector<char const *> argv { "dcgmi", "health", "--set", "z" };
+
+            WHEN("the health command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessHealthCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessHealthCommandLine valid execution branches")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("valid health command lines")
+    {
+        SECTION("fetch and check watches")
+        {
+            std::vector<char const *> fetchArgv { "dcgmi", "health", "--fetch", "--group", "g", "--json" };
+            std::vector<char const *> checkArgv { "dcgmi", "health", "--check", "--group", "a", "--json" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessHealthCommandLine, fetchArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessHealthCommandLine, checkArgv);
+        }
+
+        SECTION("clear and set watches")
+        {
+            std::vector<char const *> clearArgv { "dcgmi", "health", "--clear", "--group", "3" };
+            std::vector<char const *> setArgv { "dcgmi", "health",         "--set", "pmitndx",           "--group",
+                                                "3",     "--max-keep-age", "60",    "--update-interval", "10" };
+            std::vector<char const *> setAllArgv { "dcgmi", "health", "--set", "a", "--group", "3" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessHealthCommandLine, clearArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessHealthCommandLine, setArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessHealthCommandLine, setAllArgv);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessProfileCommandLine invalid argument combinations")
+{
+    GIVEN("profile command line validation")
+    {
+        SECTION("Entity and group IDs are mutually exclusive")
+        {
+            std::vector<char const *> argv { "dcgmi", "profile", "--list", "--entity-id", "0", "--group-id", "1" };
+
+            WHEN("the profile command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessProfileCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: valid execution branches for monitoring subsystems")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("valid topology, nvlink, dmon, and profile command lines")
+    {
+        SECTION("topology commands")
+        {
+            std::vector<char const *> groupArgv { "dcgmi", "topo", "--group", "3", "--json" };
+            std::vector<char const *> gpuArgv { "dcgmi", "topo", "--gpuid", "0", "--json" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessTopoCommandLine, groupArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessTopoCommandLine, gpuArgv);
+        }
+
+        SECTION("nvlink commands")
+        {
+            std::vector<char const *> errorsArgv { "dcgmi", "nvlink", "--errors", "--gpuid", "0", "--json" };
+            std::vector<char const *> statusArgv { "dcgmi", "nvlink", "--link-status", "--show-entity-ids" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessNvlinkCommandLine, errorsArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessNvlinkCommandLine, statusArgv);
+        }
+
+        SECTION("device monitor commands")
+        {
+            std::vector<char const *> listArgv { "dcgmi", "dmon", "--list" };
+            std::vector<char const *> fieldsArgv { "dcgmi", "dmon",    "--entity-id", "gpu:0",   "--field-id",
+                                                   "150",   "--delay", "1",           "--count", "1" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessDmonCommandLine, listArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessDmonCommandLine, fieldsArgv);
+        }
+
+        SECTION("profile commands")
+        {
+            std::vector<char const *> listArgv { "dcgmi", "profile", "--list", "--entity-id", "gpu:0", "--json" };
+            std::vector<char const *> pauseArgv { "dcgmi", "profile", "--pause" };
+            std::vector<char const *> resumeArgv { "dcgmi", "profile", "--resume" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessProfileCommandLine, listArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessProfileCommandLine, pauseArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessProfileCommandLine, resumeArgv);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessSettingsCommandLine invalid argument combinations")
+{
+    GIVEN("settings command line validation")
+    {
+        SECTION("Attach and detach are mutually exclusive")
+        {
+            std::vector<char const *> argv { "dcgmi", "set", "--attach-driver", "--detach-driver" };
+
+            WHEN("the settings command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessSettingsCommandLine, argv);
+            }
+        }
+
+        SECTION("At least one setting action is required")
+        {
+            std::vector<char const *> argv { "dcgmi", "set" };
+
+            WHEN("the settings command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessSettingsCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: valid execution branches for settings and modules")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("valid settings and modules command lines")
+    {
+        SECTION("settings commands")
+        {
+            std::vector<char const *> severityArgv { "dcgmi", "set",   "--logging-severity", "DEBUG", "--target-logger",
+                                                     "BASE",  "--json" };
+            std::vector<char const *> attachArgv { "dcgmi", "set", "--attach-driver" };
+            std::vector<char const *> detachArgv { "dcgmi", "set", "--detach-driver" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessSettingsCommandLine, severityArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessSettingsCommandLine, attachArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessSettingsCommandLine, detachArgv);
+        }
+
+        SECTION("module commands")
+        {
+            std::vector<char const *> listArgv { "dcgmi", "modules", "--list", "--json" };
+            std::vector<char const *> denylistArgv { "dcgmi", "modules", "--denylist", "profiling", "--json" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessModuleCommandLine, listArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessModuleCommandLine, denylistArgv);
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessAdminCommandLine invalid argument combinations")
+{
+    GIVEN("admin command line validation")
+    {
+        SECTION("Negative group id")
+        {
+            std::vector<char const *> argv { "dcgmi", "test", "--introspect", "--group", "-1" };
+
+            WHEN("the admin command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessAdminCommandLine, argv);
+            }
+        }
+
+        SECTION("GPU and group are mutually exclusive")
+        {
+            std::vector<char const *> argv { "dcgmi", "test", "--introspect", "--gpuid", "1", "--group", "2" };
+
+            WHEN("the admin command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessAdminCommandLine, argv);
+            }
+        }
+
+        SECTION("Field is required for introspection")
+        {
+            std::vector<char const *> argv { "dcgmi", "test", "--introspect" };
+
+            WHEN("the admin command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessAdminCommandLine, argv);
+            }
+        }
+
+        SECTION("Injection cannot target a group")
+        {
+            std::vector<char const *> argv { "dcgmi",   "test", "--inject", "--group", "2",
+                                             "--field", "100",  "--value",  "1" };
+
+            WHEN("the admin command is processed")
+            {
+                RequireParserThrows(CommandLineParser::ProcessAdminCommandLine, argv);
+            }
+        }
+    }
+}
+
+TEST_CASE("CommandLineParser: ProcessAdminCommandLine valid execution branches")
+{
+    ScopedCommandExecutor executeHook;
+
+    GIVEN("valid admin command lines")
+    {
+        SECTION("introspect and inject")
+        {
+            std::vector<char const *> introspectGpuArgv { "dcgmi", "test",    "--introspect", "--gpuid",
+                                                          "0",     "--field", "150" };
+            std::vector<char const *> introspectGroupArgv { "dcgmi", "test",    "--introspect", "--group",
+                                                            "3",     "--field", "150" };
+            std::vector<char const *> injectArgv { "dcgmi", "test",    "--inject", "--gpuid",  "0", "--field",
+                                                   "150",   "--value", "42",       "--offset", "2" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessAdminCommandLine, introspectGpuArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessAdminCommandLine, introspectGroupArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessAdminCommandLine, injectArgv);
+        }
+
+        SECTION("pause and resume")
+        {
+            std::vector<char const *> pauseArgv { "dcgmi", "test", "--pause" };
+            std::vector<char const *> resumeArgv { "dcgmi", "test", "--resume" };
+
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessAdminCommandLine, pauseArgv);
+            RequireParserOkAndExecuted(executeHook, CommandLineParser::ProcessAdminCommandLine, resumeArgv);
+        }
+    }
+}
+

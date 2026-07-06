@@ -18,6 +18,8 @@ import test_utils
 import dcgm_agent_internal
 
 
+# NO HARDWARE
+
 @test_utils.run_with_standalone_host_engine()
 def test_utils_run_with_standalone_host_engine(handle):
     '''

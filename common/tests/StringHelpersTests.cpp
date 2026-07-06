@@ -17,23 +17,108 @@
 #include <algorithm>
 #include <catch2/catch_all.hpp>
 #include <cstring>
+#include <stdexcept>
+#include <string_view>
 #include <tuple>
+#include <vector>
 
 #include <DcgmStringHelpers.h>
 
 TEST_CASE("String Split_Join")
 {
     using namespace DcgmNs;
-    REQUIRE(Join(Split("a,b,c,d", ','), "::") == "a::b::c::d");
-    REQUIRE(Join(Split("a", ','), "::") == "a");
-    REQUIRE(Join(Split("", '\0'), ",").empty());
-    REQUIRE(Join(Split("", '\0'), "").empty());
 
-    std::vector<std::string> v1 = { "a", "b", "c", "d" };
-    REQUIRE(Join(begin(v1), end(v1), ",") == "a,b,c,d");
+    GIVEN("strings split by a single character separator")
+    {
+        SECTION("Multiple values")
+        {
+            CHECK(Join(Split("a,b,c,d", ','), "::") == "a::b::c::d");
+        }
 
-    std::vector<std::string_view> v2 = { "a", "b", "c", "d" };
-    REQUIRE(Join(begin(v2), end(v2), "::") == "a::b::c::d");
+        SECTION("Single value")
+        {
+            CHECK(Join(Split("a", ','), "::") == "a");
+        }
+
+        SECTION("Empty value")
+        {
+            CHECK(Join(Split("", '\0'), ",").empty());
+            CHECK(Join(Split("", '\0'), "").empty());
+        }
+    }
+
+    GIVEN("string and string_view containers")
+    {
+        std::vector<std::string> v1      = { "a", "b", "c", "d" };
+        std::vector<std::string_view> v2 = { "a", "b", "c", "d" };
+
+        WHEN("the values are joined")
+        {
+            CHECK(Join(begin(v1), end(v1), ",") == "a,b,c,d");
+            CHECK(Join(begin(v2), end(v2), "::") == "a::b::c::d");
+        }
+    }
+}
+
+TEST_CASE("dcgmTokenizeString")
+{
+    GIVEN("a target vector that may already contain values")
+    {
+        std::vector<std::string> tokens { "existing" };
+
+        SECTION("Empty input leaves existing tokens untouched")
+        {
+            dcgmTokenizeString("", ",", tokens);
+            CHECK(tokens == std::vector<std::string> { "existing" });
+        }
+
+        SECTION("Adjacent delimiters preserve empty tokens")
+        {
+            dcgmTokenizeString("a,,b,", ",", tokens);
+            CHECK(tokens == std::vector<std::string> { "existing", "a", "", "b", "" });
+        }
+    }
+
+    GIVEN("the vector-returning overload")
+    {
+        WHEN("the delimiter has multiple characters")
+        {
+            auto tokens = dcgmTokenizeString("gpu::cpu::switch", "::");
+
+            CHECK(tokens == std::vector<std::string> { "gpu", "cpu", "switch" });
+        }
+    }
+}
+
+TEST_CASE("dcgmStrToLower")
+{
+    GIVEN("mixed-case ASCII text")
+    {
+        WHEN("it is normalized")
+        {
+            CHECK(dcgmStrToLower("GPU-ABC_xyz09") == "gpu-abc_xyz09");
+        }
+    }
+}
+
+TEST_CASE("strictStrToInt")
+{
+    using namespace DcgmNs;
+
+    GIVEN("an input that fully represents an integer")
+    {
+        CHECK(strictStrToInt("-42") == -42);
+    }
+
+    GIVEN("an input with extra trailing characters")
+    {
+        CHECK_THROWS_AS(strictStrToInt("42gpu"), std::invalid_argument);
+    }
+
+    GIVEN("an input outside the int range")
+    {
+        CHECK_THROWS_AS(strictStrToInt("999999999999999999999"), std::out_of_range);
+    }
 }
 
 TEST_CASE("ParseRangeString")

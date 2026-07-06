@@ -17,6 +17,7 @@
 #include <Defer.hpp>
 #include <InjectedNvml.h>
 #include <InjectionKeys.h>
+#include <MockFileSystemOperator.h>
 #include <UnitTestHelpers.h>
 #include <catch2/catch_all.hpp>
 #include <condition_variable>
@@ -24,7 +25,6 @@
 #include <future>
 #include <nvml_injection.h>
 #include <queue>
-#include <tests/MockFileSystemOperator.h>
 #include <thread>
 #include <vector>
 

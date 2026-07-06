@@ -50,7 +50,8 @@ class DcgmJsonReader(DcgmReader):
             # We only want the last measurement
             lastValueList = [l[-1] for l in valuesListOfLists]
 
-            # Turn FV into a conventional Python Object which can be converted to JSON
+            # Turn FV into a conventional Python Object which can be converted
+            # to JSON
             outObject = {self.ConvertFieldIdToTag(
                 i.fieldId): i.value for i in lastValueList}
             outJson = self.PrepareJson(gpuId, outObject)

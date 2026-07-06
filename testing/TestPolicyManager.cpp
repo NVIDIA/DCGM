@@ -211,7 +211,7 @@ int TestPolicyManager::TestPolicyRegUnreg()
     }
 
     fv.version   = dcgmInjectFieldValue_version;
-    fv.fieldId   = DCGM_FI_DEV_ECC_CURRENT;
+    fv.fieldId   = DCGM_FI_DEV_ECC_MODE;
     fv.fieldType = DCGM_FT_INT64;
     fv.status    = 0;
     fv.value.i64 = 1;
@@ -224,12 +224,24 @@ int TestPolicyManager::TestPolicyRegUnreg()
         goto cleanup;
     }
 
+    // Inject baseline (previous) sample for delta calculation
     fv.fieldId   = DCGM_FI_DEV_ECC_DBE_VOL_DEV;
-    fv.value.i64 = policy.parms[0].val.llval + 1;
+    fv.value.i64 = 0; // Previous count = 0
+    fv.ts        = (std::time(0) * 1000000) + 60000000;
     result       = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
     if (result != DCGM_ST_OK)
     {
-        fprintf(stderr, "fpEngineInjectFieldValue failed with %d\n", (int)result);
+        fprintf(stderr, "fpEngineInjectFieldValue (baseline) failed with %d\n", (int)result);
+        goto cleanup;
+    }
+
+    // Inject current sample with increased count to trigger violation
+    fv.value.i64 = policy.parms[0].val.llval + 1;       // Current count > previous
+    fv.ts        = (std::time(0) * 1000000) + 61000000; // Later timestamp
+    result       = dcgmInjectFieldValue(m_dcgmHandle, groupInfo->entityList[0].entityId, &fv);
+    if (result != DCGM_ST_OK)
+    {
+        fprintf(stderr, "fpEngineInjectFieldValue (current) failed with %d\n", (int)result);
         goto cleanup;
     }
 
@@ -451,7 +463,7 @@ int TestPolicyManager::TestPolicyRegUnregXID()
     }
 
     fv.version   = dcgmInjectFieldValue_version;
-    fv.fieldId   = DCGM_FI_DEV_XID_ERRORS;
+    fv.fieldId   = DCGM_FI_DEV_XID_ERROR;
     fv.fieldType = DCGM_FT_INT64;
     fv.status    = 0;
     fv.value.i64 = 1;

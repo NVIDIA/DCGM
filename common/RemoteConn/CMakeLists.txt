@@ -28,4 +28,7 @@ target_link_libraries(remoteconn PUBLIC
     Boost::filesystem
 )
 
+# No common/RemoteConn/mock/: RemoteConn’s ChildProcess test double is built into
+# remoteconntests only.
+
 add_subdirectory(tests)

@@ -22,13 +22,13 @@ import sys
 import logging
 
 defaultFieldIds = [
-    dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
-    dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
+    dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS,
+    dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS,
     dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
-    dcgm_fields.DCGM_FI_DEV_GPU_UTIL,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
+    dcgm_fields.DCGM_FI_DEV_GPU_UTIL_RATIO,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
     dcgm_fields.DCGM_FI_DEV_ECC_SBE_VOL_TOTAL,
     dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
     dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
@@ -36,20 +36,20 @@ defaultFieldIds = [
     dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
     dcgm_fields.DCGM_FI_DEV_FB_FREE,
     dcgm_fields.DCGM_FI_DEV_FB_USED,
-    dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-    dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS,
+    dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL,
     dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
     dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
-    dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_XID_ERROR,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL,
     dcgm_fields.DCGM_FI_DEV_MEM_CLOCK,
-    dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP,
+    dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP_CELSIUS,
     dcgm_fields.DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION,
     dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_THROUGHPUT_TOTAL,
     dcgm_fields.DCGM_FI_DEV_PCIE_TX_THROUGHPUT,
     dcgm_fields.DCGM_FI_DEV_PCIE_RX_THROUGHPUT
 ]
@@ -101,7 +101,13 @@ class DcgmReader(object):
     val : the value class that comes from DCGM (v.value is the value for the field)
     '''
 
-    def CustomFieldHandler_v2(self, entityGroupId, entityId, fieldId, fieldTag, val):
+    def CustomFieldHandler_v2(
+            self,
+            entityGroupId,
+            entityId,
+            fieldId,
+            fieldTag,
+            val):
         print("%s %s field %s=%s" % (entity_group_id_to_string(
             entityGroupId), str(entityId), fieldTag, str(val.value)))
 
@@ -186,9 +192,18 @@ class DcgmReader(object):
                       False to get data for all requested fieldId.
     '''
 
-    def __init__(self, hostname='localhost', fieldIds=None, updateFrequency=10000000,
-                 maxKeepAge=3600.0, ignoreList=None, fieldGroupName='dcgm_fieldgroupData', gpuIds=None,
-                 entities=None, fieldIntervalMap=None, ignoreBlank=True):
+    def __init__(
+            self,
+            hostname='localhost',
+            fieldIds=None,
+            updateFrequency=10000000,
+            maxKeepAge=3600.0,
+            ignoreList=None,
+            fieldGroupName='dcgm_fieldgroupData',
+            gpuIds=None,
+            entities=None,
+            fieldIntervalMap=None,
+            ignoreBlank=True):
         fieldIds = fieldIds or defaultFieldIds
         ignoreList = ignoreList or []
         self.m_dcgmHostName = hostname
@@ -218,7 +233,8 @@ class DcgmReader(object):
         self.m_gpuIdToBusId = {}  # GpuID => PCI-E busId string
         self.m_gpuIdToUUId = {}  # FieldId => dcgm_fields.dcgm_field_meta_t
         self.m_fieldIdToInfo = {}  # FieldId => dcgm_fields.dcgm_field_meta_t
-        # DCGM connection start-up/shutdown is not thread safe. Just lock pessimistically
+        # DCGM connection start-up/shutdown is not thread safe. Just lock
+        # pessimistically
         self.m_lock = threading.Lock()
         self.m_debug = False
 
@@ -285,7 +301,8 @@ class DcgmReader(object):
     '''
 
     def SetDisconnected(self):
-        # Force destructors since DCGM currently doesn't support more than one client connection per process
+        # Force destructors since DCGM currently doesn't support more than one
+        # client connection per process
         if self.m_dcgmGroup is not None:
             del (self.m_dcgmGroup)
             self.m_dcgmGroup = None
@@ -304,10 +321,10 @@ class DcgmReader(object):
 
     def Shutdown(self):
         with self.m_lock:
-            if self.m_closeHandle == True:
+            if self.m_closeHandle:
                 self.SetDisconnected()
 
-    ############################################################################
+    ##########################################################################
     '''
     Turns debugging output on
     '''
@@ -315,7 +332,7 @@ class DcgmReader(object):
     def AddDebugOutput(self):
         self.m_debug = True
 
-    ############################################################################
+    ##########################################################################
     '''
     '''
 
@@ -343,7 +360,7 @@ class DcgmReader(object):
         self.GetFieldMetadata()
         self.AddFieldWatches()
 
-    ############################################################################
+    ##########################################################################
     '''
     Has DcgmReader use but not own a handle. Currently for the unit tests.
     '''
@@ -352,7 +369,7 @@ class DcgmReader(object):
         self.m_dcgmHandle = pydcgm.DcgmHandle(handle)
         self.InitializeFromHandle()
 
-    ############################################################################
+    ##########################################################################
     '''
     Reconnect function checks if connection handle is present. If the handle is
     none, it creates the handle and gets the default DCGM group. It then maps
@@ -366,10 +383,10 @@ class DcgmReader(object):
 
         self.LogDebug("Connection handle is None. Trying to reconnect")
 
-        self.m_dcgmHandle = pydcgm.DcgmHandle(None,
-                                              ipAddress=self.m_dcgmHostName,
-                                              opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO
-                                              )
+        self.m_dcgmHandle = pydcgm.DcgmHandle(
+            None,
+            ipAddress=self.m_dcgmHostName,
+            opMode=dcgm_structs.DCGM_OPERATION_MODE_AUTO)
 
         self.m_closeHandle = True
 
@@ -451,9 +468,10 @@ class DcgmReader(object):
 
                 self.m_fieldIdToInfo[fieldId] = self.m_dcgmSystem.fields.GetFieldById(
                     fieldId)
-                if self.m_fieldIdToInfo[fieldId] == 0 or self.m_fieldIdToInfo[fieldId] == None:
+                if self.m_fieldIdToInfo[fieldId] == 0 or self.m_fieldIdToInfo[fieldId] is None:
                     self.LogError(
-                        "Cannot get field tag for field id %d. Please check dcgm_fields to see if it is valid." % (fieldId))
+                        "Cannot get field tag for field id %d. Please check dcgm_fields to see if it is valid." %
+                        (fieldId))
                     raise dcgm_structs.DCGMError(
                         dcgm_structs.DCGM_ST_UNKNOWN_FIELD)
         # Initialize a field group of ALL fields.
@@ -541,7 +559,7 @@ class DcgmReader(object):
                         if val.isBlank and self.m_ignoreBlank:
                             continue
 
-                        if mapById == False:
+                        if not mapById:
                             fieldTag = self.m_fieldIdToInfo[fieldId].tag
                             systemDictionary[gpuId][fieldTag] = val.value
                         else:
@@ -585,7 +603,7 @@ class DcgmReader(object):
                             if val.isBlank and self.m_ignoreBlank:
                                 continue
 
-                            if mapById == False:
+                            if not mapById:
                                 fieldTag = self.m_fieldIdToInfo[fieldId].tag
                                 systemDictionary[entityGroupId][entityId][fieldTag] = val.value
                             else:
@@ -627,15 +645,15 @@ class DcgmReader(object):
                                 if val.isBlank and self.m_ignoreBlank:
                                     continue
 
-                                if mapById == False:
+                                if not mapById:
                                     fieldTag = self.m_fieldIdToInfo[fieldId].tag
-                                    if not fieldTag in systemDictionary[gpuId]:
+                                    if fieldTag not in systemDictionary[gpuId]:
                                         systemDictionary[gpuId][fieldTag] = []
 
                                     systemDictionary[gpuId][fieldTag].append(
                                         val)
                                 else:
-                                    if not fieldId in systemDictionary[gpuId]:
+                                    if fieldId not in systemDictionary[gpuId]:
                                         systemDictionary[gpuId][fieldId] = []
                                     systemDictionary[gpuId][fieldId].append(
                                         val)
@@ -683,16 +701,16 @@ class DcgmReader(object):
                                     if val.isBlank and self.m_ignoreBlank:
                                         continue
 
-                                if mapById == False:
+                                if not mapById:
                                     fieldTag = self.m_fieldIdToInfo[fieldId].tag
-                                    if not fieldTag in systemDictionary[entityGroupId][entityId]:
+                                    if fieldTag not in systemDictionary[entityGroupId][entityId]:
                                         systemDictionary[entityGroupId][entityId][fieldTag] = [
                                         ]
 
                                     systemDictionary[entityGroupId][entityId][fieldTag].append(
                                         val)
                                 else:
-                                    if not fieldId in systemDictionary[entityGroupId][entityId]:
+                                    if fieldId not in systemDictionary[entityGroupId][entityId]:
                                         systemDictionary[entityGroupId][entityId][fieldId] = [
                                         ]
                                     systemDictionary[entityGroupId][entityId][fieldId].append(

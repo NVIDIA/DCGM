@@ -20,6 +20,8 @@
 #include <PluginInterface.h>
 #include <catch2/catch_all.hpp>
 
+#include <optional>
+
 TEST_CASE("NVBandwidthResult: Deserialize TestCaseStatus")
 {
     using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
@@ -51,8 +53,9 @@ TEST_CASE("NVBandwidthResult: Deserialize TestCaseStatus")
         std::string jsonStr    = R"({ "nvbandwidth" : { "testcases": [ {"status" : "invalid string"}] } })";
         bool parsingSuccessful = reader.parse(jsonStr, root);
         REQUIRE(parsingSuccessful == true);
-        REQUIRE_THROWS(
-            DcgmNs::JsonSerialize::Deserialize<TestCaseStatus>(root["nvbandwidth"]["testcases"][0]["status"]));
+        REQUIRE_THROWS_AS(
+            DcgmNs::JsonSerialize::Deserialize<TestCaseStatus>(root["nvbandwidth"]["testcases"][0]["status"]),
+            std::bad_optional_access);
     }
 
     SECTION("testcases:status: empty")
@@ -60,8 +63,34 @@ TEST_CASE("NVBandwidthResult: Deserialize TestCaseStatus")
         std::string jsonStr    = R"({ "nvbandwidth" : { "testcases": [ {}] } })";
         bool parsingSuccessful = reader.parse(jsonStr, root);
         REQUIRE(parsingSuccessful == true);
-        REQUIRE_THROWS(
-            DcgmNs::JsonSerialize::Deserialize<TestCaseStatus>(root["nvbandwidth"]["testcases"][0]["status"]));
+        REQUIRE_THROWS_AS(
+            DcgmNs::JsonSerialize::Deserialize<TestCaseStatus>(root["nvbandwidth"]["testcases"][0]["status"]),
+            std::bad_optional_access);
+    }
+}
+
+TEST_CASE("NVBandwidthResult: Deserialize TestCaseStatus rejects non-string JSON values")
+{
+    using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
+
+    GIVEN("non-string status values")
+    {
+        SECTION("numeric status")
+        {
+            Json::Value status(1);
+
+            CHECK_FALSE(DcgmNs::JsonSerialize::TryDeserialize<TestCaseStatus>(status).has_value());
+            CHECK_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<TestCaseStatus>(status), std::bad_optional_access);
+        }
+
+        SECTION("array status")
+        {
+            Json::Value status(Json::arrayValue);
+            status.append("passed");
+
+            CHECK_FALSE(DcgmNs::JsonSerialize::TryDeserialize<TestCaseStatus>(status).has_value());
+            CHECK_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<TestCaseStatus>(status), std::bad_optional_access);
+        }
     }
 }
 
@@ -95,11 +124,50 @@ TEST_CASE("NVBandwidthResult: Deserialize brandwidth_matrix but with invalid dat
     auto const result0
         = DcgmNs::JsonSerialize::TryDeserialize<Matrix>(root["nvbandwidth"]["testcases"][0]["bandwidth_matrix"]);
     REQUIRE(result0.has_value() == false);
-    REQUIRE_THROWS(DcgmNs::JsonSerialize::Deserialize<Matrix>(root["nvbandwidth"]["testcases"][0]["bandwidth_matrix"]));
+    REQUIRE_THROWS_AS(
+        DcgmNs::JsonSerialize::Deserialize<Matrix>(root["nvbandwidth"]["testcases"][0]["bandwidth_matrix"]),
+        std::bad_optional_access);
     auto const result1
         = DcgmNs::JsonSerialize::TryDeserialize<Matrix>(root["nvbandwidth"]["testcases"][1]["bandwidth_matrix"]);
     REQUIRE(result1.has_value() == false);
-    REQUIRE_THROWS(DcgmNs::JsonSerialize::Deserialize<Matrix>(root["nvbandwidth"]["testcases"][1]["bandwidth_matrix"]));
+    REQUIRE_THROWS_AS(
+        DcgmNs::JsonSerialize::Deserialize<Matrix>(root["nvbandwidth"]["testcases"][1]["bandwidth_matrix"]),
+        std::bad_optional_access);
+}
+
+TEST_CASE("NVBandwidthResult: Deserialize bandwidth_matrix rejects malformed JSON shapes")
+{
+    using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
+
+    GIVEN("malformed matrix JSON")
+    {
+        SECTION("missing matrix")
+        {
+            Json::Value matrix;
+
+            CHECK_FALSE(DcgmNs::JsonSerialize::TryDeserialize<Matrix>(matrix).has_value());
+            CHECK_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<Matrix>(matrix), std::bad_optional_access);
+        }
+
+        SECTION("matrix is not an array")
+        {
+            Json::Value matrix("not an array");
+
+            CHECK_FALSE(DcgmNs::JsonSerialize::TryDeserialize<Matrix>(matrix).has_value());
+            CHECK_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<Matrix>(matrix), std::bad_optional_access);
+        }
+
+        SECTION("matrix contains an out-of-range float")
+        {
+            Json::Value row(Json::arrayValue);
+            row.append("1e10000");
+            Json::Value matrix(Json::arrayValue);
+            matrix.append(row);
+
+            CHECK_FALSE(DcgmNs::JsonSerialize::TryDeserialize<Matrix>(matrix).has_value());
+            CHECK_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<Matrix>(matrix), std::bad_optional_access);
+        }
+    }
 }
 
 
@@ -152,6 +220,62 @@ TEST_CASE("NVBandwidthResult: Deserialize brandwidth_matrix")
     }
 }
 
+TEST_CASE("NVBandwidthResult: Deserialize TestCase with required fields only")
+{
+    using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
+    Json::Value root;
+    Json::Reader reader;
+
+    std::string jsonStr = R"(
+                        {
+                            "nvbandwidth": {
+                                "testcases" : [
+                                    {
+                                        "name" : "minimal valid test",
+                                        "status" : "waived"
+                                    }
+                                ]
+                            }
+                        }
+                    )";
+
+    REQUIRE(reader.parse(jsonStr, root));
+
+    auto const result = DcgmNs::JsonSerialize::Deserialize<TestCase>(root["nvbandwidth"]["testcases"][0]);
+
+    REQUIRE(result.name == "minimal valid test");
+    REQUIRE(result.status == TestCaseStatus::WAIVED);
+    CHECK(result.bandwidthDescription.empty());
+    CHECK(result.bandwidthMatrix.data.empty());
+}
+
+TEST_CASE("NVBandwidthResult: Deserialize TestCase rejects missing required fields")
+{
+    using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
+    Json::Value root;
+    Json::Reader reader;
+
+    std::string jsonStr = R"(
+                        {
+                            "nvbandwidth": {
+                                "testcases" : [
+                                    { "status" : "passed" },
+                                    { "name" : "missing status" },
+                                    { "name" : 7, "status" : "passed" }
+                                ]
+                            }
+                        }
+                    )";
+
+    REQUIRE(reader.parse(jsonStr, root));
+
+    for (Json::Value const &testCase : root["nvbandwidth"]["testcases"])
+    {
+        CHECK_FALSE(DcgmNs::JsonSerialize::TryDeserialize<TestCase>(testCase).has_value());
+        CHECK_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<TestCase>(testCase), std::bad_optional_access);
+    }
+}
+
 TEST_CASE("NVBandwidthResult: Deserialize TestCase with empty status")
 {
     using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
@@ -186,7 +310,8 @@ TEST_CASE("NVBandwidthResult: Deserialize TestCase with empty status")
     auto const result = DcgmNs::JsonSerialize::TryDeserialize<TestCase>(root["nvbandwidth"]["testcases"][0]);
     REQUIRE(result.has_value() == false);
     // Invalid TestCase parsing throws exceptions with Deserialize(...)
-    REQUIRE_THROWS(DcgmNs::JsonSerialize::Deserialize<TestCase>(root["nvbandwidth"]["testcases"][0]));
+    REQUIRE_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<TestCase>(root["nvbandwidth"]["testcases"][0]),
+                      std::bad_optional_access);
 }
 
 TEST_CASE("NVBandwidthResult: Deserialize TestCase with invalid bandwidth_matrix elements")
@@ -236,12 +361,14 @@ TEST_CASE("NVBandwidthResult: Deserialize TestCase with invalid bandwidth_matrix
     auto const result0 = DcgmNs::JsonSerialize::TryDeserialize<TestCase>(root["nvbandwidth"]["testcases"][0]);
     REQUIRE(result0.has_value() == false);
     // Invalid TestCase parsing throws exceptions with Deserialize(...)
-    REQUIRE_THROWS(DcgmNs::JsonSerialize::Deserialize<TestCase>(root["nvbandwidth"]["testcases"][0]));
+    REQUIRE_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<TestCase>(root["nvbandwidth"]["testcases"][0]),
+                      std::bad_optional_access);
 
     auto const result1 = DcgmNs::JsonSerialize::TryDeserialize<TestCase>(root["nvbandwidth"]["testcases"][1]);
     REQUIRE(result1.has_value() == false);
     // Invalid TestCase parsing throws exceptions with Deserialize(...)
-    REQUIRE_THROWS(DcgmNs::JsonSerialize::Deserialize<TestCase>(root["nvbandwidth"]["testcases"][1]));
+    REQUIRE_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<TestCase>(root["nvbandwidth"]["testcases"][1]),
+                      std::bad_optional_access);
 }
 
 TEST_CASE("NVBandwidthResult: Deserialize TestCase")
@@ -336,7 +463,42 @@ TEST_CASE("NVBandwidthResult: Deserialize NVBandwidthResult with invalid testcas
                         }
                     )";
 
-    REQUIRE_THROWS(DcgmNs::JsonSerialize::Deserialize<NVBandwidthResult>(std::string_view { ss, ss + strlen(ss) }));
+    REQUIRE_THROWS_AS(DcgmNs::JsonSerialize::Deserialize<NVBandwidthResult>(std::string_view { ss, ss + strlen(ss) }),
+                      std::bad_optional_access);
+}
+
+TEST_CASE("NVBandwidthResult: Deserialize NVBandwidthResult rejects malformed top-level objects")
+{
+    using namespace DcgmNs::Nvvs::Plugins::NVBandwidth;
+
+    GIVEN("top-level JSON result inputs")
+    {
+        SECTION("missing nvbandwidth member")
+        {
+            const char *ss = R"({ "not_nvbandwidth": {} })";
+
+            CHECK_THROWS_AS(
+                DcgmNs::JsonSerialize::Deserialize<NVBandwidthResult>(std::string_view { ss, ss + strlen(ss) }),
+                std::bad_optional_access);
+        }
+
+        SECTION("missing required metadata")
+        {
+            const char *ss = R"(
+                        {
+                            "nvbandwidth": {
+                                "CUDA Runtime Version" : 12030,
+                                "Driver Version" : "535.40",
+                                "testcases" : []
+                            }
+                        }
+                    )";
+
+            CHECK_THROWS_AS(
+                DcgmNs::JsonSerialize::Deserialize<NVBandwidthResult>(std::string_view { ss, ss + strlen(ss) }),
+                std::bad_optional_access);
+        }
+    }
 }
 
 

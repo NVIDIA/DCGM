@@ -116,7 +116,7 @@ int DcgmFieldGroupManager::Unlock()
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmFieldGroupManager::AddFieldGroup(std::string name,
+dcgmReturn_t DcgmFieldGroupManager::AddFieldGroup(std::string const &name,
                                                   std::vector<unsigned short> &fieldIds,
                                                   dcgmFieldGrp_t *fieldGrp,
                                                   DcgmWatcher watcher)

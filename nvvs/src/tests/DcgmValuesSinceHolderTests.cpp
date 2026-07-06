@@ -314,3 +314,48 @@ SCENARIO("bool DcgmValuesSinceHolder::DoesValuePassPerSecondThreshold(unsigned s
     dvsh.AddValue(DCGM_FE_GPU, entityId, fieldId, fv);
     CHECK(dvsh.DoesValuePassPerSecondThreshold(fieldId, threshold, entityId, "field name", errorList, 0));
 }
+
+TEST_CASE("DcgmValuesSinceHolder: negative test for DCGM_FR_FIELD_THRESHOLD_TS_DBL")
+{
+    unsigned short fieldId = 2;
+    unsigned int gpuId0    = 0;
+    unsigned int gpuId1    = 1;
+    timelib64_t startTime  = 1000000;
+
+    dcgmFieldValue_v1 thresholdFv = {};
+    thresholdFv.fieldId           = fieldId;
+    thresholdFv.fieldType         = DCGM_FT_DOUBLE;
+    thresholdFv.value.dbl         = 2.0;
+
+    DcgmValuesSinceHolder dvsh;
+    dcgmFieldValue_v1 fv = {};
+    fv.fieldId           = fieldId;
+    fv.fieldType         = DCGM_FT_DOUBLE;
+
+    // GPU 0: exceeds threshold (delta 3.0 >= 2.0)
+    fv.value.dbl = 0.0;
+    fv.ts        = startTime;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId0, fieldId, fv);
+    fv.value.dbl = 3.0;
+    fv.ts        = startTime + 1000000;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId0, fieldId, fv);
+
+    // GPU 1: does not exceed threshold (delta 1.0 < 2.0)
+    fv.value.dbl = 0.0;
+    fv.ts        = startTime;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId1, fieldId, fv);
+    fv.value.dbl = 1.0;
+    fv.ts        = startTime + 1000000;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId1, fieldId, fv);
+
+    std::vector<DcgmError> errorListGpu0;
+    std::vector<DcgmError> errorListGpu1;
+
+    CHECK(dvsh.DoesValuePassPerSecondThreshold(fieldId, thresholdFv, gpuId0, "field name", errorListGpu0, startTime));
+    CHECK(!dvsh.DoesValuePassPerSecondThreshold(fieldId, thresholdFv, gpuId1, "field name", errorListGpu1, startTime));
+
+    REQUIRE(errorListGpu0.size() == 1);
+    CHECK(errorListGpu0[0].GetCode() == DCGM_FR_FIELD_THRESHOLD_TS_DBL);
+    CHECK(errorListGpu0[0].GetGpuId() == static_cast<int>(gpuId0));
+    CHECK(errorListGpu1.size() == 0);
+}

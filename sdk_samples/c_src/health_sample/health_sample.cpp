@@ -223,8 +223,8 @@ int main(int /* argc */, char const ** /* argv */)
 
         unsigned short fieldIds[2];
 
-        fieldIds[0] = DCGM_FI_DEV_POWER_USAGE;
-        fieldIds[1] = DCGM_FI_DEV_GPU_TEMP;
+        fieldIds[0] = DCGM_FI_DEV_BOARD_POWER_WATTS;
+        fieldIds[1] = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
 
         result = dcgmFieldGroupCreate(dcgmHandle, 2, &fieldIds[0], (char *)"interesting_fields", &fieldGroupId);
         if (result != DCGM_ST_OK)

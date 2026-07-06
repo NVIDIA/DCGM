@@ -43,6 +43,7 @@ public:
 private:
     dcgmHandle_t m_handle;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
+    std::unique_ptr<TestParameters> m_testParameters;
 };
 
 #endif

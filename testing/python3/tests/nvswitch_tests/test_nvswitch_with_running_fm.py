@@ -34,29 +34,35 @@ def test_nvswitch_traffic_p2p(handle, switchIds):
 
     # TX_0 and RX_0 on port 0
     nvSwitchBandwidth0FieldIds = []
-    for i in range(dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P00,
-                   dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P00 + 1, 1):
+    for i in range(
+            dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_0_P00,
+            dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX_0_P00 + 1,
+            1):
         nvSwitchBandwidth0FieldIds.append(i)
 
     # TX_1 and RX_1 on port 0
     nvSwitchBandwidth1FieldIds = []
-    for i in range(dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P00,
-                   dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P00 + 1, 1):
+    for i in range(
+            dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_1_P00,
+            dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX_1_P00 + 1,
+            1):
         nvSwitchBandwidth1FieldIds.append(i)
 
     dcgmHandle = pydcgm.DcgmHandle(ipAddress="127.0.0.1")
 
     groupName = "test_nvswitches"
-    allNvSwitchesGroup = pydcgm.DcgmGroup(dcgmHandle, groupName=groupName,
-                                          groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES)
+    allNvSwitchesGroup = pydcgm.DcgmGroup(
+        dcgmHandle,
+        groupName=groupName,
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES)
 
     fgName = "test_nvswitches_bandwidth0"
-    nvSwitchBandwidth0FieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, name=fgName,
-                                                         fieldIds=nvSwitchBandwidth0FieldIds)
+    nvSwitchBandwidth0FieldGroup = pydcgm.DcgmFieldGroup(
+        dcgmHandle, name=fgName, fieldIds=nvSwitchBandwidth0FieldIds)
 
     fgName = "test_nvswitches_bandwidth1"
-    nvSwitchBandwidth1FieldGroup = pydcgm.DcgmFieldGroup(dcgmHandle, name=fgName,
-                                                         fieldIds=nvSwitchBandwidth1FieldIds)
+    nvSwitchBandwidth1FieldGroup = pydcgm.DcgmFieldGroup(
+        dcgmHandle, name=fgName, fieldIds=nvSwitchBandwidth1FieldIds)
 
     updateFreq = int(20 / 2.0) * 1000000
     maxKeepAge = 600.0
@@ -80,19 +86,19 @@ def test_nvswitch_traffic_p2p(handle, switchIds):
 
     for entityGroupId in list(nvSwitchBandwidth0Watcher.values.keys()):
         for entityId in nvSwitchBandwidth0Watcher.values[entityGroupId]:
-            bandwidth0FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P00
-            bandwidth1FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P00
+            bandwidth0FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_0_P00
+            bandwidth1FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_1_P00
 
-            counter0TxBefore = nvSwitchBandwidth0Watcher.values[entityGroupId][entityId][bandwidth0FieldId].values[
-                -1].value
+            counter0TxBefore = nvSwitchBandwidth0Watcher.values[
+                entityGroupId][entityId][bandwidth0FieldId].values[-1].value
             bandwidth0FieldId += 1
-            counter0RxBefore = nvSwitchBandwidth0Watcher.values[entityGroupId][entityId][bandwidth0FieldId].values[
-                -1].value
-            counter1TxBefore = nvSwitchBandwidth1Watcher.values[entityGroupId][entityId][bandwidth1FieldId].values[
-                -1].value
+            counter0RxBefore = nvSwitchBandwidth0Watcher.values[
+                entityGroupId][entityId][bandwidth0FieldId].values[-1].value
+            counter1TxBefore = nvSwitchBandwidth1Watcher.values[
+                entityGroupId][entityId][bandwidth1FieldId].values[-1].value
             bandwidth1FieldId += 1
-            counter1RxBefore = nvSwitchBandwidth1Watcher.values[entityGroupId][entityId][bandwidth1FieldId].values[
-                -1].value
+            counter1RxBefore = nvSwitchBandwidth1Watcher.values[
+                entityGroupId][entityId][bandwidth1FieldId].values[-1].value
 
     # Generate write traffic for the nvswitches
     test_utils.run_p2p_bandwidth_app(
@@ -108,19 +114,19 @@ def test_nvswitch_traffic_p2p(handle, switchIds):
 
     for entityGroupId in list(nvSwitchBandwidth0Watcher.values.keys()):
         for entityId in nvSwitchBandwidth0Watcher.values[entityGroupId]:
-            bandwidth0FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P00
-            bandwidth1FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P00
+            bandwidth0FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_0_P00
+            bandwidth1FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_1_P00
 
-            counter0TxAfter = nvSwitchBandwidth0Watcher.values[entityGroupId][entityId][bandwidth0FieldId].values[
-                -1].value
+            counter0TxAfter = nvSwitchBandwidth0Watcher.values[
+                entityGroupId][entityId][bandwidth0FieldId].values[-1].value
             bandwidth0FieldId += 1
-            counter0RxAfter = nvSwitchBandwidth0Watcher.values[entityGroupId][entityId][bandwidth0FieldId].values[
-                -1].value
-            counter1TxAfter = nvSwitchBandwidth1Watcher.values[entityGroupId][entityId][bandwidth1FieldId].values[
-                -1].value
+            counter0RxAfter = nvSwitchBandwidth0Watcher.values[
+                entityGroupId][entityId][bandwidth0FieldId].values[-1].value
+            counter1TxAfter = nvSwitchBandwidth1Watcher.values[
+                entityGroupId][entityId][bandwidth1FieldId].values[-1].value
             bandwidth1FieldId += 1
-            counter1RxAfter = nvSwitchBandwidth1Watcher.values[entityGroupId][entityId][bandwidth1FieldId].values[
-                -1].value
+            counter1RxAfter = nvSwitchBandwidth1Watcher.values[
+                entityGroupId][entityId][bandwidth1FieldId].values[-1].value
 
     assert counter0TxAfter > counter0TxBefore, "Counter0Tx did not increase"
     assert counter0RxAfter > counter0RxBefore, "counter0Rx did not increase"

@@ -44,8 +44,12 @@ TestHealthMonitor::TestHealthMonitor()
         { 48, "Double Bit ECC Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
         { 74, "NVLink Critical Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
         { 79, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_FALLEN_OFF_BUS },
-        { 94, "Contained Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
-        { 95, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_UNCONTAINED_ERROR },
+        { 94, DCGM_FR_CONTAINED_ERROR_MSG, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_ALL, DCGM_FR_CONTAINED_ERROR },
+        { 95,
+          DCGM_FR_UNCONTAINED_ERROR_MSG,
+          DCGM_HEALTH_RESULT_FAIL,
+          DCGM_HEALTH_WATCH_ALL,
+          DCGM_FR_UNCONTAINED_ERROR },
         { 119, "GSP RPC Timeout", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
         { 120, "GSP Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
         { 140, "ECC unrecovered error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR }
@@ -64,7 +68,7 @@ TestHealthMonitor::TestHealthMonitor()
           DCGM_FR_PENDING_PAGE_RETIREMENTS },
         { 64,
           DCGM_FR_ROW_REMAP_FAILURE_MSG,
-          DCGM_HEALTH_RESULT_WARN,
+          DCGM_HEALTH_RESULT_FAIL,
           DCGM_HEALTH_WATCH_MEM,
           DCGM_FR_ROW_REMAP_FAILURE },
 
@@ -502,7 +506,7 @@ int TestHealthMonitor::TestHMCheckMemUnrepairableFlag()
     }
 
     fv.version   = dcgmInjectFieldValue_version;
-    fv.fieldId   = DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG;
+    fv.fieldId   = DCGM_FI_DEV_MEMORY_UNREPAIRABLE;
     fv.fieldType = DCGM_FT_INT64;
     fv.status    = 0;
     fv.value.i64 = 1; // inject that unrepairable memory is detected
@@ -532,7 +536,7 @@ int TestHealthMonitor::TestHMCheckMemUnrepairableFlag()
     std::cout << response->incidents[0].error.msg << std::endl;
 
     // Cleanup: Inject healthy value to avoid impacting other tests
-    fv.fieldId   = DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG;
+    fv.fieldId   = DCGM_FI_DEV_MEMORY_UNREPAIRABLE;
     fv.value.i64 = 0;
     fv.ts        = ToLegacyTimestamp(Now() + 1s);
     result       = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
@@ -633,6 +637,26 @@ int TestHealthMonitor::TestHMCheckImex()
 {
     unsigned int gpuId = m_gpus[0];
 
+    // Set NVLinks to Up so SystemHasNvLinks() returns true for fake GPUs
+    for (unsigned int linkId = 0; linkId < DCGM_NVLINK_MAX_LINKS_PER_GPU; linkId++)
+    {
+        dcgmSetNvLinkLinkState_v1 linkStateMsg = {};
+        linkStateMsg.version                   = dcgmSetNvLinkLinkState_version1;
+        linkStateMsg.entityGroupId             = DCGM_FE_GPU;
+        linkStateMsg.entityId                  = gpuId;
+        linkStateMsg.linkId                    = linkId;
+        linkStateMsg.linkState                 = DcgmNvLinkLinkStateUp;
+        linkStateMsg.unused                    = 0;
+
+        auto nvlinkResult = dcgmSetEntityNvLinkLinkState(m_dcgmHandle, &linkStateMsg);
+        if (nvlinkResult != DCGM_ST_OK)
+        {
+            fprintf(
+                stderr, "Failed to set NVLink link %u to Up for IMEX test: '%s'\n", linkId, errorString(nvlinkResult));
+            return nvlinkResult;
+        }
+    }
+
     dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_NVLINK);
     auto result                    = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
@@ -717,7 +741,7 @@ int TestHealthMonitor::TestHMCheckPCIe()
         return result;
     }
 
-    fv.fieldId   = DCGM_FI_DEV_PCIE_REPLAY_COUNTER;
+    fv.fieldId   = DCGM_FI_DEV_PCIE_REPLAY_TOTAL;
     fv.value.i64 = 0;
     fv.ts        = ToLegacyTimestamp(now - 50s);
 
@@ -760,7 +784,7 @@ int TestHealthMonitor::TestHMCheckPCIe()
     std::cout << response->incidents[0].error.msg << std::endl;
 
     // Cleanup: Inject healthy value to avoid impacting other tests
-    fv.fieldId   = DCGM_FI_DEV_PCIE_REPLAY_COUNTER;
+    fv.fieldId   = DCGM_FI_DEV_PCIE_REPLAY_TOTAL;
     fv.value.i64 = 0;
     fv.ts        = ToLegacyTimestamp(now + 1s);
     result       = dcgmInjectFieldValue(m_dcgmHandle, gpuId, &fv);
@@ -793,7 +817,7 @@ int TestHealthMonitor::TestHMCheckInforom()
     }
 
     fv.version   = dcgmInjectFieldValue_version;
-    fv.fieldId   = DCGM_FI_DEV_INFOROM_CONFIG_VALID;
+    fv.fieldId   = DCGM_FI_DEV_INFOROM_VALID;
     fv.fieldType = DCGM_FT_INT64;
     fv.status    = 0;
     fv.value.i64 = 0; // inject that it is invalid
@@ -1042,7 +1066,7 @@ int TestHealthMonitor::TestHMCheckNVLink()
     }
 
     fv.version   = dcgmInjectFieldValue_version;
-    fv.fieldId   = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL;
+    fv.fieldId   = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL;
     fv.fieldType = DCGM_FT_INT64;
     fv.status    = 0;
     fv.value.i64 = 0;
@@ -1127,9 +1151,9 @@ int TestHealthMonitor::TestHMCheckNVLink()
 
     // Test the three new NVLink datalink error fields
     constexpr std::array<unsigned short, 3> errorFields = {
-        DCGM_FI_DEV_NVLINK_ERROR_DL_CRC,
-        DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY,
-        DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY,
+        DCGM_FI_DEV_NVLINK_CRC_ERROR_TOTAL,
+        DCGM_FI_DEV_NVLINK_RECOVERY_TOTAL,
+        DCGM_FI_DEV_NVLINK_REPLAY_TOTAL,
     };
 
     constexpr std::array<char const *, 3> errorFieldNames = {
@@ -1586,7 +1610,7 @@ dcgmReturn_t TestHealthMonitor::TestSingleXid(unsigned int const gpuId,
 {
     dcgmInjectFieldValue_t fv {};
     fv.version   = dcgmInjectFieldValue_version;
-    fv.fieldId   = DCGM_FI_DEV_XID_ERRORS;
+    fv.fieldId   = DCGM_FI_DEV_XID_ERROR;
     fv.fieldType = DCGM_FT_INT64;
     fv.status    = 0;
     fv.value.i64 = xid;
@@ -1983,12 +2007,12 @@ dcgmReturn_t TestSingleFabricManagerStatus(dcgmHandle_t handle,
 dcgmReturn_t ClearNvlinkFields(dcgmHandle_t handle, unsigned int const gpuId, long long const timestamp)
 {
     std::array<std::pair<unsigned short, int64_t>, 8> const nvlinkFields = { {
-        { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL, 0 },
-        { DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL, 0 },
-        { DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL, 0 },
-        { DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL, 0 },
-        { DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS, 0 },
-        { DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER, DCGM_INT64_BLANK },
+        { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL, 0 },
+        { DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, DCGM_INT64_BLANK },
         { DCGM_FI_DEV_FABRIC_HEALTH_MASK, 0 },
         { DCGM_FI_DEV_FABRIC_MANAGER_STATUS, DCGM_INT64_BLANK },
     } };
@@ -2052,7 +2076,7 @@ int TestHealthMonitor::TestHMCheckResidual()
         response->incidents, std::min(static_cast<size_t>(response->incidentCount), std::size(response->incidents)));
     auto nonXidIncidents = std::ranges::filter_view(incidents, [](auto const &incident) {
         return incident.error.code != DCGM_FR_XID_ERROR && incident.error.code != DCGM_FR_FALLEN_OFF_BUS
-               && incident.error.code != DCGM_FR_UNCONTAINED_ERROR;
+               && incident.error.code != DCGM_FR_UNCONTAINED_ERROR && incident.error.code != DCGM_FR_CONTAINED_ERROR;
     });
 
     if (!nonXidIncidents.empty())

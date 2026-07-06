@@ -24,7 +24,14 @@ This function gets the template defined for each build script
 """
 
 
-def getBuildScriptTemplate(arch, cuFileName, buildPTXName, buildHeaderName, addPythonLine=0, pythonLineArg="", compute=""):
+def getBuildScriptTemplate(
+        arch,
+        cuFileName,
+        buildPTXName,
+        buildHeaderName,
+        addPythonLine=0,
+        pythonLineArg="",
+        compute=""):
     pythonLine = ""
     if addPythonLine == 1:
         if pythonLineArg != "":
@@ -143,7 +150,7 @@ def checkAndUpdateToDefault(parsedDic, cuFileName, arch):
 
 ###################################
 """
-reformat existing build script for uniformity 
+reformat existing build script for uniformity
 """
 
 
@@ -182,7 +189,8 @@ def reformatBuildScript(path, cuFileName, arch):
                 curLine = line.split(" ")
                 headerName = [word for word in curLine if ".h" in word]
 
-                # handle if header file not parsed correctly or if the name not found in the existing script
+                # handle if header file not parsed correctly or if the name not
+                # found in the existing script
                 if len(headerName) != 0:
                     headerName = headerName[0]
                     if not headerName.endswith(".h"):
@@ -208,7 +216,12 @@ def reformatBuildScript(path, cuFileName, arch):
 
     # get the content from template
     buildScriptContent = getBuildScriptTemplate(
-        parsedDic["arch"], parsedDic["cu"], parsedDic["ptx"], parsedDic["header"], addPythonLine, parsedDic["pythonLine"])
+        parsedDic["arch"],
+        parsedDic["cu"],
+        parsedDic["ptx"],
+        parsedDic["header"],
+        addPythonLine,
+        parsedDic["pythonLine"])
 
     # update the script
     with open(path, 'w') as buildScriptFile:
@@ -497,14 +510,17 @@ def normaliseAllFolders():
             buildPresent = 1
             pathOfBuild = getPathOfBuildScript(dir)
 
-            # parse the build script file, compare with the template and reparse it
+            # parse the build script file, compare with the template and
+            # reparse it
             buildPTXName, buildHeaderName, pythonAdded = reformatBuildScript(
                 pathOfBuild, cuFileName, arch)
             print("Script path: " + pathOfBuild)
 
         # check if .ptx and .h do not exist
         print("3)")
-        if not filesExists(dir, buildPTXName) and filesExists(dir, buildHeaderName + ".h"):
+        if not filesExists(
+                dir, buildPTXName) and filesExists(
+                dir, buildHeaderName + ".h"):
             # generate .ptx file
             successRun = generatePTXFile(dir, arch, cuFileName, buildPTXName)
             if successRun == 0:
@@ -530,7 +546,8 @@ def normaliseAllFolders():
             generatedPaths["ptx"] = dir + "/" + buildPTXName
             generatedPaths["header"] = dir + "/" + buildHeaderName + ".h"
 
-        if (buildPresent == 0 or (buildPresent == 1 and pythonAdded == 0)) and (generatedPaths["ptx"] != "" or generatedPaths["header"] != ""):
+        if (buildPresent == 0 or (buildPresent == 1 and pythonAdded == 0)) and (
+                generatedPaths["ptx"] != "" or generatedPaths["header"] != ""):
             print("4) Parsing the PTX file to update header")
             print("PTX file: " + buildPTXName)
             print("Header file: " + buildHeaderName)

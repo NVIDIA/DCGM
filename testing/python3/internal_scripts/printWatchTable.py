@@ -53,7 +53,7 @@ while True:
             try:
                 watchInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
                     dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
-            except:
+            except BaseException:
                 pass
 
             if watchInfo is None:
@@ -92,8 +92,8 @@ while True:
         fieldDriverTime = sum(driverTimeByFieldId[fieldId])
         totalDriverTime += fieldDriverTime
         driverTimeAvg = fieldDriverTime / numGpus
-        print(("fieldId %d (%s), numGpus %u, driverTimePerUpdate %d usec, watchInterval %d usec" %
-               (fieldId, g_fieldTags[fieldId], numGpus, driverTimeAvg, watchIntervalByFieldId[fieldId])))
+        print(("fieldId %d (%s), numGpus %u, driverTimePerUpdate %d usec, watchInterval %d usec" % (
+            fieldId, g_fieldTags[fieldId], numGpus, driverTimeAvg, watchIntervalByFieldId[fieldId])))
 
     print(("Total Driver Time: %d usec" % totalDriverTime))
     print("")

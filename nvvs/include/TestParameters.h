@@ -18,6 +18,7 @@
 
 #include <PluginInterface.h>
 #include <map>
+#include <memory>
 #include <string>
 
 /* Parameter value types */
@@ -79,7 +80,7 @@ class TestParameters
 {
 public:
     TestParameters();
-    ~TestParameters();
+    ~TestParameters() = default;
     TestParameters(TestParameters const &copyMe);
     TestParameters &operator=(const TestParameters &other);
 
@@ -132,8 +133,8 @@ public:
     static bool bool_string_to_bool(std::string const &str);
 
 private:
-    std::map<std::string, TestParameterValue *, std::less<>> m_globalParameters;
-    std::map<std::string, std::map<std::string, TestParameterValue *>, std::less<>> m_subTestParameters;
+    std::map<std::string, std::unique_ptr<TestParameterValue>, std::less<>> m_globalParameters;
+    std::map<std::string, std::map<std::string, std::unique_ptr<TestParameterValue>>, std::less<>> m_subTestParameters;
 
     /*************************************************************************/
     int SetStructValue(TestParameterValue *tpv, dcgmDiagPluginTestParameter_t &param) const;

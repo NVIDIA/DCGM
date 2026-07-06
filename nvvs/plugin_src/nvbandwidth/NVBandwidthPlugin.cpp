@@ -122,6 +122,7 @@ NVBandwidthPlugin::NVBandwidthPlugin(dcgmHandle_t handle)
     m_testParameters.AddString(PS_LOGFILE, "stats_nvbandwidth.json");
     m_testParameters.AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_testParameters.AddString(PS_IGNORE_ERROR_CODES, "");
+    m_testParameters.AddString(PS_USE_GENERIC_MODE, "False");
     m_infoStruct.defaultTestParameters = &m_testParameters;
 }
 
@@ -214,11 +215,19 @@ void NVBandwidthPlugin::Go(std::string const &testName,
 
     if (!m_testParameters.GetBoolFromString(NVBANDWIDTH_STR_IS_ALLOWED))
     {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, NVBANDWIDTH_PLUGIN_NAME);
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
-        return;
+        if (m_testParameters.GetBoolFromString(PS_USE_GENERIC_MODE) == false)
+        {
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, NVBANDWIDTH_PLUGIN_NAME);
+            AddInfo(testName, d.GetMessage());
+            SetResult(testName, NVVS_RESULT_SKIP);
+            return;
+        }
+        else
+        {
+            log_debug("Proceeding in generic mode.");
+            AddInfoVerbose(testName, "Running in generic mode per user request.");
+        }
     }
 
     ParseIgnoreErrorCodesParam(testName, m_testParameters.GetString(PS_IGNORE_ERROR_CODES));

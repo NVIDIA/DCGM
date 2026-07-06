@@ -52,8 +52,11 @@ except ImportError:
         'Graphs for performance tests will be missing since "matplotlib" is not installed')
 else:
     if not isReqMatplotlibVersion():
-        logger.info('Graphs for performance tests will be missing since "matplotlib" version '
-                    + '%s is less than the required version %s' % (matplotlib.__version__, REQ_MATPLOTLIB_VER))
+        logger.info(
+            'Graphs for performance tests will be missing since "matplotlib" version ' +
+            '%s is less than the required version %s' %
+            (matplotlib.__version__,
+             REQ_MATPLOTLIB_VER))
     else:
         # must do this before importing matplotlib.pyplot
         # to use backend that does not require X11 display server running
@@ -79,7 +82,12 @@ class CpuTimeseries(object):
         self.cpuInfo = []
 
 
-def _plotFinalValueOrderedBarChart(points, title, ylabel, filenameBase, topValCount=20):
+def _plotFinalValueOrderedBarChart(
+        points,
+        title,
+        ylabel,
+        filenameBase,
+        topValCount=20):
     '''points are (x, y) pairs where x is the xlabel and y is the height of the var'''
     if not isReqMatplotlibVersion():
         logger.info(
@@ -181,7 +189,7 @@ def _generate_metadata_line_charts(metadataTSeries, ylabel, title):
 
 def _gather_perf_timeseries(handle, watchedFieldIds):
     '''
-    Gathers metadata over time and returns a tuple of 
+    Gathers metadata over time and returns a tuple of
     4 MetadataTimeseries (mem usage, exec time, avg exec time, cpu utilization)
     '''
 
@@ -195,12 +203,17 @@ def _gather_perf_timeseries(handle, watchedFieldIds):
     numFields = min(len(watchedFieldIds), 50)
     fieldGroups = []
     for i in range(1, 6):
-        fieldGroups.append(pydcgm.DcgmFieldGroup(
-            handle, "my_field_group_%d" % i, list(watchedFieldIds)[0:numFields]))
+        fieldGroups.append(
+            pydcgm.DcgmFieldGroup(
+                handle, "my_field_group_%d" %
+                i, list(watchedFieldIds)[
+                    0:numFields]))
 
     startTime = datetime.datetime.now()
 
-    while (datetime.datetime.now() - startTime).total_seconds() < BOUNDED_TEST_DURATION:
+    while (
+            datetime.datetime.now() -
+            startTime).total_seconds() < BOUNDED_TEST_DURATION:
 
         # poll memory usage
         memUsageTS.timestamps.append(
@@ -213,7 +226,8 @@ def _gather_perf_timeseries(handle, watchedFieldIds):
 
         for id in watchedFieldIds:
             memUsageTS.fieldVals[id].append(
-                dcgm_agent_internal.dcgmIntrospectGetFieldMemoryUsage(handle.handle, id).aggregateInfo.bytesUsed)
+                dcgm_agent_internal.dcgmIntrospectGetFieldMemoryUsage(
+                    handle.handle, id).aggregateInfo.bytesUsed)
 
         for fieldGroup in fieldGroups:
             memUsageTS.fieldGroupVals[int(fieldGroup.fieldGroupId.value)].append(
@@ -228,7 +242,8 @@ def _gather_perf_timeseries(handle, watchedFieldIds):
 
         for id in watchedFieldIds:
             execTimeTS.fieldVals[id].append(
-                dcgm_agent_internal.dcgmIntrospectGetFieldExecTime(handle.handle, id).aggregateInfo.totalEverUpdateUsec)
+                dcgm_agent_internal.dcgmIntrospectGetFieldExecTime(
+                    handle.handle, id).aggregateInfo.totalEverUpdateUsec)
             # logger.info("fieldId %d: %s" % (id, str(execTimeTS.fieldVals[id][-1])))
 
         for fieldGroup in fieldGroups:
@@ -244,7 +259,8 @@ def _gather_perf_timeseries(handle, watchedFieldIds):
 
         for id in watchedFieldIds:
             execTimeAvgTS.fieldVals[id].append(
-                dcgm_agent_internal.dcgmIntrospectGetFieldExecTime(handle.handle, id).aggregateInfo.recentUpdateUsec)
+                dcgm_agent_internal.dcgmIntrospectGetFieldExecTime(
+                    handle.handle, id).aggregateInfo.recentUpdateUsec)
 
         for fieldGroup in fieldGroups:
             execTimeAvgTS.fieldGroupVals[int(fieldGroup.fieldGroupId.value)].append(
@@ -259,18 +275,19 @@ def _gather_perf_timeseries(handle, watchedFieldIds):
 
     return memUsageTS, execTimeTS, execTimeAvgTS, cpuUtilTS
 
-# generating graphs may cause hostengine to timeout so make timeout an extra 20 sec
+# generating graphs may cause hostengine to timeout so make timeout an
+# extra 20 sec
 
 
 @test_utils.run_with_standalone_host_engine(timeout=BOUNDED_TEST_DURATION + 20)
 def test_dcgm_standalone_perf_bounded(handle):
     '''
-    Test that runs some subtests.  When we bound the number of samples to keep for each field: 
+    Test that runs some subtests.  When we bound the number of samples to keep for each field:
       - DCGM memory usage eventually flatlines on a field, field group, all fields, and process level.
-      - DCGM memory usage is at a value that we expect (golden value).  If what we 
+      - DCGM memory usage is at a value that we expect (golden value).  If what we
          expect changes over time the we must update what these values are (the tests will fail if we don't).
 
-    Plots of the memory usage and execution time generated during this test are saved and the 
+    Plots of the memory usage and execution time generated during this test are saved and the
     filename of the figure is output on the terminal.
 
     Multiple tests are included in this test in order to save time by only gathering data once.
@@ -280,7 +297,9 @@ def test_dcgm_standalone_perf_bounded(handle):
 
     handle = pydcgm.DcgmHandle(handle)
     group = pydcgm.DcgmGroup(
-        handle, groupName="metadata-test", groupType=dcgm_structs.DCGM_GROUP_DEFAULT)
+        handle,
+        groupName="metadata-test",
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT)
     updateFreq = 1000000  # 1 second. Needs to be long enough for all fields on all GPUs to update, or the record density will vary based on CPU consumption
 
     watchedFieldIds = test_utils.watch_all_fields(handle.handle,
@@ -306,9 +325,16 @@ def test_dcgm_standalone_perf_bounded(handle):
     # of the tail to the golden value
     tailStart = int(0.8 * len(memUsageTS.timestamps))
     test_utils.run_subtest(
-        _test_mem_bounded_golden_values_fields, activeGpuCount, memUsageTS, tailStart)
-    test_utils.run_subtest(_test_mem_bounded_golden_values_allfields,
-                           activeGpuCount, memUsageTS, tailStart, len(watchedFieldIds))
+        _test_mem_bounded_golden_values_fields,
+        activeGpuCount,
+        memUsageTS,
+        tailStart)
+    test_utils.run_subtest(
+        _test_mem_bounded_golden_values_allfields,
+        activeGpuCount,
+        memUsageTS,
+        tailStart,
+        len(watchedFieldIds))
     test_utils.run_subtest(_test_mem_bounded_golden_values_process,
                            memUsageTS, tailStart, len(watchedFieldIds))
 
@@ -381,8 +407,8 @@ def _generate_cpu_line_charts(cpuUtilTS):
 
 def _test_exectime_bounded_linear_growth(execTimeTS):
     '''
-    Test that when the number of samples that DCGM collects is limited there is linear growth 
-    in the total amount of time used to retrieve that each field.  
+    Test that when the number of samples that DCGM collects is limited there is linear growth
+    in the total amount of time used to retrieve that each field.
     '''
     tolerance = 0.60
 
@@ -397,7 +423,8 @@ def _test_exectime_bounded_linear_growth(execTimeTS):
         # THEN something is wrong.
 
         # calc the lin. regr. slope
-        # taken from https://en.wikipedia.org/wiki/Simple_linear_regression#Fitting_the_regression_line
+        # taken from
+        # https://en.wikipedia.org/wiki/Simple_linear_regression#Fitting_the_regression_line
         x = execTimeTS.timestamps[tailStart:]
         y = series[tailStart:]
         if y[-1] == 0:
@@ -409,9 +436,10 @@ def _test_exectime_bounded_linear_growth(execTimeTS):
         sx = stats.standard_deviation(x)
         sy = stats.standard_deviation(y)
 
-        assert (rxy >= 0.90), (
-            'execution time for field %s did not have a strong linear correlation. ' % fieldId +
-            'Its correlation coefficient was %.4f' % rxy)
+        assert (
+            rxy >= 0.90), ('execution time for field %s did not have a strong linear correlation. ' %
+                           fieldId + 'Its correlation coefficient was %.4f' %
+                           rxy)
         logger.debug('corr. coeff. for field %s: %s' % (fieldId, rxy))
 
         linRegSlope = rxy * (sy / sx)
@@ -439,10 +467,11 @@ def _assert_flatlines(seriesType, seriesId, series):
 
     for point in seriesTail:
         dFlatlinePercent = (point - flatlineVal) / flatlineVal
-        assert (abs(dFlatlinePercent) < 0.05), ('memory usage did not flatline.  '
-                                                + 'A point of type "%s" with ID "%s" was %.4f%% away from indicating a flat line. \nTail Points: %s\nPoints: %s'
-                                                % (seriesType, seriesId, 100 * dFlatlinePercent, str(seriesTail), str(series))
-                                                + 'See the the memory usage plot ".png" file outputted on the terminal above for further details')
+        assert (abs(dFlatlinePercent) < 0.05), ('memory usage did not flatline.  ' +
+                                                'A point of type "%s" with ID "%s" was %.4f%% away from indicating a flat line. \nTail Points: %s\nPoints: %s' %
+                                                (seriesType, seriesId, 100 *
+                                                 dFlatlinePercent, str(seriesTail), str(series)) +
+                                                'See the the memory usage plot ".png" file outputted on the terminal above for further details')
 
 
 def _test_mem_bounded_flatlines_allfields(memUsageTS):
@@ -480,8 +509,10 @@ def helper_field_has_variable_size(fieldId):
         return False
 
 
-def _test_mem_bounded_golden_values_fields(activeGpuCount, memUsageTS, tailStart):
-    # 1 KB plus some swag per field instance (Global, GPU). This is based off of the keyed vector block size and default number of blocks
+def _test_mem_bounded_golden_values_fields(
+        activeGpuCount, memUsageTS, tailStart):
+    # 1 KB plus some swag per field instance (Global, GPU). This is based off
+    # of the keyed vector block size and default number of blocks
     goldenVal = 1148
     tolerance = 0.10      # low tolerance, amount of records stored is bounded
 
@@ -493,7 +524,8 @@ def _test_mem_bounded_golden_values_fields(activeGpuCount, memUsageTS, tailStart
         if sum(seriesTail) == 0:
             continue
 
-        # Don't check the size of binary fields since it's arbitrary per fieldId
+        # Don't check the size of binary fields since it's arbitrary per
+        # fieldId
         if helper_field_has_variable_size(fieldId):
             logger.info("Skipping variable-sized fieldId %d" % fieldId)
             continue
@@ -508,8 +540,10 @@ def _test_mem_bounded_golden_values_fields(activeGpuCount, memUsageTS, tailStart
             + 'If this new value is expected, change the golden value used for comparison.'
 
 
-def _test_mem_bounded_golden_values_allfields(activeGpuCount, memUsageTS, tailStart, numFieldIds):
-    # 2 KiB per fieldId per GPU. This gives some swag for the binary fields that are larger
+def _test_mem_bounded_golden_values_allfields(
+        activeGpuCount, memUsageTS, tailStart, numFieldIds):
+    # 2 KiB per fieldId per GPU. This gives some swag for the binary fields
+    # that are larger
     goldenVal = 2000 * numFieldIds * activeGpuCount
     tolerance = 0.15    # low tolerance, amount of records stored is bounded
 
@@ -522,8 +556,10 @@ def _test_mem_bounded_golden_values_allfields(activeGpuCount, memUsageTS, tailSt
         + 'If this new value is expected, change the golden value used for comparison.'
 
 
-def _test_mem_bounded_golden_values_process(memUsageTS, tailStart, numFieldIds):
-    # Setting a canary in the coal mine value. This comes from the /proc filesystem and can report anywhere from 15 to 28 MiB.
+def _test_mem_bounded_golden_values_process(
+        memUsageTS, tailStart, numFieldIds):
+    # Setting a canary in the coal mine value. This comes from the /proc
+    # filesystem and can report anywhere from 15 to 28 MiB.
     highWaterMark = 29000000
 
     mean = stats.mean(memUsageTS.processVals[tailStart:])

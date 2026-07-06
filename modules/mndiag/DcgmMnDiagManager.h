@@ -83,6 +83,17 @@ struct ConnectionParams
     uid_t effectiveUid;                                //!< Effective user ID
 };
 
+/**
+ * Information about the current test
+ */
+struct TestInfo
+{
+    dcgmMultinodeTestType_t testType; //!< Type of the test
+    std::string testName;             //!< Name of the test
+    std::string testBinaryPath;       //!< Path to the test binary
+    std::string testPrefix;           //!< Test parameter prefix (e.g. "mnubergemm.")
+};
+
 class DcgmMnDiagManager
 {
 public:
@@ -141,13 +152,20 @@ public:
 private:
     // Methods for head node to communicate with remote nodes
     dcgmReturn_t ConnectRemoteNodes(std::vector<std::string> const &hostList, uid_t effectiveUid);
-    dcgmReturn_t ReserveRemoteResources();
-    dcgmReturn_t ReleaseRemoteResources();
+    dcgmReturn_t ReserveRemoteResources(dcgmMultinodeTestType_t testType);
+    dcgmReturn_t ReleaseRemoteResources(dcgmMultinodeTestType_t testType);
     dcgmReturn_t DisconnectRemoteNodes();
-    dcgmReturn_t BroadcastRunParametersToRemoteNodes(dcgmRunMnDiag_t const &params);
+    dcgmReturn_t BroadcastRunParametersToRemoteNodes(dcgmRunMnDiag_t const &params, unsigned int timeToRunSeconds = 0);
     dcgmReturn_t BroadcastEnvVariablesToRemoteNodes();
 
-    dcgmReturn_t GetNodeInfo();
+    /**
+     * Collects DCGM and driver version info from all nodes in the cluster.
+     *
+     * @param[in] testType The type of test to get node info for
+     * @return DCGM_ST_OK if successful, DCGM_ST_* on failure
+     * @note Thread-safe: All accesses to m_nodeInfo are protected by a local mutex
+     */
+    dcgmReturn_t GetNodeInfo(dcgmMultinodeTestType_t testType);
     // Generate a unique ID for the current node
     size_t GenerateCurrentNodeId() const;
 
@@ -237,13 +255,6 @@ private:
     void InitializeSSHTunnelManagers();
 
     /**
-     * @brief Gets the path to the mnubergemm binary
-     * @param path The path to the mnubergemm binary
-     * @return DCGM_ST_OK if successful, DCGM_ST_BADPARAM if the path is invalid
-     */
-    dcgmReturn_t GetMnubergemmPathHeadNode(std::string &path);
-
-    /**
      * @brief Populates the response structure for a failed MPI process
      * @param mpiRunner The MPI runner instance
      * @param response The response structure to populate
@@ -265,7 +276,7 @@ private:
      * @brief Authorizes remote connections
      * @return DCGM_ST_OK if successful, DCGM_ST_* on failure
      */
-    dcgmReturn_t AuthorizeRemoteConnections();
+    dcgmReturn_t AuthorizeRemoteConnections(dcgmMultinodeTestType_t testType);
 
     /**
      * @brief Revokes remote authorizations
@@ -324,40 +335,47 @@ private:
     dcgmReturn_t CleanupConnections();
 
     // Member variables
-    HostInfo m_localHostInfo;
-    std::optional<size_t> m_authorizedConnection; // Optional ID of the authorized connection
-    DcgmMutex m_authMutex { 0 };
-    DcgmMutex m_resourceMutex { 0 }; // Mutex to protect m_status
+    HostInfo m_localHostInfo;                     //!< Local host information including hostname and IP addresses
+    std::optional<size_t> m_authorizedConnection; //!< Optional ID of the authorized connection
+    DcgmMutex m_authMutex { 0 };                  //!< Mutex to protect authorization state
+    DcgmMutex m_resourceMutex { 0 };              //!< Mutex to protect m_status
 
-    // hostname -> ConnectionInfo mapping, maybe should be {hostname, gpuid} -> ConnectionInfo
+    // Condition variable for status change notifications
+    std::condition_variable m_statusCV;
+
+    /*!< hostname -> ConnectionInfo mapping
+         TODO: Consider changing to {hostname, gpuid} -> ConnectionInfo */
     std::unordered_map<std::string, ConnectionInfo, StringHash, std::equal_to<>> m_connections;
 
-    MnDiagStatus m_status;
-    std::unique_ptr<DcgmCoreProxyBase> m_coreProxy;
-    size_t m_currentNodeId; // Unique identifier for the current node
+    MnDiagStatus m_status;                          //!< Current status of the diagnostic
+    std::unique_ptr<DcgmCoreProxyBase> m_coreProxy; //!< Proxy for interacting with DCGM core
+    size_t m_currentNodeId;                         //!< Unique identifier for the current node
+    TestInfo m_currentTestInfo;                     //!< Information about the current test
 
-    mutable pid_t m_mpiPID { -1 };
+    mutable pid_t m_mpiPID { -1 }; //!< PID of the MPI process
 
-    // State machine for managing diagnostic lifecycle
-    std::unique_ptr<MnDiagStateMachineBase> m_stateMachine;
+    std::unique_ptr<MnDiagStateMachineBase> m_stateMachine; //!< State machine for managing diagnostic lifecycle
 
-    // Resource handle for interacting with the hostengine
-    std::unique_ptr<DcgmResourceHandleBase> m_resourceHandle;
-    std::unique_ptr<DcgmResourceHandleFactoryBase> m_resourceHandleFactory;
+    std::unique_ptr<DcgmResourceHandleBase> m_resourceHandle; //!< Resource handle for interacting with the hostengine
+    std::unique_ptr<DcgmResourceHandleFactoryBase> m_resourceHandleFactory; //!< Factory for creating resource handles
 
-    // DCGM API for making module requests
-    std::unique_ptr<DcgmApiBase> m_dcgmApi;
+    std::unique_ptr<DcgmApiBase> m_dcgmApi; //!< DCGM API for making module requests
 
-    std::unique_ptr<TcpSSHTunnelManagerBase> m_tcpSSHTunnelManager;
-    std::unique_ptr<UdsSSHTunnelManagerBase> m_udsSSHTunnelManager;
+    std::unique_ptr<TcpSSHTunnelManagerBase> m_tcpSSHTunnelManager; //!< Manager for TCP SSH tunnels
+    std::unique_ptr<UdsSSHTunnelManagerBase> m_udsSSHTunnelManager; //!< Manager for Unix domain socket SSH tunnels
 
-    // Factory for creating MPI runners
-    std::unique_ptr<MnDiagMpiRunnerFactoryBase> m_mpiRunnerFactory;
+    std::unique_ptr<MnDiagMpiRunnerFactoryBase> m_mpiRunnerFactory; //!< Factory for creating MPI runners
 
-    // Set of supported SKUs
-    std::unordered_set<std::string> m_supportedSkus;
+    std::unordered_set<std::string> m_supportedSkus; //!< Set of supported GPU SKUs
 
-    nodeInfoMap_t m_nodeInfo;
+    nodeInfoMap_t m_nodeInfo; //!< Map of node information for all nodes in the cluster
+
+    std::chrono::seconds m_processDetectionTimeout {
+        MnDiagConstants::PROCESS_DETECTION_TIMEOUT
+    }; //!< Timeout for detecting MPI processes (configurable for testing)
+    std::chrono::milliseconds m_processDetectionRetryInterval {
+        MnDiagConstants::PROCESS_DETECTION_RETRY_INTERVAL
+    }; //!< Retry interval for process detection (configurable for testing)
 
     friend class MnDiagManagerTests;
 };

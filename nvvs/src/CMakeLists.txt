@@ -35,6 +35,11 @@ target_include_directories(nvvs_without_main_objects
         "${YAML_INCLUDE_DIR}"
         "${JSONCPP_INCLUDE_DIR}")
 
+if (BUILD_TESTING)
+    target_include_directories(nvvs_without_main_objects PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    target_link_libraries(nvvs_without_main_objects PRIVATE common_tests_includes)
+endif()
+
 target_sources(nvvs_without_main_objects
     PRIVATE
         ConfigFileParser_v2.cpp

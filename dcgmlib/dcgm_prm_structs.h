@@ -42,7 +42,7 @@ auto constexpr PRM_REG_PPRM                  = 0x5059;
 
 auto constexpr PRM_LOCAL_PORT_MIN = 1;
 auto constexpr PRM_LOCAL_PORT_MAX = 1024;
-}; // namespace
+} // namespace
 
 /*
  * PPCNT Ports Performance Counter Register Structure
@@ -272,77 +272,4 @@ static_assert(sizeof(nvmlPlrCounters_t) == 0xF8,
               "nvmlPlrCounters_t size mismatch: expected 248 bytes (0xF8) with last 32-bit word at offset 0xF4");
 static_assert(offsetof(nvmlPlrCounters_t, plr_xmit_retry_events_within_t_sec_max_low) == 0x44,
               "nvmlPlrCounters_t size mismatch: expected 0x44 offset for plr_xmit_retry_events_within_t_sec_max_low");
-} // namespace
-
-/*
- * PPRM (Port Phy Recovery Mode Register) Structure - Register 0x5059
- *
- * This structure represents the PPRM register used to configure and monitor
- * physical layer recovery modes for GPU network interfaces. It contains
- * configuration fields for various recovery mechanisms and operational status.
- *
- * @deprecated This structure is expected to be removed in the near future.
- */
-typedef struct
-{
-    /* DWord 1: Port identification and configuration */
-    RESERVED_FIELD(2);
-    unsigned ovrd_no_neg_bhvr : 2; //!< Override no negotiation behavior
-    RESERVED_FIELD(4);
-    unsigned plane_ind  : 4; //!< Plane index
-    unsigned lp_msb     : 2; //!< Local port MSB
-    unsigned pnat       : 2; //!< Port NAT
-    unsigned local_port : 8; //!< Local port number
-    RESERVED_FIELD(8);
-
-    /* DWord 2: Recovery capabilities and configuration */
-    unsigned recovery_types_cap : 8; //!< Recovery types capabilities
-    RESERVED_FIELD(16);
-    unsigned no_neg_bhvr            : 4; //!< No negotiation behavior
-    unsigned wd_logic_re_lock_res   : 2; //!< Watchdog logic re-lock resolution
-    unsigned oper_logic_re_lock_res : 2; //!< Operational logic re-lock resolution
-
-    /* DWord 3: Recovery mechanism configuration */
-    unsigned module_datapath_full_toggle : 4; //!< Module datapath full toggle
-    unsigned module_tx_disable           : 4; //!< Module TX disable
-    unsigned host_serdes_feq             : 4; //!< Host SerDes FEQ
-    unsigned host_logic_re_lock          : 4; //!< Host logic re-lock
-    RESERVED_FIELD(16);
-
-    /* DWord 4: Timeout configuration */
-    unsigned link_down_timeout : 16; //!< Link down timeout
-    RESERVED_FIELD(16);
-
-    /* DWord 5 */
-    unsigned link_down_timeout_oper : 16; //!< Link down timeout operational
-    RESERVED_FIELD(16);
-
-    /* DWord 6: Draining timeout */
-    unsigned draining_timeout : 8; //!< Draining timeout
-    RESERVED_FIELD(24);
-
-    /* DWord 7: Operational recovery status */
-    unsigned oper_recovery : 8; //!< Operational recovery status
-    RESERVED_FIELD(24);
-
-    /* DWord 8: Watchdog configuration */
-    unsigned wd_module_full_toggle : 8; //!< Watchdog module full toggle
-    unsigned wd_module_tx_disable  : 8; //!< Watchdog module TX disable
-    unsigned wd_host_serdes_feq    : 8; //!< Watchdog host SerDes FEQ
-    unsigned wd_host_logic_re_lock : 8; //!< Watchdog host logic re-lock
-
-    /* DWord 9: Operational timing */
-    unsigned oper_time_module_full_toggle : 8; //!< Operational time module full toggle
-    unsigned oper_time_module_tx_disable  : 8; //!< Operational time module TX disable
-    unsigned oper_time_host_serdes_feq    : 8; //!< Operational time host SerDes FEQ
-    unsigned oper_time_host_logic_re_lock : 8; //!< Operational time host logic re-lock
-
-    // DWords 10-17 (Offsets 0x24 - 0x4c): Reserved
-    unsigned reserved[9];
-} nvmlPprm_t;
-
-namespace
-{
-static_assert(sizeof(nvmlPprm_t) == 72,
-              "nvmlPprm_t size mismatch - expected 72 bytes (18 DWords), possible padding detected");
 } // namespace

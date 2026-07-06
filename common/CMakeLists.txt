@@ -19,6 +19,7 @@ add_subdirectory(CudaLib)
 
 add_subdirectory(transport)
 add_subdirectory(mock)
+add_subdirectory(ChildProcess)
 add_subdirectory(tests)
 
 configure_file(DcgmBuildInfo.cpp.in DcgmBuildInfo.cpp @ONLY)
@@ -51,7 +52,6 @@ target_sources(dcgm_mutex PRIVATE
 
 target_link_libraries(dcgm_mutex PUBLIC common_interface dcgm_logging)
 
-add_subdirectory(ChildProcess)
 add_subdirectory(RemoteConn)
 
 target_sources(dcgm_common PRIVATE
@@ -71,8 +71,6 @@ target_sources(dcgm_common PRIVATE
     DcgmRequest.h
     DcgmSettings.cpp
     DcgmSettings.h
-    DcgmStatCollection.cpp
-    DcgmStatCollection.h
     DcgmStatus.cpp
     DcgmStatus.h
     DcgmStringConversions.h
@@ -88,6 +86,8 @@ target_sources(dcgm_common PRIVATE
     DcgmWatcher.h
     EntityListHelpers.cpp
     EntityListHelpers.h
+    DynamicLibraryLoader.cpp
+    DynamicLibraryLoader.h
     FastPimpl.hpp
     FileSystemOperator.cpp
     FingerprintStore.cpp

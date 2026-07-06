@@ -30,6 +30,7 @@ target_sources(nvvscoretests
         ParsingUtilityTests.cpp
         TestFrameworkTests.cpp
         PluginTests.cpp
+        ParameterValidatorTests.cpp
         PluginTestTests.cpp
         PluginLibTests.cpp
         PluginLibTestTests.cpp
@@ -42,6 +43,7 @@ target_sources(nvvscoretests
         IgnoreErrorCodesHelperTests.cpp
         NvvsDeviceListTests.cpp
         EntitySetTests.cpp
+        FdChannelClientTests.cpp
         )
 
 target_include_directories(nvvscoretests
@@ -57,19 +59,20 @@ target_link_libraries(nvvscoretests
         ${JSONCPP_STATIC_LIBS}
         ${YAML_STATIC_LIBS}
         Catch2::Catch2
+        common_tests_includes
         dcgm_logging
         dl
         fmt::fmt
         nvvs_without_main_objects
-        mock_interface
-        nvvs_mock_interface
+        mock_common
+        mock_nvvs
         rt
         sdk_nvml_loader
         serialize)
 
 target_link_options(nvvscoretests PRIVATE -rdynamic)
 
-add_dependencies(nvvscoretests testplugin)
+add_dependencies(nvvscoretests testplugin testplugin_incomplete)
 
 add_library(testplugin SHARED)
 set_target_properties(testplugin PROPERTIES
@@ -83,6 +86,19 @@ target_link_libraries(testplugin
         fmt::fmt)
 
 target_sources(testplugin PRIVATE fake_plugin.cpp)
+
+add_library(testplugin_incomplete SHARED)
+set_target_properties(testplugin_incomplete PROPERTIES
+    CXX_VISIBILITY_PRESET default
+    SOVERSION ${PROJECT_VERSION_MAJOR})
+
+target_link_libraries(testplugin_incomplete
+    PUBLIC
+        nvvs_interface
+    PRIVATE
+        fmt::fmt)
+
+target_sources(testplugin_incomplete PRIVATE fake_plugin_incomplete.cpp)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(nvvscoretests

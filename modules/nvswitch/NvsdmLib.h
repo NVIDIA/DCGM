@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -73,6 +74,8 @@ public:
     virtual nvsdmRet_t nvsdmDeviceGetGUID(nvsdmDevice_t const device, uint64_t *guid);
     virtual nvsdmRet_t nvsdmDeviceGetType(nvsdmDevice_t const device, unsigned int *type);
     virtual nvsdmRet_t nvsdmDeviceGetHealthStatus(nvsdmDevice_t const device, nvsdmDeviceHealthStatus_t *status);
+    virtual nvsdmRet_t nvsdmDeviceGetPCIInfo(nvsdmDevice_t const device, nvsdmPCIInfo_t *info);
+    virtual nvsdmRet_t nvsdmDeviceGetFirmwareVersion(nvsdmDevice_t const device, nvsdmVersionInfo_t *version);
     virtual nvsdmRet_t nvsdmGetVersion(uint64_t *version);
     virtual nvsdmRet_t nvsdmGetSupportedInterfaceVersionRange(uint64_t *versionFrom, uint64_t *versionTo);
     virtual nvsdmRet_t nvsdmSetLogLevel(uint32_t logLevel);
@@ -130,6 +133,8 @@ public:
     virtual nvsdmRet_t nvsdmDeviceGetType(nvsdmDevice_t const device, unsigned int *type) override;
     virtual nvsdmRet_t nvsdmDeviceGetHealthStatus(nvsdmDevice_t const device,
                                                   nvsdmDeviceHealthStatus_t *status) override;
+    virtual nvsdmRet_t nvsdmDeviceGetPCIInfo(nvsdmDevice_t const device, nvsdmPCIInfo_t *info) override;
+    virtual nvsdmRet_t nvsdmDeviceGetFirmwareVersion(nvsdmDevice_t const device, nvsdmVersionInfo_t *version) override;
     virtual nvsdmRet_t nvsdmGetVersion(uint64_t *version) override;
     virtual nvsdmRet_t nvsdmGetSupportedInterfaceVersionRange(uint64_t *versionFrom, uint64_t *versionTo) override;
     virtual nvsdmRet_t nvsdmSetLogLevel(uint32_t logLevel) override;
@@ -157,12 +162,47 @@ public:
     void SetFieldValue(nvsdmPlatformTelemCounter_t const field, nvsdmTelem_v1_t const value);
     nvsdmTelem_v1_t GetFieldValue(nvsdmPlatformTelemCounter_t const field) const;
 
+    /**
+     * @brief Configures remote device index and port index for this mock device.
+     *
+     * @param[in] devIdx  Remote device index.
+     * @param[in] portIdx Remote port index.
+     */
+    void SetRemote(unsigned int devIdx, unsigned int portIdx);
+
+    /**
+     * Returns the cached remote device index and port index for this mock device.
+     * Returns std::nullopt if SetRemote() has not been called.
+     *
+     * @return std::optional<std::pair<unsigned int, unsigned int>> remote device index and port index when available,
+     *         or std::nullopt if no remote device index and port index was configured.
+     */
+    std::optional<std::pair<unsigned int, unsigned int>> GetRemote() const;
+
+    /**
+     * @brief Configures the device index for this mock port.
+     *
+     * @param[in] devIdx  Device index.
+     */
+    void SetDevIdx(unsigned int devIdx);
+
+    /**
+     * Returns the cached device index for this mock port.
+     * Returns std::nullopt if SetDevIdx() has not been called.
+     *
+     * @return std::optional<unsigned int> device index when available,
+     *         or std::nullopt if no device index was configured.
+     */
+    std::optional<unsigned int> GetDevIdx() const;
+
 private:
     unsigned int m_portNum;
     uint16_t m_lid;
     nvsdmPortState_t m_portState = NVSDM_PORT_STATE_ACTIVE;
     std::unordered_map<nvsdmPortTelemCounter_t, nvsdmTelem_v1_t> m_portFieldValues;
     std::unordered_map<nvsdmPlatformTelemCounter_t, nvsdmTelem_v1_t> m_platformFieldValues;
+    std::optional<std::pair<unsigned int, unsigned int>> m_remote;
+    std::optional<unsigned int> m_devIdx;
 };
 
 class NvsdmMockDevice
@@ -177,8 +217,53 @@ public:
     uint64_t GetGuid() const;
     uint32_t GetHealthState() const;
     nvsdmPortIter_t GetPortsIterator();
+    /**
+     * Returns the cached PCI information for this mock device.
+     * Returns std::nullopt if SetPCIInfo() has not been called.
+     *
+     * @return std::optional<nvsdmPCIInfo_t>  PCI info (domain/bus/dev/func)
+     *         when available, or std::nullopt if no PCI info was configured.
+     */
+    std::optional<nvsdmPCIInfo_t> GetPCIInfo() const;
+
+    /**
+     * Returns the cached firmware version for this mock device.
+     * Returns std::nullopt if SetFirmwareVersion() has not been called.
+     *
+     * @return std::optional<nvsdmVersionInfo_t> firmware version when available,
+     *         or std::nullopt if no firmware version was configured.
+     */
+    std::optional<nvsdmVersionInfo_t> GetFirmwareVersion() const;
 
     void AddPort(NvsdmMockPort const &port);
+
+    /**
+     * Returns the port with the given index.
+     * Returns nullptr if the index is out of bounds.
+     *
+     * @param[in] portIdx  Port index.
+     * @return NvsdmMockPort* port when available, or nullptr if the index is out of bounds.
+     */
+    NvsdmMockPort *GetPort(unsigned int portIdx);
+
+    /**
+     * @brief Configures PCI topology information for this mock device.
+     *
+     * @param[in] domain  PCI domain number.
+     * @param[in] bus     PCI bus number.
+     * @param[in] dev     PCI device number.
+     * @param[in] func    PCI function number.
+     */
+    void SetPCIInfo(uint16_t domain, uint16_t bus, uint16_t dev, uint16_t func);
+
+    /**
+     * @brief Configures firmware version information for this mock device.
+     *
+     * @param[in] major  Major version number.
+     * @param[in] minor  Minor version number.
+     * @param[in] patch  Patch version number.
+     */
+    void SetFirmwareVersion(uint32_t major, uint32_t minor, uint32_t patch);
 
     void SetFieldValue(nvsdmConnectXTelemCounter_t const field, nvsdmTelem_v1_t const value);
     nvsdmTelem_v1_t GetFieldValue(nvsdmConnectXTelemCounter_t const field) const;
@@ -188,6 +273,8 @@ private:
     uint16_t m_devID;
     uint32_t m_vendorID;
     uint32_t m_healthState;
+    std::optional<nvsdmPCIInfo_t> m_pciInfo;
+    std::optional<nvsdmVersionInfo_t> m_firmwareVersion;
     std::vector<NvsdmMockPort> m_ports;
     std::unordered_map<nvsdmConnectXTelemCounter_t, nvsdmTelem_v1_t> m_fieldValues;
 };
@@ -213,6 +300,8 @@ public:
     virtual nvsdmRet_t nvsdmDeviceGetGUID(nvsdmDevice_t const device, uint64_t *guid) override;
     virtual nvsdmRet_t nvsdmDeviceGetHealthStatus(nvsdmDevice_t const device,
                                                   nvsdmDeviceHealthStatus_t *status) override;
+    virtual nvsdmRet_t nvsdmDeviceGetPCIInfo(nvsdmDevice_t const device, nvsdmPCIInfo_t *info) override;
+    virtual nvsdmRet_t nvsdmDeviceGetFirmwareVersion(nvsdmDevice_t const device, nvsdmVersionInfo_t *version) override;
     virtual nvsdmRet_t nvsdmDeviceGetPorts(nvsdmDevice_t const device, nvsdmPortIter_t *iter) override;
     virtual nvsdmRet_t nvsdmIteratePorts(nvsdmPortIter_t iter,
                                          nvsdmRet_t (*callback)(nvsdmPort_t const, void *),
@@ -222,6 +311,8 @@ public:
     virtual nvsdmRet_t nvsdmPortGetGID(nvsdmPort_t const port, uint8_t gid[16]) override;
     virtual nvsdmRet_t nvsdmPortGetGUID(nvsdmPort_t const port, uint64_t *guid) override;
     virtual nvsdmRet_t nvsdmPortGetInfo(nvsdmPort_t const port, nvsdmPortInfo_t *info) override;
+    virtual nvsdmRet_t nvsdmPortGetRemote(nvsdmPort_t const port, nvsdmPort_t *remote) override;
+    virtual nvsdmRet_t nvsdmPortGetDevice(nvsdmPort_t const port, nvsdmDevice_t *device) override;
 
     void InjectDevice(NvsdmMockDevice const &dev);
     bool LoadYaml(std::string const &path);

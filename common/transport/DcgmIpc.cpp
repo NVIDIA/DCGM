@@ -1048,6 +1048,8 @@ void DcgmIpc::MonitorSocketFdAsyncImpl(DcgmIpcMonitorSocketFd &monitorSocketFd)
     if (dcgmReturn != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "Failed to AddConnection";
+        bufferevent_setcb(bev, nullptr, nullptr, nullptr, nullptr);
+        bufferevent_disable(bev, EV_READ | EV_WRITE);
         bufferevent_free(bev);
         monitorSocketFd.m_promise.set_value(DCGM_ST_GENERIC_ERROR);
         return;
@@ -1226,6 +1228,7 @@ void DcgmIpc::ReadCB(bufferevent *bev)
     if (connection == nullptr)
     {
         DCGM_LOG_ERROR << "Unknown connectionId " << connectionId << " got ReadCB for bev " << bev;
+        RemoveConnectionByBev(bev);
         return;
     }
 
@@ -1300,11 +1303,14 @@ DcgmIpcConnection::~DcgmIpcConnection()
     /* Set this connection to closed, possibly triggering the m_connectPromise-linked future */
     SetConnectionState(DCGM_IPC_CS_CLOSED);
 
-    if (m_bev != nullptr)
+    if (auto bev = m_bev; bev != nullptr)
     {
-        DCGM_LOG_DEBUG << "bufferevent_free " << m_bev;
-        bufferevent_free(m_bev);
         m_bev = nullptr;
+        bufferevent_setcb(bev, nullptr, nullptr, nullptr, nullptr);
+        bufferevent_disable(bev, EV_READ | EV_WRITE);
+
+        DCGM_LOG_DEBUG << "bufferevent_free " << bev;
+        bufferevent_free(bev);
     }
 }
 
@@ -1362,6 +1368,12 @@ dcgmReturn_t DcgmIpcConnection::ReadMessages(struct bufferevent *bev,
 {
     dcgmReturn_t retSt = DCGM_ST_NO_DATA;
     size_t numBytes;
+
+    if (m_bev == nullptr)
+    {
+        log_debug("ReadMessages called but m_bev is null (connection closing)");
+        return DCGM_ST_CONNECTION_NOT_VALID;
+    }
 
     assert(bev == m_bev);
 
@@ -1567,7 +1579,8 @@ dcgmReturn_t DcgmIpc::SendMessage(dcgm_connection_id_t connectionId,
 /*****************************************************************************/
 dcgmReturn_t DcgmIpcConnection::SendMessage(std::unique_ptr<DcgmMessage> dcgmMessage)
 {
-    if (m_bev == nullptr)
+    auto bev = m_bev;
+    if (bev == nullptr)
     {
         DCGM_LOG_ERROR << "Tried to send to a connection with a null m_bev";
         return DCGM_ST_CONNECTION_NOT_VALID;
@@ -1576,12 +1589,11 @@ dcgmReturn_t DcgmIpcConnection::SendMessage(std::unique_ptr<DcgmMessage> dcgmMes
     auto msgHdr   = dcgmMessage->GetMessageHdr();
     auto msgBytes = dcgmMessage->GetMsgBytesPtr();
 
-
     /* Note that we're only able to do these calls in succession because
        we only write to connections from a single thread. Otherwise, we'd have
        to stage the entire message in an evbuffer and call bufferevent_write_buffer */
-    int st  = bufferevent_write(m_bev, msgHdr, sizeof(*msgHdr));
-    int st2 = bufferevent_write(m_bev, msgBytes->data(), msgBytes->size());
+    int st  = bufferevent_write(bev, msgHdr, sizeof(*msgHdr));
+    int st2 = bufferevent_write(bev, msgBytes->data(), msgBytes->size());
     if (st || st2)
     {
         DCGM_LOG_ERROR << "Got error from first or second write " << st << ", " << st2;

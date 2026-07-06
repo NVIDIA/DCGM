@@ -16,10 +16,22 @@
 #include <PluginCommon.h>
 
 #include <DcgmBuildInfo.hpp>
+#include <EnvVarGuard.hpp>
 
 #include <catch2/catch_all.hpp>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+
+class PluginCommonTestPlugin : public Plugin
+{
+public:
+    void Go(std::string const & /* testName */,
+            dcgmDiagPluginEntityList_v1 const * /* entityInfo */,
+            unsigned int /* numParameters */,
+            const dcgmDiagPluginTestParameter_t * /* testParameters */) override
+    {}
+};
 
 class MockDcgmRecorder : public DcgmRecorder
 {
@@ -39,6 +51,19 @@ public:
         return mockReturnValue;
     }
 };
+
+dcgmDiagPluginEntityList_v1 MakeGpuEntityList(unsigned int count)
+{
+    dcgmDiagPluginEntityList_v1 entityList {};
+    entityList.numEntities = count;
+    for (unsigned int i = 0; i < count; ++i)
+    {
+        entityList.entities[i].entity.entityId      = i;
+        entityList.entities[i].entity.entityGroupId = DCGM_FE_GPU;
+        entityList.entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
+    }
+    return entityList;
+}
 
 TEST_CASE("SetCudaDriverMajorVersion", "[PluginCommon]")
 {
@@ -70,6 +95,89 @@ TEST_CASE("SetCudaDriverMajorVersion", "[PluginCommon]")
 
             REQUIRE(result == tc.expectedResult);
             REQUIRE(cudaDriverMajorVersion == tc.expectedMajorVersion);
+        }
+    }
+}
+
+TEST_CASE("CheckAndSetResult updates per-GPU results and errors", "[PluginCommon]")
+{
+    std::string const testName             = "plugin_common";
+    dcgmDiagPluginEntityList_v1 entityList = MakeGpuEntityList(3);
+    std::vector<unsigned int> gpuList { 0, 1, 2 };
+
+    GIVEN("an initialized plugin")
+    {
+        PluginCommonTestPlugin plugin;
+        plugin.InitializeForEntityList(testName, entityList);
+
+        SECTION("a passing GPU remains passing without changing allPassed")
+        {
+            bool allPassed = true;
+
+            CheckAndSetResult(&plugin, testName, gpuList, 1, true, {}, allPassed, false);
+
+            REQUIRE(allPassed);
+            REQUIRE(plugin.GetGpuResults(testName).at(1) == NVVS_RESULT_PASS);
+            CHECK(plugin.GetEntityErrors(testName).at({ DCGM_FE_GPU, 1 }).empty());
+        }
+
+        SECTION("a failing GPU records each supplied error against that GPU")
+        {
+            bool allPassed = true;
+            DcgmError error { 0 };
+            error.SetMessage("synthetic plugin failure");
+
+            CheckAndSetResult(&plugin, testName, gpuList, 1, false, { error }, allPassed, false);
+
+            REQUIRE_FALSE(allPassed);
+            REQUIRE(plugin.GetGpuResults(testName).at(1) == NVVS_RESULT_FAIL);
+
+            auto const &entityErrors = plugin.GetEntityErrors(testName).at({ DCGM_FE_GPU, 1 });
+            REQUIRE(entityErrors.size() == 1);
+            CHECK(entityErrors[0].entity.entityGroupId == DCGM_FE_GPU);
+            CHECK(entityErrors[0].entity.entityId == 1);
+            CHECK(std::string(entityErrors[0].msg) == "synthetic plugin failure");
+        }
+
+        SECTION("a DCGM communication failure marks the current and remaining GPUs failed")
+        {
+            bool allPassed = true;
+
+            CheckAndSetResult(&plugin, testName, gpuList, 1, true, {}, allPassed, true);
+
+            REQUIRE(allPassed);
+            CHECK(plugin.GetGpuResults(testName).at(0) == NVVS_RESULT_PASS);
+            CHECK(plugin.GetGpuResults(testName).at(1) == NVVS_RESULT_FAIL);
+            CHECK(plugin.GetGpuResults(testName).at(2) == NVVS_RESULT_FAIL);
+        }
+    }
+}
+
+TEST_CASE("IsSmallFrameBufferModeSet reads the diagnostic environment flag", "[PluginCommon]")
+{
+    DcgmNs::Tests::EnvVarGuard guard("__DCGM_DIAG_SMALL_FB_MODE");
+
+    GIVEN("the small framebuffer mode environment variable")
+    {
+        SECTION("unset is disabled")
+        {
+            unsetenv("__DCGM_DIAG_SMALL_FB_MODE");
+
+            CHECK_FALSE(IsSmallFrameBufferModeSet());
+        }
+
+        SECTION("set to 1 is enabled")
+        {
+            setenv("__DCGM_DIAG_SMALL_FB_MODE", "1", 1);
+
+            CHECK(IsSmallFrameBufferModeSet());
+        }
+
+        SECTION("set to another value is disabled")
+        {
+            setenv("__DCGM_DIAG_SMALL_FB_MODE", "0", 1);
+
+            CHECK_FALSE(IsSmallFrameBufferModeSet());
         }
     }
 }

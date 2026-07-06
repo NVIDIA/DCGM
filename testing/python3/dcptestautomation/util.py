@@ -14,12 +14,12 @@
 import sys
 from subprocess import PIPE, Popen
 
-###############################################################################################
+##########################################################################
 #
 # Utility function to execute bash commands from this script
 # Prints the stdout to screen and returns a return code from the shell
 #
-###############################################################################################
+##########################################################################
 
 
 def executeBashCmd(cmd, prnt):
@@ -52,13 +52,13 @@ def executeBashCmd(cmd, prnt):
 
     return result.returncode, ret_line.strip()
 
-###############################################################################################
+##########################################################################
 #
 # This function removes cleans up all the dependent libraries
 # It also uninstalls any existing installation of datacenter gpu manager
 # Returns success in the end.
 #
-###############################################################################################
+##########################################################################
 
 
 def removeDependencies(prnt):

@@ -31,7 +31,12 @@ def get_mock_call_kwargs(call):
     return call[2]
 
 
-def helper_check_argument_added(call_list, short_param=None, long_param=None, dest=None, type=None):
+def helper_check_argument_added(
+        call_list,
+        short_param=None,
+        long_param=None,
+        dest=None,
+        type=None):
     calls_with_short_param = list(filter(
         lambda call: get_mock_call_name(call) == 'add_argument' and
         len(get_mock_call_args(call)) == 2,
@@ -136,7 +141,7 @@ def test_get_log_level(mock_exit):
     mock_exit.assert_not_called()
     try:  # It raises an exception because it tries to return an undeclared var
         cli.get_log_level(Struct(loglevel='wrong', print_help=mock_help))
-    except:
+    except BaseException:
         pass
 
     mock_exit.assert_called()

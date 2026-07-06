@@ -78,6 +78,27 @@ struct Uint64Data
 };
 
 /**
+ * Stores a uint64_t GUID as a zero-padded lowercase hex string with "0x" prefix,
+ * This preserves all 64 bits without sign-extension issues.
+ */
+struct GuidHexData
+{
+    char value[19]; /* "0x" + 16 hex digits + null terminator */
+
+    GuidHexData(void);
+    GuidHexData(uint64_t guid);
+    ~GuidHexData() = default;
+
+    void BufferAdd(dcgm_field_entity_group_t entityGroupId,
+                   dcgm_field_eid_t entityId,
+                   unsigned short fieldId,
+                   timelib64_t now,
+                   DcgmFvBuffer &buf) const;
+
+    std::string Str(void) const;
+};
+
+/**
  * This holds Switch error data. We get passed passed a vector of nscq_error_t
  * from NSCQ and each element has a value and time element. The time element
  * tags the error value in the buffer of error values ultimately produced.

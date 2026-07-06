@@ -56,4 +56,44 @@ std::unique_ptr<DcgmGroup> StartDcgmGroupWatch(BusGrind *bg,
                                                std::vector<unsigned int> const &gpuIds);
 
 std::string_view ExtractJson(std::string_view output);
+
+/**
+ * Output a pairs P2P bandwidth matrix for concurrent GPU transfers
+ *
+ * Computes and records bandwidth measurements for P2P transfers between GPU pairs,
+ * with optional P2P enablement. Skips the test if fewer than 2 GPUs are available.
+ *
+ * @param[in] bg  BusGrind context containing GPUs, test parameters, and logging helpers
+ * @param[in] p2p Whether P2P is enabled for the test
+ *
+ * @return 0 when the subtest is skipped or completes successfully
+ */
+int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p);
+
+/**
+ * Output a 1D exchange bandwidth matrix for concurrent neighbor GPU transfers
+ *
+ * Computes and records bandwidth measurements for 1D exchange transfers across
+ * adjacent GPUs, with optional P2P enablement. Skips the test if fewer than 2 GPUs
+ * are available.
+ *
+ * @param[in] bg  BusGrind context containing GPUs, test parameters, and logging helpers
+ * @param[in] p2p Whether P2P is enabled for the test
+ *
+ * @return 0 when the subtest is skipped or completes successfully
+ */
+int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p);
+
+/**
+ * Check PCIe link width and generation for all GPUs
+ *
+ * Verifies that each GPU's PCIe link width and generation meet the configured
+ * minimum thresholds. Skips GPUs not in P-state 0.
+ *
+ * @param[in,out] bg      BusGrind context containing GPUs, recorder, and error reporting
+ * @param[in]     subTest Name of the subtest to read threshold parameters from
+ *
+ * @return 0 if all GPUs pass, 1 if any GPU fails
+ */
+int bg_check_pci_link(BusGrind &bg, std::string subTest);
 #endif // PCIEMAIN_H

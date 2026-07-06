@@ -99,9 +99,21 @@ TEST_CASE("GetP2PError")
         CHECK(writerError == DCGM_FR_BROKEN_P2P_NVLINK_WRITER_DEVICE);
     }
 
-    SECTION("Verify summary function returning error results in P2P error")
+    SECTION("Verify DCGM_ST_NOT_WATCHED results in generic error")
     {
+        // When field is not watched, we cannot determine if NVLink was used,
+        // so return generic code
         globalErrorCode = DCGM_ST_NOT_WATCHED;
+        GetP2PError(&bg, startTime, gpuId, memoryError, writerError);
+
+        CHECK(memoryError == DCGM_FR_BROKEN_P2P_MEMORY_DEVICE);
+        CHECK(writerError == DCGM_FR_BROKEN_P2P_WRITER_DEVICE);
+    }
+
+    SECTION("Verify unexpected error code results in generic error")
+    {
+        // Any error other than OK, NO_DATA, or NOT_WATCHED should return generic codes
+        globalErrorCode = DCGM_ST_BADPARAM;
         GetP2PError(&bg, startTime, gpuId, memoryError, writerError);
 
         CHECK(memoryError == DCGM_FR_BROKEN_P2P_MEMORY_DEVICE);

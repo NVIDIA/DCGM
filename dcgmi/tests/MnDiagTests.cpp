@@ -15,9 +15,10 @@
  */
 
 #include <catch2/catch_all.hpp>
+
+#include "DcgmiTestHelpers.hpp"
+
 #include <fstream>
-#include <iostream>
-#include <sstream>
 
 #include <DcgmStringHelpers.h>
 #include <MnDiag.h>
@@ -74,29 +75,6 @@ public:
 
 private:
     MnDiag &m_mnDiag;
-};
-
-// Redirection class to capture stdout for testing
-class StdoutRedirect
-{
-public:
-    StdoutRedirect()
-        : m_oldBuffer(std::cout.rdbuf(m_buffer.rdbuf()))
-    {}
-
-    ~StdoutRedirect()
-    {
-        std::cout.rdbuf(m_oldBuffer);
-    }
-
-    std::string GetOutput() const
-    {
-        return m_buffer.str();
-    }
-
-private:
-    std::stringstream m_buffer;
-    std::streambuf *m_oldBuffer;
 };
 
 // Helper function to create a test response

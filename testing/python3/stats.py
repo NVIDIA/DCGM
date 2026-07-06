@@ -40,7 +40,8 @@ def correlation_coefficient(x, y):
     xSquaredBar = mean(xi**2 for xi in x)
     ySquaredBar = mean(yi**2 for yi in y)
 
-    return (xyBar - xBar * yBar) / (math.sqrt((xSquaredBar - xBar**2) * (ySquaredBar - yBar**2)))
+    return (xyBar - xBar * yBar) / \
+        (math.sqrt((xSquaredBar - xBar**2) * (ySquaredBar - yBar**2)))
 
 
 def standard_deviation(x):

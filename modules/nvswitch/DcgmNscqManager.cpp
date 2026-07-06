@@ -127,30 +127,31 @@ std::optional<dcgmGroupEntityPair_t> DcgmNscqManager::Find(unsigned short fieldI
  */
 static std::optional<lane_vc_id_t> FieldIdToLane(unsigned short fieldId)
 {
-    std::map<unsigned short, lane_vc_id_t> map
-        = { { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0, 0 },  { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0, 0 },
+    std::map<unsigned short, lane_vc_id_t> map = {
+        { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L0_TOTAL, 0 },       { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L0_TOTAL, 0 },
 
-            { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1, 1 },  { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1, 1 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L1_TOTAL, 1 },       { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L1_TOTAL, 1 },
 
-            { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2, 2 },  { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2, 2 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L2_TOTAL, 2 },       { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L2_TOTAL, 2 },
 
-            { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3, 3 },  { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3, 3 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L3_TOTAL, 3 },       { DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L3_TOTAL, 3 },
 
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0, 0 },   { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0, 0 },
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0, 0 },  { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0, 0 },
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0, 0 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0, 0 },          { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0, 0 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0, 0 },         { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0, 0 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL, 0 },
 
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1, 1 },   { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1, 1 },
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1, 1 },  { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1, 1 },
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1, 1 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1, 1 },          { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1, 1 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1, 1 },         { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1, 1 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL, 1 },
 
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2, 2 },   { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2, 2 },
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2, 2 },  { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2, 2 },
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2, 2 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2, 2 },          { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2, 2 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2, 2 },         { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2, 2 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL, 2 },
 
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3, 3 },   { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3, 3 },
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3, 3 },  { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3, 3 },
-            { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3, 3 } };
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3, 3 },          { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3, 3 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3, 3 },         { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3, 3 },
+        { DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL, 3 }
+    };
 
     auto it = map.find(fieldId);
 
@@ -285,7 +286,7 @@ dcgmReturn_t DcgmNscqManager::UpdateFatalErrorsAllSwitches()
             haveErrors = true;
             buf.AddInt64Value(DCGM_FE_SWITCH,
                               m_nvSwitches[i].physicalId,
-                              DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS,
+                              DCGM_FI_DEV_SXID_FATAL_ERROR,
                               m_fatalErrors[i].error,
                               now,
                               DCGM_ST_OK);
@@ -315,7 +316,7 @@ dcgmReturn_t DcgmNscqManager::UpdateFieldsFromNvswitchLibrary(unsigned short fie
                                                               const std::vector<dcgm_field_update_info_t> &entities,
                                                               timelib64_t now)
 {
-    const FieldIdControlType<DCGM_FI_UNKNOWN> *internalFieldId = FieldIdFind(fieldId);
+    const FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN> *internalFieldId = FieldIdFind(fieldId);
 
     if (internalFieldId == nullptr)
     {
@@ -565,7 +566,7 @@ dcgmReturn_t DcgmNscqManager::AttachNvSwitches()
         phys_id_t physId;
     };
 
-    NscqDataCollector<IdPair> collector(DCGM_FI_UNKNOWN, nscqPath);
+    NscqDataCollector<IdPair> collector(DCGM_FI_SYSTEM_FIELD_UNKNOWN, nscqPath);
 
     auto cb = [](const uuid_p device, nscq_rc_t rc, const phys_id_t in, NscqDataCollector<IdPair> *dest) {
         if (dest == nullptr)
@@ -688,7 +689,7 @@ dcgmReturn_t DcgmNscqManager::ReadNvSwitchStatusAllSwitches()
         bool state;
     };
 
-    NscqDataCollector<DeviceStatePair> collector(DCGM_FI_UNKNOWN, nscqPath);
+    NscqDataCollector<DeviceStatePair> collector(DCGM_FI_SYSTEM_FIELD_UNKNOWN, nscqPath);
 
     auto cb = [](const uuid_p device, nscq_rc_t rc, const bool in, NscqDataCollector<DeviceStatePair> *dest) {
         if (dest == nullptr)
@@ -775,7 +776,7 @@ dcgmReturn_t DcgmNscqManager::ReadLinkStatesAllSwitches()
 
     using collector_t = NscqDataCollector<TempData>;
 
-    collector_t collector(DCGM_FI_UNKNOWN, nscqPath);
+    collector_t collector(DCGM_FI_SYSTEM_FIELD_UNKNOWN, nscqPath);
 
     auto cb = [](const uuid_p device,
                  const link_id_t linkId,
@@ -903,7 +904,7 @@ dcgmReturn_t DcgmNscqManager::ReadNvSwitchFatalErrorsAllSwitches()
 
     using collector_t = NscqDataCollector<TempData>;
 
-    collector_t collector(DCGM_FI_UNKNOWN, nscqPath);
+    collector_t collector(DCGM_FI_SYSTEM_FIELD_UNKNOWN, nscqPath);
 
     auto cb = [](const uuid_p device, const link_id_t port, nscq_rc_t rc, const nscq_error_t error, collector_t *dest) {
         if (dest == nullptr)

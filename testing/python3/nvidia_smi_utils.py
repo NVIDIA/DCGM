@@ -24,9 +24,9 @@ import dcgm_agent
 import shlex
 import subprocess
 
-################################################################################
+##########################################################################
 # XML tags to search for
-################################################################################
+##########################################################################
 CLOCKS_EVENT_FN = "clocks_event_reasons"
 THROTTLE_FN = "clocks_throttle_reasons"
 ECC_FN = "ecc_errors"
@@ -62,26 +62,35 @@ relevant_throttling = ["clocks_throttle_reason_hw_slowdown",
                        "clocks_throttle_reason_hw_power_brake_slowdown",
                        "clocks_throttle_reason_sw_thermal_slowdown"]
 
-################################################################################
+##########################################################################
 # Supported field ids
 # Each is a tuple of the field id, the type of check for error, and the ideal
 # value. Set each of these values in order to add support for a new field.
-################################################################################
+##########################################################################
 CHECKER_ANY_VALUE = 0
 CHECKER_MAX_VALUE = 1
 CHECKER_LAST_VALUE = 2
 CHECKER_INFOROM = 3
-supportedFields = [(dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS, CHECKER_ANY_VALUE, ''),
-                   (dcgm_fields.DCGM_FI_DEV_ECC_CURRENT,
-                    CHECKER_ANY_VALUE, 'Active'),
-                   (dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, CHECKER_MAX_VALUE, 0),
-                   (dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, CHECKER_LAST_VALUE, 0),
-                   (dcgm_fields.DCGM_FI_DEV_INFOROM_CONFIG_VALID,
-                    CHECKER_INFOROM, True),
-                   ]
+supportedFields = [
+    (dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS,
+     CHECKER_ANY_VALUE,
+     ''),
+    (dcgm_fields.DCGM_FI_DEV_ECC_MODE,
+     CHECKER_ANY_VALUE,
+     'Active'),
+    (dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
+     CHECKER_MAX_VALUE,
+     0),
+    (dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
+     CHECKER_LAST_VALUE,
+     0),
+    (dcgm_fields.DCGM_FI_DEV_INFOROM_VALID,
+     CHECKER_INFOROM,
+     True),
+]
 # field ids where any value is an error
 anyCheckFields = [dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS,
-                  dcgm_fields.DCGM_FI_DEV_ECC_CURRENT]
+                  dcgm_fields.DCGM_FI_DEV_ECC_MODE]
 # field ids where the max value should be returned as an error
 maxCheckFields = [dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION]
 # field ids where the last value should be returned as an error
@@ -95,7 +104,7 @@ zeroIdealField = [dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
 emptyStrIdealField = [dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASONS]
 
 # field ids where False is the ideal value
-falseIdealField = [dcgm_fields.DCGM_FI_DEV_INFOROM_CONFIG_VALID]
+falseIdealField = [dcgm_fields.DCGM_FI_DEV_INFOROM_VALID]
 
 
 def parse_int_from_nvml_xml(text):
@@ -106,13 +115,13 @@ def parse_int_from_nvml_xml(text):
     except ValueError as e:
         return 0
 
-################################################################################
+##########################################################################
 
 
 class NvidiaSmiJob(threading.Thread):
-    ################################################################################
+    ##########################################################################
     # Constructor
-    ################################################################################
+    ##########################################################################
     def __init__(self):
         threading.Thread.__init__(self)
         self.m_shutdownFlag = threading.Event()
@@ -122,22 +131,22 @@ class NvidiaSmiJob(threading.Thread):
         self.m_supportedFields = {}
         self.InitializeSupportedFields()
 
-    ################################################################################
+    ##########################################################################
     # Map the fieldId to the information for supporting that field id
-    ################################################################################
+    ##########################################################################
     def InitializeSupportedFields(self):
         for fieldInfo in supportedFields:
             self.m_supportedFields[fieldInfo[0]] = fieldInfo
 
-    ################################################################################
+    ##########################################################################
     # Sets the sleep interval between querying nvidia-smi
-    ################################################################################
+    ##########################################################################
     def SetIterationInterval(self, interval):
         self.m_sleepInterval = interval
 
-    ################################################################################
+    ##########################################################################
     # Looks at the volatile XML node to find the total double bit errors
-    ################################################################################
+    ##########################################################################
     def ParseEccErrors(self, ecc_subnode, gpudata, isVolatile):
         for child in ecc_subnode:
             if child.tag == DB_FN:
@@ -165,10 +174,10 @@ class NvidiaSmiJob(threading.Thread):
                 gpudata[fieldId] = parse_int_from_nvml_xml(child.text)
                 break
 
-    ################################################################################
+    ##########################################################################
     # Reads the common failure conditions from the XML for this GPU
     # All non-error values are set to None to make it easier to read the map
-    ################################################################################
+    ##########################################################################
     def ParseSingleGpuDataFromXml(self, gpuxml_node):
         gpudata = {}
         gpu_id = -1
@@ -176,8 +185,8 @@ class NvidiaSmiJob(threading.Thread):
             if child.tag == THROTTLE_FN or child.tag == CLOCKS_EVENT_FN:
                 reasons = ''
                 for grandchild in child:
-                    if ((grandchild.tag in relevant_clocks_events) or (grandchild.tag in relevant_throttling)) and \
-                            grandchild.text == 'Active':
+                    if ((grandchild.tag in relevant_clocks_events) or (
+                            grandchild.tag in relevant_throttling)) and grandchild.text == 'Active':
                         if not reasons:
                             reasons = grandchild.tag
                         else:
@@ -190,7 +199,7 @@ class NvidiaSmiJob(threading.Thread):
             elif child.tag == ECC_ENABLED_FN:
                 for grandchild in child:
                     if grandchild.tag == ECC_CURRENT_FN:
-                        gpudata[dcgm_fields.DCGM_FI_DEV_ECC_CURRENT] = grandchild.text
+                        gpudata[dcgm_fields.DCGM_FI_DEV_ECC_MODE] = grandchild.text
             elif child.tag == ECC_FN:
                 for grandchild in child:
                     if grandchild.tag == VOLATILE_FN:
@@ -201,10 +210,10 @@ class NvidiaSmiJob(threading.Thread):
                 for grandchild in child:
                     if grandchild.tag == RETIRED_SBE_FN:
                         self.ParseRetiredPagesCount(
-                            grandchild, gpudata, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE)
+                            grandchild, gpudata, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL)
                     elif grandchild.tag == RETIRED_DBE_FN:
                         self.ParseRetiredPagesCount(
-                            grandchild, gpudata, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE)
+                            grandchild, gpudata, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL)
             elif child.tag == PCI_FN:
                 for grandchild in child:
                     if grandchild.tag == PCI_DEVICE_ID_FN:
@@ -223,28 +232,34 @@ class NvidiaSmiJob(threading.Thread):
 
             self.m_data[gpu_id][key].append(gpudata[key])
 
-    ################################################################################
+    ##########################################################################
     # Finds each GPU's xml entry and passes it off to be read
-    ################################################################################
+    ##########################################################################
     def ParseDataFromXml(self, root):
         for child in root:
             if child.tag == GPU_FN:
                 self.ParseSingleGpuDataFromXml(child)
 
-    ################################################################################
+    ##########################################################################
     # Reads some common failure condition values from nvidia-smi -q -x
     # Returns an XML ElementTree object on success
     # None on failure
-    ################################################################################
+    ##########################################################################
     def QueryNvidiaSmiXml(self, parseData=None):
         if parseData is None:
             parseData = True
+
+        if option_parser.options.no_hw:
+            return None
 
         output = ""
         nvsmi_cmd = "nvidia-smi -q -x"
         try:
             runner = subprocess.Popen(
-                nvsmi_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                nvsmi_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True)
             (output, error) = runner.communicate()
             output_str = output.decode()
 
@@ -273,16 +288,19 @@ class NvidiaSmiJob(threading.Thread):
                          (str(e), output_str))
             return None
 
-    ################################################################################
+    ##########################################################################
     # Reads thermal violation values from nvidia-smi stats
-    ################################################################################
+    ##########################################################################
     def QueryNvidiaSmiStats(self):
         nvsmi_cmd = "nvidia-smi stats -c 1 -d violThm"
         # Initialize lines as an empty list so we don't do anything if IO fails
         lines = []
         try:
             runner = subprocess.Popen(
-                nvsmi_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                nvsmi_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True)
             (output_buf, error_buf) = runner.communicate()
             output = output_buf.decode('utf-8')
             error = error_buf.decode('utf-8')
@@ -314,7 +332,7 @@ class NvidiaSmiJob(threading.Thread):
             self.m_data[gpu_id][dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION].append(
                 violation)
 
-    ################################################################################
+    ##########################################################################
     def GetAnyThermalClocksEventReasons(self):
         reasons = []
         for gpuId in self.m_data:
@@ -324,17 +342,20 @@ class NvidiaSmiJob(threading.Thread):
 
         return reasons
 
-    ################################################################################
+    ##########################################################################
     # Deprecated: Use GetAnyThermalClocksEventReasons() instead
     def GetAnyThermalThrottlingReasons(self):
         return self.GetAnyThermalClocksEventReasons()
 
-    ################################################################################
+    ##########################################################################
     def CheckInforom(self):
         nvsmi_cmd = "nvidia-smi"
         try:
             runner = subprocess.Popen(
-                nvsmi_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+                nvsmi_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=True)
             (outputbytes, errorbytes) = runner.communicate()
             output = outputbytes.decode('utf-8')
             error = errorbytes.decode('utf-8')
@@ -347,7 +368,7 @@ class NvidiaSmiJob(threading.Thread):
 
         return None
 
-    ################################################################################
+    ##########################################################################
 
     def run(self):
         while not self.m_shutdownFlag.is_set():
@@ -355,7 +376,7 @@ class NvidiaSmiJob(threading.Thread):
             self.QueryNvidiaSmiStats()
             time.sleep(self.m_sleepInterval)
 
-    ################################################################################
+    ##########################################################################
     def CheckField(self, fieldId, values):
         # Return None for an empty list or an unsupported field id
         if not values or fieldId not in self.m_supportedFields:
@@ -378,21 +399,22 @@ class NvidiaSmiJob(threading.Thread):
         else:
             return None
 
-    ################################################################################
+    ##########################################################################
     # Determine if the NvidiaSmiChecker object also found an error for the specified
     # gpuId and fieldId. If so, return a valid value.
     # Returning None means no error was found for that fieldId and gpuId
-    ################################################################################
+    ##########################################################################
     def GetErrorValue(self, gpuId, fieldId):
         if not gpuId:
-            if fieldId == dcgm_fields.DCGM_FI_DEV_INFOROM_CONFIG_VALID:
+            if fieldId == dcgm_fields.DCGM_FI_DEV_INFOROM_VALID:
                 if self.m_inforomCorrupt is None:
                     self.m_inforomCorrupt = self.CheckInforom()
                 # Only valid if we're looking for inforom errors
                 return self.m_inforomCorrupt, self.GetCorrectValue(fieldId)
         elif gpuId in self.m_data:
             if fieldId in self.m_data[gpuId]:
-                return self.CheckField(fieldId, self.m_data[gpuId][fieldId]), self.GetCorrectValue(fieldId)
+                return self.CheckField(
+                    fieldId, self.m_data[gpuId][fieldId]), self.GetCorrectValue(fieldId)
 
         return None, None
 
@@ -402,13 +424,15 @@ class NvidiaSmiJob(threading.Thread):
         else:
             return self.m_supportedFields[fieldId][2]
 
-    ################################################################################
+    ##########################################################################
     # Checks for multiple page retirement issues within the nvidia-smi xml output
     # returns True if there are page retirement issues according to criteria
     # described in JIRA DCGM-1009
-    ################################################################################
+    ##########################################################################
 
     def CheckPageRetirementErrors(self):
+        if option_parser.options.no_hw:
+            return False
 
         elemTree = self.QueryNvidiaSmiXml()
         if elemTree is None:
@@ -421,8 +445,8 @@ class NvidiaSmiJob(threading.Thread):
         totals[dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL] = 0
         totals[dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL] = 0
         totals[dcgm_fields.DCGM_FI_DEV_ECC_DBE_AGG_TOTAL] = 0
-        totals[dcgm_fields.DCGM_FI_DEV_RETIRED_SBE] = 0
-        totals[dcgm_fields.DCGM_FI_DEV_RETIRED_DBE] = 0
+        totals[dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL] = 0
+        totals[dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL] = 0
 
         for gpuId in self.m_data:
             for fieldId in totals:
@@ -430,17 +454,20 @@ class NvidiaSmiJob(threading.Thread):
                     if self.m_data[gpuId][fieldId]:
                         totals[fieldId] += self.m_data[gpuId][fieldId][-1]
 
-        if (totals[dcgm_fields.DCGM_FI_DEV_RETIRED_SBE] + totals[dcgm_fields.DCGM_FI_DEV_RETIRED_DBE]) > 64:
+        if (totals[dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL] +
+                totals[dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL]) > 64:
             logger.warning("More than 64 page retirements were found")
             return True
 
-        if totals[dcgm_fields.DCGM_FI_DEV_ECC_SBE_VOL_TOTAL] + totals[dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL] > 50000:
+        if totals[dcgm_fields.DCGM_FI_DEV_ECC_SBE_VOL_TOTAL] + \
+                totals[dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL] > 50000:
             logger.warning("Too many ECC errors found: %d volatile SBE and %d volatile DBE errors" %
                            (totals[dcgm_fields.DCGM_FI_DEV_ECC_SBE_VOL_TOTAL],
                             totals[dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL]))
             return True
 
-        if totals[dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL] + totals[dcgm_fields.DCGM_FI_DEV_ECC_DBE_AGG_TOTAL] > 50000:
+        if totals[dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL] + \
+                totals[dcgm_fields.DCGM_FI_DEV_ECC_DBE_AGG_TOTAL] > 50000:
             logger.warning("Too many ECC errors found: %d aggregate SBE and %d aggregate DBE errors" %
                            (totals[dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL],
                             totals[dcgm_fields.DCGM_FI_DEV_ECC_DBE_AGG_TOTAL]))
@@ -459,13 +486,16 @@ def helper_nvidia_smi_xml():
     try:
         nvsmiData = subprocess.check_output(shlex.split(cmd)).decode('utf-8')
     except subprocess.CalledProcessError as e:
-        logger.error("Failed to run '%s': '%s'", cmd, e)
+        logger.error("Failed to run %r: %s" % (cmd, e))
+        return None
+    except FileNotFoundError:
+        logger.info("Command %r not found" % (cmd,))
         return None
 
     xml_start = nvsmiData.find("<?xml version=")
     if xml_start == -1:
         logger.error(
-            "Could not locate XML preamble in nvidia-smi output: %s", nvsmiData[:256])
+            "Could not locate XML preamble in nvidia-smi output: %s" % nvsmiData[:256])
         return None
     elif xml_start > 0:
         logger.warning("Prefix found before XML: %s" % nvsmiData[:xml_start])
@@ -474,7 +504,8 @@ def helper_nvidia_smi_xml():
     try:
         tree = ET.fromstring(nvsmiData)
     except ET.ParseError as e:
-        logger.error("Failed to parse nvidia-smi XML (%s): %s", e, nvsmiData)
+        logger.error("Failed to parse nvidia-smi XML (%s): %s" %
+                     (e, nvsmiData))
         return None
 
     return tree
@@ -581,9 +612,9 @@ def enable_persistence_mode():
         print(("Failed to enable persistence mode. Error:\n%s" % e))
         return (None, e.output)
 
-################################################################################
+##########################################################################
 # Simple function to print out some values from nvidia-smi commands
-################################################################################
+##########################################################################
 
 
 def main():

@@ -22,7 +22,11 @@ import time
 # Stores the parameters in a field value of type DCGM_FT_INT64
 
 
-def get_field_value_i64(fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
+def get_field_value_i64(
+        fieldId,
+        value,
+        offset,
+        entityGroupId=dcgm_fields.DCGM_FE_GPU):
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.fieldId = fieldId
@@ -36,7 +40,11 @@ def get_field_value_i64(fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_F
 # Stores the parameters in a field value of type DCGM_FT_DOUBLE
 
 
-def get_field_value_fp64(fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
+def get_field_value_fp64(
+        fieldId,
+        value,
+        offset,
+        entityGroupId=dcgm_fields.DCGM_FE_GPU):
     field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
     field.fieldId = fieldId
@@ -88,8 +96,16 @@ def inject_nvml_value(handle, gpuId, fieldId, value, offset):
 '''
 
 
-def inject_value(handle, entityId, fieldId, value, offset, verifyInsertion=True,
-                 entityType=dcgm_fields.DCGM_FE_GPU, repeatCount=0, repeatOffset=1):
+def inject_value(
+        handle,
+        entityId,
+        fieldId,
+        value,
+        offset,
+        verifyInsertion=True,
+        entityType=dcgm_fields.DCGM_FE_GPU,
+        repeatCount=0,
+        repeatOffset=1):
     fieldType = dcgm_fields.DcgmFieldGetById(fieldId).fieldType
 
     if fieldType == dcgm_fields.DCGM_FT_INT64:
@@ -103,7 +119,12 @@ def inject_value(handle, entityId, fieldId, value, offset, verifyInsertion=True,
 
             offset = offset + repeatOffset
             ret = inject_field_value_i64(
-                handle, entityId, fieldId, value, offset, entityGroupId=entityType)
+                handle,
+                entityId,
+                fieldId,
+                value,
+                offset,
+                entityGroupId=entityType)
 
     elif fieldType == dcgm_fields.DCGM_FT_DOUBLE:
 
@@ -116,7 +137,12 @@ def inject_value(handle, entityId, fieldId, value, offset, verifyInsertion=True,
 
             offset = offset + repeatOffset
             ret = inject_field_value_fp64(
-                handle, entityId, fieldId, value, offset, entityGroupId=entityType)
+                handle,
+                entityId,
+                fieldId,
+                value,
+                offset,
+                entityGroupId=entityType)
     else:
         assert False, "Cannot inject field type '%s', only INT64 and DOUBLE are supported" % fieldType
 
@@ -128,15 +154,29 @@ def inject_value(handle, entityId, fieldId, value, offset, verifyInsertion=True,
 # Injects a field value of type DCGM_FT_INT64 into DCGM's cache
 
 
-def inject_field_value_i64(handle, entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
+def inject_field_value_i64(
+        handle,
+        entityId,
+        fieldId,
+        value,
+        offset,
+        entityGroupId=dcgm_fields.DCGM_FE_GPU):
     field = get_field_value_i64(fieldId, value, offset, entityGroupId)
 
-    return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, entityGroupId, entityId, field)
+    return dcgm_agent_internal.dcgmInjectEntityFieldValue(
+        handle, entityGroupId, entityId, field)
 
 # Injects a field value of type DCGM_FT_DOUBLE into DCGM's cache
 
 
-def inject_field_value_fp64(handle, entityId, fieldId, value, offset, entityGroupId=dcgm_fields.DCGM_FE_GPU):
+def inject_field_value_fp64(
+        handle,
+        entityId,
+        fieldId,
+        value,
+        offset,
+        entityGroupId=dcgm_fields.DCGM_FE_GPU):
     field = get_field_value_fp64(fieldId, value, offset, entityGroupId)
 
-    return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, entityGroupId, entityId, field)
+    return dcgm_agent_internal.dcgmInjectEntityFieldValue(
+        handle, entityGroupId, entityId, field)

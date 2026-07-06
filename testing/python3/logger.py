@@ -42,7 +42,8 @@ nvml_trace_log_filename = None
 nvvs_trace_log_filename = None
 dmesg_log_filename = None
 _indent_lvl = 0
-# coloring is applied even there is no file descriptor connected to tty like device
+# coloring is applied even there is no file descriptor connected to tty
+# like device
 _coloring_enabled = True
 _message_levels = (FATAL, ERROR, INFO, WARNING, DEBUG) = list(range(5))
 messages_level_counts = [0] * len(_message_levels)
@@ -96,7 +97,11 @@ def caller_function_details(depth=1):
         func = func.f_back
     func = func.f_code
 
-    return (os.path.relpath(func.co_filename), func.co_name, func.co_firstlineno)
+    return (
+        os.path.relpath(
+            func.co_filename),
+        func.co_name,
+        func.co_firstlineno)
 
 
 def addtrace_logging(module, filter_fns=lambda name, fn: True):
@@ -160,9 +165,11 @@ def setup_environment():
     nvml_trace_log_filename = os.path.join(log_dir, "nvml_trace.log")
     dmesg_log_filename = os.path.join(log_dir, "dmesg.log")
 
-    # We clean up the log dir from previous runs once per test run in order to prevent the constant accumulation of logs
+    # We clean up the log dir from previous runs once per test run in order to
+    # prevent the constant accumulation of logs
     if not have_recreated_log_dir:
-        # We set this boolean here so we don't incorrectly remove this directory if this function is called again
+        # We set this boolean here so we don't incorrectly remove this
+        # directory if this function is called again
         have_recreated_log_dir = True
         if os.path.isdir(log_dir):
             shutil.rmtree(log_dir, ignore_errors=True)
@@ -191,7 +198,8 @@ def setup_environment():
     os.chmod(dcgm_trace_log_filename, 0o777)
 
     if not test_utils.noLogging:
-        # Log both NVML and DCGM so we can the underlying NVML calls for the DCGM data
+        # Log both NVML and DCGM so we can the underlying NVML calls for the
+        # DCGM data
         os.environ['__NVML_DBG_FILE'] = nvml_trace_log_filename
         os.environ['__NVML_DBG_LVL'] = test_utils.loggingLevel
         os.environ['__NVML_DBG_APPEND'] = '1'
@@ -286,7 +294,7 @@ def capture_dmesg():
 
 def close():
     """
-    Closes all the debug file streams and archives all logs 
+    Closes all the debug file streams and archives all logs
     into single zip file logger.log_archive_filename
 
     """
@@ -333,7 +341,7 @@ def run_with_coverage(fn):
 
 _defered_lines = []
 
-log_lock = threading.Lock()
+log_lock = threading.RLock()
 _log_id = 0
 
 
@@ -375,7 +383,8 @@ def log(level, msg, caller_depth=0, defer=False):
         timestamp = datetime.datetime.now()
 
         if not defer and level <= stdout_loglevel:
-            # will be printing this message to stdout so we need to flush all deferred lines first
+            # will be printing this message to stdout so we need to flush all
+            # deferred lines first
             for (log_id, defered_level, line) in _defered_lines:
                 print(apply_coloring(defered_level, line))
                 if _summary_file is not None:
@@ -409,7 +418,8 @@ def log(level, msg, caller_depth=0, defer=False):
                 except dcgm_structs.DCGMError:
                     pass
 
-                # Every 100 messages force OS to write to log file to HD in case OS kernel panics
+                # Every 100 messages force OS to write to log file to HD in
+                # case OS kernel panics
                 if _log_id % 100 == 0:
                     os.fsync(_log_file)
 
@@ -485,14 +495,18 @@ if __name__ == "__main__":
     setup_environment()
 
     info("This gets printed to stdout")
-    debug("This by default gets printed only to debug log in %s dir" % (log_dir))
+    debug(
+        "This by default gets printed only to debug log in %s dir" %
+        (log_dir))
     log_id1 = info(
-        "This message is deferred. It can be removed from stdout but not from debug log", defer=True)
+        "This message is deferred. It can be removed from stdout but not from debug log",
+        defer=True)
     debug("Even when one prints to debug log, deferred line can be removed")
-    assert pop_defered(log_id1) == True
+    assert pop_defered(log_id1)
 
     log_id2 = info(
-        "This message is also deferred. But will get printed as soon as error message requested", defer=True)
+        "This message is also deferred. But will get printed as soon as error message requested",
+        defer=True)
     with IndentBlock():  # indent this message
         error("This causes the deferred message to be printed")
     assert pop_defered(log_id2) == False

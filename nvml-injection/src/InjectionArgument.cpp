@@ -114,6 +114,7 @@ int nvmlConfComputeGpuAttestationReport_tCompare(const nvmlConfComputeGpuAttesta
 int nvmlConfComputeSetKeyRotationThresholdInfo_v1_tCompare(const nvmlConfComputeSetKeyRotationThresholdInfo_v1_t &a, const nvmlConfComputeSetKeyRotationThresholdInfo_v1_t &b);
 int nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(const nvmlConfComputeGetKeyRotationThresholdInfo_v1_t &a, const nvmlConfComputeGetKeyRotationThresholdInfo_v1_t &b);
 int nvmlGpuFabricInfo_tCompare(const nvmlGpuFabricInfo_t &a, const nvmlGpuFabricInfo_t &b);
+int nvmlGpuFabricInfo_v2_tCompare(const nvmlGpuFabricInfo_v2_t &a, const nvmlGpuFabricInfo_v2_t &b);
 int nvmlGpuFabricInfoV_tCompare(const nvmlGpuFabricInfoV_t &a, const nvmlGpuFabricInfoV_t &b);
 int nvmlSystemDriverBranchInfo_tCompare(const nvmlSystemDriverBranchInfo_t &a, const nvmlSystemDriverBranchInfo_t &b);
 int nvmlTemperature_tCompare(const nvmlTemperature_t &a, const nvmlTemperature_t &b);
@@ -2405,6 +2406,42 @@ int nvmlGpuFabricInfo_tCompare(const nvmlGpuFabricInfo_t &a, const nvmlGpuFabric
 }
 
 // The following snippet is generated from write_struct_compare_definition
+int nvmlGpuFabricInfo_v2_tCompare(const nvmlGpuFabricInfo_v2_t &a, const nvmlGpuFabricInfo_v2_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.version != b.version)
+    {
+        return a.version < b.version ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = memcmp(a.clusterUuid, b.clusterUuid, sizeof(a.clusterUuid)); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.status != b.status)
+    {
+        return a.status < b.status ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.cliqueId != b.cliqueId)
+    {
+        return a.cliqueId < b.cliqueId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.state != b.state)
+    {
+        return a.state < b.state ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.healthMask != b.healthMask)
+    {
+        return a.healthMask < b.healthMask ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
 int nvmlGpuFabricInfoV_tCompare(const nvmlGpuFabricInfoV_t &a, const nvmlGpuFabricInfoV_t &b)
 {
     // The following snippet is generated from write_struct_compare_definition
@@ -2436,6 +2473,11 @@ int nvmlGpuFabricInfoV_tCompare(const nvmlGpuFabricInfoV_t &a, const nvmlGpuFabr
     if (a.healthMask != b.healthMask)
     {
         return a.healthMask < b.healthMask ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.healthSummary != b.healthSummary)
+    {
+        return a.healthSummary < b.healthSummary ? -1 : 1;
     }
     return 0;
 }
@@ -5673,6 +5715,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_GPUFABRICINFO)
             {
                 memcpy(m_value.GpuFabricInfoPtr, &other.m_value.GpuFabricInfo, sizeof(*m_value.GpuFabricInfoPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUFABRICINFO_V2:
+        {
+            if (other.m_type == INJECTION_GPUFABRICINFO_V2)
+            {
+                memcpy(&m_value.GpuFabricInfo_v2, &other.m_value.GpuFabricInfo_v2, sizeof(*&m_value.GpuFabricInfo_v2));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUFABRICINFO_V2_PTR)
+            {
+                memcpy(&m_value.GpuFabricInfo_v2, other.m_value.GpuFabricInfo_v2Ptr, sizeof(*&m_value.GpuFabricInfo_v2));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUFABRICINFO_V2_PTR:
+        {
+            if (other.m_type == INJECTION_GPUFABRICINFO_V2_PTR)
+            {
+                memcpy(m_value.GpuFabricInfo_v2Ptr, other.m_value.GpuFabricInfo_v2Ptr, sizeof(*m_value.GpuFabricInfo_v2Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUFABRICINFO_V2)
+            {
+                memcpy(m_value.GpuFabricInfo_v2Ptr, &other.m_value.GpuFabricInfo_v2, sizeof(*m_value.GpuFabricInfo_v2Ptr));
                 set = true;
             }
             break;
@@ -11971,6 +12044,29 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     return nvmlGpuFabricInfo_tCompare(m_value.GpuFabricInfo, other.m_value.GpuFabricInfo);
                     break; // NOT REACHED
                 }
+                case INJECTION_GPUFABRICINFO_V2_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlGpuFabricInfo_v2_tCompare(*m_value.GpuFabricInfo_v2Ptr, *other.m_value.GpuFabricInfo_v2Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlGpuFabricInfo_v2_tCompare(*m_value.GpuFabricInfo_v2Ptr, *other.m_value.GpuFabricInfo_v2Ptr); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUFABRICINFO_V2:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlGpuFabricInfo_v2_tCompare(m_value.GpuFabricInfo_v2, other.m_value.GpuFabricInfo_v2);
+                    break; // NOT REACHED
+                }
                 case INJECTION_GPUFABRICSTATE_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -16411,6 +16507,14 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.GpuFabricInfoPtr)
             {
                 free(m_value.GpuFabricInfoPtr);
+            }
+            break;
+        }
+        case INJECTION_GPUFABRICINFO_V2_PTR:
+        {
+            if (m_inHeap && m_value.GpuFabricInfo_v2Ptr)
+            {
+                free(m_value.GpuFabricInfo_v2Ptr);
             }
             break;
         }

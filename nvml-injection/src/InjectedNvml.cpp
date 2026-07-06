@@ -37,7 +37,7 @@ bool IsDeviceFunc(const std::string &funcname, const std::vector<InjectionArgume
 {
     return (funcname.starts_with("nvmlDeviceGet") || funcname.starts_with("nvmlGpmQueryDevice")
             || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceWorkloadPowerProfile")
-            || funcname.starts_with("nvmlDeviceReadWritePRM_v"))
+            || funcname.starts_with("nvmlDeviceReadWritePRM_v") || funcname.starts_with("nvmlGpmQueryDeviceSupport"))
            && args.size() >= 1 && args[0].GetType() == INJECTION_DEVICE;
 }
 
@@ -295,6 +295,54 @@ bool VgpuInstanceUtilizationParser(const std::string &key, const YAML::Node &nod
         sample.vgpuInstance  = instance["vgpuInstance"].as<unsigned int>();
         ah.AddVgpuInstanceUtilizationRecord(sample.timeStamp, { NVML_VALUE_TYPE_UNSIGNED_INT, sample });
     }
+    return true;
+}
+
+/*
+ * This function is used to parse the GPM metrics (GpmMetrics from nvml recorded YAML file).
+ * @param[in] key The key of the attribute.
+ * @param[in] node The YAML node of the attribute.
+ * @param[out] ah The attribute holder.
+ * @return True if successful, false otherwise
+ */
+bool GpmMetricsParser(std::string const &key, YAML::Node const &node, AttributeHolder<nvmlDevice_t> &ah)
+{
+    if (!node || !node[FunctionReturn])
+    {
+        ah.SetAttribute(key, NvmlFuncReturn(NVML_ERROR_UNKNOWN));
+        return false;
+    }
+    auto ret = static_cast<nvmlReturn_t>(node[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
+    if (ret != NVML_SUCCESS || !node[ReturnValue])
+    {
+        ah.SetAttribute(key, NvmlFuncReturn(ret));
+        return true;
+    }
+
+    nvmlGpmMetricsGet_t metricsGet {};
+    metricsGet.numMetrics = node[ReturnValue].size();
+    for (unsigned int i = 0; i < NVML_GPM_METRIC_MAX; i++)
+    {
+        metricsGet.metrics[i].nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
+    }
+    for (YAML::const_iterator it = node[ReturnValue].begin(); it != node[ReturnValue].end(); ++it)
+    {
+        auto metricId = it->first.as<unsigned int>();
+        auto value    = it->second;
+        if (metricId == 0 || metricId > NVML_GPM_METRIC_MAX)
+        {
+            continue;
+        }
+        metricsGet.metrics[metricId - 1].metricId = metricId;
+        metricsGet.metrics[metricId - 1].nvmlReturn
+            = static_cast<nvmlReturn_t>(value[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
+        if (!value[ReturnValue] || !value[ReturnValue]["value"])
+        {
+            continue;
+        }
+        metricsGet.metrics[metricId - 1].value = value[ReturnValue]["value"].as<double>();
+    }
+    ah.SetAttribute(key, NvmlFuncReturn(NVML_SUCCESS, metricsGet));
     return true;
 }
 
@@ -786,6 +834,7 @@ bool InjectedNvml::ParseOneDevice(const YAML::Node &device, AttributeHolder<nvml
             { INJECTION_PROCESSUTILIZATION_KEY, ProcessUtilizationParser },
             { INJECTION_VGPUPROCESSUTILIZATION_KEY, VgpuProcessUtilizationParser },
             { INJECTION_VGPUUTILIZATION_KEY, VgpuInstanceUtilizationParser },
+            { "GpmMetrics", GpmMetricsParser },
         };
 
     if (!device)
@@ -1380,7 +1429,8 @@ bool InjectedNvml::IsGetter(const std::string &funcname) const
     if (funcname.starts_with("nvmlDeviceGet") || funcname.starts_with("nvmlGpuInstanceGet")
         || funcname.starts_with("nvmlComputeInstanceGet") || funcname.starts_with("nvmlVgpuInstanceGet")
         || funcname.starts_with("nvmlVgpuTypeGet") || funcname.starts_with("nvmlDeviceWorkloadPowerProfile")
-        || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceReadWritePRM_v"))
+        || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceReadWritePRM_v")
+        || funcname == "nvmlGpmQueryDeviceSupport")
     {
         return true;
     }
@@ -2740,4 +2790,152 @@ nvmlReturn_t InjectedNvml::nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequ
     // to prevent keeping sending events, we delete the flag file
     m_fileSystemOp->Unlink(flagFilePath);
     return NVML_SUCCESS;
+}
+
+struct nvmlGpmSample_st
+{
+    nvmlDevice_t device; //!< store device ptr so that when doing nvmlGpmMetricsGet, we can get the device index.
+};
+
+/*
+ * This function is used to allocate a GPM sample.
+ * @param[in] gpmSample The GPM sample pointer.
+ * @return NVML_SUCCESS if successful, error code otherwise.
+ */
+nvmlReturn_t InjectedNvml::nvmlGpmSampleAllocImpl(nvmlGpmSample_t *gpmSample)
+{
+    if (!gpmSample)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    *gpmSample = (nvmlGpmSample_t)malloc(sizeof(nvmlGpmSample_st));
+    if (!*gpmSample)
+    {
+        return NVML_ERROR_MEMORY;
+    }
+    return NVML_SUCCESS;
+}
+
+/*
+ * This function is used to free a GPM sample.
+ * @param[in] gpmSample The GPM sample pointer.
+ * @return NVML_SUCCESS if successful, error code otherwise.
+ */
+nvmlReturn_t InjectedNvml::nvmlGpmSampleFreeImpl(nvmlGpmSample_t gpmSample)
+{
+    if (!gpmSample)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    free(gpmSample);
+    return NVML_SUCCESS;
+}
+
+/*
+ * This function is used to get a GPM sample.
+ * Note that, in injection implementation, we store the device pointer in the GPM sample so that when doing
+ * nvmlGpmMetricsGet, we can get the device index.
+ * @param[in] device The device pointer.
+ * @param[in] gpmSample The GPM sample pointer.
+ * @return NVML_SUCCESS if successful, error code otherwise.
+ */
+nvmlReturn_t InjectedNvml::nvmlGpmSampleGetImpl(nvmlDevice_t device, nvmlGpmSample_t gpmSample)
+{
+    if (!gpmSample)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    gpmSample->device = device;
+    return NVML_SUCCESS;
+}
+
+/*
+ * This function is used to get the GPM metrics.
+ * @param[in] metricsGet The GPM metrics pointer.
+ * @return NVML_SUCCESS if successful, error code otherwise.
+ */
+nvmlReturn_t InjectedNvml::nvmlGpmMetricsGetImpl(nvmlGpmMetricsGet_t *metricsGet)
+{
+    if (!metricsGet || !metricsGet->sample1)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    std::lock_guard<std::mutex> guard(m_mutex);
+    nvmlDevice_t device = (nvmlDevice_t)metricsGet->sample1->device;
+    auto deviceIter     = m_devices.find(device);
+    if (deviceIter == m_devices.end())
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    auto &ah                     = *deviceIter->second;
+    NvmlFuncReturn gpmMetricsRet = ah.GetAttribute("GpmMetrics");
+    if (!gpmMetricsRet.IsNvmlSucces())
+    {
+        return gpmMetricsRet.GetRet();
+    }
+    auto const gpmMetrics = gpmMetricsRet.GetCompoundValue().AsInjectionArgument().AsGpmMetricsGet();
+    for (unsigned int i = 0; i < metricsGet->numMetrics; i++)
+    {
+        auto metricId = metricsGet->metrics[i].metricId;
+        if (metricId == 0 || metricId > NVML_GPM_METRIC_MAX)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        metricsGet->metrics[i].nvmlReturn = gpmMetrics.metrics[metricId - 1].nvmlReturn;
+        metricsGet->metrics[i].value      = gpmMetrics.metrics[metricId - 1].value;
+    }
+    return NVML_SUCCESS;
+}
+
+/*
+ * This function is used to wrap the GPM API calls. This function is called by the generated stubs.
+ * @param[in] funcname The name of the function.
+ * @param[in] args The arguments of the function.
+ * @param[in] preparedValues The prepared values of the function.
+ * @return NVML_SUCCESS if successful, error code otherwise.
+ */
+nvmlReturn_t InjectedNvml::GpmApiWrapper(std::string const &funcname,
+                                         std::vector<InjectionArgument> &args,
+                                         std::vector<InjectionArgument> &preparedValues)
+{
+    if (funcname == "nvmlGpmSampleAlloc")
+    {
+        if (preparedValues.size() != 1 || preparedValues[0].GetType() != INJECTION_GPMSAMPLE_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        nvmlGpmSample_t sample;
+        auto nvmlRet = nvmlGpmSampleAllocImpl(&sample);
+        if (nvmlRet != NVML_SUCCESS)
+        {
+            return nvmlRet;
+        }
+        return preparedValues[0].SetValueFrom(InjectionArgument(&sample));
+    }
+    if (funcname == "nvmlGpmSampleFree")
+    {
+        if (args.size() != 1 || args[0].GetType() != INJECTION_GPMSAMPLE)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlGpmSampleFreeImpl(args[0].AsGpmSample());
+    }
+    if (funcname == "nvmlGpmSampleGet")
+    {
+        if (args.size() != 2 || args[0].GetType() != INJECTION_DEVICE || args[1].GetType() != INJECTION_GPMSAMPLE)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlGpmSampleGetImpl(args[0].AsDevice(), args[1].AsGpmSample());
+    }
+    if (funcname == "nvmlGpmMetricsGet")
+    {
+        if (preparedValues.size() != 1 || preparedValues[0].GetType() != INJECTION_GPMMETRICSGET_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlGpmMetricsGetImpl(preparedValues[0].AsGpmMetricsGetPtr());
+    }
+    return NVML_ERROR_NOT_SUPPORTED;
 }

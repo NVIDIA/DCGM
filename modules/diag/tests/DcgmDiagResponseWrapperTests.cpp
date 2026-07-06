@@ -25,6 +25,41 @@
 #define __DIAG_UNIT_TESTING__
 #include <DcgmDiagResponseWrapper.h>
 
+namespace
+{
+template <typename ResponseType>
+void PopulateSetResultSource(ResponseType &response)
+{
+    if constexpr (std::is_same_v<ResponseType, dcgmDiagResponse_v12>
+                  || std::is_same_v<ResponseType, dcgmDiagResponse_v11>)
+    {
+        response.numTests = 1;
+        SafeCopyTo(response.tests[0].name, "memory");
+    }
+    else
+    {
+        SafeCopyTo(response.systemError.msg, "legacy system error");
+        response.systemError.code = DCGM_FR_INTERNAL;
+    }
+}
+
+template <typename ResponseType>
+void CheckSetResultCopied(ResponseType const &response)
+{
+    if constexpr (std::is_same_v<ResponseType, dcgmDiagResponse_v12>
+                  || std::is_same_v<ResponseType, dcgmDiagResponse_v11>)
+    {
+        REQUIRE(response.numTests == 1);
+        REQUIRE(std::string_view(response.tests[0].name) == "memory");
+    }
+    else
+    {
+        REQUIRE(std::string_view(response.systemError.msg) == "legacy system error");
+        REQUIRE(response.systemError.code == DCGM_FR_INTERNAL);
+    }
+}
+} //namespace
+
 TEST_CASE("DcgmDiagResponseWrapper: HasTest")
 {
     SECTION("Unsupported version")
@@ -880,6 +915,100 @@ TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::RecordSystemError",
     }
 }
 
+TEST_CASE("DcgmDiagResponseWrapper::GetSystemErr")
+{
+    SECTION("uninitialized wrapper returns explanatory error")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        REQUIRE(wrapper.GetSystemErr() == "ERROR: Must initialize DcgmDiagResponseWrapper before using.");
+    }
+
+    SECTION("v12 concatenates all system errors")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v12>();
+        wrapper.SetVersion(response.get());
+
+        wrapper.RecordSystemError("first");
+        wrapper.RecordSystemError("second");
+
+        REQUIRE(wrapper.GetSystemErr() == "first\nsecond");
+    }
+}
+
+TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::SetResult",
+                   "",
+                   dcgmDiagResponse_v12,
+                   dcgmDiagResponse_v11,
+                   dcgmDiagResponse_v10,
+                   dcgmDiagResponse_v9,
+                   dcgmDiagResponse_v8,
+                   dcgmDiagResponse_v7)
+{
+    using ResponseType = TestType;
+
+    DYNAMIC_SECTION("Testing version " << DcgmNs::ResponseVersionTrait<ResponseType>::version)
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<ResponseType>();
+        REQUIRE(wrapper.SetVersion(response.get()) == DCGM_ST_OK);
+
+        ResponseType src {};
+        PopulateSetResultSource(src);
+        auto data = std::as_writable_bytes(std::span(&src, 1));
+
+        SECTION("copies a complete response blob")
+        {
+            REQUIRE(wrapper.SetResult(data) == DCGM_ST_OK);
+            CheckSetResultCopied(*response);
+        }
+
+        SECTION("rejects response blobs with the wrong size")
+        {
+            REQUIRE(wrapper.SetResult(data.first(data.size() - 1)) == DCGM_ST_GENERIC_ERROR);
+        }
+    }
+}
+
+TEST_CASE("DcgmDiagResponseWrapper::SetResult rejects unset version")
+{
+    DcgmDiagResponseWrapper wrapper;
+    dcgmDiagResponse_v12 src {};
+    auto data = std::as_writable_bytes(std::span(&src, 1));
+
+    REQUIRE(wrapper.SetResult(data) == DCGM_ST_GENERIC_ERROR);
+}
+
+TEST_CASE("DcgmDiagResponseWrapper::AddCpuSerials")
+{
+    SECTION("uninitialized wrapper is invalid")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        REQUIRE(wrapper.AddCpuSerials() == false);
+    }
+
+    SECTION("legacy versions are unsupported")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response = MakeUniqueZero<dcgmDiagResponse_v10>();
+        wrapper.SetVersion(response.get());
+
+        REQUIRE(wrapper.AddCpuSerials() == false);
+    }
+
+    SECTION("v12 with no CPU entities succeeds without querying serials")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response                              = MakeUniqueZero<dcgmDiagResponse_v12>();
+        response->numEntities                      = 1;
+        response->entities[0].entity.entityGroupId = DCGM_FE_GPU;
+        response->entities[0].entity.entityId      = 0;
+        wrapper.SetVersion(response.get());
+
+        REQUIRE(wrapper.AddCpuSerials() == true);
+    }
+}
+
 TEMPLATE_TEST_CASE("DcgmDiagResponseWrapper::AdoptEudResponse",
                    "",
                    dcgmDiagResponse_v12,
@@ -1125,5 +1254,55 @@ TEST_CASE("DcgmDiagResponseWrapper::AddGpuStatusToAllTests")
 
         ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", false);
         REQUIRE(ret == DCGM_ST_INSUFFICIENT_SIZE);
+    }
+
+    SECTION("Skips a test whose result index array is full")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response                 = MakeUniqueZero<dcgmDiagResponse_v12>();
+        response->numTests            = 1;
+        response->tests[0].numResults = DCGM_DIAG_TEST_RUN_RESULTS_MAX;
+        SafeCopyTo(response->tests[0].name, "memory");
+        wrapper.SetVersion(response.get());
+
+        auto ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        REQUIRE(response->numResults == 0);
+        REQUIRE(response->numErrors == 0);
+    }
+
+    SECTION("Skips error details when response error storage is full")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response       = MakeUniqueZero<dcgmDiagResponse_v12>();
+        response->numTests  = 1;
+        response->numErrors = DCGM_DIAG_RESPONSE_ERRORS_MAX;
+        SafeCopyTo(response->tests[0].name, "memory");
+        wrapper.SetVersion(response.get());
+
+        auto ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        REQUIRE(response->numResults == 1);
+        REQUIRE(response->numErrors == DCGM_DIAG_RESPONSE_ERRORS_MAX);
+        REQUIRE(response->tests[0].numErrors == 0);
+    }
+
+    SECTION("Skips error details when a test error index array is full")
+    {
+        DcgmDiagResponseWrapper wrapper;
+        auto response                = MakeUniqueZero<dcgmDiagResponse_v12>();
+        response->numTests           = 1;
+        response->tests[0].numErrors = DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX;
+        SafeCopyTo(response->tests[0].name, "memory");
+        wrapper.SetVersion(response.get());
+
+        auto ret = wrapper.AddGpuStatusToAllTests(0, DcgmEntityStatusDetached, "2335", "1234567890", true);
+
+        REQUIRE(ret == DCGM_ST_OK);
+        REQUIRE(response->numResults == 1);
+        REQUIRE(response->numErrors == 0);
+        REQUIRE(response->tests[0].numErrors == DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX);
     }
 }

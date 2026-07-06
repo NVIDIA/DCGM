@@ -21,21 +21,31 @@
 #include "dcgm_mndiag_structs.hpp"
 #include <chrono>
 #include <expected>
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
+namespace DcgmNs::Common::ProcessUtils
+{
+class CommandExecutor;
+} // namespace DcgmNs::Common::ProcessUtils
+
 /**
- * @brief Specialized MPI runner for mnubergemm diagnostics
+ * @brief Base MPI runner for mndiag diagnostics. Subclasses implement test-specific behavior.
  */
 class MnDiagMpiRunner : public MpiRunner
 {
 public:
     /**
      * @brief Constructor
+     *
+     * @param coreProxy The core proxy to use for the ChildProcess management
+     * @param effectiveUid The effective UID of the caller
      */
-    MnDiagMpiRunner(DcgmCoreProxyBase &coreProxy)
-        : MpiRunner(coreProxy)
+    MnDiagMpiRunner(DcgmCoreProxyBase &coreProxy, uid_t effectiveUid)
+        : MpiRunner(coreProxy, effectiveUid)
     {}
 
     /**
@@ -44,16 +54,36 @@ public:
     virtual ~MnDiagMpiRunner() = default;
 
     /**
+     * @brief Type alias for the routing interface resolver function.
+     *
+     * Takes a list of hostnames/IPs and returns a comma-separated string of
+     * network interface names (or subnets) to pass to MPI's btl/oob_tcp_if_include.
+     * Defaults to MnDiagMpiRunnerInternal::GetRoutingInterfacesForHosts.
+     * Injectable via SetRoutingInterfaceResolver for unit testing.
+     */
+    using RoutingInterfaceResolver = std::function<std::string(std::vector<std::string> const &)>;
+
+    /**
+     * @brief Override the routing interface resolver (for unit testing only).
+     *
+     * @param resolver  Callable that returns the interface string for a given host list.
+     */
+    void SetRoutingInterfaceResolver(RoutingInterfaceResolver resolver)
+    {
+        m_routingInterfaceResolver = std::move(resolver);
+    }
+
+    /**
      * @brief Custom output callback handler for mnubergemm diagnostics
      *
      * This method processes output from the MPI process and populates
      * a dcgmMnDiagResponse_t structure with the results based on the version
      *
-     * @param dataStream The stream to parse
+     * @param fd File descriptor to read MPI process output from
      * @param responseStruct Pointer to a dcgmMnDiagResponse_t structure to be updated
      * @param nodeInfo The node info map used to populate the response structure
      */
-    dcgmReturn_t MnDiagOutputCallback(std::istream &dataStream, void *responseStruct, nodeInfoMap_t const &nodeInfo);
+    dcgmReturn_t MnDiagOutputCallback(int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo);
 
     /**
      * @brief Construct an MPI command from input parameters and store it internally
@@ -65,22 +95,32 @@ public:
     void ConstructMpiCommand(void const *params) override;
 
     /**
-     * @brief Check if MPI has launched enough processes
+     * @brief Get the path to the test binary
      *
-     * This method monitors the MPI process output to determine if the expected
-     * number of processes have been launched successfully. It handles cases where
-     * the data stream producer is slow or intermittent.
-     *
-     * @return std::expected<bool, dcgmReturn_t> True if enough processes launched, error code on failure
+     * @param path Output: the resolved binary path
+     * @return DCGM_ST_OK on success
      */
-    std::expected<bool, dcgmReturn_t> HasMpiLaunchedEnoughProcesses();
+    virtual dcgmReturn_t GetTestBinaryPath(std::string &path) const = 0;
 
     /**
-     * @brief Set the mnubergemm path
+     * @brief Get the test prefix used to identify test-specific parameters
      *
-     * @param mnubergemmPath The path to the mnubergemm binary
+     * @return std::string_view The prefix (e.g. "mnubergemm.")
      */
-    void SetMnubergemmPath(std::string const &mnubergemmPath);
+    virtual std::string_view GetTestPrefix() const = 0;
+
+    virtual std::string_view GetLogFilePrefix() const = 0;
+
+    /**
+     * @brief Get the default parameters map for this test type
+     *
+     * @return std::unordered_map<std::string, std::string> Map of parameter name to value
+     */
+    virtual std::unordered_map<std::string, std::string> GetDefaultParametersMap() const = 0;
+
+    virtual void ParseTestOutput(int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo) = 0;
+
+    virtual std::expected<std::chrono::milliseconds, dcgmReturn_t> GetTestRunTime(dcgmRunMnDiag_t const &params) const;
 
 protected:
     /**
@@ -103,18 +143,27 @@ private:
     void ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drmnd);
 
     /**
-     * @brief Parse MPI output and populate dcgmMnDiagResponse_v1 structure
+     * Check that the mpirun binary and ompi_info report the same Open MPI version.
      *
-     * @param dataStream The stream to parse
-     * @param responseStruct Pointer to the response struct to populate
-     * @param nodeInfo The node info map used to populate the response structure
+     * Logs a warning when they differ, naming the exact env var to set as the fix.
+     * Silently skips when either tool is absent or is not Open MPI.
+     *
+     * @param[in] mpirunPath Resolved path to the mpirun binary
+     * @param[in] executor   Command runner to use; uses SystemCommandExecutor when nullptr.
+     *                       Only pass a non-null value in tests to inject a fake executor —
+     *                       production callers always omit this parameter.
+     * @return false if a version mismatch was detected; true otherwise
      */
-    void ParseMnUberGemmOutput_v1(std::istream &dataStream, void *responseStruct, nodeInfoMap_t const &nodeInfo);
+    bool CheckMpiVersionConsistency(std::string const &mpirunPath,
+                                    DcgmNs::Common::ProcessUtils::CommandExecutor *executor = nullptr) const;
 
     unsigned int m_totalProcessCount { 0 };
-    std::string m_mnubergemmPath;
+    RoutingInterfaceResolver m_routingInterfaceResolver;
 
-    friend class MnDiagMpiRunnerTests;
+    friend class MnDiagMpiMnubergemmRunnerTests;
+
+protected:
+    mutable std::optional<std::expected<std::string, dcgmReturn_t>> m_testBinaryPath; //!< nullopt = not yet resolved
 };
 
 #endif // MNDIAG_MPI_RUNNER_H

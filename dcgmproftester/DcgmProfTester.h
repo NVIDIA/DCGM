@@ -179,7 +179,7 @@ private:
     /* Test parameters */
 
     // Field ID we are testing. This will determine which subtest gets called.
-    unsigned int m_testFieldId { DCGM_FI_PROF_SM_ACTIVE };
+    unsigned int m_testFieldId { DCGM_FI_PROF_SM_UTIL_RATIO };
     double m_duration { 30.0 };         /* Test duration in seconds */
     double m_reportingInterval { 1.0 }; /* Reporting interval in seconds. */
 

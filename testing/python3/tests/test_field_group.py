@@ -20,19 +20,23 @@ import dcgm_agent
 from dcgm_structs import dcgmExceptionClass
 
 
+# NO HARDWARE
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_field_group_duplicate_name(handle):
-    fieldIds = [dcgm_fields.DCGM_FI_DRIVER_VERSION, ]
+    fieldIds = [dcgm_fields.DCGM_FI_SYSTEM_DRIVER_VERSION, ]
     handle = pydcgm.DcgmHandle(handle)
     fieldGroup = pydcgm.DcgmFieldGroup(handle, "dupeme", fieldIds)
     with test_utils.assert_raises(dcgmExceptionClass(dcgm_structs.DCGM_ST_DUPLICATE_KEY)):
         fieldGroup2 = pydcgm.DcgmFieldGroup(handle, "dupeme", fieldIds)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_field_group_add_remove(handle):
-    fieldIds = [dcgm_fields.DCGM_FI_DRIVER_VERSION,
-                dcgm_fields.DCGM_FI_DEV_NAME, dcgm_fields.DCGM_FI_DEV_BRAND]
+    fieldIds = [dcgm_fields.DCGM_FI_SYSTEM_DRIVER_VERSION,
+                dcgm_fields.DCGM_FI_DEV_GPU_NAME, dcgm_fields.DCGM_FI_DEV_GPU_BRAND]
     handle = pydcgm.DcgmHandle(handle)
     fieldGroup = pydcgm.DcgmFieldGroup(handle, "mygroup", fieldIds)
 
@@ -53,14 +57,17 @@ def test_dcgm_field_group_add_remove(handle):
             handle.handle, fieldGroupId)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_field_group_info(handle):
-    fieldIds = [dcgm_fields.DCGM_FI_DRIVER_VERSION,
-                dcgm_fields.DCGM_FI_DEV_NAME, dcgm_fields.DCGM_FI_DEV_BRAND]
+    fieldIds = [dcgm_fields.DCGM_FI_SYSTEM_DRIVER_VERSION,
+                dcgm_fields.DCGM_FI_DEV_GPU_NAME, dcgm_fields.DCGM_FI_DEV_GPU_BRAND]
     handle = pydcgm.DcgmHandle(handle)
     fieldGroup = pydcgm.DcgmFieldGroup(handle, "mygroup", fieldIds)
 
-    # Get the field group we just added to verify it was added and the metadata is correct
+    # Get the field group we just added to verify it was added and the
+    # metadata is correct
     fieldGroupInfo = dcgm_agent.dcgmFieldGroupGetInfo(
         handle.handle, fieldGroup.fieldGroupId)
     assert fieldGroupInfo.version == dcgm_structs.dcgmFieldGroupInfo_version1, fieldGroupInfo.version
@@ -75,10 +82,12 @@ def test_dcgm_field_group_info(handle):
             i, fieldGroupInfo.fieldIds[i], fieldId)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_embedded_host_engine()
 def test_dcgm_field_group_get_by_name(handle):
-    fieldIds = [dcgm_fields.DCGM_FI_DRIVER_VERSION,
-                dcgm_fields.DCGM_FI_DEV_NAME, dcgm_fields.DCGM_FI_DEV_BRAND]
+    fieldIds = [dcgm_fields.DCGM_FI_SYSTEM_DRIVER_VERSION,
+                dcgm_fields.DCGM_FI_DEV_GPU_NAME, dcgm_fields.DCGM_FI_DEV_GPU_BRAND]
     handle = pydcgm.DcgmHandle(handle)
 
     fieldGroupName = "mygroup"

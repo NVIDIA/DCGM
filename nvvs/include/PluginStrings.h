@@ -236,7 +236,8 @@
 #define TS_STR_MAX_GRAPHICS_CLOCK                                                                                      \
     "max_graphics_clock" /* Maximum graphics clock in MHZ to use when locking application clocks to max while targeted \
                             perf runs */
-#define TS_STR_SBE_ERROR_THRESHOLD "max_sbe_errors" /* Threshold beyond which sbe's are treated as errors */
+#define TS_STR_SBE_ERROR_THRESHOLD "max_sbe_errors"    /* Threshold beyond which sbe's are treated as errors */
+#define TS_STR_ALWAYS_USE_TENSOR   "always_use_tensor" /* Use tensor cores for GEMM operations if available */
 
 /******************************************************************************
  * MEMORY PLUGIN
@@ -471,6 +472,14 @@ is less than this percentage, the test will be skipped */
 #define NCCL_TESTS_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
 
 #define NCCL_TESTS_STR_IS_ALLOWED "is_allowed" /* Is the NCCL tests plugin allowed to run? */
+
+/******************************************************************************
+ * RIST PLUGIN
+ *****************************************************************************/
+#define RIST_PLUGIN_NAME     "rist"
+#define RIST_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
+
+#define DCGM_RIST_BIN_PATH_ENV "DCGM_RIST_BIN_PATH"
 
 /******************************************************************************
  * COMMON TO ALL PLUGINS

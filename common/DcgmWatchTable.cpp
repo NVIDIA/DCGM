@@ -181,13 +181,15 @@ bool DcgmWatchTable::IsFieldIgnored(unsigned int fieldId, dcgmModuleId_t current
     {
         case DcgmModuleIdCore:
             /* Ignore NvSwitch fields but keep the rest, including profiling fields */
-            return fieldId >= DCGM_FI_FIRST_NVSWITCH_FIELD_ID && fieldId <= DCGM_FI_LAST_NVSWITCH_FIELD_ID;
+            return (fieldId >= DCGM_FI_FIRST_NVSWITCH_FIELD_ID && fieldId <= DCGM_FI_LAST_NVSWITCH_FIELD_ID)
+                   || (fieldId == DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION);
         case DcgmModuleIdNvSwitch:
             return ((fieldId < DCGM_FI_FIRST_NVSWITCH_FIELD_ID) || (fieldId > DCGM_FI_LAST_NVSWITCH_FIELD_ID))
                    && ((fieldId < DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID)
-                       || (fieldId > DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID));
+                       || (fieldId > DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID))
+                   && (fieldId != DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION);
         case DcgmModuleIdProfiling:
-            return fieldId < DCGM_FI_PROF_FIRST_ID || fieldId > DCGM_FI_PROF_LAST_ID;
+            return !DCGM_FIELD_ID_IS_PROF_FIELD(fieldId);
         case DcgmModuleIdSysmon:
             return fieldId < DCGM_FI_SYSMON_FIRST_ID || fieldId > DCGM_FI_SYSMON_LAST_ID;
         default:
@@ -373,7 +375,8 @@ bool DcgmWatchTable::AddWatcher(dcgm_field_entity_group_t entityGroupId,
     watcherInfo.isSubscribed       = isSubscribed;
 
     dcgm_watch_info_t &watchInfo = m_entityWatchHashTable[key];
-    bool newWatch = watchInfo.watchKey.fieldId == DCGM_FI_UNKNOWN && watchInfo.watchKey.entityGroupId == DCGM_FE_NONE;
+    bool newWatch                = watchInfo.watchKey.fieldId == DCGM_FI_SYSTEM_FIELD_UNKNOWN
+                    && watchInfo.watchKey.entityGroupId == DCGM_FE_NONE;
     if (newWatch)
     {
         watchInfo.watchKey           = key;

@@ -16,8 +16,11 @@
 #ifndef DCGMI_CLI_PARSER_H
 #define DCGMI_CLI_PARSER_H
 
+#include "Command.h"
 #include "dcgmi_common.h"
+#include <functional>
 #include <map>
+#include <string>
 
 
 /*
@@ -40,6 +43,18 @@ private:
     // map of subsystem function pointers
     static inline std::map<std::string, dcgmReturn_t (*)(int argc, char const *const *argv)> m_functionMap;
     static inline StaticConstructor m_staticConstructor;
+
+    // Allows parser tests to mock command execution without connecting to hostengine.
+    using CommandExecutor                           = std::function<dcgmReturn_t(Command &command)>;
+    static inline CommandExecutor m_commandExecutor = [](Command &command) {
+        return command.Execute();
+    };
+
+    template <typename CommandType>
+    static dcgmReturn_t ExecuteCommand(CommandType &&command)
+    {
+        return m_commandExecutor(command);
+    }
 
     // subsystem CL processing
     static dcgmReturn_t ProcessQueryCommandLine(int argc, char const *const *argv);

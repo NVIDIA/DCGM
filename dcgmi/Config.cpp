@@ -411,13 +411,14 @@ dcgmReturn_t Config::RunSetConfig(dcgmHandle_t pNvcmHandle)
 
         if (mConfigVal.perfState.syncBoost == 1)
         {
-            gpuErrView.addErrorStringOverride(
-                DCGM_FI_SYNC_BOOST, DCGM_ST_BADPARAM, "Syncboost - A GPU is invalid or in another sync boost group");
+            gpuErrView.addErrorStringOverride(DCGM_FI_SYSTEM_GPU_SYNC_BOOST,
+                                              DCGM_ST_BADPARAM,
+                                              "Syncboost - A GPU is invalid or in another sync boost group");
         }
         else
         {
             gpuErrView.addErrorStringOverride(
-                DCGM_FI_SYNC_BOOST, DCGM_ST_BADPARAM, "Syncboost - Already disabled on GPU(s) in group");
+                DCGM_FI_SYSTEM_GPU_SYNC_BOOST, DCGM_ST_BADPARAM, "Syncboost - Already disabled on GPU(s) in group");
         }
 
         gpuErrView.addError(stHandle);
@@ -496,7 +497,7 @@ dcgmReturn_t Config::RunEnforceConfig(dcgmHandle_t pNvcmHandle)
 
         // Add this to override not very informative error messages within the status handle. BUG ->
         gpuErrView.addErrorStringOverride(
-            DCGM_FI_UNKNOWN, DCGM_ST_NOT_CONFIGURED, "Unknown - Target configuration not specified.");
+            DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_NOT_CONFIGURED, "Unknown - Target configuration not specified.");
 
         gpuErrView.addError(stHandle);
         gpuErrView.display();

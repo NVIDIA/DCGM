@@ -83,9 +83,9 @@ long long GetTimeSinceEpochFromMonoticTs(const long long timestamp);
 class DcgmKmsgReaderThread : public DcgmThread
 {
 private:
-    std::vector<std::unique_ptr<KmsgXidData>> m_parsedKmsgXids;
     std::unordered_set<uint32_t> m_xidsToParse;
-    std::unique_ptr<DcgmMutex> m_mutex;
+    std::unique_ptr<DcgmMutex> m_mutex; //!< protects m_parsedKmsgXids only
+    std::vector<std::unique_ptr<KmsgXidData>> m_parsedKmsgXids;
     std::string m_kmsgFilename;
     uint32_t m_pollIntervalUs = 5000;
 

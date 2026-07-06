@@ -53,7 +53,8 @@ def initialize_sdk(fileName):
     if utils.is_linux():
         if os.path.exists(sdk_executable):
             # On linux, for binaries inside the package (not just commands in the path) test that they have +x
-            # e.g. if package is extracted on windows and copied to Linux, the +x privileges will be lost
+            # e.g. if package is extracted on windows and copied to Linux, the
+            # +x privileges will be lost
             assert os.access(sdk_executable, os.X_OK), \
                 "SDK binary %s is not executable! Make sure that the testing archive has been correctly extracted." \
                 % sdk_executable
@@ -167,7 +168,8 @@ def test_sdk_example_script_smoke_standalone_auto(handle):
     env = {'PYTHONPATH': ':'.join(sys.path)}
     script = os.path.join(sdk_sample_scripts_path, 'dcgm_example.py')
     example = AppRunner(
-        sys.executable, [script, '--opmode=auto', '--type=standalone'], env=env)
+        sys.executable, [
+            script, '--opmode=auto', '--type=standalone'], env=env)
     example.run(timeout=SAMPLE_SCRIPT_TIMEOUT)
 
 
@@ -189,17 +191,18 @@ def test_sdk_example_script_smoke_embedded_auto():
 @test_utils.run_only_with_nvml()
 def test_sdk_example_script_smoke_embedded_manual():
     """
-    Smoke test ensuring that the example script for using dcgm does not fail 
+    Smoke test ensuring that the example script for using dcgm does not fail
     for an embedded hostengine with manual operation mode
     """
     env = {'PYTHONPATH': ':'.join(sys.path)}
     script = os.path.join(sdk_sample_scripts_path, 'dcgm_example.py')
     example = AppRunner(
-        sys.executable, [script, '--opmode=manual', '--type=embedded'], env=env)
+        sys.executable, [
+            script, '--opmode=manual', '--type=embedded'], env=env)
     example.run(timeout=SAMPLE_SCRIPT_TIMEOUT)
 
 
-""" 
+"""
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
 @test_utils.for_all_same_sku_gpus()
@@ -207,7 +210,7 @@ def test_sdk_process_stats_sample_standalone(handle, gpuIds):
     ""
     Test SDK process stats sample
     ""
-    
+
     devices = dcgm_agent.dcgmGetAllDevices(handle)
     for gpu in devices:
         device = dcgm_agent.dcgmGetDeviceAttributes(handle, gpu)
@@ -215,12 +218,12 @@ def test_sdk_process_stats_sample_standalone(handle, gpuIds):
             continue
         else:
             break
-    
+
     if device == None:
         test_utils.skip_test("No GPU to run on")
-    
+
     dcgm_agent.dcgmWatchFields(handle, dcgm_structs.DCGM_GROUP_ALL_GPUS, dcgm_fields.DCGM_FC_PROCESSINFO, 1000000, 3600, 0)
-    
+
     ctx = apps.CudaCtxCreateAdvancedApp(
         [
             "--ctxCreate", device.identifiers.pciBusId,
@@ -233,26 +236,26 @@ def test_sdk_process_stats_sample_standalone(handle, gpuIds):
     ctx.wait()
     time.sleep(1.0)
     ctx.validate()
-    
-    
+
+
     dcgm_agent.dcgmUpdateAllFields(handle, 1) #force update
-    
+
     time.sleep(1.0)
-    
+
     sdk_subprocess = initialize_sdk("process_stats_sample")
-     
+
     sdk_stdout = sdk_subprocess.communicate(input= b"1\n127.0.0.1\n" + str(cuda_pid) )[0]
-    
+
     ss = ""
-    
+
     for line in sdk_stdout.decode():
         ss += line
 
     #assert "error" not in ss.lower(), "Error detected in SDK sample. Output: %s" % ss
-         
+
     # Right now it returns no-data since we are passing in a random PID
     assert sdk_subprocess.returncode == dcgm_structs.DCGM_ST_OK or sdk_subprocess.returncode == dcgm_structs.DCGM_ST_NO_DATA, "SDK sample encountered an error. Return code: %d" % sdk_subprocess.returncode
-    
+
     #ctx.wait()
     #ctx.validate()
 """

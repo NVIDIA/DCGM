@@ -24,6 +24,7 @@
 #define TOPO_H_
 
 #include "Command.h"
+#include <stdint.h>
 
 class Topo
 {
@@ -45,8 +46,8 @@ public:
 
 
     static std::string HelperGetAffinity(unsigned long const *cpuAffinity);
-    std::string HelperGetPciPath(dcgmGpuTopologyLevel_t &path);
-    std::string HelperGetNvLinkPath(dcgmGpuTopologyLevel_t &path, unsigned int linkMask);
+    std::string HelperGetPciPath(dcgmGpuTopologyLevel_t path);
+    std::string HelperGetNvLinkPath(dcgmGpuTopologyLevel_t path, uint64_t linkMask);
 
 private:
     /*****************************************************************************

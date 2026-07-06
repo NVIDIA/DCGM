@@ -560,15 +560,15 @@ TEST_CASE("DcgmModuleSysmon::ReadTemperature")
 
     for (int i = 0; i < 4; i++)
     {
-        CHECK(sysmon.ReadTemperature(i, DCGM_FI_DEV_CPU_TEMP_CURRENT) == 9.001);
-        CHECK(sysmon.ReadTemperature(i, DCGM_FI_DEV_CPU_TEMP_WARNING) == 100.0);
-        CHECK(sysmon.ReadTemperature(i, DCGM_FI_DEV_CPU_TEMP_CRITICAL) == 104.5);
+        CHECK(sysmon.ReadTemperature(i, DCGM_FI_DEV_CPU_TEMP_CELSIUS) == 9.001);
+        CHECK(sysmon.ReadTemperature(i, DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS) == 100.0);
+        CHECK(sysmon.ReadTemperature(i, DCGM_FI_DEV_CPU_TEMP_CRITICAL_CELSIUS) == 104.5);
     }
 
     // TZ that doesn't exist should return 0
-    CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_CURRENT) == 0.0);
-    CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_WARNING) == 0.0);
-    CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_CRITICAL) == 0.0);
+    CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_CELSIUS) == 0.0);
+    CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS) == 0.0);
+    CHECK(sysmon.ReadTemperature(5, DCGM_FI_DEV_CPU_TEMP_CRITICAL_CELSIUS) == 0.0);
 
     REQUIRE_FALSE(UnsetTestEnv());
 }
@@ -706,4 +706,12 @@ TEST_CASE_METHOD(PauseResumeTestFixture, "DcgmModuleSysmon PauseResume Module ac
         CHECK(ret == DCGM_ST_OK);
         CHECK_FALSE(sysmon.m_paused);
     }
+}
+
+TEST_CASE("DcgmModuleSysmon::ProcessMessage rejects null moduleCommand")
+{
+    REQUIRE_FALSE(SetTestEnv());
+    DcgmModuleSysmon sysmon(g_coreCallbacks);
+    CHECK(sysmon.ProcessMessage(nullptr) == DCGM_ST_BADPARAM);
+    REQUIRE_FALSE(UnsetTestEnv());
 }

@@ -22,11 +22,16 @@
 #include <unistd.h>
 #include <yaml-cpp/yaml.h>
 
-static long long g_timestamp            = 0;
-static dcgmReturn_t g_watchFieldsRet    = DCGM_ST_OK;
-static dcgmReturn_t g_getValuesSinceRet = DCGM_ST_OK;
-static dcgmFieldGrp_t g_fieldGroupId    = 0;
-static dcgmGpuGrp_t g_groupId           = 0;
+static long long g_timestamp                                = 0;
+static dcgmReturn_t g_watchFieldsRet                        = DCGM_ST_OK;
+static dcgmReturn_t g_getValuesSinceRet                     = DCGM_ST_OK;
+static dcgmFieldGrp_t g_fieldGroupId                        = 0;
+static dcgmGpuGrp_t g_groupId                               = 0;
+static unsigned int g_injectedGpuId                         = 0;
+static dcgmFieldValue_v1 g_injectedFieldVal                 = {};
+static bool g_hasInjectedValue                              = false;
+static dcgmReturn_t g_getFieldSummaryRet                    = DCGM_ST_OK;
+static dcgmSummaryResponse_t g_injectedFieldSummaryResponse = {};
 
 class WrapperDcgmRecorder : protected DcgmRecorder
 {
@@ -41,6 +46,7 @@ public:
                                           int64_t intValue,
                                           double dblValue,
                                           const std::string &fieldName);
+    using DcgmRecorder::AddWatches;
 };
 
 long long initializeDataCommon(dcgmTimeseriesInfo_t &data, unsigned short fieldId)
@@ -263,6 +269,52 @@ dcgmReturn_t dcgmGetValuesSince(dcgmHandle_t /* pDcgmHandle */,
     return g_getValuesSinceRet;
 }
 
+dcgmReturn_t dcgmGetValuesSince_v2(dcgmHandle_t /* pDcgmHandle */,
+                                   dcgmGpuGrp_t /* groupId */,
+                                   dcgmFieldGrp_t /* fieldGroupId */,
+                                   long long /* sinceTimestamp */,
+                                   long long * /* nextSinceTimestamp */,
+                                   dcgmFieldValueEntityEnumeration_f enumCB,
+                                   void *userData)
+{
+    if (g_getValuesSinceRet == DCGM_ST_OK && enumCB != nullptr && g_hasInjectedValue)
+    {
+        enumCB(DCGM_FE_GPU, g_injectedGpuId, &g_injectedFieldVal, 1, userData);
+    }
+
+    return g_getValuesSinceRet;
+}
+
+// Needed because DcgmRecorder::Shutdown destroys the group when AddWatches has initialized m_dcgmGroup
+dcgmReturn_t dcgmGroupDestroy(dcgmHandle_t /* pDcgmHandle */, dcgmGpuGrp_t /* groupId */)
+{
+    return DCGM_ST_OK;
+}
+
+// Needed because DcgmRecorder::Shutdown destroys the field group when AddWatches has set m_fieldGroupId
+dcgmReturn_t dcgmFieldGroupDestroy(dcgmHandle_t /* pDcgmHandle */, dcgmFieldGrp_t /* fieldGroupId */)
+{
+    return DCGM_ST_OK;
+}
+
+// Needed because DcgmGroup::FieldGroupDestroy calls dcgmUnwatchFields during cleanup
+dcgmReturn_t dcgmUnwatchFields(dcgmHandle_t /* pDcgmHandle */,
+                               dcgmGpuGrp_t /* groupId */,
+                               dcgmFieldGrp_t /* fieldGroupId */)
+{
+    return DCGM_ST_OK;
+}
+
+// Needed because DcgmRecorder::GetFieldSummary calls dcgmGetFieldSummary
+dcgmReturn_t dcgmGetFieldSummary(dcgmHandle_t /* handle */, dcgmFieldSummaryRequest_t *request)
+{
+    if (request != nullptr)
+    {
+        request->response = g_injectedFieldSummaryResponse;
+    }
+    return g_getFieldSummaryRet;
+}
+
 SCENARIO("AddWatches")
 {
     DcgmRecorder dr((dcgmHandle_t)1);
@@ -271,7 +323,7 @@ SCENARIO("AddWatches")
 
     // Fail with empty field ids
     CHECK(dr.AddWatches(fieldIds, gpuIds, false, "field_group1", "group1", 300.0) == DCGM_ST_BADPARAM);
-    fieldIds.push_back(DCGM_FI_DEV_GPU_TEMP);
+    fieldIds.push_back(DCGM_FI_DEV_GPU_TEMP_CELSIUS);
     // Fail with empty gpu IDs
     CHECK(dr.AddWatches(fieldIds, gpuIds, false, "field_group1", "group1", 300.0) == DCGM_ST_BADPARAM);
     gpuIds.push_back(0);
@@ -286,7 +338,7 @@ SCENARIO("DcgmRecorder::WriteToFile with field watch errors")
 {
     dcgmHandle_t handle = (dcgmHandle_t)1;
     DcgmRecorder dr(handle);
-    std::vector<unsigned short> fieldIds = { DCGM_FI_DEV_GPU_TEMP, DCGM_FI_DEV_POWER_USAGE };
+    std::vector<unsigned short> fieldIds = { DCGM_FI_DEV_GPU_TEMP_CELSIUS, DCGM_FI_DEV_BOARD_POWER_WATTS };
     std::vector<unsigned int> gpuIds     = { 0 };
 
     std::string jsonFileName = createTmpFile("json");
@@ -356,7 +408,7 @@ SCENARIO("FormatFieldViolationError")
                 CHECK(d.GetCode() == DCGM_FR_THERMAL_VIOLATIONS);
                 break;
             }
-            case DCGM_FI_DEV_XID_ERRORS:
+            case DCGM_FI_DEV_XID_ERROR:
             {
                 CHECK(d.GetCode() == DCGM_FR_XID_ERROR);
                 break;
@@ -372,4 +424,149 @@ SCENARIO("FormatFieldViolationError")
             }
         }
     }
+}
+
+SCENARIO("DcgmRecorder: negative test for DCGM_FR_CLOCKS_EVENT_VIOLATION")
+{
+    DcgmRecorder dr((dcgmHandle_t)42);
+    unsigned int targetGpuId = 1;
+    timelib64_t startTime    = 1000000;
+    std::vector<DcgmError> fatalErrors;
+    std::vector<DcgmError> ignoredErrors;
+
+    // Set up field watches so CheckForClocksEvent can query field values
+    g_groupId                            = 1;
+    g_fieldGroupId                       = 1;
+    g_watchFieldsRet                     = DCGM_ST_OK;
+    g_getValuesSinceRet                  = DCGM_ST_OK;
+    std::vector<unsigned short> fieldIds = { DCGM_FI_DEV_CLOCKS_EVENT_REASONS };
+    std::vector<unsigned int> gpuIds     = { targetGpuId };
+
+    REQUIRE(dr.AddWatches(fieldIds, gpuIds, false, "test_field_group", "test_group", 300.0) == DCGM_ST_OK);
+
+    // Inject a HW slowdown clocks event for the target GPU via the dcgmGetValuesSince_v2 stub
+    memset(&g_injectedFieldVal, 0, sizeof(g_injectedFieldVal));
+    g_injectedFieldVal.version   = dcgmFieldValue_version1;
+    g_injectedFieldVal.fieldId   = DCGM_FI_DEV_CLOCKS_EVENT_REASONS;
+    g_injectedFieldVal.fieldType = DCGM_FT_INT64;
+    g_injectedFieldVal.status    = DCGM_ST_OK;
+    g_injectedFieldVal.ts        = startTime + 5000000;
+    g_injectedFieldVal.value.i64 = DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN;
+    g_injectedGpuId              = targetGpuId;
+    g_hasInjectedValue           = true;
+
+    DcgmNs::Defer cleanup([] {
+        g_fieldGroupId      = 0;
+        g_groupId           = 0;
+        g_watchFieldsRet    = DCGM_ST_OK;
+        g_getValuesSinceRet = DCGM_ST_OK;
+        g_hasInjectedValue  = false;
+        g_injectedGpuId     = 0;
+        memset(&g_injectedFieldVal, 0, sizeof(g_injectedFieldVal));
+    });
+
+    // CheckForClocksEvent should detect the injected event and return DR_VIOLATION
+    int ret = dr.CheckForClocksEvent(targetGpuId, startTime, fatalErrors, ignoredErrors);
+    CHECK(ret == DR_VIOLATION);
+    REQUIRE(fatalErrors.size() == 1);
+
+    // The error must carry the correct failure reason and be attributed to the affected GPU
+    CHECK(fatalErrors[0].GetCode() == DCGM_FR_CLOCKS_EVENT_VIOLATION);
+    CHECK(fatalErrors[0].GetEntity().entityId == targetGpuId);
+    CHECK(fatalErrors[0].GetSeverity() == DCGM_ERROR_MONITOR);
+    CHECK(fatalErrors[0].GetMessage().find("Clocks event for GPU") != std::string::npos);
+}
+
+SCENARIO("DcgmRecorder: negative test for DCGM_FR_THERMAL_VIOLATIONS_TS")
+{
+    WrapperDcgmRecorder dr((dcgmHandle_t)42);
+    constexpr unsigned int targetGpuId = 1;
+    constexpr timelib64_t startTime    = 1000000;
+
+    // Set up field watches so FormatFieldViolationError can query field values
+    g_groupId                            = 1;
+    g_fieldGroupId                       = 1;
+    g_watchFieldsRet                     = DCGM_ST_OK;
+    g_getValuesSinceRet                  = DCGM_ST_OK;
+    std::vector<unsigned short> fieldIds = { DCGM_FI_DEV_CLOCKS_EVENT_REASONS };
+    std::vector<unsigned int> gpuIds     = { targetGpuId };
+
+    REQUIRE(dr.AddWatches(fieldIds, gpuIds, false, "test_field_group", "test_group", 300.0) == DCGM_ST_OK);
+
+    // Inject a HW slowdown clocks event for the target GPU via the dcgmGetValuesSince_v2 stub
+    memset(&g_injectedFieldVal, 0, sizeof(g_injectedFieldVal));
+    g_injectedFieldVal.version   = dcgmFieldValue_version1;
+    g_injectedFieldVal.fieldId   = DCGM_FI_DEV_CLOCKS_EVENT_REASONS;
+    g_injectedFieldVal.fieldType = DCGM_FT_INT64;
+    g_injectedFieldVal.status    = DCGM_ST_OK;
+    g_injectedFieldVal.ts        = startTime + 5000000;
+    g_injectedFieldVal.value.i64 = DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN;
+    g_injectedGpuId              = targetGpuId;
+    g_hasInjectedValue           = true;
+
+    DcgmNs::Defer cleanup([] {
+        g_fieldGroupId      = 0;
+        g_groupId           = 0;
+        g_watchFieldsRet    = DCGM_ST_OK;
+        g_getValuesSinceRet = DCGM_ST_OK;
+        g_hasInjectedValue  = false;
+        g_injectedGpuId     = 0;
+        memset(&g_injectedFieldVal, 0, sizeof(g_injectedFieldVal));
+    });
+
+    // FormatFieldViolationError should pick up the injected reason and emit the _TS variant
+    DcgmError d { targetGpuId };
+    dr.WrapperFormatFieldViolationError(
+        d, DCGM_FI_DEV_THERMAL_VIOLATION, targetGpuId, startTime, 5000000000LL, 0.0, "");
+
+    // The error must carry the correct failure reason and be attributed to the affected GPU
+    CHECK(d.GetCode() == DCGM_FR_THERMAL_VIOLATIONS_TS);
+    CHECK(d.GetEntity().entityId == targetGpuId);
+    CHECK(d.GetSeverity() == DCGM_ERROR_MONITOR);
+    CHECK(d.GetMessage().find("Thermal violations totaling") != std::string::npos);
+}
+
+SCENARIO("DcgmRecorder: negative test for DCGM_FR_UNSUPPORTED_FIELD_TYPE")
+{
+    DcgmRecorder dr((dcgmHandle_t)42);
+    constexpr unsigned int targetGpuId = 1;
+    constexpr timelib64_t startTime    = 1000000;
+    std::vector<DcgmError> fatalErrors;
+    std::vector<DcgmError> ignoredErrors;
+
+    // Set up field watches so CheckErrorFields can query field values
+    g_groupId            = 1;
+    g_fieldGroupId       = 1;
+    g_watchFieldsRet     = DCGM_ST_OK;
+    g_getValuesSinceRet  = DCGM_ST_OK;
+    g_getFieldSummaryRet = DCGM_ST_OK;
+
+    // DCGM_FI_DEV_GPU_UUID has fieldType DCGM_FT_STRING, which forces the unsupported-type branch
+    std::vector<unsigned short> fieldIds = { DCGM_FI_DEV_GPU_UUID };
+    std::vector<unsigned int> gpuIds     = { targetGpuId };
+
+    REQUIRE(DcgmFieldsInit() == 0);
+    REQUIRE(dr.AddWatches(fieldIds, gpuIds, false, "test_field_group", "test_group", 300.0) == DCGM_ST_OK);
+
+    DcgmNs::Defer cleanup([] {
+        g_fieldGroupId       = 0;
+        g_groupId            = 0;
+        g_watchFieldsRet     = DCGM_ST_OK;
+        g_getValuesSinceRet  = DCGM_ST_OK;
+        g_getFieldSummaryRet = DCGM_ST_OK;
+        memset(&g_injectedFieldSummaryResponse, 0, sizeof(g_injectedFieldSummaryResponse));
+        DcgmFieldsTerm();
+    });
+
+    // maxTemp is set above the zeroed response highTemp=0 so the bundled CheckGpuTemperature stays silent
+    int ret = dr.CheckErrorFields(fieldIds, nullptr, targetGpuId, 1000, fatalErrors, ignoredErrors, startTime);
+    CHECK(ret == DR_VIOLATION);
+    REQUIRE(fatalErrors.size() == 1);
+
+    // The error must carry the correct failure reason and be attributed to the affected GPU
+    CHECK(fatalErrors[0].GetCode() == DCGM_FR_UNSUPPORTED_FIELD_TYPE);
+    CHECK(fatalErrors[0].GetEntity().entityId == targetGpuId);
+    CHECK(fatalErrors[0].GetSeverity() == DCGM_ERROR_TRIAGE);
+    CHECK(fatalErrors[0].GetMessage().find("not supported") != std::string::npos);
+    CHECK(ignoredErrors.empty());
 }

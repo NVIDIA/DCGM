@@ -12,26 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import sys
+
+
 def _python_version_check():
-    import sys
     python_version = sys.version.split(None, 1)[0]
     if python_version < '3':
-        print('[ERROR] Detected Python version {}. These bindings are for Python 3.5+.'.format(python_version))
+        print(
+            '[ERROR] Detected Python version {}. These bindings are for Python 3.5+.'.format(python_version))
         sys.exit(1)
 
 
 _python_version_check()
 
 # Bring classes into this namespace
-from DcgmHandle import *
-from DcgmGroup import *
-from DcgmStatus import *
-from DcgmSystem import *
-from DcgmFieldGroup import *
-from DcgmLogging import *
+from DcgmHandle import *  # noqa: E402
+from DcgmGroup import *  # noqa: E402
+from DcgmStatus import *  # noqa: E402
+from DcgmSystem import *  # noqa: E402
+from DcgmFieldGroup import *  # noqa: E402
+from DcgmLogging import *  # noqa: E402
 
-import os
-if '__DCGM_TESTING_FRAMEWORK_ACTIVE' in os.environ and os.environ['__DCGM_TESTING_FRAMEWORK_ACTIVE'] == '1':
+if '__DCGM_TESTING_FRAMEWORK_ACTIVE' in os.environ and \
+        os.environ['__DCGM_TESTING_FRAMEWORK_ACTIVE'] == '1':
     import utils
     import dcgm_structs
     dcgm_structs._dcgmInit(utils.get_testing_framework_library_path())

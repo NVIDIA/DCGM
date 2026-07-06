@@ -33,18 +33,18 @@ namespace DcgmNs
 
 /**
  * This macro simply allows us to return a reference to a static singleton
- * FieldIdControlType<fieldId> upcast to FieldIdControlType<DCGM_FI_UNKNOWN>.
+ * FieldIdControlType<fieldId> upcast to FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>.
  * It allows for mappings of fieldId to the "magic"
  * FieldIdControlType<fieldId> that can provide the NSCQ path and Update
  * function to use. It is intended to be included in every Field ID
  * specialised FieldIdControlType definition.
  */
 
-#define SELF_REF                                                 \
-    static const FieldIdControlType<DCGM_FI_UNKNOWN> &Self(void) \
-    {                                                            \
-        static FieldIdControlType<fieldId> self;                 \
-        return self;                                             \
+#define SELF_REF                                                              \
+    static const FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN> &Self(void) \
+    {                                                                         \
+        static FieldIdControlType<fieldId> self;                              \
+        return self;                                                          \
     }
 
 
@@ -61,9 +61,9 @@ namespace DcgmNs
  * needs to be introduced.
  */
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -83,9 +83,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SLOWDOWN> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_TEMP_SLOWDOWN_CELSIUS>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SLOWDOWN;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_TEMP_SLOWDOWN_CELSIUS;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -105,9 +106,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SHUTDOWN> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_TEMP_SHUTDOWN_CELSIUS>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_TEMPERATURE_LIMIT_SHUTDOWN;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_TEMP_SHUTDOWN_CELSIUS;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -127,7 +129,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX;
 
@@ -149,7 +151,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX;
 
@@ -215,9 +217,9 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_SXID_FATAL_ERROR> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_SXID_FATAL_ERROR;
 
 public:
     using dcgmFieldType = NvSwitch::Data::ErrorData;
@@ -237,9 +239,9 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_SXID_NON_FATAL_ERROR> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_SXID_NON_FATAL_ERROR;
 
 public:
     using dcgmFieldType = NvSwitch::Data::ErrorData;
@@ -263,10 +265,10 @@ public:
  * callback data.
  */
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_SXID_FATAL_ERROR>
+    : public FieldIdControlType<DCGM_FI_DEV_SXID_FATAL_ERROR>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_SXID_FATAL_ERROR;
 
 public:
     FieldIdStorageType(void)
@@ -285,10 +287,10 @@ public:
  * callback data.
  */
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_SXID_NON_FATAL_ERROR>
+    : public FieldIdControlType<DCGM_FI_DEV_SXID_NON_FATAL_ERROR>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_SXID_NON_FATAL_ERROR;
 
 public:
     FieldIdStorageType(void)
@@ -303,9 +305,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERROR_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERRORS;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERROR_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -325,9 +328,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERROR_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERRORS;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_RECOVERY_ERROR_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -347,9 +351,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERROR_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERRORS;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_FLIT_ERROR_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -369,9 +374,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_TOTAL;
 
 public:
     using nscqFieldType = uint64_t;
@@ -391,9 +397,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -413,7 +420,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX;
 
@@ -435,7 +443,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX;
 
@@ -501,7 +510,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS;
 
@@ -523,7 +533,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_NON_FATAL_ERRORS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_NON_FATAL_ERRORS>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_NON_FATAL_ERRORS;
 
@@ -589,9 +600,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L0_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE0;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L0_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -611,9 +623,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L1_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE1;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L1_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -633,9 +646,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L2_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L2_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -655,9 +669,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L3_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L3_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -677,9 +692,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L0_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE0;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L0_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -699,9 +715,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L1_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE1;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L1_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -721,9 +738,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L2_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE2;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L2_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -743,9 +761,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L3_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERRORS_LANE3;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ECC_ERROR_L3_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -765,7 +784,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT;
 
@@ -787,7 +806,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ;
 
@@ -809,7 +828,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_REV;
 
@@ -831,9 +851,9 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_VDD;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -853,9 +873,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_DVDD;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -875,9 +896,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_HVDD;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -897,7 +919,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_CURRENT_IDDQ_DVDD;
 
@@ -919,7 +942,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC0;
 
@@ -941,7 +965,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC0;
 
@@ -963,7 +988,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC0;
 
@@ -985,7 +1011,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC0;
 
@@ -1007,9 +1034,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -1029,7 +1057,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC1;
 
@@ -1051,7 +1080,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC1;
 
@@ -1073,7 +1103,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC1;
 
@@ -1095,7 +1126,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC1;
 
@@ -1117,9 +1149,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -1139,7 +1172,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC2;
 
@@ -1161,7 +1195,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC2;
 
@@ -1183,7 +1218,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC2;
 
@@ -1205,7 +1241,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC2;
 
@@ -1227,9 +1264,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -1249,7 +1287,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_LOW_VC3;
 
@@ -1271,7 +1310,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_MEDIUM_VC3;
 
@@ -1293,7 +1333,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_HIGH_VC3;
 
@@ -1315,7 +1356,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_PANIC_VC3;
 
@@ -1337,9 +1379,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Uint64Data;
@@ -1440,10 +1483,10 @@ public:
  * Here we define 3 storage types to extract returned NSCQ power callback data.
  */
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_VDD>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_VDD;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS;
 
 public:
     FieldIdStorageType(void)
@@ -1458,10 +1501,10 @@ public:
 };
 
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_DVDD;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS;
 
 public:
     FieldIdStorageType(void)
@@ -1476,10 +1519,10 @@ public:
 };
 
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_HVDD;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS;
 
 public:
     FieldIdStorageType(void)
@@ -1586,10 +1629,10 @@ public:
  * callback data.
  */
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL;
 
 public:
     FieldIdStorageType(void)
@@ -1696,10 +1739,10 @@ public:
  * callback data.
  */
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL;
 
 public:
     FieldIdStorageType(void)
@@ -1806,10 +1849,10 @@ public:
  * callback data.
  */
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL;
 
 public:
     FieldIdStorageType(void)
@@ -1916,10 +1959,10 @@ public:
  * callback data.
  */
 template <>
-class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3>
-    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3>::dcgmFieldType
+class FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL>
+    : public FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL>::dcgmFieldType
 {
-    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3;
+    constexpr static unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL;
 
 public:
     FieldIdStorageType(void)
@@ -1934,9 +1977,9 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_UUID> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_GPU_UUID> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_UUID;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_GPU_UUID;
 
 public:
     using dcgmFieldType = NvSwitch::Data::UuidData;
@@ -1956,9 +1999,9 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PHYS_ID> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PHYSICAL_ID> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_PHYS_ID;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_PHYSICAL_ID;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -1973,12 +2016,12 @@ public:
 
     UpdateFuncType UpdateFunc(void) const override
     {
-        return UpdateLinkScalarFieldType<fieldId>::updateFunc;
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
     }
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_RESET_REQUIRED> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_RESET_REQUIRED> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_RESET_REQUIRED;
 
@@ -1995,12 +2038,12 @@ public:
 
     UpdateFuncType UpdateFunc(void) const override
     {
-        return UpdateLinkScalarFieldType<fieldId>::updateFunc;
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
     }
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ID> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_ID> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_ID;
 
@@ -2017,12 +2060,12 @@ public:
 
     UpdateFuncType UpdateFunc(void) const override
     {
-        return UpdateLinkScalarFieldType<fieldId>::updateFunc;
+        return UpdateNvSwitchScalarFieldType<fieldId>::updateFunc;
     }
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_STATUS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_STATUS> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_STATUS;
 
@@ -2044,7 +2087,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_TYPE> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_TYPE> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_TYPE;
 
@@ -2067,7 +2110,8 @@ public:
 
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_BUS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_BUS>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_BUS;
 
@@ -2089,7 +2133,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DEVICE> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DEVICE>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DEVICE;
 
@@ -2111,7 +2156,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DOMAIN> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DOMAIN>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_DOMAIN;
 
@@ -2133,7 +2179,8 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_PCIE_FUNCTION;
 
@@ -2155,9 +2202,10 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_ID> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_ID>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_ID;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_ID;
 
 public:
     using dcgmFieldType = NvSwitch::Data::Int64Data;
@@ -2177,12 +2225,13 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_SID> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID>
+    : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_DEVICE_LINK_SID;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID;
 
 public:
-    using dcgmFieldType = NvSwitch::Data::Int64Data;
+    using dcgmFieldType = NvSwitch::Data::GuidHexData;
     using nscqFieldType = uint64_t;
 
     SELF_REF
@@ -2199,9 +2248,9 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_DEVICE_UUID> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_UUID> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
-    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_DEVICE_UUID;
+    static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_UUID;
 
 public:
     using dcgmFieldType = NvSwitch::Data::UuidData;
@@ -2221,7 +2270,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PCIE_BUS> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PCIE_BUS> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_PCIE_BUS;
 
@@ -2243,7 +2292,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PCIE_DEVICE> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PCIE_DEVICE> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_PCIE_DEVICE;
 
@@ -2265,7 +2314,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PCIE_DOMAIN> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PCIE_DOMAIN> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_PCIE_DOMAIN;
 
@@ -2287,7 +2336,7 @@ public:
 };
 
 template <>
-class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PCIE_FUNCTION> : public FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_DEV_NVSWITCH_PCIE_FUNCTION> : public FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
     static constexpr unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_PCIE_FUNCTION;
 

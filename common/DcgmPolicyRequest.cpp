@@ -74,7 +74,16 @@ int DcgmPolicyRequest::ProcessMessage(std::unique_ptr<DcgmMessage> msg)
     }
 
     /* We should only be here if we got a policy notification */
-    auto msgBytes                    = msg->GetMsgBytesPtr();
+    auto msgBytes = msg->GetMsgBytesPtr();
+
+    /* Buffer needs to be at least large enough to hold the policy notify struct */
+    if (msgBytes->size() < sizeof(dcgm_msg_policy_notify_t))
+    {
+        Unlock();
+        log_error("Message buffer too small: {} < {}", msgBytes->size(), sizeof(dcgm_msg_policy_notify_t));
+        return DCGM_ST_BADPARAM;
+    }
+
     dcgm_msg_policy_notify_t *policy = (dcgm_msg_policy_notify_t *)msgBytes->data();
 
     /* Make local copies of the callback so we can safely unlock. I don't want this code to deadlock if someone

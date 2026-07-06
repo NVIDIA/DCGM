@@ -23,8 +23,8 @@
 #include <DcgmDiagResponseWrapper.h>
 
 #include <DcgmStringHelpers.h>
+#include <MockFileHandle.h>
 #include <UniquePtrUtil.h>
-#include <mock/FileHandleMock.h>
 
 
 namespace
@@ -66,11 +66,51 @@ dcgmReturn_t PostRequestToCoreMock(dcgm_module_command_header_t *header, void *p
     return DCGM_ST_OK;
 }
 
+std::set<std::string> CollectTmpDcgmPaths()
+{
+    namespace fs = std::filesystem;
+    std::set<std::string> paths;
+    std::error_code ec;
+    fs::path const tmpDir("/tmp");
+    if (!fs::is_directory(tmpDir, ec) || ec)
+    {
+        FAIL(fmt::format("{} is not a directory or could not be accessed: {}", tmpDir.string(), ec.message()));
+    }
+    for (fs::directory_iterator it(tmpDir, ec); it != fs::directory_iterator(); it.increment(ec))
+    {
+        if (ec)
+        {
+            FAIL(fmt::format("Could not iterate over {}: {}", tmpDir.string(), ec.message()));
+        }
+        if (!it->path().filename().string().starts_with("tmp-dcgm-"))
+        {
+            continue;
+        }
+        std::error_code entryEc;
+        if (it->is_regular_file(entryEc) && !entryEc)
+        {
+            paths.insert(it->path().string());
+        }
+        else if (entryEc)
+        {
+            FAIL(fmt::format("Could not check if {} is a regular file: {}", it->path().string(), entryEc.message()));
+        }
+    }
+    return paths;
+}
+
+std::set<std::string> NewTmpDcgmPaths(std::set<std::string> const &before, std::set<std::string> const &after)
+{
+    std::set<std::string> diff;
+    std::set_difference(after.begin(), after.end(), before.begin(), before.end(), std::inserter(diff, diff.begin()));
+    return diff;
+}
+
 } //namespace
 
 TEST_CASE("DcgmDiagManager::ReadDataFromFd")
 {
-    FileHandleMock fileHandle;
+    MockFileHandle fileHandle;
     dcgmCoreCallbacks_t coreCallbacks;
     dcgmDiagStatus_t actualDiagStatus = {};
 
@@ -156,6 +196,86 @@ TEST_CASE("DcgmDiagManager::CheckAndHandleRunningFlag")
         auto ret = diagManager.CheckAndHandleRunningFlag(response);
         REQUIRE(ret == DCGM_ST_DIAG_STOPPED);
         REQUIRE(response.GetSystemErr().contains("capoo is fixing bugs"));
+    }
+}
+
+TEST_CASE("DcgmDiagManager state and argument helpers")
+{
+    dcgmCoreCallbacks_t coreCallbacks {};
+    DcgmDiagManager diagManager(coreCallbacks);
+
+    SECTION("GIVEN compare test names WHEN normalized THEN spaces become lowercase underscores")
+    {
+        CHECK(DcgmDiagManager::GetCompareTestName("Targeted Power") == "targeted_power");
+        CHECK(DcgmDiagManager::GetCompareTestName("SM Stress") == "sm_stress");
+        CHECK(DcgmDiagManager::GetCompareTestName("NCCL_TESTS") == "nccl_tests");
+    }
+
+    SECTION("GIVEN known and unknown test names WHEN indexes are requested THEN mappings are returned")
+    {
+        CHECK(DcgmDiagManager::GetTestIndex("diagnostic") == DCGM_DIAGNOSTIC_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("PCIe") == DCGM_PCI_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("Targeted Stress") == DCGM_TARGETED_STRESS_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("Targeted Power") == DCGM_TARGETED_POWER_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("memory bandwidth") == DCGM_MEMORY_BANDWIDTH_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("memory") == DCGM_MEMORY_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("memtest") == DCGM_MEMTEST_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("context create") == DCGM_CONTEXT_CREATE_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("pulse test") == DCGM_PULSE_TEST_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("eud") == DCGM_EUD_TEST_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("nvbandwidth") == DCGM_NVBANDWIDTH_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("nccl tests") == DCGM_NCCL_TESTS_INDEX);
+        CHECK(DcgmDiagManager::GetTestIndex("not-a-real-test") == DCGM_PER_GPU_TEST_COUNT_V8);
+    }
+
+    SECTION("GIVEN run options WHEN validation levels and explicit tests are used THEN arguments are assembled")
+    {
+        dcgmRunDiag_v10 drd {};
+        std::vector<std::string> args;
+
+        drd.validate = DCGM_POLICY_VALID_SV_SHORT;
+        REQUIRE(diagManager.AddRunOptions(args, &drd) == DCGM_ST_OK);
+        REQUIRE(args.size() == 2);
+        CHECK(args[0] == "--specifiedtest");
+        CHECK(args[1] == "short");
+
+        args.clear();
+        drd.validate = DCGM_POLICY_VALID_SV_MED;
+        REQUIRE(diagManager.AddRunOptions(args, &drd) == DCGM_ST_OK);
+        CHECK(args[1] == "medium");
+
+        args.clear();
+        drd.validate = DCGM_POLICY_VALID_SV_LONG;
+        REQUIRE(diagManager.AddRunOptions(args, &drd) == DCGM_ST_OK);
+        CHECK(args[1] == "long");
+
+        args.clear();
+        drd.validate = DCGM_POLICY_VALID_SV_XLONG;
+        REQUIRE(diagManager.AddRunOptions(args, &drd) == DCGM_ST_OK);
+        CHECK(args[1] == "xlong");
+
+        args.clear();
+        SafeCopyTo(drd.testNames[0], "diagnostic");
+        SafeCopyTo(drd.testNames[1], "pcie");
+        SafeCopyTo(drd.testParms[0], "diagnostic.test_duration=5");
+        SafeCopyTo(drd.testParms[1], "pcie.h2d_d2h_single_pinned=1");
+        REQUIRE(diagManager.AddRunOptions(args, &drd) == DCGM_ST_OK);
+        REQUIRE(args.size() == 4);
+        CHECK(args[0] == "--specifiedtest");
+        CHECK(args[1] == "diagnostic,pcie");
+        CHECK(args[2] == "--parameters");
+        CHECK(args[3] == "diagnostic.test_duration=5;pcie.h2d_d2h_single_pinned=1");
+    }
+
+    SECTION("GIVEN an invalid run validation level WHEN options are added THEN bad parameter is returned")
+    {
+        dcgmRunDiag_v10 drd {};
+        drd.validate = static_cast<dcgmPolicyValidation_t>(0xFFFFFFFF);
+        std::vector<std::string> args;
+
+        CHECK(diagManager.AddRunOptions(args, &drd) == DCGM_ST_BADPARAM);
+        CHECK(args.size() == 1);
+        CHECK(args[0] == "--specifiedtest");
     }
 }
 
@@ -897,5 +1017,187 @@ TEST_CASE("DcgmDiagManager::GetDetachedGpus")
         REQUIRE(isGpuWildcard == true);
         REQUIRE(detachedGpuInfos.size() == 3);
         REQUIRE(allDetached == false);
+    }
+}
+
+TEST_CASE("DcgmDiagManager - /tmp/tmp-dcgm-* files are handled correctly")
+{
+    dcgmCoreCallbacks_t coreCallbacks = {};
+    coreCallbacks.postfunc            = [](dcgm_module_command_header_t *, void *) -> dcgmReturn_t {
+        return DCGM_ST_NOT_SUPPORTED;
+    };
+    DcgmDiagManager diagManager(coreCallbacks);
+    dcgmRunDiag_v10 drd = {};
+    drd.validate        = DCGM_POLICY_VALID_SV_SHORT;
+    snprintf(drd.configFileContents, sizeof(drd.configFileContents), "test data\n");
+    std::vector<std::string> cmdArgs;
+    DcgmDiagManager::ConfigFileGuard configFileGuard;
+
+    SECTION("CreateNvvsCommand - config file is present in cmdArgs when configFileContents is not empty")
+    {
+        auto const ret = diagManager.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12, configFileGuard);
+        REQUIRE(ret == DCGM_ST_OK);
+
+        // --config <path> must appear in cmdArgs and the next argument after it must be the /tmp/tmp-dcgm-* file
+        auto const it = std::find(cmdArgs.begin(), cmdArgs.end(), "--config");
+        REQUIRE(it != cmdArgs.end());
+        REQUIRE(std::next(it)->find("/tmp/tmp-dcgm-") == 0);
+        REQUIRE(configFileGuard.has_value()); // configFileGuard should have a value
+    }
+
+    SECTION("AddConfigFile - temp file is deleted if any failures occur after it is created")
+    {
+        // Mock a postfunc that returns a non-existent service account name when
+        // AddConfigFile calls GetServiceAccount. Since subsequent call to GetUserCredentials
+        // will fail (no such user), AddConfigFile will return an error and the Defer guard
+        // in AddConfigFile will unlink the temp file before returning.
+        auto postfunc = [](dcgm_module_command_header_t *header, void * /*poster*/) -> dcgmReturn_t {
+            if (header == nullptr)
+            {
+                return DCGM_ST_BADPARAM;
+            }
+            if (header->subCommand == DcgmCoreReqGetServiceAccount)
+            {
+                auto *req = reinterpret_cast<dcgmCoreGetServiceAccount_t *>(header);
+                snprintf(req->response.serviceAccount,
+                         sizeof(req->response.serviceAccount),
+                         "nonexistent_dcgm_test_user_12345");
+                return DCGM_ST_OK;
+            }
+            return DCGM_ST_NOT_SUPPORTED;
+        };
+
+        coreCallbacks.postfunc = postfunc;
+        DcgmDiagManager sectionDiagManager(coreCallbacks);
+
+        auto const before = CollectTmpDcgmPaths();
+        auto const ret    = sectionDiagManager.AddConfigFile(&drd, cmdArgs, configFileGuard);
+        // AddConfigFile should fail, configFileGuard should have no value, and no new tmp-dcgm files should have been
+        // created
+        REQUIRE(ret == DCGM_ST_GENERIC_ERROR);
+        REQUIRE_FALSE(configFileGuard.has_value());
+        REQUIRE(NewTmpDcgmPaths(before, CollectTmpDcgmPaths()).empty());
+    }
+
+    SECTION("PerformNVVSExecute - temp file is deleted after NVVS execution")
+    {
+        auto responsePtr = MakeUniqueZero<dcgmDiagResponse_v12>();
+        DcgmDiagResponseWrapper response;
+        response.SetVersion(responsePtr.get());
+
+        // No new /tmp/tmp-dcgm-* files should exist after PerformNVVSExecute call returns.
+        auto const before = CollectTmpDcgmPaths();
+        diagManager.PerformNVVSExecute(nullptr, nullptr, &drd, response, DCGM_CONNECTION_ID_NONE);
+        REQUIRE(NewTmpDcgmPaths(before, CollectTmpDcgmPaths()).empty());
+    }
+}
+
+TEST_CASE("DcgmDiagManager::CreateNvvsCommand builds run options")
+{
+    dcgmCoreCallbacks_t coreCallbacks = {};
+    coreCallbacks.postfunc            = [](dcgm_module_command_header_t *, void *) -> dcgmReturn_t {
+        return DCGM_ST_NOT_SUPPORTED;
+    };
+    DcgmDiagManager diagManager(coreCallbacks);
+    DcgmDiagManager::ConfigFileGuard configFileGuard;
+
+    auto contains = [](std::vector<std::string> const &args, std::string const &value) {
+        return std::find(args.begin(), args.end(), value) != args.end();
+    };
+    auto argAfter = [](std::vector<std::string> const &args, std::string const &key) -> std::string {
+        auto const it = std::find(args.begin(), args.end(), key);
+        REQUIRE(it != args.end());
+        REQUIRE(std::next(it) != args.end());
+        return *std::next(it);
+    };
+
+    SECTION("GIVEN an invalid validation level WHEN run options are added THEN bad parameter is returned")
+    {
+        dcgmRunDiag_v10 drd = {};
+        drd.validate        = static_cast<dcgmPolicyValidation_t>(999);
+        std::vector<std::string> cmdArgs;
+
+        CHECK(diagManager.AddRunOptions(cmdArgs, &drd) == DCGM_ST_BADPARAM);
+        REQUIRE(cmdArgs.size() == 1);
+        CHECK(cmdArgs[0] == "--specifiedtest");
+    }
+
+    SECTION("GIVEN named tests and parameters WHEN command is created THEN they override validation level")
+    {
+        dcgmRunDiag_v10 drd = {};
+        drd.validate        = DCGM_POLICY_VALID_SV_LONG;
+        SafeCopyTo(drd.testNames[0], "diagnostic");
+        SafeCopyTo(drd.testNames[1], "targeted_power");
+        SafeCopyTo(drd.testParms[0], "diagnostic.test_duration=5");
+        SafeCopyTo(drd.testParms[1], "targeted_power.power=250");
+        std::vector<std::string> cmdArgs;
+
+        REQUIRE(diagManager.CreateNvvsCommand(cmdArgs,
+                                              &drd,
+                                              dcgmDiagResponse_version12,
+                                              configFileGuard,
+                                              "",
+                                              "gpu:0",
+                                              DcgmDiagManager::ExecuteWithServiceAccount::Yes)
+                == DCGM_ST_OK);
+
+        CHECK(argAfter(cmdArgs, "--specifiedtest") == "diagnostic,targeted_power");
+        CHECK(argAfter(cmdArgs, "--parameters") == "diagnostic.test_duration=5;targeted_power.power=250");
+        CHECK(argAfter(cmdArgs, "--entity-id") == "gpu:0");
+        CHECK(contains(cmdArgs, "--configless"));
+        CHECK_FALSE(contains(cmdArgs, "--rerun-as-root"));
+    }
+
+    SECTION("GIVEN miscellaneous run options WHEN command is created THEN each option is emitted")
+    {
+        dcgmRunDiag_v10 drd   = {};
+        drd.validate          = DCGM_POLICY_VALID_SV_XLONG;
+        drd.flags             = DCGM_RUN_FLAGS_STATSONFAIL | DCGM_RUN_FLAGS_VERBOSE | DCGM_RUN_FLAGS_FAIL_EARLY;
+        drd.debugLevel        = DcgmLoggingSeverityDebug;
+        drd.failCheckInterval = 9;
+        drd.currentIteration  = 2;
+        drd.totalIterations   = 4;
+        drd.watchFrequency    = 123456;
+        SafeCopyTo(drd.debugLogFile, "/tmp/nvvs-debug.log");
+        SafeCopyTo(drd.statsPath, "/tmp/nvvs-stats");
+        SafeCopyTo(drd.clocksEventMask, "hw_slowdown");
+        SafeCopyTo(drd.ignoreErrorCodes, "12,34");
+        std::vector<std::string> cmdArgs;
+
+        REQUIRE(diagManager.CreateNvvsCommand(cmdArgs,
+                                              &drd,
+                                              dcgmDiagResponse_version12,
+                                              configFileGuard,
+                                              "0,1",
+                                              "gpu:0",
+                                              DcgmDiagManager::ExecuteWithServiceAccount::No)
+                == DCGM_ST_OK);
+
+        CHECK(argAfter(cmdArgs, "--specifiedtest") == "xlong");
+        CHECK(contains(cmdArgs, "--rerun-as-root"));
+        CHECK(contains(cmdArgs, "--statsonfail"));
+        CHECK(contains(cmdArgs, "-v"));
+        CHECK(argAfter(cmdArgs, "-l") == "/tmp/nvvs-debug.log");
+        CHECK(argAfter(cmdArgs, "--statspath") == "/tmp/nvvs-stats");
+        CHECK(argAfter(cmdArgs, "-f") == "0,1");
+        CHECK_FALSE(contains(cmdArgs, "--entity-id"));
+        CHECK(argAfter(cmdArgs, "-d") == "DEBUG");
+        CHECK(argAfter(cmdArgs, "--clocksevent-mask") == "hw_slowdown");
+        CHECK(contains(cmdArgs, "--fail-early"));
+        CHECK(argAfter(cmdArgs, "--check-interval") == "9");
+        CHECK(argAfter(cmdArgs, "--current-iteration") == "2");
+        CHECK(argAfter(cmdArgs, "--total-iterations") == "4");
+        CHECK(argAfter(cmdArgs, "--watch-frequency") == "123456");
+        CHECK(argAfter(cmdArgs, "--ignoreErrorCodes") == "12,34");
+    }
+
+    SECTION("GIVEN pre-populated command vector WHEN command is created THEN bad parameter is returned")
+    {
+        dcgmRunDiag_v10 drd = {};
+        drd.validate        = DCGM_POLICY_VALID_SV_SHORT;
+        std::vector<std::string> cmdArgs { "already-present" };
+
+        CHECK(diagManager.CreateNvvsCommand(cmdArgs, &drd, dcgmDiagResponse_version12, configFileGuard)
+              == DCGM_ST_BADPARAM);
     }
 }

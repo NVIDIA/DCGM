@@ -14,8 +14,9 @@
 try:
     import pydcgm
 except ImportError:
-    print("Unable to find pydcgm. You need to add the location of "
-          "pydcgm.py to your environment as PYTHONPATH=$PYTHONPATH:[path-to-pydcgm.py]")
+    print(
+        "Unable to find pydcgm. You need to add the location of "
+        "pydcgm.py to your environment as PYTHONPATH=$PYTHONPATH:[path-to-pydcgm.py]")
 
 import sys
 import os
@@ -38,20 +39,31 @@ class NvSwitchCounterMonitor:
     def _InitFieldLists(self):
         self._nvSwitchLatencyFieldIds = []
         # get the low/medium/high/max latency bucket field ids, each switch port has 4 values.
-        # the field ids are contiguous, where first 4 ids are for port0, next 4 for port1 and so on.
-        for i in range(dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00, dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P17 + 1, 1):
+        # the field ids are contiguous, where first 4 ids are for port0, next 4
+        # for port1 and so on.
+        for i in range(
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_LOW_P00,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_LATENCY_MAX_P17 + 1,
+                1):
             self._nvSwitchLatencyFieldIds.append(i)
 
         # need two lists because there is gap between bandwidth0 and bandwidth1 field Ids.
         # each counter has two values, TX_0 and RX_0.
-        # the field ids are contiguous, where first 2 ids are for port0, next 2 for port1 and so on.
+        # the field ids are contiguous, where first 2 ids are for port0, next 2
+        # for port1 and so on.
         self._nvSwitchBandwidth0FieldIds = []
-        for i in range(dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P00, dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_0_P17 + 1, 1):
+        for i in range(
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_0_P00,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX_0_P17 + 1,
+                1):
             self._nvSwitchBandwidth0FieldIds.append(i)
 
         # get bandwidth counter1 field ids, ie TX_1, RX_1
         self._nvSwitchBandwidth1FieldIds = []
-        for i in range(dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P00, dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_RX_1_P17 + 1, 1):
+        for i in range(
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_1_P00,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX_1_P17 + 1,
+                1):
             self._nvSwitchBandwidth1FieldIds.append(i)
 
     def _InitHandles(self):
@@ -59,7 +71,9 @@ class NvSwitchCounterMonitor:
 
         groupName = "bandwidth_mon_nvswitches" + self._pidPostfix
         self._allNvSwitchesGroup = pydcgm.DcgmGroup(
-            self._dcgmHandle, groupName=groupName, groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES)
+            self._dcgmHandle,
+            groupName=groupName,
+            groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES)
         print(("Found %d NVSwitches" %
               len(self._allNvSwitchesGroup.GetEntities())))
 
@@ -119,18 +133,21 @@ class NvSwitchCounterMonitor:
                         latencyMax = self._nvSwitchLatencyWatcher.values[
                             entityGroupId][entityId][latencyFieldId].values[-1].value
                         latencyFieldId += 1
-                        print(("SwitchID %d LinkIdx %d Latency Low %d Medium %d High %d Max %d"
-                               % (entityId, linkIdx, latencyLow, latencyMed, latencyHigh, latencyMax)))
+                        print(("SwitchID %d LinkIdx %d Latency Low %d Medium %d High %d Max %d" % (
+                            entityId, linkIdx, latencyLow, latencyMed, latencyHigh, latencyMax)))
                     else:
                         latencyFieldId += 4
-        for entityGroupId in list(self._nvSwitchBandwidth0Watcher.values.keys()):
+        for entityGroupId in list(
+                self._nvSwitchBandwidth0Watcher.values.keys()):
             for entityId in self._nvSwitchBandwidth0Watcher.values[entityGroupId]:
-                bandwidth0FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_0_P00
-                bandwidth1FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_BANDWIDTH_TX_1_P00
+                bandwidth0FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_0_P00
+                bandwidth1FieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX_1_P00
                 for linkIdx in range(0, self.NVSWITCH_NUM_LINKS):
                     # if the link is not enabled, then the corresponding bandwidth0FieldId and
-                    # bandwidth1FieldId key values will be empty, so skip those links.
-                    if bandwidth0FieldId in self._nvSwitchBandwidth0Watcher.values[entityGroupId][entityId]:
+                    # bandwidth1FieldId key values will be empty, so skip those
+                    # links.
+                    if bandwidth0FieldId in self._nvSwitchBandwidth0Watcher.values[
+                            entityGroupId][entityId]:
                         counter0Tx = self._nvSwitchBandwidth0Watcher.values[
                             entityGroupId][entityId][bandwidth0FieldId].values[-1].value
                         counter1Tx = self._nvSwitchBandwidth1Watcher.values[

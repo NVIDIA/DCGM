@@ -39,29 +39,60 @@ def create_parser(
     '''
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-p', '--publish-port', dest='publish_port', type=int, default=publish_port,
-                        help='TCP port that the client should publish to. Default={}.'.format(publish_port))
-    parser.add_argument('-i', '--interval', dest='interval', type=int, default=interval,
-                        help='How often the client should retrieve new values from DCGM in seconds. Default={}.'.format(interval))
-    parser.add_argument('-f', '--field-ids', dest='field_ids', type=str, default=field_ids,
-                        help='Comma-separated list of field IDs that should be retrieved from DCGM. ' +
-                             'The full list of available field IDs can be obtained from dcgm_fields.h, dcgm_fields.py, ' +
-                             'or running \'dcgmi dmon -l\'.')
-    parser.add_argument('--log-file', dest='logfile', type=str, default=log_file,
-                        help='A path to a log file for recording what information is being sent to {}'.format(name))
-    parser.add_argument('--log-level', dest='loglevel', type=str, default=log_level,
-                        help='Specify a log level to use for logging.\n\tCRITICAL (0) - log only critical errors that drastically affect execution' +
-                             '\n\tERROR (1) - Log any error in execution\n\tWARNING (2) - Log all warnings and errors that occur' +
-                             '\n\tINFO (3) - Log informational messages about program execution in addition to warnings and errors' +
-                             '\n\tDEBUG (4) - Log debugging information in addition to all information about execution' +
-
-                             '\nDefault: {}'.format(log_level))
+    parser.add_argument(
+        '-p',
+        '--publish-port',
+        dest='publish_port',
+        type=int,
+        default=publish_port,
+        help='TCP port that the client should publish to. Default={}.'.format(publish_port))
+    parser.add_argument(
+        '-i',
+        '--interval',
+        dest='interval',
+        type=int,
+        default=interval,
+        help='How often the client should retrieve new values from DCGM in seconds. Default={}.'.format(interval))
+    parser.add_argument(
+        '-f',
+        '--field-ids',
+        dest='field_ids',
+        type=str,
+        default=field_ids,
+        help='Comma-separated list of field IDs that should be retrieved from DCGM. ' +
+        'The full list of available field IDs can be obtained from dcgm_fields.h, dcgm_fields.py, ' +
+        'or running \'dcgmi dmon -l\'.')
+    parser.add_argument(
+        '--log-file',
+        dest='logfile',
+        type=str,
+        default=log_file,
+        help='A path to a log file for recording what information is being sent to {}'.format(name))
+    parser.add_argument(
+        '--log-level',
+        dest='loglevel',
+        type=str,
+        default=log_level,
+        help='Specify a log level to use for logging.\n\tCRITICAL (0) - log only critical errors that drastically affect execution' +
+        '\n\tERROR (1) - Log any error in execution\n\tWARNING (2) - Log all warnings and errors that occur' +
+        '\n\tINFO (3) - Log informational messages about program execution in addition to warnings and errors' +
+        '\n\tDEBUG (4) - Log debugging information in addition to all information about execution' +
+        '\nDefault: {}'.format(log_level))
 
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('-n', '--hostname', dest='hostname', type=str, default=dcgm_hostname,
-                       help='IP/hostname where the client should query DCGM for values. Default={} (all interfaces).' .format(dcgm_hostname))
-    group.add_argument('-e', '--embedded', dest='embedded', action='store_true',
-                       help='Launch DCGM from within this process instead of connecting to nv-hostengine.')
+    group.add_argument(
+        '-n',
+        '--hostname',
+        dest='hostname',
+        type=str,
+        default=dcgm_hostname,
+        help='IP/hostname where the client should query DCGM for values. Default={} (all interfaces).' .format(dcgm_hostname))
+    group.add_argument(
+        '-e',
+        '--embedded',
+        dest='embedded',
+        action='store_true',
+        help='Launch DCGM from within this process instead of connecting to nv-hostengine.')
 
     return parser
 
@@ -73,9 +104,13 @@ def add_custom_argument(parser, *args, **kwargs):
 
 
 def add_target_host_argument(name, parser, default_target='localhost'):
-    parser.add_argument('-t', '--publish-hostname', dest='publish_hostname',
-                        type=str, default=default_target,
-                        help='The hostname at which the client will publish the readings to {}'.format(name))
+    parser.add_argument(
+        '-t',
+        '--publish-hostname',
+        dest='publish_hostname',
+        type=str,
+        default=default_target,
+        help='The hostname at which the client will publish the readings to {}'.format(name))
 
 ###############################################################################
 

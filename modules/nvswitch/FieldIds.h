@@ -77,7 +77,7 @@ struct NscqDataCollector
  * update function. Finally a const char* NscqPath(void) is expected to return
  * the nscqPath to retrieve the data necessary for this fieldId. These are
  * polymorphic functions in classes to be derived from
- * FieldIdControlType<DCGM_FI_UNKNOWN>.
+ * FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>.
  *
  * Each dcgmFieldType is expected to have a
  *
@@ -124,7 +124,7 @@ public:
  * callback indicies among supplied entities.
  */
 template <>
-class FieldIdControlType<DCGM_FI_UNKNOWN>
+class FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN>
 {
 public:
     using dcgmFieldType = void;
@@ -244,6 +244,6 @@ public:
 /**
  * Map fieldId to FieldIdControlType<fieldId> singleton reference.
  */
-const FieldIdControlType<DCGM_FI_UNKNOWN> *FieldIdFind(unsigned short fieldId);
+const FieldIdControlType<DCGM_FI_SYSTEM_FIELD_UNKNOWN> *FieldIdFind(unsigned short fieldId);
 
 } // namespace DcgmNs

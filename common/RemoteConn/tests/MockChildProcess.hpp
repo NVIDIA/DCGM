@@ -14,10 +14,18 @@
  * limitations under the License.
  */
 
+// Exception: not under mock/; built into remoteconntests only
+
 #pragma once
 
 #include <ChildProcess/ChildProcess.hpp>
 #include <any>
+#include <chrono>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace DcgmNs::Common::RemoteConn::Mock

@@ -24,9 +24,7 @@ import test_utils
 import time
 
 
-@test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_reader_default(handle, gpuIds):
+def helper_dcgm_reader_default(handle, gpuIds):
     # pylint: disable=undefined-variable
     dr = DcgmReader(ignoreBlank=False)
     dr.SetHandle(handle)
@@ -51,14 +49,20 @@ def test_dcgm_reader_default(handle, gpuIds):
         # Make sure we get valid integer field ids
         for fieldId in sample[gpuId]:
             assert isinstance(fieldId, int)
-            assert dcgm_fields.DcgmFieldGetById(fieldId) != None
+            assert dcgm_fields.DcgmFieldGetById(fieldId) is not None
 
+
+# NO HARDWARE
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
-def test_dcgm_reader_specific_fields(handle, gpuIds):
-    specificFields = [dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
-                      dcgm_fields.DCGM_FI_DEV_XID_ERRORS]
+def test_dcgm_reader_default(handle, gpuIds):
+    helper_dcgm_reader_default(handle, gpuIds)
+
+
+def helper_dcgm_reader_specific_fields(handle, gpuIds):
+    specificFields = [dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS,
+                      dcgm_fields.DCGM_FI_DEV_XID_ERROR]
     # pylint: disable=undefined-variable
     dr = DcgmReader(fieldIds=specificFields, ignoreBlank=False)
     dr.SetHandle(handle)
@@ -70,15 +74,19 @@ def test_dcgm_reader_specific_fields(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
-def test_reading_specific_data(handle, gpuIds):
-    """ 
+def test_dcgm_reader_specific_fields(handle, gpuIds):
+    helper_dcgm_reader_specific_fields(handle, gpuIds)
+
+
+def helper_reading_specific_data(handle, gpuIds):
+    """
     Verifies that we can inject specific data and get that same data back
     """
 
     dcgmHandle = pydcgm.DcgmHandle(handle)
     dcgmSystem = dcgmHandle.GetSystem()
 
-    specificFieldIds = [dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
+    specificFieldIds = [dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
                         dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
                         dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
                         ]
@@ -113,6 +121,12 @@ def test_reading_specific_data(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
+def test_reading_specific_data(handle, gpuIds):
+    helper_reading_specific_data(handle, gpuIds)
+
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
 @test_utils.run_only_on_non_mig_gpus()
 @test_utils.run_with_non_mig_cuda_visible_devices()
 @test_utils.exclude_confidential_compute_gpus()
@@ -129,7 +143,8 @@ def test_reading_pid_fields(handle, gpuIds, cudaApp):
     numTries = 75
 
     # pylint: disable=undefined-variable
-    dr = DcgmReader(fieldIds=[fieldTag], updateFrequency=updateFrequencyUsec)
+    dr = DcgmReader(fieldIds=[fieldTag],
+                    updateFrequency=updateFrequencyUsec, gpuIds=gpuIds)
     dr.SetHandle(handle)
     logger.debug(f"Trying for {sleepTime * numTries} seconds")
     exit_loop = False
@@ -152,7 +167,14 @@ def test_reading_pid_fields(handle, gpuIds, cudaApp):
     message = "Found PIDs: [%s]. Expected cudaApp PID: [%d]" % (
         str(pids), cudaApp.getpid())
     logger.debug(message)
-    assert cudaApp.getpid() in pids, "Could not find cudaApp PID. %s" % (message)
+
+    if cudaApp.getpid() not in pids:
+        retvalue = cudaApp.retvalue()
+        if retvalue is not None and retvalue != 0:
+            test_utils.skip_test(
+                "cudaApp (pid %d) exited rc=%s; DCGM had no running process to observe."
+                % (cudaApp.getpid(), retvalue))
+        assert False, "Could not find cudaApp PID. %s" % (message)
 
 
 def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
@@ -166,8 +188,8 @@ def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
         flag:   argument for GetAllGpuValuesAsDictSinceLastCall
         repeat: whether to repeat GetAllGpuValuesAsDictsSinceLastCall call
     """
-    specificFields = [dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
-                      dcgm_fields.DCGM_FI_DEV_XID_ERRORS]
+    specificFields = [dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS,
+                      dcgm_fields.DCGM_FI_DEV_XID_ERROR]
     # pylint: disable=undefined-variable
     dr = DcgmReader(fieldIds=specificFields, ignoreBlank=False)
     dr.SetHandle(handle)
@@ -176,7 +198,7 @@ def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
     if repeat:
         latest = dr.GetAllGpuValuesAsDictSinceLastCall(flag)
 
-    if flag == False:
+    if not flag:
         dcgmHandle = pydcgm.DcgmHandle(handle)
         dcgmSystem = dcgmHandle.GetSystem()
         fieldTags = []
@@ -188,34 +210,50 @@ def util_dcgm_reader_all_since_last_call(handle, flag, repeat):
         assert len(latest[gpuId]) == len(specificFields)
 
         for key in latest[gpuId].keys():
-            if flag == False:
+            if not flag:
                 assert key in fieldTags
             else:
                 assert key in specificFields
 
 
-@test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_only_with_live_gpus()
-def test_dcgm_reader_all_since_last_call_false(handle, gpuIds):
+def helper_dcgm_reader_all_since_last_call_false(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, False, False)
 
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
-def test_dcgm_reader_all_since_last_call_true(handle, gpuIds):
+def test_dcgm_reader_all_since_last_call_false(handle, gpuIds):
+    helper_dcgm_reader_all_since_last_call_false(handle, gpuIds)
+
+
+def helper_dcgm_reader_all_since_last_call_true(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, True, False)
 
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
-def test_dcgm_reader_all_since_last_call_false_repeat(handle, gpuIds):
+def test_dcgm_reader_all_since_last_call_true(handle, gpuIds):
+    helper_dcgm_reader_all_since_last_call_true(handle, gpuIds)
+
+
+def helper_dcgm_reader_all_since_last_call_false_repeat(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, False, True)
 
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
-def test_dcgm_reader_all_since_last_call_true_repeat(handle, gpuIds):
+def test_dcgm_reader_all_since_last_call_false_repeat(handle, gpuIds):
+    helper_dcgm_reader_all_since_last_call_false_repeat(handle, gpuIds)
+
+
+def helper_dcgm_reader_all_since_last_call_true_repeat(handle, gpuIds):
     util_dcgm_reader_all_since_last_call(handle, True, True)
+
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
+def test_dcgm_reader_all_since_last_call_true_repeat(handle, gpuIds):
+    helper_dcgm_reader_all_since_last_call_true_repeat(handle, gpuIds)
 
 
 def helper_mig_init_field_values(handle, ciIds, fieldIds, fieldValues):
@@ -262,7 +300,8 @@ def helper_mig_init_field_values(handle, ciIds, fieldIds, fieldValues):
     time.sleep(0.050)
 
 
-def helper_dcgm_reader_latest_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, mapById=True):
+def helper_dcgm_reader_latest_mig_ci_fields(
+        handle, gpuIds, instanceIds, ciIds, mapById=True):
     """
     Test DcgmiReader for MIG CI fields.
     """
@@ -272,8 +311,10 @@ def helper_dcgm_reader_latest_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, 
 
     helper_mig_init_field_values(handle, ciIds, fieldIds, fieldValues)
 
-    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(
-        handle), groupName='allMigs', groupType=dcgm_structs.DCGM_GROUP_DEFAULT_COMPUTE_INSTANCES)
+    group = pydcgm.DcgmGroup(
+        pydcgm.DcgmHandle(handle),
+        groupName='allMigs',
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT_COMPUTE_INSTANCES)
     dr = DcgmReader(fieldIds=fieldIds, entities=group.GetEntities())
     dr.SetHandle(handle)
 
@@ -317,7 +358,8 @@ def helper_dcgm_reader_latest_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, 
             assert (foundValues == len(fieldValues))
 
 
-def helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, mapById=True):
+def helper_dcgm_reader_all_mig_ci_fields(
+        handle, gpuIds, instanceIds, ciIds, mapById=True):
     """
     Test DcgmiReader for MIG CI fields.
     """
@@ -327,8 +369,10 @@ def helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, map
 
     helper_mig_init_field_values(handle, ciIds, fieldIds, fieldValues)
 
-    group = pydcgm.DcgmGroup(pydcgm.DcgmHandle(
-        handle), groupName='allMigs', groupType=dcgm_structs.DCGM_GROUP_DEFAULT_COMPUTE_INSTANCES)
+    group = pydcgm.DcgmGroup(
+        pydcgm.DcgmHandle(handle),
+        groupName='allMigs',
+        groupType=dcgm_structs.DCGM_GROUP_DEFAULT_COMPUTE_INSTANCES)
     dr = DcgmReader(fieldIds=fieldIds, entities=group.GetEntities())
     dr.SetHandle(handle)
 
@@ -381,6 +425,8 @@ def helper_dcgm_reader_all_mig_ci_fields(handle, gpuIds, instanceIds, ciIds, map
             assert (foundValues == len(fieldValues))
 
 
+# NO HARDWARE
+
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(2)
@@ -409,12 +455,16 @@ def test_dcgm_reader_wildcard_gi(handle, gpuIds, instanceIds, ciIds):
         dcgm_structs.DCGM_MAX_COMPUTE_INSTANCES_PER_GPU, ciIds[0] / gpuIds[1])
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(1)
 @test_utils.run_with_injection_gpu_instances(1)
 @test_utils.run_with_injection_gpu_compute_instances(4)
-def test_dcgm_reader_latest_mig_ci_fields_by_id(handle, gpuIds, instanceIds, ciIds):
+def test_dcgm_reader_latest_mig_ci_fields_by_id(
+        handle, gpuIds, instanceIds, ciIds):
     """
     Test DcgmiReader for MIG CI fields.
     """
@@ -423,12 +473,16 @@ def test_dcgm_reader_latest_mig_ci_fields_by_id(handle, gpuIds, instanceIds, ciI
         handle, gpuIds, instanceIds, ciIds, True)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(1)
 @test_utils.run_with_injection_gpu_instances(1)
 @test_utils.run_with_injection_gpu_compute_instances(4)
-def test_dcgm_reader_all_mig_ci_fields_by_id(handle, gpuIds, instanceIds, ciIds):
+def test_dcgm_reader_all_mig_ci_fields_by_id(
+        handle, gpuIds, instanceIds, ciIds):
     """
     Test DcgmiReader for MIG CI fields.
     """
@@ -437,12 +491,16 @@ def test_dcgm_reader_all_mig_ci_fields_by_id(handle, gpuIds, instanceIds, ciIds)
         handle, gpuIds, instanceIds, ciIds, True)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(1)
 @test_utils.run_with_injection_gpu_instances(1)
 @test_utils.run_with_injection_gpu_compute_instances(4)
-def test_dcgm_reader_latest_mig_ci_fields_by_tag(handle, gpuIds, instanceIds, ciIds):
+def test_dcgm_reader_latest_mig_ci_fields_by_tag(
+        handle, gpuIds, instanceIds, ciIds):
     """
     Test DcgmiReader for MIG CI fields.
     """
@@ -451,12 +509,16 @@ def test_dcgm_reader_latest_mig_ci_fields_by_tag(handle, gpuIds, instanceIds, ci
         handle, gpuIds, instanceIds, ciIds, False)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(1)
 @test_utils.run_with_injection_gpu_instances(1)
 @test_utils.run_with_injection_gpu_compute_instances(4)
-def test_dcgm_reader_all_mig_ci_fields_by_tag(handle, gpuIds, instanceIds, ciIds):
+def test_dcgm_reader_all_mig_ci_fields_by_tag(
+        handle, gpuIds, instanceIds, ciIds):
     """
     Test DcgmiReader for MIG CI fields.
     """

@@ -18,3 +18,10 @@
 
 extern CUresult cuInitResult;
 extern CUresult cuStreamCreateResult;
+extern CUresult cuDeviceGetByPCIBusIdResult;
+extern CUresult cuModuleLoadDataResult;
+extern CUdeviceptr_v2 cuMemcpyDtoHValue;
+extern CUresult cuMemAllocResult;
+extern size_t cuMemGetInfoFree;
+extern size_t cuMemGetInfoTotal;
+extern const char *cuGetErrorStringValue;

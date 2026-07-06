@@ -15,7 +15,6 @@
  */
 
 #include "MnDiagCommon.h"
-#include "MnDiagProcessUtils.h"
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
 #include <algorithm>
@@ -191,4 +190,55 @@ dcgmReturn_t infer_mnubergemm_default_path(std::string &mnubergemm_path, int cud
 
     mnubergemm_path = candidatePath.value();
     return DCGM_ST_OK;
+}
+
+std::expected<int, dcgmReturn_t> ParseTimeToRunSeconds(dcgmRunMnDiag_t const &params, std::string_view key)
+{
+    int const testParmsLen
+        = static_cast<int>(std::min(static_cast<size_t>(DCGM_MAX_TEST_PARMS), std::size(params.testParms)));
+
+    for (int i = 0; i < testParmsLen && params.testParms[i][0] != '\0'; ++i)
+    {
+        std::string_view param(params.testParms[i]);
+        if (!param.starts_with(key))
+        {
+            continue;
+        }
+        if (param.size() <= key.size())
+        {
+            log_error("Invalid {} parameter format (missing '='): {}", key, param);
+            return std::unexpected(DCGM_ST_BADPARAM);
+        }
+        if (param[key.size()] != '=')
+        {
+            continue;
+        }
+
+        auto const posEq         = key.size();
+        auto posSemicolon        = param.find(';', posEq + 1);
+        std::string_view valueSv = (posSemicolon == std::string_view::npos)
+                                       ? param.substr(posEq + 1)
+                                       : param.substr(posEq + 1, posSemicolon - (posEq + 1));
+
+        int parsed = 0;
+        try
+        {
+            parsed = DcgmNs::strictStrToInt(std::string(valueSv));
+        }
+        catch (std::exception const &e)
+        {
+            log_error("Invalid {} value '{}': {}", key, valueSv, e.what());
+            return std::unexpected(DCGM_ST_BADPARAM);
+        }
+
+        if (parsed <= 0)
+        {
+            log_error("Invalid {} value '{}': must be > 0", key, valueSv);
+            return std::unexpected(DCGM_ST_BADPARAM);
+        }
+
+        return parsed;
+    }
+
+    return 0;
 }

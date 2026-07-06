@@ -241,10 +241,10 @@ dcgmReturn_t DcgmChildProcessManager::Spawn(dcgmChildProcessParams_t const &para
                    ProcessInfo { .process         = std::move(process),
                                  .stdErrPipe      = std::move(stdErrPipe),
                                  .stdOutPipe      = std::move(stdOutPipe),
-                                 .dataChannelPipe = std::move(dataChannelPipe) });
+                                 .dataChannelPipe = std::move(dataChannelPipe),
+                                 .hangDetectPid   = pid });
 
-    /* To avoid duplicative tracking of the process, start hang detection after adding the process info.
-       This means a process that fails pipe creation could be created and unmonitored. */
+    // Note: A process that fails pipe creation could be created and unmonitored.
     StartHangDetection(pid);
 
     return DCGM_ST_OK;
@@ -278,7 +278,7 @@ dcgmReturn_t DcgmChildProcessManager::Stop(ChildProcessHandle_t handle, bool for
     }
 
     auto &processInfo = (*processInfoRef).get();
-    auto const pid    = processInfo.process->GetPid().value_or(0);
+    auto const pid    = processInfo.hangDetectPid;
     processInfo.process->Stop(force);
     if (processInfo.process->IsAlive())
     {
@@ -385,7 +385,7 @@ dcgmReturn_t DcgmChildProcessManager::Destroy(ChildProcessHandle_t handle, int s
         return DCGM_ST_BADPARAM;
     }
     auto const &mappedProcess = processInfoNode.mapped();
-    auto const pid            = mappedProcess.process->GetPid().value_or(0);
+    auto const pid            = mappedProcess.hangDetectPid;
     mappedProcess.process->Kill(sigTermTimeoutSec);
     if (mappedProcess.process->IsAlive())
     {
@@ -528,7 +528,7 @@ dcgmReturn_t DcgmChildProcessManager::Reset()
     // Kill processes
     for (auto &[handle, processInfo] : processesToDestroy)
     {
-        auto const pid = processInfo.process->GetPid().value_or(0);
+        auto const pid = processInfo.hangDetectPid;
         StopHangDetectGuard hangDetectionGuard(*this, pid);
 
         try
@@ -564,7 +564,7 @@ DcgmChildProcessManager::~DcgmChildProcessManager()
 {
     for (auto &[handle, processInfo] : m_processes)
     {
-        if (auto const pid = processInfo.process->GetPid().value_or(0); pid != 0)
+        if (auto const pid = processInfo.hangDetectPid; pid != 0)
         {
             StopHangDetectGuard hangDetectionGuard(*this, pid);
         }

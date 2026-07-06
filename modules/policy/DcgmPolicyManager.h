@@ -172,6 +172,23 @@ private:
     /* Helper function to convert Nvlink counters fieldIds to string */
     char *ConvertNVLinkCounterTypeToString(unsigned short fieldId);
 
+    /**
+     * Gets delta between current and previous sample from cache.
+     *
+     * @param[in]  entityId      GPU entity ID
+     * @param[in]  fieldId       Field to query
+     * @param[in]  timestamp     Current sample timestamp
+     * @param[out] currentCount  Current counter value
+     * @param[out] prevCount     Previous counter value
+     *
+     * @return true if delta available, false if not enough samples or error
+     */
+    bool GetCounterDelta(unsigned int entityId,
+                         unsigned short fieldId,
+                         int64_t timestamp,
+                         unsigned int &currentCount,
+                         unsigned int &prevCount);
+
     /*****************************************************************************
      * Method to watch all fields that need to be watched in order for the policy
      * manager to do its job. If the cache manager is already watching fields, this is a

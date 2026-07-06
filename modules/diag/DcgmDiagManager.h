@@ -150,6 +150,8 @@ public:
     /* Should not be made public... for testing purposes only */
     dcgmReturn_t PerformDummyTestExecute(std::string *stdoutStr, std::string *stderrStr);
 
+    using ConfigFileCleanupType = DcgmNs::Defer<std::function<void()>>;
+    using ConfigFileGuard       = std::optional<ConfigFileCleanupType>;
     /*************************************************************************/
     /*
      * Create the nvvs command for execution.
@@ -159,6 +161,7 @@ public:
      * @param cmdArgs: vector in which the args will be stored
      * @param drd: struct containing details for the diag to run
      * @param diagResponseVersion: expected diag response version to be returned from nvvs.
+     * @param configFileGuard: guard for the config file cleanup
      * @param fakeGpuIds: csv list of fake gpu ids for the nvvs command
      * @param entityIds: entity ids for the nvvs command
      *
@@ -169,6 +172,7 @@ public:
     dcgmReturn_t CreateNvvsCommand(std::vector<std::string> &cmdArgs,
                                    dcgmRunDiag_v10 *drd,
                                    unsigned int diagResponseVersion,
+                                   ConfigFileGuard &configFileGuard,
                                    std::string const &fakeGpuIds               = "",
                                    std::string const &entityIds                = "",
                                    ExecuteWithServiceAccount useServiceAccount = ExecuteWithServiceAccount::Yes);
@@ -286,9 +290,22 @@ private:
     static std::string GetCompareTestName(const std::string &testname);
 
     /*
-     * Write the config file (if needed) and add that to the command arguments
+     * If drd->configFileContents is non-empty, writes it to a temporary /tmp/tmp-dcgm-* file,
+     * appends --config <path> to cmdArgs, and populates configFileGuard with a RAII guard
+     * that will unlink the file when it fires.
+     * If drd->configFileContents is empty, appends --configless to cmdArgs instead and leaves
+     * configFileGuard empty.
+     * On any error after the file is created, the file is deleted before returning.
+     *
+     * @param drd             : struct containing details for the diag to run
+     * @param cmdArgs         : command arguments vector to append --config or --configless to
+     * @param configFileGuard : receives ownership of the temp file cleanup on success
+     *
+     * Returns: DCGM_ST_OK on success, DCGM_ST_GENERIC_ERROR on failure
      */
-    dcgmReturn_t AddConfigFile(dcgmRunDiag_v10 *drd, std::vector<std::string> &cmdArgs) const;
+    dcgmReturn_t AddConfigFile(dcgmRunDiag_v10 *drd,
+                               std::vector<std::string> &cmdArgs,
+                               ConfigFileGuard &configFileGuard) const;
     static void AppendDummyArgs(std::vector<std::string> &args);
     dcgmReturn_t CanRunNewNvvsInstance() const;
 

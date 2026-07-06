@@ -47,7 +47,7 @@ private:
     int TestGroupReportErrOnDuplicate();
     int TestDefaultGpusAreDynamic();
 
-    int HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager, unsigned int groupId, std::string groupName);
+    int HelperOperationsOnGroup(DcgmGroupManager *pDcgmGrpManager, unsigned int groupId, std::string const &groupName);
 
     std::vector<unsigned int> m_gpus; /* List of GPUs to run on, copied in Init() */
 };

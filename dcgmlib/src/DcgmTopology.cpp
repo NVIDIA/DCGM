@@ -22,10 +22,47 @@
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 
+#include <algorithm>
+#include <bit>
 #include <dcgm_nvml.h>
 #include <map>
 #include <set>
 #include <vector>
+
+dcgmGpuTopologyLevel_t NvLinkPathFromLinkQuantity(unsigned int linkQuantity, unsigned int maxLinks)
+{
+    if (linkQuantity == 0 || maxLinks == 0)
+    {
+        return DCGM_TOPOLOGY_UNINITIALIZED;
+    }
+
+    unsigned int const cappedLinkQuantity = std::min(linkQuantity, maxLinks);
+    return static_cast<dcgmGpuTopologyLevel_t>(static_cast<uint64_t>(DCGM_TOPOLOGY_NVLINK1)
+                                               << (cappedLinkQuantity - 1));
+}
+
+dcgmGpuTopologyLevel_v1_t TopologyPathToLegacy(dcgmGpuTopologyLevel_t path)
+{
+    uint64_t pciPath    = static_cast<uint64_t>(DCGM_TOPOLOGY_PATH_PCI(path));
+    uint64_t nvLinkPath = NvLinkPathFromLinkQuantity(NvLinkScore(path), DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY3);
+
+    return static_cast<dcgmGpuTopologyLevel_v1_t>(pciPath | nvLinkPath);
+}
+
+namespace
+{
+dcgmReturn_t AddNvLinkToTopologyMask(uint64_t &mask, unsigned int linkId)
+{
+    if (linkId >= sizeof(mask) * 8)
+    {
+        DCGM_LOG_ERROR << "NVLINK " << linkId << " is out of range for topology mask width " << sizeof(mask) * 8;
+        return DCGM_ST_BADPARAM;
+    }
+
+    mask |= 1ULL << linkId;
+    return DCGM_ST_OK;
+}
+} // namespace
 
 /*****************************************************************************/
 void ConvertVectorToBitmask(std::vector<unsigned int> &gpuIds, uint64_t &outputGpus, uint32_t numGpus)
@@ -281,18 +318,8 @@ unsigned int SetIOConnectionLevels(std::vector<unsigned int> &affinityGroup,
  */
 unsigned int NvLinkScore(dcgmGpuTopologyLevel_t path)
 {
-    unsigned long temp = static_cast<unsigned long>(path);
-
-    // This code relies on DCGM_TOPOLOGY_NVLINK1 equaling 0x100, so
-    // make the code fail so this gets updated if it ever changes
-    temp = temp / 256;
-    DCGM_CASSERT(DCGM_TOPOLOGY_NVLINK1 == 0x100, 1);
-    unsigned int score = 0;
-
-    for (; temp > 0; score++)
-        temp = temp / 2;
-
-    return score;
+    uint64_t nvLinkPath = static_cast<uint64_t>(DCGM_TOPOLOGY_PATH_NVLINK(path)) >> 8;
+    return static_cast<unsigned int>(std::bit_width(nvLinkPath));
 }
 
 bool HasStrongConnection(std::vector<DcgmGpuConnectionPair> &connections, uint32_t numGpus, uint64_t &outputGpus)
@@ -554,7 +581,7 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
 
     *topology_pp = topology_p;
 
-    topology_p->version = dcgmTopology_version1;
+    topology_p->version = dcgmTopology_version2;
     for (unsigned int index1 = 0; index1 < gpuInfo.size(); index1++)
     {
         if (gpuInfo[index1].status == DcgmEntityStatusDetached)
@@ -585,8 +612,9 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
             // all of the paths are stored low GPU to higher GPU (i.e. 0 -> 1, 0 -> 2, 1 -> 2, etc.)
             // so for NVLINK though the quantity of links will be the same as determined by querying
             // node 0 or node 1, the link numbers themselves will be different.  Need to store both values.
-            unsigned int localNvLinkQuantity = 0, localNvLinkMask = 0;
-            unsigned int remoteNvLinkMask = 0;
+            unsigned int localNvLinkQuantity = 0;
+            uint64_t localNvLinkMask         = 0;
+            uint64_t remoteNvLinkMask        = 0;
 
             // Assign here instead of 6x below
             localNvLinkQuantity = gpuNvSwitchLinkCounts[gpuId1];
@@ -598,7 +626,13 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
                 if (gpuNvSwitchLinkCounts[gpuId1] > 0)
                 {
                     if (gpuInfo[gpuId1].nvLinkLinkState[localNvLink] == DcgmNvLinkLinkStateUp)
-                        localNvLinkMask |= 1 << localNvLink;
+                    {
+                        dcgmReturn_t dcgmReturn = AddNvLinkToTopologyMask(localNvLinkMask, localNvLink);
+                        if (dcgmReturn != DCGM_ST_OK)
+                        {
+                            return dcgmReturn;
+                        }
+                    }
                 }
                 else
                 {
@@ -628,7 +662,11 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
                     if (!strcasecmp(tempPciInfo.busId, gpuInfo[index2].busId))
                     {
                         localNvLinkQuantity++;
-                        localNvLinkMask |= 1 << localNvLink;
+                        dcgmReturn_t dcgmReturn = AddNvLinkToTopologyMask(localNvLinkMask, localNvLink);
+                        if (dcgmReturn != DCGM_ST_OK)
+                        {
+                            return dcgmReturn;
+                        }
                     }
                 }
             }
@@ -643,7 +681,13 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
                 if (gpuNvSwitchLinkCounts[gpuId2] > 0)
                 {
                     if (gpuInfo[gpuId2].nvLinkLinkState[remoteNvLink] == DcgmNvLinkLinkStateUp)
-                        remoteNvLinkMask |= 1 << remoteNvLink;
+                    {
+                        dcgmReturn_t dcgmReturn = AddNvLinkToTopologyMask(remoteNvLinkMask, remoteNvLink);
+                        if (dcgmReturn != DCGM_ST_OK)
+                        {
+                            return dcgmReturn;
+                        }
+                    }
                 }
                 else
                 {
@@ -671,7 +715,11 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
                     }
                     if (!strcasecmp(tempPciInfo.busId, gpuInfo[index1].busId))
                     {
-                        remoteNvLinkMask |= 1 << remoteNvLink;
+                        dcgmReturn_t dcgmReturn = AddNvLinkToTopologyMask(remoteNvLinkMask, remoteNvLink);
+                        if (dcgmReturn != DCGM_ST_OK)
+                        {
+                            return dcgmReturn;
+                        }
                     }
                 }
             }
@@ -691,7 +739,7 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
 
             // NVLINK information for path resides in bits 31:8 so it can fold into the PCI path
             // easily
-            topology_p->element[elementsFilled].path = (dcgmGpuTopologyLevel_t)((1 << (localNvLinkQuantity - 1)) << 8);
+            topology_p->element[elementsFilled].path = NvLinkPathFromLinkQuantity(localNvLinkQuantity);
             elementsFilled++;
         }
     }

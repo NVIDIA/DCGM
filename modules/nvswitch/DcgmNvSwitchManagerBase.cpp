@@ -221,7 +221,8 @@ dcgmReturn_t DcgmNvSwitchManagerBase::WatchField(const dcgm_field_entity_group_t
     {
         if (((fieldIds[i] < DCGM_FI_FIRST_NVSWITCH_FIELD_ID) || (fieldIds[i] > DCGM_FI_LAST_NVSWITCH_FIELD_ID))
             && ((fieldIds[i] < DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID)
-                || (fieldIds[i] > DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID)))
+                || (fieldIds[i] > DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID))
+            && (fieldIds[i] != DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION))
         {
             log_debug("Skipping watching non supported field {}", fieldIds[i]);
         }
@@ -248,18 +249,9 @@ static void BufferBlankValueForEntity(dcgm_field_entity_group_t entityGroupId,
 {
     assert(fieldMeta != nullptr);
 
-    switch (fieldMeta->fieldType)
+    if (buf.AddBlankValue(entityGroupId, entityId, fieldMeta->fieldId, now, DCGM_ST_OK) == nullptr)
     {
-        case DCGM_FT_INT64:
-            buf.AddInt64Value(entityGroupId, entityId, fieldMeta->fieldId, DCGM_INT64_BLANK, now, DCGM_ST_OK);
-            break;
-
-        case DCGM_FT_DOUBLE:
-            buf.AddDoubleValue(entityGroupId, entityId, fieldMeta->fieldId, DCGM_FP64_BLANK, now, DCGM_ST_OK);
-            break;
-
-        default:
-            log_error("Unhandled type: {}", fieldMeta->fieldType);
+        log_error("NvSwitch blank append failed for fieldId {} (type {})", fieldMeta->fieldId, fieldMeta->fieldType);
     }
 }
 
@@ -278,7 +270,7 @@ dcgmReturn_t DcgmNvSwitchManagerBase::UpdateFatalErrorsAllSwitches()
             haveErrors = true;
             buf.AddInt64Value(DCGM_FE_SWITCH,
                               m_nvSwitches[i].physicalId,
-                              DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS,
+                              DCGM_FI_DEV_SXID_FATAL_ERROR,
                               m_fatalErrors[i].error,
                               now,
                               DCGM_ST_OK);
@@ -361,11 +353,14 @@ dcgmReturn_t DcgmNvSwitchManagerBase::UpdateFields(timelib64_t &nextUpdateTime, 
         fieldEntityMap[fieldInfo.fieldMeta->fieldId].push_back(fieldInfo);
     }
 
+    auto const connectionStatus = CheckConnectionStatus();
     for (const auto &[fieldId, entities] : fieldEntityMap)
     {
-        if (CheckConnectionStatus() == ConnectionStatus::Paused)
+        if (connectionStatus != ConnectionStatus::Ok)
         {
-            log_debug("The NvSwitch module is paused. Filling fieldId {} with blank values", fieldId);
+            log_debug("The NvSwitch module is in {} state. Filling fieldId {} with blank values",
+                      static_cast<int>(connectionStatus),
+                      fieldId);
             BufferBlankValueForAllEntities(fieldId, buf, entities);
             continue;
         }

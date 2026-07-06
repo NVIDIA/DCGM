@@ -16,19 +16,20 @@
 
 #pragma once
 
-#include "DcgmCoreProxyBase.h"
 #include "MnDiagMpiRunner.h"
 #include "MnDiagMpiRunnerBase.h"
 #include <memory>
 
 /**
- * @brief Adapter for MnDiagMpiRunner to use in production code
+ * @brief Adapter for MnDiagMpiRunner to use in production code.
+ *        The concrete runner subclass is supplied at construction time,
+ *        allowing the factory to select the appropriate test implementation.
  */
 class MnDiagMpiRunnerAdapter : public MnDiagMpiRunnerBase
 {
 public:
-    MnDiagMpiRunnerAdapter(DcgmCoreProxyBase &coreProxy)
-        : m_mpiRunner(std::make_unique<MnDiagMpiRunner>(coreProxy))
+    explicit MnDiagMpiRunnerAdapter(std::unique_ptr<MnDiagMpiRunner> runner)
+        : m_mpiRunner(std::move(runner))
     {}
 
     ~MnDiagMpiRunnerAdapter() override = default;
@@ -47,17 +48,6 @@ public:
     std::string GetLastCommand() const override
     {
         return m_mpiRunner->GetLastCommand();
-    }
-
-    /**
-     * @brief Set the user name and uid to run the MPI process as
-     *
-     * @param userInfo The user name and uid to run the MPI process as, or nullopt to run as the user running
-     * nv-hostengine
-     */
-    void SetUserInfo(std::pair<std::string, uid_t> userInfo) override
-    {
-        m_mpiRunner->SetUserInfo(std::move(userInfo));
     }
 
     /**
@@ -115,11 +105,9 @@ public:
     /**
      * @brief Custom output callback handler for mnubergemm diagnostics
      */
-    dcgmReturn_t MnDiagOutputCallback(std::istream &dataStream,
-                                      void *responseStruct,
-                                      nodeInfoMap_t const &nodeInfo) override
+    dcgmReturn_t MnDiagOutputCallback(int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo) override
     {
-        return m_mpiRunner->MnDiagOutputCallback(dataStream, responseStruct, nodeInfo);
+        return m_mpiRunner->MnDiagOutputCallback(fd, responseStruct, nodeInfo);
     }
 
     /**
@@ -138,22 +126,34 @@ public:
         return m_mpiRunner->PopulateResponse(responseStruct, nodeInfo);
     }
 
-    /**
-     * @brief Check if MPI has launched enough processes
-     *
-     * @return std::expected<bool, dcgmReturn_t> True if enough processes launched, error code on failure
-     */
-    std::expected<bool, dcgmReturn_t> HasMpiLaunchedEnoughProcesses() override
+    std::expected<std::chrono::milliseconds, dcgmReturn_t> GetTestRunTime(dcgmRunMnDiag_t const &params) const override
     {
-        return m_mpiRunner->HasMpiLaunchedEnoughProcesses();
+        return m_mpiRunner->GetTestRunTime(params);
     }
 
-    /**
-     * @brief Set the mnubergemm path using the real MnDiagMpiRunner
-     */
-    void SetMnubergemmPath(std::string const &mnubergemmPath) override
+    dcgmReturn_t GetTestBinaryPath(std::string &path) const override
     {
-        m_mpiRunner->SetMnubergemmPath(mnubergemmPath);
+        return m_mpiRunner->GetTestBinaryPath(path);
+    }
+
+    std::string_view GetTestPrefix() const override
+    {
+        return m_mpiRunner->GetTestPrefix();
+    }
+
+    std::string_view GetLogFilePrefix() const override
+    {
+        return m_mpiRunner->GetLogFilePrefix();
+    }
+
+    std::unordered_map<std::string, std::string> GetDefaultParametersMap() const override
+    {
+        return m_mpiRunner->GetDefaultParametersMap();
+    }
+
+    void ParseTestOutput(int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo) override
+    {
+        m_mpiRunner->ParseTestOutput(fd, responseStruct, nodeInfo);
     }
 
 private:

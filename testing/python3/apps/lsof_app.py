@@ -49,15 +49,19 @@ class LsofApp(app_runner.AppRunner):
     def _process_finish(self, stdout_buf, stderr_buf):
         super(LsofApp, self)._process_finish(stdout_buf, stderr_buf)
 
-        if self.retvalue() == 1 and self.stdout_lines and self.stdout_lines[0].startswith("lsof: no file use located: "):
-            # lsof returns with error code 1 and prints message when no processes opened the file
+        if self.retvalue() == 1 and self.stdout_lines and self.stdout_lines[0].startswith(
+                "lsof: no file use located: "):
+            # lsof returns with error code 1 and prints message when no
+            # processes opened the file
             self.validate()
             self._retvalue = 0  # Fake success
             self.processes = []
             return
 
-        if self.retvalue() == 1 and self.stderr_lines and self.stderr_lines[0].endswith("No such file or directory"):
-            # lsof returns with error code 1 and prints message when target file doesn't exist
+        if self.retvalue() == 1 and self.stderr_lines and self.stderr_lines[0].endswith(
+                "No such file or directory"):
+            # lsof returns with error code 1 and prints message when target
+            # file doesn't exist
             self.validate()
             self._retvalue = 0  # Fake success
             self.processes = []  # no file, no processes using it

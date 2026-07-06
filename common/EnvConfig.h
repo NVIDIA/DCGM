@@ -25,6 +25,16 @@ public:
     EnvConfig();
     virtual ~EnvConfig() = default;
 
+    /**
+     * @brief Checks if the environment variable is set to a regular file path
+     * @param envVarName The name of the environment variable
+     * @return True if the environment variable is set to a regular file path, false otherwise
+     */
+    virtual bool IsEnvVarPathToRegularFile(char const *envVarName) const;
+    /**
+     * @brief Checks if the non-NVIDIA CPU is supported
+     * @return True if the non-NVIDIA CPU is supported, false otherwise
+     */
     virtual bool SupportNonNvidiaCpu() const;
 
 private:

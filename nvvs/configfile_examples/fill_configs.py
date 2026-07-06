@@ -34,7 +34,8 @@ for test in tests:
         try:
             outFile = open(outFileName, 'w')
         except IOError as e:
-            print "Unable to open %s for writing. Skipping." % outFileName
+            print(
+                "Unable to open %s for writing. Skipping." % outFileName)
             continue
 
         for line in fileinput.input(template):

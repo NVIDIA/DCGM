@@ -51,12 +51,18 @@ public:
 
     nvvsPluginResult_t TestMain(unsigned int dcgmGpuIndex);
 
+protected:
+    int AllocDeviceMem(int size, CUdeviceptr_v2 *ptr);
+    void SetGpuIndex(unsigned int gpuIndex)
+    {
+        m_gpuIndex = gpuIndex;
+    }
+
 private:
     int Setup(void);
     void Cleanup(void);
     nvvsPluginResult_t RunTest(void);
 
-    int AllocDeviceMem(int size, CUdeviceptr_v2 *ptr);
     int AllocHostMem(int size, void **ptr);
     nvvsPluginResult_t GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes);
     int GetCuDevice(CUdevice *cuDevice, std::stringstream &error);

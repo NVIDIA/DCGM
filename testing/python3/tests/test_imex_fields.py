@@ -28,10 +28,12 @@ def helper_imex_fields_basic_retrieval(handle, gpuIds):
     """Helper function to test basic retrieval of IMEX field values"""
 
     # Create a field group with IMEX fields
-    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(handle,
-                                                   [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS,
-                                                    dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS],
-                                                   "imex_test_fields")
+    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(
+        handle,
+        [
+            dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS,
+            dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS],
+        "imex_test_fields")
 
     # Create a group with all GPUs (default behavior)
     groupId = dcgm_agent.dcgmGroupCreate(
@@ -51,14 +53,16 @@ def helper_imex_fields_basic_retrieval(handle, gpuIds):
         # Wait for at least one update
         time.sleep(2)
 
-        # Get the latest values for the GPU - request each field separately to avoid race conditions
-        domain_values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId,
-                                                                         [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
-        daemon_values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId,
-                                                                         [dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS])
+        # Get the latest values for the GPU - request each field separately to
+        # avoid race conditions
+        domain_values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+            handle, gpuId, [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
+        daemon_values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+            handle, gpuId, [dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS])
 
         logger.info(
-            f"Retrieved {len(domain_values)} domain values and {len(daemon_values)} daemon values")
+            f"Retrieved {len(domain_values)} domain values and "
+            f"{len(daemon_values)} daemon values")
 
         # Validate domain status
         domain_found = False
@@ -95,7 +99,8 @@ def helper_imex_fields_basic_retrieval(handle, gpuIds):
         try:
             dcgm_agent.dcgmUnwatchFields(handle, groupId, fieldGroupId)
         except Exception as e:
-            # Only log if it's not the common "Field is not being updated" error
+            # Only log if it's not the common "Field is not being updated"
+            # error
             if "Field is not being updated" not in str(e):
                 logger.warning(f"Failed to unwatch fields: {e}")
 
@@ -114,9 +119,8 @@ def helper_imex_domain_status_values(handle, gpuIds):
     """Helper function to test IMEX domain status field returns valid values"""
 
     # Create field group for domain status only
-    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(handle,
-                                                   [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS],
-                                                   "imex_domain_test")
+    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(
+        handle, [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS], "imex_domain_test")
 
     groupId = dcgm_agent.dcgmGroupCreate(
         handle, dcgm_structs.DCGM_GROUP_DEFAULT, "imex_domain_group")
@@ -130,8 +134,8 @@ def helper_imex_domain_status_values(handle, gpuIds):
 
         time.sleep(2)
 
-        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId,
-                                                                  [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+            handle, gpuId, [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
 
         assert len(
             values) == 1, f"Expected 1 domain status value, got {len(values)}"
@@ -156,7 +160,8 @@ def helper_imex_domain_status_values(handle, gpuIds):
         try:
             dcgm_agent.dcgmUnwatchFields(handle, groupId, fieldGroupId)
         except Exception as e:
-            # Only log if it's not the common "Field is not being updated" error
+            # Only log if it's not the common "Field is not being updated"
+            # error
             if "Field is not being updated" not in str(e):
                 logger.warning(f"Failed to unwatch fields: {e}")
 
@@ -175,9 +180,8 @@ def helper_imex_daemon_status_values(handle, gpuIds):
     """Helper function to test IMEX daemon status field returns valid values"""
 
     # Create field group for daemon status only
-    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(handle,
-                                                   [dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS],
-                                                   "imex_daemon_test")
+    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(
+        handle, [dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS], "imex_daemon_test")
 
     groupId = dcgm_agent.dcgmGroupCreate(
         handle, dcgm_structs.DCGM_GROUP_DEFAULT, "imex_daemon_group")
@@ -191,8 +195,8 @@ def helper_imex_daemon_status_values(handle, gpuIds):
 
         time.sleep(2)
 
-        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId,
-                                                                  [dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS])
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+            handle, gpuId, [dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS])
 
         logger.info(f"Retrieved {len(values)} daemon status values")
         for i, value in enumerate(values):
@@ -235,7 +239,8 @@ def helper_imex_daemon_status_values(handle, gpuIds):
         try:
             dcgm_agent.dcgmUnwatchFields(handle, groupId, fieldGroupId)
         except Exception as e:
-            # Only log if it's not the common "Field is not being updated" error
+            # Only log if it's not the common "Field is not being updated"
+            # error
             if "Field is not being updated" not in str(e):
                 logger.warning(f"Failed to unwatch fields: {e}")
 
@@ -253,10 +258,12 @@ def helper_imex_daemon_status_values(handle, gpuIds):
 def helper_imex_fields_consistency(handle, gpuIds):
     """Helper function to test that IMEX field values are consistent across multiple GPUs"""
 
-    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(handle,
-                                                   [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS,
-                                                    dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS],
-                                                   "imex_consistency_test")
+    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(
+        handle,
+        [
+            dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS,
+            dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS],
+        "imex_consistency_test")
 
     # Use default group which includes all GPUs
     groupId = dcgm_agent.dcgmGroupCreate(
@@ -284,19 +291,20 @@ def helper_imex_fields_consistency(handle, gpuIds):
 
         for i, gpuId in enumerate(available_gpus[:4]):
             # Get domain status
-            domain_vals = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId,
-                                                                           [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
+            domain_vals = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+                handle, gpuId, [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
             domain_values.extend(
                 [v for v in domain_vals if v.fieldId == dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
 
             # Get daemon status
-            daemon_vals = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId,
-                                                                           [dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS])
+            daemon_vals = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+                handle, gpuId, [dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS])
             daemon_values.extend(
                 [v for v in daemon_vals if v.fieldId == dcgm_fields.DCGM_FI_IMEX_DAEMON_STATUS])
 
         logger.info(
-            f"Final count - Domain values: {len(domain_values)}, Daemon values: {len(daemon_values)}")
+            f"Final count - Domain values: {len(domain_values)}, "
+            f"Daemon values: {len(daemon_values)}")
 
         # Since IMEX fields are global, all GPUs must report the same values
         if len(domain_values) > 1:
@@ -314,14 +322,16 @@ def helper_imex_fields_consistency(handle, gpuIds):
                     f"IMEX daemon status inconsistent: GPU {i} reports {current_daemon} but GPU 0 reports {first_daemon}"
 
         logger.info(
-            f"Consistency test passed with {len(domain_values)} domain and {len(daemon_values)} daemon values")
+            f"Consistency test passed with {len(domain_values)} "
+            f"domain and {len(daemon_values)} daemon values")
 
     finally:
         # Cleanup - handle potential errors gracefully
         try:
             dcgm_agent.dcgmUnwatchFields(handle, groupId, fieldGroupId)
         except Exception as e:
-            # Only log if it's not the common "Field is not being updated" error
+            # Only log if it's not the common "Field is not being updated"
+            # error
             if "Field is not being updated" not in str(e):
                 logger.warning(f"Failed to unwatch fields: {e}")
 
@@ -339,9 +349,8 @@ def helper_imex_fields_consistency(handle, gpuIds):
 def helper_imex_fields_update_frequency(handle, gpuIds):
     """Helper function to test that IMEX fields can be updated at different frequencies"""
 
-    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(handle,
-                                                   [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS],
-                                                   "imex_frequency_test")
+    fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(
+        handle, [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS], "imex_frequency_test")
 
     groupId = dcgm_agent.dcgmGroupCreate(
         handle, dcgm_structs.DCGM_GROUP_DEFAULT, "imex_freq_group")
@@ -358,8 +367,8 @@ def helper_imex_fields_update_frequency(handle, gpuIds):
         time.sleep(5)
 
         # Get multiple samples (using single latest value for now)
-        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(handle, gpuId,
-                                                                  [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
+        values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
+            handle, gpuId, [dcgm_fields.DCGM_FI_IMEX_DOMAIN_STATUS])
 
         # Should have at least one sample
         assert len(values) > 0, "No IMEX field values returned for frequency test"
@@ -370,14 +379,16 @@ def helper_imex_fields_update_frequency(handle, gpuIds):
         assert len(domain_samples) > 0, "No domain status samples found"
 
         logger.info(
-            f"Got {len(domain_samples)} domain status samples in frequency test")
+            f"Got {len(domain_samples)} domain status samples in "
+            f"frequency test")
 
     finally:
         # Cleanup - handle potential errors gracefully
         try:
             dcgm_agent.dcgmUnwatchFields(handle, groupId, fieldGroupId)
         except Exception as e:
-            # Only log if it's not the common "Field is not being updated" error
+            # Only log if it's not the common "Field is not being updated"
+            # error
             if "Field is not being updated" not in str(e):
                 logger.warning(f"Failed to unwatch fields: {e}")
 

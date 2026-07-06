@@ -17,6 +17,7 @@
 #define _NVVS_NVVS_TargetedPower_H_
 
 #include <iostream>
+#include <memory>
 #include <ranges>
 #include <sstream>
 #include <string>
@@ -293,12 +294,13 @@ private:
 
     /*************************************************************************/
     /* Variables */
-    std::unique_ptr<TestParameters> m_testParameters; /* Parameters for this test */
-    bool m_dcgmCommErrorOccurred;                     /* Has there been a communication error with DCGM? */
-    bool m_dcgmRecorderInitialized;                   /* Has DcgmRecorder been initialized? */
-    DcgmRecorder m_dcgmRecorder;                      /* DCGM stats recording interfact object */
-    dcgmHandle_t m_handle;                            /* Handle to communicate with DCGM */
-    std::vector<CPDevice *> m_device;                 /* Per-device data */
+    std::unique_ptr<TestParameters> m_testParameters;        /* Parameters for this test */
+    std::unique_ptr<TestParameters> m_defaultTestParameters; /* Owned default parameters for infoStruct */
+    bool m_dcgmCommErrorOccurred;                            /* Has there been a communication error with DCGM? */
+    bool m_dcgmRecorderInitialized;                          /* Has DcgmRecorder been initialized? */
+    DcgmRecorder m_dcgmRecorder;                             /* DCGM stats recording interfact object */
+    dcgmHandle_t m_handle;                                   /* Handle to communicate with DCGM */
+    std::vector<std::unique_ptr<CPDevice>> m_device;         /* Per-device data */
 
     /* Cached parameters read from testParameters */
     double m_testDuration; /* Test duration in seconds */

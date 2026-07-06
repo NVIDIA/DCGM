@@ -48,7 +48,8 @@ def handleMigFailure(err):
 
     if migFailuresRe.search(str(err)):
         logger.warning(
-            f'Problem executing initial diagnostic: {str(err)}. (Ignored because MIG is enabled.)')
+            f'Problem executing initial diagnostic: {str(err)}. '
+            f'(Ignored because MIG is enabled.)')
         return True
 
     # Caller should forward the exception
@@ -65,7 +66,8 @@ def runDiagForGpuGroup(handle, gpuIds):
     except Exception as err:
         if option_parser.options.ignore_init_diag:
             logger.warning(
-                f'Problem executing initial diagnostic: {str(err)}. (Ignored by user request).')
+                f'Problem executing initial diagnostic: {str(err)}. '
+                f'(Ignored by user request).')
             return
         raise DcgmInitialDiagError(
             f'Problem executing initial diagnostic: {str(err)}')
@@ -75,11 +77,13 @@ def runDiagForGpuGroup(handle, gpuIds):
                                       response.errors[:min(response.numErrors, dcgm_structs.DCGM_DIAG_RESPONSE_ERRORS_MAX)]))
 
     # Ignore non-passing results (SKIP, NOT_RUN) that aren't FAIL.
-    for testId in range(min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)):
+    for testId in range(min(response.numTests,
+                            dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)):
         if response.tests[testId].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL:
             failingTests.append(response.tests[testId].name)
 
-    for error in response.errors[:min(response.numErrors, dcgm_structs.DCGM_DIAG_RESPONSE_ERRORS_MAX)]:
+    for error in response.errors[:min(
+            response.numErrors, dcgm_structs.DCGM_DIAG_RESPONSE_ERRORS_MAX)]:
         if error.testId == dcgm_structs.DCGM_DIAG_RESPONSE_SYSTEM_ERROR:
             logger.error(f'System error: {error.msg}')
         else:
@@ -113,8 +117,17 @@ def runInitialDiag(handle):
         test_utils.skip_test(
             'Skipping initial diagnostic because filter-tests is specified.')
 
+    if option_parser.options.no_hw:
+        test_utils.skip_test(
+            'Skipping initial diagnostic because no-hw is specified.')
+
     try:
-        gpuIds = test_utils.get_live_gpu_ids(handle)
+        gpuIds = test_utils.filter_cuda_gpus(
+            test_utils.get_live_gpu_ids(handle))
+        if (len(gpuIds) == 0) and (option_parser.options.cuda_gpus != None):
+            raise DcgmInitialDiagError("No CUDA GPUs in GPU list.")
+    except test_utils.DcgmArgParseError as ex:
+        raise DcgmInitialDiagError(str(ex))
     except dcgm_structs.DCGMError_NvmlNotLoaded:
         gpuIds = []
     if not gpuIds:
@@ -122,6 +135,7 @@ def runInitialDiag(handle):
             'Skipping initial diagnostic because no live GPUs were found.')
 
     migEnabled = test_utils.is_mig_mode_enabled()
+
     if migEnabled:
         logger.debug(
             'Performing initial diagnostic sequentially because MIG is enabled.')

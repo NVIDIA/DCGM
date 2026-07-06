@@ -23,8 +23,31 @@
 #include <PluginStrings.h>
 #include <dcgm_structs.h>
 
+// RAII helper to silence glibc dlopen loader-internal allocations under LSan/ASan, no-op otherwise
+#if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
+#include <sanitizer/lsan_interface.h>
+#define DCGM_TEST_LSAN_SCOPE_DISABLE() ::__lsan::ScopedDisabler dcgm_lsan_disabler_
+#else
+#define DCGM_TEST_LSAN_SCOPE_DISABLE() ((void)0)
+#endif
+
+TEST_CASE("PluginLib: load fails when plugin omits a required entry point")
+{
+    // Suppress glibc dlopen loader-internal allocations, not a DCGM leak
+    DCGM_TEST_LSAN_SCOPE_DISABLE();
+
+    DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
+
+    PluginLib pl;
+    dcgmReturn_t ret = pl.LoadPlugin("./libtestplugin_incomplete.so", "software");
+    CHECK(ret == DCGM_ST_GENERIC_ERROR);
+}
+
 TEST_CASE("PluginLib: General")
 {
+    // Suppress glibc dlopen loader-internal allocations, not a DCGM leak
+    DCGM_TEST_LSAN_SCOPE_DISABLE();
+
     /* Initialize logging or the plugin will crash when it tries to log to us */
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 
@@ -88,6 +111,9 @@ static inline bool operator==(dcgmDiagPluginTestParameter_t const &a, dcgmDiagPl
 
 TEST_CASE("PluginLib::SetIgnoreErrorCodesParam")
 {
+    // Suppress glibc dlopen loader-internal allocations, not a DCGM leak
+    DCGM_TEST_LSAN_SCOPE_DISABLE();
+
     /* Initialize logging or the plugin will crash when it tries to log to us */
     DcgmLoggingInit("-", DcgmLoggingSeverityError, DcgmLoggingSeverityNone);
 

@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-sys.path.insert(0, '..')
-import dcgm_agent
-import dcgm_agent_internal
-import dcgm_structs
-import dcgm_fields
-import dcgmvalue
-import dcgm_structs_internal
 from ctypes import *
 import time
+
+sys.path.insert(0, '..')
+import dcgm_agent  # noqa: E402
+import dcgm_agent_internal  # noqa: E402
+import dcgm_structs  # noqa: E402
+import dcgm_fields  # noqa: E402
+import dcgmvalue  # noqa: E402
+import dcgm_structs_internal  # noqa: E402
 
 global callbackCalled
 callbackCalled = False
@@ -38,12 +39,17 @@ def helper_verify_power_value_standalone(handle, groupId, expected_power):
     status_handle = dcgm_agent.dcgmStatusCreate()
 
     config_values = dcgm_agent.dcgmConfigGet(
-        handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+        handle,
+        groupId,
+        dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+        groupInfo.count,
+        status_handle)
     assert len(
         config_values) > 0, "Failed to get configuration using dcgmConfigGet"
 
     for x in range(0, groupInfo.count):
-        if (config_values[x].mPowerLimit.val != dcgmvalue.DCGM_INT32_NOT_SUPPORTED):
+        if (config_values[x].mPowerLimit.val !=
+                dcgmvalue.DCGM_INT32_NOT_SUPPORTED):
             assert config_values[x].mPowerLimit.type == dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL, \
                 "The power limit type for gpuId %d is incorrect. Returned: %d Expected :%d" \
                 % (x, config_values[x].mPowerLimit.type, dcgm_structs.DCGM_CONFIG_POWER_CAP_INDIVIDUAL)
@@ -76,12 +82,13 @@ newPolicy.parms[2].tag = 1
 newPolicy.parms[2].val.llval = 5
 
 
-# find a GPU that supports retired pages (otherwise internal test will ignore it)
+# find a GPU that supports retired pages (otherwise internal test will
+# ignore it)
 devices = dcgm_agent.dcgmGetAllDevices(handle)
 validDevice = -1
 for x in devices:
     fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(
-        handle, x, [dcgm_fields.DCGM_FI_DEV_RETIRED_DBE, ])
+        handle, x, [dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, ])
     if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
         validDevice = x
         break
@@ -130,13 +137,17 @@ assert (ret == dcgm_structs.DCGM_ST_OK)
 time.sleep(5)  # give the policy manager a chance to start
 
 requestId = dcgm_agent.dcgmPolicyRegister_v2(
-    handle, groupId, dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED, c_callback, 0)
-assert (requestId != None)
+    handle,
+    groupId,
+    dcgm_structs.DCGM_POLICY_COND_MAX_PAGES_RETIRED,
+    c_callback,
+    0)
+assert (requestId is not None)
 
 # inject an error into page retirement
 field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
 field.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-field.fieldId = dcgm_fields.DCGM_FI_DEV_RETIRED_DBE
+field.fieldId = dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL
 field.status = 0
 field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
 # set the injected data into the future

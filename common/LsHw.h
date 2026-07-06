@@ -26,6 +26,7 @@ class LsHw
 {
 public:
     LsHw();
+    virtual ~LsHw() = default;
 
     void SetChecker(std::unique_ptr<DcgmNs::Utils::RunningUserChecker> checker);
     void SetRunCmdHelper(std::unique_ptr<DcgmNs::Utils::RunCmdHelper> runCmdHelper);

@@ -16,6 +16,8 @@
 #include <catch2/catch_all.hpp>
 
 #include <DcgmError.h>
+#include <array>
+#include <cstring>
 #include <dcgm_errors.h>
 #include <iostream>
 
@@ -29,6 +31,116 @@ TEST_CASE("dcgm_errors: check initialization")
         CHECK(errorMeta->errorId == i);
         CHECK(errorMeta->msgFormat != nullptr);
         CHECK(errorMeta->suggestion != nullptr);
+    }
+}
+
+TEST_CASE("dcgm_errors: metadata helpers handle valid and invalid codes")
+{
+    SECTION("valid metadata helpers return table values")
+    {
+        CHECK(dcgmErrorGetPriorityByCode(DCGM_FR_PCI_REPLAY_RATE) == DCGM_ERROR_ISOLATE);
+        CHECK(dcgmErrorGetCategoryByCode(DCGM_FR_PCI_REPLAY_RATE) == DCGM_FR_EC_HARDWARE_PCIE);
+        REQUIRE(dcgmErrorGetFormatMsgByCode(DCGM_FR_PCI_REPLAY_RATE) != nullptr);
+        CHECK(std::strlen(dcgmErrorGetFormatMsgByCode(DCGM_FR_PCI_REPLAY_RATE)) > 0);
+    }
+
+    SECTION("sentinel and out-of-range codes return safe defaults")
+    {
+        CHECK(dcgmErrorGetPriorityByCode(DCGM_FR_ERROR_SENTINEL) == DCGM_ERROR_UNKNOWN);
+        CHECK(static_cast<int>(dcgmErrorGetCategoryByCode(DCGM_FR_ERROR_SENTINEL))
+              == static_cast<int>(DCGM_ERROR_UNKNOWN));
+        CHECK(dcgmErrorGetFormatMsgByCode(DCGM_FR_ERROR_SENTINEL) == nullptr);
+        CHECK(dcgmGetErrorMeta(DCGM_FR_ERROR_SENTINEL) == nullptr);
+        CHECK(dcgmGetErrorMeta(static_cast<dcgmError_t>(-1)) == nullptr);
+    }
+}
+
+TEST_CASE("dcgm_errors: errorString maps public return codes")
+{
+    SECTION("known return codes produce a non-empty message")
+    {
+        constexpr auto returnCodes = std::to_array<dcgmReturn_t>({
+            DCGM_ST_OK,
+            DCGM_ST_BADPARAM,
+            DCGM_ST_GENERIC_ERROR,
+            DCGM_ST_MEMORY,
+            DCGM_ST_NOT_CONFIGURED,
+            DCGM_ST_NOT_SUPPORTED,
+            DCGM_ST_INIT_ERROR,
+            DCGM_ST_NVML_ERROR,
+            DCGM_ST_PENDING,
+            DCGM_ST_UNINITIALIZED,
+            DCGM_ST_TIMEOUT,
+            DCGM_ST_VER_MISMATCH,
+            DCGM_ST_UNKNOWN_FIELD,
+            DCGM_ST_NO_DATA,
+            DCGM_ST_STALE_DATA,
+            DCGM_ST_NOT_WATCHED,
+            DCGM_ST_NO_PERMISSION,
+            DCGM_ST_GPU_IS_LOST,
+            DCGM_ST_RESET_REQUIRED,
+            DCGM_ST_FUNCTION_NOT_FOUND,
+            DCGM_ST_CONNECTION_NOT_VALID,
+            DCGM_ST_GPU_NOT_SUPPORTED,
+            DCGM_ST_GROUP_INCOMPATIBLE,
+            DCGM_ST_MAX_LIMIT,
+            DCGM_ST_LIBRARY_NOT_FOUND,
+            DCGM_ST_DUPLICATE_KEY,
+            DCGM_ST_GPU_IN_SYNC_BOOST_GROUP,
+            DCGM_ST_GPU_NOT_IN_SYNC_BOOST_GROUP,
+            DCGM_ST_REQUIRES_ROOT,
+            DCGM_ST_NVVS_ERROR,
+            DCGM_ST_INSUFFICIENT_SIZE,
+            DCGM_ST_FIELD_UNSUPPORTED_BY_API,
+            DCGM_ST_MODULE_NOT_LOADED,
+            DCGM_ST_IN_USE,
+            DCGM_ST_GROUP_IS_EMPTY,
+            DCGM_ST_PROFILING_NOT_SUPPORTED,
+            DCGM_ST_PROFILING_LIBRARY_ERROR,
+            DCGM_ST_PROFILING_MULTI_PASS,
+            DCGM_ST_DIAG_ALREADY_RUNNING,
+            DCGM_ST_DIAG_BAD_JSON,
+            DCGM_ST_DIAG_BAD_LAUNCH,
+            DCGM_ST_DIAG_UNUSED,
+            DCGM_ST_DIAG_THRESHOLD_EXCEEDED,
+            DCGM_ST_INSUFFICIENT_DRIVER_VERSION,
+            DCGM_ST_INSTANCE_NOT_FOUND,
+            DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND,
+            DCGM_ST_CHILD_NOT_KILLED,
+            DCGM_ST_3RD_PARTY_LIBRARY_ERROR,
+            DCGM_ST_INSUFFICIENT_RESOURCES,
+            DCGM_ST_PLUGIN_EXCEPTION,
+            DCGM_ST_NVVS_ISOLATE_ERROR,
+            DCGM_ST_NVVS_BINARY_NOT_FOUND,
+            DCGM_ST_NVVS_KILLED,
+            DCGM_ST_PAUSED,
+            DCGM_ST_ALREADY_INITIALIZED,
+            DCGM_ST_NVML_NOT_LOADED,
+            DCGM_ST_NVML_DRIVER_TIMEOUT,
+            DCGM_ST_NVVS_NO_AVAILABLE_TEST,
+            DCGM_ST_MNDIAG_CONNECTION_NOT_AVAILABLE,
+            DCGM_ST_MNDIAG_CONNECTION_UNAUTHORIZED,
+            DCGM_ST_REMOTE_SSH_CONNECTION_FAILED,
+            DCGM_ST_CHILD_SPAWN_FAILED,
+            DCGM_ST_FILE_IO_ERROR,
+            DCGM_ST_CHILD_SIGNAL_RECEIVED,
+            DCGM_ST_CALLER_ALREADY_STOPPED,
+            DCGM_ST_DIAG_STOPPED,
+            DCGM_ST_GPUS_DETACHED,
+        });
+
+        for (auto const code : returnCodes)
+        {
+            INFO("code: " << code);
+            REQUIRE(errorString(code) != nullptr);
+            CHECK(std::strlen(errorString(code)) > 0);
+        }
+    }
+
+    SECTION("unmapped and invalid return codes produce null")
+    {
+        CHECK(errorString(static_cast<dcgmReturn_t>(1)) == nullptr);
+        CHECK(errorString(static_cast<dcgmReturn_t>(-9999)) == nullptr);
     }
 }
 

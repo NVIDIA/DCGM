@@ -24,8 +24,14 @@
 #include <fmt/format.h>
 #include <iostream>
 #include <signal.h>
+#include <stdio.h>
+#include <unistd.h>
 
-#include "mocks/MockDcgmCoreProxy.h"
+#include "MockDcgmCoreProxy.h"
+
+// Use the current user's UID so the child process can change to it without EPERM.
+// Hardcoding 0 (root) causes ChangeUser("root") to fail with EPERM in non-root test environments.
+static const uid_t EFFECTIVE_UID = geteuid();
 
 // Configuration for the sleep process
 struct SleepConfig
@@ -37,7 +43,7 @@ class TestMpiRunner : public MpiRunner
 {
 public:
     TestMpiRunner(DcgmCoreProxyBase &coreProxy)
-        : MpiRunner(coreProxy)
+        : MpiRunner(coreProxy, EFFECTIVE_UID)
     {}
 
     void ConstructMpiCommand(void const *params) override
@@ -76,7 +82,7 @@ public:
     {}
 
     // Expose or wrap public methods that tests call
-    void SetOutputCallback(std::function<dcgmReturn_t(std::istream &, void *, nodeInfoMap_t const &)> callback)
+    void SetOutputCallback(std::function<dcgmReturn_t(int, void *, nodeInfoMap_t const &)> callback)
     {
         m_runner.SetOutputCallback(std::move(callback));
     }
@@ -193,7 +199,7 @@ TEST_CASE("MpiRunner process lifecycle with Wait")
         SleepConfig config { std::chrono::seconds(1) };
 
         // Set a custom output callback that extracts the return code from output
-        runner.SetOutputCallback([](std::istream &dataStream, void *responseStruct, nodeInfoMap_t const &) {
+        runner.SetOutputCallback([](int fd, void *responseStruct, nodeInfoMap_t const &) {
             if (!responseStruct)
             {
                 return DCGM_ST_BADPARAM;
@@ -201,10 +207,28 @@ TEST_CASE("MpiRunner process lifecycle with Wait")
 
             auto *response = static_cast<TestResponse *>(responseStruct);
 
-            // Extract return code from the output string
-            std::string outputString;
-            while (std::getline(dataStream, outputString))
+            int dupFd = dup(fd);
+            if (dupFd < 0)
             {
+                return DCGM_ST_FILE_IO_ERROR;
+            }
+            FILE *fp = fdopen(dupFd, "r");
+            if (!fp)
+            {
+                close(dupFd);
+                return DCGM_ST_FILE_IO_ERROR;
+            }
+
+            char *linePtr  = nullptr;
+            size_t lineCap = 0;
+            while (::getline(&linePtr, &lineCap, fp) != -1)
+            {
+                std::string outputString(linePtr);
+                if (!outputString.empty() && outputString.back() == '\n')
+                {
+                    outputString.pop_back();
+                }
+
                 size_t pos = outputString.find("return code ");
                 if (pos != std::string::npos)
                 {
@@ -220,6 +244,8 @@ TEST_CASE("MpiRunner process lifecycle with Wait")
                     }
                 }
             }
+            free(linePtr);
+            fclose(fp);
             return DCGM_ST_OK;
         });
 

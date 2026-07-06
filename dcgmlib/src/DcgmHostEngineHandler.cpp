@@ -41,10 +41,12 @@
 #include <dcgm_sysmon_structs.h>
 #include <dcgm_util.h>
 
+#include <DcgmProtocol.h>
 #include <dcgm_nvml.h>
 #include <nvcmvalue.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <dlfcn.h> //dlopen, dlsym..etc
 #include <iostream>
 #include <optional>
@@ -60,9 +62,10 @@
 
 namespace
 {
-auto const DCGM_HANGDETECT_DISABLE    = "DCGM_HANGDETECT_DISABLE";
-auto const DCGM_HANGDETECT_TERMINATE  = "DCGM_HANGDETECT_TERMINATE";
-auto const DCGM_HANGDETECT_EXPIRY_SEC = "DCGM_HANGDETECT_EXPIRY_SEC";
+auto const DCGM_HANGDETECT_DISABLE           = "DCGM_HANGDETECT_DISABLE";
+auto const DCGM_HANGDETECT_TERMINATE         = "DCGM_HANGDETECT_TERMINATE";
+auto const DCGM_HANGDETECT_EXPIRY_SEC        = "DCGM_HANGDETECT_EXPIRY_SEC";
+auto const DCGM_NVML_INIT_FLAG_NO_ATTACH_ENV = "DCGM_NVML_INIT_FLAG_NO_ATTACH";
 } // namespace
 
 DcgmHostEngineHandler *DcgmHostEngineHandler::mpHostEngineHandlerInstance = nullptr;
@@ -540,7 +543,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyAffinity(unsigned int group
 
     // retrieve the latest sample of PCI topology information
     DcgmFvBuffer affFv;
-    dcgmReturn = GetCachedOrLiveValueForEntity({ DCGM_FE_GPU, dcgmGpuIds[0] }, DCGM_FI_GPU_TOPOLOGY_AFFINITY, affFv);
+    dcgmReturn = GetCachedOrLiveValueForEntity({ DCGM_FE_GPU, dcgmGpuIds[0] }, DCGM_FI_SYSTEM_GPU_AFFINITY, affFv);
     if (DCGM_ST_OK != dcgmReturn)
     {
         DCGM_LOG_ERROR << "Unable to retrieve affinity information" << errorString(dcgmReturn);
@@ -610,6 +613,9 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
     std::vector<dcgmGroupEntityPair_t> entities;
     std::vector<unsigned int> dcgmGpuIds;
 
+    gpuTopology.version     = dcgmTopology_version;
+    gpuTopology.numElements = 0;
+
     /* Verify group id is valid */
     dcgmReturn = mpGroupManager->verifyAndUpdateGroupId(&groupId);
     if (DCGM_ST_OK != dcgmReturn)
@@ -644,7 +650,8 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
 
     // retrieve the latest sample of PCI topology information
     DcgmFvBuffer pciFvBuffer;
-    dcgmReturn = GetCachedOrLiveValueForEntity({ DCGM_FE_GPU, dcgmGpuIds[0] }, DCGM_FI_GPU_TOPOLOGY_PCI, pciFvBuffer);
+    dcgmReturn
+        = GetCachedOrLiveValueForEntity({ DCGM_FE_GPU, dcgmGpuIds[0] }, DCGM_FI_SYSTEM_PCI_TOPOLOGY, pciFvBuffer);
     if (DCGM_ST_OK != dcgmReturn)
     {
         DCGM_LOG_ERROR << "Error: unable to retrieve topology information: " << errorString(dcgmReturn);
@@ -663,7 +670,7 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
     /*  retrieve the latest sample of NVLINK topology information */
     DcgmFvBuffer nvLinkFvBuffer;
     dcgmReturn
-        = GetCachedOrLiveValueForEntity({ DCGM_FE_GPU, dcgmGpuIds[0] }, DCGM_FI_GPU_TOPOLOGY_NVLINK, nvLinkFvBuffer);
+        = GetCachedOrLiveValueForEntity({ DCGM_FE_GPU, dcgmGpuIds[0] }, DCGM_FI_SYSTEM_NVLINK_TOPOLOGY, nvLinkFvBuffer);
     if (DCGM_ST_OK != dcgmReturn)
     {
         DCGM_LOG_ERROR << "Error: unable to retrieve NVLink topology information: " << errorString(dcgmReturn);
@@ -702,8 +709,8 @@ dcgmReturn_t DcgmHostEngineHandler::HelperGetTopologyIO(unsigned int groupId, dc
                     && topologyNvLink_p->element[nvLinkElNum].dcgmGpuB == topologyPci_p->element[elNum].dcgmGpuB)
                 {
                     gpuTopology.element[gpuTopology.numElements].path
-                        = (dcgmGpuTopologyLevel_t)((int)gpuTopology.element[gpuTopology.numElements].path
-                                                   | (int)topologyNvLink_p->element[nvLinkElNum].path);
+                        = gpuTopology.element[gpuTopology.numElements].path
+                          | topologyNvLink_p->element[nvLinkElNum].path;
                     gpuTopology.element[gpuTopology.numElements].AtoBNvLinkIds
                         = topologyNvLink_p->element[nvLinkElNum].AtoBNvLinkIds;
                     gpuTopology.element[gpuTopology.numElements].BtoANvLinkIds
@@ -1220,7 +1227,12 @@ dcgmReturn_t DcgmHostEngineHandler::SendRawMessageToEmbeddedClient(unsigned int 
     msgBytes->resize(msgLength);
     memcpy(msgBytes->data(), msgData, msgLength);
 
-    request->ProcessMessage(std::move(msg));
+    auto const processRet = static_cast<dcgmReturn_t>(request->ProcessMessage(std::move(msg)));
+    if (processRet != DCGM_ST_OK)
+    {
+        log_error("ProcessMessage for requestId {} returned ({}) {}", requestId, processRet, errorString(processRet));
+        return processRet;
+    }
     return DCGM_ST_OK;
 }
 
@@ -1410,6 +1422,73 @@ void DcgmHostEngineHandler::AttachGpusToModules()
 }
 
 /*****************************************************************************/
+static_assert(sizeof(dcgm_core_msg_entities_get_latest_values_v1) <= DCGM_PROTO_MAX_MESSAGE_SIZE,
+              "dcgm_core_msg_entities_get_latest_values_v1 exceeds DCGM_PROTO_MAX_MESSAGE_SIZE");
+static_assert(sizeof(dcgm_core_msg_entities_get_latest_values_v2) <= DCGM_PROTO_MAX_MESSAGE_SIZE,
+              "dcgm_core_msg_entities_get_latest_values_v2 exceeds DCGM_PROTO_MAX_MESSAGE_SIZE");
+static_assert(sizeof(dcgm_core_msg_entities_get_latest_values_v4) == DCGM_PROTO_MAX_MESSAGE_SIZE,
+              "dcgm_core_msg_entities_get_latest_values_v4 must exactly fill DCGM_PROTO_MAX_MESSAGE_SIZE");
+/* dcgm_core_msg_entities_get_latest_values_v3 exceeds DCGM_PROTO_MAX_MESSAGE_SIZE. Omitting the
+   check until this is resolved. */
+static_assert(offsetof(dcgm_core_msg_entities_get_latest_values_v3, ev.buffer)
+                  == offsetof(dcgm_core_msg_entities_get_latest_values_v4, ev.buffer),
+              "v3/v4 ev.buffer offset mismatch");
+static_assert(sizeof(dcgm_core_msg_get_multiple_values_for_field_v1) <= DCGM_PROTO_MAX_MESSAGE_SIZE,
+              "dcgm_core_msg_get_multiple_values_for_field_v1 exceeds DCGM_PROTO_MAX_MESSAGE_SIZE");
+static_assert(sizeof(dcgm_core_msg_get_multiple_values_for_field_v2) <= DCGM_PROTO_MAX_MESSAGE_SIZE,
+              "dcgm_core_msg_get_multiple_values_for_field_v2 exceeds DCGM_PROTO_MAX_MESSAGE_SIZE");
+
+dcgmReturn_t ResizeMsgBufferForSubCommand(unsigned int moduleId,
+                                          unsigned int subCommand,
+                                          std::vector<char> &msgBytes,
+                                          std::size_t maxMessageSize)
+{
+    if (moduleId != DcgmModuleIdCore)
+    {
+        return DCGM_ST_OK;
+    }
+
+    std::size_t newSize = 0;
+    switch (subCommand)
+    {
+        case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4:
+            newSize = sizeof(dcgm_core_msg_entities_get_latest_values_v4);
+            break;
+        case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V3:
+            newSize = sizeof(dcgm_core_msg_entities_get_latest_values_v3);
+            break;
+        case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2:
+            newSize = sizeof(dcgm_core_msg_entities_get_latest_values_v2);
+            break;
+        case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V1:
+            newSize = sizeof(dcgm_core_msg_entities_get_latest_values_v1);
+            break;
+        case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V1:
+            newSize = sizeof(dcgm_core_msg_get_multiple_values_for_field_v1);
+            break;
+        case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2:
+            newSize = sizeof(dcgm_core_msg_get_multiple_values_for_field_v2);
+            break;
+        default:
+            log_debug("Unknown subCommand {}, leaving buffer unchanged", subCommand);
+            return DCGM_ST_OK;
+    }
+
+    newSize = std::min(newSize, maxMessageSize);
+    msgBytes.resize(newSize);
+    auto *header   = reinterpret_cast<dcgm_module_command_header_t *>(msgBytes.data());
+    header->length = static_cast<unsigned int>(newSize);
+
+    return DCGM_ST_OK;
+}
+
+bool DcgmHostEngineHandler::IsCoreModuleSubcommandDenied(const dcgm_module_command_header_t *moduleCommand)
+{
+    static std::array<unsigned int, 2> constexpr DENY_LIST = { DCGM_CORE_SR_ATTACH_GPUS, DCGM_CORE_SR_DETACH_GPUS };
+    return moduleCommand->moduleId == DcgmModuleIdCore
+           && std::ranges::find(DENY_LIST, moduleCommand->subCommand) != DENY_LIST.end();
+}
+
 dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommandMsg(dcgm_connection_id_t connectionId,
                                                             std::unique_ptr<DcgmMessage> message)
 {
@@ -1430,7 +1509,22 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommandMsg(dcgm_connection_id_t
     msgBytes->resize(DCGM_PROTO_MAX_MESSAGE_SIZE);
 #endif
 
+    /* Buffer needs to be at least large enough to hold the header */
+    if (msgBytes->size() < sizeof(dcgm_module_command_header_t))
+    {
+        DCGM_LOG_ERROR << "Message buffer too small: " << msgBytes->size() << " < "
+                       << sizeof(dcgm_module_command_header_t);
+        return DCGM_ST_BADPARAM;
+    }
+
     auto moduleCommand = (dcgm_module_command_header_t *)msgBytes->data();
+
+    if (IsCoreModuleSubcommandDenied(moduleCommand))
+    {
+        log_debug("Rejecting client module command: subCommand {} is not available via public interfaces",
+                  moduleCommand->subCommand);
+        return DCGM_ST_NOT_SUPPORTED;
+    }
 
     /* Verify that we didn't get a malicious moduleCommand->length. This also implicitly
        checks that our message isn't larger than DCGM_PROTO_MAX_MESSAGE_SIZE
@@ -1441,41 +1535,13 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommandMsg(dcgm_connection_id_t
         return DCGM_ST_BADPARAM;
     }
 
-    /* Resize buffer for certain commands that may have large response payloads */
-    if (moduleCommand->moduleId == DcgmModuleIdCore)
+    dcgmReturn_t resizeRet = ResizeMsgBufferForSubCommand(
+        moduleCommand->moduleId, moduleCommand->subCommand, *msgBytes, DCGM_PROTO_MAX_MESSAGE_SIZE);
+    if (resizeRet != DCGM_ST_OK)
     {
-        switch (moduleCommand->subCommand)
-        {
-            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V3:
-                msgBytes->resize(sizeof(dcgm_core_msg_entities_get_latest_values_v3));
-                moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
-                moduleCommand->length = sizeof(dcgm_core_msg_entities_get_latest_values_v3);
-                break;
-            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V2:
-                msgBytes->resize(sizeof(dcgm_core_msg_entities_get_latest_values_v2));
-                moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
-                moduleCommand->length = sizeof(dcgm_core_msg_entities_get_latest_values_v2);
-                break;
-            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V1:
-                msgBytes->resize(sizeof(dcgm_core_msg_entities_get_latest_values_v1));
-                moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
-                moduleCommand->length = sizeof(dcgm_core_msg_entities_get_latest_values_v1);
-                break;
-            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V1:
-                msgBytes->resize(sizeof(dcgm_core_msg_get_multiple_values_for_field_v1));
-                moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
-                moduleCommand->length = sizeof(dcgm_core_msg_get_multiple_values_for_field_v1);
-                break;
-            case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V2:
-                msgBytes->resize(sizeof(dcgm_core_msg_get_multiple_values_for_field_v2));
-                moduleCommand         = (dcgm_module_command_header_t *)msgBytes->data();
-                moduleCommand->length = sizeof(dcgm_core_msg_get_multiple_values_for_field_v2);
-                break;
-            default:
-                /* No need to resize */
-                break;
-        }
+        return resizeRet;
     }
+    moduleCommand = (dcgm_module_command_header_t *)msgBytes->data();
 
     if (moduleCommand->requestId == DCGM_REQUEST_ID_NONE)
         moduleCommand->requestId = msgHeader->requestId;
@@ -1485,6 +1551,13 @@ dcgmReturn_t DcgmHostEngineHandler::ProcessModuleCommandMsg(dcgm_connection_id_t
     dcgmReturn_t requestStatus = ProcessModuleCommand(moduleCommand);
 
     /* Resize msgBytes to whatever moduleCommand's updated size is */
+    if (moduleCommand->length > DCGM_PROTO_MAX_MESSAGE_SIZE)
+    {
+        log_debug("Module command length {} is greater than {}, truncating to fit",
+                  moduleCommand->length,
+                  DCGM_PROTO_MAX_MESSAGE_SIZE);
+        moduleCommand->length = DCGM_PROTO_MAX_MESSAGE_SIZE;
+    }
     msgBytes->resize(moduleCommand->length);
 
     message->UpdateMsgHdr(DCGM_MSG_MODULE_COMMAND, moduleCommand->requestId, requestStatus, moduleCommand->length);
@@ -1536,14 +1609,14 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     }
 
     fieldIds.clear();
-    fieldIds.push_back(DCGM_FI_DEV_ECC_CURRENT); /* Can really only change once per driver reload. NVML caches this so
+    fieldIds.push_back(DCGM_FI_DEV_ECC_MODE); /* Can really only change once per driver reload. NVML caches this so
                                                     it's virtually a no-op */
 
     /* Don't bother with vGPU fields unless we're in Host vGPU mode per DCGM-513 */
     if (mpCacheManager->AreAnyGpusInHostVGPUMode())
     {
-        fieldIds.push_back(DCGM_FI_DEV_CREATABLE_VGPU_TYPE_IDS); /* Used by dcgmVgpuDeviceAttributes_t */
-        fieldIds.push_back(DCGM_FI_DEV_VGPU_INSTANCE_IDS);       /* Used by dcgmVgpuDeviceAttributes_t */
+        fieldIds.push_back(DCGM_FI_DEV_VGPU_CREATABLE_IDS); /* Used by dcgmVgpuDeviceAttributes_t */
+        fieldIds.push_back(DCGM_FI_DEV_VGPU_INSTANCE_INFO); /* Used by dcgmVgpuDeviceAttributes_t */
     }
 
     dcgmReturn = mpFieldGroupManager->AddFieldGroup("DCGM_INTERNAL_30SEC", fieldIds, &mFieldGroup30Sec, watcher);
@@ -1563,8 +1636,8 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
 
     fieldIds.clear();
     /* Needed as it is the static info related to GPU attribute associated with vGPU */
-    fieldIds.push_back(DCGM_FI_DEV_SUPPORTED_TYPE_INFO);
-    fieldIds.push_back(DCGM_FI_DEV_SUPPORTED_VGPU_TYPE_IDS);
+    fieldIds.push_back(DCGM_FI_DEV_VGPU_SUPPORTED_INFO);
+    fieldIds.push_back(DCGM_FI_DEV_VGPU_SUPPORTED_IDS);
     fieldIds.push_back(DCGM_FI_DEV_VGPU_TYPE_INFO);
     fieldIds.push_back(DCGM_FI_DEV_VGPU_TYPE_NAME);
     fieldIds.push_back(DCGM_FI_DEV_VGPU_TYPE_CLASS);
@@ -1587,19 +1660,19 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
 
     /* Process / job stats fields. Just add the group. The user will watch the fields */
     fieldIds.clear();
-    fieldIds.push_back(DCGM_FI_DEV_ACCOUNTING_DATA);
-    fieldIds.push_back(DCGM_FI_DEV_POWER_USAGE);
+    fieldIds.push_back(DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS);
+    fieldIds.push_back(DCGM_FI_DEV_BOARD_POWER_WATTS);
     fieldIds.push_back(DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION);
     fieldIds.push_back(DCGM_FI_DEV_PCIE_TX_THROUGHPUT);
     fieldIds.push_back(DCGM_FI_DEV_PCIE_RX_THROUGHPUT);
-    fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
-    fieldIds.push_back(DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS);
-    fieldIds.push_back(DCGM_FI_DEV_GPU_UTIL);
+    fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_GPU_UTIL_RATIO);
     fieldIds.push_back(DCGM_FI_DEV_MEM_COPY_UTIL);
     fieldIds.push_back(DCGM_FI_DEV_ECC_DBE_VOL_TOTAL);
     fieldIds.push_back(DCGM_FI_DEV_SM_CLOCK);
     fieldIds.push_back(DCGM_FI_DEV_MEM_CLOCK);
-    fieldIds.push_back(DCGM_FI_DEV_XID_ERRORS);
+    fieldIds.push_back(DCGM_FI_DEV_XID_ERROR);
     fieldIds.push_back(DCGM_FI_DEV_COMPUTE_PIDS);
     fieldIds.push_back(DCGM_FI_DEV_GRAPHICS_PIDS);
     fieldIds.push_back(DCGM_FI_DEV_POWER_VIOLATION);
@@ -1607,22 +1680,22 @@ dcgmReturn_t DcgmHostEngineHandler::WatchHostEngineFields()
     fieldIds.push_back(DCGM_FI_DEV_SYNC_BOOST_VIOLATION);
     fieldIds.push_back(DCGM_FI_DEV_MEM_COPY_UTIL_SAMPLES);
     fieldIds.push_back(DCGM_FI_DEV_GPU_UTIL_SAMPLES);
-    fieldIds.push_back(DCGM_FI_DEV_RETIRED_SBE);
-    fieldIds.push_back(DCGM_FI_DEV_RETIRED_DBE);
-    fieldIds.push_back(DCGM_FI_DEV_RETIRED_PENDING);
-    fieldIds.push_back(DCGM_FI_DEV_INFOROM_CONFIG_VALID);
+    fieldIds.push_back(DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_PAGE_RETIRED_PENDING);
+    fieldIds.push_back(DCGM_FI_DEV_INFOROM_VALID);
 
     fieldIds.push_back(DCGM_FI_DEV_THERMAL_VIOLATION);
     fieldIds.push_back(DCGM_FI_DEV_POWER_VIOLATION);
 
     /* Add Watch for NVLINK flow control CRC Error Counter for all the lanes */
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL);
     /* Add Watch for NVLINK data CRC Error Counter for all the lanes */
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL);
     /* Add Watch for NVLINK Replay Error Counter for all the lanes */
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL);
     /* Add Watch for NVLINK Recovery Error Counter for all the lanes*/
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL);
 
 
     // reliability violation time
@@ -1868,9 +1941,12 @@ dcgmReturn_t DcgmNvmlSystemEventThread::Init()
             log_error("Failed to initialize NVML: {}", ret);
             return DcgmNs::Utils::NvmlReturnToDcgmReturn(ret);
         }
-        // On driver versions less than 590.37, we need to initialize NVML only with NVML_INIT_FLAG_NO_GPUS. Otherwise,
-        // the nvmlDeviceGetCount API will return 0 count for devices and no NVML_INIT_FLAG_FORCE_INIT flag can be
-        // used.
+        // NVML_INIT_FLAG_NO_ATTACH requires an NVML bug fix present from 590.37 onward, which was not ported to the 600
+        // branch (fix is present again from >610 onward). For drivers >610 the fix is expected, so the
+        // NVML_INIT_FLAG_NO_ATTACH is enabled by default. For drivers <=610, fall back to NVML_INIT_FLAG_NO_GPUS-only
+        // unless DCGM_NVML_INIT_FLAG_NO_ATTACH is set (opt-in for environments like Kata/GFN or whose driver may carry
+        // the fix). Using NVML_INIT_FLAG_NO_ATTACH on a driver that lacks the fix causes nvmlDeviceGetCount to return 0
+        // and NVML_INIT_FLAG_FORCE_INIT cannot be used.
         char driverVersionBuf[NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE] = {};
         ret = nvmlSystemGetDriverVersion(driverVersionBuf, NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE);
         if (ret != NVML_SUCCESS)
@@ -1887,25 +1963,29 @@ dcgmReturn_t DcgmNvmlSystemEventThread::Init()
             return DCGM_ST_GENERIC_ERROR;
         }
         std::string_view majorDriverVersionStr = driverVersionStr.substr(0, dotPos);
-        std::string_view minorDriverVersionStr = driverVersionStr.substr(dotPos + 1);
         auto majorDriverVersion                = DcgmNs::StrToUint32(majorDriverVersionStr);
-        auto minorDriverVersion                = DcgmNs::StrToUint32(minorDriverVersionStr);
 
-        if (majorDriverVersion.is_error() || minorDriverVersion.is_error())
+        if (majorDriverVersion.is_error())
         {
             log_error("Failed to parse driver version: {}", driverVersionStr);
             return DCGM_ST_GENERIC_ERROR;
         }
 
-        std::uint32_t constexpr majorDriverVersion590 = 590;
-        std::uint32_t constexpr minorDriverVersion37  = 37;
+        std::uint32_t constexpr majorDriverVersion610 = 610;
         log_debug("Driver version: {}", driverVersionStr);
-        if (*majorDriverVersion < majorDriverVersion590
-            || (*majorDriverVersion == majorDriverVersion590 && *minorDriverVersion < minorDriverVersion37))
+        if (std::getenv(DCGM_NVML_INIT_FLAG_NO_ATTACH_ENV) != nullptr)
         {
-            log_debug("Driver version {} is less than 590.37, initializing NVML with NVML_INIT_FLAG_NO_GPUS only.",
-                      driverVersionStr);
-            log_debug("Re-initializing NVML with NVML_INIT_FLAG_NO_GPUS only");
+            log_info("Environment variable {} is set. keeping NVML_INIT_FLAG_NO_ATTACH for driver {}.",
+                     DCGM_NVML_INIT_FLAG_NO_ATTACH_ENV,
+                     driverVersionStr);
+        }
+        else if (*majorDriverVersion <= majorDriverVersion610)
+        {
+            log_debug(
+                "Driver version {} is <= {} and {} is not set. Re-initializing NVML with NVML_INIT_FLAG_NO_GPUS only.",
+                driverVersionStr,
+                majorDriverVersion610,
+                DCGM_NVML_INIT_FLAG_NO_ATTACH_ENV);
             nvmlShutdown();
             ret = nvmlInitWithFlags(NVML_INIT_FLAG_NO_GPUS);
             if (ret != NVML_SUCCESS)
@@ -2424,7 +2504,7 @@ DcgmHostEngineHandler::DcgmHostEngineHandler(dcgmStartEmbeddedV2Params_v1 params
     }
 
     /* Initialize the group manager before we add our default watches */
-    mpGroupManager = new DcgmGroupManager(mpCacheManager, false);
+    mpGroupManager = new DcgmGroupManager(mpCacheManager, HostEngineHandler {}, false);
     mpGroupManager->SubscribeForGroupEvents(HostEngineOnGroupEventCB, this);
     m_nvmlSystemEventThread->SetGroupManager(mpGroupManager);
     mModuleCoreObj.SetGroupManager(mpGroupManager);
@@ -2491,7 +2571,10 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
      * Always keep this first */
     try
     {
-        m_dcgmIpc->StopAndWait(60000);
+        if (m_dcgmIpc)
+        {
+            m_dcgmIpc->StopAndWait(60000);
+        }
     }
     catch (std::exception const &ex)
     {
@@ -2502,11 +2585,15 @@ DcgmHostEngineHandler::~DcgmHostEngineHandler()
         DCGM_LOG_ERROR << "Unknown exception caught in DcgmHostEngineHandler::~DcgmHostEngineHandler()";
     }
 
-    if (auto ret = m_nvmlSystemEventThread->StopAndWait(45000); ret != 0)
+    if (m_nvmlSystemEventThread)
     {
-        log_error("Failed to stop NVML system event thread: {}", ret);
+        if (auto ret = m_nvmlSystemEventThread->StopAndWait(45000); ret != 0)
+        {
+            log_error("Failed to stop NVML system event thread: {}", ret);
+        }
     }
 
+    /* GroupManager destructor must not lock to avoid lock-order inversion */
     auto lock = Lock();
     /**
      * Free sub-modules before we unload core modules.
@@ -3159,7 +3246,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
             summaryTypes[0] = DcgmcmSummaryTypeIntegral;
             mpCacheManager->GetFp64SummaryData(DCGM_FE_GPU,
                                                singleInfo->gpuId,
-                                               DCGM_FI_DEV_POWER_USAGE,
+                                               DCGM_FI_DEV_BOARD_POWER_WATTS,
                                                1,
                                                &summaryTypes[0],
                                                &doubleVal,
@@ -3203,7 +3290,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
         summaryTypes[0] = DcgmcmSummaryTypeMaximum;
         mpCacheManager->GetInt64SummaryData(DCGM_FE_GPU,
                                             singleInfo->gpuId,
-                                            DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
+                                            DCGM_FI_DEV_PCIE_REPLAY_TOTAL,
                                             1,
                                             &summaryTypes[0],
                                             &singleInfo->pcieReplays,
@@ -3218,7 +3305,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
 
 
         HelperGetInt32StatSummary(
-            DCGM_FE_GPU, singleInfo->gpuId, DCGM_FI_DEV_GPU_UTIL, &singleInfo->smUtilization, startTime, endTime);
+            DCGM_FE_GPU, singleInfo->gpuId, DCGM_FI_DEV_GPU_UTIL_RATIO, &singleInfo->smUtilization, startTime, endTime);
         HelperGetInt32StatSummary(DCGM_FE_GPU,
                                   singleInfo->gpuId,
                                   DCGM_FI_DEV_MEM_COPY_UTIL,
@@ -3252,7 +3339,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
         singleInfo->numXidCriticalErrors = Msamples;
         dcgmReturn                       = mpCacheManager->GetSamples(DCGM_FE_GPU,
                                                 singleInfo->gpuId,
-                                                DCGM_FI_DEV_XID_ERRORS,
+                                                DCGM_FI_DEV_XID_ERROR,
                                                 samples,
                                                 &singleInfo->numXidCriticalErrors,
                                                 startTime,
@@ -3275,7 +3362,7 @@ dcgmReturn_t DcgmHostEngineHandler::GetProcessInfo(unsigned int groupId, dcgmPid
                 pidInfo->summary.numXidCriticalErrors++;
             }
         }
-        mpCacheManager->FreeSamples(samples, singleInfo->numXidCriticalErrors, DCGM_FI_DEV_XID_ERRORS);
+        mpCacheManager->FreeSamples(samples, singleInfo->numXidCriticalErrors, DCGM_FI_DEV_XID_ERROR);
 
         singleInfo->numOtherComputePids = (int)DCGM_ARRAY_CAPACITY(singleInfo->otherComputePids);
         dcgmReturn                      = mpCacheManager->GetUniquePidLists(DCGM_FE_GPU,
@@ -3753,7 +3840,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
 
         mpCacheManager->GetFp64SummaryData(DCGM_FE_GPU,
                                            singleInfo->gpuId,
-                                           DCGM_FI_DEV_POWER_USAGE,
+                                           DCGM_FI_DEV_BOARD_POWER_WATTS,
                                            4,
                                            &summaryTypes[0],
                                            &doubleVals[0],
@@ -3866,7 +3953,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
         summaryTypes[0] = DcgmcmSummaryTypeMaximum;
         mpCacheManager->GetInt64SummaryData(DCGM_FE_GPU,
                                             singleInfo->gpuId,
-                                            DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
+                                            DCGM_FI_DEV_PCIE_REPLAY_TOTAL,
                                             1,
                                             &summaryTypes[0],
                                             &singleInfo->pcieReplays,
@@ -3890,7 +3977,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
         singleInfo->endTime   = endTime;
 
         DcgmHostEngineHandler::Instance()->HelperGetInt32StatSummary(
-            DCGM_FE_GPU, singleInfo->gpuId, DCGM_FI_DEV_GPU_UTIL, &singleInfo->smUtilization, startTime, endTime);
+            DCGM_FE_GPU, singleInfo->gpuId, DCGM_FI_DEV_GPU_UTIL_RATIO, &singleInfo->smUtilization, startTime, endTime);
 
         /* If the SM utilization is blank, update the average with the SM utilization value as 0 for this GPU*/
         if (DCGM_INT32_IS_BLANK(singleInfo->smUtilization.average))
@@ -3987,7 +4074,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
         singleInfo->numXidCriticalErrors = Msamples;
         dcgmReturn                       = mpCacheManager->GetSamples(DCGM_FE_GPU,
                                                 singleInfo->gpuId,
-                                                DCGM_FI_DEV_XID_ERRORS,
+                                                DCGM_FI_DEV_XID_ERROR,
                                                 samples,
                                                 &singleInfo->numXidCriticalErrors,
                                                 startTime,
@@ -4010,7 +4097,7 @@ dcgmReturn_t DcgmHostEngineHandler::JobGetStats(const std::string &jobId, dcgmJo
                 pJobInfo->summary.numXidCriticalErrors++;
             }
         }
-        mpCacheManager->FreeSamples(samples, singleInfo->numXidCriticalErrors, DCGM_FI_DEV_XID_ERRORS);
+        mpCacheManager->FreeSamples(samples, singleInfo->numXidCriticalErrors, DCGM_FI_DEV_XID_ERROR);
 
         singleInfo->numComputePids = (int)DCGM_ARRAY_CAPACITY(singleInfo->computePidInfo);
         dcgmReturn                 = mpCacheManager->GetUniquePidLists(DCGM_FE_GPU,
@@ -4353,7 +4440,7 @@ static void helper_get_prof_field_ids(std::vector<unsigned short> &fieldIds, std
 
     for (unsigned short &fieldId : fieldIds)
     {
-        if (fieldId >= DCGM_FI_PROF_FIRST_ID && fieldId <= DCGM_FI_PROF_LAST_ID)
+        if (DCGM_FIELD_ID_IS_PROF_FIELD(fieldId))
         {
             profFieldIds.push_back(fieldId);
         }

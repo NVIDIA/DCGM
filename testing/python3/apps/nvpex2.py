@@ -38,4 +38,5 @@ class RunNVpex2(app_runner.AppRunner):
         super(RunNVpex2, self).start(timeout=10)
 
     def __str__(self):
-        return "RunNVpex2 on all supported devices " + super(RunNVpex2, self).__str__()
+        return "RunNVpex2 on all supported devices " + \
+            super(RunNVpex2, self).__str__()

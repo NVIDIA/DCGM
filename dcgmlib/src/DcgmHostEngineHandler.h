@@ -37,6 +37,7 @@
 #include <core/DcgmModuleCore.h>
 #include <dcgm_core_communication.h>
 #include <unordered_map>
+#include <vector>
 
 #define INJECTION_MODE_ENV_VAR "NVML_INJECTION_MODE"
 
@@ -193,6 +194,15 @@ public:
     /*****************************************************************************/
     dcgmReturn_t ProcessModuleCommandMsg(dcgm_connection_id_t connectionId, std::unique_ptr<DcgmMessage> message);
     dcgmReturn_t ProcessModuleCommand(dcgm_module_command_header_t *moduleCommand);
+
+    /**
+     * @brief Some subcommands are required to be listed as public structs but
+     * are not actually available for public use. Check @p moduleCommand
+     *
+     * @param[in] moduleCommand The command to check
+     * @return True if this command should be denied, false otherwise
+     */
+    static bool IsCoreModuleSubcommandDenied(const dcgm_module_command_header_t *moduleCommand);
 
     /*****************************************************************************
      Get the status for an entity
@@ -795,6 +805,13 @@ private:
     DcgmChildProcessManager m_childProcessManager;
 
     std::unique_ptr<DcgmNvmlSystemEventThread> m_nvmlSystemEventThread;
+
+    friend class TestDcgmHostEngineHandler;
 };
+
+dcgmReturn_t ResizeMsgBufferForSubCommand(unsigned int moduleId,
+                                          unsigned int subCommand,
+                                          std::vector<char> &msgBytes,
+                                          std::size_t maxMessageSize);
 
 #endif /* DCGMHOSTENGINEHANDLER_H */

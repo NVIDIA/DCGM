@@ -22,13 +22,137 @@
 #include <DcgmGroupManager.h>
 #include <DcgmHostEngineHandler.h>
 #include <DcgmStringHelpers.h>
+#include <DcgmTopology.hpp>
 #include <DcgmUtilities.h>
 #include <DcgmVersion.hpp>
 #include <fmt/format.h>
 
+#include <algorithm>
+
 #ifdef INJECTION_LIBRARY_AVAILABLE
 #include <nvml_injection.h>
 #endif
+
+template <typename MsgT>
+dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesImpl(MsgT &msg, unsigned int versionMagic)
+{
+    dcgmReturn_t ret = DcgmModule::CheckVersion(&msg.header, versionMagic);
+    if (DCGM_ST_OK != ret)
+    {
+        log_error("Version mismatch");
+        return ret;
+    }
+
+    msg.header.length = sizeof(MsgT) - sizeof(msg.ev.buffer);
+
+    std::vector<dcgmGroupEntityPair_t> entities;
+    std::vector<unsigned short> fieldIds;
+
+    if (msg.ev.entitiesCount == 0)
+    {
+        unsigned int groupId = msg.ev.groupId;
+
+        ret = m_groupManager->verifyAndUpdateGroupId(&groupId);
+        if (ret != DCGM_ST_OK)
+        {
+            log_error("Got ret {} from verifyAndUpdateGroupId. groupId {}", ret, msg.ev.groupId);
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+
+        ret = m_groupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
+        if (ret != DCGM_ST_OK)
+        {
+            log_error("Got ret {} from GetGroupEntities. groupId {}", ret, msg.ev.groupId);
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+    }
+    else if (msg.ev.entitiesCount > DCGM_GROUP_MAX_ENTITIES_V2)
+    {
+        log_error("Invalid entities count: {} > MAX:{}", msg.ev.entitiesCount, DCGM_GROUP_MAX_ENTITIES_V2);
+        msg.ev.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+    else
+    {
+        entities.insert(entities.end(), &msg.ev.entities[0], &msg.ev.entities[msg.ev.entitiesCount]);
+    }
+
+    if (entities.empty())
+    {
+        msg.ev.cmdRet = DCGM_ST_GROUP_IS_EMPTY;
+        return DCGM_ST_OK;
+    }
+
+    if (msg.ev.fieldIdCount == 0)
+    {
+        DcgmFieldGroupManager *mpFieldGroupManager = DcgmHostEngineHandler::Instance()->GetFieldGroupManager();
+
+        ret = mpFieldGroupManager->GetFieldGroupFields(msg.ev.fieldGroupId, fieldIds);
+        if (ret != DCGM_ST_OK)
+        {
+            log_error("Got ret {} from GetFieldGroupFields. fieldGroupId {}", ret, msg.ev.fieldGroupId);
+            msg.ev.cmdRet = ret;
+            return DCGM_ST_OK;
+        }
+    }
+    else if (msg.ev.fieldIdCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
+    {
+        log_error("Invalid fieldId count: {} > MAX:{}", msg.ev.fieldIdCount, DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP);
+        msg.ev.cmdRet = DCGM_ST_BADPARAM;
+        return DCGM_ST_OK;
+    }
+    else
+    {
+        fieldIds.insert(fieldIds.end(), &msg.ev.fieldIdList[0], &msg.ev.fieldIdList[msg.ev.fieldIdCount]);
+    }
+
+    size_t initialCapacity = FVBUFFER_GUESS_INITIAL_CAPACITY(entities.size(), fieldIds.size());
+    DcgmFvBuffer fvBuffer(initialCapacity);
+
+    if ((msg.ev.flags & DCGM_FV_FLAG_LIVE_DATA) != 0)
+    {
+        ret = m_cacheManager->GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
+    }
+    else
+    {
+        ret = m_cacheManager->GetMultipleLatestSamples(entities, fieldIds, &fvBuffer);
+    }
+    if (ret != DCGM_ST_OK)
+    {
+        msg.ev.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
+
+    const char *fvBufferBytes = fvBuffer.GetBuffer();
+    size_t elementCount       = 0;
+
+    fvBuffer.GetSize((size_t *)&msg.ev.bufferSize, &elementCount);
+
+    if ((fvBufferBytes == nullptr) || (msg.ev.bufferSize == 0))
+    {
+        log_warning("Unexpected fvBuffer {}, bufferSize {}", (void *)fvBufferBytes, msg.ev.bufferSize);
+        ret           = DCGM_ST_GENERIC_ERROR;
+        msg.ev.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
+
+    if (msg.ev.bufferSize > sizeof(msg.ev.buffer))
+    {
+        log_error("Buffer size too small, consider smaller request: {}>{}", msg.ev.bufferSize, sizeof(msg.ev.buffer));
+        msg.ev.bufferSize = sizeof(msg.ev.buffer);
+        msg.ev.cmdRet     = DCGM_ST_INSUFFICIENT_SIZE;
+        return DCGM_ST_OK;
+    }
+
+    memcpy(&msg.ev.buffer, fvBufferBytes, (size_t)msg.ev.bufferSize);
+
+    msg.header.length = sizeof(MsgT) - sizeof(msg.ev.buffer) + msg.ev.bufferSize;
+    msg.ev.cmdRet     = DCGM_ST_OK;
+
+    return DCGM_ST_OK;
+}
 
 extern "C" dcgmReturn_t dcgm_core_process_message(DcgmModule *module, dcgm_module_command_header_t *moduleCommand)
 {
@@ -126,6 +250,10 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
                 dcgmReturn
                     = ProcessEntitiesGetLatestValuesV3(*(dcgm_core_msg_entities_get_latest_values_v3 *)moduleCommand);
                 break;
+            case DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4:
+                dcgmReturn
+                    = ProcessEntitiesGetLatestValuesV4(*(dcgm_core_msg_entities_get_latest_values_v4 *)moduleCommand);
+                break;
             case DCGM_CORE_SR_GET_MULTIPLE_VALUES_FOR_FIELD_V1:
                 dcgmReturn = ProcessGetMultipleValuesForFieldV1(
                     *(dcgm_core_msg_get_multiple_values_for_field_v1 *)moduleCommand);
@@ -163,7 +291,14 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
                 dcgmReturn = ProcessUnwatchFields(*(dcgm_core_msg_watch_fields_t *)moduleCommand);
                 break;
             case DCGM_CORE_SR_GET_TOPOLOGY:
-                dcgmReturn = ProcessGetTopology(*(dcgm_core_msg_get_topology_t *)moduleCommand);
+                if (moduleCommand->version == dcgm_core_msg_get_topology_version1)
+                {
+                    dcgmReturn = ProcessGetTopology(*(dcgm_core_msg_get_topology_v1 *)moduleCommand);
+                }
+                else
+                {
+                    dcgmReturn = ProcessGetTopology(*(dcgm_core_msg_get_topology_v2 *)moduleCommand);
+                }
                 break;
             case DCGM_CORE_SR_GET_TOPOLOGY_AFFINITY:
                 dcgmReturn = ProcessGetTopologyAffinity(*(dcgm_core_msg_get_topology_affinity_t *)moduleCommand);
@@ -181,7 +316,14 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
                 dcgmReturn = ProcessSetEntityNvLinkState(*(dcgm_core_msg_set_entity_nvlink_state_t *)moduleCommand);
                 break;
             case DCGM_CORE_SR_GET_NVLINK_STATUS:
-                dcgmReturn = ProcessGetNvLinkStatus(*(dcgm_core_msg_get_nvlink_status_t *)moduleCommand);
+                if (moduleCommand->version == dcgm_core_msg_get_nvlink_status_version3)
+                {
+                    dcgmReturn = ProcessGetNvLinkStatus(*(dcgm_core_msg_get_nvlink_status_v3 *)moduleCommand);
+                }
+                else
+                {
+                    dcgmReturn = ProcessGetNvLinkStatus(*(dcgm_core_msg_get_nvlink_status_v4 *)moduleCommand);
+                }
                 break;
             case DCGM_CORE_SR_GET_NVLINK_P2P_STATUS:
                 dcgmReturn = ProcessGetNvLinkP2PStatus(*(dcgm_core_msg_get_nvlink_p2p_status_t *)moduleCommand);
@@ -950,135 +1092,12 @@ dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_enti
 
 dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV3(dcgm_core_msg_entities_get_latest_values_v3 &msg)
 {
-    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_entities_get_latest_values_version3);
-    if (DCGM_ST_OK != ret)
-    {
-        DCGM_LOG_ERROR << "Version mismatch";
-        return ret;
-    }
+    return ProcessEntitiesGetLatestValuesImpl(msg, dcgm_core_msg_entities_get_latest_values_version3);
+}
 
-    /* initialize length of response to handle failure cases */
-    msg.header.length = sizeof(dcgm_core_msg_entities_get_latest_values_v3) - SAMPLES_BUFFER_SIZE_V2;
-
-    std::vector<dcgmGroupEntityPair_t> entities;
-    std::vector<unsigned short> fieldIds;
-
-    /* Convert the entity group to a list of entities */
-    if (msg.ev.entitiesCount == 0)
-    {
-        unsigned int groupId = msg.ev.groupId;
-
-        /* If this is a special group ID, convert it to a real one */
-        ret = m_groupManager->verifyAndUpdateGroupId(&groupId);
-        if (ret != DCGM_ST_OK)
-        {
-            DCGM_LOG_ERROR << "Got ret " << ret << " from verifyAndUpdateGroupId. groupId " << msg.ev.groupId;
-            msg.ev.cmdRet = ret;
-            return DCGM_ST_OK;
-        }
-
-        ret = m_groupManager->GetGroupEntities(groupId, DcgmGroupOption::All, entities);
-        if (ret != DCGM_ST_OK)
-        {
-            DCGM_LOG_ERROR << "Got ret " << ret << " from GetGroupEntities. groupId " << msg.ev.groupId;
-            msg.ev.cmdRet = ret;
-            return DCGM_ST_OK;
-        }
-    }
-    else if (msg.ev.entitiesCount > DCGM_GROUP_MAX_ENTITIES_V2)
-    {
-        DCGM_LOG_ERROR << "Invalid entities count: " << msg.ev.entitiesCount << " > MAX:" << DCGM_GROUP_MAX_ENTITIES_V2;
-        msg.ev.cmdRet = DCGM_ST_BADPARAM;
-        return DCGM_ST_OK;
-    }
-    else
-    {
-        /* Use the list from the message */
-        entities.insert(entities.end(), &msg.ev.entities[0], &msg.ev.entities[msg.ev.entitiesCount]);
-    }
-
-    if (entities.empty())
-    {
-        msg.ev.cmdRet = DCGM_ST_GROUP_IS_EMPTY;
-        return DCGM_ST_OK;
-    }
-
-    /* Convert the fieldGroupId to a list of field IDs */
-    if (msg.ev.fieldIdCount == 0)
-    {
-        DcgmFieldGroupManager *mpFieldGroupManager = DcgmHostEngineHandler::Instance()->GetFieldGroupManager();
-
-        ret = mpFieldGroupManager->GetFieldGroupFields(msg.ev.fieldGroupId, fieldIds);
-        if (ret != DCGM_ST_OK)
-        {
-            DCGM_LOG_ERROR << "Got ret " << ret << " from GetFieldGroupFields. fieldGroupId " << msg.ev.fieldGroupId;
-            msg.ev.cmdRet = ret;
-            return DCGM_ST_OK;
-        }
-    }
-    else if (msg.ev.fieldIdCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
-    {
-        DCGM_LOG_ERROR << "Invalid fieldId count: " << msg.ev.fieldIdCount
-                       << " > MAX:" << DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP;
-        msg.ev.cmdRet = DCGM_ST_BADPARAM;
-        return DCGM_ST_OK;
-    }
-    else
-    {
-        /* Use the list from the message */
-        fieldIds.insert(fieldIds.end(), &msg.ev.fieldIdList[0], &msg.ev.fieldIdList[msg.ev.fieldIdCount]);
-    }
-
-    /* Create the fvBuffer after we know how many field IDs we'll be retrieving */
-    size_t initialCapacity = FVBUFFER_GUESS_INITIAL_CAPACITY(entities.size(), fieldIds.size());
-    DcgmFvBuffer fvBuffer(initialCapacity);
-
-    /* Make a batch request to the cache manager to fill a fvBuffer with all of the values */
-    if ((msg.ev.flags & DCGM_FV_FLAG_LIVE_DATA) != 0)
-    {
-        ret = m_cacheManager->GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
-    }
-    else
-    {
-        ret = m_cacheManager->GetMultipleLatestSamples(entities, fieldIds, &fvBuffer);
-    }
-    if (ret != DCGM_ST_OK)
-    {
-        msg.ev.cmdRet = ret;
-        return DCGM_ST_OK;
-    }
-
-    const char *fvBufferBytes = fvBuffer.GetBuffer();
-    size_t elementCount       = 0;
-
-    fvBuffer.GetSize((size_t *)&msg.ev.bufferSize, &elementCount);
-
-    if ((fvBufferBytes == nullptr) || (msg.ev.bufferSize == 0))
-    {
-        DCGM_LOG_ERROR << "Unexpected fvBuffer " << (void *)fvBufferBytes << ", fvBufferBytes " << msg.ev.bufferSize;
-        ret           = DCGM_ST_GENERIC_ERROR;
-        msg.ev.cmdRet = ret;
-        return DCGM_ST_OK;
-    }
-
-    if (msg.ev.bufferSize > sizeof(msg.ev.buffer))
-    {
-        DCGM_LOG_ERROR << "Buffer size too small, consider smaller request: " << msg.ev.bufferSize << ">"
-                       << sizeof(msg.ev.buffer);
-        msg.ev.bufferSize = sizeof(msg.ev.buffer);
-        msg.ev.cmdRet     = DCGM_ST_INSUFFICIENT_SIZE;
-        return DCGM_ST_OK;
-    }
-
-    /* Set pCmd->blob with the contents of the FV buffer */
-    memcpy(&msg.ev.buffer, fvBufferBytes, (size_t)msg.ev.bufferSize);
-
-    /* calculate actual message size to avoid transferring extra data */
-    msg.header.length
-        = sizeof(dcgm_core_msg_entities_get_latest_values_v3) - SAMPLES_BUFFER_SIZE_V2 + msg.ev.bufferSize;
-    msg.ev.cmdRet = DCGM_ST_OK;
-
-    return DCGM_ST_OK;
+dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesV4(dcgm_core_msg_entities_get_latest_values_v4 &msg)
+{
+    return ProcessEntitiesGetLatestValuesImpl(msg, dcgm_core_msg_entities_get_latest_values_version4);
 }
 
 dcgmReturn_t DcgmModuleCore::ProcessGetMultipleValuesForFieldV1(dcgm_core_msg_get_multiple_values_for_field_v1 &msg)
@@ -1619,9 +1638,49 @@ dcgmReturn_t DcgmModuleCore::ProcessGetGpuStatus(dcgm_core_msg_get_gpu_status_t 
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmModuleCore::ProcessGetTopology(dcgm_core_msg_get_topology_t &msg)
+namespace
 {
-    dcgmReturn_t dcgmReturn = CheckVersion(&msg.header, dcgm_core_msg_get_topology_version);
+void CopyTopologyToLegacy(dcgmTopology_v1 &legacyTopology, dcgmTopology_v2 const &topology)
+{
+    legacyTopology             = {};
+    legacyTopology.version     = dcgmTopology_version1;
+    legacyTopology.numElements = topology.numElements;
+
+    for (unsigned int index = 0; index < topology.numElements; index++)
+    {
+        legacyTopology.element[index].dcgmGpuA = topology.element[index].dcgmGpuA;
+        legacyTopology.element[index].dcgmGpuB = topology.element[index].dcgmGpuB;
+        legacyTopology.element[index].AtoBNvLinkIds
+            = static_cast<unsigned int>(topology.element[index].AtoBNvLinkIds & 0xFFFFFFFFULL);
+        legacyTopology.element[index].BtoANvLinkIds
+            = static_cast<unsigned int>(topology.element[index].BtoANvLinkIds & 0xFFFFFFFFULL);
+        legacyTopology.element[index].path = TopologyPathToLegacy(topology.element[index].path);
+    }
+}
+} // namespace
+
+dcgmReturn_t DcgmModuleCore::ProcessGetTopology(dcgm_core_msg_get_topology_v1 &msg)
+{
+    dcgmReturn_t dcgmReturn = CheckVersion(&msg.header, dcgm_core_msg_get_topology_version1);
+
+    if (dcgmReturn != DCGM_ST_OK)
+    {
+        DCGM_LOG_ERROR << "Version mismatch";
+        return dcgmReturn;
+    }
+
+    unsigned int groupId    = msg.topo.groupId;
+    dcgmTopology_t topology = {};
+
+    msg.topo.cmdRet = DcgmHostEngineHandler::Instance()->HelperGetTopologyIO(groupId, topology);
+    CopyTopologyToLegacy(msg.topo.topology, topology);
+
+    return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessGetTopology(dcgm_core_msg_get_topology_v2 &msg)
+{
+    dcgmReturn_t dcgmReturn = CheckVersion(&msg.header, dcgm_core_msg_get_topology_version2);
 
     if (dcgmReturn != DCGM_ST_OK)
     {
@@ -1780,9 +1839,13 @@ dcgmReturn_t DcgmModuleCore::ProcessGetDeviceWorkloadPowerProfilesInfo(
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_t &msg)
+template <typename MsgType>
+dcgmReturn_t ProcessGetNvLinkStatusImpl(DcgmCacheManager *cacheManager,
+                                        MsgType &msg,
+                                        unsigned int messageVersion,
+                                        unsigned int linkStatusVersion)
 {
-    dcgmReturn_t ret = CheckVersion(&msg.header, dcgm_core_msg_get_nvlink_status_version);
+    dcgmReturn_t ret = DcgmModule::CheckVersion(&msg.header, messageVersion);
 
     if (ret != DCGM_ST_OK)
     {
@@ -1790,14 +1853,19 @@ dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_sta
         return ret;
     }
 
-    if (msg.info.ls.version != dcgmNvLinkStatus_version4)
+    if (msg.info.ls.version != linkStatusVersion)
     {
         DCGM_LOG_ERROR << "Struct version mismatch";
         msg.info.cmdRet = DCGM_ST_VER_MISMATCH;
         return DCGM_ST_OK;
     }
 
-    ret = m_cacheManager->PopulateNvLinkLinkStatus(msg.info.ls);
+    ret = cacheManager->PopulateNvLinkLinkStatus(msg.info.ls);
+    if (ret != DCGM_ST_OK)
+    {
+        msg.info.cmdRet = ret;
+        return DCGM_ST_OK;
+    }
 
     dcgm_nvswitch_msg_get_all_link_states_t nvsMsg {};
     nvsMsg.header.length     = sizeof(nvsMsg);
@@ -1822,6 +1890,18 @@ dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_sta
     }
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_v3 &msg)
+{
+    return ProcessGetNvLinkStatusImpl(
+        m_cacheManager, msg, dcgm_core_msg_get_nvlink_status_version3, dcgmNvLinkStatus_version4);
+}
+
+dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_v4 &msg)
+{
+    return ProcessGetNvLinkStatusImpl(
+        m_cacheManager, msg, dcgm_core_msg_get_nvlink_status_version4, dcgmNvLinkStatus_version5);
 }
 
 dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkP2PStatus(dcgm_core_msg_get_nvlink_p2p_status_t &msg)
@@ -2163,7 +2243,7 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
     /* This is a GPM field. Populate the struct here. If we need NVML information in the future to
        populate this request, then we should forward it to m_cacheManager->m_gpmManager. */
 
-    msg.metricGroups.numMetricGroups = 2;
+    msg.metricGroups.numMetricGroups = 3;
 
     dcgmProfMetricGroupInfo_v2 *mg = &msg.metricGroups.metricGroups[0]; /* Shortcut pointer */
     mg->majorId                    = 0;
@@ -2171,7 +2251,7 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
     mg->numFieldIds                = 0;
 
     using FirstGroupRange
-        = DcgmStaticRange<DCGM_FI_PROF_FIRST_ID, DCGM_FI_PROF_NVOFA1_ACTIVE, DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2>;
+        = DcgmStaticRange<DCGM_FI_PROF_FIRST_ID, DCGM_FI_PROF_NVOFA_UTIL_1_RATIO, DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2>;
     for (unsigned int fieldId = FirstGroupRange::start; fieldId <= FirstGroupRange::end; fieldId++)
     {
         mg->fieldIds[mg->numFieldIds] = fieldId;
@@ -2187,6 +2267,27 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
                                              DCGM_FI_PROF_PEERMEM_CACHE_MISS,
                                              DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2>;
     for (unsigned int fieldId = SecondGroupRange::start; fieldId <= SecondGroupRange::end; fieldId++)
+    {
+        mg->fieldIds[mg->numFieldIds] = fieldId;
+        mg->numFieldIds++;
+    }
+
+    /* Per-link NVLink throughput keyed by dcgm_link_t. These share the NVLink GPM metric group but
+       are not contiguous with the legacy L0-L17 range above, so advertise them explicitly. */
+    mg->fieldIds[mg->numFieldIds++] = DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK;
+    mg->fieldIds[mg->numFieldIds++] = DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK;
+
+    mg              = &msg.metricGroups.metricGroups[2]; /* Shortcut pointer */
+    mg->majorId     = 2;
+    mg->minorId     = 0;
+    mg->numFieldIds = 0;
+
+    static_assert((DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL - DCGM_FI_PROF_SM_CYCLES_ELAPSED_TOTAL + 1)
+                      <= DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2,
+                  "Cumulative GPM metric group exceeds DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2");
+
+    for (unsigned int fieldId = DCGM_FI_PROF_SM_CYCLES_ELAPSED_TOTAL; fieldId <= DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL;
+         fieldId++)
     {
         mg->fieldIds[mg->numFieldIds] = fieldId;
         mg->numFieldIds++;

@@ -22,6 +22,8 @@
 #include <dcgm_core_communication.h>
 #include <dcgm_module_structs.h>
 
+#include <DcgmUtilities.h>
+
 #include <vector>
 
 enum class EntityListOption
@@ -79,6 +81,16 @@ public:
      * @param[out] gpuInfo - a list of all the GPU information
      */
     dcgmReturn_t GetAllGpuInfo(std::vector<dcgmcm_gpu_info_cached_t> &gpuInfo);
+
+    /**
+     * Return the chip architecture for a single GPU by querying GetAllGpuInfo.
+     *
+     * @param[in] gpuId  The GPU entity ID to look up.
+     * @return The chip architecture on success.
+     *         DCGM_ST_BADPARAM if the GPU ID was not found in the cached GPU list.
+     *         DCGM_ST_* error code if the underlying GetAllGpuInfo query failed.
+     */
+    DcgmResult<dcgmChipArchitecture_t> GetGpuChipArch(dcgm_field_eid_t gpuId);
 
     /**
      * @param[in] nvmlIndex - the NVML index to translate to a DCGM GPU id

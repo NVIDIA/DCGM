@@ -17,6 +17,7 @@
 #include <catch2/catch_all.hpp>
 #include <cstdlib>
 #include <fmt/core.h>
+#include <string>
 
 #define DCGM_NVSWITCH_TEST
 #include <DcgmNvSwitchManagerBase.h>
@@ -27,6 +28,19 @@
 extern dcgmReturn_t CustomPost(dcgm_module_command_header_t *req, void *poster);
 
 using namespace DcgmNs;
+
+namespace
+{
+/** Packed dcgm_link_t.raw for an NvSwitch-owned link (matches AttachNvLinks encoding). */
+inline dcgm_field_eid_t NvsdmTestLinkEid(unsigned int switchId, unsigned int portIndex)
+{
+    dcgm_link_t link {};
+    link.parsed.type     = DCGM_FE_SWITCH;
+    link.parsed.switchId = static_cast<uint8_t>(switchId);
+    link.parsed.index    = static_cast<uint16_t>(portIndex);
+    return link.raw;
+}
+} // namespace
 
 SCENARIO("Validating entity Id")
 {
@@ -42,41 +56,33 @@ SCENARIO("Validating entity Id")
 
     GIVEN("Switch manager isn't initialized") // Init() isn't called
     {
-        THEN("Any entity Id >= 0 is invalid")
+        THEN("NvSwitch entity id 0 is invalid")
         {
             REQUIRE(nsm.IsValidNvSwitchId(0) == false);
-            REQUIRE(nsm.IsValidNvLinkId(0) == false);
         }
     }
 
     nsm.Init();
-    GIVEN("Irrespective of switch manager is inited or not")
+    GIVEN("Switch manager is initialized")
     {
         THEN("entity Id of NvSwitch >= DCGM_MAX_NUM_SWITCHES is invalid")
         {
             REQUIRE(nsm.IsValidNvSwitchId(DCGM_MAX_NUM_SWITCHES) == false);
         }
-        THEN("entity Id of NvLink >= DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH is invalid")
-        {
-            REQUIRE(nsm.IsValidNvLinkId(DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH) == false);
-        }
-    }
 
-    GIVEN("Switch manager is initialized")
-    {
-        THEN("entity Id > number of available ports is invalid")
+        THEN("a well-formed link id for a port that was never discovered is rejected")
         {
-            REQUIRE(nsm.IsValidNvLinkId(2) == false);
+            REQUIRE(nsm.FindPortVectorIndex(NvsdmTestLinkEid(0, 99)).has_value() == false);
         }
 
-        THEN("entity Id == (number of available ports - 1) is valid")
+        THEN("last discovered link entity id is valid")
         {
-            REQUIRE(nsm.IsValidNvLinkId(1) == true);
+            REQUIRE(nsm.FindPortVectorIndex(NvsdmTestLinkEid(0, 1)).has_value() == true);
         }
 
-        THEN("entity Id < number of available ports is valid")
+        THEN("first discovered link entity id is valid")
         {
-            REQUIRE(nsm.IsValidNvLinkId(0) == true);
+            REQUIRE(nsm.FindPortVectorIndex(NvsdmTestLinkEid(0, 0)).has_value() == true);
         }
     }
 }
@@ -95,9 +101,9 @@ SCENARIO("Validating entity Id for ports")
         DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         nsm.Init();
 
-        THEN("entityId > (number of available ports - 1) is invalid")
+        THEN("any link lookup fails when no ports were discovered")
         {
-            REQUIRE(nsm.IsValidNvLinkId(0) == false);
+            REQUIRE(nsm.FindPortVectorIndex(NvsdmTestLinkEid(0, 0)).has_value() == false);
         }
 
         THEN("Direct port access would fail")
@@ -116,14 +122,14 @@ SCENARIO("Validating entity Id for ports")
         DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         nsm.Init();
 
-        THEN("entityId > (number of available ports - 1) is invalid")
+        THEN("a link id for a port that was never discovered is rejected")
         {
-            REQUIRE(nsm.IsValidNvLinkId(1) == false);
+            REQUIRE(nsm.FindPortVectorIndex(NvsdmTestLinkEid(0, 1)).has_value() == false);
         }
 
-        THEN("entityId == (number of available ports - 1) is valid")
+        THEN("the single discovered link entity id is valid")
         {
-            REQUIRE(nsm.IsValidNvLinkId(0) == true);
+            REQUIRE(nsm.FindPortVectorIndex(NvsdmTestLinkEid(0, 0)).has_value() == true);
         }
 
         THEN("Direct port access would succeed")
@@ -246,7 +252,11 @@ SCENARIO("Validating num, LID, gid and guid of NvLink from stub Nvsdm lib")
             REQUIRE(nsm.m_numNvSwitchPorts > 0);
             for (auto const &nvLink : nsm.m_nvSwitchPorts)
             {
-                REQUIRE(nvLink.num == nvLink.id);
+                dcgm_link_t link {};
+                link.raw = nvLink.id;
+                REQUIRE(link.parsed.type == DCGM_FE_SWITCH);
+                REQUIRE(link.parsed.switchId == 0);
+                REQUIRE(link.parsed.index == nvLink.num);
             }
         }
 
@@ -264,7 +274,8 @@ SCENARIO("Validating num, LID, gid and guid of NvLink from stub Nvsdm lib")
             for (auto const &nvLink : nsm.m_nvSwitchPorts)
             {
                 memset(nvsdmPortGID, 0, sizeof(nvsdmPortGID));
-                fmt::format_to_n(nvsdmPortGID, sizeof(nvsdmPortGID), "NvsdmPort-{}\0", nvLink.id);
+                /* NvsdmMockPort::GetGid() uses m_portNum (nvLink.num), not DCGM entity id */
+                fmt::format_to_n(nvsdmPortGID, sizeof(nvsdmPortGID), "NvsdmPort-{}\0", nvLink.num);
                 REQUIRE(memcmp(nvLink.gid, nvsdmPortGID, sizeof(nvsdmPortGID)) == 0);
             }
         }
@@ -276,8 +287,9 @@ SCENARIO("Validating num, LID, gid and guid of NvLink from stub Nvsdm lib")
             uint64_t nvsdmLinkGuid      = 0;
             for (auto const &nvLink : nsm.m_nvSwitchPorts)
             {
+                /* NvsdmMockPort::GetGuid() packs num/lid/num — low bits are port num, not dcgm entity id */
                 nvsdmLinkGuid = ((uint64_t)(nvLink.num) << guidPortNumLshift)
-                                | ((uint64_t)(nvLink.lid) << guidPortLidLshift) | nvLink.id;
+                                | ((uint64_t)(nvLink.lid) << guidPortLidLshift) | nvLink.num;
                 REQUIRE(nvLink.guid == nvsdmLinkGuid);
             }
         }
@@ -373,11 +385,11 @@ TEST_CASE("DcgmNvsdmManager::GetEntityStatus")
 
         dcgm_nvswitch_msg_get_entity_status_t msg;
         msg.entityGroupId = DCGM_FE_LINK;
-        msg.entityId      = 0;
+        msg.entityId      = NvsdmTestLinkEid(0, 0);
         // If we can find the target NvLink, its status is always DcgmEntityStatusOk
         REQUIRE(nsm.GetEntityStatus(&msg) == DCGM_ST_OK);
         REQUIRE(msg.entityStatus == DcgmEntityStatusOk);
-        msg.entityId = 1;
+        msg.entityId = NvsdmTestLinkEid(0, 1);
         REQUIRE(nsm.GetEntityStatus(&msg) == DCGM_ST_OK);
         REQUIRE(msg.entityStatus == DcgmEntityStatusOk);
     }
@@ -602,8 +614,8 @@ TEST_CASE("DcgmNvsdmManager::GetEntityList")
         unsigned int count = ids.size();
         REQUIRE(nsm.GetEntityList(count, ids.data(), DCGM_FE_LINK, 0) == DCGM_ST_OK);
         REQUIRE(count == 2);
-        REQUIRE(ids[0] == 0);
-        REQUIRE(ids[1] == 1);
+        REQUIRE(ids[0] == NvsdmTestLinkEid(0, 0));
+        REQUIRE(ids[1] == NvsdmTestLinkEid(0, 1));
         REQUIRE(ids[2] == 5566);
     }
 
@@ -715,8 +727,8 @@ TEST_CASE("Pause & Resume")
         unsigned int count = ids.size();
         REQUIRE(nsm.GetEntityList(count, ids.data(), DCGM_FE_LINK, 0) == DCGM_ST_OK);
         REQUIRE(count == 2);
-        REQUIRE(ids[0] == 0);
-        REQUIRE(ids[1] == 1);
+        REQUIRE(ids[0] == NvsdmTestLinkEid(0, 0));
+        REQUIRE(ids[1] == NvsdmTestLinkEid(0, 1));
         REQUIRE(ids[2] == 5566);
     }
 
@@ -958,4 +970,269 @@ TEST_CASE("DcgmNvsdmManager::HandleCompositeFieldId")
         REQUIRE(fv->value.i64 > UINT32_MAX);
         REQUIRE(fv->fieldId == DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
     }
+}
+
+TEST_CASE("DcgmNvsdmManager::HandleInfoField")
+{
+    constexpr uint16_t nvsdmPortLID        = 1234;
+    constexpr uint32_t nvsdmSwitchVendorID = 0xc8763;
+    constexpr unsigned int switchID        = 0;
+
+    // Create a switch device with PCI info and firmware version
+    NvsdmMockDevice dev(NVSDM_DEV_TYPE_SWITCH, switchID, nvsdmSwitchVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+    dev.SetPCIInfo(0x0000, 0x3b, 0x00, 0x0); // domain=0, bus=0x3b, dev=0, func=0
+    dev.SetFirmwareVersion(35, 2014, 4770);
+
+    // Add ports
+    NvsdmMockPort port0(0, nvsdmPortLID);
+    NvsdmMockPort port1(1, nvsdmPortLID);
+    dev.AddPort(port0);
+    dev.AddPort(port1);
+
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    mockNvsdm->InjectDevice(dev);
+
+    DcgmFieldsInit();
+    dcgmCoreCallbacks_t dcc = {};
+    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+    SECTION("Switch-level PCI info fields")
+    {
+        DcgmFvBuffer buf;
+        timelib64_t now = timelib_usecSince1970();
+        std::vector<dcgm_field_update_info_t> entities;
+        dcgm_field_update_info_t entity;
+        entity.entityGroupId = DCGM_FE_SWITCH;
+        entity.entityId      = 0;
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_NVSWITCH_PCIE_BUS);
+        entities.push_back(entity);
+
+        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_PCIE_BUS, buf, entities, now) == DCGM_ST_OK);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        REQUIRE(fv->entityGroupId == DCGM_FE_SWITCH);
+        REQUIRE(fv->entityId == 0);
+        REQUIRE(fv->fieldId == DCGM_FI_DEV_NVSWITCH_PCIE_BUS);
+        REQUIRE(fv->value.i64 == 0x3b);
+        REQUIRE(fv->status == DCGM_ST_OK);
+    }
+
+    SECTION("Link-level info fields")
+    {
+        DcgmFvBuffer buf;
+        timelib64_t now = timelib_usecSince1970();
+        std::vector<dcgm_field_update_info_t> entities;
+        dcgm_field_update_info_t entity;
+        entity.entityGroupId = DCGM_FE_LINK;
+        entity.entityId      = NvsdmTestLinkEid(0, 0); // First port
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_NVSWITCH_LINK_ID);
+        entities.push_back(entity);
+
+        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_LINK_ID, buf, entities, now) == DCGM_ST_OK);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        REQUIRE(fv->entityGroupId == DCGM_FE_LINK);
+        REQUIRE(fv->entityId == NvsdmTestLinkEid(0, 0));
+        REQUIRE(fv->fieldId == DCGM_FI_DEV_NVSWITCH_LINK_ID);
+        REQUIRE(fv->value.i64 == 0); // port number 0
+        REQUIRE(fv->status == DCGM_ST_OK);
+    }
+
+    SECTION("Link status field")
+    {
+        DcgmFvBuffer buf;
+        timelib64_t now = timelib_usecSince1970();
+        std::vector<dcgm_field_update_info_t> entities;
+        dcgm_field_update_info_t entity;
+        entity.entityGroupId = DCGM_FE_LINK;
+        entity.entityId      = NvsdmTestLinkEid(0, 0);
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_NVSWITCH_LINK_STATUS);
+        entities.push_back(entity);
+
+        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_LINK_STATUS, buf, entities, now)
+                == DCGM_ST_OK);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        REQUIRE(fv->fieldId == DCGM_FI_DEV_NVSWITCH_LINK_STATUS);
+        // Default port state is ACTIVE in mock, which maps to 2
+        REQUIRE(fv->value.i64 == 2);
+        REQUIRE(fv->status == DCGM_ST_OK);
+    }
+
+    SECTION("Firmware version field returns cached string value")
+    {
+        DcgmFvBuffer buf;
+        timelib64_t now = timelib_usecSince1970();
+        std::vector<dcgm_field_update_info_t> entities;
+        dcgm_field_update_info_t entity;
+        entity.entityGroupId = DCGM_FE_SWITCH;
+        entity.entityId      = 0;
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION);
+        entities.push_back(entity);
+
+        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION, buf, entities, now)
+                == DCGM_ST_OK);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        REQUIRE(fv->entityGroupId == DCGM_FE_SWITCH);
+        REQUIRE(fv->entityId == 0);
+        REQUIRE(fv->fieldId == DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION);
+        REQUIRE(fv->status == DCGM_ST_OK);
+        REQUIRE(std::string(fv->value.str) == "35.2014.4770");
+    }
+}
+
+TEST_CASE("DcgmNvsdmManager::HandleInfoField - Missing info returns NOT_SUPPORTED")
+{
+    constexpr uint16_t nvsdmPortLID        = 1234;
+    constexpr uint32_t nvsdmSwitchVendorID = 0xc8763;
+    constexpr unsigned int switchID        = 0;
+
+    // Create switch WITHOUT PCI info (hasPciInfo remains false)
+    // Mock doesn't implement nvsdmPortGetRemote, so hasRemoteDeviceInfo also remains false
+    NvsdmMockDevice dev(NVSDM_DEV_TYPE_SWITCH, switchID, nvsdmSwitchVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+    NvsdmMockPort port0(0, nvsdmPortLID);
+    dev.AddPort(port0);
+
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    mockNvsdm->InjectDevice(dev);
+
+    DcgmFieldsInit();
+    dcgmCoreCallbacks_t dcc = {};
+    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+    SECTION("Switch PCI fields return NOT_SUPPORTED when hasPciInfo is false")
+    {
+        DcgmFvBuffer buf;
+        timelib64_t now = timelib_usecSince1970();
+        std::vector<dcgm_field_update_info_t> entities;
+        dcgm_field_update_info_t entity;
+        entity.entityGroupId = DCGM_FE_SWITCH;
+        entity.entityId      = 0;
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_NVSWITCH_PCIE_BUS);
+        entities.push_back(entity);
+
+        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_PCIE_BUS, buf, entities, now) == DCGM_ST_OK);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        REQUIRE(fv->fieldId == DCGM_FI_DEV_NVSWITCH_PCIE_BUS);
+        REQUIRE(fv->status == DCGM_ST_NOT_SUPPORTED);
+    }
+
+    SECTION("Link remote device fields return NOT_SUPPORTED when hasRemoteDeviceInfo is false")
+    {
+        // Fields: LINK_TYPE (871), LINK_REMOTE_LINK_ID (876), LINK_REMOTE_LINK_SID (877)
+        std::vector<unsigned short> remoteDeviceInfoFields = { DCGM_FI_DEV_NVSWITCH_LINK_TYPE,
+                                                               DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_ID,
+                                                               DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID };
+
+        for (auto fieldId : remoteDeviceInfoFields)
+        {
+            CAPTURE(fieldId);
+            DcgmFvBuffer buf;
+            timelib64_t now = timelib_usecSince1970();
+            std::vector<dcgm_field_update_info_t> entities;
+            dcgm_field_update_info_t entity;
+            entity.entityGroupId = DCGM_FE_LINK;
+            entity.entityId      = NvsdmTestLinkEid(0, 0);
+            entity.fieldMeta     = DcgmFieldGetById(fieldId);
+            entities.push_back(entity);
+
+            REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(fieldId, buf, entities, now) == DCGM_ST_OK);
+
+            dcgmBufferedFvCursor_t cursor = 0;
+            dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+            REQUIRE(fv != nullptr);
+            REQUIRE(fv->fieldId == fieldId);
+            REQUIRE(fv->status == DCGM_ST_NOT_SUPPORTED);
+        }
+    }
+
+    SECTION("Firmware version field returns DCGM_STR_BLANK and NOT_SUPPORTED when not set")
+    {
+        DcgmFvBuffer buf;
+        timelib64_t now = timelib_usecSince1970();
+        std::vector<dcgm_field_update_info_t> entities;
+        dcgm_field_update_info_t entity;
+        entity.entityGroupId = DCGM_FE_SWITCH;
+        entity.entityId      = 0;
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION);
+        entities.push_back(entity);
+
+        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION, buf, entities, now)
+                == DCGM_ST_OK);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        REQUIRE(fv->fieldId == DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION);
+        REQUIRE(fv->status == DCGM_ST_NOT_SUPPORTED);
+        REQUIRE(std::string(fv->value.str) == DCGM_STR_BLANK);
+    }
+}
+
+TEST_CASE("DcgmNvsdmManager::HandleInfoField - LINK_REMOTE_LINK_SID returned as full hex string")
+{
+    // NvsdmMock treats vendorID >= 0x80000000 as "GUID has bit 63 set"; LINK_REMOTE_LINK_SID must
+    // still be published as a full 16-character lowercase hex string (same width as any other GUID).
+    constexpr unsigned int c_localSwitchId   = 0;
+    constexpr unsigned int c_remoteSwitchId  = 0x0001;
+    constexpr uint32_t c_localVendorId       = 0;
+    constexpr uint32_t c_remoteVendorIdMsbOn = 0x80000001;
+    constexpr unsigned int c_remoteDevIdx    = 1;
+    constexpr unsigned int c_portIdx0        = 0;
+    constexpr uint16_t c_remotePortLid       = 100;
+    constexpr uint16_t c_localPortLid        = 200;
+
+    NvsdmMockDevice remoteDevice(
+        NVSDM_DEV_TYPE_SWITCH, c_remoteSwitchId, c_remoteVendorIdMsbOn, NVSDM_DEVICE_STATE_HEALTHY);
+    NvsdmMockPort remotePort(c_portIdx0, c_remotePortLid);
+    remotePort.SetDevIdx(c_remoteDevIdx); // nvsdmPortGetDevice resolves owning device via this index
+    remoteDevice.AddPort(remotePort);
+
+    NvsdmMockDevice localDevice(NVSDM_DEV_TYPE_SWITCH, c_localSwitchId, c_localVendorId, NVSDM_DEVICE_STATE_HEALTHY);
+    NvsdmMockPort localPort(c_portIdx0, c_localPortLid);
+    localPort.SetRemote(c_remoteDevIdx, c_portIdx0);
+    localDevice.AddPort(localPort);
+
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    mockNvsdm->InjectDevice(localDevice);
+    mockNvsdm->InjectDevice(remoteDevice);
+
+    DcgmFieldsInit();
+    dcgmCoreCallbacks_t dcc = {};
+    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+    DcgmFvBuffer buf;
+    dcgm_field_update_info_t entity;
+    entity.entityGroupId = DCGM_FE_LINK;
+    entity.entityId      = NvsdmTestLinkEid(0, 0);
+    entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID);
+
+    REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(
+                DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID, buf, { entity }, timelib_usecSince1970())
+            == DCGM_ST_OK);
+
+    dcgmBufferedFvCursor_t cursor = 0;
+    dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+    REQUIRE(fv != nullptr);
+    REQUIRE(fv->status == DCGM_ST_OK);
+    // "0x" + 16 hex digits; high bit preserved (would be negative as int64).
+    std::string guidStr(fv->value.str);
+    REQUIRE(guidStr.length() == 18);
+    REQUIRE(guidStr.substr(0, 2) == "0x");
+    CHECK(guidStr[2] >= '8');
 }

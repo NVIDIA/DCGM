@@ -21,14 +21,23 @@ target_sources(dcgmlibtests
         CacheTests.cpp
         MigManagerTests.cpp
         ApiTests.cpp
+        DcgmGroupManagerTests.cpp
         GpuInstanceTests.cpp
         dcgm_error_tests.cpp
         GpmTests.cpp
         DcgmKmsgReaderTests.cpp
+        DcgmNvmlSystemEventThreadTests.cpp
         DcgmResourceManagerTests.cpp
         DcgmTopologyTests.cpp
         DcgmImexManagerTests.cpp
         NvmlTaskRunnerTests.cpp
+        DcgmModuleCoreTests.cpp
+        DcgmCoreCommunicationTests.cpp
+        DcgmFieldGroupTests.cpp
+        DcgmHostEngineHandlerTests.cpp
+        dcgm_fields_tests.cpp
+        DcgmVersionTests.cpp
+        DcgmVgpuTests.cpp
 )
 
 target_link_libraries(dcgmlibtests PRIVATE
@@ -62,5 +71,5 @@ if (${LINK_INJECTION_LIB} STREQUAL "true")
 endif()
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    catch_discover_tests(dcgmlibtests EXTRA_ARGS --colour-mode ansi)
+    catch_discover_tests(dcgmlibtests EXTRA_ARGS --colour-mode ansi PROPERTIES RESOURCE_LOCK serial_tests)
 endif()

@@ -89,9 +89,9 @@ FingerprintStoreRet FingerprintStore::Retrieve(PidTidPair const &key)
     }
     else
     {
-        log_debug("Unable to retrieve fingerprint for {}",
-                  key.tid.has_value() ? fmt::format("task {} of pid {}", key.tid.value(), key.pid)
-                                      : fmt::format("pid {}", key.pid));
+        log_verbose("Unable to retrieve fingerprint for {}",
+                    key.tid.has_value() ? fmt::format("task {} of pid {}", key.tid.value(), key.pid)
+                                        : fmt::format("pid {}", key.pid));
         return FingerprintStoreRet { DCGM_ST_NO_DATA, std::nullopt, std::nullopt };
     }
 }
