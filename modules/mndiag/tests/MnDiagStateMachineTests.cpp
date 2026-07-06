@@ -35,6 +35,9 @@ public:
 
     static void SetProcessInfoForTesting(MnDiagStateMachine &machine, pid_t pid, std::string const &processName)
     {
+        // Acquire the mutex so the write is visible to the state machine thread,
+        // consistent with how TransitionToLocked(WAITING) clears m_processInfo.
+        DcgmLockGuard lg(&machine.m_mutex);
         machine.m_processInfo.clear();
         machine.m_processInfo.emplace_back(pid, processName);
     }
@@ -42,6 +45,31 @@ public:
     static std::string to_string(MnDiagStateMachine const &machine)
     {
         return MnDiagStateMachine::to_string(machine.GetState());
+    }
+
+    // Block until the machine reaches a specific state or the timeout expires.
+    // Returns true if the desired state was reached, false on timeout.
+    // Named helpers are provided because MnDiagStateMachine::State is private.
+    static bool WaitForState(MnDiagStateMachine &machine,
+                             MnDiagStateMachine::State desired,
+                             std::chrono::milliseconds timeout = std::chrono::milliseconds(500))
+    {
+        DcgmLockGuard lg(&machine.m_mutex);
+        auto result = machine.m_mutex.CondWait(
+            machine.m_stateCV, timeout.count(), [&]() { return machine.m_state == desired; });
+        return result == DCGM_MUTEX_ST_OK;
+    }
+
+    static bool WaitForWaiting(MnDiagStateMachine &machine,
+                               std::chrono::milliseconds timeout = std::chrono::milliseconds(500))
+    {
+        return WaitForState(machine, MnDiagStateMachine::State::WAITING, timeout);
+    }
+
+    static bool WaitForCleanup(MnDiagStateMachine &machine,
+                               std::chrono::milliseconds timeout = std::chrono::milliseconds(500))
+    {
+        return WaitForState(machine, MnDiagStateMachine::State::CLEANUP, timeout);
     }
 };
 
@@ -59,11 +87,12 @@ SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag]
         bool processRunning = true;
 
         // Setup callback counters to verify they were called
-        int processRunningCalls   = 0;
-        int stopProcessCalls      = 0;
-        int acquireResourcesCalls = 0;
-        int releaseResourcesCalls = 0;
-        int setStatusCalls        = 0;
+        int processRunningCalls    = 0;
+        int stopProcessCalls       = 0;
+        int acquireResourcesCalls  = 0;
+        int releaseResourcesCalls  = 0;
+        int setStatusCalls         = 0;
+        int getMpiProcessInfoCalls = 0;
 
         // Current status for the mock
         MnDiagStatus currentStatus = MnDiagStatus::READY;
@@ -93,6 +122,10 @@ SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag]
                 setStatusCalls++;
                 currentStatus = status;
             },
+            [&]() {
+                getMpiProcessInfoCalls++;
+                return std::vector<std::pair<pid_t, std::string>> {};
+            },
             testReservationTimeout,       // Pass short reservation timeout for testing
             testProcessExecutionTimeout); // Pass short execution timeout for testing
 
@@ -111,7 +144,8 @@ SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag]
             {
                 REQUIRE(MnDiagStateMachineTests::to_string(*stateMachine) == "RESERVED");
                 REQUIRE(currentStatus == MnDiagStatus::RESERVED);
-                REQUIRE(acquireResourcesCalls > 0); // Verify acquire resources was called
+                REQUIRE(acquireResourcesCalls > 0);  // Verify acquire resources was called
+                REQUIRE(getMpiProcessInfoCalls > 0); // Verify getMPIProcessInfo was called
                 REQUIRE(setStatusCalls > 0);
                 setStatusCalls = 0; // Reset for next test
 
@@ -142,8 +176,8 @@ SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag]
                                 REQUIRE(setStatusCalls > 0);
                                 setStatusCalls = 0;
 
-                                // Wait for cleanup to stop the process
-                                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                                // Wait for cleanup to finish and reach WAITING
+                                MnDiagStateMachineTests::WaitForWaiting(*stateMachine);
 
                                 // Stop machine to prevent further async calls
                                 stateMachine->Stop();
@@ -165,10 +199,8 @@ SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag]
 
                             THEN("The state should change to FINISHING then WAITING")
                             {
-                                // Give state machine a bit of time to transition
-                                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-                                // Should have gone to WAITING after FINISHING
+                                // Wait for the state machine thread to drive through FINISHING → WAITING
+                                REQUIRE(MnDiagStateMachineTests::WaitForWaiting(*stateMachine));
                                 REQUIRE(MnDiagStateMachineTests::to_string(*stateMachine) == "WAITING");
                                 REQUIRE(currentStatus == MnDiagStatus::READY);
 
@@ -182,8 +214,11 @@ SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag]
 
                 AND_WHEN("Reservation times out before process starts")
                 {
-                    // Wait for timeout to occur (longer than the test reservation timeout)
-                    std::this_thread::sleep_for(testReservationTimeout + std::chrono::milliseconds(350));
+                    // Wait for the reservation timeout to fire and the machine to reach WAITING
+                    // Allow time for 2 background thread iterations (each up to 100ms + overshoot)
+                    // plus scheduling jitter on top of the reservation timeout itself.
+                    REQUIRE(MnDiagStateMachineTests::WaitForWaiting(
+                        *stateMachine, testReservationTimeout + std::chrono::milliseconds(500)));
 
                     THEN("The state should change to FINISHING and eventually to WAITING")
                     {
@@ -210,6 +245,10 @@ SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag]
                 },
                 [&]() { return DCGM_ST_OK; },
                 [&](MnDiagStatus status) { currentStatus = status; },
+                [&]() {
+                    getMpiProcessInfoCalls++;
+                    return std::vector<std::pair<pid_t, std::string>> {};
+                },
                 testReservationTimeout,       // Pass short reservation timeout for testing
                 testProcessExecutionTimeout); // Pass short execution timeout for testing
 
@@ -219,6 +258,7 @@ SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag]
             {
                 REQUIRE_FALSE(failingStateMachine->NotifyToReserve());
                 REQUIRE(acquireResourcesCalls > 0);
+                REQUIRE(getMpiProcessInfoCalls > 0);
                 REQUIRE(MnDiagStateMachineTests::to_string(*failingStateMachine) == "WAITING");
 
                 failingStateMachine->Stop();
@@ -248,11 +288,12 @@ SCENARIO("MnDiagStateMachine handles process execution timeout correctly", "[mnd
         auto processStartTime = std::chrono::steady_clock::now();
 
         // Setup callback counters to verify they were called
-        int processRunningCalls   = 0;
-        int stopProcessCalls      = 0;
-        int acquireResourcesCalls = 0;
-        int releaseResourcesCalls = 0;
-        int setStatusCalls        = 0;
+        int processRunningCalls    = 0;
+        int stopProcessCalls       = 0;
+        int acquireResourcesCalls  = 0;
+        int releaseResourcesCalls  = 0;
+        int setStatusCalls         = 0;
+        int getMpiProcessInfoCalls = 0;
 
         // Current status for the mock
         MnDiagStatus currentStatus = MnDiagStatus::READY;
@@ -285,6 +326,10 @@ SCENARIO("MnDiagStateMachine handles process execution timeout correctly", "[mnd
                 setStatusCalls++;
                 currentStatus = status;
             },
+            [&]() {
+                getMpiProcessInfoCalls++;
+                return std::vector<std::pair<pid_t, std::string>> {};
+            },
             testReservationTimeout,       // Short reservation timeout for tests
             testProcessExecutionTimeout); // Short execution timeout for tests
 
@@ -301,6 +346,7 @@ SCENARIO("MnDiagStateMachine handles process execution timeout correctly", "[mnd
             REQUIRE(stateMachine->NotifyToReserve());
             REQUIRE(MnDiagStateMachineTests::to_string(*stateMachine) == "RESERVED");
             REQUIRE(currentStatus == MnDiagStatus::RESERVED);
+            REQUIRE(getMpiProcessInfoCalls > 0);
 
             // Detect process - this starts the execution timer
             // Populate process info for testing since we're not using TryGetDetectedMpiPid()
@@ -316,9 +362,12 @@ SCENARIO("MnDiagStateMachine handles process execution timeout correctly", "[mnd
             releaseResourcesCalls = 0;
             setStatusCalls        = 0;
 
-            // Wait long enough for the execution timeout to occur
-            // (a bit longer than the timeout to ensure state transition completes)
-            std::this_thread::sleep_for(testProcessExecutionTimeout + std::chrono::milliseconds(500));
+            // Wait for the execution timeout to fire and the machine to return to WAITING.
+            // The path is: STARTED → CLEANUP → FINISHING → WAITING, each hop driven by a
+            // 100ms poll cycle, so the budget must cover the execution timeout plus at
+            // least 3 poll cycles (300ms) with a small safety margin.
+            REQUIRE(MnDiagStateMachineTests::WaitForWaiting(
+                *stateMachine, testProcessExecutionTimeout + std::chrono::milliseconds(500)));
 
             THEN("The state machine should detect execution timeout and clean up the process")
             {
@@ -365,6 +414,99 @@ SCENARIO("MnDiagStateMachine handles process execution timeout correctly", "[mnd
         }
 
         // Clean up
+        stateMachine->Stop();
+    }
+}
+
+// Verify that concurrent NotifyDiagnosticFinished (which clears m_processInfo under
+// m_mutex) and the state machine thread's HandleStartedState / HandleCleanupState
+// (which now snapshot m_processInfo under m_mutex) do not produce a data race.
+SCENARIO("MnDiagStateMachine is free of data races when NotifyDiagnosticFinished races the state machine thread",
+         "[mndiag][statemachine][concurrency]")
+{
+    GIVEN("A state machine in STARTED state with a running process")
+    {
+        constexpr std::chrono::milliseconds testReservationTimeout      = std::chrono::milliseconds(500);
+        constexpr std::chrono::milliseconds testProcessExecutionTimeout = std::chrono::milliseconds(500);
+        constexpr pid_t testPid                                         = 11111;
+
+        std::atomic<bool> processRunning { true };
+        std::atomic<int> stopProcessCalls { 0 };
+        std::atomic<int> releaseResourcesCalls { 0 };
+        std::atomic<int> getMpiProcessInfoCalls { 0 };
+        MnDiagStatus currentStatus = MnDiagStatus::READY;
+
+        auto stateMachine
+            = std::make_unique<MnDiagStateMachine>([&](pid_t /*pid*/) { return processRunning.load(); },
+                                                   [&](pid_t /*pid*/) {
+                                                       stopProcessCalls++;
+                                                       processRunning = false;
+                                                       return DCGM_ST_OK;
+                                                   },
+                                                   [&]() { return DCGM_ST_OK; },
+                                                   [&]() {
+                                                       releaseResourcesCalls++;
+                                                       return DCGM_ST_OK;
+                                                   },
+                                                   [&](MnDiagStatus status) { currentStatus = status; },
+                                                   [&]() {
+                                                       getMpiProcessInfoCalls++;
+                                                       return std::vector<std::pair<pid_t, std::string>> {};
+                                                   },
+                                                   testReservationTimeout,
+                                                   testProcessExecutionTimeout);
+
+        REQUIRE(stateMachine->Start());
+        REQUIRE(stateMachine->NotifyToReserve());
+        REQUIRE(getMpiProcessInfoCalls > 0);
+        MnDiagStateMachineTests::SetProcessInfoForTesting(*stateMachine, testPid, "test_process");
+        REQUIRE(stateMachine->NotifyProcessDetected());
+        REQUIRE(MnDiagStateMachineTests::to_string(*stateMachine) == "STARTED");
+
+        WHEN("NotifyDiagnosticFinished is called while the state machine thread is active in STARTED state")
+        {
+            // Give the state machine thread a couple of cycles in STARTED state,
+            // then call NotifyDiagnosticFinished concurrently from the test thread.
+            // If m_processInfo were accessed without the lock this would be a data
+            // race detectable by ThreadSanitizer.
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            bool result = stateMachine->NotifyDiagnosticFinished();
+
+            THEN("The transition succeeds and the machine eventually reaches WAITING")
+            {
+                REQUIRE(result);
+
+                // Wait for the state machine thread to drive through FINISHING → WAITING
+                REQUIRE(MnDiagStateMachineTests::WaitForWaiting(*stateMachine));
+                REQUIRE(MnDiagStateMachineTests::to_string(*stateMachine) == "WAITING");
+                REQUIRE(currentStatus == MnDiagStatus::READY);
+                REQUIRE(releaseResourcesCalls > 0);
+            }
+        }
+
+        WHEN("NotifyDiagnosticFinished races with the CLEANUP state handler")
+        {
+            // Drive into CLEANUP: process is still running when NotifyDiagnosticFinished
+            // fires, so the machine transitions to CLEANUP.  The CLEANUP handler will
+            // then try to stop the process while the state machine thread iterates over
+            // its local snapshot — no raw access to m_processInfo should occur.
+            processRunning = true;
+            bool result    = stateMachine->NotifyDiagnosticFinished();
+            REQUIRE(result);
+            REQUIRE(MnDiagStateMachineTests::to_string(*stateMachine) == "CLEANUP");
+
+            // Wait for the cleanup handler to stop the process and return to WAITING
+            REQUIRE(MnDiagStateMachineTests::WaitForWaiting(*stateMachine));
+
+            THEN("The machine stops the process and returns to WAITING")
+            {
+                REQUIRE(MnDiagStateMachineTests::to_string(*stateMachine) == "WAITING");
+                REQUIRE(currentStatus == MnDiagStatus::READY);
+                REQUIRE(stopProcessCalls > 0);
+                REQUIRE_FALSE(processRunning.load());
+            }
+        }
+
         stateMachine->Stop();
     }
 }

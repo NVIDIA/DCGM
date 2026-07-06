@@ -27,12 +27,13 @@ os.environ['DCGM_TESTING_FRAMEWORK'] = 'True'
 if 'LD_LIBRARY_PATH' in os.environ:
     os.environ['DCGMLIBPATH'] = os.environ['LD_LIBRARY_PATH']
 
-stubspath = os.path.dirname(os.path.realpath(__file__)) + '/stubs/'
+stubspath = os.path.split(os.path.dirname(os.path.realpath(__file__)))[
+    0] + '/tests/stubs/'
 if stubspath not in sys.path:
     sys.path.insert(0, stubspath)
 
-import collectd_tester_globals
-import dcgm_collectd_plugin
+import collectd_tester_globals  # noqa: E402
+import dcgm_collectd_plugin  # noqa: E402
 
 
 class Config:
@@ -46,17 +47,15 @@ class Config:
         self.children = []
 
 
-@test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_only_with_live_gpus()
-def test_collectd_basic_integration(handle, gpuIds):
-    """ 
+def helper_collectd_basic_integration(handle, gpuIds):
+    """
     Verifies that we can inject specific data and get that same data back
     """
     dcgmHandle = pydcgm.DcgmHandle(handle)
     dcgmSystem = dcgmHandle.GetSystem()
 
-    specificFieldIds = [dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                        dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
+    specificFieldIds = [dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
+                        dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
                         dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
                         dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION]
 
@@ -108,6 +107,12 @@ def test_collectd_basic_integration(handle, gpuIds):
             assert gpuDict[fieldTag] == fieldValues[i]
 
 
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
+def test_collectd_basic_integration(handle, gpuIds):
+    helper_collectd_basic_integration(handle, gpuIds)
+
+
 def helper_collectd_config(gpuIds, config, verify_fields=True):
     """
     Verify config via dcgm plugin. Verify fields parsed, if desired.
@@ -152,10 +157,8 @@ def helper_collectd_config(gpuIds, config, verify_fields=True):
                 # assert gpuDict[fieldTag] == fieldValues[i]
 
 
-@test_utils.run_with_standalone_host_engine(20)
-@test_utils.run_only_with_live_gpus()
-def test_collectd_config_integration(handle, gpuIds):
-    """ 
+def helper_collectd_config_integration(handle, gpuIds):
+    """
     Verifies that we can parse config and get specified fields back.
     """
     config = Config()
@@ -168,8 +171,12 @@ def test_collectd_config_integration(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
-def test_collectd_config_bad_alpha_field(handle, gpuIds):
-    """ 
+def test_collectd_config_integration(handle, gpuIds):
+    helper_collectd_config_integration(handle, gpuIds)
+
+
+def helper_collectd_config_bad_alpha_field(handle, gpuIds):
+    """
     Verifies that we can parse config and get specified fields back, despite a
     bad alpha field.
     """
@@ -183,8 +190,12 @@ def test_collectd_config_bad_alpha_field(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
-def test_collectd_config_bad_numeric_field(handle, gpuIds):
-    """ 
+def test_collectd_config_bad_alpha_field(handle, gpuIds):
+    helper_collectd_config_bad_alpha_field(handle, gpuIds)
+
+
+def helper_collectd_config_bad_numeric_field(handle, gpuIds):
+    """
     Verifies that we can parse config and get specified fields back despite a
     bad numeric field.
     """
@@ -198,8 +209,12 @@ def test_collectd_config_bad_numeric_field(handle, gpuIds):
 
 @test_utils.run_with_standalone_host_engine(20)
 @test_utils.run_only_with_live_gpus()
-def test_collectd_config_no_fields(handle, gpuIds):
-    """ 
+def test_collectd_config_bad_numeric_field(handle, gpuIds):
+    helper_collectd_config_bad_numeric_field(handle, gpuIds)
+
+
+def helper_collectd_config_no_fields(handle, gpuIds):
+    """
     Verifies that we can parse config if no fields are specified.
     """
     config = Config()
@@ -207,3 +222,9 @@ def test_collectd_config_no_fields(handle, gpuIds):
     config.children = [Config('Interval', ['2'])]
 
     helper_collectd_config(gpuIds, config, False)
+
+
+@test_utils.run_with_standalone_host_engine(20)
+@test_utils.run_only_with_live_gpus()
+def test_collectd_config_no_fields(handle, gpuIds):
+    helper_collectd_config_no_fields(handle, gpuIds)

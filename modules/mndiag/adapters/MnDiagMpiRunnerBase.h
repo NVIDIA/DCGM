@@ -16,11 +16,15 @@
 
 #pragma once
 
+#include "MnDiagCommon.h"
+#include <chrono>
 #include <dcgm_structs.h>
+#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 /**
  * @brief Base interface for MnDiagMpiRunner to allow for mocking in tests
@@ -31,7 +35,7 @@ public:
     /**
      * @brief Typedef for output callback function
      */
-    using OutputCallback = std::function<dcgmReturn_t(std::istream &, void *, nodeInfoMap_t const &)>;
+    using OutputCallback = std::function<dcgmReturn_t(int, void *, nodeInfoMap_t const &)>;
 
     virtual ~MnDiagMpiRunnerBase() = default;
 
@@ -48,14 +52,6 @@ public:
      * @return std::string The last constructed command
      */
     virtual std::string GetLastCommand() const = 0;
-
-    /**
-     * @brief Set the user name to run the MPI process as
-     *
-     * @param userInfo The user name and uid to run the MPI process as, or nullopt to run as the user running
-     * nv-hostengine
-     */
-    virtual void SetUserInfo(std::pair<std::string, uid_t> userInfo) = 0;
 
     /**
      * @brief Set the log file names for the MPI process
@@ -110,10 +106,7 @@ public:
      * @param responseStruct Pointer to a dcgmMnDiagResponse_t structure to be updated
      * @param nodeInfo The node info map used to populate the response structure
      */
-    virtual dcgmReturn_t MnDiagOutputCallback(std::istream &dataStream,
-                                              void *responseStruct,
-                                              nodeInfoMap_t const &nodeInfo)
-        = 0;
+    virtual dcgmReturn_t MnDiagOutputCallback(int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo) = 0;
 
     /**
      * @brief Stop the MPI process if it's running
@@ -131,16 +124,54 @@ public:
     virtual dcgmReturn_t PopulateResponse(void *responseStruct, nodeInfoMap_t const &nodeInfo) = 0;
 
     /**
-     * @brief Check if MPI has launched enough processes
+     * @brief Get the total process execution time (test run time + startup latency).
      *
-     * @return std::expected<bool, dcgmReturn_t> True if enough processes launched, error code on failure
+     * Scans testParms for "<GetTestPrefix()>time_to_run=<N>" and returns the
+     * parsed and validated value. Falls back to the default run time
+     * when the parameter is absent.
+     *
+     * @param params The run parameters struct
+     * @return The timeout on success, or std::unexpected(DCGM_ST_BADPARAM) if the
+     *         time_to_run parameter in testParms is malformed.
      */
-    virtual std::expected<bool, dcgmReturn_t> HasMpiLaunchedEnoughProcesses() = 0;
+    virtual std::expected<std::chrono::milliseconds, dcgmReturn_t> GetTestRunTime(dcgmRunMnDiag_t const &params) const
+        = 0;
 
     /**
-     * @brief Set the mnubergemm path for the MPI runner
+     * @brief Get the path to the test binary
      *
-     * @param mnubergemmPath The path to the mnubergemm binary
+     * @param path The path to the test binary
+     * @return dcgmReturn_t DCGM_ST_OK if successful, error code otherwise
      */
-    virtual void SetMnubergemmPath(std::string const &mnubergemmPath) = 0;
+    virtual dcgmReturn_t GetTestBinaryPath(std::string &path) const = 0;
+
+    /**
+     * @brief Get the test prefix
+     *
+     * @return std::string_view The test prefix (e.g. "mnubergemm.")
+     */
+    virtual std::string_view GetTestPrefix() const = 0;
+
+    /**
+     * @brief Get the log file prefix
+     *
+     * @return std::string_view The log file prefix
+     */
+    virtual std::string_view GetLogFilePrefix() const = 0;
+
+    /**
+     * @brief Get the default parameters map for the test
+     *
+     * @return std::unordered_map<std::string, std::string> The default parameters map
+     */
+    virtual std::unordered_map<std::string, std::string> GetDefaultParametersMap() const = 0;
+
+    /**
+     * @brief Parse the test output
+     *
+     * @param dataStream The data stream to parse
+     * @param responseStruct The response structure to populate
+     * @param nodeInfo The node info map used to populate the response structure
+     */
+    virtual void ParseTestOutput(int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo) = 0;
 };

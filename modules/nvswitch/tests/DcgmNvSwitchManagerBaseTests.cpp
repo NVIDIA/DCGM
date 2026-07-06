@@ -20,6 +20,8 @@
 #include <dcgm_fields.h>
 #include <dcgm_structs.h>
 
+extern dcgmReturn_t CustomPost(dcgm_module_command_header_t *req, void *poster);
+
 using namespace DcgmNs;
 
 // Test class that is a friend of DcgmNvSwitchManagerBase
@@ -87,8 +89,21 @@ public:
     {
         return DCGM_ST_OK;
     }
-    dcgm_nvswitch_info_t *GetNvSwitchObject(dcgm_field_entity_group_t, dcgm_field_eid_t) override
+    dcgm_nvswitch_info_t *GetNvSwitchObject(dcgm_field_entity_group_t entityGroupId, dcgm_field_eid_t entityId) override
     {
+        if (entityGroupId != DCGM_FE_SWITCH)
+        {
+            log_error("Unexpected entityGroupId: {}", entityGroupId);
+            return nullptr;
+        }
+
+        for (unsigned int i = 0; i < m_numNvSwitches; ++i)
+        {
+            if (entityId == m_nvSwitches[i].physicalId)
+            {
+                return &m_nvSwitches[i];
+            }
+        }
         return nullptr;
     }
 
@@ -220,5 +235,62 @@ TEST_CASE("CheckAndLogConnectionStatus behavior")
         manager.SetMockConnectionStatus(manager.GetPausedStatus());
         dcgmReturn_t pausedResult = manager.CheckAndLogConnectionStatus();
         REQUIRE(pausedResult == DCGM_ST_PAUSED);
+    }
+}
+
+TEST_CASE("UpdateFields returns blank values when disconnected or paused")
+{
+    auto const connectionStatus = GENERATE(TestDcgmNvSwitchManagerBase::GetDisconnectedStatus(),
+                                           TestDcgmNvSwitchManagerBase::GetPausedStatus());
+
+    // Initialize fields for access to fields metadata
+    auto ret = DcgmFieldsInit();
+    REQUIRE(ret == DCGM_ST_OK);
+
+    // CustomPost callback helps to verify that the fields are blank when disconnected
+    std::set<unsigned short> fieldIdsFromCustomPost;
+    dcgmCoreCallbacks_t dcc = { .version    = dcgmCoreCallbacks_version,
+                                .postfunc   = CustomPost,
+                                .poster     = &fieldIdsFromCustomPost,
+                                .loggerfunc = [](void const *) { /* do nothing */ } };
+
+    TestDcgmNvSwitchManagerBase manager(&dcc);
+    // Create a fake switch to watch
+    unsigned int fakeCount = 1;
+    unsigned int fakeSwitchIds[1];
+    ret = manager.CreateFakeSwitches(fakeCount, fakeSwitchIds);
+    REQUIRE(ret == DCGM_ST_OK);
+
+    // Set up watch parameters on NvSwitch fields. INT64 and STRING cover every NvSwitch field type
+    // currently defined, so one of each is included to exercise the full blanking-helper surface.
+    std::array<unsigned short, 2> constexpr fieldIds
+        = { DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT, DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION };
+    timelib64_t constexpr watchIntervalUsec
+        = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(1)).count();
+    DcgmWatcher watcher;
+    ret = manager.WatchField(DCGM_FE_SWITCH,
+                             fakeSwitchIds[0],
+                             fieldIds.size(),
+                             fieldIds.data(),
+                             watchIntervalUsec,
+                             watcher.watcherType,
+                             watcher.connectionId,
+                             true);
+    REQUIRE(ret == DCGM_ST_OK);
+
+    // Let's set the manager to disconnected or paused and call UpdateFields. Expectation is that the field values are
+    // blank when manager is disconnected or paused. We have a custom .postfunc callback (CustomPost) to verify that the
+    // fields are blank when disconnected or paused.
+    manager.SetMockConnectionStatus(connectionStatus);
+    timelib64_t nextUpdateTimeUsec;
+    timelib64_t now = timelib_usecSince1970();
+    ret             = manager.DcgmNvSwitchManagerBase::UpdateFields(nextUpdateTimeUsec, now);
+    REQUIRE(ret == DCGM_ST_OK);
+
+    // Verify that all expected fields were observed at CustomPost callback.
+    // fieldIdsFromCustomPost is populated by the CustomPost callback.
+    for (auto const &fieldId : fieldIds)
+    {
+        REQUIRE(fieldIdsFromCustomPost.contains(fieldId));
     }
 }

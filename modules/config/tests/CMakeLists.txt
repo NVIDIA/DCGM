@@ -20,6 +20,8 @@ target_sources(configManagerTests
     PRIVATE
         DcgmConfigManagerTests.cpp
         ../DcgmConfigManager.cpp
+        ../DcgmModuleConfig.cpp
+        DcgmModuleConfigTests.cpp
 )
 
 target_link_libraries(configManagerTests

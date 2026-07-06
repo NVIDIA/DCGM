@@ -261,16 +261,42 @@ typedef struct dcgmCacheManagerFieldInfo_v4_t
  */
 typedef struct
 {
+    unsigned int dcgmGpuA;          //!< GPU A
+    unsigned int dcgmGpuB;          //!< GPU B
+    unsigned int AtoBNvLinkIds;     //!< bits representing the links connected from GPU A to GPU B
+                                    //!< e.g. if this field == 3, links 0 and 1 are connected,
+                                    //!< field is only valid if NVLINKS actually exist between GPUs
+    unsigned int BtoANvLinkIds;     //!< bits representing the links connected from GPU B to GPU A
+                                    //!< e.g. if this field == 3, links 0 and 1 are connected,
+                                    //!< field is only valid if NVLINKS actually exist between GPUs
+    dcgmGpuTopologyLevel_v1_t path; //!< path between A and B
+} dcgmTopologyElement_v1;
+
+typedef struct
+{
     unsigned int dcgmGpuA;       //!< GPU A
     unsigned int dcgmGpuB;       //!< GPU B
-    unsigned int AtoBNvLinkIds;  //!< bits representing the links connected from GPU A to GPU B
+    uint64_t AtoBNvLinkIds;      //!< bits representing the links connected from GPU A to GPU B
                                  //!< e.g. if this field == 3, links 0 and 1 are connected,
                                  //!< field is only valid if NVLINKS actually exist between GPUs
-    unsigned int BtoANvLinkIds;  //!< bits representing the links connected from GPU B to GPU A
+    uint64_t BtoANvLinkIds;      //!< bits representing the links connected from GPU B to GPU A
                                  //!< e.g. if this field == 3, links 0 and 1 are connected,
                                  //!< field is only valid if NVLINKS actually exist between GPUs
     dcgmGpuTopologyLevel_t path; //!< path between A and B
-} dcgmTopologyElement_t;
+} dcgmTopologyElement_v2;
+
+typedef dcgmTopologyElement_v2 dcgmTopologyElement_t;
+
+/**
+ * Topology results structure
+ */
+typedef struct
+{
+    unsigned int version;     //!< version number (dcgmTopology_version)
+    unsigned int numElements; //!< number of valid dcgmTopologyElement_t elements
+
+    dcgmTopologyElement_v1 element[DCGM_TOPOLOGY_MAX_ELEMENTS];
+} dcgmTopology_v1;
 
 /**
  * Topology results structure
@@ -281,12 +307,12 @@ typedef struct
     unsigned int numElements; //!< number of valid dcgmTopologyElement_t elements
 
     dcgmTopologyElement_t element[DCGM_TOPOLOGY_MAX_ELEMENTS];
-} dcgmTopology_v1;
+} dcgmTopology_v2;
 
 /**
- * Typedef for \ref dcgmTopology_v1
+ * Typedef for \ref dcgmTopology_v2
  */
-typedef dcgmTopology_v1 dcgmTopology_t;
+typedef dcgmTopology_v2 dcgmTopology_t;
 
 /**
  * Version 1 for \ref dcgmTopology_v1
@@ -294,9 +320,14 @@ typedef dcgmTopology_v1 dcgmTopology_t;
 #define dcgmTopology_version1 MAKE_DCGM_VERSION(dcgmTopology_v1, 1)
 
 /**
+ * Version 2 for \ref dcgmTopology_v2
+ */
+#define dcgmTopology_version2 MAKE_DCGM_VERSION(dcgmTopology_v2, 2)
+
+/**
  * Latest version for \ref dcgmTopology_t
  */
-#define dcgmTopology_version dcgmTopology_version1
+#define dcgmTopology_version dcgmTopology_version2
 
 typedef struct
 {
@@ -601,6 +632,33 @@ typedef struct
     char buffer[SAMPLES_BUFFER_SIZE_V2]; //!< OUT: this field is last, and can be truncated for speed */
 } dcgmEntitiesGetLatestValues_v3;
 
+/*
+ * A module command header is 24 bytes, so the largest payload that fits DCGM_PROTO_MAX_MESSAGE_SIZE
+ * is 4 MiB - 24. The v3 payload exceeds that by this amount.
+ */
+#define SAMPLES_BUFFER_SIZE_V3_OVERAGE (sizeof(dcgmEntitiesGetLatestValues_v3) - ((4 * 1024 * 1024) - 24))
+#define SAMPLES_BUFFER_SIZE_V3         (SAMPLES_BUFFER_SIZE_V2 - SAMPLES_BUFFER_SIZE_V3_OVERAGE)
+
+/**
+ * Version 4 of dcgmEntitiesGetLatestValues_t; same fields as v3 with a shorter trailing buffer.
+ *
+ * @note Uses dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES_V2] like v3.
+ */
+typedef struct
+{
+    unsigned int groupId;                                       //!< IN: Optional group id for information to be fetched
+    dcgmGroupEntityPair_t entities[DCGM_GROUP_MAX_ENTITIES_V2]; //!< IN: List of entities to get values for
+    unsigned int entitiesCount;                                 //!< IN: Number of entries in entities[]
+    unsigned int fieldGroupId; //!< IN: Optional fieldGroupId that will be resolved by the host engine.
+                               //!<     This is ignored if fieldIdList[] is provided
+    unsigned short fieldIdList[DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP]; //!< IN: Field IDs to return data for
+    unsigned int fieldIdCount;                                      //!< IN: Number of field IDs in fieldIdList[] array.
+    unsigned int flags;                  //!< IN: Optional flags that affect how this request is processed.
+    unsigned int cmdRet;                 //!< OUT: Error code generated
+    unsigned int bufferSize;             //!< OUT: Length of populated buffer
+    char buffer[SAMPLES_BUFFER_SIZE_V3]; //!< OUT: this field is last, and can be truncated for speed */
+} dcgmEntitiesGetLatestValues_v4;
+
 /**
  * Version 1 of dcgmGetMultipleValuesForField
  */
@@ -753,10 +811,17 @@ typedef struct
 
 typedef struct
 {
+    unsigned int groupId;     //!< IN: Group ID representing collection of one or more entities
+    dcgmTopology_v1 topology; //!< OUT: populated struct
+    unsigned int cmdRet;      //!< OUT: Error code generated
+} dcgmGetTopologyMsg_v1;
+
+typedef struct
+{
     unsigned int groupId;    //!< IN: Group ID representing collection of one or more entities
     dcgmTopology_t topology; //!< OUT: populated struct
     unsigned int cmdRet;     //!< OUT: Error code generated
-} dcgmGetTopologyMsg_v1;
+} dcgmGetTopologyMsg_v2;
 
 typedef struct
 {
@@ -812,6 +877,12 @@ typedef struct
     dcgmNvLinkStatus_v4 ls; //!< IN/OUT: nvlink status populated on success
     unsigned int cmdRet;    //!< OUT: Error code generated
 } dcgmGetNvLinkStatus_v3;
+
+typedef struct
+{
+    dcgmNvLinkStatus_v5 ls; //!< IN/OUT: nvlink status populated on success
+    unsigned int cmdRet;    //!< OUT: Error code generated
+} dcgmGetNvLinkStatus_v4;
 
 typedef struct
 {
@@ -1172,7 +1243,14 @@ DCGM_CASSERT(dcgmStartEmbeddedV2Params_version2 == (long)0x02000050, 2);
 DCGM_CASSERT(dcgmStartEmbeddedV2Params_version3 == (long)0x03000068, 3);
 DCGM_CASSERT(dcgmInjectFieldValue_version1 == (long)0x1001018, 1);
 DCGM_CASSERT(dcgmInjectFieldValue_version == (long)0x1001018, 1);
+DCGM_CASSERT(dcgmTopology_version1 == (long)0x10026C8, 1);
+DCGM_CASSERT(dcgmTopology_version2 == (long)0x2003E08, 2);
+DCGM_CASSERT(dcgmDeviceTopology_version1 == (long)0x10001C0, 1);
+DCGM_CASSERT(dcgmDeviceTopology_version2 == (long)0x2000338, 2);
+DCGM_CASSERT(dcgmGroupTopology_version1 == (long)0x1000050, 1);
+DCGM_CASSERT(dcgmGroupTopology_version2 == (long)0x2000058, 2);
 DCGM_CASSERT(dcgmNvLinkStatus_version4 == (long)0x40039BC, 4);
+DCGM_CASSERT(dcgmNvLinkStatus_version5 == (long)0x50042BC, 5);
 DCGM_CASSERT(dcgmNvLinkP2PStatus_version1 == (long)0x1001088, 1);
 DCGM_CASSERT(dcgmDiagStatus_version1 == (long)0x1000090, 1);
 DCGM_CASSERT(dcgmHostengineHealth_version1 == (long)0x1000008, 1);

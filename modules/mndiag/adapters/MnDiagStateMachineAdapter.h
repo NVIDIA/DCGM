@@ -44,6 +44,7 @@ public:
                               std::function<dcgmReturn_t()> acquireResourcesCallback,
                               std::function<dcgmReturn_t()> releaseResourcesCallback,
                               std::function<void(MnDiagStatus)> setStatusCallback,
+                              std::function<std::vector<std::pair<pid_t, std::string>>()> getMpiProcessInfoCallback,
                               std::chrono::milliseconds reservationTimeout
                               = MnDiagStateMachine::TimeoutValues::RESERVATION_TIMEOUT_MS,
                               std::chrono::milliseconds processExecutionTimeout
@@ -53,6 +54,7 @@ public:
                          std::move(acquireResourcesCallback),
                          std::move(releaseResourcesCallback),
                          std::move(setStatusCallback),
+                         std::move(getMpiProcessInfoCallback),
                          reservationTimeout,
                          processExecutionTimeout)
     {}
@@ -127,13 +129,13 @@ public:
     }
 
     /**
-     * @brief Set the path to the mnubergemm binary
+     * @brief Set the expected test binary path for process detection
      *
-     * @param path The path to the mnubergemm binary
+     * @param path The path to the test binary
      */
-    void SetMnubergemmPath(std::string const &path) override
+    void SetExpectedBinaryPath(std::string const &path) override
     {
-        m_stateMachine.SetMnubergemmPath(path);
+        m_stateMachine.SetExpectedBinaryPath(path);
     }
 
 private:

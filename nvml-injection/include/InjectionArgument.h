@@ -779,6 +779,16 @@ private:
                 }
                 break;
             }
+            case INJECTION_GPUFABRICINFO_V2_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuFabricInfo_v2Ptr = static_cast<nvmlGpuFabricInfo_v2_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuFabricInfo_v2Ptr)));
+                if (m_value.GpuFabricInfo_v2Ptr != nullptr)
+                {
+                    std::memcpy(m_value.GpuFabricInfo_v2Ptr, other.m_value.GpuFabricInfo_v2Ptr, allocateNum * sizeof(*other.m_value.GpuFabricInfo_v2Ptr));
+                }
+                break;
+            }
             case INJECTION_GPUFABRICSTATE_PTR:
             {
                 unsigned int allocateNum = m_isArray ? m_arrLen : 1;
@@ -4264,6 +4274,36 @@ public:
     nvmlGpuFabricInfo_t const &AsGpuFabricInfo() const
     {
         return m_value.GpuFabricInfo;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlGpuFabricInfo_v2_t *GpuFabricInfo_v2Ptr, bool inHeap = false)
+        : m_type(INJECTION_GPUFABRICINFO_V2_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuFabricInfo_v2Ptr = GpuFabricInfo_v2Ptr;
+    }
+    InjectionArgument(nvmlGpuFabricInfo_v2_t GpuFabricInfo_v2)
+        : m_type(INJECTION_GPUFABRICINFO_V2)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuFabricInfo_v2 = GpuFabricInfo_v2;
+    }
+    InjectionArgument(nvmlGpuFabricInfo_v2_t *GpuFabricInfo_v2Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUFABRICINFO_V2_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuFabricInfo_v2Ptr = GpuFabricInfo_v2Ptr;
+    }
+
+    nvmlGpuFabricInfo_v2_t *AsGpuFabricInfo_v2Ptr() const
+    {
+        return m_value.GpuFabricInfo_v2Ptr;
+    }
+
+    nvmlGpuFabricInfo_v2_t const &AsGpuFabricInfo_v2() const
+    {
+        return m_value.GpuFabricInfo_v2;
     }
 
     nvmlGpuFabricState_t *AsGpuFabricStatePtr() const

@@ -17,8 +17,8 @@ import dcgm_fields
 
 class FieldHandlerReader(DcgmReader):
     '''
-        Override just this method to do something different per field. 
-        This method is called once for each field for each GPU each 
+        Override just this method to do something different per field.
+        This method is called once for each field for each GPU each
         time that its Process() method is invoked, and it will be skipped
         for blank values and fields in the ignore list.
     '''
@@ -29,7 +29,7 @@ class FieldHandlerReader(DcgmReader):
 
 class DataHandlerReader(DcgmReader):
     '''
-        Override just this method to handle the entire map of data in your own way. This 
+        Override just this method to handle the entire map of data in your own way. This
         might be used if you want to iterate by field id and then GPU or something like that.
         This method is called once for each time the Process() method is invoked.
     '''
@@ -45,7 +45,8 @@ class DataHandlerReader(DcgmReader):
                 gpuFv = fvs[gpuId]
                 val = gpuFv[fieldId][-1]
 
-                # Skip blank values. Otherwise, we'd have to insert a placeholder blank value based on the fieldId
+                # Skip blank values. Otherwise, we'd have to insert a
+                # placeholder blank value based on the fieldId
                 if val.isBlank:
                     continue
 
@@ -53,7 +54,7 @@ class DataHandlerReader(DcgmReader):
                 append = " GPU%d=%s" % (gpuId, val.value)
                 out = out + append
 
-            if wasBlank == False:
+            if not wasBlank:
                 print(out)
 
 
@@ -65,10 +66,19 @@ class DataHandlerReader(DcgmReader):
 '''
 
 
-def DcgmReaderDictionary(field_ids=defaultFieldIds, update_frequency=10000000, keep_time=3600.0, ignores=[], field_groups='dcgm_fieldgroupdata'):
+def DcgmReaderDictionary(
+        field_ids=defaultFieldIds,
+        update_frequency=10000000,
+        keep_time=3600.0,
+        ignores=[],
+        field_groups='dcgm_fieldgroupdata'):
     # Instantiate a DcgmReader object
-    dr = DcgmReader(fieldIds=field_ids, updateFrequency=update_frequency,
-                    maxKeepAge=keep_time, ignoreList=ignores, fieldGroupName=field_groups)
+    dr = DcgmReader(
+        fieldIds=field_ids,
+        updateFrequency=update_frequency,
+        maxKeepAge=keep_time,
+        ignoreList=ignores,
+        fieldGroupName=field_groups)
 
     # Get the default list of fields as a dictionary of dictionaries:
     # gpuId -> field name -> field value
@@ -89,8 +99,10 @@ def main():
     dr.Process()
 
     print('\n\nUsing custom fields through the dictionary interface...')
-    customFields = [dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL,
-                    dcgm_fields.DCGM_FI_DEV_GPU_UTIL, dcgm_fields.DCGM_FI_DEV_POWER_USAGE]
+    customFields = [
+        dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL,
+        dcgm_fields.DCGM_FI_DEV_GPU_UTIL_RATIO,
+        dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS]
     DcgmReaderDictionary(field_ids=customFields)
 
     print('\n\nProcessing in field order by overriding the CustomerDataHandler() method')

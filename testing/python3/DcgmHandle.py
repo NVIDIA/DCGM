@@ -78,7 +78,8 @@ class DcgmHandle:
         dcgm_structs._dcgmInit()
         dcgm_agent.dcgmInit()  # Not harmful to call this multiple times in a process
 
-        # If neither ipAddress nor unixSocketPath are present, start an embedded host engine
+        # If neither ipAddress nor unixSocketPath are present, start an
+        # embedded host engine
         if ipAddress is None and unixSocketPath is None:
             self.handle = dcgm_agent.dcgmStartEmbedded(opMode)
             self.isEmbedded = True
@@ -163,7 +164,8 @@ class DcgmHandle:
             self.__StopDcgm__()
         except AttributeError as e:
             # Due to multi-threading, sometimes this is called after the modules have been unloaded, making
-            # dcgm_agent effectively NoneType and resulting in this error being thrown.
+            # dcgm_agent effectively NoneType and resulting in this error being
+            # thrown.
             pass
 
         self._handleCreated = False

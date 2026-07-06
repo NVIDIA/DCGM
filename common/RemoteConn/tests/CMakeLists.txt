@@ -16,11 +16,13 @@ if (NOT BUILD_TESTING)
     return()
 endif()
 
+# MockChildProcess* are sources of this target only; not a separate mock/ tree or mock_*
+# library
 add_executable(remoteconntests)
 
 target_sources(remoteconntests PRIVATE
-    MockChildProcess.hpp
     MockChildProcess.cpp
+    MockChildProcess.hpp
     MockChildProcessTests.cpp
     TestHelpers.hpp
     TestHelpers.cpp

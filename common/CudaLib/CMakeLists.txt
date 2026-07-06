@@ -13,49 +13,21 @@
 # limitations under the License.
 
 add_subdirectory(mock)
-macro(define_dcgm_cuda_lib cuda_version)
-    set(dcgm_cuda_lib dcgm_cuda_lib${cuda_version})
-    target_compile_definitions(${dcgm_cuda_lib} PRIVATE
-        CUDA_VERSION_USED=${cuda_version})
 
-    target_include_directories(${dcgm_cuda_lib} PRIVATE
-        "${CUDA${cuda_version}_INCLUDE_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}")
-
-    target_include_directories(${dcgm_cuda_lib} INTERFACE
-        "${CMAKE_CURRENT_SOURCE_DIR}")
-
-    target_link_libraries(${dcgm_cuda_lib} PRIVATE
-        ${CUDA${cuda_version}_LIBS}
-        ${CUDA${cuda_version}_STATIC_LIBS}
-        dcgm_common
-        dcgm_cublas_proxy${cuda_version}
-        dcgm_logging
-        cuda_lib_base_interface
-        dl
-        rt)
-
-    target_sources(${dcgm_cuda_lib} PRIVATE
-        CudaLib.cpp
-        CudaLib.h)
-endmacro()
-
-define_dcgm_cuda_lib(11)
-define_dcgm_cuda_lib(12)
-define_dcgm_cuda_lib(13)
-
-target_include_directories(cuda_lib_base_interface INTERFACE
+target_include_directories(cuda_lib_base PUBLIC
     "${CUDA12_INCLUDE_DIR}")
-target_include_directories(cuda_lib_base_interface INTERFACE
+target_include_directories(cuda_lib_base PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(cuda_lib_base_interface INTERFACE
+target_link_libraries(cuda_lib_base PUBLIC
     dcgm_common
     dcgm_logging
     fmt::fmt
     dl
     rt)
 
-target_sources(cuda_lib_base_interface INTERFACE
+target_sources(cuda_lib_base PRIVATE
+    CudaLib.cpp
+    CudaLib.h
     CudaLibBase.cpp
     CudaLibBase.h)

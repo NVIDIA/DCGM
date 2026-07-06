@@ -29,3 +29,5 @@ target_sources(dcgmmodulepolicy
         DcgmPolicyManager.h
         DcgmModulePolicy.cpp
 )
+
+add_subdirectory(tests)

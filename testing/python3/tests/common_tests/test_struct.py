@@ -21,5 +21,5 @@ def test_struct():
     try:
         i = s.notfield  # pylint: disable=no-member
         assert False  # notfield should not exist
-    except:
+    except BaseException:
         pass

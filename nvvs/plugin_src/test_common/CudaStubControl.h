@@ -15,6 +15,14 @@
  */
 
 #include "cuda.h"
+#include "cuda_runtime.h"
 
 extern int cudaAttributeValue;
 extern cudaError_t cudaStreamCreateResult;
+extern cudaError_t cudaEventCreateResult;
+extern cudaError_t cudaGetDeviceCountResult;
+extern cudaError_t cudaGetDevicePropertiesResult;
+extern cudaError_t cudaHostAllocResult;
+extern cudaError_t cudaMallocResult;
+extern int cudaStubDeviceCount;
+extern bool cudaStubAllocateMemory;

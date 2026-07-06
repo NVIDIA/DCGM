@@ -1,8 +1,7 @@
 {
     "tests_to_run_independent": [
-	"test_health_check_nvlink_mig_reset_to_up_and_disable_mig_standalone",
-	"test_health_check_nvlink_mig_reset_to_up_and_disable_mig_embedded",
-	"test_kmsg_fatal_xid_parsing"
+	"test_kmsg_fatal_xid_parsing",
+	"test_dcgm_diag_context_create"
     ],
     "modules_to_run_independent": [
 	"test_workload_power_profiles",

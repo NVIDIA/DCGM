@@ -16,6 +16,9 @@
 
 #include <DcgmLogging.h>
 
+#include <algorithm>
+#include <iterator>
+
 #include "DcgmCpuManager.h"
 
 using namespace DcgmNs::Cpu;
@@ -101,12 +104,11 @@ CoreId DcgmCpuManager::AddFakeCore(CpuId cpuId)
 
 void DcgmCpuManager::GetCpus(dcgm_sysmon_msg_get_cpus_t &msg) const
 {
-    msg.cpuCount   = m_cpus.size();
-    unsigned int i = 0;
-    for (auto const &cpu : m_cpus)
+    auto const count = std::min(m_cpus.size(), std::size(msg.cpus));
+    msg.cpuCount     = count;
+    for (size_t i = 0; i < count; i++)
     {
-        msg.cpus[i] = cpu.m_cpu;
-        i++;
+        msg.cpus[i] = m_cpus[i].m_cpu;
     }
 }
 

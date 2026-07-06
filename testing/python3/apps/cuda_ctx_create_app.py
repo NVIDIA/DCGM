@@ -30,8 +30,8 @@ class CudaCtxCreateApp(app_runner.AppRunner):
 
     def __init__(self, device):
         self.device = device
-        path = os.path.join(
-            utils.script_dir, CudaCtxCreateApp.paths[utils.platform_identifier])
+        path = os.path.join(utils.script_dir,
+                            CudaCtxCreateApp.paths[utils.platform_identifier])
         super(CudaCtxCreateApp, self).__init__(
             path, ["-i", device.busId, "--getchar"], cwd=os.path.dirname(path))
 
@@ -47,7 +47,9 @@ class CudaCtxCreateApp(app_runner.AppRunner):
         self.stdout_readtillmatch(lambda x: x == "Context created")
 
     def __str__(self):
-        return "CudaCtxCreateApp on device " + str(self.device) + " with " + super(CudaCtxCreateApp, self).__str__()
+        return "CudaCtxCreateApp on device " + \
+            str(self.device) + " with " + \
+            super(CudaCtxCreateApp, self).__str__()
 
 
 class CudaCtxCreateAdvancedApp(app_runner.AppRunner):
@@ -74,4 +76,5 @@ class CudaCtxCreateAdvancedApp(app_runner.AppRunner):
             path, args, cwd=os.path.dirname(path), env=env)
 
     def __str__(self):
-        return "CudaCtxCreateAdvancedApp with " + super(CudaCtxCreateAdvancedApp, self).__str__()
+        return "CudaCtxCreateAdvancedApp with " + \
+            super(CudaCtxCreateAdvancedApp, self).__str__()

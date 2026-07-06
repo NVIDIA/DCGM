@@ -32,7 +32,7 @@ dcgmRecvUpdates_t = dcgm_structs._dcgmRecvUpdates_t
 dcgmStatsFileType_t = dcgm_structs_internal._dcgmStatsFileType_t
 dcgmInjectFieldValue_t = dcgm_structs_internal.c_dcgmInjectFieldValue_v1
 
-""" 
+"""
 Corresponding Calls
 """
 
@@ -49,7 +49,14 @@ def dcgmGetLatestValuesForFields(dcgmHandle, gpuId, fieldIds):
 
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmGetMultipleValuesForField(dcgmHandle, gpuId, fieldId, maxCount, startTs, endTs, order):
+def dcgmGetMultipleValuesForField(
+        dcgmHandle,
+        gpuId,
+        fieldId,
+        maxCount,
+        startTs,
+        endTs,
+        order):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmGetMultipleValuesForField")
     localMaxCount = c_int(maxCount)  # Going to pass by ref
     # Make space to return up to maxCount records
@@ -58,14 +65,21 @@ def dcgmGetMultipleValuesForField(dcgmHandle, gpuId, fieldId, maxCount, startTs,
              c_int64(startTs), c_int64(endTs), c_uint(order), max_field_values)
     _dcgmIntCheckReturn(ret)
     localMaxCount = localMaxCount.value  # Convert to int
-    # We may have gotten less records back than we requested. If so, truncate our array
+    # We may have gotten less records back than we requested. If so, truncate
+    # our array
     return max_field_values[:int(localMaxCount)]
 
 # This method is used to tell the cache manager to watch a field value
 
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmWatchFieldValue(dcgmHandle, gpuId, fieldId, updateFreq, maxKeepAge, maxKeepEntries):
+def dcgmWatchFieldValue(
+        dcgmHandle,
+        gpuId,
+        fieldId,
+        updateFreq,
+        maxKeepAge,
+        maxKeepEntries):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmWatchFieldValue")
     ret = fn(dcgmHandle, c_int(gpuId), c_uint(fieldId), c_longlong(
         updateFreq), c_double(maxKeepAge), c_int(maxKeepEntries))
@@ -98,7 +112,8 @@ def dcgmInjectEntityFieldValue(dcgmHandle, entityGroupId, entityId, value):
 
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmInjectEntityFieldValueToNvml(dcgmHandle, entityGroupId, entityId, value):
+def dcgmInjectEntityFieldValueToNvml(
+        dcgmHandle, entityGroupId, entityId, value):
     fn = dcgm_structs._dcgmGetFunctionPointer(
         "dcgmInjectEntityFieldValueToNvml")
     ret = fn(dcgmHandle, c_uint(entityGroupId), c_uint(entityId), byref(value))
@@ -115,7 +130,13 @@ def dcgmCreateNvmlInjectionGpu(dcgmHandle, index):
 
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmInjectNvmlDevice(dcgmHandle, gpuId, key, extraKeys, extraKeyCount, injectNvmlRet):
+def dcgmInjectNvmlDevice(
+        dcgmHandle,
+        gpuId,
+        key,
+        extraKeys,
+        extraKeyCount,
+        injectNvmlRet):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmInjectNvmlDevice")
     if extraKeys is None:
         ret = fn(dcgmHandle, c_uint(gpuId), key, None,
@@ -128,7 +149,14 @@ def dcgmInjectNvmlDevice(dcgmHandle, gpuId, key, extraKeys, extraKeyCount, injec
 
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmInjectNvmlDeviceForFollowingCalls(dcgmHandle, gpuId, key, extraKeys, extraKeyCount, injectNvmlRets, retCount):
+def dcgmInjectNvmlDeviceForFollowingCalls(
+        dcgmHandle,
+        gpuId,
+        key,
+        extraKeys,
+        extraKeyCount,
+        injectNvmlRets,
+        retCount):
     fn = dcgm_structs._dcgmGetFunctionPointer(
         "dcgmInjectNvmlDeviceForFollowingCalls")
     if extraKeys is None:
@@ -183,7 +211,12 @@ def dcgmRestoreNvmlInjectedGpu(dcgmHandle, uuid):
 
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmSetEntityNvLinkLinkState(dcgmHandle, entityGroupId, entityId, linkId, linkState):
+def dcgmSetEntityNvLinkLinkState(
+        dcgmHandle,
+        entityGroupId,
+        entityId,
+        linkId,
+        linkState):
     linkStateStruct = dcgm_structs_internal.c_dcgmSetNvLinkLinkState_v1()
     linkStateStruct.version = dcgm_structs_internal.dcgmSetNvLinkLinkState_version1
     linkStateStruct.entityGroupId = entityGroupId
@@ -228,7 +261,13 @@ dcgmFieldValueEnumeration_f = CFUNCTYPE(c_int32, c_uint32, POINTER(
 
 
 @dcgm_agent.ensure_byte_strings()
-def dcgmGetFieldValuesSince(dcgmHandle, groupId, sinceTimestamp, fieldIds, enumCB, userData):
+def dcgmGetFieldValuesSince(
+        dcgmHandle,
+        groupId,
+        sinceTimestamp,
+        fieldIds,
+        enumCB,
+        userData):
     fn = dcgm_structs._dcgmGetFunctionPointer("dcgmGetFieldValuesSince")
     c_fieldIds = (c_uint32 * len(fieldIds))(*fieldIds)
     c_nextSinceTimestamp = c_int64()

@@ -13,10 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <TimeLib.hpp>
+#include <array>
 #include <catch2/catch_all.hpp>
+#include <cstring>
 #include <dcgm_agent.h>
 #include <sstream>
 #include <string_view>
+#include <utility>
 
 #define TEST_DCGMCACHEMANAGER
 #include <DcgmCacheManager.h>
@@ -25,7 +29,28 @@
 #include <Defer.hpp>
 #include <UnitTestHelpers.h>
 #include <dcgm_fields.h>
-#include <ranges>
+#include <nvml_injection.h>
+#include <vector>
+
+namespace
+{
+dcgmcm_gpu_info_t MakeDetectedGpu(unsigned int gpuId,
+                                  char const *uuid,
+                                  char const *busId,
+                                  dcgmGpuBrandType_t brand    = DCGM_GPU_BRAND_GEFORCE,
+                                  dcgmChipArchitecture_t arch = DCGM_CHIP_ARCH_AMPERE)
+{
+    dcgmcm_gpu_info_t gpu {};
+    gpu.gpuId  = gpuId;
+    gpu.status = DcgmEntityStatusOk;
+    gpu.brand  = brand;
+    gpu.arch   = arch;
+    SafeCopyTo(gpu.uuid, uuid);
+    SafeCopyTo(gpu.pciInfo.busIdLegacy, busId);
+    SafeCopyTo(gpu.deviceName, "detected-gpu");
+    return gpu;
+}
+} // namespace
 
 #if defined(NV_VMWARE)
 /* No. of iterations corresponding to different sample set of vgpuIds */
@@ -204,6 +229,801 @@ TEST_CASE("CacheManager: Test GetGpuId")
     }
 }
 
+TEST_CASE("CacheManager: fake entity query helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    DcgmCacheManager cm;
+
+    unsigned int const gpu0      = cm.AddFakeGpu(0x20B0, 0x145F);
+    unsigned int const gpu1      = cm.AddFakeGpu(0x20B0, 0x145F);
+    unsigned int const gpu2      = cm.AddFakeGpu(0x2330, 0x1626);
+    unsigned int const instance0 = cm.AddFakeInstance(gpu0);
+    unsigned int const instance1 = cm.AddFakeInstance(gpu1);
+    unsigned int const ci0       = cm.AddFakeComputeInstance(instance0);
+    unsigned int const ci1       = cm.AddFakeComputeInstance(instance1);
+
+    SECTION("GIVEN fake GPUs WHEN GPU ids and counts are queried THEN active and all modes include them")
+    {
+        std::vector<unsigned int> gpuIds;
+
+        REQUIRE(cm.GetGpuIds(0, gpuIds) == DCGM_ST_OK);
+        REQUIRE(gpuIds.size() == 3);
+        CHECK(gpuIds[0] == gpu0);
+        CHECK(gpuIds[1] == gpu1);
+        CHECK(gpuIds[2] == gpu2);
+        CHECK(cm.GetGpuCount(0) == 3);
+
+        REQUIRE(cm.GetGpuIds(1, gpuIds) == DCGM_ST_OK);
+        REQUIRE(gpuIds.size() == 3);
+        CHECK(cm.GetGpuCount(1) == 3);
+    }
+
+    SECTION("GIVEN fake GPU hierarchy WHEN entities are queried THEN GPUs, instances, and compute instances are listed")
+    {
+        std::vector<dcgmGroupEntityPair_t> entities;
+
+        REQUIRE(cm.GetAllEntitiesOfEntityGroup(1, DCGM_FE_GPU, entities) == DCGM_ST_OK);
+        REQUIRE(entities.size() == 3);
+        CHECK(entities[0].entityGroupId == DCGM_FE_GPU);
+        CHECK(entities[0].entityId == gpu0);
+
+        REQUIRE(cm.GetAllEntitiesOfEntityGroup(1, DCGM_FE_GPU_I, entities) == DCGM_ST_OK);
+        REQUIRE(entities.size() == 2);
+        CHECK(entities[0].entityGroupId == DCGM_FE_GPU_I);
+        CHECK(entities[0].entityId == instance0);
+        CHECK(entities[1].entityId == instance1);
+
+        REQUIRE(cm.GetAllEntitiesOfEntityGroup(1, DCGM_FE_GPU_CI, entities) == DCGM_ST_OK);
+        REQUIRE(entities.size() == 2);
+        CHECK(entities[0].entityGroupId == DCGM_FE_GPU_CI);
+        CHECK(entities[0].entityId == ci0);
+        CHECK(entities[1].entityId == ci1);
+
+        CHECK(cm.GetAllEntitiesOfEntityGroup(1, DCGM_FE_NONE, entities) == DCGM_ST_NOT_SUPPORTED);
+        CHECK(entities.empty());
+    }
+
+    SECTION("GIVEN fake entities WHEN status is queried THEN owning GPU status is returned")
+    {
+        CHECK(cm.GetEntityStatus(DCGM_FE_GPU, gpu0) == DcgmEntityStatusFake);
+        CHECK(cm.GetEntityStatus(DCGM_FE_GPU_I, instance0) == DcgmEntityStatusFake);
+        CHECK(cm.GetEntityStatus(DCGM_FE_GPU_CI, ci0) == DcgmEntityStatusFake);
+        CHECK(cm.GetEntityStatus(DCGM_FE_GPU, DCGM_MAX_NUM_DEVICES) == DcgmEntityStatusUnknown);
+        CHECK(cm.GetEntityStatus(DCGM_FE_NONE, 0) == DcgmEntityStatusUnknown);
+    }
+
+    SECTION("GIVEN fake GPUs WHEN SKU and NVML index helpers are queried THEN valid and invalid cases are handled")
+    {
+        std::vector<unsigned int> sameSkuGpus { gpu0, gpu1 };
+        std::vector<unsigned int> mixedSkuGpus { gpu0, gpu2 };
+        std::vector<unsigned int> invalidGpus { gpu0, DCGM_MAX_NUM_DEVICES };
+
+        CHECK(cm.AreAllGpuIdsSameSku(sameSkuGpus) == 1);
+        CHECK(cm.AreAllGpuIdsSameSku(mixedSkuGpus) == 0);
+        CHECK(cm.AreAllGpuIdsSameSku(invalidGpus) == 0);
+
+        auto nvmlIndex = cm.GpuIdToNvmlIndex(gpu1);
+        REQUIRE(nvmlIndex.has_value());
+        CHECK(*nvmlIndex == static_cast<int>(gpu1));
+        CHECK_FALSE(cm.GpuIdToNvmlIndex(DCGM_MAX_NUM_DEVICES).has_value());
+
+        auto gpuId = cm.NvmlIndexToGpuId(*nvmlIndex);
+        REQUIRE(gpuId.has_value());
+        CHECK(*gpuId == gpu1);
+        CHECK_FALSE(cm.NvmlIndexToGpuId(DCGM_MAX_NUM_DEVICES).has_value());
+    }
+
+    SECTION("GIVEN fake GPUs WHEN all GPU info is requested THEN cached identity data is copied")
+    {
+        std::vector<dcgmcm_gpu_info_cached_t> gpuInfo;
+
+        REQUIRE(cm.GetAllGpuInfo(gpuInfo) == DCGM_ST_OK);
+        REQUIRE(gpuInfo.size() == 3);
+        CHECK(gpuInfo[0].gpuId == gpu0);
+        CHECK(gpuInfo[0].status == DcgmEntityStatusFake);
+        CHECK(gpuInfo[0].nvmlIndex == gpu0);
+        CHECK(gpuInfo[0].pciInfo.pciDeviceId == 0x20B0);
+        CHECK(gpuInfo[2].pciInfo.pciDeviceId == 0x2330);
+    }
+
+    SECTION("GIVEN fake GPUs WHEN identity helpers are queried THEN defaults and invalid ids are handled")
+    {
+        dcgmChipArchitecture_t arch = DCGM_CHIP_ARCH_UNKNOWN;
+
+        CHECK(cm.GetGpuStatus(gpu0) == DcgmEntityStatusFake);
+        CHECK(cm.GetGpuStatus(DCGM_MAX_NUM_DEVICES) == DcgmEntityStatusUnknown);
+        CHECK(cm.GetGpuBrand(gpu0) == DCGM_GPU_BRAND_TESLA);
+        CHECK(cm.GetGpuBrand(DCGM_MAX_NUM_DEVICES) == DCGM_GPU_BRAND_UNKNOWN);
+        REQUIRE(cm.GetGpuArch(gpu0, arch) == DCGM_ST_OK);
+        CHECK(arch == DCGM_CHIP_ARCH_UNKNOWN);
+        CHECK(cm.GetGpuArch(DCGM_MAX_NUM_DEVICES, arch) == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN fake GPUs WHEN lightweight GPU helpers are called THEN local state is used")
+    {
+        std::vector<nvmlExcludedDeviceInfo_t> excludeList;
+        dcgmWorkloadPowerProfileProfilesInfo_v1 profilesInfo {};
+        dcgmDeviceWorkloadPowerProfilesStatus_v1 profilesStatus {};
+
+        REQUIRE(cm.GetGpuExcludeList(excludeList) == DCGM_ST_OK);
+        CHECK(excludeList.empty());
+        CHECK(cm.GetWorkloadPowerProfilesInfo(gpu0, &profilesInfo, &profilesStatus) == DCGM_ST_OK);
+        CHECK(cm.GetWorkloadPowerProfilesInfo(DCGM_MAX_NUM_DEVICES, &profilesInfo, &profilesStatus)
+              == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN fake GPU NvLink state WHEN link helpers are called THEN validation is applied")
+    {
+        CHECK(cm.SetGpuNvLinkLinkState(gpu0, 0, DcgmNvLinkLinkStateUp) == DCGM_ST_OK);
+        CHECK(cm.SetGpuNvLinkLinkState(gpu0, DCGM_NVLINK_MAX_LINKS_PER_GPU - 1, DcgmNvLinkLinkStateUp) == DCGM_ST_OK);
+        CHECK(cm.SetGpuNvLinkLinkState(DCGM_MAX_NUM_DEVICES, 0, DcgmNvLinkLinkStateUp) == DCGM_ST_BADPARAM);
+        CHECK(cm.SetGpuNvLinkLinkState(gpu0, DCGM_NVLINK_MAX_LINKS_PER_GPU, DcgmNvLinkLinkStateUp) == DCGM_ST_BADPARAM);
+        CHECK(cm.SetEntityNvLinkLinkState(DCGM_FE_GPU, gpu0, 1, DcgmNvLinkLinkStateDown) == DCGM_ST_OK);
+        CHECK(cm.SetEntityNvLinkLinkState(DCGM_FE_NONE, gpu0, 1, DcgmNvLinkLinkStateDown) == DCGM_ST_NOT_SUPPORTED);
+    }
+}
+
+TEST_CASE("CacheManager: GPU allowlist and detected GPU merge helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    DcgmCacheManager cm;
+
+    SECTION("GIVEN invalid GPU id WHEN allowlist is queried THEN it is rejected")
+    {
+        cm.m_numGpus = 1;
+        CHECK(cm.IsGpuAllowlisted(1) == 0);
+    }
+
+    SECTION("GIVEN supported and unsupported architectures WHEN allowlist is queried THEN brand thresholds apply")
+    {
+        cm.m_numGpus       = 3;
+        cm.m_gpus[0].brand = DCGM_GPU_BRAND_TESLA;
+        cm.m_gpus[0].arch  = DCGM_CHIP_ARCH_KEPLER;
+        cm.m_gpus[1].brand = DCGM_GPU_BRAND_GEFORCE;
+        cm.m_gpus[1].arch  = DCGM_CHIP_ARCH_KEPLER;
+        cm.m_gpus[2].brand = DCGM_GPU_BRAND_GEFORCE;
+        cm.m_gpus[2].arch  = DCGM_CHIP_ARCH_MAXWELL;
+
+        CHECK(cm.IsGpuAllowlisted(0) == 1);
+        CHECK(cm.IsGpuAllowlisted(1) == 0);
+        CHECK(cm.IsGpuAllowlisted(2) == 1);
+    }
+
+    SECTION("GIVEN no cached GPUs WHEN detected GPUs are merged THEN empty UUID entries are skipped")
+    {
+        dcgmcm_gpu_info_t detected[3] {};
+        detected[0] = MakeDetectedGpu(0, "GPU-A", "0000:01:00.0");
+        detected[1] = MakeDetectedGpu(1, "", "0000:02:00.0");
+        detected[2] = MakeDetectedGpu(2, "GPU-C", "0000:03:00.0");
+
+        cm.MergeNewlyDetectedGpuList(detected, 3);
+
+        REQUIRE(cm.m_numGpus == 2);
+        CHECK(std::string(cm.m_gpus[0].uuid) == "GPU-A");
+        CHECK(std::string(cm.m_gpus[1].uuid) == "GPU-C");
+        CHECK(cm.pciBusGpuIdMap.at("0000:01:00.0") == 0);
+        CHECK(cm.pciBusGpuIdMap.at("0000:03:00.0") == 2);
+    }
+
+    SECTION("GIVEN existing GPUs WHEN detected GPUs are merged THEN matches update and new GPUs append")
+    {
+        cm.m_numGpus = 2;
+        cm.m_gpus[0] = MakeDetectedGpu(0, "GPU-OLD-A", "0000:01:00.0", DCGM_GPU_BRAND_GEFORCE, DCGM_CHIP_ARCH_MAXWELL);
+        cm.m_gpus[1] = MakeDetectedGpu(1, "GPU-OLD-B", "0000:02:00.0", DCGM_GPU_BRAND_TESLA, DCGM_CHIP_ARCH_KEPLER);
+        cm.m_gpus[1].status = DcgmEntityStatusLost;
+
+        dcgmcm_gpu_info_t detected[2] {};
+        detected[0] = MakeDetectedGpu(0, "GPU-OLD-B", "0000:22:00.0", DCGM_GPU_BRAND_GEFORCE, DCGM_CHIP_ARCH_AMPERE);
+        detected[0].virtualizationMode = DCGM_GPU_VIRTUALIZATION_MODE_HOST_VGPU;
+        detected[0].supportGpm         = true;
+        detected[0].migEnabled         = true;
+        detected[0].ciCount            = 3;
+        detected[0].maxGpcs            = 4;
+        detected[0].usedGpcs           = 2;
+        detected[0].ccMode             = 1;
+        detected[1]                    = MakeDetectedGpu(2, "GPU-NEW-C", "0000:03:00.0");
+
+        cm.MergeNewlyDetectedGpuList(detected, 2);
+
+        REQUIRE(cm.m_numGpus == 3);
+        CHECK(std::string(cm.m_gpus[1].uuid) == "GPU-OLD-B");
+        CHECK(cm.m_gpus[1].status == DcgmEntityStatusOk);
+        CHECK(cm.m_gpus[1].brand == DCGM_GPU_BRAND_GEFORCE);
+        CHECK(cm.m_gpus[1].arch == DCGM_CHIP_ARCH_AMPERE);
+        CHECK(cm.m_gpus[1].virtualizationMode == DCGM_GPU_VIRTUALIZATION_MODE_HOST_VGPU);
+        CHECK(cm.m_gpus[1].supportGpm);
+        CHECK(cm.m_gpus[1].migEnabled);
+        CHECK(cm.m_gpus[1].ciCount == 3);
+        CHECK(cm.m_gpus[1].maxGpcs == 4);
+        CHECK(cm.m_gpus[1].usedGpcs == 2);
+        CHECK(cm.m_gpus[1].ccMode == 1);
+        CHECK(std::string(cm.m_gpus[2].uuid) == "GPU-NEW-C");
+        CHECK(cm.m_gpus[2].gpuId == 2);
+        CHECK(cm.pciBusGpuIdMap.at("0000:22:00.0") == 1);
+        CHECK(cm.pciBusGpuIdMap.at("0000:03:00.0") == 2);
+    }
+}
+
+TEST_CASE("CacheManager: field validation helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    DcgmCacheManager cm;
+    unsigned int const gpuId = cm.AddFakeGpu();
+
+    SECTION("GIVEN global field ids WHEN validating global fields THEN scope and unknown field errors are reported")
+    {
+        CHECK(cm.CheckValidGlobalField(DCGM_FI_SYSTEM_DRIVER_VERSION) == DCGM_ST_OK);
+        CHECK(cm.CheckValidGlobalField(DCGM_FI_SYSTEM_FIELD_UNKNOWN) == DCGM_ST_UNKNOWN_FIELD);
+        CHECK(cm.CheckValidGlobalField(DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN GPU field ids WHEN validating GPU fields THEN scope, field, and GPU errors are reported")
+    {
+        CHECK(cm.CheckValidGpuField(gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_OK);
+        CHECK(cm.CheckValidGpuField(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN) == DCGM_ST_UNKNOWN_FIELD);
+        CHECK(cm.CheckValidGpuField(gpuId, DCGM_FI_SYSTEM_DRIVER_VERSION) == DCGM_ST_BADPARAM);
+        CHECK(cm.CheckValidGpuField(DCGM_MAX_NUM_DEVICES, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN null runtime stats WHEN stats are requested THEN the helper returns without writing")
+    {
+        cm.GetRuntimeStats(nullptr);
+    }
+}
+
+TEST_CASE("CacheManager: watch info snapshot helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    DcgmCacheManager cm;
+    unsigned int const gpuId = cm.AddFakeGpu();
+
+    SECTION("GIVEN a null snapshot destination WHEN snapshot is requested THEN bad parameter is returned")
+    {
+        CHECK(cm.GetEntityWatchInfoSnapshot(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, nullptr)
+              == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN no watch info WHEN snapshot is requested THEN not watched is returned")
+    {
+        dcgmcm_watch_info_t snapshot {};
+
+        CHECK(cm.GetEntityWatchInfoSnapshot(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, &snapshot)
+              == DCGM_ST_NOT_WATCHED);
+    }
+
+    SECTION("GIVEN existing watch info WHEN snapshot is requested THEN a copy is returned")
+    {
+        dcgmcm_watch_info_p watchInfo = cm.GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 1);
+        REQUIRE(watchInfo != nullptr);
+        watchInfo->isWatched           = 1;
+        watchInfo->lastStatus          = NVML_ERROR_NOT_SUPPORTED;
+        watchInfo->lastQueriedUsec     = 1234;
+        watchInfo->monitorIntervalUsec = 5678;
+        watchInfo->maxAgeUsec          = 9012;
+        watchInfo->fetchCount          = 34;
+
+        dcgmcm_watch_info_t snapshot {};
+        REQUIRE(cm.GetEntityWatchInfoSnapshot(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, &snapshot)
+                == DCGM_ST_OK);
+
+        CHECK(snapshot.watchKey.entityGroupId == watchInfo->watchKey.entityGroupId);
+        CHECK(snapshot.watchKey.entityId == watchInfo->watchKey.entityId);
+        CHECK(snapshot.watchKey.fieldId == watchInfo->watchKey.fieldId);
+        CHECK(snapshot.isWatched == 1);
+        CHECK(snapshot.lastStatus == NVML_ERROR_NOT_SUPPORTED);
+        CHECK(snapshot.lastQueriedUsec == 1234);
+        CHECK(snapshot.monitorIntervalUsec == 5678);
+        CHECK(snapshot.maxAgeUsec == 9012);
+        CHECK(snapshot.fetchCount == 34);
+
+        std::vector<dcgmcm_watch_info_p> watchers;
+        cm.GetAllWatchObjects(watchers);
+        REQUIRE_FALSE(watchers.empty());
+        bool foundWatchInfo = false;
+        for (auto const watcher : watchers)
+        {
+            foundWatchInfo |= (watcher == watchInfo);
+        }
+        CHECK(foundWatchInfo);
+    }
+}
+
+TEST_CASE("CacheManager: watcher aggregation helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    DcgmCacheManager cm;
+    cm.m_nvmlLoaded.store(false, std::memory_order_release);
+
+    dcgm_entity_key_t key {};
+    cm.EntityIdToWatchKey(&key, DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+    auto watchInfo = cm.AllocWatchInfo(key);
+    REQUIRE(watchInfo != nullptr);
+    DcgmNs::Defer freeWatchInfo([&] { cm.FreeWatchInfo(watchInfo); });
+
+    GIVEN("empty and null watcher inputs")
+    {
+        dcgm_watch_watcher_info_t watcher {};
+        watcher.watcher             = DcgmWatcher(DcgmWatcherTypeClient, 100);
+        watcher.monitorIntervalUsec = 5000;
+        watcher.maxAgeUsec          = 10000;
+
+        bool wasAdded = false;
+
+        THEN("bad parameters and empty watch state are reported")
+        {
+            CHECK(cm.AddOrUpdateWatcher(nullptr, &wasAdded, &watcher) == DCGM_ST_BADPARAM);
+            CHECK(cm.RemoveWatcher(nullptr, &watcher) == DCGM_ST_BADPARAM);
+            CHECK(cm.UpdateWatchFromWatchers(nullptr) == DCGM_ST_BADPARAM);
+            CHECK(cm.UpdateWatchFromWatchers(watchInfo) == DCGM_ST_NOT_WATCHED);
+            CHECK(cm.RemoveWatcher(watchInfo, &watcher) == DCGM_ST_NOT_WATCHED);
+            CHECK(watchInfo->hasSubscribedWatchers == 0);
+        }
+    }
+
+    GIVEN("multiple watcher registrations")
+    {
+        dcgm_watch_watcher_info_t slowWatcher {};
+        slowWatcher.watcher             = DcgmWatcher(DcgmWatcherTypeClient, 101);
+        slowWatcher.monitorIntervalUsec = 5000;
+        slowWatcher.maxAgeUsec          = 10000;
+        slowWatcher.isSubscribed        = 0;
+
+        dcgm_watch_watcher_info_t fastWatcher {};
+        fastWatcher.watcher             = DcgmWatcher(DcgmWatcherTypeClient, 102);
+        fastWatcher.monitorIntervalUsec = 1000;
+        fastWatcher.maxAgeUsec          = 20000;
+        fastWatcher.isSubscribed        = 1;
+
+        bool wasAdded = false;
+
+        WHEN("watchers are added and one existing watcher is updated")
+        {
+            REQUIRE(cm.AddOrUpdateWatcher(watchInfo, &wasAdded, &slowWatcher) == DCGM_ST_OK);
+            CHECK(wasAdded);
+            REQUIRE(cm.AddOrUpdateWatcher(watchInfo, &wasAdded, &fastWatcher) == DCGM_ST_OK);
+            CHECK(wasAdded);
+
+            slowWatcher.monitorIntervalUsec = 3000;
+            slowWatcher.maxAgeUsec          = 40000;
+            REQUIRE(cm.AddOrUpdateWatcher(watchInfo, &wasAdded, &slowWatcher) == DCGM_ST_OK);
+            CHECK_FALSE(wasAdded);
+
+            THEN("the aggregate interval, age, and subscription flag are recomputed")
+            {
+                CHECK(watchInfo->watchers.size() == 2);
+                CHECK(watchInfo->monitorIntervalUsec == 1000);
+                CHECK(watchInfo->maxAgeUsec == 40000);
+                CHECK(watchInfo->hasSubscribedWatchers == 1);
+            }
+        }
+
+        WHEN("watchers are removed")
+        {
+            REQUIRE(cm.AddOrUpdateWatcher(watchInfo, &wasAdded, &slowWatcher) == DCGM_ST_OK);
+            REQUIRE(cm.AddOrUpdateWatcher(watchInfo, &wasAdded, &fastWatcher) == DCGM_ST_OK);
+            watchInfo->isWatched = 1;
+
+            REQUIRE(cm.RemoveWatcher(watchInfo, &fastWatcher) == DCGM_ST_OK);
+
+            THEN("remaining watcher state is preserved until the last watcher is removed")
+            {
+                CHECK(watchInfo->watchers.size() == 1);
+                CHECK(watchInfo->isWatched == 1);
+                CHECK(watchInfo->monitorIntervalUsec == slowWatcher.monitorIntervalUsec);
+                CHECK(watchInfo->maxAgeUsec == slowWatcher.maxAgeUsec);
+                CHECK(watchInfo->hasSubscribedWatchers == 0);
+
+                REQUIRE(cm.RemoveWatcher(watchInfo, &slowWatcher) == DCGM_ST_OK);
+                CHECK(watchInfo->watchers.empty());
+                CHECK(watchInfo->isWatched == 0);
+            }
+        }
+    }
+}
+
+TEST_CASE("CacheManager: watch precheck and clear helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    DcgmCacheManager cm;
+    dcgm_entity_key_t key {};
+    cm.EntityIdToWatchKey(&key, DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+    auto watchInfo = cm.AllocWatchInfo(key);
+    REQUIRE(watchInfo != nullptr);
+    DcgmNs::Defer freeWatchInfo([&] { cm.FreeWatchInfo(watchInfo); });
+
+    GIVEN("watch info without cached samples")
+    {
+        THEN("precheck distinguishes missing watches, unwatched fields, driver errors, and empty data")
+        {
+            CHECK(cm.PrecheckWatchInfoForSamples(nullptr) == DCGM_ST_NOT_WATCHED);
+            CHECK(cm.PrecheckWatchInfoForSamples(watchInfo) == DCGM_ST_NOT_WATCHED);
+
+            watchInfo->isWatched  = 1;
+            watchInfo->lastStatus = NVML_ERROR_NOT_SUPPORTED;
+            CHECK(cm.PrecheckWatchInfoForSamples(watchInfo) == DCGM_ST_NOT_SUPPORTED);
+
+            watchInfo->lastStatus = NVML_SUCCESS;
+            CHECK(cm.PrecheckWatchInfoForSamples(watchInfo) == DCGM_ST_NO_DATA);
+        }
+    }
+
+    GIVEN("a populated watch info object")
+    {
+        dcgm_watch_watcher_info_t watcher {};
+        watcher.watcher             = DcgmWatcher(DcgmWatcherTypeClient, 201);
+        watcher.monitorIntervalUsec = 10;
+        watcher.maxAgeUsec          = 20;
+        watcher.isSubscribed        = 1;
+        bool wasAdded               = false;
+        REQUIRE(cm.AddOrUpdateWatcher(watchInfo, &wasAdded, &watcher) == DCGM_ST_OK);
+        watchInfo->isWatched       = 1;
+        watchInfo->pushedByModule  = true;
+        watchInfo->lastStatus      = NVML_ERROR_TIMEOUT;
+        watchInfo->lastQueriedUsec = 99;
+
+        WHEN("the watch info is cleared without cache destruction")
+        {
+            cm.ClearWatchInfo(watchInfo, 0);
+
+            THEN("transient watcher state is reset")
+            {
+                CHECK(watchInfo->watchers.empty());
+                CHECK(watchInfo->isWatched == 0);
+                CHECK(watchInfo->hasSubscribedWatchers == 0);
+                CHECK_FALSE(watchInfo->pushedByModule);
+                CHECK(watchInfo->lastStatus == NVML_SUCCESS);
+                CHECK(watchInfo->lastQueriedUsec == 0);
+                CHECK(watchInfo->monitorIntervalUsec == 0);
+                CHECK(watchInfo->maxAgeUsec == DCGM_MAX_AGE_USEC_DEFAULT);
+            }
+        }
+    }
+}
+
+TEST_CASE("CacheManager: field watch lifecycle helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    DcgmCacheManager cm;
+    DcgmWatcher const watcher(DcgmWatcherTypeClient, 7001);
+
+    SECTION("GIVEN NVML is unavailable WHEN GPU fields are watched THEN the request is rejected early")
+    {
+        bool wereFirstWatcher = false;
+
+        cm.m_nvmlLoaded.store(false, std::memory_order_release);
+
+        CHECK(cm.AddFieldWatch(
+                  DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 1000, 60.0, 2, watcher, false, false, wereFirstWatcher)
+              == DCGM_ST_NVML_NOT_LOADED);
+        CHECK_FALSE(wereFirstWatcher);
+    }
+
+    SECTION("GIVEN a global field WHEN watched and removed THEN global watch state is updated")
+    {
+        bool wereFirstWatcher = false;
+
+        cm.m_nvmlLoaded.store(false, std::memory_order_release);
+
+        REQUIRE(
+            cm.AddFieldWatch(
+                DCGM_FE_NONE, 0, DCGM_FI_SYSTEM_DRIVER_VERSION, 1000, 60.0, 2, watcher, true, false, wereFirstWatcher)
+            == DCGM_ST_OK);
+        CHECK(wereFirstWatcher);
+        CHECK(cm.m_haveAnyLiveSubscribers);
+
+        auto watchInfo = cm.GetGlobalWatchInfo(DCGM_FI_SYSTEM_DRIVER_VERSION, 0);
+        REQUIRE(watchInfo != nullptr);
+        CHECK(watchInfo->isWatched == 1);
+        CHECK(watchInfo->watchers.size() == 1);
+        CHECK(watchInfo->watchers[0].isSubscribed == 1);
+
+        CHECK(cm.RemoveFieldWatch(DCGM_FE_NONE, 0, DCGM_FI_SYSTEM_DRIVER_VERSION, 0, watcher) == DCGM_ST_OK);
+        CHECK(watchInfo->isWatched == 0);
+        CHECK(watchInfo->watchers.empty());
+        CHECK(cm.RemoveGlobalFieldWatch(DCGM_FI_MAX_FIELDS, 0, watcher) == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN fake GPU fields WHEN watched and removed THEN entity watch state is updated")
+    {
+        bool wereFirstWatcher     = false;
+        unsigned int const gpuId  = cm.AddFakeGpu();
+        DcgmWatcher const watcher = DcgmWatcher(DcgmWatcherTypeClient, 7002);
+
+        cm.m_nvmlLoaded.store(true, std::memory_order_release);
+
+        REQUIRE(cm.AddFieldWatch(DCGM_FE_GPU,
+                                 gpuId,
+                                 DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                                 5000,
+                                 120.0,
+                                 4,
+                                 watcher,
+                                 true,
+                                 false,
+                                 wereFirstWatcher)
+                == DCGM_ST_OK);
+        CHECK(wereFirstWatcher);
+
+        auto watchInfo = cm.GetEntityWatchInfo(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 0);
+        REQUIRE(watchInfo != nullptr);
+        CHECK(watchInfo->isWatched == 1);
+        CHECK(watchInfo->watchers.size() == 1);
+        CHECK(watchInfo->monitorIntervalUsec == 5000);
+        CHECK(watchInfo->hasSubscribedWatchers == 1);
+
+        CHECK(cm.RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 0, watcher) == DCGM_ST_OK);
+        CHECK(watchInfo->isWatched == 0);
+        CHECK(watchInfo->watchers.empty());
+        CHECK(cm.RemoveEntityFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_MAX_FIELDS, 0, watcher) == DCGM_ST_BADPARAM);
+        CHECK(cm.RemoveFieldWatch(DCGM_FE_GPU, DCGM_MAX_NUM_DEVICES, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 0, watcher)
+              == DCGM_ST_BADPARAM);
+        CHECK(cm.RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 0, watcher) == DCGM_ST_OK);
+        CHECK(cm.RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_BOARD_POWER_WATTS, 0, watcher)
+              == DCGM_ST_NOT_WATCHED);
+    }
+
+    SECTION("GIVEN pre and post watch helpers WHEN called for cheap paths THEN status codes are stable")
+    {
+        unsigned int const gpuId = cm.AddFakeGpu();
+
+        cm.m_nvmlLoaded.store(true, std::memory_order_release);
+
+        CHECK(cm.NvmlPreWatch(gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_OK);
+        CHECK(cm.NvmlPreWatch(DCGM_MAX_NUM_DEVICES, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_GENERIC_ERROR);
+        CHECK(cm.NvmlPreWatch(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN) == DCGM_ST_UNKNOWN_FIELD);
+
+        cm.m_nvmlLoaded.store(false, std::memory_order_release);
+        CHECK(cm.NvmlPostWatch(gpuId, DCGM_FI_DEV_XID_ERROR) == DCGM_ST_OK);
+        CHECK(cm.NvmlPostWatch(gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_OK);
+    }
+
+    SECTION("GIVEN entity pairs WHEN GPM support is queried THEN local support flags and entity validation are used")
+    {
+        unsigned int const gpuId = cm.AddFakeGpu();
+        dcgmGroupEntityPair_t const gpuPair { DCGM_FE_GPU, gpuId };
+        dcgmGroupEntityPair_t const badPair { DCGM_FE_SWITCH, 0 };
+
+        cm.m_nvmlLoaded.store(false, std::memory_order_release);
+        CHECK_FALSE(cm.EntityPairSupportsGpm(gpuPair));
+
+        cm.m_nvmlLoaded.store(true, std::memory_order_release);
+        CHECK_FALSE(cm.EntityPairSupportsGpm(badPair));
+        CHECK_FALSE(cm.EntityPairSupportsGpm({ DCGM_FE_GPU, DCGM_MAX_NUM_DEVICES }));
+
+        cm.m_gpus[gpuId].supportGpm = false;
+        CHECK_FALSE(cm.EntityPairSupportsGpm(gpuPair));
+
+        cm.m_gpus[gpuId].supportGpm = true;
+        CHECK(cm.EntityPairSupportsGpm(gpuPair));
+
+        cm.m_gpus[gpuId].supportGpm     = false;
+        cm.m_forceProfMetricsThroughGpm = true;
+        dcgm_entity_key_t profilingKey {};
+        profilingKey.entityGroupId = DCGM_FE_GPU;
+        profilingKey.entityId      = gpuId;
+        profilingKey.fieldId       = DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO;
+        CHECK(cm.EntityKeySupportsGpm(profilingKey));
+
+        profilingKey.fieldId = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
+        CHECK_FALSE(cm.EntityKeySupportsGpm(profilingKey));
+    }
+}
+
+TEST_CASE("CacheManager: watch key and practical entity helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    DcgmCacheManager cm;
+
+    SECTION("GIVEN a null watch key destination WHEN building a key THEN no write is attempted")
+    {
+        cm.EntityIdToWatchKey(nullptr, DCGM_FE_GPU, 7, DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+    }
+
+    SECTION("GIVEN entity values WHEN building a watch key THEN fields are copied")
+    {
+        dcgm_entity_key_t key {};
+
+        cm.EntityIdToWatchKey(&key, DCGM_FE_GPU, 7, DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+
+        CHECK(key.entityGroupId == DCGM_FE_GPU);
+        CHECK(key.entityId == 7);
+        CHECK(key.fieldId == DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+    }
+
+    SECTION("GIVEN non-MIG entities WHEN practical entity info is set THEN existing entity mapping is preserved")
+    {
+        dcgmcm_watch_info_t watchInfo {};
+        cm.EntityIdToWatchKey(&watchInfo.watchKey, DCGM_FE_GPU, 2, DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+        watchInfo.practicalEntityGroupId = DCGM_FE_GPU;
+        watchInfo.practicalEntityId      = 2;
+
+        REQUIRE(cm.SetPracticalEntityInfo(watchInfo) == DCGM_ST_OK);
+        CHECK(watchInfo.practicalEntityGroupId == DCGM_FE_GPU);
+        CHECK(watchInfo.practicalEntityId == 2);
+    }
+
+    SECTION("GIVEN invalid practical entity inputs WHEN mapping is requested THEN bad parameters are returned")
+    {
+        dcgmcm_watch_info_t badGroup {};
+        cm.EntityIdToWatchKey(&badGroup.watchKey, DCGM_FE_COUNT, 1, DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+        CHECK(cm.SetPracticalEntityInfo(badGroup) == DCGM_ST_BADPARAM);
+
+        dcgmcm_watch_info_t badField {};
+        cm.EntityIdToWatchKey(&badField.watchKey, DCGM_FE_GPU_I, 1, DCGM_FI_MAX_FIELDS);
+        CHECK(cm.SetPracticalEntityInfo(badField) == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN entity keys WHEN checking GPM support THEN non-profiling fields are rejected early")
+    {
+        dcgm_entity_key_t key {};
+        cm.EntityIdToWatchKey(&key, DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+
+        CHECK_FALSE(cm.EntityKeySupportsGpm(key));
+    }
+}
+
+TEST_CASE("CacheManager: sample API edge cases")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    DcgmCacheManager cm;
+    unsigned int const gpuId = cm.AddFakeGpu();
+
+    SECTION("GIVEN invalid sample API inputs WHEN called THEN bad parameter errors are returned")
+    {
+        dcgmcm_sample_t sample {};
+        dcgmcm_sample_t samples[2] {};
+        int count = 2;
+
+        CHECK(cm.GetLatestSample(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, nullptr, nullptr)
+              == DCGM_ST_BADPARAM);
+        CHECK(
+            cm.GetSamples(
+                DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, samples, nullptr, 0, 0, DCGM_ORDER_ASCENDING, nullptr)
+            == DCGM_ST_BADPARAM);
+
+        count = 0;
+        CHECK(
+            cm.GetSamples(
+                DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, samples, &count, 0, 0, DCGM_ORDER_ASCENDING, nullptr)
+            == DCGM_ST_BADPARAM);
+
+        count = 2;
+        CHECK(
+            cm.GetSamples(
+                DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, nullptr, &count, 0, 0, DCGM_ORDER_ASCENDING, nullptr)
+            == DCGM_ST_BADPARAM);
+
+        count = 2;
+        CHECK(cm.GetSamples(DCGM_FE_GPU,
+                            gpuId,
+                            DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                            samples,
+                            &count,
+                            0,
+                            0,
+                            static_cast<dcgmOrder_t>(99),
+                            nullptr)
+              == DCGM_ST_BADPARAM);
+        CHECK(count == 0);
+
+        count = 2;
+        CHECK(
+            cm.GetSamples(DCGM_FE_GPU, gpuId, DCGM_FI_MAX_FIELDS, samples, &count, 0, 0, DCGM_ORDER_ASCENDING, nullptr)
+            == DCGM_ST_UNKNOWN_FIELD);
+        CHECK(count == 0);
+
+        CHECK(cm.InjectSamples(DCGM_FE_GPU, gpuId, 0, &sample, 1) == DCGM_ST_BADPARAM);
+        CHECK(cm.InjectSamples(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, nullptr, 1) == DCGM_ST_BADPARAM);
+        CHECK(cm.InjectSamples(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, &sample, 0) == DCGM_ST_BADPARAM);
+        CHECK(cm.FreeSamples(nullptr, 1, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_BADPARAM);
+        CHECK(cm.FreeSamples(&sample, 0, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_BADPARAM);
+        CHECK(cm.FreeSamples(&sample, 1, 0) == DCGM_ST_BADPARAM);
+        CHECK(cm.AppendSamples(nullptr) == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("GIVEN unwatched fields WHEN samples are requested THEN not-watched is returned")
+    {
+        dcgmcm_sample_t sample {};
+        dcgmcm_sample_t samples[2] {};
+        int count = 2;
+
+        CHECK(cm.GetLatestSample(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, &sample, nullptr)
+              == DCGM_ST_NOT_WATCHED);
+        CHECK(
+            cm.GetSamples(
+                DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, samples, &count, 0, 0, DCGM_ORDER_ASCENDING, nullptr)
+            == DCGM_ST_NOT_WATCHED);
+        CHECK(count == 0);
+    }
+
+    SECTION(
+        "GIVEN injected integer samples WHEN queried THEN latest, ascending, descending, and range cases are handled")
+    {
+        timelib64_t const firstTimestamp  = timelib_usecSince1970() + 1000000;
+        timelib64_t const secondTimestamp = firstTimestamp + 1;
+        dcgmcm_sample_t injected[2] {};
+        injected[0].timestamp = firstTimestamp;
+        injected[0].val.i64   = 11;
+        injected[1].timestamp = secondTimestamp;
+        injected[1].val.i64   = 22;
+
+        REQUIRE(cm.InjectSamples(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_ECC_MODE, injected, 2) == DCGM_ST_OK);
+
+        dcgmcm_sample_t latest {};
+        REQUIRE(cm.GetLatestSample(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_ECC_MODE, &latest, nullptr) == DCGM_ST_OK);
+        CHECK(latest.val.i64 == 22);
+
+        dcgmcm_sample_t samples[4] {};
+        int count = 4;
+        REQUIRE(cm.GetSamples(DCGM_FE_GPU,
+                              gpuId,
+                              DCGM_FI_DEV_ECC_MODE,
+                              samples,
+                              &count,
+                              firstTimestamp,
+                              secondTimestamp,
+                              DCGM_ORDER_ASCENDING,
+                              nullptr)
+                == DCGM_ST_OK);
+        REQUIRE(count == 2);
+        CHECK(samples[0].val.i64 == 11);
+        CHECK(samples[1].val.i64 == 22);
+
+        count = 4;
+        REQUIRE(cm.GetSamples(DCGM_FE_GPU,
+                              gpuId,
+                              DCGM_FI_DEV_ECC_MODE,
+                              samples,
+                              &count,
+                              firstTimestamp,
+                              secondTimestamp,
+                              DCGM_ORDER_DESCENDING,
+                              nullptr)
+                == DCGM_ST_OK);
+        REQUIRE(count == 2);
+        CHECK(samples[0].val.i64 == 22);
+        CHECK(samples[1].val.i64 == 11);
+
+        count = 4;
+        CHECK(cm.GetSamples(DCGM_FE_GPU,
+                            gpuId,
+                            DCGM_FI_DEV_ECC_MODE,
+                            samples,
+                            &count,
+                            secondTimestamp + 1,
+                            secondTimestamp + 2,
+                            DCGM_ORDER_ASCENDING,
+                            nullptr)
+              == DCGM_ST_NO_DATA);
+        CHECK(count == 0);
+    }
+
+    SECTION("GIVEN string samples WHEN injected or freed THEN string paths are covered")
+    {
+        dcgmcm_sample_t badString {};
+        badString.timestamp = 100;
+        CHECK(cm.InjectSamples(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_NAME, &badString, 1) == DCGM_ST_BADPARAM);
+
+        dcgmcm_sample_t ownedString {};
+        ownedString.val.str = strdup("owned");
+        REQUIRE(ownedString.val.str != nullptr);
+        CHECK(cm.FreeSamples(&ownedString, 1, DCGM_FI_DEV_GPU_NAME) == DCGM_ST_OK);
+        CHECK(ownedString.val.str == nullptr);
+    }
+}
+
 void callback(unsigned int gpuId, void *userData)
 {
     auto gpuIdPtr = (unsigned int *)userData;
@@ -356,9 +1176,9 @@ TEST_CASE("DcgmCacheManager::UpdateAllFields")
 
     unsigned int constexpr gpuId = 0;
     // field from dedicated API
-    unsigned short constexpr fieldIdUUID = DCGM_FI_DEV_UUID;
+    unsigned short constexpr fieldIdUUID = DCGM_FI_DEV_GPU_UUID;
     // field from nvmlDeviceGetFieldValues
-    unsigned short constexpr fieldIdECCCurrent       = DCGM_FI_DEV_ECC_CURRENT;
+    unsigned short constexpr fieldIdECCCurrent       = DCGM_FI_DEV_ECC_MODE;
     std::array<unsigned short, 2> constexpr fieldIds = { fieldIdUUID, fieldIdECCCurrent };
     DcgmWatcher watcher(DcgmWatcherTypeClient, 5566);
 
@@ -399,6 +1219,87 @@ TEST_CASE("DcgmCacheManager::UpdateAllFields")
     }
 }
 
+TEST_CASE("DcgmCacheManager: NVLink TX/RX throughput watches with NVML field injection")
+{
+    auto restoreEnv = WithNvmlInjectionSkuFile("H200.yaml");
+    if (!restoreEnv)
+    {
+        SKIP("Sku file not found: H200.yaml");
+    }
+
+    DcgmFieldsInit();
+    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+
+    auto nvmlRet = nvmlInit_v2();
+    REQUIRE(nvmlRet == NVML_SUCCESS);
+    DcgmNs::Defer deferNvml([&] { nvmlShutdown(); });
+
+    DcgmCacheManager cacheManager;
+    REQUIRE(cacheManager.Init(1, 14400.0, true) == DCGM_ST_OK);
+    cacheManager.Start();
+
+    unsigned int constexpr gpuId = 0;
+    nvmlDevice_t nvmlDevice {};
+    REQUIRE(nvmlDeviceGetHandleByIndex(gpuId, &nvmlDevice) == NVML_SUCCESS);
+    DcgmWatcher watcher(DcgmWatcherTypeClient, 5577);
+
+    /* All NVLink throughput fields: per-link L0..L17 plus TOTAL for TX and RX (contiguous IDs). */
+    std::vector<unsigned short> throughputFields;
+    throughputFields.reserve(
+        static_cast<size_t>(DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_TOTAL - DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_L0 + 1)
+        + static_cast<size_t>(DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_TOTAL - DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_L0 + 1));
+    for (unsigned short fid = DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_L0; fid <= DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_TOTAL; ++fid)
+    {
+        throughputFields.push_back(fid);
+    }
+    for (unsigned short fid = DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_L0; fid <= DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_TOTAL; ++fid)
+    {
+        throughputFields.push_back(fid);
+    }
+
+    std::array<unsigned short, 2> constexpr nvlinkNvmlFields = {
+        NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX,
+        NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX,
+    };
+    int64_t const ts         = timelib_usecSince1970() + 128 * 1000000;
+    uint64_t constexpr value = 0xc8763ull;
+
+    for (auto fieldId : nvlinkNvmlFields)
+    {
+        nvmlFieldValue_t nvmlFv {};
+        nvmlFv.fieldId      = fieldId;
+        nvmlFv.scopeId      = 0;
+        nvmlFv.nvmlReturn   = NVML_SUCCESS;
+        nvmlFv.timestamp    = ts;
+        nvmlFv.valueType    = NVML_VALUE_TYPE_UNSIGNED_LONG_LONG;
+        nvmlFv.value.ullVal = value;
+        REQUIRE(nvmlDeviceInjectFieldValue(nvmlDevice, &nvmlFv) == NVML_SUCCESS);
+    }
+
+    for (auto fieldId : throughputFields)
+    {
+        bool wereFirstWatcher = false;
+        REQUIRE(cacheManager.AddFieldWatch(
+                    DCGM_FE_GPU, gpuId, fieldId, 0, 14400.0, 2, watcher, false, false, wereFirstWatcher)
+                == DCGM_ST_OK);
+    }
+
+    REQUIRE(cacheManager.UpdateAllFields(1) == DCGM_ST_OK);
+
+    for (auto fieldId : throughputFields)
+    {
+        dcgmcm_sample_t sample {};
+        REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+        REQUIRE_FALSE(DCGM_INT64_IS_BLANK(sample.val.i64));
+        REQUIRE(cacheManager.FreeSamples(&sample, 1, fieldId) == DCGM_ST_OK);
+    }
+
+    for (auto fieldId : throughputFields)
+    {
+        REQUIRE(cacheManager.RemoveFieldWatch(DCGM_FE_GPU, gpuId, fieldId, 0, watcher) == DCGM_ST_OK);
+    }
+}
+
 TEST_CASE("DcgmCacheManager::IsGpuMigEnabled & IsMigEnabledAnywhere")
 {
     DcgmCacheManager cacheManager;
@@ -426,6 +1327,231 @@ TEST_CASE("DcgmCacheManager::IsGpuMigEnabled & IsMigEnabledAnywhere")
             REQUIRE(cacheManager.IsGpuMigEnabled(i) == false);
         }
         REQUIRE(cacheManager.IsMigEnabledAnywhere() == true);
+    }
+}
+
+TEST_CASE("DcgmCacheManager: pure state helpers")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    SECTION("GIVEN constructor environment WHEN force-GPM is set THEN the flag is enabled")
+    {
+        setenv("__DCGM_FORCE_PROF_METRICS_THROUGH_GPM", "1", 1);
+        DcgmNs::Defer restoreEnv([] { unsetenv("__DCGM_FORCE_PROF_METRICS_THROUGH_GPM"); });
+
+        DcgmCacheManager cacheManager;
+
+        CHECK(cacheManager.m_forceProfMetricsThroughGpm);
+    }
+
+    SECTION("GIVEN global watch fields WHEN global watch info is requested THEN create and lookup paths agree")
+    {
+        DcgmCacheManager cacheManager;
+
+        CHECK(cacheManager.GetGlobalWatchInfo(DCGM_FI_SYSTEM_DRIVER_VERSION, 0) == nullptr);
+
+        auto watchInfo = cacheManager.GetGlobalWatchInfo(DCGM_FI_SYSTEM_DRIVER_VERSION, 1);
+        REQUIRE(watchInfo != nullptr);
+        CHECK(watchInfo->watchKey.entityGroupId == DCGM_FE_NONE);
+        CHECK(watchInfo->watchKey.entityId == 0);
+        CHECK(watchInfo->watchKey.fieldId == DCGM_FI_SYSTEM_DRIVER_VERSION);
+        CHECK(cacheManager.GetGlobalWatchInfo(DCGM_FI_SYSTEM_DRIVER_VERSION, 0) == watchInfo);
+    }
+
+    SECTION("GIVEN fake GPU topology WHEN helper is called THEN cached GPU data is returned")
+    {
+        DcgmCacheManager cacheManager;
+        unsigned int const gpu0 = cacheManager.AddFakeGpu(0x20B0, 0x145F);
+        unsigned int const gpu1 = cacheManager.AddFakeGpu(0x2330, 0x1626);
+        SafeCopyTo(cacheManager.m_gpus[gpu0].pciInfo.busId, "00000000:01:00.0");
+        SafeCopyTo(cacheManager.m_gpus[gpu1].pciInfo.busId, "00000000:02:00.0");
+        cacheManager.m_gpus[gpu0].numNvLinks = 4;
+        cacheManager.m_gpus[gpu1].numNvLinks = 2;
+        cacheManager.m_gpus[gpu0].arch       = DCGM_CHIP_ARCH_AMPERE;
+        cacheManager.m_gpus[gpu1].arch       = DCGM_CHIP_ARCH_HOPPER;
+
+        auto topology = cacheManager.GetTopologyHelper(false);
+
+        REQUIRE(topology.size() == 2);
+        CHECK(topology[0].gpuId == gpu0);
+        CHECK(topology[0].status == DcgmEntityStatusFake);
+        CHECK(topology[0].numNvLinks == 4);
+        CHECK(topology[0].arch == DCGM_CHIP_ARCH_AMPERE);
+        CHECK(std::string(topology[0].busId) == "00000000:01:00.0");
+        CHECK(topology[1].gpuId == gpu1);
+        CHECK(topology[1].numNvLinks == 2);
+        CHECK(topology[1].arch == DCGM_CHIP_ARCH_HOPPER);
+    }
+
+    SECTION("GIVEN cached MIG hierarchy WHEN it is cleared THEN GPU instance counters are decremented")
+    {
+        DcgmCacheManager cacheManager;
+        unsigned int const gpuId     = cacheManager.AddFakeGpu();
+        unsigned int const instance0 = cacheManager.AddFakeInstance(gpuId);
+        unsigned int const instance1 = cacheManager.AddFakeInstance(gpuId);
+        unsigned int const ci0       = cacheManager.AddFakeComputeInstance(instance0);
+        unsigned int const ci1       = cacheManager.AddFakeComputeInstance(instance1);
+        auto &gpuInfo                = cacheManager.m_gpus[gpuId];
+
+        REQUIRE(instance0 != instance1);
+        REQUIRE(ci0 != ci1);
+        REQUIRE(gpuInfo.instances.size() == 2);
+        cacheManager.m_numInstances = gpuInfo.instances.size();
+        cacheManager.m_numComputeInstances
+            = gpuInfo.instances[0].GetComputeInstanceCount() + gpuInfo.instances[1].GetComputeInstanceCount();
+        REQUIRE(cacheManager.m_numInstances == 2);
+        REQUIRE(cacheManager.m_numComputeInstances == 2);
+
+        cacheManager.ClearGpuMigInfo(gpuInfo);
+
+        CHECK(gpuInfo.instances.empty());
+        CHECK(cacheManager.m_numInstances == 0);
+        CHECK(cacheManager.m_numComputeInstances == 0);
+    }
+
+    SECTION("GIVEN unavailable NVML state WHEN GPU instances are initialized THEN early returns avoid driver calls")
+    {
+        DcgmCacheManager cacheManager;
+        dcgmcm_gpu_info_t gpuInfo {};
+
+        gpuInfo.status = DcgmEntityStatusLost;
+        CHECK(cacheManager.InitializeGpuInstances(gpuInfo) == DCGM_ST_GPU_IS_LOST);
+
+        gpuInfo.status = DcgmEntityStatusOk;
+        cacheManager.m_nvmlLoaded.store(false, std::memory_order_release);
+        CHECK(cacheManager.InitializeGpuInstances(gpuInfo) == DCGM_ST_NVML_NOT_LOADED);
+    }
+
+    SECTION("GIVEN NVML is not loaded WHEN event set is initialized THEN no event set is created")
+    {
+        DcgmCacheManager cacheManager;
+
+        cacheManager.m_nvmlLoaded.store(false, std::memory_order_release);
+        CHECK(cacheManager.InitializeNvmlEventSet() == DCGM_ST_OK);
+        CHECK_FALSE(cacheManager.m_nvmlEventSetInitialized);
+    }
+
+    SECTION("GIVEN fake GPUs and MIG entities WHEN entity helpers are queried THEN cached state is reported")
+    {
+        DcgmCacheManager cacheManager;
+        unsigned int const gpu0          = cacheManager.AddFakeGpu(0x20B0, 0x145F);
+        unsigned int const gpu1          = cacheManager.AddFakeGpu(0x20B0, 0x145F);
+        unsigned int const gpu2          = cacheManager.AddFakeGpu(0x2330, 0x1626);
+        unsigned int const instance0     = cacheManager.AddFakeInstance(gpu0);
+        unsigned int const ci0           = cacheManager.AddFakeComputeInstance(instance0);
+        cacheManager.m_gpus[gpu1].status = DcgmEntityStatusDetached;
+
+        std::vector<unsigned int> gpuIds;
+        REQUIRE(cacheManager.GetGpuIds(0, gpuIds) == DCGM_ST_OK);
+        CHECK(gpuIds == std::vector<unsigned int> { gpu0, gpu1, gpu2 });
+
+        REQUIRE(cacheManager.GetGpuIds(1, gpuIds) == DCGM_ST_OK);
+        CHECK(gpuIds == std::vector<unsigned int> { gpu0, gpu2 });
+        CHECK(cacheManager.GetGpuCount(0) == 3);
+        CHECK(cacheManager.GetGpuCount(1) == 2);
+
+        std::vector<dcgmGroupEntityPair_t> entities;
+        REQUIRE(cacheManager.GetAllEntitiesOfEntityGroup(1, DCGM_FE_GPU, entities) == DCGM_ST_OK);
+        REQUIRE(entities.size() == 2);
+        CHECK(entities[0].entityGroupId == DCGM_FE_GPU);
+        CHECK(entities[0].entityId == gpu0);
+        CHECK(entities[1].entityId == gpu2);
+
+        REQUIRE(cacheManager.GetAllEntitiesOfEntityGroup(1, DCGM_FE_GPU_I, entities) == DCGM_ST_OK);
+        REQUIRE(entities.size() == 1);
+        CHECK(entities[0].entityGroupId == DCGM_FE_GPU_I);
+        CHECK(entities[0].entityId == instance0);
+
+        REQUIRE(cacheManager.GetAllEntitiesOfEntityGroup(1, DCGM_FE_GPU_CI, entities) == DCGM_ST_OK);
+        REQUIRE(entities.size() == 1);
+        CHECK(entities[0].entityGroupId == DCGM_FE_GPU_CI);
+        CHECK(entities[0].entityId == ci0);
+
+        CHECK(cacheManager.GetAllEntitiesOfEntityGroup(1, DCGM_FE_VGPU, entities) == DCGM_ST_NOT_SUPPORTED);
+        CHECK(entities.empty());
+
+        CHECK(cacheManager.GetEntityStatus(DCGM_FE_GPU, gpu0) == DcgmEntityStatusFake);
+        CHECK(cacheManager.GetEntityStatus(DCGM_FE_GPU, gpu1) == DcgmEntityStatusDetached);
+        CHECK(cacheManager.GetEntityStatus(DCGM_FE_GPU_I, instance0) == DcgmEntityStatusFake);
+        CHECK(cacheManager.GetEntityStatus(DCGM_FE_GPU_CI, ci0) == DcgmEntityStatusFake);
+        CHECK(cacheManager.GetEntityStatus(DCGM_FE_GPU, 99) == DcgmEntityStatusUnknown);
+        CHECK(cacheManager.GetEntityStatus(DCGM_FE_NONE, 0) == DcgmEntityStatusUnknown);
+
+        std::vector<unsigned int> matchingSku { gpu0, gpu1 };
+        std::vector<unsigned int> mixedSku { gpu0, gpu2 };
+        std::vector<unsigned int> invalidSku { gpu0, 99 };
+        CHECK(cacheManager.AreAllGpuIdsSameSku(matchingSku) == 1);
+        CHECK(cacheManager.AreAllGpuIdsSameSku(mixedSku) == 0);
+        CHECK(cacheManager.AreAllGpuIdsSameSku(invalidSku) == 0);
+    }
+
+    SECTION("GIVEN field metadata WHEN validation helpers are called THEN scope and id checks are enforced")
+    {
+        DcgmCacheManager cacheManager;
+        unsigned int const gpuId = cacheManager.AddFakeGpu();
+
+        CHECK(cacheManager.CheckValidGlobalField(DCGM_FI_SYSTEM_DRIVER_VERSION) == DCGM_ST_OK);
+        CHECK(cacheManager.CheckValidGlobalField(DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_BADPARAM);
+        CHECK(cacheManager.CheckValidGlobalField(DCGM_FI_SYSTEM_FIELD_UNKNOWN) == DCGM_ST_UNKNOWN_FIELD);
+
+        CHECK(cacheManager.CheckValidGpuField(gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_OK);
+        CHECK(cacheManager.CheckValidGpuField(gpuId, DCGM_FI_SYSTEM_DRIVER_VERSION) == DCGM_ST_BADPARAM);
+        CHECK(cacheManager.CheckValidGpuField(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN) == DCGM_ST_UNKNOWN_FIELD);
+        CHECK(cacheManager.CheckValidGpuField(gpuId + 1, DCGM_FI_DEV_GPU_TEMP_CELSIUS) == DCGM_ST_BADPARAM);
+
+        dcgmcm_runtime_stats_t stats {};
+        cacheManager.GetRuntimeStats(nullptr);
+        cacheManager.GetRuntimeStats(&stats);
+        CHECK(stats.lockCount >= 0);
+
+        std::vector<unsigned short> validFieldIds;
+        cacheManager.GetValidFieldIds(validFieldIds, true);
+        REQUIRE_FALSE(validFieldIds.empty());
+        CHECK(std::ranges::find(validFieldIds, DCGM_FI_DEV_GPU_TEMP_CELSIUS) != validFieldIds.end());
+
+        cacheManager.GetValidFieldIds(validFieldIds, false);
+        REQUIRE_FALSE(validFieldIds.empty());
+        CHECK(std::ranges::find(validFieldIds, DCGM_FI_DEV_GPU_TEMP_CELSIUS) != validFieldIds.end());
+    }
+
+    SECTION("GIVEN watched fields WHEN snapshots are requested THEN watched and unwatched paths are distinct")
+    {
+        DcgmCacheManager cacheManager;
+        unsigned int const gpuId = cacheManager.AddFakeGpu();
+        DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
+        cacheManager.m_nvmlLoaded.store(true, std::memory_order_release);
+
+        dcgmcm_watch_info_t snapshot {};
+        CHECK(cacheManager.GetEntityWatchInfoSnapshot(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, nullptr)
+              == DCGM_ST_BADPARAM);
+        CHECK(cacheManager.GetEntityWatchInfoSnapshot(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, &snapshot)
+              == DCGM_ST_NOT_WATCHED);
+
+        bool wereFirstWatcher = false;
+        REQUIRE(cacheManager.AddFieldWatch(DCGM_FE_GPU,
+                                           gpuId,
+                                           DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+                                           1000000,
+                                           60.0,
+                                           0,
+                                           watcher,
+                                           true,
+                                           false,
+                                           wereFirstWatcher)
+                == DCGM_ST_OK);
+        CHECK(cacheManager.GetEntityWatchInfoSnapshot(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, &snapshot)
+              == DCGM_ST_OK);
+        CHECK(snapshot.watchKey.entityGroupId == DCGM_FE_GPU);
+        CHECK(snapshot.watchKey.entityId == gpuId);
+        CHECK(snapshot.watchKey.fieldId == DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+
+        std::vector<dcgmcm_watch_info_p> watchers;
+        cacheManager.GetAllWatchObjects(watchers);
+        CHECK_FALSE(watchers.empty());
+
+        CHECK(cacheManager.RemoveFieldWatch(DCGM_FE_GPU, gpuId, DCGM_FI_DEV_GPU_TEMP_CELSIUS, 1, watcher)
+              == DCGM_ST_OK);
     }
 }
 
@@ -1081,4 +2207,620 @@ TEST_CASE("DcgmCacheManager::GetSupportedVgpuTypeNames - DCGM-6550 Memory Safety
             REQUIRE(cacheManager.FreeSamples(&sample, 1, fieldId) == DCGM_ST_OK);
         }
     }
+}
+
+TEST_CASE("DcgmCacheManager::IsModulePushedFieldId")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    DcgmCacheManager cm;
+
+    SECTION("Returns false for GPU device fields below the NvSwitch boundary")
+    {
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_GPU_TEMP_CELSIUS) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_BOARD_POWER_WATTS) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_FB_USED) == false);
+    }
+
+    SECTION("Returns true for NvSwitch fields (700-899)")
+    {
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_FIRST_NVSWITCH_FIELD_ID) == true);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_LAST_NVSWITCH_FIELD_ID) == true);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT) == true);
+    }
+
+    SECTION("Returns false for NVLink TX/RX throughput fields (IDs overlap NvSwitch range)")
+    {
+        // Per-link and total throughput use IDs inside 700-899 but are updated by the
+        // cache from NVML, not pushed by the NvSwitch module.
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_L0) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_TOTAL) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_L0) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_TOTAL) == false);
+    }
+
+    SECTION("Returns true for profiling fields")
+    {
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_PROF_FIRST_ID) == true);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_PROF_LAST_ID) == true);
+    }
+
+    SECTION("Returns true for sysmon fields (1100-1141)")
+    {
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_SYSMON_FIRST_ID) == true);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_SYSMON_LAST_ID) == true);
+    }
+
+    SECTION("Returns true for ConnectX fields (1300-1399)")
+    {
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID) == true);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID) == true);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_CONNECTX_HEALTH) == true);
+    }
+
+    SECTION("Returns false for clock event reason NS fields (1420-1424)")
+    {
+        // NVML-polled GPU device fields outside all module-pushed ranges
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_CLOCKS_EVENT_REASON_SW_POWER_CAP_NS) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_CLOCKS_EVENT_REASON_SYNC_BOOST_NS) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN_NS) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_THERM_SLOWDOWN_NS) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN_NS) == false);
+    }
+
+    SECTION("Returns false for power smoothing fields (1425-1442)")
+    {
+        // NVML-polled GPU device fields outside all module-pushed ranges
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_PWR_SMOOTHING_ENABLED) == false);
+        CHECK(cm.IsModulePushedFieldId(DCGM_FI_DEV_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL) == false);
+    }
+
+    SECTION("Returns false by default for unknown high-numbered fields outside module ranges")
+    {
+        // Any future GPU device field added outside the known module ranges must
+        // default to false (polled), not true (skipped).  This guards against the
+        // class of bug fixed in DCGM-6546.
+        // Pick a field ID in the gap between profiling range 1 and range 2
+        // (e.g. 1500) that is not in any known module range.
+        unsigned int const hypotheticalFutureField = 1500;
+        CHECK(cm.IsModulePushedFieldId(hypotheticalFutureField) == false);
+    }
+}
+
+TEST_CASE("DCGM_FIELD_ID_IS_PROF_FIELD")
+{
+    static_assert(DCGM_FIELD_ID_IS_PROF_FIELD(DCGM_FI_PROF_FIRST_ID));
+    static_assert(DCGM_FIELD_ID_IS_PROF_FIELD(DCGM_FI_PROF_LAST_ID));
+    static_assert(DCGM_FIELD_ID_IS_PROF_FIELD(DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL));
+    static_assert(DCGM_FIELD_ID_IS_PROF_FIELD(DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK));
+    static_assert(DCGM_FIELD_ID_IS_PROF_FIELD(DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK));
+
+    static_assert(!DCGM_FIELD_ID_IS_PROF_FIELD(1000));
+    static_assert(!DCGM_FIELD_ID_IS_PROF_FIELD(1097));
+    static_assert(!DCGM_FIELD_ID_IS_PROF_FIELD(1100));
+    static_assert(!DCGM_FIELD_ID_IS_PROF_FIELD(1500));
+}
+
+TEST_CASE("DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH")
+{
+    // PCIe throughput
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_PCIE_TX_BYTES));
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_PCIE_RX_BYTES));
+    // NVLink aggregate throughput
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_NVLINK_TX_BYTES));
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_NVLINK_RX_BYTES));
+    // NVLink per-link throughput (legacy L0-L17 and dcgm_link_t-keyed)
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_NVLINK_L0_TX_BYTES));
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_NVLINK_L17_RX_BYTES));
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK));
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK));
+    // C2C throughput
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_C2C_TX_ALL_BYTES));
+    static_assert(DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_C2C_RX_DATA_BYTES));
+
+    // Ratio fields are not bandwidth
+    static_assert(!DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO));
+    // Cumulative counters are not bandwidth
+    static_assert(!DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_SM_CYCLES_ELAPSED_TOTAL));
+    static_assert(!DCGM_FIELD_ID_IS_GPM_MIB_BANDWIDTH(DCGM_FI_PROF_PCIE_TX_BYTES_TOTAL));
+}
+
+TEST_CASE("DcgmFieldIsNvLinkCountField")
+{
+    SECTION("Returns true for NVLink COUNT fields")
+    {
+        std::vector<unsigned short> countFields = {
+            DCGM_FI_DEV_NVLINK_TX_PACKET_TOTAL,      DCGM_FI_DEV_NVLINK_TX_BYTES_TOTAL,
+            DCGM_FI_DEV_NVLINK_RX_PACKET_TOTAL,      DCGM_FI_DEV_NVLINK_RX_BYTES_TOTAL,
+            DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL,       DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW,
+            DCGM_FI_DEV_NVLINK_SYMBOL_BER_RATIO,     DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL,
+            DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO,  DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0,
+            DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15,
+        };
+        for (auto fieldId : countFields)
+        {
+            CHECK(DcgmFieldIsNvLinkCountField(fieldId) == true);
+        }
+    }
+
+    SECTION("Returns false for non-COUNT fields")
+    {
+        std::vector<unsigned short> nonCountFields = {
+            DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L0_TOTAL,
+            DCGM_FI_DEV_NVLINK_THROUGHPUT_L0,
+            DCGM_FI_DEV_BOARD_POWER_WATTS,
+            DCGM_FI_DEV_GPU_TEMP_CELSIUS,
+            0,
+            1199,
+            1220,
+            9999,
+        };
+        for (auto fieldId : nonCountFields)
+        {
+            CHECK(DcgmFieldIsNvLinkCountField(fieldId) == false);
+        }
+    }
+}
+
+TEST_CASE("DcgmCacheManager::AddFieldWatch allows module-pushed NvSwitch link fields without NVML")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    DcgmCacheManager cm;
+    DcgmWatcher watcher(DcgmWatcherTypeClient, 5566);
+
+    dcgm_link_t switchLink {};
+    switchLink.parsed.type     = DCGM_FE_SWITCH;
+    switchLink.parsed.switchId = 0;
+    switchLink.parsed.index    = 0;
+
+    bool wereFirstWatcher = false;
+    REQUIRE(cm.AddFieldWatch(DCGM_FE_LINK,
+                             switchLink.raw,
+                             DCGM_FI_DEV_NVSWITCH_LINK_ID,
+                             1000000,
+                             30.0,
+                             1,
+                             watcher,
+                             false,
+                             false,
+                             wereFirstWatcher)
+            == DCGM_ST_OK);
+
+    dcgm_link_t gpuLink {};
+    gpuLink.parsed.type  = DCGM_FE_GPU;
+    gpuLink.parsed.gpuId = 0;
+    gpuLink.parsed.index = 0;
+
+    wereFirstWatcher = false;
+    REQUIRE(cm.AddFieldWatch(DCGM_FE_LINK,
+                             gpuLink.raw,
+                             DCGM_FI_DEV_NVLINK_GET_STATE,
+                             1000000,
+                             30.0,
+                             1,
+                             watcher,
+                             false,
+                             false,
+                             wereFirstWatcher)
+            == DCGM_ST_NVML_NOT_LOADED);
+}
+
+TEST_CASE("CacheManager: typed append helpers cache and buffer values")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    DcgmCacheManager cacheManager;
+    unsigned int const gpuId = cacheManager.AddFakeGpu();
+
+    auto makeContext = [&](unsigned short fieldId, DcgmFvBuffer &fvBuffer) {
+        dcgmcm_watch_info_p watchInfo = cacheManager.GetEntityWatchInfo(DCGM_FE_GPU, gpuId, fieldId, 1);
+        REQUIRE(watchInfo != nullptr);
+        watchInfo->isWatched  = 1;
+        watchInfo->maxAgeUsec = DcgmNs::Timelib::ToLegacyTimestamp(std::chrono::seconds(30));
+
+        dcgmcm_update_thread_t threadCtx;
+        threadCtx.watchInfo               = watchInfo;
+        threadCtx.fvBuffer                = &fvBuffer;
+        threadCtx.entityKey.entityGroupId = DCGM_FE_GPU;
+        threadCtx.entityKey.entityId      = gpuId;
+        threadCtx.entityKey.fieldId       = fieldId;
+        return threadCtx;
+    };
+
+    GIVEN("watched GPU fields for each value type")
+    {
+        SECTION("double values are written to the time series and field-value buffer")
+        {
+            unsigned short constexpr fieldId = DCGM_FI_DEV_BOARD_POWER_WATTS;
+            double constexpr value           = 125.5;
+            DcgmFvBuffer fvBuffer;
+            auto threadCtx = makeContext(fieldId, fvBuffer);
+
+            WHEN("the double append helper is used")
+            {
+                timelib64_t const now = timelib_usecSince1970();
+                REQUIRE(cacheManager.AppendEntityDouble(threadCtx, value, 0.0, now, 0) == DCGM_ST_OK);
+
+                THEN("the buffered and cached values match")
+                {
+                    dcgmBufferedFvCursor_t cursor = 0;
+                    dcgmBufferedFv_t *fv          = fvBuffer.GetNextFv(&cursor);
+                    REQUIRE(fv != nullptr);
+                    CHECK(fv->fieldType == DCGM_FT_DOUBLE);
+                    CHECK(fv->fieldId == fieldId);
+                    CHECK(fv->value.dbl == value);
+                    CHECK(threadCtx.affectedSubscribers == 0);
+
+                    dcgmcm_sample_t sample {};
+                    REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+                    CHECK(sample.val.d == value);
+                }
+            }
+        }
+
+        SECTION("int64 values are written to the time series and field-value buffer")
+        {
+            unsigned short constexpr fieldId = DCGM_FI_DEV_ECC_MODE;
+            long long constexpr value        = 2;
+            DcgmFvBuffer fvBuffer;
+            auto threadCtx = makeContext(fieldId, fvBuffer);
+
+            WHEN("the int64 append helper is used")
+            {
+                timelib64_t const now = timelib_usecSince1970();
+                REQUIRE(cacheManager.AppendEntityInt64(threadCtx, value, 0, now, 0) == DCGM_ST_OK);
+
+                THEN("the buffered and cached values match")
+                {
+                    dcgmBufferedFvCursor_t cursor = 0;
+                    dcgmBufferedFv_t *fv          = fvBuffer.GetNextFv(&cursor);
+                    REQUIRE(fv != nullptr);
+                    CHECK(fv->fieldType == DCGM_FT_INT64);
+                    CHECK(fv->fieldId == fieldId);
+                    CHECK(fv->value.i64 == value);
+
+                    dcgmcm_sample_t sample {};
+                    REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+                    CHECK(sample.val.i64 == value);
+                }
+            }
+        }
+
+        SECTION("string values are written to the time series and field-value buffer")
+        {
+            unsigned short constexpr fieldId = DCGM_FI_DEV_GPU_NAME;
+            char const *value                = "unit-test-gpu";
+            DcgmFvBuffer fvBuffer;
+            auto threadCtx = makeContext(fieldId, fvBuffer);
+
+            WHEN("the string append helper is used")
+            {
+                timelib64_t const now = timelib_usecSince1970();
+                REQUIRE(cacheManager.AppendEntityString(threadCtx, value, now, 0) == DCGM_ST_OK);
+
+                THEN("the buffered and cached values match")
+                {
+                    dcgmBufferedFvCursor_t cursor = 0;
+                    dcgmBufferedFv_t *fv          = fvBuffer.GetNextFv(&cursor);
+                    REQUIRE(fv != nullptr);
+                    CHECK(fv->fieldType == DCGM_FT_STRING);
+                    CHECK(fv->fieldId == fieldId);
+                    CHECK(std::strcmp(fv->value.str, value) == 0);
+
+                    dcgmcm_sample_t sample {};
+                    REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+                    REQUIRE(sample.val.str != nullptr);
+                    CHECK(std::strcmp(sample.val.str, value) == 0);
+                    REQUIRE(cacheManager.FreeSamples(&sample, 1, fieldId) == DCGM_ST_OK);
+                }
+            }
+        }
+
+        SECTION("blob values are written to the time series and field-value buffer")
+        {
+            unsigned short constexpr fieldId = DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS;
+            std::array<unsigned char, 4> value { 0x1, 0x2, 0x3, 0x4 };
+            DcgmFvBuffer fvBuffer;
+            auto threadCtx = makeContext(fieldId, fvBuffer);
+
+            WHEN("the blob append helper is used")
+            {
+                timelib64_t const now = timelib_usecSince1970();
+                REQUIRE(cacheManager.AppendEntityBlob(threadCtx, value.data(), value.size(), now, 0) == DCGM_ST_OK);
+
+                THEN("the buffered and cached values match")
+                {
+                    dcgmBufferedFvCursor_t cursor = 0;
+                    dcgmBufferedFv_t *fv          = fvBuffer.GetNextFv(&cursor);
+                    REQUIRE(fv != nullptr);
+                    CHECK(fv->fieldType == DCGM_FT_BINARY);
+                    CHECK(fv->fieldId == fieldId);
+                    CHECK(fv->length == (sizeof(*fv) - sizeof(fv->value)) + value.size());
+                    CHECK(std::memcmp(fv->value.blob, value.data(), value.size()) == 0);
+
+                    dcgmcm_sample_t sample {};
+                    REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+                    REQUIRE(sample.val.blob != nullptr);
+                    CHECK(sample.val2.ptrSize == value.size());
+                    CHECK(std::memcmp(sample.val.blob, value.data(), value.size()) == 0);
+                    REQUIRE(cacheManager.FreeSamples(&sample, 1, fieldId) == DCGM_ST_OK);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("CacheManager: entity mapping helpers handle GPUs and fake MIG entities")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    DcgmCacheManager cacheManager;
+    unsigned int const gpuId              = cacheManager.AddFakeGpu();
+    unsigned int const gpuInstanceId      = cacheManager.AddFakeInstance(gpuId);
+    unsigned int const computeInstanceId  = cacheManager.AddFakeComputeInstance(gpuInstanceId);
+    unsigned int constexpr missingNvmlId  = 99;
+    dcgm_field_eid_t constexpr missingEid = 4242;
+
+    GIVEN("a cache manager with fake GPU, GPU instance, and compute instance entities")
+    {
+        SECTION("entity-to-GPU lookup recognizes direct and MIG entities")
+        {
+            auto gpuLookup = cacheManager.GetGpuIdForEntity(DCGM_FE_GPU, gpuId);
+            REQUIRE(gpuLookup.has_value());
+            CHECK(gpuLookup.value() == gpuId);
+
+            auto instanceLookup = cacheManager.GetGpuIdForEntity(DCGM_FE_GPU_I, gpuInstanceId);
+            REQUIRE(instanceLookup.has_value());
+            CHECK(instanceLookup.value() == gpuId);
+
+            auto computeInstanceLookup = cacheManager.GetGpuIdForEntity(DCGM_FE_GPU_CI, computeInstanceId);
+            REQUIRE(computeInstanceLookup.has_value());
+            CHECK(computeInstanceLookup.value() == gpuId);
+
+            CHECK_FALSE(cacheManager.GetGpuIdForEntity(DCGM_FE_GPU_I, missingEid).has_value());
+            CHECK_FALSE(cacheManager.GetGpuIdForEntity(DCGM_FE_NONE, gpuId).has_value());
+        }
+
+        SECTION("NVML MIG IDs map to DCGM entity IDs")
+        {
+            CHECK(cacheManager.GetInstanceEntityId(gpuId, DcgmNs::Mig::Nvml::GpuInstanceId { 0 }) == gpuInstanceId);
+            CHECK(cacheManager.GetComputeInstanceEntityId(
+                      gpuId, DcgmNs::Mig::Nvml::ComputeInstanceId { 0 }, DcgmNs::Mig::Nvml::GpuInstanceId { 0 })
+                  == computeInstanceId);
+
+            CHECK(cacheManager.GetInstanceEntityId(gpuId, DcgmNs::Mig::Nvml::GpuInstanceId { missingNvmlId })
+                  == DCGM_BLANK_ENTITY_ID);
+            CHECK(cacheManager.GetComputeInstanceEntityId(gpuId,
+                                                          DcgmNs::Mig::Nvml::ComputeInstanceId { missingNvmlId },
+                                                          DcgmNs::Mig::Nvml::GpuInstanceId { 0 })
+                  == DCGM_BLANK_ENTITY_ID);
+            CHECK(cacheManager.GetInstanceProfile(gpuId, DcgmNs::Mig::Nvml::GpuInstanceId { missingNvmlId })
+                  == DcgmMigProfileNone);
+        }
+
+        SECTION("profiling entity filtering honors forced GPM mode")
+        {
+            std::vector<dcgmGroupEntityPair_t> entities = {
+                { DCGM_FE_GPU, gpuId },
+                { DCGM_FE_GPU_I, gpuInstanceId },
+                { DCGM_FE_GPU_CI, computeInstanceId },
+            };
+
+            cacheManager.m_forceProfMetricsThroughGpm = true;
+            cacheManager.GetProfModuleServicedEntities(entities);
+            CHECK(entities.empty());
+        }
+
+        SECTION("active entity filtering keeps valid fake GPU and MIG entities")
+        {
+            std::vector<dcgmGroupEntityPair_t> entities = {
+                { DCGM_FE_GPU, gpuId },        { DCGM_FE_GPU, DCGM_MAX_NUM_DEVICES }, { DCGM_FE_GPU_I, gpuInstanceId },
+                { DCGM_FE_GPU_I, missingEid }, { DCGM_FE_GPU_CI, computeInstanceId }, { DCGM_FE_GPU_CI, missingEid },
+                { DCGM_FE_SWITCH, 9 },
+            };
+
+            auto activeEntities = cacheManager.FilterActiveEntities(entities);
+
+            REQUIRE(activeEntities.size() == 4);
+            CHECK(activeEntities[0].entityGroupId == DCGM_FE_GPU);
+            CHECK(activeEntities[0].entityId == gpuId);
+            CHECK(activeEntities[1].entityGroupId == DCGM_FE_GPU_I);
+            CHECK(activeEntities[1].entityId == gpuInstanceId);
+            CHECK(activeEntities[2].entityGroupId == DCGM_FE_GPU_CI);
+            CHECK(activeEntities[2].entityId == computeInstanceId);
+            CHECK(activeEntities[3].entityGroupId == DCGM_FE_SWITCH);
+            CHECK(activeEntities[3].entityId == 9);
+        }
+
+        SECTION("MIG index lookup validates output pointers and entity types")
+        {
+            unsigned int foundGpuId = DCGM_MAX_NUM_DEVICES;
+            DcgmNs::Mig::GpuInstanceId foundInstanceId {};
+            DcgmNs::Mig::ComputeInstanceId foundComputeInstanceId {};
+
+            REQUIRE(cacheManager.GetMigIndicesForEntity(
+                        { DCGM_FE_GPU_I, gpuInstanceId }, &foundGpuId, &foundInstanceId, &foundComputeInstanceId)
+                    == DCGM_ST_OK);
+            CHECK(foundGpuId == gpuId);
+            CHECK(foundInstanceId.id == gpuInstanceId);
+
+            CHECK(cacheManager.GetMigIndicesForEntity(
+                      { DCGM_FE_GPU_I, gpuInstanceId }, nullptr, &foundInstanceId, &foundComputeInstanceId)
+                  == DCGM_ST_BADPARAM);
+
+            REQUIRE(cacheManager.GetMigIndicesForEntity(
+                        { DCGM_FE_GPU_CI, computeInstanceId }, &foundGpuId, &foundInstanceId, &foundComputeInstanceId)
+                    == DCGM_ST_OK);
+            CHECK(foundGpuId == gpuId);
+            CHECK(foundInstanceId.id == gpuInstanceId);
+            CHECK(foundComputeInstanceId.id == computeInstanceId);
+
+            CHECK(cacheManager.GetMigIndicesForEntity(
+                      { DCGM_FE_GPU_CI, computeInstanceId }, &foundGpuId, &foundInstanceId, nullptr)
+                  == DCGM_ST_BADPARAM);
+            CHECK(cacheManager.GetMigIndicesForEntity(
+                      { DCGM_FE_GPU_CI, missingEid }, &foundGpuId, &foundInstanceId, &foundComputeInstanceId)
+                  == DCGM_ST_NO_DATA);
+        }
+
+        SECTION("NVLink and NVML handle helpers validate simple GPU states")
+        {
+            dcgmNvLinkLinkState_t linkStates[DCGM_NVLINK_MAX_LINKS_PER_GPU] {};
+
+            CHECK(cacheManager.GetEntityNvLinkLinkStatus(DCGM_FE_NONE, gpuId, linkStates) == DCGM_ST_BADPARAM);
+            CHECK(cacheManager.GetEntityNvLinkLinkStatus(DCGM_FE_GPU, gpuId, nullptr) == DCGM_ST_BADPARAM);
+            CHECK(cacheManager.GetEntityNvLinkLinkStatus(DCGM_FE_GPU, DCGM_MAX_NUM_DEVICES, linkStates)
+                  == DCGM_ST_BADPARAM);
+            CHECK(cacheManager.GetEntityNvLinkLinkStatus(DCGM_FE_GPU, gpuId, linkStates) == DCGM_ST_OK);
+            CHECK(cacheManager.UpdateNvLinkLinkState(DCGM_MAX_NUM_DEVICES) == DCGM_ST_BADPARAM);
+            CHECK(cacheManager.UpdateNvLinkLinkState(gpuId) == DCGM_ST_OK);
+
+            CHECK(cacheManager.GetNvmlDeviceFromEntityId(DCGM_MAX_NUM_DEVICES) == nullptr);
+            CHECK(cacheManager.GetActiveGpuHandles().empty());
+
+            auto safeHandle = cacheManager.GetSafeNvmlHandle(gpuId);
+            REQUIRE(safeHandle.has_value());
+            CHECK(safeHandle->nvmlDevice == nullptr);
+
+            auto missingHandle = cacheManager.GetSafeNvmlHandle(DCGM_MAX_NUM_DEVICES);
+            REQUIRE(missingHandle.is_error());
+            CHECK(missingHandle.error() == DCGM_ST_BADPARAM);
+        }
+    }
+}
+
+TEST_CASE("CachePrmField")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    dcgm_link_t link              = {};
+    link.parsed.type              = DCGM_FE_GPU;
+    link.parsed.gpuId             = 0;
+    link.parsed.index             = 1;
+    dcgm_field_eid_t linkEntityId = link.raw;
+
+    DcgmCacheManager cm;
+    dcgmcm_update_thread_t threadCtx;
+    DcgmFvBuffer fvBuffer;
+    threadCtx.fvBuffer                = &fvBuffer;
+    threadCtx.entityKey.entityGroupId = DCGM_FE_LINK;
+    threadCtx.entityKey.entityId      = linkEntityId;
+
+    auto watchField = [&](unsigned short fieldId) {
+        dcgmcm_watch_info_p watchInfo = cm.GetEntityWatchInfo(DCGM_FE_LINK, linkEntityId, fieldId, 1);
+        REQUIRE(watchInfo != nullptr);
+        watchInfo->isWatched  = 1;
+        watchInfo->maxAgeUsec = DcgmNs::Timelib::ToLegacyTimestamp(std::chrono::seconds(30));
+    };
+
+    SECTION("populates time series for requested field in live mode")
+    {
+        unsigned short constexpr fieldId = DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_EVENT_TOTAL;
+        long long constexpr testValue    = 42LL;
+
+        watchField(fieldId);
+
+        threadCtx.entityKey.fieldId = fieldId;
+
+        timelib64_t now = timelib_usecSince1970();
+
+        cm.CachePrmField(threadCtx, linkEntityId, fieldId, fieldId, static_cast<uint64_t>(testValue), now);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = fvBuffer.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        REQUIRE(fv->entityGroupId == DCGM_FE_LINK);
+        REQUIRE(fv->entityId == linkEntityId);
+        REQUIRE(fv->fieldId == fieldId);
+        REQUIRE(fv->value.i64 == testValue);
+
+        dcgmcm_sample_t sample {};
+        REQUIRE(cm.GetLatestSample(DCGM_FE_LINK, linkEntityId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+        REQUIRE(sample.val.i64 == testValue);
+    }
+
+    SECTION("consecutive live mode calls use correct watchInfo per field")
+    {
+        unsigned short constexpr fieldA = DCGM_FI_DEV_NVLINK_PPCNT_PLR_TX_RETRY_EVENT_TOTAL;
+        unsigned short constexpr fieldB = DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_TOTAL;
+        long long constexpr valueA      = 11LL;
+        long long constexpr valueB      = 22LL;
+
+        watchField(fieldA);
+        watchField(fieldB);
+
+        timelib64_t now = timelib_usecSince1970();
+
+        threadCtx.entityKey.fieldId = fieldA;
+        cm.CachePrmField(threadCtx, linkEntityId, fieldA, fieldA, static_cast<uint64_t>(valueA), now);
+
+        threadCtx.entityKey.fieldId = fieldB;
+        cm.CachePrmField(threadCtx, linkEntityId, fieldB, fieldB, static_cast<uint64_t>(valueB), now + 1);
+
+        dcgmcm_sample_t sampleA {};
+        REQUIRE(cm.GetLatestSample(DCGM_FE_LINK, linkEntityId, fieldA, &sampleA, nullptr) == DCGM_ST_OK);
+        REQUIRE(sampleA.val.i64 == valueA);
+
+        dcgmcm_sample_t sampleB {};
+        REQUIRE(cm.GetLatestSample(DCGM_FE_LINK, linkEntityId, fieldB, &sampleB, nullptr) == DCGM_ST_OK);
+        REQUIRE(sampleB.val.i64 == valueB);
+    }
+}
+
+TEST_CASE("GetMultipleLatestLiveSamples: unsupported PRM ports return one not-supported value")
+{
+    DcgmFieldsInit();
+    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+
+    DcgmCacheManager cm;
+    cm.m_nvmlLoaded.store(true, std::memory_order_release);
+    unsigned int const gpuId = cm.AddFakeGpu();
+
+    auto makeLinkEntity = [&](unsigned int portIndex) {
+        dcgm_link_t link  = {};
+        link.parsed.type  = DCGM_FE_GPU;
+        link.parsed.gpuId = gpuId;
+        link.parsed.index = portIndex;
+        return dcgmGroupEntityPair_t { DCGM_FE_LINK, link.raw };
+    };
+
+    auto watchField = [&](dcgm_field_eid_t entityId, unsigned short fieldId) {
+        dcgmcm_watch_info_p watchInfo = cm.GetEntityWatchInfo(DCGM_FE_LINK, entityId, fieldId, 1);
+        REQUIRE(watchInfo != nullptr);
+        watchInfo->isWatched  = 1;
+        watchInfo->maxAgeUsec = DcgmNs::Timelib::ToLegacyTimestamp(std::chrono::seconds(30));
+    };
+
+    auto requireUnsupportedPort = [&](unsigned short fieldId, unsigned int portIndex) {
+        auto entity = makeLinkEntity(portIndex);
+        watchField(entity.entityId, fieldId);
+
+        std::vector<dcgmGroupEntityPair_t> entities = { entity };
+        std::vector<unsigned short> fieldIds        = { fieldId };
+        DcgmFvBuffer fvBuffer(1024);
+
+        REQUIRE(cm.GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer) == DCGM_ST_OK);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = fvBuffer.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        REQUIRE(fv->entityGroupId == DCGM_FE_LINK);
+        REQUIRE(fv->entityId == entity.entityId);
+        REQUIRE(fv->fieldId == fieldId);
+        REQUIRE(fv->status == DCGM_ST_OK);
+        REQUIRE(fv->value.i64 == DCGM_INT64_NOT_SUPPORTED);
+        REQUIRE(fvBuffer.GetNextFv(&cursor) == nullptr);
+
+        dcgmcm_sample_t sample {};
+        REQUIRE(cm.GetLatestSample(DCGM_FE_LINK, entity.entityId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+        REQUIRE(sample.val.i64 == DCGM_INT64_NOT_SUPPORTED);
+    };
+
+    requireUnsupportedPort(DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY, DCGM_NVLINK_MAX_LINKS_PER_GPU);
+    requireUnsupportedPort(DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT, DCGM_NVLINK_MAX_LINKS_PER_GPU + 1);
 }

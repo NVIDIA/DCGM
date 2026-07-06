@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(adapters)
 add_subdirectory(tests)
 
 target_include_directories(mndiag_interface INTERFACE
@@ -49,6 +50,8 @@ set(SRCS
     MpiRunner.h
     MnDiagMpiRunner.cpp
     MnDiagMpiRunner.h
+    MnDiagMpiMnubergemmRunner.cpp
+    MnDiagMpiMnubergemmRunner.h
     MnDiagStateMachine.cpp
     MnDiagStateMachine.h
     MnDiagProcessUtils.cpp

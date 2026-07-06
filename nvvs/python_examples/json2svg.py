@@ -25,7 +25,10 @@ keys = ''
 
 
 def printUsage():
-    print str(sys.argv[0]) + ' [-i <inputfile>] -o <outputfile> -k <keys (comma separated)>'
+    print(
+        str(sys.argv[0])
+        + ' [-i <inputfile>] -o <outputfile> -k <keys (comma '
+        + 'separated))')
 
 
 def parseArgs(argv):
@@ -67,7 +70,7 @@ def cleanup():
 if __name__ == "__main__":
     parseArgs(sys.argv[1:])
 
-jsonFile = open(inputfile) if inputfile is not "" else sys.stdin
+jsonFile = open(inputfile) if inputfile != "" else sys.stdin
 jsonData = json.load(jsonFile)
 
 keyList = keys.split(",")
@@ -80,14 +83,20 @@ custom_style = Style(
             '#82b414', '#fd971f', '#56c2d6', '#808384', '#8c54fe',
             '#465457'))
 
-lineChart = pygal.Line(x_labels_major_every=10, show_minor_x_labels=False, show_dots=False, legend_font_size=10,
-                       legend_at_bottom=True, style=custom_style, include_x_axis=False)
+lineChart = pygal.Line(
+    x_labels_major_every=10,
+    show_minor_x_labels=False,
+    show_dots=False,
+    legend_font_size=10,
+    legend_at_bottom=True,
+    style=custom_style,
+    include_x_axis=False)
 
 try:
     key = keyList[0]
     lineChart.x_labels = map(str, range(0, len(gpusData["0"][key])))
 except KeyError:
-    print 'Key \"' + key + '\" not found in JSON file.'
+    print('Key \"' + key + '\" not found in JSON file.')
 
 for gpu in gpusData:
     try:
@@ -103,7 +112,7 @@ for gpu in gpusData:
             lineChart.add(str(key) + ' ' + str(gpu),
                           line, secondary=secondaryAxis)
     except KeyError:
-        print 'Key \"' + key + '\" not found in JSON file.'
+        print('Key \"' + key + '\" not found in JSON file.')
 
 lineChart.render_to_file(outputfile)
 

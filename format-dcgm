@@ -25,7 +25,7 @@ fi
 
 function format_cxx() {
     find "${TOP_LEVEL_DIR}" -type f \
-        "(" -name "*.[ch]" -o -name "*.[ch]pp" ")" \
+        "(" -name "*.[ch]" -o -name "*.[ch]pp" -o -name "*.inl" ")" \
         -print0 \
         | xargs -0 -n 1 -P 0 clang-format -i
 }

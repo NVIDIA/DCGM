@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,6 +201,20 @@ namespace Terminal
             return std::nullopt;
         }
         return TermDimensions { w.ws_row, w.ws_col };
+    }
+
+    std::uint16_t ComputeItemsPerLine(std::uint16_t itemWidth,
+                                      std::uint16_t availableWidth,
+                                      std::uint16_t minItems,
+                                      std::uint16_t maxItems)
+    {
+        if (itemWidth == 0 || availableWidth == 0)
+        {
+            return minItems;
+        }
+
+        std::uint16_t computed = availableWidth / itemWidth;
+        return std::clamp<std::uint16_t>(computed, minItems, maxItems);
     }
 } // namespace Terminal
 

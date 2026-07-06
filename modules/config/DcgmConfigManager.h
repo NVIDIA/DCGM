@@ -61,7 +61,6 @@ public:
     }
 };
 
-
 class DcgmConfigManager
 {
 public:
@@ -155,7 +154,7 @@ protected:
                                                 unsigned int (&mergedWorkloadPowerProfiles)[N],
                                                 dcgmcmWorkloadPowerProfile_t &newCmWorkloadPowerProfiles);
 
-private:
+protected:
     /*****************************************************************************
      * Helper method to get target configuration for a GPU ID
      *****************************************************************************/
@@ -232,6 +231,18 @@ private:
      *****************************************************************************/
     void InitAliveEntities();
 
+    /**
+     * Returns the single error code shared by all entries in statusList, or
+     * DCGM_ST_GENERIC_ERROR when entries disagree, the list is null, or empty.
+     */
+    static dcgmReturn_t GetConsistentErrorCode(DcgmConfigManagerStatusList const *statusList);
+
+    unsigned int GetClocksConfigured() const
+    {
+        return mClocksConfigured;
+    }
+
+private:
     /* Array of currently-active target configs. These can be null, so you may have to alloc them */
     dcgmConfig_t *m_activeConfig[DCGM_MAX_NUM_DEVICES];
 

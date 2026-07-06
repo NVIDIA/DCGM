@@ -100,7 +100,7 @@ nvvsPluginResult_t L1TagCuda::GetMaxL1CacheSizePerSM(uint32_t &l1PerSMBytes)
     unsigned int flags               = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
     dcgmFieldValue_v2 cudaComputeVal = {};
     dcgmReturn_t ret
-        = m_dcgmRecorder->GetCurrentFieldValue(m_gpuIndex, DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, cudaComputeVal, flags);
+        = m_dcgmRecorder->GetCurrentFieldValue(m_gpuIndex, DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, cudaComputeVal, flags);
     if (ret != DCGM_ST_OK)
     {
         DcgmError d { m_gpuIndex };

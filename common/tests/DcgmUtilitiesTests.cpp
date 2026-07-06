@@ -18,12 +18,17 @@
 #include <DcgmUtilities.h>
 
 #include <DcgmException.hpp>
+#include <Defer.hpp>
 #include <chrono>
+#include <csignal>
+#include <dlfcn.h>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <set>
 #include <string>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <unordered_set>
 
 #include <catch2/catch_all.hpp>
@@ -261,6 +266,210 @@ TEST_CASE("RunCmdAndGetOutput")
     }
 }
 
+TEST_CASE("Utils: RunCmdAndGetOutputWithTimeout")
+{
+    SECTION("successful command captures stdout")
+    {
+        std::string output;
+
+        auto result
+            = DcgmNs::Utils::RunCmdAndGetOutputWithTimeout("/bin/echo dcgm", output, std::chrono::seconds { 1 });
+
+        REQUIRE(result == DCGM_ST_OK);
+        REQUIRE(output == "dcgm\n");
+    }
+
+    SECTION("non-zero exit is reported as initialization error")
+    {
+        std::string output;
+
+        auto result = DcgmNs::Utils::RunCmdAndGetOutputWithTimeout("/bin/false", output, std::chrono::seconds { 1 });
+
+        REQUIRE(result == DCGM_ST_INIT_ERROR);
+    }
+
+    SECTION("slow command returns timeout")
+    {
+        std::string output;
+
+        auto result
+            = DcgmNs::Utils::RunCmdAndGetOutputWithTimeout("/bin/sleep 1", output, std::chrono::milliseconds { 1 });
+
+        REQUIRE(result == DCGM_ST_TIMEOUT);
+    }
+}
+
+TEST_CASE("Utils: RunCmdHelper wrappers")
+{
+    DcgmNs::Utils::RunCmdHelper helper;
+    std::string output;
+
+    SECTION("GIVEN helper wrapper WHEN command succeeds without timeout THEN output is returned")
+    {
+        REQUIRE(helper.RunCmdAndGetOutput("/bin/echo wrapper", output) == DCGM_ST_OK);
+        CHECK(output == "wrapper\n");
+    }
+
+    SECTION("GIVEN helper wrapper WHEN command succeeds with timeout THEN output is returned")
+    {
+        REQUIRE(helper.RunCmdAndGetOutputWithTimeout("/bin/echo timed", output, std::chrono::seconds { 1 })
+                == DCGM_ST_OK);
+        CHECK(output == "timed\n");
+    }
+}
+
+TEST_CASE("Utils: FileHandle ownership")
+{
+    SECTION("Release abandons ownership")
+    {
+        int fds[2];
+        REQUIRE(pipe(fds) == 0);
+
+        DcgmNs::Utils::FileHandle readFd(fds[0]);
+        DcgmNs::Utils::FileHandle writeFd(fds[1]);
+
+        int rawReadFd = readFd.Release();
+        REQUIRE(rawReadFd == fds[0]);
+        CHECK(readFd.Get() == -1);
+
+        REQUIRE(close(rawReadFd) == 0);
+    }
+
+    SECTION("Move assignment swaps ownership")
+    {
+        int firstPipe[2];
+        int secondPipe[2];
+        REQUIRE(pipe(firstPipe) == 0);
+        REQUIRE(pipe(secondPipe) == 0);
+
+        DcgmNs::Utils::FileHandle firstRead(firstPipe[0]);
+        DcgmNs::Utils::FileHandle firstWrite(firstPipe[1]);
+        DcgmNs::Utils::FileHandle secondRead(secondPipe[0]);
+        DcgmNs::Utils::FileHandle secondWrite(secondPipe[1]);
+
+        int originalFirstRead  = firstRead.Get();
+        int originalSecondRead = secondRead.Get();
+
+        firstRead = std::move(secondRead);
+
+        CHECK(firstRead.Get() == originalSecondRead);
+        CHECK(secondRead.Get() == originalFirstRead);
+    }
+
+    SECTION("GIVEN invalid handle WHEN reading or writing THEN EBADF is reported")
+    {
+        DcgmNs::Utils::FileHandle handle;
+        std::array<std::byte, 4> buffer {};
+
+        CHECK(handle.ReadExact(buffer.data(), buffer.size()) == -1);
+        CHECK(handle.GetErrno() == EBADF);
+        CHECK(handle.Write("x", 1) == -1);
+        CHECK(handle.GetErrno() == EBADF);
+    }
+
+    SECTION("GIVEN pipe-backed handles WHEN reading and writing THEN exact data is transferred")
+    {
+        int fds[2];
+        REQUIRE(pipe(fds) == 0);
+        DcgmNs::Utils::FileHandle readFd(fds[0]);
+        DcgmNs::Utils::FileHandle writeFd(fds[1]);
+        std::array<std::byte, 4> buffer {};
+
+        REQUIRE(writeFd.Write("dcgm", 4) == 4);
+        REQUIRE(readFd.ReadExact(buffer.data(), buffer.size()) == 4);
+        CHECK(std::string(reinterpret_cast<char *>(buffer.data()), buffer.size()) == "dcgm");
+    }
+
+    SECTION("GIVEN EOF before requested bytes WHEN reading exact data THEN zero is returned")
+    {
+        int fds[2];
+        REQUIRE(pipe(fds) == 0);
+        DcgmNs::Utils::FileHandle readFd(fds[0]);
+        DcgmNs::Utils::FileHandle writeFd(fds[1]);
+        std::array<std::byte, 4> buffer {};
+
+        writeFd = DcgmNs::Utils::FileHandle {};
+
+        CHECK(readFd.ReadExact(buffer.data(), buffer.size()) == 0);
+    }
+}
+
+TEST_CASE("Utils: PipePair helpers")
+{
+    SECTION("GIVEN blocking pipe pair WHEN endpoints are borrowed and given up THEN ownership moves")
+    {
+        auto pipePair = DcgmNs::Utils::PipePair::Create(DcgmNs::Utils::PipePair::BlockingType::Blocking);
+        REQUIRE(pipePair != nullptr);
+        REQUIRE(pipePair->BorrowSender().Get() >= 0);
+        REQUIRE(pipePair->BorrowReceiver().Get() >= 0);
+
+        auto sender   = pipePair->GiveupSender();
+        auto receiver = pipePair->GiveupReceiver();
+
+        CHECK(sender.Get() >= 0);
+        CHECK(receiver.Get() >= 0);
+        CHECK(pipePair->BorrowSender().Get() == -1);
+        CHECK(pipePair->BorrowReceiver().Get() == -1);
+    }
+
+    SECTION("GIVEN nonblocking pipe pair WHEN receiver is empty THEN read reports EAGAIN")
+    {
+        auto pipePair = DcgmNs::Utils::PipePair::Create(DcgmNs::Utils::PipePair::BlockingType::NonBlocking);
+        REQUIRE(pipePair != nullptr);
+        std::array<std::byte, 1> buffer {};
+        auto receiver = pipePair->GiveupReceiver();
+
+        CHECK(receiver.ReadExact(buffer.data(), buffer.size()) == -1);
+        CHECK(receiver.GetErrno() == EAGAIN);
+
+        pipePair->CloseSender();
+        CHECK(pipePair->BorrowSender().Get() == -1);
+        CHECK(pipePair->BorrowReceiver().Get() == -1);
+    }
+}
+
+TEST_CASE("Utils: dynamic loading and low-level IO")
+{
+    SECTION("GIVEN missing symbol WHEN loading function THEN nullptr is returned")
+    {
+        void *handle = dlopen(nullptr, RTLD_LAZY);
+        REQUIRE(handle != nullptr);
+
+        CHECK(DcgmNs::Utils::LoadFunction(handle, "dcgm_missing_symbol_for_test", "self") == nullptr);
+    }
+
+    SECTION("GIVEN writable pipe WHEN WriteAll is called THEN all bytes are written")
+    {
+        int fds[2];
+        REQUIRE(pipe(fds) == 0);
+        DcgmNs::Utils::FileHandle readFd(fds[0]);
+        DcgmNs::Utils::FileHandle writeFd(fds[1]);
+        std::array<char, 5> buffer {};
+
+        REQUIRE(DcgmNs::Utils::WriteAll(writeFd.Get(), "hello", 5) == 0);
+        REQUIRE(read(readFd.Get(), buffer.data(), buffer.size()) == static_cast<ssize_t>(buffer.size()));
+        CHECK(std::string(buffer.data(), buffer.size()) == "hello");
+    }
+}
+
+TEST_CASE("Utils: BER and log path helpers")
+{
+    SECTION("GIVEN BER values WHEN parsed and checked THEN threshold rules are applied")
+    {
+        CHECK_FALSE(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(15, 255));
+        CHECK_FALSE(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(1, 12));
+        CHECK(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(2, 12));
+        CHECK_FALSE(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(10, 13));
+        CHECK(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(11, 13));
+        CHECK(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(1, 11));
+
+        auto const [mantissa, exponent, parsed] = DcgmNs::Utils::NvmlBerParser(0);
+        CHECK(mantissa == 0);
+        CHECK(exponent == 0);
+        CHECK(parsed == 0.0);
+    }
+}
+
 TEST_CASE("Utils: FindExecutable", "[DcgmUtilities]")
 {
     // Create a temporary directory and executable for testing
@@ -318,4 +527,96 @@ TEST_CASE("Utils: FindExecutable", "[DcgmUtilities]")
 
     // Cleanup
     std::filesystem::remove_all(tempDir);
+}
+
+TEST_CASE("Utils: IsProcessRunning", "[DcgmUtilities]")
+{
+    SECTION("Invalid PIDs return false")
+    {
+        REQUIRE_FALSE(DcgmNs::Utils::IsProcessRunning(-1));
+        REQUIRE_FALSE(DcgmNs::Utils::IsProcessRunning(0));
+    }
+
+    SECTION("Non-existent PID returns false")
+    {
+        REQUIRE_FALSE(DcgmNs::Utils::IsProcessRunning(999999));
+    }
+
+    SECTION("Current process is running")
+    {
+        REQUIRE(DcgmNs::Utils::IsProcessRunning(getpid()));
+    }
+}
+
+TEST_CASE("Utils: TerminateProcess", "[DcgmUtilities]")
+{
+    SECTION("Invalid PID is a no-op")
+    {
+        auto result
+            = DcgmNs::Utils::TerminateProcess(-1, [](pid_t) { return true; }, 1, std::chrono::milliseconds { 10 });
+        REQUIRE(result == DCGM_ST_OK);
+    }
+
+    SECTION("Already-dead process succeeds immediately")
+    {
+        auto result
+            = DcgmNs::Utils::TerminateProcess(42, [](pid_t) { return false; }, 4, std::chrono::milliseconds { 10 });
+        REQUIRE(result == DCGM_ST_OK);
+    }
+
+    SECTION("Returns DCGM_ST_CHILD_NOT_KILLED when process stays alive")
+    {
+        auto result
+            = DcgmNs::Utils::TerminateProcess(42, [](pid_t) { return true; }, 2, std::chrono::milliseconds { 1 });
+        REQUIRE(result == DCGM_ST_CHILD_NOT_KILLED);
+    }
+
+    SECTION("Process that dies after first signal")
+    {
+        int callCount = 0;
+        auto result   = DcgmNs::Utils::TerminateProcess(
+            42,
+            [&callCount](pid_t) {
+                ++callCount;
+                return callCount <= 1;
+            },
+            4,
+            std::chrono::milliseconds { 1 });
+        REQUIRE(result == DCGM_ST_OK);
+        // 1: loop-check (alive) → send SIGTERM, 2: loop-check (dead) → exit, 3: post-loop check
+        REQUIRE(callCount == 3);
+    }
+}
+
+TEST_CASE("Utils: KillAndReapChild with forked process", "[DcgmUtilities]")
+{
+    pid_t child = fork();
+    REQUIRE(child >= 0);
+
+    if (child == 0)
+    {
+        pause();
+        _exit(0);
+    }
+
+    REQUIRE(kill(child, 0) == 0);
+    DcgmNs::Utils::KillAndReapChild(child, 4, std::chrono::milliseconds { 50 });
+
+    int status;
+    REQUIRE(waitpid(child, &status, WNOHANG) <= 0);
+}
+
+TEST_CASE("Utils: StopProcess", "[DcgmUtilities]")
+{
+    SECTION("Non-existent process returns DCGM_ST_INSTANCE_NOT_FOUND")
+    {
+        auto result = DcgmNs::Utils::StopProcess(999999, 1, std::chrono::milliseconds { 10 });
+        REQUIRE(result == DCGM_ST_INSTANCE_NOT_FOUND);
+    }
+
+    SECTION("Invalid PIDs return DCGM_ST_INSTANCE_NOT_FOUND")
+    {
+        REQUIRE(DcgmNs::Utils::StopProcess(-1, 1, std::chrono::milliseconds { 10 }) == DCGM_ST_INSTANCE_NOT_FOUND);
+        REQUIRE(DcgmNs::Utils::StopProcess(0, 1, std::chrono::milliseconds { 10 }) == DCGM_ST_INSTANCE_NOT_FOUND);
+    }
 }

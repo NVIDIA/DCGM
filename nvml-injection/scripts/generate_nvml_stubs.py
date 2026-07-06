@@ -27,7 +27,8 @@ import logging
 # Regular expression for pulling out the different pieces of the nvml entry points
 # It will match something in the form of:
 # funcname, tsapiFuncname, (argument list), "(argument type matching)", arg1[, arg2, ...])
-# We place funcname, (argument list), and arg1[, arg2, ...] into groups for use later
+# We place funcname, (argument list), and arg1[, arg2, ...] into groups
+# for use later
 preg = re.compile(r"(nvml\w+),[^)]+(\([^)]+\)),\s+\"[^\"]+\",\s+([^)]+)")
 
 MAX_NVML_ARGS = 20
@@ -200,15 +201,20 @@ def get_function_signature(entry_point, first):
     # Remove all line breaks, remove the extra whitespace on the ends, and then get
     # get rid of the parenthesis around the string
     # We are left with something in the form of:
-    # funcname, tsapiFuncname, (argument list), "(argument type matching)", arg1, arg2, ...)
+    # funcname, tsapiFuncname, (argument list), "(argument type matching)",
+    # arg1, arg2, ...)
     entry_point = entry_point.replace('\n', ' ').strip()[1:-1]
     m = preg.search(entry_point)
     if m:
-        return remove_extra_spaces(m.group(1)), remove_extra_spaces(m.group(2)), remove_extra_spaces(m.group(3))
+        return remove_extra_spaces(
+            m.group(1)), remove_extra_spaces(
+            m.group(2)), remove_extra_spaces(
+            m.group(3))
     else:
         if entry_point == "include \"dcgm_nvml.h":
             pass
-        # Ignore errors on the first token because it is everything from before the first entry point
+        # Ignore errors on the first token because it is everything from before
+        # the first entry point
         elif not first:
             print("no match found in entry point = '%s'" % entry_point)
         return None, None, None
@@ -371,7 +377,9 @@ def print_generator_source_info(out_file, indent):
             f"// The following snippet is generated from {function_name}\n")
     else:
         print_body_line(
-            f"// The following snippet is generated from {function_name}", out_file, indent - 1)
+            f"// The following snippet is generated from {function_name}",
+            out_file,
+            indent - 1)
 
 
 def check_and_write_get_string_body(stub_file, key, arg_types, arg_names):
@@ -380,7 +388,8 @@ def check_and_write_get_string_body(stub_file, key, arg_types, arg_names):
 
     # Only handle the following two cases
     # 1. Direct string output (e.g. nvmlDeviceGetVbiosVersion)
-    # 2. Has another extra key and direct string output (e.g. nvmlDeviceGetInforomVersion)
+    # 2. Has another extra key and direct string output (e.g.
+    # nvmlDeviceGetInforomVersion)
     if len(arg_types) != 3 and len(arg_types) != 4:
         return False
 
@@ -396,15 +405,18 @@ def check_and_write_get_string_body(stub_file, key, arg_types, arg_names):
         if arg_types[3] != UINT and arg_types[3] != UINT_PTR:
             return False
 
-    # InjectionNvml::GetString will return a std::string associated with two keys
+    # InjectionNvml::GetString will return a std::string associated with two
+    # keys
     print_generator_source_info(stub_file, 2)
     print_body_line("InjectionArgument arg(%s);" % arg_names[0], stub_file, 1)
     if len(arg_types) == 3:
         print_body_line(
-            "auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, \"%s\");" % (key), stub_file, 1)
+            "auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, \"%s\");" %
+            (key), stub_file, 1)
     if len(arg_types) == 4:
-        print_body_line("auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, \"%s\", InjectionArgument(%s));" %
-                        (key, arg_names[1]), stub_file, 1)
+        print_body_line(
+            "auto [tmpNvmlRet, buf] = injectedNvml->GetString(arg, \"%s\", InjectionArgument(%s));" %
+            (key, arg_names[1]), stub_file, 1)
 
     print_body_line("if (tmpNvmlRet != NVML_SUCCESS)", stub_file, 1)
     print_body_line("{", stub_file, 1)
@@ -503,7 +515,13 @@ def write_auto_generate_py_file_header(out_file):
     out_file.write(auto_generated_notice)
 
 
-def generate_getter_functions(stub_file, funcname, arg_list, arg_types, arg_names, justifyLen):
+def generate_getter_functions(
+        stub_file,
+        funcname,
+        arg_list,
+        arg_types,
+        arg_names,
+        justifyLen):
     generated = True
     key, version = get_function_info_from_name(funcname)
 
@@ -513,15 +531,17 @@ def generate_getter_functions(stub_file, funcname, arg_list, arg_types, arg_name
         print_body_line("{", stub_file, 1)
         print_body_line("return NVML_ERROR_INVALID_ARGUMENT;", stub_file, 2)
         print_body_line("}\n", stub_file, 1)
-        print_body_line("injectedNvml->GetFieldValues(%s, %s, %s);" %
-                        (arg_names[0], arg_names[1], arg_names[2]), stub_file, 1)
+        print_body_line(
+            "injectedNvml->GetFieldValues(%s, %s, %s);" %
+            (arg_names[0], arg_names[1], arg_names[2]), stub_file, 1)
     elif len(arg_types) == 2 and arg_types[1] == NVML_DEVICE_PTR:
         # Device handler getter (e.g. nvmlDeviceGetHandleByIndex)
         print_generator_source_info(stub_file, 2)
         print_body_line("InjectionArgument identifier(%s);" %
                         arg_names[0], stub_file, 1)
-        print_body_line("*%s = injectedNvml->GetNvmlDevice(identifier, \"%s\");" %
-                        (arg_names[1], key), stub_file, 1)
+        print_body_line(
+            "*%s = injectedNvml->GetNvmlDevice(identifier, \"%s\");" %
+            (arg_names[1], key), stub_file, 1)
     elif check_and_write_get_string_body(stub_file, key, arg_types, arg_names):
         pass
     elif len(arg_types) == 1 and is_pointer(arg_types[0]):
@@ -530,13 +550,15 @@ def generate_getter_functions(stub_file, funcname, arg_list, arg_types, arg_name
         print_body_line("InjectionArgument arg(%s);" %
                         arg_names[0], stub_file, 1)
         print_body_line(
-            "arg.SetValueFrom(injectedNvml->ObjectlessGet(\"%s\"));" % (key), stub_file, 1)
+            "arg.SetValueFrom(injectedNvml->ObjectlessGet(\"%s\"));" %
+            (key), stub_file, 1)
     elif len(arg_types) == 2 and arg_types[0] == CHAR and arg_types[1] == UINT:
         # Global string attribute getter (e.g. nvmlSystemGetDriverVersion)
         print_generator_source_info(stub_file, 2)
         lhand = "std::string str"
-        print_body_line("%s = injectedNvml->ObjectlessGet(\"%s\").AsString();" %
-                        (lhand.ljust(justifyLen), key), stub_file, 1)
+        print_body_line(
+            "%s = injectedNvml->ObjectlessGet(\"%s\").AsString();" %
+            (lhand.ljust(justifyLen), key), stub_file, 1)
         print_body_line("snprintf(%s, %s, \"%s\", str.c_str());" %
                         (arg_names[0], arg_names[1], "%s"), stub_file, 1)
     else:
@@ -564,7 +586,8 @@ def is_setter(funcname):
 
 
 def is_event_api(funcname):
-    if funcname.startswith("nvmlSystemEvent") or funcname == "nvmlSystemRegisterEvents":
+    if funcname.startswith(
+            "nvmlSystemEvent") or funcname == "nvmlSystemRegisterEvents":
         return True
     return False
 
@@ -575,7 +598,12 @@ def is_workload_power_profile_api(funcname):
     return False
 
 
-def generate_setter_functions(stub_file, funcname, arg_list, arg_types, arg_names):
+def generate_setter_functions(
+        stub_file,
+        funcname,
+        arg_list,
+        arg_types,
+        arg_names):
     generated = True
     key, version = get_function_info_from_name(funcname)
 
@@ -584,8 +612,9 @@ def generate_setter_functions(stub_file, funcname, arg_list, arg_types, arg_name
         print_generator_source_info(stub_file, 2)
         print_body_line("InjectionArgument value(%s);" %
                         (arg_names[1].strip()), stub_file, 1)
-        print_body_line("return injectedNvml->DeviceSet(%s, \"%s\", {}, NvmlFuncReturn(NVML_SUCCESS, value));" %
-                        (arg_names[0], key), stub_file, 1)
+        print_body_line(
+            "return injectedNvml->DeviceSet(%s, \"%s\", {}, NvmlFuncReturn(NVML_SUCCESS, value));" %
+            (arg_names[0], key), stub_file, 1)
     elif len(arg_types) == 3 and arg_types[0] == NVML_DEVICE:
         if funcname == 'nvmlDeviceSetFanSpeed_v2' or funcname == 'nvmlDeviceSetTemperatureThreshold':
             print_generator_source_info(stub_file, 2)
@@ -594,19 +623,23 @@ def generate_setter_functions(stub_file, funcname, arg_list, arg_types, arg_name
             print_body_line("InjectionArgument value(%s);" %
                             arg_names[2], stub_file, 1)
             print_body_line(
-                "return injectedNvml->DeviceSet(%s, \"%s\", {extraKey}, NvmlFuncReturn(NVML_SUCCESS, value));" % (arg_names[0], key), stub_file, 1)
+                "return injectedNvml->DeviceSet(%s, \"%s\", {extraKey}, NvmlFuncReturn(NVML_SUCCESS, value));" %
+                (arg_names[0], key), stub_file, 1)
         else:
             # Device setter with two values (e.g nvmlDeviceSetGpuLockedClocks)
             print_generator_source_info(stub_file, 2)
             print_body_line(
                 "std::vector<InjectionArgument> preparedValues;", stub_file, 1)
-            print_body_line("preparedValues.push_back(InjectionArgument(%s));" %
-                            arg_names[1].strip(), stub_file, 1)
-            print_body_line("preparedValues.push_back(InjectionArgument(%s));" %
-                            arg_names[2].strip(), stub_file, 1)
+            print_body_line(
+                "preparedValues.push_back(InjectionArgument(%s));" %
+                arg_names[1].strip(), stub_file, 1)
+            print_body_line(
+                "preparedValues.push_back(InjectionArgument(%s));" %
+                arg_names[2].strip(), stub_file, 1)
             print_body_line("CompoundValue cv(preparedValues);", stub_file, 1)
-            print_body_line("return injectedNvml->DeviceSet(%s, \"%s\", {}, NvmlFuncReturn(NVML_SUCCESS, cv));" %
-                            (arg_names[0], key), stub_file, 1)
+            print_body_line(
+                "return injectedNvml->DeviceSet(%s, \"%s\", {}, NvmlFuncReturn(NVML_SUCCESS, cv));" %
+                (arg_names[0], key), stub_file, 1)
     else:
         generated = False
         print_ungenerated_function(funcname, arg_types)
@@ -614,7 +647,12 @@ def generate_setter_functions(stub_file, funcname, arg_list, arg_types, arg_name
     return generated
 
 
-def generate_event_api_functions(stub_file, funcname, arg_list, arg_types, arg_names):
+def generate_event_api_functions(
+        stub_file,
+        funcname,
+        arg_list,
+        arg_types,
+        arg_names):
     generated = True
     key, version = get_function_info_from_name(funcname)
 
@@ -626,7 +664,9 @@ def generate_event_api_functions(stub_file, funcname, arg_list, arg_types, arg_n
         print_body_line("args.push_back(InjectionArgument(%s));" %
                         arg_names[0], stub_file, 1)
         print_body_line(
-            f"return injectedNvml->EventApiWrapper(__func__, \"{key}\", args, preparedValues);", stub_file, 1)
+            f"return injectedNvml->EventApiWrapper(__func__, \"{key}\", args, preparedValues);",
+            stub_file,
+            1)
     else:
         generated = False
 
@@ -640,13 +680,54 @@ cant_generate = [
 ]
 
 
-def generate_injection_function(stub_file, funcname, arg_list, arg_types, arg_names, justifyLen):
+def is_gpm_function(func_name):
+    # nvmlGpmQueryDeviceSupport is device function and is handled well in
+    # regular device functions.
+    return func_name.startswith(
+        "nvmlGpm") and func_name != "nvmlGpmQueryDeviceSupport"
+
+
+def generate_gpm_functions(
+        stub_file,
+        arg_types,
+        arg_names):
+    generated = True
+    print_generator_source_info(stub_file, 2)
+    print_body_line("std::vector<InjectionArgument> args;", stub_file, 1)
+    print_body_line(
+        "std::vector<InjectionArgument> preparedValues;", stub_file, 1)
+    for arg_type, arg_name in zip(arg_types, arg_names):
+        if is_pointer_type(arg_type):
+            print_body_line(
+                "preparedValues.push_back(InjectionArgument(%s));" %
+                arg_name.strip(), stub_file, 1)
+        else:
+            print_body_line(
+                "args.push_back(InjectionArgument(%s));" %
+                arg_name.strip(), stub_file, 1)
+    print_body_line(
+        f"return injectedNvml->GpmApiWrapper(__func__, args, preparedValues);",
+        stub_file,
+        1)
+    return generated
+
+
+def generate_injection_function(
+        stub_file,
+        funcname,
+        arg_list,
+        arg_types,
+        arg_names,
+        justifyLen):
     if funcname in cant_generate:
         return False
 
     generated = False
 
-    if is_event_api(funcname):
+    if is_gpm_function(funcname):
+        generated = generate_gpm_functions(
+            stub_file, arg_types, arg_names)
+    elif is_event_api(funcname):
         generated = generate_event_api_functions(
             stub_file, funcname, arg_list, arg_types, arg_names)
     elif is_getter(funcname) or is_workload_power_profile_api(funcname):
@@ -725,10 +806,17 @@ def write_function(stub_file, funcinfo, all_functypes):
     print_body_line("}", stub_file, 1)
     print_body_line("injectedNvml->AddFuncCallCount(\"%s\");" %
                     funcname, stub_file, 1)
-    if generate_injection_function(stub_file, funcname, arg_list, arg_types, arguments, len(start)):
+    if generate_injection_function(
+            stub_file,
+            funcname,
+            arg_list,
+            arg_types,
+            arguments,
+            len(start)):
         generated = True
     else:
-        # General case, we put all non-pointer args into args and treat all pointer args as values
+        # General case, we put all non-pointer args into args and treat all
+        # pointer args as values
         print_generator_source_info(stub_file, 2)
         print_body_line("std::vector<InjectionArgument> args;", stub_file, 1)
         print_body_line(
@@ -737,30 +825,40 @@ def write_function(stub_file, funcinfo, all_functypes):
             argument = arguments[i]
             if is_pointer_type(arg_types[i]):
                 print_body_line(
-                    "preparedValues.push_back(InjectionArgument(%s));" % argument.strip(), stub_file, 1)
+                    "preparedValues.push_back(InjectionArgument(%s));" %
+                    argument.strip(), stub_file, 1)
             else:
-                if arg_types[i] != "unsigned int" or not arg_is_count(argument):
+                if arg_types[i] != "unsigned int" or not arg_is_count(
+                        argument):
                     # We should skip the buffer length as it is used for buffer validation not the actual function arg
-                    # e.g. in nvmlDeviceGetInforomImageVersion, we should not push length in args
+                    # e.g. in nvmlDeviceGetInforomImageVersion, we should not
+                    # push length in args
                     print_body_line(
-                        "args.push_back(InjectionArgument(%s));" % argument.strip(), stub_file, 1)
+                        "args.push_back(InjectionArgument(%s));" %
+                        argument.strip(), stub_file, 1)
 
         stub_file.write("\n")
         print_body_line("if (injectedNvml->IsGetter(__func__))", stub_file, 1)
         print_body_line("{", stub_file, 1)
         print_body_line(
-            f"return injectedNvml->GetWrapper(__func__, \"{key}\", args, preparedValues);", stub_file, 2)
+            f"return injectedNvml->GetWrapper(__func__, \"{key}\", args, preparedValues);",
+            stub_file,
+            2)
         print_body_line("}", stub_file, 1)
         print_body_line(
             "else if (injectedNvml->IsEventApi(__func__))", stub_file, 1)
         print_body_line("{", stub_file, 1)
         print_body_line(
-            f"return injectedNvml->EventApiWrapper(__func__, \"{key}\", args, preparedValues);", stub_file, 2)
+            f"return injectedNvml->EventApiWrapper(__func__, \"{key}\", args, preparedValues);",
+            stub_file,
+            2)
         print_body_line("}", stub_file, 1)
         print_body_line("else", stub_file, 1)
         print_body_line("{", stub_file, 1)
         print_body_line(
-            f"return injectedNvml->SetWrapper(__func__, \"{key}\", args, preparedValues);", stub_file, 2)
+            f"return injectedNvml->SetWrapper(__func__, \"{key}\", args, preparedValues);",
+            stub_file,
+            2)
         print_body_line("}", stub_file, 1)
     print_body_line("}", stub_file, 0)
     print_body_line("return NVML_SUCCESS;", stub_file, 0)
@@ -827,15 +925,17 @@ def build_argument_type_list(arg_list, all_argument_types):
 
     for arg_type in argument_types:
         check_type = get_true_arg_type(arg_type)
-        # skip nvmlProcessInfo_t as nvmlProcessInfo_v2_t and nvmlProcessInfo_t are the same
+        # skip nvmlProcessInfo_t as nvmlProcessInfo_v2_t and nvmlProcessInfo_t
+        # are the same
         if remove_ptr_if_any(check_type) in duplicate_types:
             continue
         if check_type not in all_argument_types:
             all_argument_types.append(check_type)
         # also build non-pointer version in InjectionArgument for easier use.
-        # but skip const char and const nvmlGpuInstancePlacement_t as const member in union is strange
-        if remove_ptr_if_any(check_type) not in all_argument_types and\
-                remove_ptr_if_any(check_type) != "const char" and remove_ptr_if_any(check_type) != "const nvmlGpuInstancePlacement_t":
+        # but skip const char and const nvmlGpuInstancePlacement_t as const
+        # member in union is strange
+        if remove_ptr_if_any(check_type) not in all_argument_types and remove_ptr_if_any(
+                check_type) != "const char" and remove_ptr_if_any(check_type) != "const nvmlGpuInstancePlacement_t":
             all_argument_types.append(remove_ptr_if_any(check_type))
 
     return argument_types
@@ -882,7 +982,13 @@ def get_enum_name(arg_type, const=False):
     return ret, ptr_ret
 
 
-def print_memcpy(fileHandle, indentLevel, destName, srcName, destIsPtr, srcIsPtr):
+def print_memcpy(
+        fileHandle,
+        indentLevel,
+        destName,
+        srcName,
+        destIsPtr,
+        srcIsPtr):
     src = ''
     dst = ''
     sizeof = ''
@@ -915,7 +1021,9 @@ def write_string_case_entry(injectionCpp):
     print_body_line('set         = true;', injectionCpp, 3)
     print_body_line('}', injectionCpp, 2)
     print_body_line(
-        'else if (other.m_type == INJECTION_CHAR_PTR && other.m_value.Str != nullptr)', injectionCpp, 2)
+        'else if (other.m_type == INJECTION_CHAR_PTR && other.m_value.Str != nullptr)',
+        injectionCpp,
+        2)
     print_body_line('{', injectionCpp, 2)
     print_body_line('this->m_str = other.m_value.Str;', injectionCpp, 3)
     print_body_line('set         = true;', injectionCpp, 3)
@@ -952,34 +1060,50 @@ def write_set_value_from_case_entry(injectionCpp, struct_name, all_enum):
         # Add method to convert int to uint
         print_generator_source_info(injectionCpp, 3)
         print_body_line(
-            f'else if (other.m_type == INJECTION_INT && other.m_value.{int_variable_name} > 0)', injectionCpp, 2)
+            f'else if (other.m_type == INJECTION_INT && other.m_value.{int_variable_name} > 0)',
+            injectionCpp,
+            2)
         print_body_line('{', injectionCpp, 2)
         print_body_line(
-            f'this->m_value.{uint_variable_name} = other.m_value.{int_variable_name};', injectionCpp, 3)
+            f'this->m_value.{uint_variable_name} = other.m_value.{int_variable_name};',
+            injectionCpp,
+            3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
         print_body_line(
-            f'else if (other.m_type == INJECTION_INT_PTR && *other.m_value.{int_variable_name_ptr} > 0)', injectionCpp, 2)
+            f'else if (other.m_type == INJECTION_INT_PTR && *other.m_value.{int_variable_name_ptr} > 0)',
+            injectionCpp,
+            2)
         print_body_line('{', injectionCpp, 2)
         print_body_line(
-            f'this->m_value.{uint_variable_name} = *other.m_value.{int_variable_name_ptr};', injectionCpp, 3)
+            f'this->m_value.{uint_variable_name} = *other.m_value.{int_variable_name_ptr};',
+            injectionCpp,
+            3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
     elif enum_name == 'INJECTION_INT':
         # Add method to convert uint to int
         print_generator_source_info(injectionCpp, 3)
         print_body_line(
-            f'else if (other.m_type == INJECTION_UINT && other.m_value.{uint_variable_name} <= INT_MAX)', injectionCpp, 2)
+            f'else if (other.m_type == INJECTION_UINT && other.m_value.{uint_variable_name} <= INT_MAX)',
+            injectionCpp,
+            2)
         print_body_line('{', injectionCpp, 2)
         print_body_line(
-            f'this->m_value.{int_variable_name} = other.m_value.{uint_variable_name};', injectionCpp, 3)
+            f'this->m_value.{int_variable_name} = other.m_value.{uint_variable_name};',
+            injectionCpp,
+            3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
         print_body_line(
-            f'else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.{uint_variable_name_ptr} <= INT_MAX)', injectionCpp, 2)
+            f'else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.{uint_variable_name_ptr} <= INT_MAX)',
+            injectionCpp,
+            2)
         print_body_line('{', injectionCpp, 2)
         print_body_line(
-            f'this->m_value.{int_variable_name} = *other.m_value.{uint_variable_name_ptr};', injectionCpp, 3)
+            f'this->m_value.{int_variable_name} = *other.m_value.{uint_variable_name_ptr};',
+            injectionCpp,
+            3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
     print_body_line('break;', injectionCpp, 2)
@@ -1006,34 +1130,50 @@ def write_set_value_from_case_entry(injectionCpp, struct_name, all_enum):
         # Add method to convert int to uint pointer
         print_generator_source_info(injectionCpp, 3)
         print_body_line(
-            f'else if (other.m_type == INJECTION_INT && other.m_value.{int_variable_name} > 0)', injectionCpp, 2)
+            f'else if (other.m_type == INJECTION_INT && other.m_value.{int_variable_name} > 0)',
+            injectionCpp,
+            2)
         print_body_line('{', injectionCpp, 2)
         print_body_line(
-            f'*this->m_value.{uint_variable_name_ptr} = other.m_value.{int_variable_name};', injectionCpp, 3)
+            f'*this->m_value.{uint_variable_name_ptr} = other.m_value.{int_variable_name};',
+            injectionCpp,
+            3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
         print_body_line(
-            f'else if (other.m_type == INJECTION_INT_PTR && *other.m_value.{int_variable_name_ptr} > 0)', injectionCpp, 2)
+            f'else if (other.m_type == INJECTION_INT_PTR && *other.m_value.{int_variable_name_ptr} > 0)',
+            injectionCpp,
+            2)
         print_body_line('{', injectionCpp, 2)
         print_body_line(
-            f'*this->m_value.{uint_variable_name_ptr} = *other.m_value.{int_variable_name_ptr};', injectionCpp, 3)
+            f'*this->m_value.{uint_variable_name_ptr} = *other.m_value.{int_variable_name_ptr};',
+            injectionCpp,
+            3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
     elif enum_nam_ptr == 'INJECTION_INT_PTR':
         # Add method to convert uint to int pointer
         print_generator_source_info(injectionCpp, 3)
         print_body_line(
-            f'else if (other.m_type == INJECTION_UINT && other.m_value.{uint_variable_name} <= INT_MAX)', injectionCpp, 2)
+            f'else if (other.m_type == INJECTION_UINT && other.m_value.{uint_variable_name} <= INT_MAX)',
+            injectionCpp,
+            2)
         print_body_line('{', injectionCpp, 2)
         print_body_line(
-            f'*this->m_value.{int_variable_name_ptr} = other.m_value.{uint_variable_name};', injectionCpp, 3)
+            f'*this->m_value.{int_variable_name_ptr} = other.m_value.{uint_variable_name};',
+            injectionCpp,
+            3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
         print_body_line(
-            f'else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.{uint_variable_name_ptr} <= INT_MAX)', injectionCpp, 2)
+            f'else if (other.m_type == INJECTION_UINT_PTR && *other.m_value.{uint_variable_name_ptr} <= INT_MAX)',
+            injectionCpp,
+            2)
         print_body_line('{', injectionCpp, 2)
         print_body_line(
-            f'*this->m_value.{int_variable_name_ptr} = *other.m_value.{uint_variable_name_ptr};', injectionCpp, 3)
+            f'*this->m_value.{int_variable_name_ptr} = *other.m_value.{uint_variable_name_ptr};',
+            injectionCpp,
+            3)
         print_body_line('set = true;', injectionCpp, 3)
         print_body_line('}', injectionCpp, 2)
     print_body_line('break;', injectionCpp, 2)
@@ -1085,7 +1225,16 @@ def struct_compare_func_name(struct_name):
 
 
 def get_cannot_compare_struct_set():
-    return {"nvmlSystemEventSet_t", "nvmlSystemEventSetCreateRequest_t", "nvmlSystemEventSetFreeRequest_t", "nvmlSystemRegisterEventRequest_t", "nvmlSystemEventSetWaitRequest_t", "nvmlGpuThermalSettings_t", "nvmlGpuDynamicPstatesInfo_t", "nvmlGpmMetric_t", "nvmlGpmMetricsGet_t"}
+    return {
+        "nvmlSystemEventSet_t",
+        "nvmlSystemEventSetCreateRequest_t",
+        "nvmlSystemEventSetFreeRequest_t",
+        "nvmlSystemRegisterEventRequest_t",
+        "nvmlSystemEventSetWaitRequest_t",
+        "nvmlGpuThermalSettings_t",
+        "nvmlGpuDynamicPstatesInfo_t",
+        "nvmlGpmMetric_t",
+        "nvmlGpmMetricsGet_t"}
 
 
 def write_struct_compare_declare(out_file, struct_with_member, all_enum):
@@ -1110,12 +1259,17 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
         for member_type, member_name in member_list:
             if member_type == "nvmlVgpuSchedulerParams_t" or member_type == "nvmlVgpuSchedulerSetParams_t":
                 print_body_line(
-                    f'NVML_LOG_ERR("{member_type} conatins union, and cannot compare now. May cause problems...");', out_file, 0)
+                    f'NVML_LOG_ERR("{member_type} conatins union, and cannot compare now. May cause problems...");',
+                    out_file,
+                    0)
             elif "union nvmlPRMTLV_v1_t::" in member_type:
-                # The union cannot be generated automatically, write it manually.
+                # The union cannot be generated automatically, write it
+                # manually.
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    "if (auto cmpRet = memcmp(a.inData, b.inData, sizeof(a.inData)); cmpRet != 0)", out_file, 0)
+                    "if (auto cmpRet = memcmp(a.inData, b.inData, sizeof(a.inData)); cmpRet != 0)",
+                    out_file,
+                    0)
                 print_body_line("{", out_file, 0)
                 print_body_line("return cmpRet;", out_file, 1)
                 print_body_line("}", out_file, 0)
@@ -1132,7 +1286,9 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
                 # byte-array type uses memcmp
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f"if (auto ret = memcmp(a.{member_name}, b.{member_name}, sizeof(a.{member_name})); ret)", out_file, 0)
+                    f"if (auto ret = memcmp(a.{member_name}, b.{member_name}, sizeof(a.{member_name})); ret)",
+                    out_file,
+                    0)
                 print_body_line("{", out_file, 0)
                 print_body_line("return ret;", out_file, 1)
                 print_body_line("}", out_file, 0)
@@ -1140,7 +1296,9 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
                 # c-string type uses strcmp
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f"if (auto ret = strcmp(a.{member_name}, b.{member_name}); ret)", out_file, 0)
+                    f"if (auto ret = strcmp(a.{member_name}, b.{member_name}); ret)",
+                    out_file,
+                    0)
                 print_body_line("{", out_file, 0)
                 print_body_line("return ret;", out_file, 1)
                 print_body_line("}", out_file, 0)
@@ -1148,7 +1306,9 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
                 # nvmlValue_t type uses memcmp
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f"if (auto ret = memcmp(&a.{member_name}, &b.{member_name}, sizeof(a.{member_name})); ret)", out_file, 0)
+                    f"if (auto ret = memcmp(&a.{member_name}, &b.{member_name}, sizeof(a.{member_name})); ret)",
+                    out_file,
+                    0)
                 print_body_line("{", out_file, 0)
                 print_body_line("return ret;", out_file, 1)
                 print_body_line("}", out_file, 0)
@@ -1157,7 +1317,9 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
                 print_generator_source_info(out_file, 1)
                 pure_type = member_type.split("[")[0]
                 print_body_line(
-                    f"for (unsigned int i = 0; i < sizeof(a.{member_name}) / sizeof(a.{member_name}[0]); ++i)", out_file, 0)
+                    f"for (unsigned int i = 0; i < sizeof(a.{member_name}) / sizeof(a.{member_name}[0]); ++i)",
+                    out_file,
+                    0)
                 print_body_line("{", out_file, 0)
                 if is_basic_type(pure_type):
                     # basic type directly compares the value
@@ -1168,10 +1330,13 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
                         f"return a.{member_name}[i] < b.{member_name}[i] ? -1 : 1;", out_file, 2)
                     print_body_line("}", out_file, 1)
                 else:
-                    # call the appropriate compare function to compare if the array elemenet is another struct
+                    # call the appropriate compare function to compare if the
+                    # array elemenet is another struct
                     compare_func_name = struct_compare_func_name(pure_type)
                     print_body_line(
-                        f"if (auto ret = {compare_func_name}(a.{member_name}[i], b.{member_name}[i]); ret)", out_file, 1)
+                        f"if (auto ret = {compare_func_name}(a.{member_name}[i], b.{member_name}[i]); ret)",
+                        out_file,
+                        1)
                     print_body_line("{", out_file, 1)
                     print_body_line(f"return ret;", out_file, 2)
                     print_body_line("}", out_file, 1)
@@ -1185,21 +1350,27 @@ def write_struct_compare_definition(out_file, struct_with_member, all_enum):
                     f"return *a.{member_name} < *b.{member_name};", out_file, 1)
                 print_body_line("}", out_file, 0)
             elif is_pointer_type(member_type):
-                # call the appropriate compare function to compare for member type is another struct
+                # call the appropriate compare function to compare for member
+                # type is another struct
                 compare_func_name = struct_compare_func_name(
                     remove_ptr_if_any(member_type))
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f"if (auto ret = {compare_func_name}(*a.{member_name}, *b.{member_name}); ret)", out_file, 0)
+                    f"if (auto ret = {compare_func_name}(*a.{member_name}, *b.{member_name}); ret)",
+                    out_file,
+                    0)
                 print_body_line("{", out_file, 0)
                 print_body_line(f"return ret;", out_file, 1)
                 print_body_line("}", out_file, 0)
             else:
-                # call the appropriate compare function to compare for member type is another struct
+                # call the appropriate compare function to compare for member
+                # type is another struct
                 compare_func_name = struct_compare_func_name(member_type)
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f"if (auto ret = {compare_func_name}(a.{member_name}, b.{member_name}); ret)", out_file, 0)
+                    f"if (auto ret = {compare_func_name}(a.{member_name}, b.{member_name}); ret)",
+                    out_file,
+                    0)
                 print_body_line("{", out_file, 0)
                 print_body_line(f"return ret;", out_file, 1)
                 print_body_line("}", out_file, 0)
@@ -1241,7 +1412,9 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
         'else if (m_type == INJECTION_CONST_CHAR_PTR)', out_file, 1)
     print_body_line('{', out_file, 1)
     print_body_line(
-        'return strcmp(m_value.ConstStr, other.m_value.ConstStr);', out_file, 2)
+        'return strcmp(m_value.ConstStr, other.m_value.ConstStr);',
+        out_file,
+        2)
     print_body_line('}', out_file, 1)
     print_body_line('else', out_file, 1)
     print_body_line('{', out_file, 1)
@@ -1266,13 +1439,16 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
             print_generator_source_info(out_file, 5)
             print_body_line('if (!m_isArray)', out_file, 4)
             print_body_line('{', out_file, 4)
-            print_body_line('if (*m_value.%s == *other.m_value.%s)' %
-                            (variable_name_ptr, variable_name_ptr), out_file, 5)
+            print_body_line(
+                'if (*m_value.%s == *other.m_value.%s)' %
+                (variable_name_ptr, variable_name_ptr), out_file, 5)
             print_body_line('{', out_file, 5)
             print_body_line('return 0;', out_file, 6)
             print_body_line('}', out_file, 5)
             print_body_line(
-                f'return *m_value.{variable_name_ptr} < *other.m_value.{variable_name_ptr} ? -1 : 1;', out_file, 5)
+                f'return *m_value.{variable_name_ptr} < *other.m_value.{variable_name_ptr} ? -1 : 1;',
+                out_file,
+                5)
             print_body_line('}', out_file, 4)
             print_body_line(
                 'for (unsigned i = 0; i < m_arrLen; ++i)', out_file, 4)
@@ -1283,16 +1459,21 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
             print_body_line('continue;', out_file, 6)
             print_body_line('}', out_file, 5)
             print_body_line(
-                f'return m_value.{variable_name_ptr}[i] < other.m_value.{variable_name_ptr}[i] ? -1 : 1;', out_file, 5)
+                f'return m_value.{variable_name_ptr}[i] < other.m_value.{variable_name_ptr}[i] ? -1 : 1;',
+                out_file,
+                5)
             print_body_line('}', out_file, 4)
             print_body_line(f'return 0;', out_file, 4)
         elif remove_ptr_if_any(type_name) == "nvmlDevice_t" or remove_ptr_if_any(type_name) == "nvmlComputeInstance_t" or remove_ptr_if_any(type_name) == "nvmlEventSet_t" or remove_ptr_if_any(type_name) == "nvmlGpmMetricsGet_t" or remove_ptr_if_any(type_name) == "nvmlGpmSample_t" or remove_ptr_if_any(type_name) == "nvmlGpuDynamicPstatesInfo_t" or remove_ptr_if_any(type_name) == "nvmlGpuInstance_t" or remove_ptr_if_any(type_name) == "nvmlGpuThermalSettings_t" or remove_ptr_if_any(type_name) == "nvmlUnit_t" or type_name == "nvmlGpmMetric_t" or remove_ptr_if_any(type_name) in get_cannot_compare_struct_set():
-            # Listed types are not well-defined or may have inner struct defined, use memcmp for them
+            # Listed types are not well-defined or may have inner struct
+            # defined, use memcmp for them
             print_generator_source_info(out_file, 5)
             print_body_line(
                 'unsigned size = m_isArray ? m_arrLen : 1;', out_file, 4)
             print_body_line(
-                f'return memcmp(m_value.{variable_name_ptr}, other.m_value.{variable_name_ptr}, size * sizeof(*m_value.{variable_name_ptr}));', out_file, 4)
+                f'return memcmp(m_value.{variable_name_ptr}, other.m_value.{variable_name_ptr}, size * sizeof(*m_value.{variable_name_ptr}));',
+                out_file,
+                4)
         else:
             # Otherwise use generated compare function to check
             print_generator_source_info(out_file, 5)
@@ -1302,14 +1483,17 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
                 compare_func = compare_func[6:]
             print_body_line('if (!m_isArray)', out_file, 4)
             print_body_line('{', out_file, 4)
-            print_body_line(f'return {compare_func}(*m_value.%s, *other.m_value.%s);' % (
-                variable_name_ptr, variable_name_ptr), out_file, 5)
+            print_body_line(
+                f'return {compare_func}(*m_value.%s, *other.m_value.%s);' %
+                (variable_name_ptr, variable_name_ptr), out_file, 5)
             print_body_line('}', out_file, 4)
             print_body_line(
                 'for (unsigned i = 0; i < m_arrLen; ++i)', out_file, 4)
             print_body_line('{', out_file, 4)
             print_body_line(
-                f'if (auto ret = {compare_func}(*m_value.{variable_name_ptr}, *other.m_value.{variable_name_ptr}); ret)', out_file, 5)
+                f'if (auto ret = {compare_func}(*m_value.{variable_name_ptr}, *other.m_value.{variable_name_ptr}); ret)',
+                out_file,
+                5)
             print_body_line('{', out_file, 5)
             print_body_line('return ret;', out_file, 6)
             print_body_line('}', out_file, 5)
@@ -1321,9 +1505,12 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
         # non-pointer case
         print_body_line('case %s:' % enum_name, out_file, 3)
         print_body_line('{', out_file, 3)
-        if is_basic_type(type_name) or is_enum_type(type_name, all_enum) or type_name == "nvmlDevice_t" or type_name == "nvmlComputeInstance_t":
+        if is_basic_type(type_name) or is_enum_type(
+                type_name,
+                all_enum) or type_name == "nvmlDevice_t" or type_name == "nvmlComputeInstance_t":
             # Basic type directly compares
-            # Note: nvmlDevice_t and nvmlComputeInstance_t are number in our implementation
+            # Note: nvmlDevice_t and nvmlComputeInstance_t are number in our
+            # implementation
             print_generator_source_info(out_file, 5)
             print_body_line('if (m_value.%s < other.m_value.%s)' %
                             (variable_name, variable_name), out_file, 4)
@@ -1340,10 +1527,13 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
             print_body_line('return 0;', out_file, 5)
             print_body_line('}', out_file, 4)
         elif type_name == "nvmlEventSet_t" or type_name == "nvmlGpmMetricsGet_t" or type_name == "nvmlGpmSample_t" or type_name == "nvmlGpuDynamicPstatesInfo_t" or type_name == "nvmlGpuInstance_t" or type_name == "nvmlGpuThermalSettings_t" or type_name == "nvmlUnit_t" or type_name == "nvmlGpmMetric_t" or type_name in get_cannot_compare_struct_set():
-            # Listed types are not well-defined or may have inner struct defined, use memcmp for them
+            # Listed types are not well-defined or may have inner struct
+            # defined, use memcmp for them
             print_generator_source_info(out_file, 5)
             print_body_line(
-                f'return memcmp(&m_value.{variable_name}, &other.m_value.{variable_name}, sizeof(m_value.{variable_name}));', out_file, 4)
+                f'return memcmp(&m_value.{variable_name}, &other.m_value.{variable_name}, sizeof(m_value.{variable_name}));',
+                out_file,
+                4)
         else:
             # Otherwise use generated compare function to check
             print_generator_source_info(out_file, 5)
@@ -1351,8 +1541,9 @@ def write_injection_argument_compare(out_file, struct_with_member, all_enum):
                 remove_ptr_if_any(type_name))
             if compare_func.startswith('const '):
                 compare_func = compare_func[6:]
-            print_body_line(f'return {compare_func}(m_value.%s, other.m_value.%s);' % (
-                variable_name, variable_name), out_file, 4)
+            print_body_line(
+                f'return {compare_func}(m_value.%s, other.m_value.%s);' %
+                (variable_name, variable_name), out_file, 4)
         print_body_line('break; // NOT REACHED', out_file, 4)
         print_body_line('}', out_file, 3)
     print_body_line('default:', out_file, 3)
@@ -1531,7 +1722,11 @@ def get_struct_variable_name(struct_name, const=False):
 
 
 def get_handlers():
-    return [NVML_DEVICE, "nvmlGpuInstance_t", "nvmlComputeInstance_t", "nvmlUnit_t"]
+    return [
+        NVML_DEVICE,
+        "nvmlGpuInstance_t",
+        "nvmlComputeInstance_t",
+        "nvmlUnit_t"]
 
 
 def get_const_type():
@@ -1577,7 +1772,8 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"moduleId\", c_char),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
-        # PyNVML's c_nvmlGpuFabricInfo_t is wrong. We define correct version here.
+        # PyNVML's c_nvmlGpuFabricInfo_t is wrong. We define correct version
+        # here.
         print_body_line(
             'class c_nvmlGpuFabricInfo_t_dcgm_ver(Structure):', out_file, 0)
         print_body_line("_fields_ = [", out_file, 1)
@@ -1587,7 +1783,8 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"state\", c_ubyte),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
-        # PyNVML's c_nvmlGpuFabricInfoV_t is wrong. We define correct version here.
+        # PyNVML's c_nvmlGpuFabricInfoV_t is wrong. We define correct version
+        # here.
 
         print_body_line(
             'class c_nvmlGpuFabricInfoV_t_dcgm_ver(Structure):', out_file, 0)
@@ -1598,9 +1795,11 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"cliqueId\", c_uint),", out_file, 2)
         print_body_line("(\"state\", c_ubyte),", out_file, 2)
         print_body_line("(\"healthMask\", c_uint),", out_file, 2)
+        print_body_line("(\"healthSummary\", c_ubyte),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
-        # PyNVML does not define c_nvmlPlatformInfo_t yet. Define separately here.
+        # PyNVML does not define c_nvmlPlatformInfo_t yet. Define separately
+        # here.
         print_body_line(
             'class c_nvmlPlatformInfo_v1_t(Structure):', out_file, 0)
         print_body_line("_fields_ = [", out_file, 1)
@@ -1615,18 +1814,24 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
         print_body_line("(\"moduleId\", c_char),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
-        # PyNVML does not define c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t. Define separately here.
+        # PyNVML does not define c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t.
+        # Define separately here.
         print_body_line(
-            'class c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t(Structure):', out_file, 0)
+            'class c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t(Structure):',
+            out_file,
+            0)
         print_body_line("_fields_ = [", out_file, 1)
         print_body_line("(\"operation\", c_int),", out_file, 2)
         print_body_line(
             "(\"updateProfilesMask\", c_nvmlMask255_t),", out_file, 2)
         print_body_line("]\n", out_file, 1)
 
-        # PyNVML does not define c_nvmlUnrepairableMemoryStatus_v1_t. Define separately here.
+        # PyNVML does not define c_nvmlUnrepairableMemoryStatus_v1_t. Define
+        # separately here.
         print_body_line(
-            'class c_nvmlUnrepairableMemoryStatus_v1_t(Structure):', out_file, 0)
+            'class c_nvmlUnrepairableMemoryStatus_v1_t(Structure):',
+            out_file,
+            0)
         print_body_line("_fields_ = [", out_file, 1)
         print_body_line("(\"version\", c_uint),", out_file, 2)
         print_body_line("(\"bUnrepairableMemory\", c_uint),", out_file, 2)
@@ -1640,7 +1845,8 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
             print_body_line(
                 f"(\"{variable_name_ptr}\", c_void_p),", out_file, 2)
             if is_pynvml_missing_struct(struct_name):
-                # we don't know the structure declarition now, comment out and wait for PyNVML updates.
+                # we don't know the structure declarition now, comment out and
+                # wait for PyNVML updates.
                 print_body_line(
                     f"# (\"{variable_name}\", c_{struct_name}),", out_file, 2)
             elif struct_name == "nvmlDeviceAttributes_t" or struct_name == "nvmlRowRemapperHistogramValues_t":
@@ -1662,11 +1868,13 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
                 print_body_line(
                     f"(\"{variable_name}\", {struct_name}),", out_file, 2)
             elif struct_name == "nvmlGpuFabricInfo_t":
-                # nvmlGpuFabricInfo_t is wrong in PyNVML, use our own definition
+                # nvmlGpuFabricInfo_t is wrong in PyNVML, use our own
+                # definition
                 print_body_line(
                     f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
             elif struct_name == "nvmlGpuFabricInfoV_t":
-                # nvmlGpuFabricInfoV_t is wrong in PyNVML, use our own definition
+                # nvmlGpuFabricInfoV_t is wrong in PyNVML, use our own
+                # definition
                 print_body_line(
                     f"(\"{variable_name}\", c_{struct_name}_dcgm_ver),", out_file, 2)
             elif struct_name == "nvmlPlatformInfo_t":
@@ -1682,29 +1890,44 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
                 print_body_line(
                     f"(\"{variable_name}\", c_nvmlEccSramErrorStatus_v1_t),", out_file, 2)
             elif struct_name == "nvmlUnrepairableMemoryStatus_t":
-                # nvmlUnrepairableMemoryStatus_t is defined in nvml_injection_structs.py as c_nvmlUnrepairableMemoryStatus_v1_t
+                # nvmlUnrepairableMemoryStatus_t is defined in
+                # nvml_injection_structs.py as
+                # c_nvmlUnrepairableMemoryStatus_v1_t
                 print_body_line(
-                    f"(\"{variable_name}\", c_nvmlUnrepairableMemoryStatus_v1_t),", out_file, 2)
+                    f"(\"{variable_name}\", c_nvmlUnrepairableMemoryStatus_v1_t),",
+                    out_file,
+                    2)
             elif struct_name == "nvmlWorkloadPowerProfileInfo_t":
                 # nvmlWorkloadPowerProfileInfo_t in PyNVML is c_nvmlWorkloadPowerProfileInfo_v1_t
                 print_body_line(
-                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileInfo_v1_t),", out_file, 2)
+                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileInfo_v1_t),",
+                    out_file,
+                    2)
             elif struct_name == "nvmlWorkloadPowerProfileProfilesInfo_t":
                 # nvmlWorkloadPowerProfileProfilesInfo_t in PyNVML is c_nvmlWorkloadPowerProfileProfilesInfo_v1_t
                 print_body_line(
-                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileProfilesInfo_v1_t),", out_file, 2)
+                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileProfilesInfo_v1_t),",
+                    out_file,
+                    2)
             elif struct_name == "nvmlWorkloadPowerProfileCurrentProfiles_t":
                 # c_nvmlWorkloadPowerProfileCurrentProfiles_t in PyNVML is c_nvmlWorkloadPowerProfileCurrentProfiles_v1_t
                 print_body_line(
-                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileCurrentProfiles_v1_t),", out_file, 2)
+                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileCurrentProfiles_v1_t),",
+                    out_file,
+                    2)
             elif struct_name == "nvmlWorkloadPowerProfileRequestedProfiles_t":
                 # nvmlWorkloadPowerProfileRequestedProfiles_t in PyNVML is c_nvmlWorkloadPowerProfileRequestedProfiles_v1_t
                 print_body_line(
-                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileRequestedProfiles_v1_t),", out_file, 2)
+                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileRequestedProfiles_v1_t),",
+                    out_file,
+                    2)
             elif struct_name == "nvmlWorkloadPowerProfileUpdateProfiles_v1_t":
-                # c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t is not defined in PyNVML, add definition
+                # c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t is not defined
+                # in PyNVML, add definition
                 print_body_line(
-                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t),", out_file, 2)
+                    f"(\"{variable_name}\", c_nvmlWorkloadPowerProfileUpdateProfiles_v1_t),",
+                    out_file,
+                    2)
             else:
                 # other nvml structures will add c_ as prefix in PyNVML
                 # e.g. nvmlBAR1Memory_t => c_nvmlBAR1Memory_t
@@ -1718,7 +1941,10 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
                 f"(\"{variable_name_ptr}\", c_void_p),", out_file, 2)
             # replace correct ctype from mapping for basic type
             print_body_line(
-                f"(\"{variable_name}\", {c_type_mapping.get(basic)}),", out_file, 2)
+                f"(\"{variable_name}\", "
+                f"{c_type_mapping.get(basic)}),",
+                out_file,
+                2)
         for enum in all_enum:
             variable_name, variable_name_ptr = get_struct_variable_name(enum)
             # use int to represent enum type
@@ -1770,11 +1996,15 @@ def write_nvml_injection_struct_py(output_dir, struct_with_member, all_enum):
 
         out_file.write("except ModuleNotFoundError:\n")
         print_body_line(
-            "print (\"No dcgm_nvml is currently present.\")", out_file, 0)
+            "print(\"No dcgm_nvml is currently present.\")", out_file, 0)
         print_body_line("nvml_injection_usable = False", out_file, 0)
         out_file.write("except NameError as e:\n")
+        print_body_line("print(", out_file, 0)
         print_body_line(
-            "print (f\"dcgm_nvml is probably an older version. It is missing a definition for {str(e)}.\")", out_file, 0)
+            "f\"dcgm_nvml is probably an older version. It is missing \"",
+            out_file,
+            1)
+        print_body_line("f\"a definition for {str(e)}.\")", out_file, 1)
         print_body_line("nvml_injection_usable = False", out_file, 0)
 
     logging.info(f"{INJECTION_STRUCTS_PY_NAME} genereted")
@@ -1829,8 +2059,9 @@ def write_injection_structs_header(struct_with_member, output_dir, all_enum):
             print_body_line('%s = %d,' %
                             (handler_enum_name, index), injectionStructs, 0)
             index += 1
-            print_body_line('%s = %d,' %
-                            (handler_enum_name_ptr, index), injectionStructs, 0)
+            print_body_line(
+                '%s = %d,' %
+                (handler_enum_name_ptr, index), injectionStructs, 0)
             index += 1
         print_body_line(INJECTION_ARG_COUNT_STR, injectionStructs, 0)
         injectionStructs.write('} injectionArgType_t;\n\n')
@@ -1845,10 +2076,13 @@ def write_injection_structs_header(struct_with_member, output_dir, all_enum):
     return
 
 
-def write_injection_argument_deep_copy_function(out_file, struct_with_member, all_enum):
+def write_injection_argument_deep_copy_function(
+        out_file, struct_with_member, all_enum):
     print_generator_source_info(out_file, 1)
     print_body_line(
-        '// Some type of holding member live in heap. Do deep copy so that our destructor can work well.', out_file, 0)
+        '// Some type of holding member live in heap. Do deep copy so that our destructor can work well.',
+        out_file,
+        0)
     print_body_line(
         'void DeepCopy(const InjectionArgument &other)', out_file, 0)
     print_body_line('{', out_file, 0)
@@ -1871,14 +2105,20 @@ def write_injection_argument_deep_copy_function(out_file, struct_with_member, al
         print_body_line(f'case {enum_nam_ptr}:', out_file, 2)
         print_body_line('{', out_file, 2)
         print_body_line(
-            'unsigned int allocateNum = m_isArray ? m_arrLen : 1;', out_file, 3)
+            'unsigned int allocateNum = m_isArray ? m_arrLen : 1;',
+            out_file,
+            3)
         print_body_line(
-            f'm_value.{variable_name_ptr} = static_cast<{struct_name} *>(malloc(allocateNum * sizeof(*other.m_value.{variable_name_ptr})));', out_file, 3)
+            f'm_value.{variable_name_ptr} = static_cast<{struct_name} *>(malloc(allocateNum * sizeof(*other.m_value.{variable_name_ptr})));',
+            out_file,
+            3)
         print_body_line(
             f'if (m_value.{variable_name_ptr} != nullptr)', out_file, 3)
         print_body_line('{', out_file, 3)
         print_body_line(
-            f'std::memcpy(m_value.{variable_name_ptr}, other.m_value.{variable_name_ptr}, allocateNum * sizeof(*other.m_value.{variable_name_ptr}));', out_file, 4)
+            f'std::memcpy(m_value.{variable_name_ptr}, other.m_value.{variable_name_ptr}, allocateNum * sizeof(*other.m_value.{variable_name_ptr}));',
+            out_file,
+            4)
         print_body_line('}', out_file, 3)
         print_body_line('break;', out_file, 3)
         print_body_line('}', out_file, 2)
@@ -1891,7 +2131,9 @@ def write_injection_argument_deep_copy_function(out_file, struct_with_member, al
 def write_injection_argument_copy_constructor(out_file):
     print_generator_source_info(out_file, 1)
     print_body_line(
-        'InjectionArgument &operator=(const InjectionArgument &other)', out_file, 0)
+        'InjectionArgument &operator=(const InjectionArgument &other)',
+        out_file,
+        0)
     print_body_line('{', out_file, 0)
     print_body_line('DeepCopy(other);', out_file, 1)
     print_body_line('return *this;', out_file, 1)
@@ -1936,21 +2178,31 @@ def write_injection_argument_header(output_dir, struct_with_member, all_enum):
         print_body_line('Clear();', injectionHeader, 1)
         print_body_line('}\n', injectionHeader, 0)
         print_body_line(
-            'InjectionArgument(const injectNvmlVal_t &value)', injectionHeader, 0)
+            'InjectionArgument(const injectNvmlVal_t &value)',
+            injectionHeader,
+            0)
         print_body_line(': m_type(value.type)', injectionHeader, 1)
         print_body_line(', m_value(value.value)', injectionHeader, 1)
         print_body_line('{}\n', injectionHeader, 0)
         print_body_line('/**', injectionHeader, 0)
         print_body_line(
-            ' * SetValueFrom - Sets this injection argument based other\'s value', injectionHeader, 0)
+            ' * SetValueFrom - Sets this injection argument based other\'s value',
+            injectionHeader,
+            0)
         print_body_line(
-            ' * @param other - the InjectionArgument whose value we flexibly copy if possible.', injectionHeader, 0)
+            ' * @param other - the InjectionArgument whose value we flexibly copy if possible.',
+            injectionHeader,
+            0)
         print_body_line(' *', injectionHeader, 0)
         print_body_line(
-            ' * @return 0 if we could set from other\'s value, 1 if incompatible', injectionHeader, 0)
+            ' * @return 0 if we could set from other\'s value, 1 if incompatible',
+            injectionHeader,
+            0)
         print_body_line(' **/', injectionHeader, 0)
         print_body_line(
-            'nvmlReturn_t SetValueFrom(const InjectionArgument &other);\n', injectionHeader, 0)
+            'nvmlReturn_t SetValueFrom(const InjectionArgument &other);\n',
+            injectionHeader,
+            0)
         print_body_line('injectionArgType_t GetType() const',
                         injectionHeader, 0)
         print_body_line('{', injectionHeader, 0)
@@ -1967,15 +2219,21 @@ def write_injection_argument_header(output_dir, struct_with_member, all_enum):
                         injectionHeader, 1)
         print_body_line('}\n', injectionHeader, 0)
         print_body_line(
-            'int Compare(const InjectionArgument &other) const;\n', injectionHeader, 0)
+            'int Compare(const InjectionArgument &other) const;\n',
+            injectionHeader,
+            0)
         print_body_line(
-            'bool operator<(const InjectionArgument &other) const', injectionHeader, 0)
+            'bool operator<(const InjectionArgument &other) const',
+            injectionHeader,
+            0)
         print_body_line('{', injectionHeader, 0)
         print_body_line('return this->Compare(other) == -1;',
                         injectionHeader, 1)
         print_body_line('}\n', injectionHeader, 0)
         print_body_line(
-            'bool operator==(const InjectionArgument &other) const', injectionHeader, 0)
+            'bool operator==(const InjectionArgument &other) const',
+            injectionHeader,
+            0)
         print_body_line('{', injectionHeader, 0)
         print_body_line('return this->Compare(other) == 0;',
                         injectionHeader, 1)
@@ -1995,15 +2253,19 @@ def write_injection_argument_header(output_dir, struct_with_member, all_enum):
 
             if struct_name not in all_enum or all_enum[struct_name] == ENUM_TYPE_PURE_ENUM:
                 # for case like `typedef unsigned int nvmlFanControlPolicy_t;`
-                # we cannot use the following way to create constructor. Since it will re-define constructors of unsigned int...
+                # we cannot use the following way to create constructor. Since
+                # it will re-define constructors of unsigned int...
                 print_generator_source_info(injectionHeader, 1)
-                print_body_line('InjectionArgument(%s *%s, bool inHeap = false)' %
-                                (struct_name, variable_name_ptr), injectionHeader, 0)
+                print_body_line(
+                    'InjectionArgument(%s *%s, bool inHeap = false)' %
+                    (struct_name, variable_name_ptr), injectionHeader, 0)
                 print_body_line(': m_type(%s), m_inHeap(inHeap)' % (
                     enum_nam_ptr), injectionHeader, 1)
                 print_body_line('{', injectionHeader, 0)
                 print_body_line(
-                    'memset(&m_value, 0, sizeof(m_value));', injectionHeader, 1)
+                    'memset(&m_value, 0, sizeof(m_value));',
+                    injectionHeader,
+                    1)
                 print_body_line('m_value.%s = %s;' % (
                     variable_name_ptr, variable_name_ptr), injectionHeader, 1)
                 print_body_line('}', injectionHeader, 0)
@@ -2014,26 +2276,35 @@ def write_injection_argument_header(output_dir, struct_with_member, all_enum):
                     enum_name), injectionHeader, 1)
                 print_body_line('{', injectionHeader, 0)
                 print_body_line(
-                    'memset(&m_value, 0, sizeof(m_value));', injectionHeader, 1)
+                    'memset(&m_value, 0, sizeof(m_value));',
+                    injectionHeader,
+                    1)
                 print_body_line('m_value.%s = %s;' % (
                     variable_name, variable_name), injectionHeader, 1)
                 print_body_line('}', injectionHeader, 0)
 
                 # Write array constructor
-                print_body_line('InjectionArgument(%s *%s, unsigned int arrLen, bool inHeap = false)' %
-                                (struct_name, variable_name_ptr), injectionHeader, 0)
-                print_body_line(': m_type(%s), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)' % (
-                    enum_nam_ptr), injectionHeader, 1)
+                print_body_line(
+                    'InjectionArgument(%s *%s, unsigned int arrLen, bool inHeap = false)' %
+                    (struct_name, variable_name_ptr), injectionHeader, 0)
+                print_body_line(
+                    ': m_type(%s), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)' % (
+                        enum_nam_ptr),
+                    injectionHeader,
+                    1)
                 print_body_line('{', injectionHeader, 0)
                 print_body_line(
-                    'memset(&m_value, 0, sizeof(m_value));', injectionHeader, 1)
+                    'memset(&m_value, 0, sizeof(m_value));',
+                    injectionHeader,
+                    1)
                 print_body_line('m_value.%s = %s;' % (
                     variable_name_ptr, variable_name_ptr), injectionHeader, 1)
                 print_body_line('}\n', injectionHeader, 0)
 
                 # Write As* function
-                print_body_line('%s *As%s() const' %
-                                (struct_name, variable_name_ptr), injectionHeader, 0)
+                print_body_line(
+                    '%s *As%s() const' %
+                    (struct_name, variable_name_ptr), injectionHeader, 0)
                 print_body_line('{', injectionHeader, 0)
                 print_body_line('return m_value.%s;' %
                                 variable_name_ptr, injectionHeader, 1)
@@ -2055,19 +2326,25 @@ def write_injection_argument_header(output_dir, struct_with_member, all_enum):
                 else:
                     underly_variable_name, underly_variable_name_ptr = get_struct_variable_name(
                         'unsigned char')
-                # Write As* function for the case like `typedef unsigned int nvmlFanControlPolicy_t;`
-                print_body_line('%s *As%s() const' %
-                                (struct_name, variable_name_ptr), injectionHeader, 0)
+                # Write As* function for the case like `typedef unsigned int
+                # nvmlFanControlPolicy_t;`
+                print_body_line(
+                    '%s *As%s() const' %
+                    (struct_name, variable_name_ptr), injectionHeader, 0)
                 print_body_line('{', injectionHeader, 0)
                 print_body_line(
-                    f'return static_cast<{struct_name} *>(m_value.{underly_variable_name_ptr});', injectionHeader, 1)
+                    f'return static_cast<{struct_name} *>(m_value.{underly_variable_name_ptr});',
+                    injectionHeader,
+                    1)
                 print_body_line('}\n', injectionHeader, 0)
 
                 print_body_line('%s As%s() const' % (
                     struct_name, variable_name), injectionHeader, 0)
                 print_body_line('{', injectionHeader, 0)
                 print_body_line(
-                    f'return static_cast<{struct_name}>(m_value.{underly_variable_name});', injectionHeader, 1)
+                    f'return static_cast<{struct_name}>(m_value.{underly_variable_name});',
+                    injectionHeader,
+                    1)
                 print_body_line('}\n', injectionHeader, 0)
 
         const_types = get_const_type()
@@ -2076,8 +2353,9 @@ def write_injection_argument_header(output_dir, struct_with_member, all_enum):
                 const_type, True)
             enum_name, enum_nam_ptr = get_enum_name(const_type, True)
             print_generator_source_info(injectionHeader, 1)
-            print_body_line('InjectionArgument(const %s *%s, bool inHeap = false)' %
-                            (const_type, variable_name_ptr), injectionHeader, 0)
+            print_body_line(
+                'InjectionArgument(const %s *%s, bool inHeap = false)' %
+                (const_type, variable_name_ptr), injectionHeader, 0)
             print_body_line(': m_type(%s), m_inHeap(inHeap)' % (
                 enum_nam_ptr), injectionHeader, 1)
             print_body_line('{', injectionHeader, 0)
@@ -2150,8 +2428,9 @@ def write_key_file(output_dir):
         write_auto_generate_c_file_header(key_file)
         key_file.write("// clang-format off\n")
         for key in g_key_to_function:
-            key_file.write("const char *INJECTION_%s_KEY = \"%s\"; // Function name(s): %s\n" %
-                           (key.upper(), key, g_key_to_function[key]))
+            key_file.write(
+                "const char *INJECTION_%s_KEY = \"%s\"; // Function name(s): %s\n" %
+                (key.upper(), key, g_key_to_function[key]))
 
     logging.info(f"{KEY_LIST_PATH} genereted")
 
@@ -2295,7 +2574,8 @@ def separate_struct_by_generable(struct_with_member, all_enum):
     cannot_write_deserializer = get_cannot_write_deserializer_struct(
         struct_with_member)
     struct_cannot_gen_parsers = {}
-    # The following types are not used in entry_point.h. In this case, InjectionArgument.h does not have relevent constructor.
+    # The following types are not used in entry_point.h. In this case,
+    # InjectionArgument.h does not have relevent constructor.
     struct_cannot_gen_parsers["nvmlBridgeChipInfo_t"] = True
     struct_cannot_gen_parsers["nvmlClkMonFaultInfo_t"] = True
     struct_cannot_gen_parsers["nvmlVgpuLicenseExpiry_t"] = True
@@ -2365,10 +2645,29 @@ def arg_is_count(arg):
     return 'count' == arg or 'SetSize' in arg or 'sessionCount' == arg or 'pageCount' == arg or 'vgpuCount' == arg or 'infoCount' == arg
 
 
-def try_to_write_device_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
-    # We try to store the latest version of struct. So that we parse nvmlDeviceGetMemoryInfo_v2 automatically.
-    # For nvmlDeviceGetMemoryInfo, we hand write a GetWrapper to copy the v2 value to v1 struct
-    if func_name == "nvmlDeviceGetMemoryInfo":
+def try_to_write_device_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
+    # we always try to deserialize the yaml to latest version of struct.
+    outdated_functions = [
+        "nvmlDeviceGetMemoryInfo",
+        "nvmlDeviceGetPciInfo",
+        "nvmlDeviceGetPciInfo_v2",
+        "nvmlDeviceGetGridLicensableFeatures",
+        "nvmlDeviceGetGridLicensableFeatures_v2",
+        "nvmlDeviceGetGridLicensableFeatures_v3",
+        "nvmlDeviceGetAttributes",
+        "nvmlDeviceGetComputeRunningProcesses",
+        "nvmlDeviceGetComputeRunningProcesses_v2",
+        "nvmlDeviceGetGraphicsRunningProcesses",
+        "nvmlDeviceGetGraphicsRunningProcesses_v2",
+        "nvmlDeviceGetMPSComputeRunningProcesses",
+        "nvmlDeviceGetMPSComputeRunningProcesses_v2",
+        "nvmlDeviceGetDriverModel"]
+    if func_name in outdated_functions:
         return False
     if len(parameters) < 1 or parameters[0].type != "nvmlDevice_t":
         return False
@@ -2384,7 +2683,9 @@ def try_to_write_device_handler(out_file, func_name, parameters, struct_cannot_g
     if len(parameters) == 2:
         if remove_ptr_if_any(parameters[1].type) in struct_cannot_gen_parsers:
             return False
-        if is_basic_type(parameters[1].type) or is_basic_ptr_type(parameters[1].type):
+        if is_basic_type(
+                parameters[1].type) or is_basic_ptr_type(
+                parameters[1].type):
             print_generator_source_info(out_file, 2)
             print_body_line(
                 f'{{"{key}", BasicTypeParser<{remove_ptr_if_any(parameters[1].type)}, {remove_ptr_if_any(parameters[1].type)}>}},', out_file, 1)
@@ -2396,38 +2697,60 @@ def try_to_write_device_handler(out_file, func_name, parameters, struct_cannot_g
             return True
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", {type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}},', out_file, 1)
+            f'{{"{key}", '
+            f'{type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}},',
+            out_file, 1)
         return True
     if len(parameters) == 3:
-        if not is_pointer_type(parameters[1].type) and not arg_is_count(parameters[1].name):
+        if not is_pointer_type(
+                parameters[1].type) and not arg_is_count(
+                parameters[1].name):
             return False
         if parameters[1].type == "char *" and parameters[2].type == "unsigned int":
             # e.g. nvmlDeviceGetVbiosVersion
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'{{"{key}", BasicTypeParser<std::string, std::string>}},', out_file, 1)
+                '{{"{}", BasicTypeParser<std::string, std::string>}},'.format(
+                    key),
+                out_file,
+                1)
             return True
-        if is_basic_ptr_type(parameters[1].type) and is_basic_ptr_type(parameters[2].type):
+        if is_basic_ptr_type(
+                parameters[1].type) and is_basic_ptr_type(
+                parameters[2].type):
             # e.g. nvmlDeviceGetGspFirmwareMode
             print_generator_source_info(out_file, 2)
             print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
             return True
-        if remove_ptr_if_any(parameters[1].type) in all_enum and remove_ptr_if_any(parameters[2].type) in all_enum:
+        if remove_ptr_if_any(
+                parameters[1].type) in all_enum and remove_ptr_if_any(
+                parameters[2].type) in all_enum:
             # e.g. nvmlDeviceGetGpuOperationMode
             print_generator_source_info(out_file, 2)
             print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
             return True
-        if arg_is_count(parameters[1].name) and (parameters[1].type == "unsigned int *" or parameters[1].type == "unsigned int"):
+        if arg_is_count(
+                parameters[1].name) and (
+                parameters[1].type == "unsigned int *" or parameters[1].type == "unsigned int"):
             # e.g. nvmlDeviceGetFBCSessions
             print_generator_source_info(out_file, 2)
             print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
             return True
     if len(parameters) == 4:
-        all_basic_type = is_basic_ptr_type(parameters[1].type) and is_basic_ptr_type(
-            parameters[2].type) and is_basic_ptr_type(parameters[3].type)
-        all_enum_type = is_enum_type(remove_ptr_if_any(parameters[1].type), all_enum) and\
-            is_enum_type(remove_ptr_if_any(parameters[2].type), all_enum) and is_enum_type(
-                remove_ptr_if_any(parameters[3].type), all_enum)
+        all_basic_type = is_basic_ptr_type(
+            parameters[1].type) and is_basic_ptr_type(
+            parameters[2].type) and is_basic_ptr_type(
+            parameters[3].type)
+        all_enum_type = is_enum_type(
+            remove_ptr_if_any(
+                parameters[1].type),
+            all_enum) and is_enum_type(
+            remove_ptr_if_any(
+                parameters[2].type),
+            all_enum) and is_enum_type(
+            remove_ptr_if_any(
+                parameters[3].type),
+            all_enum)
         if not all_basic_type and not all_enum_type:
             return False
         print_generator_source_info(out_file, 2)
@@ -2436,7 +2759,12 @@ def try_to_write_device_handler(out_file, func_name, parameters, struct_cannot_g
     return False
 
 
-def try_to_write_gpu_instance_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_gpu_instance_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
     if len(parameters) < 1 or parameters[0].type != "nvmlGpuInstance_t":
         return False
     key, version = get_function_info_from_name(func_name)
@@ -2445,7 +2773,9 @@ def try_to_write_gpu_instance_handler(out_file, func_name, parameters, struct_ca
     if len(parameters) == 2:
         if remove_ptr_if_any(parameters[1].type) in struct_cannot_gen_parsers:
             return False
-        if is_basic_type(parameters[1].type) or is_basic_ptr_type(parameters[1].type):
+        if is_basic_type(
+                parameters[1].type) or is_basic_ptr_type(
+                parameters[1].type):
             print_generator_source_info(out_file, 2)
             print_body_line(
                 f'{{"{key}", BasicTypeParser<{remove_ptr_if_any(parameters[1].type)}, {remove_ptr_if_any(parameters[1].type)}>}},', out_file, 1)
@@ -2457,12 +2787,19 @@ def try_to_write_gpu_instance_handler(out_file, func_name, parameters, struct_ca
             return True
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", {type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}},', out_file, 1)
+            f'{{"{key}", '
+            f'{type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}} ,',
+            out_file, 1)
         return True
     return False
 
 
-def try_to_write_compute_instance_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_compute_instance_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
     if len(parameters) < 1 or parameters[0].type != "nvmlComputeInstance_t":
         return False
     key, version = get_function_info_from_name(func_name)
@@ -2471,7 +2808,9 @@ def try_to_write_compute_instance_handler(out_file, func_name, parameters, struc
     if len(parameters) == 2:
         if remove_ptr_if_any(parameters[1].type) in struct_cannot_gen_parsers:
             return False
-        if is_basic_type(parameters[1].type) or is_basic_ptr_type(parameters[1].type):
+        if is_basic_type(
+                parameters[1].type) or is_basic_ptr_type(
+                parameters[1].type):
             print_generator_source_info(out_file, 2)
             print_body_line(
                 f'{{"{key}", BasicTypeParser<{remove_ptr_if_any(parameters[1].type)}, {remove_ptr_if_any(parameters[1].type)}>}},', out_file, 1)
@@ -2483,12 +2822,19 @@ def try_to_write_compute_instance_handler(out_file, func_name, parameters, struc
             return True
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", {type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}},', out_file, 1)
+            f'{{"{key}", '
+            f'{type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}} ,',
+            out_file, 1)
         return True
     return False
 
 
-def try_to_write_vgpu_type_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_vgpu_type_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
     if len(parameters) < 1 or parameters[0].type != "nvmlVgpuTypeId_t":
         return False
     key, version = get_function_info_from_name(func_name)
@@ -2498,7 +2844,9 @@ def try_to_write_vgpu_type_handler(out_file, func_name, parameters, struct_canno
     if len(parameters) == 2:
         if remove_ptr_if_any(parameters[1].type) in struct_cannot_gen_parsers:
             return False
-        if is_basic_type(parameters[1].type) or is_basic_ptr_type(parameters[1].type):
+        if is_basic_type(
+                parameters[1].type) or is_basic_ptr_type(
+                parameters[1].type):
             # e.g. nvmlVgpuTypeGetFramebufferSize
             print_generator_source_info(out_file, 2)
             print_body_line(
@@ -2511,36 +2859,52 @@ def try_to_write_vgpu_type_handler(out_file, func_name, parameters, struct_canno
             return True
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", {type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}},', out_file, 1)
+            f'{{"{key}", '
+            f'{type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}} ,',
+            out_file, 1)
         return True
     if len(parameters) == 3:
         if parameters[1].type == "char *" and parameters[2].type == "unsigned int":
             # e.g. nvmlVgpuTypeGetLicense
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'{{"{key}", BasicTypeParser<std::string, std::string>}},', out_file, 1)
+                '{{"{}", BasicTypeParser<std::string, std::string>}},'.format(
+                    key),
+                out_file,
+                1)
             return True
         if parameters[1].type == "char *" and parameters[2].type == "unsigned int *":
             # e.g. nvmlVgpuTypeGetName
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'{{"{key}", BasicTypeParser<std::string, std::string>}},', out_file, 1)
+                '{{"{}", BasicTypeParser<std::string, std::string>}},'.format(
+                    key),
+                out_file,
+                1)
             return True
-        if is_basic_ptr_type(parameters[1].type) and is_basic_ptr_type(parameters[2].type):
+        if is_basic_ptr_type(
+                parameters[1].type) and is_basic_ptr_type(
+                parameters[2].type):
             # e.g. nvmlVgpuTypeGetDeviceID
             print_generator_source_info(out_file, 2)
             print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
             return True
     if len(parameters) == 4 and func_name == "nvmlVgpuTypeGetResolution":
         # this function in PyNVML only has one input...
-        # hardcode here as it is a special case which does not have extra key but with 4 parameters
+        # hardcode here as it is a special case which does not have extra key
+        # but with 4 parameters
         print_generator_source_info(out_file, 2)
         print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
         return True
     return False
 
 
-def try_to_write_vgpu_type_extra_key_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_vgpu_type_extra_key_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
     if func_name == "nvmlVgpuTypeGetResolution":
         # this function in PyNVML only has one input...
         return False
@@ -2559,13 +2923,19 @@ def try_to_write_vgpu_type_extra_key_handler(out_file, func_name, parameters, st
     if is_enum_type(parameters[1].type, all_enum):
         key2_parser = f"BasicKeyTypeParser<int, {parameters[1].type}>"
     elif is_basic_type(parameters[1].type):
-        key2_parser = f"BasicKeyTypeParser<{parameters[1].type}, {parameters[1].type}>"
+        key2_parser = (
+            f"BasicKeyTypeParser<{parameters[1].type}, "
+            f"{parameters[1].type}>")
     if len(parameters) == 3:
         if is_basic_ptr_type(parameters[2].type):
             # e.g. nvmlVgpuTypeGetCapabilities
-            value_parser = f"BasicTypeParser<{remove_ptr_if_any(parameters[2].type)}, {remove_ptr_if_any(parameters[2].type)}>"
+            value_parser = (
+                f"BasicTypeParser<{remove_ptr_if_any(parameters[2].type)}, "
+                f"{remove_ptr_if_any(parameters[2].type)}>")
     if len(parameters) == 4:
-        if is_basic_ptr_type(parameters[2].type) and is_basic_ptr_type(parameters[3].type):
+        if is_basic_ptr_type(
+                parameters[2].type) and is_basic_ptr_type(
+                parameters[3].type):
             value_parser = f"{key}Parser"
     if key2_parser is None or value_parser is None:
         return False
@@ -2575,7 +2945,16 @@ def try_to_write_vgpu_type_extra_key_handler(out_file, func_name, parameters, st
     return False
 
 
-def try_to_write_vgpu_instance_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_vgpu_instance_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
+
+    outdated_functions = ["nvmlVgpuInstanceGetLicenseInfo"]
+    if func_name in outdated_functions:
+        return False
     if len(parameters) < 1 or parameters[0].type != "nvmlVgpuInstance_t":
         return False
     key, _ = get_function_info_from_name(func_name)
@@ -2583,7 +2962,9 @@ def try_to_write_vgpu_instance_handler(out_file, func_name, parameters, struct_c
     if len(parameters) == 2:
         if remove_ptr_if_any(parameters[1].type) in struct_cannot_gen_parsers:
             return False
-        if is_basic_type(parameters[1].type) or is_basic_ptr_type(parameters[1].type):
+        if is_basic_type(
+                parameters[1].type) or is_basic_ptr_type(
+                parameters[1].type):
             # e.g. nvmlVgpuInstanceGetFbUsage
             print_generator_source_info(out_file, 2)
             print_body_line(
@@ -2597,37 +2978,53 @@ def try_to_write_vgpu_instance_handler(out_file, func_name, parameters, struct_c
             return True
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", {type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}},', out_file, 1)
+            f'{{"{key}", '
+            f'{type_name_to_parser_name(remove_ptr_if_any(parameters[1].type))}}},',
+            out_file, 1)
         return True
     if len(parameters) == 3:
         if parameters[1].type == "char *" and parameters[2].type == "unsigned int":
             # e.g. nvmlVgpuInstanceGetUUID
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'{{"{key}", BasicTypeParser<std::string, std::string>}},', out_file, 1)
+                '{{"{}", BasicTypeParser<std::string, std::string>}},'.format(
+                    key),
+                out_file,
+                1)
             return True
         if parameters[1].type == "char *" and parameters[2].type == "unsigned int *":
             # e.g. nvmlVgpuInstanceGetGpuPciId
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'{{"{key}", BasicTypeParser<std::string, std::string>}},', out_file, 1)
+                '{{"{}", BasicTypeParser<std::string, std::string>}},'.format(
+                    key),
+                out_file,
+                1)
             return True
-        if is_basic_ptr_type(parameters[1].type) and is_basic_ptr_type(parameters[2].type):
+        if is_basic_ptr_type(
+                parameters[1].type) and is_basic_ptr_type(
+                parameters[2].type):
             print_generator_source_info(out_file, 2)
             print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
             return True
-        if is_basic_type(parameters[1].type) and parameters[2].type not in struct_cannot_gen_parsers:
+        if is_basic_type(
+                parameters[1].type) and parameters[2].type not in struct_cannot_gen_parsers:
             # e.g. nvmlVgpuInstanceGetAccountingStats
             print_generator_source_info(out_file, 2)
             print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
             return True
-        if arg_is_count(parameters[1].name) and (parameters[1].type == "unsigned int *" or parameters[1].type == "unsigned int"):
+        if arg_is_count(
+                parameters[1].name) and (
+                parameters[1].type == "unsigned int *" or parameters[1].type == "unsigned int"):
             # e.g. nvmlVgpuInstanceGetEncoderSessions
             print_generator_source_info(out_file, 2)
             print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
             return True
     if len(parameters) == 4:
-        if is_basic_ptr_type(parameters[1].type) and is_basic_ptr_type(parameters[2].type) and is_basic_ptr_type(parameters[3].type):
+        if is_basic_ptr_type(
+            parameters[1].type) and is_basic_ptr_type(
+            parameters[2].type) and is_basic_ptr_type(
+                parameters[3].type):
             # e.g. nvmlVgpuInstanceGetEncoderStats
             print_generator_source_info(out_file, 2)
             print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
@@ -2635,7 +3032,15 @@ def try_to_write_vgpu_instance_handler(out_file, func_name, parameters, struct_c
     return False
 
 
-def try_to_write_device_extra_key_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_device_extra_key_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
+    outdated_functions = ["nvmlDeviceGetNvLinkRemotePciInfo"]
+    if func_name in outdated_functions:
+        return False
     key, _ = get_function_info_from_name(func_name)
     if len(parameters) < 3:
         return False
@@ -2651,13 +3056,18 @@ def try_to_write_device_extra_key_handler(out_file, func_name, parameters, struc
             key2_parser = f"BasicKeyTypeParser<int, {parameters[1].type}>"
         elif is_basic_type(parameters[1].type):
             # e.g. nvmlDeviceGetGpuInstanceProfileInfo
-            key2_parser = f"BasicKeyTypeParser<{parameters[1].type}, {parameters[1].type}>"
+            key2_parser = (
+                f"BasicKeyTypeParser<{parameters[1].type}, "
+                f"{parameters[1].type}>")
         if is_basic_ptr_type(parameters[2].type):
             # e.g. nvmlDeviceGetClockInfo
-            value_parser = f"BasicTypeParser<{remove_ptr_if_any(parameters[2].type)}, {remove_ptr_if_any(parameters[2].type)}>"
+            param_type = remove_ptr_if_any(parameters[2].type)
+            value_parser = (
+                f"BasicTypeParser<{param_type}, {param_type}>")
         elif is_enum_type(remove_ptr_if_any(parameters[2].type), all_enum):
             # e.g. nvmlDeviceGetAPIRestriction
-            value_parser = f"BasicTypeParser<int, {remove_ptr_if_any(parameters[2].type)}>"
+            param_type = remove_ptr_if_any(parameters[2].type)
+            value_parser = f"BasicTypeParser<int, {param_type}>"
         elif remove_ptr_if_any(parameters[2].type) not in struct_cannot_gen_parsers:
             # e.g. nvmlDeviceGetThermalSettings
             value_parser = type_name_to_parser_name(
@@ -2676,16 +3086,22 @@ def try_to_write_device_extra_key_handler(out_file, func_name, parameters, struc
             key2_parser = f"BasicKeyTypeParser<int, {parameters[1].type}>"
         if is_basic_type(parameters[1].type):
             # e.g. nvmlDeviceGetMemoryAffinity
-            key2_parser = f"BasicKeyTypeParser<{parameters[1].type}, {parameters[1].type}>"
+            param_type = parameters[1].type
+            key2_parser = f"BasicKeyTypeParser<{param_type}, {param_type}>"
         if parameters[2].type == "char *" and parameters[3].type == "unsigned int":
             # e.g. nvmlDeviceGetInforomVersion
             value_parser = "BasicTypeParser<std::string, std::string>"
-        if is_enum_type(parameters[3].type, all_enum) and arg_is_count(parameters[1].name):
-            # array type with extra key in the last (e.g. nvmlDeviceGetCpuAffinityWithinScope)
+        if is_enum_type(
+                parameters[3].type,
+                all_enum) and arg_is_count(
+                parameters[1].name):
+            # array type with extra key in the last (e.g.
+            # nvmlDeviceGetCpuAffinityWithinScope)
             key2_parser = f"BasicKeyTypeParser<int, {parameters[3].type}>"
             if is_basic_ptr_type(parameters[2].type):
                 value_parser = f"{key}Parser"
-        if parameters[2].type == "unsigned int *" and is_basic_ptr_type(parameters[3].type):
+        if parameters[2].type == "unsigned int *" and is_basic_ptr_type(
+                parameters[3].type):
             # e.g. nvmlDeviceGetSupportedGraphicsClocks
             value_parser = f"{key}Parser"
         if key2_parser is None or value_parser is None:
@@ -2697,7 +3113,12 @@ def try_to_write_device_extra_key_handler(out_file, func_name, parameters, struc
     return False
 
 
-def try_to_write_device_three_keys_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_device_three_keys_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
     key, version = get_function_info_from_name(func_name)
     if version != 1:
         key = f"{key}_v{version}"
@@ -2713,16 +3134,19 @@ def try_to_write_device_three_keys_handler(out_file, func_name, parameters, stru
         key1_parser = f"BasicKeyTypeParser<int, {parameters[1].type}>"
     elif is_basic_type(parameters[1].type):
         # e.g. nvmlDeviceGetNvLinkCapability
-        key1_parser = f"BasicKeyTypeParser<{parameters[1].type}, {parameters[1].type}>"
+        param_type = parameters[1].type
+        key1_parser = f"BasicKeyTypeParser<{param_type}, {param_type}>"
     if is_enum_type(parameters[2].type, all_enum):
         # e.g. nvmlDeviceGetDetailedEccErrors
         key2_parser = f"BasicKeyTypeParser<int, {parameters[2].type}>"
     elif is_basic_type(parameters[2].type):
         # e.g. nvmlDeviceGetNvLinkUtilizationCounter
-        key2_parser = f"BasicKeyTypeParser<{parameters[2].type}, {parameters[2].type}>"
+        param_type = parameters[2].type
+        key2_parser = f"BasicKeyTypeParser<{param_type}, {param_type}>"
     if is_basic_ptr_type(parameters[3].type):
         # e.g. nvmlDeviceGetNvLinkCapability
-        value1_parser = f"BasicTypeParser<{remove_ptr_if_any(parameters[3].type)}, {remove_ptr_if_any(parameters[3].type)}>"
+        param_type = remove_ptr_if_any(parameters[3].type)
+        value1_parser = f"BasicTypeParser<{param_type}, {param_type}>"
     elif remove_ptr_if_any(parameters[3].type) not in struct_cannot_gen_parsers:
         # e.g. nvmlDeviceGetDetailedEccErrors
         value1_parser = type_name_to_parser_name(
@@ -2732,7 +3156,13 @@ def try_to_write_device_three_keys_handler(out_file, func_name, parameters, stru
             return False
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", {{{key1_parser}, {key2_parser}, {value1_parser}}}}},', out_file, 1)
+            '{{"{}", {{{}, {}, {}}}}},'.format(
+                key,
+                key1_parser,
+                key2_parser,
+                value1_parser),
+            out_file,
+            1)
         return True
     if len(parameters) == 5:
         can_parse_value2 = False
@@ -2746,12 +3176,23 @@ def try_to_write_device_three_keys_handler(out_file, func_name, parameters, stru
         value_parser = f"{key}Parser"
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", {{{key1_parser}, {key2_parser}, {value_parser}}}}},', out_file, 1)
+            '{{"{}", {{{}, {}, {}}}}},'.format(
+                key,
+                key1_parser,
+                key2_parser,
+                value_parser),
+            out_file,
+            1)
         return True
     return False
 
 
-def try_to_write_gpu_instance_extra_key_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_gpu_instance_extra_key_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
     key, version = get_function_info_from_name(func_name)
     if version != 1:
         key = f"{key}_v{version}"
@@ -2768,10 +3209,12 @@ def try_to_write_gpu_instance_extra_key_handler(out_file, func_name, parameters,
             key2_parser = f"BasicKeyTypeParser<int, {parameters[1].type}>"
         elif is_basic_type(parameters[1].type):
             # e.g. nvmlGpuInstanceGetComputeInstanceRemainingCapacity
-            key2_parser = f"BasicKeyTypeParser<{parameters[1].type}, {parameters[1].type}>"
+            param_type = parameters[1].type
+            key2_parser = f"BasicKeyTypeParser<{param_type}, {param_type}>"
         if is_basic_ptr_type(parameters[2].type):
             # e.g. nvmlGpuInstanceGetComputeInstanceRemainingCapacity
-            value_parser = f"BasicTypeParser<{remove_ptr_if_any(parameters[2].type)}, {remove_ptr_if_any(parameters[2].type)}>"
+            param_type = remove_ptr_if_any(parameters[2].type)
+            value_parser = f"BasicTypeParser<{param_type}, {param_type}>"
         if key2_parser is None or value_parser is None:
             return False
         print_generator_source_info(out_file, 2)
@@ -2781,7 +3224,12 @@ def try_to_write_gpu_instance_extra_key_handler(out_file, func_name, parameters,
     return False
 
 
-def try_to_write_gpu_instance_three_keys_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_gpu_instance_three_keys_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
     key, version = get_function_info_from_name(func_name)
     if version != 1:
         key = f"{key}_v{version}"
@@ -2797,14 +3245,17 @@ def try_to_write_gpu_instance_three_keys_handler(out_file, func_name, parameters
             key1_parser = f"BasicKeyTypeParser<int, {parameters[1].type}>"
         elif is_basic_type(parameters[1].type):
             # e.g. nvmlGpuInstanceGetComputeInstanceProfileInfo
-            key1_parser = f"BasicKeyTypeParser<{parameters[1].type}, {parameters[1].type}>"
+            param_type = parameters[1].type
+            key1_parser = f"BasicKeyTypeParser<{param_type}, {param_type}>"
         if is_enum_type(parameters[2].type, all_enum):
             key2_parser = f"BasicKeyTypeParser<int, {parameters[2].type}>"
         elif is_basic_type(parameters[2].type):
             # e.g. nvmlGpuInstanceGetComputeInstanceProfileInfo
-            key2_parser = f"BasicKeyTypeParser<{parameters[2].type}, {parameters[2].type}>"
+            param_type = parameters[2].type
+            key2_parser = f"BasicKeyTypeParser<{param_type}, {param_type}>"
         if is_basic_ptr_type(parameters[3].type):
-            value_parser = f"BasicTypeParser<{remove_ptr_if_any(parameters[3].type)}, {remove_ptr_if_any(parameters[3].type)}>"
+            param_type = remove_ptr_if_any(parameters[3].type)
+            value_parser = f"BasicTypeParser<{param_type}, {param_type}>"
         elif remove_ptr_if_any(parameters[3].type) not in struct_cannot_gen_parsers:
             # e.g. nvmlGpuInstanceGetComputeInstanceProfileInfo
             value_parser = type_name_to_parser_name(
@@ -2813,12 +3264,26 @@ def try_to_write_gpu_instance_three_keys_handler(out_file, func_name, parameters
             return False
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", {{{key1_parser}, {key2_parser}, {value_parser}}}}},', out_file, 1)
+            '{{"{}", {{{}, {}, {}}}}},'.format(
+                key,
+                key1_parser,
+                key2_parser,
+                value_parser),
+            out_file,
+            1)
         return True
     return False
 
 
-def try_to_write_general_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+def try_to_write_general_handler(
+        out_file,
+        func_name,
+        parameters,
+        struct_cannot_gen_parsers,
+        all_enum):
+    outdated_functions = ["nvmlDeviceGetCount"]
+    if func_name in outdated_functions:
+        return False
     key, version = get_function_info_from_name(func_name)
     if key is None:
         return False
@@ -2836,11 +3301,13 @@ def try_to_write_general_handler(out_file, func_name, parameters, struct_cannot_
             print_body_line(
                 f'{{"{key}", BasicTypeParser<int, {remove_ptr_if_any(parameters[0].type)}>}},', out_file, 1)
             return True
-        if remove_ptr_if_any(parameters[0].type) not in struct_cannot_gen_parsers:
+        if remove_ptr_if_any(
+                parameters[0].type) not in struct_cannot_gen_parsers:
             # e.g. nvmlSystemGetConfComputeState
             print_generator_source_info(out_file, 2)
-            print_body_line(
-                f'{{"{key}", {type_name_to_parser_name(remove_ptr_if_any(parameters[0].type))}}},', out_file, 1)
+            parser_name = type_name_to_parser_name(
+                remove_ptr_if_any(parameters[0].type))
+            print_body_line(f'{{"{key}", {parser_name}}},', out_file, 1)
             return True
         return False
     if len(parameters) == 2:
@@ -2849,7 +3316,9 @@ def try_to_write_general_handler(out_file, func_name, parameters, struct_cannot_
         # e.g. nvmlSystemGetNVMLVersion
         print_generator_source_info(out_file, 2)
         print_body_line(
-            f'{{"{key}", BasicTypeParser<std::string, std::string>}},', out_file, 1)
+            '{{"{}", BasicTypeParser<std::string, std::string>}},'.format(key),
+            out_file,
+            1)
         return True
     return False
 
@@ -2893,7 +3362,10 @@ def get_cannot_write_deserializer_struct(struct_with_member):
     return cannot_write_deserializer_struct
 
 
-def write_deserializer_declare(out_file, struct_with_member, cannot_write_deserializer_struct):
+def write_deserializer_declare(
+        out_file,
+        struct_with_member,
+        cannot_write_deserializer_struct):
     print_generator_source_info(out_file, 0)
     for struct_name, _ in struct_with_member.items():
         if struct_name in cannot_write_deserializer_struct:
@@ -2904,7 +3376,11 @@ def write_deserializer_declare(out_file, struct_with_member, cannot_write_deseri
     out_file.write("\n")
 
 
-def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot_write_deserializer_struct):
+def write_deserializer_definition(
+        out_file,
+        struct_with_member,
+        all_enum,
+        cannot_write_deserializer_struct):
     for struct_name, member_list in struct_with_member.items():
         if struct_name in cannot_write_deserializer_struct:
             continue
@@ -2914,22 +3390,29 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
             f"{struct_name} *{func_name}(const YAML::Node &node)\n{{\n")
         variable_name = lowercase_first_letter(struct_name[4:-2])
         print_body_line(
-            f"auto *{variable_name} = reinterpret_cast<{struct_name} *>(malloc(sizeof({struct_name})));", out_file, 0)
+            f"auto *{variable_name} = reinterpret_cast<{struct_name} *>(malloc(sizeof({struct_name})));",
+            out_file,
+            0)
         print_body_line(f"if ({variable_name} == nullptr)", out_file, 0)
         print_body_line('{', out_file, 0)
         print_body_line('return nullptr;', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            f'memset({variable_name}, 0, sizeof(*{variable_name}));', out_file, 0)
+            f'memset({variable_name}, 0, sizeof(*{variable_name}));',
+            out_file,
+            0)
         tmp_cnt = 0
         for member_type, name in member_list:
             if struct_name == "nvmlAccountingStats_t" and name == "reserved":
                 continue
-            if struct_name == "nvmlVgpuMetadata_t" and (name == "reserved" or name == "opaqueData"):
+            if struct_name == "nvmlVgpuMetadata_t" and (
+                    name == "reserved" or name == "opaqueData"):
                 continue
-            if struct_name == "nvmlVgpuPgpuMetadata_t" and (name == "reserved" or name == "opaqueData"):
+            if struct_name == "nvmlVgpuPgpuMetadata_t" and (
+                    name == "reserved" or name == "opaqueData"):
                 continue
-            # PyNVML does not return usedGpuCcProtectedMemory in nvmlProcessInfo_t
+            # PyNVML does not return usedGpuCcProtectedMemory in
+            # nvmlProcessInfo_t
             if struct_name == "nvmlProcessInfo_t" and name == "usedGpuCcProtectedMemory":
                 continue
             print_body_line(f'if (node["{name}"])', out_file, 0)
@@ -2938,52 +3421,72 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                 # basic type uses build-in yaml-cpp convertion method
                 print_generator_source_info(out_file, 2)
                 print_body_line(
-                    f'{variable_name}->{name} = node["{name}"].as<{member_type}>();', out_file, 1)
+                    f'{variable_name}->{name} = node["{name}"].as<{member_type}>();',
+                    out_file,
+                    1)
             elif is_basic_ptr_type(member_type):
-                # Basic pointer types can involve arrays with a count stored in a separate struct member.
+                # Basic pointer types can involve arrays with a count stored in
+                # a separate struct member.
                 type_name = remove_ptr_if_any(member_type)
                 print_generator_source_info(out_file, 2)
                 tmp_varialbe = f"tmp{tmp_cnt}"
                 tmp_cnt += 1
                 print_body_line(
-                    f'auto const {tmp_varialbe} = node["{name}"].as<std::vector<{type_name}>>();', out_file, 1)
+                    f'auto const {tmp_varialbe} = node["{name}"].as<std::vector<{type_name}>>();',
+                    out_file,
+                    1)
                 print_body_line(
-                    f'{variable_name}->{name} = reinterpret_cast<{type_name} *>(malloc(sizeof({type_name}) * {tmp_varialbe}.size()));', out_file, 1)
+                    f'{variable_name}->{name} = reinterpret_cast<{type_name} *>(malloc(sizeof({type_name}) * {tmp_varialbe}.size()));',
+                    out_file,
+                    1)
                 print_body_line(
-                    f'for (unsigned int ii = 0; ii < {tmp_varialbe}.size(); ++ii)', out_file, 1)
+                    f'for (unsigned int ii = 0; ii < {tmp_varialbe}.size(); ++ii)',
+                    out_file,
+                    1)
                 print_body_line('{', out_file, 1)
                 print_body_line(
                     f'{variable_name}->{name}[ii] = {tmp_varialbe}[ii];', out_file, 2)
                 print_body_line('}', out_file, 1)
             elif is_enum_type(member_type, all_enum):
-                # enum type uses build-in yaml-cpp convertion method to covert to int and cast to enum type
+                # enum type uses build-in yaml-cpp convertion method to covert
+                # to int and cast to enum type
                 print_generator_source_info(out_file, 2)
                 print_body_line(
-                    f'{variable_name}->{name} = static_cast<{member_type}>(node["{name}"].as<int>());', out_file, 1)
+                    f'{variable_name}->{name} = static_cast<{member_type}>(node["{name}"].as<int>());',
+                    out_file,
+                    1)
             elif "char[" in member_type:
                 # c-string
                 print_generator_source_info(out_file, 2)
                 print_body_line(
                     f'auto {name} = node["{name}"].as<std::string>();', out_file, 1)
-                if (name == "clusterUuid") and ((struct_name == "nvmlGpuFabricInfo_t") or (struct_name == "nvmlGpuFabricInfoV_t")):
+                if (name == "clusterUuid") and ((struct_name == "nvmlGpuFabricInfo_t") or (
+                        struct_name == "nvmlGpuFabricInfoV_t")):
                     print_body_line(f'NvmlInjectionUuid uuid;', out_file, 1)
                     print_body_line(
                         f'NvmlUuidParse({name}, uuid);', out_file, 1)
                     print_body_line(
-                        f'std::memcpy(&{variable_name}->{name}, uuid, sizeof({variable_name}->{name}));', out_file, 1)
+                        f'std::memcpy(&{variable_name}->{name}, uuid, sizeof({variable_name}->{name}));',
+                        out_file,
+                        1)
                 else:
                     print_body_line(
-                        f'std::memcpy(&{variable_name}->{name}, {name}.data(), std::min({name}.size(), sizeof({variable_name}->{name})));', out_file, 1)
+                        f'std::memcpy(&{variable_name}->{name}, {name}.data(), std::min({name}.size(), sizeof({variable_name}->{name})));',
+                        out_file,
+                        1)
             elif "[" in member_type:
                 # custom type array
-                # for each element, we call corresponding deserializer and memcpy the result to our struct
+                # for each element, we call corresponding deserializer and
+                # memcpy the result to our struct
                 type_name = member_type.split("[")[0]
                 print_generator_source_info(out_file, 2)
                 if is_basic_type(type_name):
                     tmp_varialbe = f"tmp{tmp_cnt}"
                     tmp_cnt += 1
                     print_body_line(
-                        f'auto const {tmp_varialbe} = node["{name}"].as<std::vector<{type_name}>>();', out_file, 1)
+                        f'auto const {tmp_varialbe} = node["{name}"].as<std::vector<{type_name}>>();',
+                        out_file,
+                        1)
                     print_body_line(
                         f'for (unsigned int ii = 0; ii < {tmp_varialbe}.size(); ++ii)', out_file, 1)
                     print_body_line('{', out_file, 1)
@@ -2993,9 +3496,13 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                 else:
                     print_body_line('int idx = 0;', out_file, 1)
                     print_body_line(
-                        f'int size = std::min(node["{name}"].size(), sizeof({variable_name}->{name}) / sizeof({type_name}));', out_file, 1)
+                        f'int size = std::min(node["{name}"].size(), sizeof({variable_name}->{name}) / sizeof({type_name}));',
+                        out_file,
+                        1)
                     print_body_line(
-                        f'for (YAML::const_iterator it = node["{name}"].begin(); it != node["{name}"].end(); ++it)', out_file, 1)
+                        f'for (YAML::const_iterator it = node["{name}"].begin(); it != node["{name}"].end(); ++it)',
+                        out_file,
+                        1)
                     print_body_line('{', out_file, 1)
                     deserialzier_name = struct_name_to_deserializer_name(
                         type_name)
@@ -3011,7 +3518,9 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                     print_body_line('break;', out_file, 3)
                     print_body_line('}', out_file, 2)
                     print_body_line(
-                        f'std::memcpy(&{variable_name}->{name}[idx++], tmp, sizeof({type_name}));', out_file, 2)
+                        f'std::memcpy(&{variable_name}->{name}[idx++], tmp, sizeof({type_name}));',
+                        out_file,
+                        2)
                     print_body_line('free(tmp);', out_file, 2)
                     print_body_line('}', out_file, 1)
             elif is_pointer_type(member_type):
@@ -3022,7 +3531,9 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                 print_generator_source_info(out_file, 2)
                 if type_name in cannot_write_deserializer_struct or type_name not in struct_with_member:
                     print_body_line(
-                        f'NVML_LOG_ERR("Skipping loading {name} for struct {struct_name}");', out_file, 1)
+                        f'NVML_LOG_ERR("Skipping loading {name} for struct {struct_name}");',
+                        out_file,
+                        1)
                 else:
                     print_body_line(
                         f'auto *{tmp_varialbe} = {deserialzier_name}(node["{name}"]);', out_file, 1)
@@ -3032,11 +3543,14 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                     print_body_line('return nullptr;', out_file, 2)
                     print_body_line('}', out_file, 1)
                     print_body_line(
-                        f'std::memcpy({variable_name}->{name}, {tmp_varialbe}, sizeof({type_name}));', out_file, 1)
+                        f'std::memcpy({variable_name}->{name}, {tmp_varialbe}, sizeof({type_name}));',
+                        out_file,
+                        1)
                     print_body_line(f'free({tmp_varialbe});', out_file, 1)
             else:
                 # custom type
-                # we call corresponding deserializer and memcpy the result to our struct
+                # we call corresponding deserializer and memcpy the result to
+                # our struct
                 deserialzier_name = struct_name_to_deserializer_name(
                     member_type)
                 tmp_varialbe = f"tmp{tmp_cnt}"
@@ -3044,7 +3558,9 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                 print_generator_source_info(out_file, 2)
                 if member_type in cannot_write_deserializer_struct or member_type not in struct_with_member:
                     print_body_line(
-                        f'NVML_LOG_ERR("Skipping loading {name} for struct {struct_name}");', out_file, 1)
+                        f'NVML_LOG_ERR("Skipping loading {name} for struct {struct_name}");',
+                        out_file,
+                        1)
                 else:
                     print_body_line(
                         f'auto *{tmp_varialbe} = {deserialzier_name}(node["{name}"]);', out_file, 1)
@@ -3054,16 +3570,22 @@ def write_deserializer_definition(out_file, struct_with_member, all_enum, cannot
                     print_body_line('return nullptr;', out_file, 2)
                     print_body_line('}', out_file, 1)
                     print_body_line(
-                        f'std::memcpy(&{variable_name}->{name}, {tmp_varialbe}, sizeof({member_type}));', out_file, 1)
+                        f'std::memcpy(&{variable_name}->{name}, {tmp_varialbe}, sizeof({member_type}));',
+                        out_file,
+                        1)
                     print_body_line(f'free({tmp_varialbe});', out_file, 1)
             print_body_line('}', out_file, 0)
-            # PyNVML will return function not found in nvmlDeviceGetMemoryInfo_v2
-            if struct_name == "nvmlMemory_v2_t" and (name == "version" or name == "reserved"):
+            # PyNVML will return function not found in
+            # nvmlDeviceGetMemoryInfo_v2
+            if struct_name == "nvmlMemory_v2_t" and (
+                    name == "version" or name == "reserved"):
                 continue
             print_body_line('else', out_file, 0)
             print_body_line('{', out_file, 0)
             print_body_line(
-                f'NVML_LOG_ERR("missing {name} for struct {struct_name}");', out_file, 1)
+                f'NVML_LOG_ERR("missing {name} for struct {struct_name}");',
+                out_file,
+                1)
             print_body_line('}', out_file, 0)
         print_body_line(f'return {variable_name};', out_file, 0)
         out_file.write("}\n\n")
@@ -3079,13 +3601,17 @@ def write_basic_type_parser(out_file):
     print_body_line('return NvmlFuncReturn(NVML_ERROR_UNKNOWN);', out_file, 1)
     print_body_line('}', out_file, 0)
     print_body_line(
-        'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));', out_file, 0)
+        'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));',
+        out_file,
+        0)
     print_body_line("if (!node[\"ReturnValue\"])", out_file, 0)
     print_body_line('{', out_file, 0)
     print_body_line('return NvmlFuncReturn(ret);', out_file, 1)
     print_body_line('}', out_file, 0)
     print_body_line(
-        'auto value = static_cast<resultType>(node["ReturnValue"].as<underlyType>());', out_file, 0)
+        'auto value = static_cast<resultType>(node["ReturnValue"].as<underlyType>());',
+        out_file,
+        0)
     print_body_line(
         'return NvmlFuncReturn(ret, std::move(value));', out_file, 0)
     out_file.write("}\n\n")
@@ -3104,7 +3630,8 @@ def write_basic_key_type_parser(out_file):
         'return static_cast<resultType>(node.as<underlyType>());', out_file, 0)
     out_file.write("}\n\n")
 
-# some functions only have return without attribute (e.g. nvmlDeviceValidateInforom)
+# some functions only have return without attribute (e.g.
+# nvmlDeviceValidateInforom)
 
 
 def write_nvml_return_parser(out_file):
@@ -3116,12 +3643,19 @@ def write_nvml_return_parser(out_file):
     print_body_line('return NvmlFuncReturn(NVML_ERROR_UNKNOWN);', out_file, 1)
     print_body_line('}', out_file, 0)
     print_body_line(
-        'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));', out_file, 0)
+        'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));',
+        out_file,
+        0)
     print_body_line('return NvmlFuncReturn(ret);', out_file, 0)
     out_file.write("}\n\n")
 
 
-def write_known_struct_parser(out_file, struct_with_member, struct_cannot_gen_parsers, all_enum, written_parser):
+def write_known_struct_parser(
+        out_file,
+        struct_with_member,
+        struct_cannot_gen_parsers,
+        all_enum,
+        written_parser):
     for struct_name, _ in struct_with_member.items():
         if struct_name in struct_cannot_gen_parsers:
             logging.debug(
@@ -3140,25 +3674,36 @@ def write_known_struct_parser(out_file, struct_with_member, struct_cannot_gen_pa
             'return NvmlFuncReturn(NVML_ERROR_UNKNOWN);', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));', out_file, 0)
+            'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));',
+            out_file,
+            0)
         print_body_line("if (!node[\"ReturnValue\"])", out_file, 0)
         print_body_line('{', out_file, 0)
         print_body_line('return NvmlFuncReturn(ret);', out_file, 1)
         print_body_line('}', out_file, 0)
         derserializer_name = struct_name_to_deserializer_name(struct_name)
         print_body_line(
-            f"auto *{variable_name} = {derserializer_name}(node[\"ReturnValue\"]);", out_file, 0)
+            f"auto *{variable_name} = {derserializer_name}(node[\"ReturnValue\"]);",
+            out_file,
+            0)
         print_body_line(f"if ({variable_name} == nullptr)", out_file, 0)
         print_body_line('{', out_file, 0)
         print_body_line('return std::nullopt;', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            f'return NvmlFuncReturn(ret, {{{variable_name}, true}});', out_file, 0)
+            f'return NvmlFuncReturn(ret, {{{variable_name}, true}});',
+            out_file,
+            0)
         out_file.write("}\n\n")
         written_parser[parser_name] = True
 
 
-def write_array_funcs_parser(out_file, functions, all_enum, written_parser, cannot_write_deserializer_struct):
+def write_array_funcs_parser(
+        out_file,
+        functions,
+        all_enum,
+        written_parser,
+        cannot_write_deserializer_struct):
     for func_name, parameters in functions.items():
         if len(parameters) < 3:
             continue
@@ -3171,17 +3716,27 @@ def write_array_funcs_parser(out_file, functions, all_enum, written_parser, cann
         can_write = False
         # Only handle the following two cases
         # 1. Direct array output (e.g. nvmlDeviceGetCpuAffinity)
-        # 2. Has another extra key and direct array output (e.g. nvmlDeviceGetCpuAffinityWithinScope)
+        # 2. Has another extra key and direct array output (e.g.
+        # nvmlDeviceGetCpuAffinityWithinScope)
         if len(parameters) == 3:
-            can_write = (arg_is_count(parameters[1].name) and parameters[1].type == "unsigned int" and remove_ptr_if_any(
-                parameters[2].type) not in cannot_write_deserializer_struct)
+            can_write = (
+                arg_is_count(
+                    parameters[1].name) and parameters[1].type == "unsigned int" and remove_ptr_if_any(
+                    parameters[2].type) not in cannot_write_deserializer_struct)
             target_idx = len(parameters) - 1
         elif len(parameters) == 4:
-            if (is_basic_type(parameters[1].type) or is_enum_type(parameters[1].type, all_enum)) and\
-                    (arg_is_count(parameters[2].name) and (parameters[2].type == "unsigned int" or parameters[2].type == "unsigned int *")):
+            if (
+                is_basic_type(
+                    parameters[1].type) or is_enum_type(
+                    parameters[1].type,
+                    all_enum)) and (
+                arg_is_count(
+                    parameters[2].name) and (
+                        parameters[2].type == "unsigned int" or parameters[2].type == "unsigned int *")):
                 can_write = True
                 target_idx = len(parameters) - 1
-            if (arg_is_count(parameters[1].name) and parameters[1].type == "unsigned int"):
+            if (arg_is_count(parameters[1].name)
+                    and parameters[1].type == "unsigned int"):
                 can_write = True
                 target_idx = len(parameters) - 2
         if not can_write:
@@ -3195,29 +3750,47 @@ def write_array_funcs_parser(out_file, functions, all_enum, written_parser, cann
             'return NvmlFuncReturn(NVML_ERROR_UNKNOWN);', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));', out_file, 0)
+            'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));',
+            out_file,
+            0)
         print_body_line("if (!node[\"ReturnValue\"])", out_file, 0)
         print_body_line('{', out_file, 0)
         print_body_line('return NvmlFuncReturn(ret);', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            'auto size = static_cast<unsigned int>(node[\"ReturnValue\"].size());', out_file, 0)
+            'auto size = static_cast<unsigned int>(node[\"ReturnValue\"].size());',
+            out_file,
+            0)
         print_body_line('unsigned int idx = 0;', out_file, 0)
         print_body_line(
-            f'auto *valPtr = reinterpret_cast<{parameters[target_idx].type}>(malloc(sizeof({remove_ptr_if_any(parameters[target_idx].type)}) * size));', out_file, 0)
+            f'auto *valPtr = reinterpret_cast<{parameters[target_idx].type}>'
+            f'(malloc(sizeof({remove_ptr_if_any(parameters[target_idx].type)}) '
+            f'* size));',
+            out_file,
+            0)
         print_body_line(
-            'for (YAML::const_iterator it = node[\"ReturnValue\"].begin(); it != node[\"ReturnValue\"].end(); ++it)', out_file, 0)
+            'for (YAML::const_iterator it = node[\"ReturnValue\"].begin(); it != node[\"ReturnValue\"].end(); ++it)',
+            out_file,
+            0)
         print_body_line('{', out_file, 0)
         if is_basic_ptr_type(parameters[target_idx].type):
             # basic type uses build-in yaml-cpp convertion
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'valPtr[idx++] = it->as<{remove_ptr_if_any(parameters[target_idx].type)}>();', out_file, 1)
+                f'valPtr[idx++] = it->as<'
+                f'{remove_ptr_if_any(parameters[target_idx].type)}>();',
+                out_file,
+                1)
         elif is_enum_type(remove_ptr_if_any(parameters[target_idx].type, all_enum)):
-            # enum type uses build-in yaml-cpp int convertion and cast to corresponding enum
+            # enum type uses build-in yaml-cpp int convertion and cast to
+            # corresponding enum
             print_generator_source_info(out_file, 2)
             print_body_line(
-                f'valPtr[idx++] = static_cast<{remove_ptr_if_any(parameters[target_idx].type)}>(it->as<int>());', out_file, 1)
+                f'valPtr[idx++] = static_cast<'
+                f'{remove_ptr_if_any(parameters[target_idx].type)}>'
+                f'(it->as<int>());',
+                out_file,
+                1)
         else:
             # struct type calls deserializer and memcpy to our struct
             print_generator_source_info(out_file, 2)
@@ -3231,7 +3804,10 @@ def write_array_funcs_parser(out_file, functions, all_enum, written_parser, cann
             print_body_line('return std::nullopt;', out_file, 2)
             print_body_line('}', out_file, 1)
             print_body_line(
-                f'std::memcpy(&valPtr[idx++], tmp, sizeof({remove_ptr_if_any(parameters[target_idx].type)}));', out_file, 1)
+                f'std::memcpy(&valPtr[idx++], tmp, sizeof('
+                f'{remove_ptr_if_any(parameters[target_idx].type)}));',
+                out_file,
+                1)
             print_body_line('free(tmp);', out_file, 1)
         print_body_line('}', out_file, 0)
         if parameters[2].type == "unsigned int *":
@@ -3246,12 +3822,19 @@ def write_array_funcs_parser(out_file, functions, all_enum, written_parser, cann
         else:
             print_generator_source_info(out_file, 2)
             print_body_line(
-                'return NvmlFuncReturn(ret, {valPtr, size, true});', out_file, 0)
+                'return NvmlFuncReturn(ret, {valPtr, size, true});',
+                out_file,
+                0)
         out_file.write("}\n\n")
         written_parser[parser_name] = True
 
 
-def write_two_attrs_funcs_parser(out_file, functions, all_enum, written_parser, cannot_write_deserializer_struct):
+def write_two_attrs_funcs_parser(
+        out_file,
+        functions,
+        all_enum,
+        written_parser,
+        cannot_write_deserializer_struct):
     for func_name, parameters in functions.items():
         if len(parameters) < 3:
             continue
@@ -3271,9 +3854,15 @@ def write_two_attrs_funcs_parser(out_file, functions, all_enum, written_parser, 
             continue
         first_point_idx = len(parameters) - 2
         second_point_idx = len(parameters) - 1
-        can_write = (arg_is_count(parameters[first_point_idx].name) and parameters[first_point_idx].type == "unsigned int *" and remove_ptr_if_any(parameters[second_point_idx].type) not in cannot_write_deserializer_struct) or\
-            (is_basic_ptr_type(parameters[first_point_idx].type) and is_basic_ptr_type(parameters[second_point_idx].type)) or\
-            (remove_ptr_if_any(parameters[first_point_idx].type) in all_enum and remove_ptr_if_any(
+        can_write = (
+            arg_is_count(
+                parameters[first_point_idx].name) and parameters[first_point_idx].type == "unsigned int *" and remove_ptr_if_any(
+                parameters[second_point_idx].type) not in cannot_write_deserializer_struct) or (
+            is_basic_ptr_type(
+                parameters[first_point_idx].type) and is_basic_ptr_type(
+                parameters[second_point_idx].type)) or (
+            remove_ptr_if_any(
+                parameters[first_point_idx].type) in all_enum and remove_ptr_if_any(
                 parameters[second_point_idx].type) in all_enum)
         if not can_write:
             continue
@@ -3286,7 +3875,9 @@ def write_two_attrs_funcs_parser(out_file, functions, all_enum, written_parser, 
             'return NvmlFuncReturn(NVML_ERROR_UNKNOWN);', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));', out_file, 0)
+            'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));',
+            out_file,
+            0)
         print_body_line("if (!node[\"ReturnValue\"])", out_file, 0)
         print_body_line('{', out_file, 0)
         print_body_line('return NvmlFuncReturn(ret);', out_file, 1)
@@ -3296,23 +3887,40 @@ def write_two_attrs_funcs_parser(out_file, functions, all_enum, written_parser, 
             # array type
             print_generator_source_info(out_file, 1)
             print_body_line(
-                'auto size = static_cast<unsigned int>(node[\"ReturnValue\"].size());', out_file, 0)
+                'auto size = static_cast<unsigned int>(node[\"ReturnValue\"].size());',
+                out_file,
+                0)
             print_body_line('int idx = 0;', out_file, 0)
             print_body_line(
-                f'auto *valPtr = reinterpret_cast<{parameters[second_point_idx].type}>(malloc(sizeof({remove_ptr_if_any(parameters[second_point_idx].type)}) * size));', out_file, 0)
+                f'auto *valPtr = reinterpret_cast<'
+                f'{parameters[second_point_idx].type}>'
+                f'(malloc(sizeof({remove_ptr_if_any(parameters[second_point_idx].type)}) '
+                f'* size));',
+                out_file,
+                0)
             print_body_line(
-                'for (YAML::const_iterator it = node[\"ReturnValue\"].begin(); it != node[\"ReturnValue\"].end(); ++it)', out_file, 0)
+                'for (YAML::const_iterator it = node[\"ReturnValue\"].begin(); it != node[\"ReturnValue\"].end(); ++it)',
+                out_file,
+                0)
             print_body_line('{', out_file, 0)
             if is_basic_ptr_type(parameters[second_point_idx].type):
                 # basic type uses build-in yaml-cpp convertion
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f'valPtr[idx++] = it->as<{remove_ptr_if_any(parameters[second_point_idx].type)}>();', out_file, 1)
+                    f'valPtr[idx++] = it->as<'
+                    f'{remove_ptr_if_any(parameters[second_point_idx].type)}>();',
+                    out_file,
+                    1)
             elif is_enum_type(remove_ptr_if_any(parameters[second_point_idx].type), all_enum):
-                # enum type uses build-in yaml-cpp int convertion and cast to corresponding enum
+                # enum type uses build-in yaml-cpp int convertion and cast to
+                # corresponding enum
                 print_generator_source_info(out_file, 1)
                 print_body_line(
-                    f'valPtr[idx++] = static_cast<{remove_ptr_if_any(parameters[second_point_idx].type)}>(it->as<int>());', out_file, 1)
+                    f'valPtr[idx++] = static_cast<'
+                    f'{remove_ptr_if_any(parameters[second_point_idx].type)}>'
+                    f'(it->as<int>());',
+                    out_file,
+                    1)
             else:
                 # struct type calls deserializer and memcpy to our struct
                 print_generator_source_info(out_file, 1)
@@ -3326,7 +3934,10 @@ def write_two_attrs_funcs_parser(out_file, functions, all_enum, written_parser, 
                 print_body_line('return std::nullopt;', out_file, 2)
                 print_body_line('}', out_file, 1)
                 print_body_line(
-                    f'std::memcpy(&valPtr[idx++], tmp, sizeof({remove_ptr_if_any(parameters[second_point_idx].type)}));', out_file, 1)
+                    f'std::memcpy(&valPtr[idx++], tmp, sizeof('
+                    f'{remove_ptr_if_any(parameters[second_point_idx].type)}));',
+                    out_file,
+                    1)
                 print_body_line('free(tmp);', out_file, 1)
             print_body_line('}', out_file, 0)
             print_body_line('args.emplace_back(size);', out_file, 0)
@@ -3336,21 +3947,35 @@ def write_two_attrs_funcs_parser(out_file, functions, all_enum, written_parser, 
             # actual two attributes
             print_generator_source_info(out_file, 1)
             for i in range(first_point_idx, second_point_idx + 1):
+                param_name = parameters[i].name
+                param_type = remove_ptr_if_any(parameters[i].type)
                 if is_basic_ptr_type(parameters[i].type):
                     # basic type uses build-in yaml-cpp convertion
-                    print_body_line(
-                        f'args.emplace_back(node[\"ReturnValue\"]["{parameters[i].name}"].as<{remove_ptr_if_any(parameters[i].type)}>());', out_file, 0)
+                    line = (
+                        f'args.emplace_back(node["ReturnValue"]'
+                        f'["{param_name}"].as<{param_type}>());'
+                    )
+                    print_body_line(line, out_file, 0)
                 else:
-                    # enum type uses build-in yaml-cpp int convertion and cast to corresponding enum
-                    print_body_line(
-                        f'args.emplace_back(static_cast<{remove_ptr_if_any(parameters[i].type)}>(node[\"ReturnValue\"]["{parameters[i].name}"].as<int>()));', out_file, 0)
+                    # enum type uses build-in yaml-cpp int convertion and
+                    # cast to corresponding enum
+                    line = (
+                        f'args.emplace_back(static_cast<{param_type}>'
+                        f'(node["ReturnValue"]["{param_name}"]'
+                        f'.as<int>()));'
+                    )
+                    print_body_line(line, out_file, 0)
         print_body_line(
             'return NvmlFuncReturn(ret, std::move(args));', out_file, 0)
         out_file.write("}\n\n")
         written_parser[parser_name] = True
 
 
-def write_three_attrs_funcs_parser(out_file, functions, all_enum, written_parser):
+def write_three_attrs_funcs_parser(
+        out_file,
+        functions,
+        all_enum,
+        written_parser):
     for func_name, parameters in functions.items():
         if len(parameters) != 4:
             continue
@@ -3360,11 +3985,20 @@ def write_three_attrs_funcs_parser(out_file, functions, all_enum, written_parser
         parser_name = f"{key}Parser"
         if parser_name in written_parser:
             continue
-        all_basic_type = is_basic_ptr_type(parameters[1].type) and is_basic_ptr_type(
-            parameters[2].type) and is_basic_ptr_type(parameters[3].type)
-        all_enum_type = is_enum_type(remove_ptr_if_any(parameters[1].type), all_enum) and\
-            is_enum_type(remove_ptr_if_any(parameters[2].type), all_enum) and is_enum_type(
-                remove_ptr_if_any(parameters[3].type), all_enum)
+        all_basic_type = is_basic_ptr_type(
+            parameters[1].type) and is_basic_ptr_type(
+            parameters[2].type) and is_basic_ptr_type(
+            parameters[3].type)
+        all_enum_type = is_enum_type(
+            remove_ptr_if_any(
+                parameters[1].type),
+            all_enum) and is_enum_type(
+            remove_ptr_if_any(
+                parameters[2].type),
+            all_enum) and is_enum_type(
+            remove_ptr_if_any(
+                parameters[3].type),
+            all_enum)
         can_write = all_basic_type or all_enum_type
         if not can_write:
             continue
@@ -3378,7 +4012,9 @@ def write_three_attrs_funcs_parser(out_file, functions, all_enum, written_parser
             'return NvmlFuncReturn(NVML_ERROR_UNKNOWN);', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));', out_file, 0)
+            'auto ret = static_cast<nvmlReturn_t>(node[\"FunctionReturn\"].as<int>(NVML_ERROR_UNKNOWN));',
+            out_file,
+            0)
         print_body_line("if (!node[\"ReturnValue\"])", out_file, 0)
         print_body_line('{', out_file, 0)
         print_body_line('return NvmlFuncReturn(ret);', out_file, 1)
@@ -3386,11 +4022,19 @@ def write_three_attrs_funcs_parser(out_file, functions, all_enum, written_parser
         print_body_line('std::vector<InjectionArgument> args;', out_file, 0)
         for i in range(1, 4):
             if is_basic_ptr_type(parameters[i].type):
+                param_name = parameters[i].name
+                param_type = remove_ptr_if_any(parameters[i].type)
                 print_body_line(
-                    f'args.emplace_back(node[\"ReturnValue\"]["{parameters[i].name}"].as<{remove_ptr_if_any(parameters[i].type)}>());', out_file, 0)
+                    f'args.emplace_back(node["ReturnValue"]["{param_name}"]'
+                    f'.as<{param_type}>());', out_file, 0)
             else:
+                param_name = parameters[i].name
+                param_type = remove_ptr_if_any(parameters[i].type)
                 print_body_line(
-                    f'args.emplace_back(static_cast<{remove_ptr_if_any(parameters[i].type)}>(node[\"ReturnValue\"]["{parameters[i].name}"].as<int>()));', out_file, 0)
+                    f'args.emplace_back(static_cast<{param_type}>'
+                    f'(node["ReturnValue"]["{param_name}"].as<int>()));',
+                    out_file,
+                    0)
         print_body_line(
             'return NvmlFuncReturn(ret, std::move(args));', out_file, 0)
         out_file.write("}\n\n")
@@ -3433,11 +4077,17 @@ def write_extra_key_handle_method(out_file):
         print_body_line('return std::nullopt;', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            'std::vector<std::tuple<InjectionArgument, NvmlFuncReturn>> ret;', out_file, 0)
+            'std::vector<std::tuple<InjectionArgument, NvmlFuncReturn>> ret;',
+            out_file,
+            0)
         print_body_line(
-            f'auto &[keyParser, valueParser] = {handler_map}[key];', out_file, 0)
+            f'auto &[keyParser, valueParser] = {handler_map}[key];',
+            out_file,
+            0)
         print_body_line(
-            'for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)', out_file, 0)
+            'for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)',
+            out_file,
+            0)
         print_body_line('{', out_file, 0)
         print_body_line('YAML::Node innerKey = it->first;', out_file, 1)
         print_body_line('YAML::Node innerValue = it->second;', out_file, 1)
@@ -3472,11 +4122,17 @@ def write_three_key_handle_method(out_file):
         print_body_line('return std::nullopt;', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line(
-            'std::vector<std::tuple<InjectionArgument, InjectionArgument, NvmlFuncReturn>> ret;', out_file, 0)
+            'std::vector<std::tuple<InjectionArgument, InjectionArgument, NvmlFuncReturn>> ret;',
+            out_file,
+            0)
         print_body_line(
-            f'auto &[key1Parser, key2Parser, valueParser] = {handler_map}[key];', out_file, 0)
+            f'auto &[key1Parser, key2Parser, valueParser] = {handler_map}[key];',
+            out_file,
+            0)
         print_body_line(
-            'for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)', out_file, 0)
+            'for (YAML::const_iterator it = node.begin(); it != node.end(); ++it)',
+            out_file,
+            0)
         print_body_line('{', out_file, 0)
         print_body_line('YAML::Node innerKey = it->first;', out_file, 1)
         print_body_line('YAML::Node innerValue = it->second;', out_file, 1)
@@ -3486,7 +4142,9 @@ def write_three_key_handle_method(out_file):
         print_body_line('return std::nullopt;', out_file, 2)
         print_body_line('}', out_file, 1)
         print_body_line(
-            'for (YAML::const_iterator layerThreeIt = innerValue.begin(); layerThreeIt != innerValue.end(); ++layerThreeIt)', out_file, 1)
+            'for (YAML::const_iterator layerThreeIt = innerValue.begin(); layerThreeIt != innerValue.end(); ++layerThreeIt)',
+            out_file,
+            1)
         print_body_line('{', out_file, 1)
         print_body_line(
             'YAML::Node layerThreeKey = layerThreeIt->first;', out_file, 2)
@@ -3505,7 +4163,9 @@ def write_three_key_handle_method(out_file):
         print_body_line('return std::nullopt;', out_file, 3)
         print_body_line('}', out_file, 2)
         print_body_line(
-            'ret.emplace_back(key1Opt.value(), key2Opt.value(), valOpt.value());', out_file, 2)
+            'ret.emplace_back(key1Opt.value(), key2Opt.value(), valOpt.value());',
+            out_file,
+            2)
         print_body_line('}', out_file, 1)
         print_body_line('}', out_file, 0)
         print_body_line('return ret;', out_file, 0)
@@ -3579,7 +4239,11 @@ def get_skipped_funcs():
     return skip_funcs
 
 
-def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, functions):
+def nvml_return_deserializer_cpp_writer(
+        out_dir,
+        struct_with_member,
+        all_enum,
+        functions):
     _, struct_cannot_gen_parsers = separate_struct_by_generable(
         struct_with_member, all_enum)
     handled_funcs = {}
@@ -3608,17 +4272,32 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         write_deserializer_declare(
             out_file, struct_with_member, cannot_write_deserializer_struct)
         write_deserializer_definition(
-            out_file, struct_with_member, all_enum, cannot_write_deserializer_struct)
+            out_file,
+            struct_with_member,
+            all_enum,
+            cannot_write_deserializer_struct)
         write_basic_type_parser(out_file)
         write_basic_key_type_parser(out_file)
         write_nvml_return_parser(out_file)
         written_parser = {}
         write_known_struct_parser(
-            out_file, struct_with_member, struct_cannot_gen_parsers, all_enum, written_parser)
+            out_file,
+            struct_with_member,
+            struct_cannot_gen_parsers,
+            all_enum,
+            written_parser)
         write_array_funcs_parser(
-            out_file, functions, all_enum, written_parser, cannot_write_deserializer_struct)
+            out_file,
+            functions,
+            all_enum,
+            written_parser,
+            cannot_write_deserializer_struct)
         write_two_attrs_funcs_parser(
-            out_file, functions, all_enum, written_parser, cannot_write_deserializer_struct)
+            out_file,
+            functions,
+            all_enum,
+            written_parser,
+            cannot_write_deserializer_struct)
         write_three_attrs_funcs_parser(
             out_file, functions, all_enum, written_parser)
 
@@ -3629,7 +4308,12 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_deviceHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_device_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_device_handler(
+                    out_file,
+                    func_name,
+                    parameters,
+                    struct_cannot_gen_parsers,
+                    all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3637,7 +4321,8 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_deviceExtraKeyHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_device_extra_key_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_device_extra_key_handler(
+                    out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3645,7 +4330,8 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_deviceThreeKeysHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_device_three_keys_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_device_three_keys_handler(
+                    out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3653,7 +4339,12 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_gpuInstanceHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_gpu_instance_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_gpu_instance_handler(
+                    out_file,
+                    func_name,
+                    parameters,
+                    struct_cannot_gen_parsers,
+                    all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3661,7 +4352,8 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_gpuInstanceExtraKeyHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_gpu_instance_extra_key_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_gpu_instance_extra_key_handler(
+                    out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3669,7 +4361,8 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_gpuInstanceThreeKeysHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_gpu_instance_three_keys_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_gpu_instance_three_keys_handler(
+                    out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3677,7 +4370,8 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_computeInstanceHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_compute_instance_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_compute_instance_handler(
+                    out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3685,7 +4379,12 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_vgpuTypeHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_vgpu_type_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_vgpu_type_handler(
+                    out_file,
+                    func_name,
+                    parameters,
+                    struct_cannot_gen_parsers,
+                    all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3693,7 +4392,8 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_vgpuTypeExtraKeyHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_vgpu_type_extra_key_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_vgpu_type_extra_key_handler(
+                    out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3701,7 +4401,12 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_vgpuInstanceHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_vgpu_instance_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_vgpu_instance_handler(
+                    out_file,
+                    func_name,
+                    parameters,
+                    struct_cannot_gen_parsers,
+                    all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3709,7 +4414,12 @@ def nvml_return_deserializer_cpp_writer(out_dir, struct_with_member, all_enum, f
         print_generator_source_info(out_file, 1)
         print_body_line('m_generalHandlers = {', out_file, 0)
         for func_name, parameters in functions.items():
-            if try_to_write_general_handler(out_file, func_name, parameters, struct_cannot_gen_parsers, all_enum):
+            if try_to_write_general_handler(
+                    out_file,
+                    func_name,
+                    parameters,
+                    struct_cannot_gen_parsers,
+                    all_enum):
                 handled_funcs[func_name] = True
                 continue
         print_body_line('};', out_file, 0)
@@ -3752,44 +4462,89 @@ def nvml_return_deserializer_header_writer(out_dir):
         out_file.write('class NvmlReturnDeserializer\n{\n')
         out_file.write('private:\n')
         print_body_line(
-            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_deviceHandlers;', out_file, 0)
-        print_body_line('std::unordered_map<std::string, std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>>> m_deviceExtraKeyHandlers;\n', out_file, 0)
+            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_deviceHandlers;',
+            out_file,
+            0)
+        print_body_line(
+            'std::unordered_map<std::string, std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>>> m_deviceExtraKeyHandlers;\n',
+            out_file,
+            0)
         print_body_line('std::unordered_map<std::string, std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>>> m_deviceThreeKeysHandlers;\n', out_file, 0)
         print_body_line(
-            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_gpuInstanceHandlers;', out_file, 0)
+            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_gpuInstanceHandlers;',
+            out_file,
+            0)
         print_body_line(
-            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_computeInstanceHandlers;', out_file, 0)
-        print_body_line('std::unordered_map<std::string, std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>>> m_gpuInstanceExtraKeyHandlers;\n', out_file, 0)
+            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_computeInstanceHandlers;',
+            out_file,
+            0)
+        print_body_line(
+            'std::unordered_map<std::string, std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>>> m_gpuInstanceExtraKeyHandlers;\n',
+            out_file,
+            0)
         print_body_line('std::unordered_map<std::string, std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>>> m_gpuInstanceThreeKeysHandlers;\n', out_file, 0)
         print_body_line(
-            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_vgpuTypeHandlers;', out_file, 0)
-        print_body_line('std::unordered_map<std::string, std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>>> m_vgpuTypeExtraKeyHandlers;\n', out_file, 0)
+            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_vgpuTypeHandlers;',
+            out_file,
+            0)
         print_body_line(
-            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_vgpuInstanceHandlers;', out_file, 0)
+            'std::unordered_map<std::string, std::tuple<std::function<std::optional<InjectionArgument>(const YAML::Node &)>, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>>> m_vgpuTypeExtraKeyHandlers;\n',
+            out_file,
+            0)
         print_body_line(
-            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_generalHandlers;', out_file, 0)
+            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_vgpuInstanceHandlers;',
+            out_file,
+            0)
+        print_body_line(
+            'std::unordered_map<std::string, std::function<std::optional<NvmlFuncReturn>(const YAML::Node &)>> m_generalHandlers;',
+            out_file,
+            0)
         out_file.write('public:\n')
         print_body_line('NvmlReturnDeserializer();', out_file, 0)
         print_body_line(
-            'std::optional<NvmlFuncReturn> DeviceHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<NvmlFuncReturn> DeviceHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         print_body_line(
-            'std::optional<NvmlFuncReturn> GpuInstanceHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<NvmlFuncReturn> GpuInstanceHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         print_body_line(
-            'std::optional<NvmlFuncReturn> ComputeInstanceHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<NvmlFuncReturn> ComputeInstanceHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         print_body_line(
-            'std::optional<NvmlFuncReturn> VgpuTypeHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<NvmlFuncReturn> VgpuTypeHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         print_body_line(
-            'std::optional<NvmlFuncReturn> VgpuInstanceHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<NvmlFuncReturn> VgpuInstanceHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         print_body_line(
-            'std::optional<NvmlFuncReturn> GeneralHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<NvmlFuncReturn> GeneralHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         print_body_line(
-            'std::optional<std::vector<std::tuple<InjectionArgument, NvmlFuncReturn>>> DeviceExtraKeyHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
-        print_body_line('std::optional<std::vector<std::tuple<InjectionArgument, InjectionArgument, NvmlFuncReturn>>> DeviceThreeKeysHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<std::vector<std::tuple<InjectionArgument, NvmlFuncReturn>>> DeviceExtraKeyHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         print_body_line(
-            'std::optional<std::vector<std::tuple<InjectionArgument, NvmlFuncReturn>>> GpuInstanceExtraKeyHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<std::vector<std::tuple<InjectionArgument, InjectionArgument, NvmlFuncReturn>>> DeviceThreeKeysHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         print_body_line(
-            'std::optional<std::vector<std::tuple<InjectionArgument, NvmlFuncReturn>>> VgpuTypeExtraKeyHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
-        print_body_line('std::optional<std::vector<std::tuple<InjectionArgument, InjectionArgument, NvmlFuncReturn>>> GpuInstanceThreeKeysHandle(const std::string &key, const YAML::Node &node);', out_file, 0)
+            'std::optional<std::vector<std::tuple<InjectionArgument, NvmlFuncReturn>>> GpuInstanceExtraKeyHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
+        print_body_line(
+            'std::optional<std::vector<std::tuple<InjectionArgument, NvmlFuncReturn>>> VgpuTypeExtraKeyHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
+        print_body_line(
+            'std::optional<std::vector<std::tuple<InjectionArgument, InjectionArgument, NvmlFuncReturn>>> GpuInstanceThreeKeysHandle(const std::string &key, const YAML::Node &node);',
+            out_file,
+            0)
         out_file.write('};\n')
 
     logging.info(f"{NVML_RETURN_DESERIALIZER_HEADER_PATH} genereted")
@@ -3811,6 +4566,73 @@ class Arg:
 ENUM_TYPE_UNSIGNED_INT = 0
 ENUM_TYPE_UNSIGNED_CHAR = 1
 ENUM_TYPE_PURE_ENUM = 2
+
+
+def build_type_alias_dict(nvmlHeaderFile):
+    """
+    Build a dictionary mapping versioned type names to their canonical non-versioned aliases.
+
+    For example:
+    - nvmlProcessInfo_v2_t -> nvmlProcessInfo_t
+    - nvmlProcessDetailList_v1_t -> nvmlProcessDetailList_t
+
+    This handles two patterns:
+    1. Multiple aliases in struct definitions: } nvmlProcessInfo_v2_t, nvmlProcessInfo_t;
+    2. Typedef chains: typedef nvmlProcessDetailList_v1_t nvmlProcessDetailList_t;
+
+    @param[in] nvmlHeaderFile: Path to the NVML header file
+    @return: Dictionary mapping versioned type names to canonical non-versioned names
+    """
+    type_alias_dict = {}
+    version_pattern = re.compile(r'_v\d+_t$')
+
+    # Pattern 1: Parse typedef declarations with multiple aliases using regex
+    # Matches: } type1_t, type2_t, type3_t;
+    multi_alias_pattern = re.compile(
+        r'^\s*\}\s+((?:\w+_t\s*,\s*)*\w+_t)\s*;', re.MULTILINE)
+
+    with open(nvmlHeaderFile, 'r') as f:
+        content = f.read()
+
+        # Find all struct definitions with multiple typedef names
+        for match in multi_alias_pattern.finditer(content):
+            # Extract all type names from the comma-separated list
+            type_names = [name.strip() for name in match.group(1).split(',')]
+
+            # Find versioned types and map them to non-versioned types
+            versioned_types = [
+                name for name in type_names if version_pattern.search(name)]
+            non_versioned_types = [
+                name for name in type_names if not version_pattern.search(name)]
+
+            # Map each versioned type to the first non-versioned type (if any)
+            if non_versioned_types:
+                canonical_name = non_versioned_types[0]
+                for versioned_type in versioned_types:
+                    type_alias_dict[versioned_type] = canonical_name
+
+    # Pattern 2: Parse typedef chains using clang
+    # Matches: typedef nvmlProcessDetailList_v1_t nvmlProcessDetailList_t;
+    index = clang.cindex.Index.create()
+    tu = index.parse(nvmlHeaderFile)
+
+    for child in tu.cursor.get_children():
+        if child.kind != clang.cindex.CursorKind.TYPEDEF_DECL:
+            continue
+
+        # Check if this is a typedef from a versioned type to a non-versioned
+        # type
+        underlying_type = child.underlying_typedef_type.spelling
+        typedef_name = child.spelling
+
+        # If the underlying type is versioned and the new typedef is not,
+        # create mapping
+        if (version_pattern.search(underlying_type) and
+            not version_pattern.search(typedef_name) and
+                underlying_type.startswith('nvml')):
+            type_alias_dict[underlying_type] = typedef_name
+
+    return type_alias_dict
 
 
 def parse_nvml_define_from_header_file(entryPointsHeaderFile, nvmlHeaderFile):
@@ -3836,6 +4658,9 @@ def parse_nvml_define_from_header_file(entryPointsHeaderFile, nvmlHeaderFile):
     that this actually an enumeration.
     """
     all_enum = {}
+
+    # Build type alias dictionary for versioned types
+    type_alias_dict = build_type_alias_dict(nvmlHeaderFile)
     for child in tu.cursor.get_children():
         if child.kind != clang.cindex.CursorKind.TYPEDEF_DECL:
             continue
@@ -3861,12 +4686,20 @@ def parse_nvml_define_from_header_file(entryPointsHeaderFile, nvmlHeaderFile):
             func_name = child.spelling
             if func_name not in used_functions.func_dict:
                 continue
-            if func_is_setter(func_name) or func_is_handler_getter(func_name) or func_name in skip_funcs:
+            if func_is_setter(func_name) or func_is_handler_getter(
+                    func_name) or func_name in skip_funcs:
                 continue
             parameters = []
             for c in child.get_children():
                 if c.kind == clang.cindex.CursorKind.PARM_DECL:
-                    parameters.append(Arg(c.spelling, c.type.spelling))
+                    type_name = c.type.spelling
+                    if type_name.endswith("*"):
+                        type_name = remove_ptr_if_any(type_name)
+                        type_name = type_alias_dict.get(type_name, type_name)
+                        type_name = type_name + " *"
+                    else:
+                        type_name = type_alias_dict.get(type_name, type_name)
+                    parameters.append(Arg(c.spelling, type_name))
             functions[func_name] = parameters
 
     for child in tu.cursor.get_children():
@@ -3880,7 +4713,11 @@ def parse_nvml_define_from_header_file(entryPointsHeaderFile, nvmlHeaderFile):
     return struct_with_member, all_enum, functions
 
 
-def nvml_return_deserializer_writer(outputDir, struct_with_member, all_enum, functions):
+def nvml_return_deserializer_writer(
+        outputDir,
+        struct_with_member,
+        all_enum,
+        functions):
     nvml_return_deserializer_cpp_writer(
         outputDir, struct_with_member, all_enum, functions)
     nvml_return_deserializer_header_writer(outputDir)
@@ -3897,7 +4734,8 @@ def injection_structs_writer(output_dir, struct_with_member, all_enum):
 
 
 def is_in_dcgm_root():
-    return os.path.exists("./dcgmlib") and os.path.exists("./dcgmi") and os.path.exists("./nvml-injection")
+    return os.path.exists(
+        "./dcgmlib") and os.path.exists("./dcgmi") and os.path.exists("./nvml-injection")
 
 
 def main():
@@ -3905,7 +4743,8 @@ def main():
                   "Example:\n" \
                   "\t# nvml-injection/scripts/generate_nvml_stubs.py -i sdk/nvidia/nvml/entry_points.h -o nvml-injection"
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawDescriptionHelpFormatter, description=description)
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=description)
     parser.add_argument(
         '-i',
         '--input-file',
@@ -3933,6 +4772,7 @@ def main():
 
     struct_with_member, all_enum, functions = parse_nvml_define_from_header_file(
         args.inputPath, args.nvmlHeaderPath)
+
     nvml_return_deserializer_writer(
         args.outputDir, struct_with_member, all_enum, functions)
     injection_argument_writer(args.outputDir, struct_with_member, all_enum)

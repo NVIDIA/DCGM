@@ -22,6 +22,7 @@ Common helper functions and classes relating to DCGM Multi Node GPU Diagnostics
 */
 
 #include <DcgmLogging.h>
+#include <DcgmUtilities.h>
 #include <atomic>
 #include <chrono>
 #include <dcgm_structs.h>
@@ -32,26 +33,8 @@ Common helper functions and classes relating to DCGM Multi Node GPU Diagnostics
 
 namespace DcgmNs::Common::ProcessUtils
 {
-/**
- * @brief Attempts to stop a process gracefully with multiple SIGTERM attempts, followed by SIGKILL
- *
- * @param pid Process ID to stop
- * @param maxSigtermAttempts Maximum number of SIGTERM attempts before using SIGKILL (default: 4)
- * @param sigtermRetryDelay Delay between SIGTERM attempts in seconds or milliseconds (default: 4 seconds)
- * @return dcgmReturn_t DCGM_ST_OK if process was stopped, DCGM_ST_CHILD_NOT_KILLED if process couldn't be stopped
- */
-template <typename DurationType = std::chrono::seconds>
-dcgmReturn_t StopProcess(pid_t pid,
-                         unsigned int maxSigtermAttempts = 4,
-                         DurationType sigtermRetryDelay  = std::chrono::seconds(4));
-
-/**
- * @brief Checks if a process is running
- *
- * @param pid Process ID to Check
- * @return true if process is running, false otherwise
- */
-bool IsProcessRunning(pid_t pid);
+using DcgmNs::Utils::IsProcessRunning;
+using DcgmNs::Utils::StopProcess;
 
 /**
  * @brief Command executor interface

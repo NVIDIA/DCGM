@@ -118,8 +118,6 @@ private:
      */
     void HelperDisplayFailureMessage(const std::string &errMsg, dcgmReturn_t ret);
 
-    bool isWhitespace(char c) const;
-
     dcgmRunDiag_v10 m_drd;
     bool m_jsonOutput;
     unsigned int m_iterations;

@@ -101,7 +101,7 @@ dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_HAD_TO_RESTORE_STATE, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_L1TAG_UNSUPPORTED, DCGM_ERROR_CONFIG, DCGM_FR_EC_SOFTWARE_OTHER),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_L1TAG_MISCOMPARE, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_MEMORY),
-    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_ROW_REMAP_FAILURE, DCGM_ERROR_ISOLATE, DCGM_FR_EC_HARDWARE_MEMORY),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_ROW_REMAP_FAILURE, DCGM_ERROR_RESET, DCGM_FR_EC_HARDWARE_MEMORY),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_UNCONTAINED_ERROR, DCGM_ERROR_ISOLATE, DCGM_FR_EC_SOFTWARE_XID),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_EMPTY_GPU_LIST, DCGM_ERROR_CONFIG, DCGM_FR_EC_SOFTWARE_CONFIG),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS, DCGM_ERROR_RESET, DCGM_FR_EC_HARDWARE_MEMORY),
@@ -152,6 +152,8 @@ dcgm_error_meta_t dcgmErrorMeta[DCGM_FR_ERROR_SENTINEL] = {
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_GPU_RECOVERY_DRAIN_RESET, DCGM_ERROR_RESET, DCGM_FR_EC_HARDWARE_OTHER),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_NCCL_ERROR, DCGM_ERROR_RESET, DCGM_FR_EC_HARDWARE_OTHER),
     DCGM_ERROR_TABLE_ENTRY(DCGM_FR_RETEST_REQUESTED, DCGM_ERROR_TRIAGE, DCGM_FR_EC_SOFTWARE_OTHER),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_CONTAINED_ERROR, DCGM_ERROR_MONITOR, DCGM_FR_EC_SOFTWARE_XID),
+    DCGM_ERROR_TABLE_ENTRY(DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT, DCGM_ERROR_TRIAGE, DCGM_FR_EC_HARDWARE_MEMORY),
 };
 
 dcgmErrorSeverity_t dcgmErrorGetPriorityByCode(unsigned int code)
@@ -282,6 +284,10 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
             return "A field value met or exceeded the error threshold.";
         case DCGM_ST_INSUFFICIENT_DRIVER_VERSION:
             return "The installed driver version is insufficient for this API";
+        case DCGM_ST_INSTANCE_NOT_FOUND:
+            return "The specified GPU instance does not exist";
+        case DCGM_ST_COMPUTE_INSTANCE_NOT_FOUND:
+            return "The specified GPU compute instance does not exist";
         case DCGM_ST_CHILD_NOT_KILLED:
             return "Failed to kill a child process";
         case DCGM_ST_3RD_PARTY_LIBRARY_ERROR:
@@ -299,6 +305,8 @@ DCGM_PUBLIC_API const char *errorString(dcgmReturn_t result)
                    "(nv-hostengine) if it is active.";
         case DCGM_ST_NVVS_KILLED:
             return "The DCGM diagnostic was killed by a signal";
+        case DCGM_ST_PAUSED:
+            return "The hostengine and all modules are paused";
         case DCGM_ST_ALREADY_INITIALIZED:
             return "The object has already been initialized";
         case DCGM_ST_NVML_NOT_LOADED:

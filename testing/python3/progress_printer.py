@@ -38,7 +38,8 @@ class DefaultProgressPrinter(ProgressPrinter):
                 self.childrenTest = ""
                 _erisTestNumber += 1
                 subtest._DefaultProgressPrinter_header_log_id = logger.info(
-                    "\n&&&& RUNNING %s - %d\n" % (subtest.name, _erisTestNumber), defer=subtest.quiet)
+                    "\n&&&& RUNNING %s - %d\n" %
+                    (subtest.name, _erisTestNumber), defer=subtest.quiet)
             else:
                 subtest._DefaultProgressPrinter_header_log_id = logger.info(
                     "", defer=subtest.quiet)
@@ -48,18 +49,20 @@ class DefaultProgressPrinter(ProgressPrinter):
 
         logger.indent_icrement()
 
-        if subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
+        if subtest.name.startswith(
+                "test_") and not subtest.name.endswith("restore state"):
             logger.info("Test %s start time: %s" %
                         (subtest.name, datetime.datetime.now()))
 
     def subtest_finish(self, subtest):
         global _erisTestNumber
 
-        if subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
+        if subtest.name.startswith(
+                "test_") and not subtest.name.endswith("restore state"):
             logger.info("Test %s end time: %s" %
                         (subtest.name, datetime.datetime.now()))
 
-        if subtest.result == test_utils.SubTest.FAILED and test_utils.reRunning == True:
+        if subtest.result == test_utils.SubTest.FAILED and test_utils.reRunning:
             subtest.result = test_utils.SubTest.FAILURE_LOGGED
             logger.error(subtest.result_details)
         if subtest.result == test_utils.SubTest.FAILED:
@@ -76,7 +79,8 @@ class DefaultProgressPrinter(ProgressPrinter):
             logger.info("<< %s" % (subtest))
 
         if option_parser.options.eris:
-            if subtest.dvssc_log and subtest.name.startswith("test_") and not subtest.name.endswith("restore state"):
+            if subtest.dvssc_log and subtest.name.startswith(
+                    "test_") and not subtest.name.endswith("restore state"):
                 if subtest.result == test_utils.SubTest.SKIPPED:
                     logger.info("\n&&&& WAIVED %s - %d\n" %
                                 (subtest.name, _erisTestNumber))

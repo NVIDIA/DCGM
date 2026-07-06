@@ -15,6 +15,7 @@
  */
 #include "MnDiag.h"
 #include "Diag.h"
+#include "dcgmi_common.h"
 #include <DcgmLogging.h>
 #include <NvvsJsonStrings.h>
 #include <atomic>
@@ -36,43 +37,6 @@ namespace
 std::atomic<bool> g_mndiagSignalExit      = false;
 std::atomic<bool> mndiag_stopDiagOnSignal = false;
 bool mndiag_installed_sig_handlers        = false; // Whether sig handlers have been installed
-static void (*diag_oldHupHandler)(int)    = NULL;  // reference to old sig hup handler if any
-static void (*diag_oldIntHandler)(int)    = NULL;  // reference to old sig int handler if any
-static void (*diag_oldQuitHandler)(int)   = NULL;  // reference to old sig quit handler if any
-static void (*diag_oldTermHandler)(int)   = NULL;  // reference to old sig term handler if any
-
-// sigaction structs for the handlers
-struct sigaction diag_actHup;
-struct sigaction diag_actInt;
-struct sigaction diag_actQuit;
-struct sigaction diag_actTerm;
-struct sigaction diag_actOld;
-
-/* Defines for sig handling */
-// Concatenate given args into one token
-#define CONCAT2(a, b)   a##b
-#define CONCAT(a, b, c) a##b##c
-
-// Run old signal handler
-#define RUN_OLD_HANDLER(name, signum, handler)           \
-    if (CONCAT(diag_old, name, Handler) == SIG_DFL)      \
-    {                                                    \
-        signal(signum, SIG_DFL);                         \
-        raise(signum);                                   \
-        signal(signum, handler);                         \
-    }                                                    \
-    else if (CONCAT(diag_old, name, Handler) != SIG_IGN) \
-    CONCAT(diag_old, name, Handler)(signum)
-
-#define SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIG, name, handler)          \
-    /* Create new handler */                                              \
-    memset(&CONCAT2(diag_act, name), 0, sizeof(CONCAT2(diag_act, name))); \
-    CONCAT2(diag_act, name).sa_handler = handler;                         \
-    sigemptyset(&CONCAT2(diag_act, name).sa_mask);                        \
-    sigaddset(&CONCAT2(diag_act, name).sa_mask, SIG);                     \
-    sigaction(SIG, &CONCAT2(diag_act, name), &diag_actOld);               \
-    /* Save old handler */                                                \
-    CONCAT(diag_old, name, Handler) = diag_actOld.sa_handler
 
 /* Sig handler methods */
 void handle_signal_during_diag(int /* signum */)
@@ -81,20 +45,6 @@ void handle_signal_during_diag(int /* signum */)
     {
         g_mndiagSignalExit.store(true, std::memory_order_relaxed);
     }
-}
-
-void InstallSigHandlers()
-{
-    // Ensure this method is called only once
-    if (mndiag_installed_sig_handlers)
-    {
-        return;
-    }
-    mndiag_installed_sig_handlers = true;
-    SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGHUP, Hup, handle_signal_during_diag);
-    SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGINT, Int, handle_signal_during_diag);
-    SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGQUIT, Quit, handle_signal_during_diag);
-    SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGTERM, Term, handle_signal_during_diag);
 }
 
 inline std::string to_string(dcgmDiagResult_t result)
@@ -148,7 +98,13 @@ dcgmReturn_t MnDiag::RunStartMnDiag(dcgmHandle_t handle)
     response.version = dcgmMnDiagResponse_version1;
 
     // Setup signal handlers
-    InstallSigHandlers();
+    if (auto ret = DcgmNs::Dcgmi::InstallSigHandlers(
+            mndiag_installed_sig_handlers, handle_signal_during_diag, "multi-node diagnostic");
+        ret != DCGM_ST_OK)
+    {
+        HelperDisplayFailureMessage("Error: Unable to install multi-node diagnostic signal handlers.", ret, response);
+        return ret;
+    }
 
     result = ExecuteMnDiagOnServer(handle, response);
 

@@ -216,6 +216,10 @@ public:
     void SetAllowAttach(bool allowAttach);
     bool AllowAttach() const;
 
+    nvmlReturn_t GpmApiWrapper(std::string const &funcname,
+                               std::vector<InjectionArgument> &args,
+                               std::vector<InjectionArgument> &preparedValues);
+
 private:
     static InjectedNvml *m_injectedNvmlInstance;
 
@@ -332,4 +336,9 @@ private:
     // This is used for emulating GPU detachment before host engine initialization.
     // We will detach the GPUs before the host engine is initialized.
     void HandleGpuDetachedBeforeHand();
+
+    nvmlReturn_t nvmlGpmSampleAllocImpl(nvmlGpmSample_t *gpmSample);
+    nvmlReturn_t nvmlGpmSampleFreeImpl(nvmlGpmSample_t gpmSample);
+    nvmlReturn_t nvmlGpmSampleGetImpl(nvmlDevice_t device, nvmlGpmSample_t gpmSample);
+    nvmlReturn_t nvmlGpmMetricsGetImpl(nvmlGpmMetricsGet_t *metricsGet);
 };

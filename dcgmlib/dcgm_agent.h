@@ -494,14 +494,14 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetGpuInstanceHierarchy(dcgmHandle_t dcgmHandle
  *
  * @param dcgmHandle  IN: DCGM Handle
  * @param linkStatus OUT: Structure in which to store NvLink link statuses. .version should be set to
- *                        dcgmNvLinkStatus_version1 before calling this.
+ *                        dcgmNvLinkStatus_version before calling this.
  *
  * @return
  *        - \ref DCGM_ST_OK                if the call was successful.
  *        - \ref DCGM_ST_NOT_SUPPORTED     if the given entityGroup does not support enumeration.
  *        - \ref DCGM_ST_BADPARAM          if any parameter is invalid
  */
-dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v4 *linkStatus);
+dcgmReturn_t DCGM_PUBLIC_API dcgmGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v5 *linkStatus);
 
 
 /**
@@ -1871,16 +1871,17 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmPolicyTrigger(dcgmHandle_t pDcgmHandle);
  * @param pDcgmHandle             IN: DCGM Handle
  * @param gpuId                   IN: GPU Id corresponding to which topology information should be fetched
  * @param pDcgmDeviceTopology IN/OUT: Topology information corresponding to \a gpuId. pDcgmDeviceTopology->version must
- *                                    be set to dcgmDeviceTopology_version before this call.
+ *                                    be set to dcgmDeviceTopology_version or dcgmDeviceTopology_version1 before this
+ *                                    call.
  * @return
  *        - \ref DCGM_ST_OK                   if the call was successful.
  *        - \ref DCGM_ST_BADPARAM             if \a gpuId or \a pDcgmDeviceTopology were not valid.
- *        - \ref DCGM_ST_VER_MISMATCH         if pDcgmDeviceTopology->version was not set to dcgmDeviceTopology_version.
+ *        - \ref DCGM_ST_VER_MISMATCH         if pDcgmDeviceTopology->version was not set to a supported version.
  *
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmGetDeviceTopology(dcgmHandle_t pDcgmHandle,
                                                    unsigned int gpuId,
-                                                   dcgmDeviceTopology_t *pDcgmDeviceTopology);
+                                                   dcgmDeviceTopology_v2 *pDcgmDeviceTopology);
 
 /**
  * Gets group topology corresponding to the \a groupId.
@@ -1888,16 +1889,16 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmGetDeviceTopology(dcgmHandle_t pDcgmHandle,
  * @param pDcgmHandle            IN: DCGM Handle
  * @param groupId                IN: GroupId corresponding to which topology information should be fetched
  * @param pDcgmGroupTopology IN/OUT: Topology information corresponding to \a groupId. pDcgmgroupTopology->version must
- *                                   be set to dcgmGroupTopology_version.
+ *                                   be set to dcgmGroupTopology_version or dcgmGroupTopology_version1.
  * @return
  *        - \ref DCGM_ST_OK             if the call was successful.
  *        - \ref DCGM_ST_BADPARAM       if \a groupId or \a pDcgmGroupTopology were not valid.
- *        - \ref DCGM_ST_VER_MISMATCH   if pDcgmgroupTopology->version was not set to dcgmGroupTopology_version.
+ *        - \ref DCGM_ST_VER_MISMATCH   if pDcgmgroupTopology->version was not set to a supported version.
  *
  */
 dcgmReturn_t DCGM_PUBLIC_API dcgmGetGroupTopology(dcgmHandle_t pDcgmHandle,
                                                   dcgmGpuGrp_t groupId,
-                                                  dcgmGroupTopology_t *pDcgmGroupTopology);
+                                                  dcgmGroupTopology_v2 *pDcgmGroupTopology);
 
 /** @} */ // Closing for DCGMAPI_Topo
 
@@ -2043,6 +2044,9 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmModuleGetStatuses(dcgmHandle_t pDcgmHandle, dcg
 /**
  * Get all of the profiling metric groups for a given GPU group.
  *
+ * The behavior of this API differs depending on the GPU architecture:
+ *
+ * **Ampere and Older GPUs (Profiling Module):**
  * Profiling metrics are watched in groups of fields that are all watched together. For instance, if you want
  * to watch DCGM_FI_PROF_GR_ENGINE_ACTIVITY, this might also be in the same group as DCGM_FI_PROF_SM_EFFICIENCY.
  * Watching this group would result in DCGM storing values for both of these metrics.
@@ -2053,6 +2057,12 @@ dcgmReturn_t DCGM_PUBLIC_API dcgmModuleGetStatuses(dcgmHandle_t pDcgmHandle, dcg
  * DCGM_FI_PROF_NVLINK_TX_DATA.
  *
  * Metrics that can be watched concurrently will have different .majorId fields in their dcgmProfMetricGroupInfo_t
+ *
+ * **Hopper and Newer GPUs (GPM (GPU Performance Monitoring) Module):**
+ * GPM metrics are obtained from NVML's GPM APIs that capture all performance metrics data together. The metrics are
+ * still organized into groups for convenience and API consistency with older architectures. These groups do not have
+ * the same concurrency restrictions as on older architectures. On these platforms, all GPM metric and profiling groups
+ * can be watched concurrently without hardware resource conflicts.
  *
  * See \ref dcgmGroupCreate for details on creating a GPU group
  * See \ref dcgmWatchFields to actually watch the underlying profiling fields

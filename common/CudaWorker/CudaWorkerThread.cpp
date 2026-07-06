@@ -368,29 +368,29 @@ std::unique_ptr<FieldWorkerBase> CudaWorkerThread::AllocateFieldWorker(unsigned 
 {
     switch (fieldId)
     {
-        case DCGM_FI_PROF_GR_ENGINE_ACTIVE:
+        case DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO:
             return std::move(std::make_unique<FieldWorkerGrActivity>(m_cudaDevice));
 
-        case DCGM_FI_PROF_SM_ACTIVE:
+        case DCGM_FI_PROF_SM_UTIL_RATIO:
             return std::move(std::make_unique<FieldWorkerSmActivity>(m_cudaDevice));
 
-        case DCGM_FI_PROF_SM_OCCUPANCY:
+        case DCGM_FI_PROF_SM_OCCUPANCY_RATIO:
             return std::move(std::make_unique<FieldWorkerSmOccupancy>(m_cudaDevice));
 
         case DCGM_FI_PROF_PCIE_RX_BYTES:
         case DCGM_FI_PROF_PCIE_TX_BYTES:
             return std::move(std::make_unique<FieldWorkerPciRxTxBytes>(m_cudaDevice, fieldId));
 
-        case DCGM_FI_PROF_DRAM_ACTIVE:
+        case DCGM_FI_PROF_DRAM_UTIL_RATIO:
             return std::move(std::make_unique<FieldWorkerDramUtil>(m_cudaDevice));
 
         case DCGM_FI_PROF_NVLINK_RX_BYTES:
         case DCGM_FI_PROF_NVLINK_TX_BYTES:
             return std::move(std::make_unique<FieldWorkerNvLinkRwBytes>(m_cudaDevice, fieldId, m_cudaPeerBusId));
 
-        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+        case DCGM_FI_PROF_FP16_UTIL_RATIO:
+        case DCGM_FI_PROF_FP32_UTIL_RATIO:
+        case DCGM_FI_PROF_FP64_UTIL_RATIO:
             if (preferCublas)
             {
                 return std::move(std::make_unique<FieldWorkerTensorActivity>(m_cudaDevice, fieldId));
@@ -400,7 +400,7 @@ std::unique_ptr<FieldWorkerBase> CudaWorkerThread::AllocateFieldWorker(unsigned 
                 return std::move(std::make_unique<FieldWorkerDataTypeActivity>(m_cudaDevice, fieldId));
             }
 
-        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+        case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
             return std::move(std::make_unique<FieldWorkerTensorActivity>(m_cudaDevice, fieldId));
 
         default:

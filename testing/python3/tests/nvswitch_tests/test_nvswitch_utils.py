@@ -30,9 +30,9 @@ def is_nvidia_docker_running():
     cmd = 'systemctl status nvidia-docker'
     p = subprocess.Popen(
         cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out_buf, err_buf = p.communicate()
+    out_buf, _ = p.communicate()
     out = out_buf.decode('utf-8')
-    err = err_buf.decode('utf-8')
+
     if "running" in out.rstrip():
         return True
     else:
@@ -47,7 +47,7 @@ def get_nvswitch_pci_bdf():
             "lspci | grep -i nvidia | grep -i bridge", shell=True)
         lsPciOutput = lsPciOutputBuf.decode('utf-8')
     except subprocess.CalledProcessError as e:
-        logger.error(e.message)
+        logger.error("Failed to run 'lspci' for GPU BDFs: %s", e.message)
         return bdf
 
     nvswitches = lsPciOutput.split('\n')

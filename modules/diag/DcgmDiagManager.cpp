@@ -407,9 +407,12 @@ dcgmReturn_t DcgmDiagManager::AddRunOptions(std::vector<std::string> &cmdArgs, d
     return DCGM_ST_OK;
 }
 
-dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v10 *drd, std::vector<std::string> &cmdArgs) const
+dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v10 *drd,
+                                            std::vector<std::string> &cmdArgs,
+                                            ConfigFileGuard &configFileGuard) const
 {
     static const unsigned int MAX_RETRIES = 3;
+    configFileGuard.reset();
 
     size_t configFileContentsSize = strnlen(drd->configFileContents, sizeof(drd->configFileContents));
 
@@ -420,12 +423,8 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v10 *drd, std::vector<st
 
         for (unsigned int retries = 0; retries < MAX_RETRIES && fd == -1; retries++)
         {
-            // According to man 2 umask, there is no way to read the current
-            // umask through the API without also setting it. It can be read
-            // through /proc/[pid]/status, but that is likely excessive and is
-            // only supported on Linux 4.7+. So we silence the warning here, and
-            // we chmod the file to 600 below as we don't want to set the umask
-            // here without being able to revert it to its original value
+            // mkstemp creates the file with permissions 0600 (read+write for owner only),
+            // so no explicit chmod is needed.
             // coverity[secure_temp]
             fd = mkstemp(fileName);
         }
@@ -436,15 +435,18 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v10 *drd, std::vector<st
             return DCGM_ST_GENERIC_ERROR;
         }
 
-        int ret = chmod(fileName, 0600);
-        if (ret == -1)
+        // Guard: unlink the file on any error path after this point except for the success path where the
+        // ConfigFileCleanupType is moved to the caller object and disarmed locally
+        ConfigFileCleanupType configFileCleanup(
+            [configFilePath = std::string(fileName)]() { unlink(configFilePath.c_str()); });
+
+        int writeRet = DcgmNs::Utils::WriteAll(fd, drd->configFileContents, configFileContentsSize);
+        close(fd);
+        if (writeRet != 0)
         {
-            close(fd);
-            DCGM_LOG_ERROR << "Couldn't chmod a temporary configuration file for NVVS: " << std::strerror(errno);
+            DCGM_LOG_ERROR << "Failed to write the temporary configuration file for NVVS: " << std::strerror(writeRet);
             return DCGM_ST_GENERIC_ERROR;
         }
-        size_t written = write(fd, drd->configFileContents, configFileContentsSize);
-        close(fd);
         // Adjust file permissions
         if (auto serviceAccount = GetServiceAccount(m_coreProxy); serviceAccount.has_value())
         {
@@ -484,16 +486,10 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v10 *drd, std::vector<st
                 "Service account is not specified. Skipping permissions adjustments for the config file {}", fileName);
         }
 
-        if (written == configFileContentsSize)
-        {
-            cmdArgs.push_back("--config");
-            cmdArgs.push_back(fileName);
-        }
-        else
-        {
-            DCGM_LOG_ERROR << "Failed to write the temporary file for NVVS: " << std::strerror(errno);
-            return DCGM_ST_GENERIC_ERROR;
-        }
+        cmdArgs.push_back("--config");
+        cmdArgs.push_back(fileName);
+        configFileGuard = std::move(configFileCleanup);
+        configFileCleanup.Disarm();
     }
     else
     {
@@ -632,6 +628,7 @@ void DcgmDiagManager::AddMiscellaneousNvvsOptions(std::vector<std::string> &cmdA
 dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArgs,
                                                 dcgmRunDiag_v10 *drd,
                                                 unsigned int diagResponseVersion,
+                                                ConfigFileGuard &configFileGuard,
                                                 std::string const &fakeGpuIds,
                                                 std::string const &entityIds,
                                                 ExecuteWithServiceAccount useServiceAccount)
@@ -663,7 +660,7 @@ dcgmReturn_t DcgmDiagManager::CreateNvvsCommand(std::vector<std::string> &cmdArg
         return ret;
     }
 
-    if ((ret = AddConfigFile(drd, cmdArgs)) != DCGM_ST_OK)
+    if ((ret = AddConfigFile(drd, cmdArgs, configFileGuard)) != DCGM_ST_OK)
     {
         // Failure logged in AddConfigFile()
         return ret;
@@ -685,8 +682,10 @@ dcgmReturn_t DcgmDiagManager::PerformNVVSExecute(std::string *stdoutStr,
                                                  ExecuteWithServiceAccount useServiceAccount)
 {
     std::vector<std::string> args;
+    ConfigFileGuard configFileGuard;
 
-    if (auto const ret = CreateNvvsCommand(args, drd, response.GetVersion(), fakeGpuIds, entityIds, useServiceAccount);
+    if (auto const ret = CreateNvvsCommand(
+            args, drd, response.GetVersion(), configFileGuard, fakeGpuIds, entityIds, useServiceAccount);
         ret != DCGM_ST_OK)
     {
         return ret;

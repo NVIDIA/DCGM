@@ -22,6 +22,7 @@
 #include <PluginInterface.h>
 #include <dcgm_structs.h>
 
+#include <memory>
 #include <string>
 
 class MemtestPlugin : public Plugin
@@ -39,6 +40,7 @@ public:
 
 private:
     dcgmHandle_t m_handle;
+    std::unique_ptr<TestParameters> m_defaultTestParameters;
 };
 
 

@@ -25,6 +25,8 @@
 #include <DcgmUtilities.h>
 #include <EntityListHelpers.h>
 
+#include <cerrno>
+#include <cstring>
 #include <memory>
 #include <thread>
 #include <type_traits>
@@ -341,8 +343,29 @@ void PrintMetricsRow(dcgmi_entity_pair_t const &entity,
                      std::vector<unsigned short> &fieldIds)
 {
     using namespace fmt::literals;
+    std::string entityIdStr;
+    std::string entityPrefixStr;
+    if (entity.entityGroupId == DCGM_FE_LINK)
+    {
+        dcgm_link_t link {};
+        link.raw = entity.entityId;
+        if (link.parsed.type == DCGM_FE_GPU)
+        {
+            entityPrefixStr = fmt::format("GPU {} LINK", static_cast<unsigned>(link.parsed.gpuId));
+        }
+        else
+        {
+            entityPrefixStr = fmt::format("SW {} LINK", static_cast<unsigned>(link.parsed.switchId));
+        }
+        entityIdStr = fmt::to_string(static_cast<unsigned>(link.parsed.index));
+    }
+    else
+    {
+        entityIdStr     = fmt::to_string(entity.entityId);
+        entityPrefixStr = fmt::format("{}", entity.entityGroupId);
+    }
     fmt::print("{entityPair:{colWidth}}",
-               "entityPair"_a = fmt::format("{} {}", entity.entityGroupId, entity.entityId),
+               "entityPair"_a = fmt::format("{} {}", entityPrefixStr, entityIdStr),
                "colWidth"_a   = widths[0] + PADDING);
 
     size_t valuesIdx = 0;
@@ -530,7 +553,10 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
     std::unique_ptr<dcgmGroupInfo_t> dcgmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
 
     /* Install a signal handler to catch ctrl-c */
-    signal(SIGINT, &killHandler);
+    if (signal(SIGINT, &killHandler) == SIG_ERR)
+    {
+        log_warning("registering SIGINT failed for dmon: {}", std::strerror(errno));
+    }
 
     auto ret = GetSortedEntities(*(dcgmGroupInfo));
 

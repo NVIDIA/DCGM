@@ -497,7 +497,7 @@ void GetCacheManagerFieldInfo(DcgmCacheManager &cacheManager, std::vector<unsign
 
 void PopulateNvLinkLinkStatus(DcgmCacheManager &cacheManager)
 {
-    dcgmNvLinkStatus_v4 nvLinkStatus {};
+    dcgmNvLinkStatus_v5 nvLinkStatus {};
     cacheManager.PopulateNvLinkLinkStatus(nvLinkStatus);
 }
 
@@ -850,6 +850,7 @@ void RecordBindUnbindEvent(DcgmCacheManager &cacheManager)
 #define MIN_RUNTIME_FOR_CPU_CALC_MS std::chrono::milliseconds(100)
 /*****************************************************************************/
 TestCacheManager::TestCacheManager()
+    : m_fakeGpusOnly(false)
 {}
 
 /*****************************************************************************/
@@ -865,7 +866,17 @@ std::string TestCacheManager::GetTag()
 /*****************************************************************************/
 int TestCacheManager::Init(const TestDcgmModuleInitParams &initParams)
 {
-    m_gpus = initParams.liveGpuIds;
+    if (initParams.liveGpuIds.empty())
+    {
+        m_gpus         = initParams.fakeGpuIds;
+        m_fakeGpusOnly = true;
+    }
+    else
+    {
+        m_gpus         = initParams.liveGpuIds;
+        m_fakeGpusOnly = false;
+    }
+
     return 0;
 }
 
@@ -920,7 +931,7 @@ int TestCacheManager::AddPowerUsageWatchAllGpusHelper(DcgmCacheManager *cacheMan
         bool wereFirstWatcher   = false;
         st                      = cacheManager->AddFieldWatch(DCGM_FE_GPU,
                                          m_gpus[i],
-                                         DCGM_FI_DEV_POWER_USAGE,
+                                         DCGM_FI_DEV_BOARD_POWER_WATTS,
                                          1000000,
                                          86400.0,
                                          0,
@@ -967,7 +978,7 @@ int TestCacheManager::TestRecording()
     /* Verify all field values were saved */
     for (i = 0; i < (int)m_gpus.size(); i++)
     {
-        st = cacheManager->GetLatestSample(DCGM_FE_GPU, m_gpus[i], DCGM_FI_DEV_POWER_USAGE, &sample, 0);
+        st = cacheManager->GetLatestSample(DCGM_FE_GPU, m_gpus[i], DCGM_FI_DEV_BOARD_POWER_WATTS, &sample, 0);
         if (st != DCGM_ST_OK)
         {
             fprintf(stderr, "Got st %d from GetLatestSample() for gpu %u\n", st, m_gpus[i]);
@@ -976,8 +987,15 @@ int TestCacheManager::TestRecording()
         }
 
         Msamples = 1; /* Only fetch one */
-        st       = cacheManager->GetSamples(
-            DCGM_FE_GPU, m_gpus[i], DCGM_FI_DEV_POWER_USAGE, &sample, &Msamples, 0, 0, DCGM_ORDER_ASCENDING, nullptr);
+        st       = cacheManager->GetSamples(DCGM_FE_GPU,
+                                      m_gpus[i],
+                                      DCGM_FI_DEV_BOARD_POWER_WATTS,
+                                      &sample,
+                                      &Msamples,
+                                      0,
+                                      0,
+                                      DCGM_ORDER_ASCENDING,
+                                      nullptr);
         if (st != DCGM_ST_OK)
         {
             fprintf(stderr, "Got st %d from GetSamples() for gpu %u\n", st, m_gpus[i]);
@@ -1008,7 +1026,7 @@ int TestCacheManager::TestRecordingGlobal()
     bool wereFirstWatcher = false;
     st                    = cacheManager->AddFieldWatch(DCGM_FE_NONE,
                                      0,
-                                     DCGM_FI_DRIVER_VERSION,
+                                     DCGM_FI_SYSTEM_DRIVER_VERSION,
                                      1000000,
                                      86400.0,
                                      0,
@@ -1023,7 +1041,7 @@ int TestCacheManager::TestRecordingGlobal()
         goto CLEANUP;
     }
 
-    st = cacheManager->GetLatestSample(DCGM_FE_NONE, 0, DCGM_FI_DRIVER_VERSION, &sample, 0);
+    st = cacheManager->GetLatestSample(DCGM_FE_NONE, 0, DCGM_FI_SYSTEM_DRIVER_VERSION, &sample, 0);
     if (st != DCGM_ST_OK)
     {
         fprintf(stderr, "Got st %d from GetLatestSample()\n", st);
@@ -1037,7 +1055,7 @@ int TestCacheManager::TestRecordingGlobal()
 
     Msamples = 1; /* Only fetch one */
     st       = cacheManager->GetSamples(
-        DCGM_FE_NONE, 0, DCGM_FI_DRIVER_VERSION, &sample, &Msamples, 0, 0, DCGM_ORDER_ASCENDING, nullptr);
+        DCGM_FE_NONE, 0, DCGM_FI_SYSTEM_DRIVER_VERSION, &sample, &Msamples, 0, 0, DCGM_ORDER_ASCENDING, nullptr);
     if (st != DCGM_ST_OK)
     {
         fprintf(stderr, "Got st %d from GetSamples()\n", st);
@@ -1069,10 +1087,10 @@ int TestCacheManager::TestEmpty()
 
     memset(&sample, 0, sizeof(sample));
 
-    fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_GPU_TEMP);
+    fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_GPU_TEMP_CELSIUS);
     if (!fieldMeta)
     {
-        fprintf(stderr, "Unable to get fieldMeta for field DCGM_FI_DEV_GPU_TEMP\n");
+        fprintf(stderr, "Unable to get fieldMeta for field DCGM_FI_DEV_GPU_TEMP_CELSIUS\n");
         retSt = 1;
         goto CLEANUP;
     }
@@ -1958,7 +1976,7 @@ int TestCacheManager::TestRecordTiming()
     DcgmWatcher watcher(DcgmWatcherTypeClient, DCGM_CONNECTION_ID_NONE);
 
     int Nfields                   = 3; /* same as size of arrays below */
-    unsigned short fieldIds[3]    = { DCGM_FI_DEV_NAME, DCGM_FI_DEV_BRAND, DCGM_FI_DEV_SERIAL };
+    unsigned short fieldIds[3]    = { DCGM_FI_DEV_GPU_NAME, DCGM_FI_DEV_GPU_BRAND, DCGM_FI_DEV_BOARD_SERIAL };
     timelib64_t fieldFrequency[3] = { 100000, 200000, 500000 };
 
     memset(&samples, 0, sizeof(samples));
@@ -2072,10 +2090,10 @@ int TestCacheManager::TestTimeBasedQuota()
     bool updateOnFirstWatch = false; /* fake GPU */
     bool wereFirstWatcher   = false;
 
-    fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_GPU_TEMP);
+    fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_GPU_TEMP_CELSIUS);
     if (!fieldMeta)
     {
-        fprintf(stderr, "Unable to get fieldMeta for field DCGM_FI_DEV_GPU_TEMP\n");
+        fprintf(stderr, "Unable to get fieldMeta for field DCGM_FI_DEV_GPU_TEMP_CELSIUS\n");
         retSt = 1;
         goto CLEANUP;
     }
@@ -2156,13 +2174,6 @@ int TestCacheManager::TestTimeBasedQuota()
         goto CLEANUP;
     }
 
-#if 0 // Debug printing
-    for(i = 0; i < Nsamples; i++)
-    {
-        printf("ts: %lld. age: %lld\n", (long long)samples[i].timestamp, (long long)(now - samples[i].timestamp));
-    }
-#endif
-
 CLEANUP:
     return retSt;
 }
@@ -2189,10 +2200,10 @@ int TestCacheManager::TestCountBasedQuota()
     bool updateOnFirstWatch = false; /* fake GPU */
     bool wereFirstWatcher   = false;
 
-    fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_GPU_TEMP);
+    fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_GPU_TEMP_CELSIUS);
     if (!fieldMeta)
     {
-        fprintf(stderr, "Unable to get fieldMeta for field DCGM_FI_DEV_GPU_TEMP\n");
+        fprintf(stderr, "Unable to get fieldMeta for field DCGM_FI_DEV_GPU_TEMP_CELSIUS\n");
         retSt = 1;
         goto CLEANUP;
     }
@@ -2267,13 +2278,6 @@ int TestCacheManager::TestCountBasedQuota()
         retSt = 1;
         goto CLEANUP;
     }
-
-#if 0 // Debug printing
-    for(i = 0; i < Nsamples; i++)
-    {
-        printf("ts: %lld\n", (long long)samples[i].timestamp);
-    }
-#endif
 
 CLEANUP:
     return retSt;
@@ -2582,8 +2586,16 @@ int TestCacheManager::TestMultipleWatchersMaxAge(void)
     bool updateOnFirstWatch { false };
     bool wereFirstWatcher { false };
 
-    dcgmReturn_t st = dcm->AddFieldWatch(
-        DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_UTIL, 1000, 5000, 0, watcher, false, updateOnFirstWatch, wereFirstWatcher);
+    dcgmReturn_t st = dcm->AddFieldWatch(DCGM_FE_GPU,
+                                         0,
+                                         DCGM_FI_DEV_GPU_UTIL_RATIO,
+                                         1000,
+                                         5000,
+                                         0,
+                                         watcher,
+                                         false,
+                                         updateOnFirstWatch,
+                                         wereFirstWatcher);
 
     if (st)
     {
@@ -2595,8 +2607,16 @@ int TestCacheManager::TestMultipleWatchersMaxAge(void)
     updateOnFirstWatch = false;
     wereFirstWatcher   = false;
 
-    st = dcm->AddFieldWatch(
-        DCGM_FE_GPU, 0, DCGM_FI_DEV_GPU_UTIL, 500, 3000, 0, watcher2, false, updateOnFirstWatch, wereFirstWatcher);
+    st = dcm->AddFieldWatch(DCGM_FE_GPU,
+                            0,
+                            DCGM_FI_DEV_GPU_UTIL_RATIO,
+                            500,
+                            3000,
+                            0,
+                            watcher2,
+                            false,
+                            updateOnFirstWatch,
+                            wereFirstWatcher);
     if (st)
     {
         fprintf(stderr, "AddFieldWatch returned %d\n", st);
@@ -2607,7 +2627,7 @@ int TestCacheManager::TestMultipleWatchersMaxAge(void)
 
     watchInfo.watchKey.entityGroupId = DCGM_FE_GPU;
     watchInfo.watchKey.entityId      = 0;
-    watchInfo.watchKey.fieldId       = DCGM_FI_DEV_GPU_UTIL;
+    watchInfo.watchKey.fieldId       = DCGM_FI_DEV_GPU_UTIL_RATIO;
 
     dcgm_watch_watcher_info_t w1;
     w1.monitorIntervalUsec = 1000;
@@ -2660,7 +2680,7 @@ int TestCacheManager::TestGetLatestSampleNoData()
                                                    DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
                                                    DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT,
                                                    DCGM_FI_DEV_CONNECTX_HEALTH,
-                                                   DCGM_FI_DEV_CPU_POWER_LIMIT };
+                                                   DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS };
 
     for (auto const &testField : testFields)
     {
@@ -2690,7 +2710,7 @@ int TestCacheManager::TestGetLatestSampleNoDataFvBuffer()
                                                    DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
                                                    DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT,
                                                    DCGM_FI_DEV_CONNECTX_HEALTH,
-                                                   DCGM_FI_DEV_CPU_POWER_LIMIT };
+                                                   DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS };
 
     for (auto const &testField : testFields)
     {
@@ -3255,8 +3275,13 @@ int TestCacheManager::Run()
         CompleteTest("TestUpdatePerf", TestUpdatePerf(), Nfailed);
         CompleteTest("TestLockstepModeAwakeTime", TestLockstepModeAwakeTime(), Nfailed);
         CompleteTest("TestTimedModeAwakeTime", TestTimedModeAwakeTime(), Nfailed);
-        CompleteTest("TestWatchesVisited", TestWatchesVisited(), Nfailed);
-        CompleteTest("TestRecording", TestRecording(), Nfailed);
+
+        if (!m_fakeGpusOnly)
+        {
+            CompleteTest("TestWatchesVisited", TestWatchesVisited(), Nfailed);
+            CompleteTest("TestRecording", TestRecording(), Nfailed);
+        }
+
         CompleteTest("TestInjection", TestInjection(), Nfailed);
         CompleteTest("TestManageVgpuList", TestManageVgpuList(), Nfailed);
         CompleteTest("TestSummary", TestSummary(), Nfailed);

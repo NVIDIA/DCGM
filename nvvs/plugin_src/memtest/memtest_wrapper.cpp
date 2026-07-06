@@ -29,25 +29,26 @@ MemtestPlugin::MemtestPlugin(dcgmHandle_t handle)
     m_infoStruct.selfParallel     = false;
     m_infoStruct.logFileTag       = MEMTEST_PLUGIN_NAME;
 
-    TestParameters *tp = new TestParameters();
-    tp->AddString(MEMTEST_STR_USE_MAPPED_MEM, "False");
-    tp->AddString(MEMTEST_STR_IS_ALLOWED, "True");
-    tp->AddString(MEMTEST_STR_TEST_DURATION, "600");
-    tp->AddString(MEMTEST_STR_TEST0, "False");
-    tp->AddString(MEMTEST_STR_TEST1, "False");
-    tp->AddString(MEMTEST_STR_TEST2, "False");
-    tp->AddString(MEMTEST_STR_TEST3, "False");
-    tp->AddString(MEMTEST_STR_TEST4, "False");
-    tp->AddString(MEMTEST_STR_TEST5, "False");
-    tp->AddString(MEMTEST_STR_TEST6, "False");
-    tp->AddString(MEMTEST_STR_TEST7, "True");
-    tp->AddString(MEMTEST_STR_TEST8, "False");
-    tp->AddString(MEMTEST_STR_TEST9, "False");
-    tp->AddString(MEMTEST_STR_TEST10, "True");
-    tp->AddString(MEMTEST_STR_NUM_CHUNKS, "1");
-    tp->AddString(PS_IGNORE_ERROR_CODES, "");
-    tp->AddDouble(MEMTEST_STR_MIN_ALLOCATION_PERCENTAGE, DEFAULT_MIN_ALLOCATION_PERCENTAGE);
-    m_infoStruct.defaultTestParameters = tp;
+    m_defaultTestParameters = std::make_unique<TestParameters>();
+    m_defaultTestParameters->AddString(MEMTEST_STR_USE_MAPPED_MEM, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_IS_ALLOWED, "True");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST_DURATION, "600");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST0, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST1, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST2, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST3, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST4, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST5, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST6, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST7, "True");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST8, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST9, "False");
+    m_defaultTestParameters->AddString(MEMTEST_STR_TEST10, "True");
+    m_defaultTestParameters->AddString(MEMTEST_STR_NUM_CHUNKS, "1");
+    m_defaultTestParameters->AddString(PS_IGNORE_ERROR_CODES, "");
+    m_defaultTestParameters->AddString(PS_USE_GENERIC_MODE, "False");
+    m_defaultTestParameters->AddDouble(MEMTEST_STR_MIN_ALLOCATION_PERCENTAGE, DEFAULT_MIN_ALLOCATION_PERCENTAGE);
+    m_infoStruct.defaultTestParameters = m_defaultTestParameters.get();
 }
 
 /*****************************************************************************/
@@ -88,11 +89,20 @@ void MemtestPlugin::Go(std::string const &testName,
 
     if (testParameters.GetBoolFromString(MEMTEST_STR_IS_ALLOWED) == false)
     {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memtest");
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
-        return;
+        if (testParameters.GetBoolFromString(PS_USE_GENERIC_MODE) == false)
+        {
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, "Memtest");
+            AddInfo(testName, d.GetMessage());
+            SetResult(testName, NVVS_RESULT_SKIP);
+            return;
+        }
+        else
+        {
+            log_debug("Proceeding in generic mode.");
+            AddInfoVerbose(testName, "Running in generic mode per user request.");
+            testParameters.SetDouble(MEMTEST_STR_MIN_ALLOCATION_PERCENTAGE, 0.0);
+        }
     }
 
     ParseIgnoreErrorCodesParam(testName, testParameters.GetString(PS_IGNORE_ERROR_CODES));

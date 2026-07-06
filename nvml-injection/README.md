@@ -268,7 +268,7 @@ To inject a value into a specific field of `nvmlDeviceGetFieldValues`, we can us
 For example, the following code snippet injects the value 20 into `NVML_FI_DEV_REMAPPED_FAILURE` for `gpuIds[0]`.
 
 ```python
-    fieldId = dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE
+    fieldId = dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILED
     injected_value = 20 # random non-zero number
     inject_nvml_value(handle, gpuIds[0], fieldId, injected_value, 0)
 ```

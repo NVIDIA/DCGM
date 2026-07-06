@@ -17,7 +17,6 @@
 #include <SoftwarePluginFramework.h>
 
 #include <DcgmHandle.h>
-#include <DcgmRecorder.h>
 #include <Gpu.h>
 #include <NvvsCommon.h>
 #include <PluginLib.h>
@@ -27,6 +26,7 @@
 
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -94,6 +94,7 @@ void SoftwarePluginFramework::initTestNameMap()
                       { "SRAM Threshold Count", "sram_threshold" },
                       { "Graphics Processes", "graphics_processes" },
                       { "Inforom", "inforom" },
+                      { "GPU Recovery State", "gpu_recovery_state" },
                       { "Fabric Manager", "fabric_manager" } };
 }
 
@@ -189,9 +190,6 @@ void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse,
         // set the test name
         std::string testName = pair.first;
 
-        //init dcgm
-        DcgmRecorder dcgmRecorder(dcgmHandle.GetHandle());
-
         // for each test, get the test parameters
         // convert the test parameters to c struct for software class
         auto &tp = m_testParamMap[pair.second];
@@ -212,6 +210,7 @@ void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse,
         dcgmDiagPluginTestParameter_t const *parms = parameters.data();
 
         log_debug("Test {} start", testName);
+        auto const testStart = std::chrono::steady_clock::now();
 
         // run the test
         m_softwareObj->Go(m_softwareObj->GetSoftwareTestName(), m_entityList.get(), numParameters, parms);
@@ -219,10 +218,13 @@ void SoftwarePluginFramework::Run(DcgmNvvsResponseWrapper &diagResponse,
         SetResult(testName, diagResponse);
         did = true;
 
-        log_debug("Test {} had result {}. Configless is {}",
-                  testName,
-                  m_softwareObj->GetResult(m_softwareObj->GetSoftwareTestName()),
-                  nvvsCommon.configless);
+        auto const testDuration
+            = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - testStart);
+        log_debug("{}",
+                  FormatTestEndMessage(testName,
+                                       m_softwareObj->GetResult(m_softwareObj->GetSoftwareTestName()),
+                                       testDuration,
+                                       nvvsCommon.configless));
     }
 
     if (did)

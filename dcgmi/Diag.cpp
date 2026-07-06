@@ -47,7 +47,6 @@
 #include "DcgmDiagCommon.h"
 #include "DcgmGroupEntityPairHelpers.h"
 #include "DcgmStringHelpers.h"
-#include "DcgmUtilities.h"
 #include "EntityListHelpers.h"
 #include "NvcmTCLAP.h"
 #include "NvvsJsonStrings.h"
@@ -57,6 +56,7 @@
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include "dcgm_test_apis.h"
+#include "dcgmi_common.h"
 #include <DcgmBuildInfo.hpp>
 
 /* Process Info */
@@ -96,39 +96,9 @@ static std::atomic<bool> g_signalExit = false;
 static std::atomic<bool> diag_stopDiagOnSignal
     = false; // Whether we should attempt to stop a running diag on recieving a signal
 static bool diag_installed_sig_handlers = false; // Whether sig handlers have been installed
-static void (*diag_oldHupHandler)(int)  = NULL;  // reference to old sig hup handler if any
-static void (*diag_oldIntHandler)(int)  = NULL;  // reference to old sig int handler if any
-static void (*diag_oldQuitHandler)(int) = NULL;  // reference to old sig quit handler if any
-static void (*diag_oldTermHandler)(int) = NULL;  // reference to old sig term handler if any
 
-static struct sigaction diag_actHup, diag_actInt, diag_actQuit, diag_actTerm,
-    diag_actOld; // sigaction structs for the handlers
-
-/* Defines for sig handling */
-// Concatenate given args into one token
-#define CONCAT2(a, b)   a##b
-#define CONCAT(a, b, c) a##b##c
-// Run old signal handler
-#define RUN_OLD_HANDLER(name, signum, handler)           \
-    if (CONCAT(diag_old, name, Handler) == SIG_DFL)      \
-    {                                                    \
-        signal(signum, SIG_DFL);                         \
-        raise(signum);                                   \
-        signal(signum, handler);                         \
-    }                                                    \
-    else if (CONCAT(diag_old, name, Handler) != SIG_IGN) \
-    CONCAT(diag_old, name, Handler)(signum)
-
-#define SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIG, name, handler)          \
-    /* Create new handler */                                              \
-    memset(&CONCAT2(diag_act, name), 0, sizeof(CONCAT2(diag_act, name))); \
-    CONCAT2(diag_act, name).sa_handler = handler;                         \
-    sigemptyset(&CONCAT2(diag_act, name).sa_mask);                        \
-    sigaddset(&CONCAT2(diag_act, name).sa_mask, SIG);                     \
-    sigaction(SIG, &CONCAT2(diag_act, name), &diag_actOld);               \
-    /* Save old handler */                                                \
-    CONCAT(diag_old, name, Handler) = diag_actOld.sa_handler
-
+namespace
+{
 /* Sig handler methods */
 void handle_signal_during_diag(int /* signum */)
 {
@@ -138,22 +108,6 @@ void handle_signal_during_diag(int /* signum */)
     }
 }
 
-void InstallSigHandlers()
-{
-    // Ensure this method is called only once
-    if (diag_installed_sig_handlers)
-    {
-        return;
-    }
-    diag_installed_sig_handlers = true;
-    SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGHUP, Hup, handle_signal_during_diag);
-    SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGINT, Int, handle_signal_during_diag);
-    SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGQUIT, Quit, handle_signal_during_diag);
-    SET_NEW_HANDLER_AND_SAVE_OLD_HANDLER(SIGTERM, Term, handle_signal_during_diag);
-}
-
-namespace
-{
 struct EudTestVersion
 {
     std::optional<std::string> version;
@@ -453,7 +407,13 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
     InitializeDiagResponse(response);
 
     // Setup signal handlers
-    InstallSigHandlers();
+    if (auto ret
+        = DcgmNs::Dcgmi::InstallSigHandlers(diag_installed_sig_handlers, handle_signal_during_diag, "diagnostic");
+        ret != DCGM_ST_OK)
+    {
+        HelperDisplayFailureMessage("Error: Unable to install diagnostic signal handlers.", ret);
+        return ret;
+    }
 
     result = ExecuteDiagOnServer(handle, response);
 
@@ -903,26 +863,6 @@ std::string const Diag::HelperDisplayDiagResult(dcgmDiagResult_t val, displayDia
         default:
             return "";
     }
-}
-
-/*****************************************************************************/
-bool Diag::isWhitespace(char c) const
-{
-    bool whitespace = false;
-
-    switch (c)
-    {
-        case ' ':
-        case '\n':
-        case '\t':
-        case '\r':
-        case '\f':
-
-            whitespace = true;
-            break;
-    }
-
-    return (whitespace);
 }
 
 /*****************************************************************************/
@@ -1414,7 +1354,8 @@ StartDiag::StartDiag(const std::string &hostname,
             }
         }
     }
-    else if (configPath.size() > 0)
+
+    if (configPath.size() > 0)
     {
         std::ifstream configFile;
         std::stringstream ss;

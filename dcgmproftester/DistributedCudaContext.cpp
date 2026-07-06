@@ -845,7 +845,7 @@ int DistributedCudaContext::RunSubtestSmOccupancyTargetMax(void)
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     Respond("S\nD 0 1\n");
 
-    m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY, 1.0, true);
+    m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY_RATIO, 1.0, true);
 
     for (unsigned int activity = 0; activity < activities; activity++)
     {
@@ -917,7 +917,7 @@ int DistributedCudaContext::RunSubtestSmOccupancy(void)
     {
         double howFarIn = 1.0 * activity / activities;
 
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY, howFarIn);
+        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_OCCUPANCY_RATIO, howFarIn);
         curOccupancy = ((double)(unsigned int)(howFarIn * m_attributes.m_maxThreadsPerMultiProcessor))
                        / m_attributes.m_maxThreadsPerMultiProcessor;
 
@@ -981,7 +981,7 @@ int DistributedCudaContext::RunSubtestSmActivity(void)
     {
         double howFarIn = 1.0 * activity / activities;
 
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_ACTIVE, howFarIn);
+        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_SM_UTIL_RATIO, howFarIn);
         curSmActivity = ((double)(unsigned int)(howFarIn * m_attributes.m_multiProcessorCount))
                         / m_attributes.m_multiProcessorCount;
 
@@ -1050,7 +1050,7 @@ int DistributedCudaContext::RunSubtestGrActivity(void)
     {
         double howFarIn = 1.0 * activity / activities;
 
-        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_GR_ENGINE_ACTIVE, howFarIn);
+        m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO, howFarIn);
         ReportIntervalSleep();
 
         now = timelib_dsecSince1970();
@@ -1225,7 +1225,7 @@ int DistributedCudaContext::RunSubtestDramUtil(void)
     m_input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
     /* This has always been full speed. load target is ignored */
-    m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_DRAM_ACTIVE, 1.0, true);
+    m_cudaWorker.SetWorkloadAndTarget(DCGM_FI_PROF_DRAM_UTIL_RATIO, 1.0, true);
 
     Respond("S\nD 0 1\n");
 
@@ -1425,21 +1425,21 @@ int DistributedCudaContext::RunTest(void)
 
     switch (m_testFieldId)
     {
-        case DCGM_FI_PROF_GR_ENGINE_ACTIVE:
+        case DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO:
             if (m_targetMaxValue)
                 retSt = RunSubtestSmOccupancyTargetMax();
             else
                 retSt = RunSubtestGrActivity();
             break;
 
-        case DCGM_FI_PROF_SM_ACTIVE:
+        case DCGM_FI_PROF_SM_UTIL_RATIO:
             if (m_targetMaxValue)
                 retSt = RunSubtestSmOccupancyTargetMax();
             else
                 retSt = RunSubtestSmActivity();
             break;
 
-        case DCGM_FI_PROF_SM_OCCUPANCY:
+        case DCGM_FI_PROF_SM_OCCUPANCY_RATIO:
             if (m_targetMaxValue)
                 retSt = RunSubtestSmOccupancyTargetMax();
             else
@@ -1451,17 +1451,17 @@ int DistributedCudaContext::RunTest(void)
             retSt = RunSubtestPcieBandwidth();
             break;
 
-        case DCGM_FI_PROF_DRAM_ACTIVE:
+        case DCGM_FI_PROF_DRAM_UTIL_RATIO:
             retSt = RunSubtestDramUtil();
             break;
 
-        case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
-        case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+        case DCGM_FI_PROF_FP32_UTIL_RATIO:
+        case DCGM_FI_PROF_FP64_UTIL_RATIO:
+        case DCGM_FI_PROF_FP16_UTIL_RATIO:
             retSt = m_physicalGpu->UseCublas() ? RunSubtestGemmUtil() : RunSubtestDataTypeActive();
             break;
 
-        case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+        case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
             retSt = RunSubtestGemmUtil();
             break;
 

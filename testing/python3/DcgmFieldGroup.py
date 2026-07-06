@@ -45,7 +45,8 @@ class DcgmFieldGroup:
         self._dcgmHandle = dcgmHandle
         self.wasCreated = False
 
-        # If the user passed in an ID, the field group already exists. Fetch live info
+        # If the user passed in an ID, the field group already exists. Fetch
+        # live info
         if fieldGroupId is not None:
             self.fieldGroupId = fieldGroupId
             fieldGroupInfo = dcgm_agent.dcgmFieldGroupGetInfo(
@@ -53,7 +54,8 @@ class DcgmFieldGroup:
             self.name = fieldGroupInfo.fieldGroupName
             self.fieldIds = fieldGroupInfo.fieldIds
         else:
-            # Assign here so the destructor doesn't fail if the call below fails
+            # Assign here so the destructor doesn't fail if the call below
+            # fails
             self.fieldGroupId = None
             self.fieldGroupId = dcgm_agent.dcgmFieldGroupCreate(
                 self._dcgmHandle.handle, fieldIds, name)
@@ -113,23 +115,26 @@ class DcgmFieldGroup:
 
     # Destructor
     def __del__(self):
-        if self._dcgmHandle != None:
+        if self._dcgmHandle is not None:
             try:
                 self.Delete()
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NO_DATA):
                 # someone may have deleted the group under us. That's ok.
                 pass
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID):
-                # We lost our connection, but we're destructing this object anyway.
+                # We lost our connection, but we're destructing this object
+                # anyway.
                 pass
             except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_BADPARAM):
                 # Handle or field group ID has already been expired.
                 pass
             except AttributeError as ae:
                 # When we're cleaning up at the end, dcgm_agent and dcgm_structs have been unloaded and we'll
-                # get an AttributeError: "'NoneType' object has no 'dcgmExceptionClass'" Ignore this
+                # get an AttributeError: "'NoneType' object has no
+                # 'dcgmExceptionClass'" Ignore this
                 pass
             except TypeError as te:
                 # When we're cleaning up at the end, dcgm_agent and dcgm_structs have been unloaded and we might
-                # get a TypeError: "'NoneType' object is not callable'" Ignore this
+                # get a TypeError: "'NoneType' object is not callable'" Ignore
+                # this
                 pass

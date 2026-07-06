@@ -23,7 +23,7 @@ version: "@CMAKE_PROJECT_VERSION@"
 spec: dcgm-diag-v1
 skus:
   - name: Tesla K8
-    id: 1194
+    id: '1194'
     targeted_power:
       is_allowed: true
       target_power: 75.0
@@ -43,7 +43,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K80 # "Stella Duo" Gemini
-    id: 102d
+    id: '102d'
     targeted_power:
       is_allowed: true
       target_power: 148.0
@@ -63,7 +63,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: PG502-20x
-    id: 2336
+    id: '2336'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -100,7 +100,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: PG502-221
-    id: 2338
+    id: '2338'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -137,7 +137,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: H100 80GB HBM3
-    id: 2330
+    id: '2330'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -177,7 +177,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: DGX Station
-    id: 15fa
+    id: '15fa'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -204,7 +204,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: GP100 SKU 200
-    id: 15fb
+    id: '15fb'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -231,7 +231,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: GP100 SKU 201
-    id: 15fc
+    id: '15fc'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 700.0
@@ -260,7 +260,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla P100-PCIE-16GB # COPIED from -- GP100 SKU 203 - DB2 HBM2, Serial Number : PH400-C01-P0203
-    id: 15f8
+    id: '15f8'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 400.0
@@ -287,7 +287,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla P100-PCIE-12GB # Serial Number : PH400 SKU 202
-    id: 15f7
+    id: '15f7'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 400.0
@@ -314,7 +314,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: GP100 SKU 15ff
-    id: 15ff
+    id: '15ff'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -341,7 +341,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla P100-SXM2-16GB
-    id: 15f9
+    id: '15f9'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -368,7 +368,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla SKU 102f
-    id: 102f
+    id: '102f'
     targeted_power:
       is_allowed: true
       target_power: 234.0
@@ -388,7 +388,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K40d
-    id: 102e
+    id: '102e'
     targeted_power:
       is_allowed: true
       target_power: 234.0
@@ -408,7 +408,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K40m
-    id: 1023
+    id: '1023'
     targeted_power:
       is_allowed: true
       target_power: 200.0
@@ -432,7 +432,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K40c
-    id: 1024
+    id: '1024'
     targeted_power:
       is_allowed: true
       target_power: 134.0
@@ -452,7 +452,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K40t SKU 102A
-    id: 102a
+    id: '102a'
     targeted_power:
       is_allowed: true
       target_power: 234.0
@@ -472,7 +472,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K40s # values copied from Tesla K40c
-    id: 1029
+    id: '1029'
     targeted_power:
       is_allowed: true
       target_power: 234.0
@@ -492,7 +492,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K20X # values copied from Tesla K20xm
-    id: 101e
+    id: '101e'
     targeted_power:
       is_allowed: true
       target_power: 234.0
@@ -512,7 +512,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K20Xm
-    id: 1021
+    id: '1021'
     targeted_power:
       is_allowed: true
       target_power: 234.0
@@ -532,7 +532,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K20c # values copied from Tesla K20xm (except power)
-    id: 1022
+    id: '1022'
     targeted_power:
       is_allowed: true
       target_power: 224.0
@@ -552,7 +552,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K20m # values copied from Tesla K20xm
-    id: 1028
+    id: '1028'
     targeted_power:
       is_allowed: true
       target_power: 234.0
@@ -572,7 +572,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K20X
-    id: 1020
+    id: '1020'
     targeted_power:
       is_allowed: true
       target_power: 234.0
@@ -592,7 +592,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla K10
-    id: 118f
+    id: '118f'
     targeted_power:
       is_allowed: true
       target_power: 116.0
@@ -612,7 +612,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Quadro M6000 # Not supported officially for NVVS
-    id: 17f0
+    id: '17f0'
     targeted_power:
       is_allowed: true
       target_power: 249.0
@@ -634,7 +634,7 @@ skus:
     memory:
       is_allowed: true
   - name: Quadro M5000
-    id: 13f0
+    id: '13f0'
     targeted_power:
       is_allowed: true
       target_power: 149.0
@@ -654,7 +654,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: GeForce GTX TITAN X
-    id: 17c2
+    id: '17c2'
     targeted_power:
       is_allowed: true
       target_power: 249.0
@@ -682,7 +682,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla M60
-    id: 13f2
+    id: '13f2'
     targeted_power:
       is_allowed: true
       target_power: 161.0
@@ -707,7 +707,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla M6 # Copied from Tesla M60
-    id: 13f3
+    id: '13f3'
     targeted_power:
       is_allowed: true
       target_power: 161.0
@@ -732,7 +732,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla M40
-    id: 17fd
+    id: '17fd'
     targeted_power:
       is_allowed: true
       target_power: 249.0
@@ -757,7 +757,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla M4
-    id: 1431
+    id: '1431'
     targeted_power:
       is_allowed: true
       target_power: 74.0
@@ -782,7 +782,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla M10 # Mostly copied from Tesla M40
-    id: 13bd
+    id: '13bd'
     targeted_power:
       is_allowed: true
       target_power: 53.0
@@ -807,7 +807,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla GV100 DGX1-V # Serial Number: PG503-A00-P0447
-    id: 1dbd
+    id: '1dbd'
     targeted_power:
       is_allowed: true
       max_graphics_clock: 1140.0
@@ -839,7 +839,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla GV100 DGX Station # Part number 692-2G500-0201-300
-    id: 1db2
+    id: '1db2'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -870,7 +870,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla GV100 SXM2-32GB SKU 895
-    id: 1db1
+    id: '1db1'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -901,7 +901,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla GV100 SXM2-16GB SKU 890
-    id: 1db0
+    id: '1db0'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -932,7 +932,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla GV100 PCIE-16GB SKU 893
-    id: 1db4
+    id: '1db4'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -963,7 +963,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla V100 PCI-E-32GB (Passive)
-    id: 1db6
+    id: '1db6'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -994,7 +994,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla P40
-    id: 1b38
+    id: '1b38'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1021,7 +1021,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla P10 # Same as Tesla P40 (PG610 SKU200 GP102-895) but with a lower power target (150W vs 250W)
-    id: 1b39
+    id: '1b39'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1050,7 +1050,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla P6
-    id: 1bb4
+    id: '1bb4'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1080,7 +1080,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla P4
-    id: 1bb3
+    id: '1bb3'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1112,7 +1112,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla V100-HS
-    id: 1db3
+    id: '1db3'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1142,7 +1142,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla V100 32GB
-    id: 1db5
+    id: '1db5'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1177,7 +1177,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: Tesla V100 DGX-Station 32GB
-    id: 1db7
+    id: '1db7'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1210,7 +1210,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla V100 DGX-Station 32GB
-    id: 1db8
+    id: '1db8'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1244,7 +1244,7 @@ skus:
     diagnostic:
       is_allowed: true
   - name: Tesla T4 - TU104_PG183_SKU200
-    id: 1eb8
+    id: '1eb8'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 550.0
@@ -1277,7 +1277,7 @@ skus:
       # Update value when bug 200480825 is fully root caused and resolved
       minimum_bandwidth: 183000.0
   - name: Tesla T40 - TU102-895
-    id: 1e38
+    id: '1e38'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1309,7 +1309,7 @@ skus:
       # Spec sheet says 448000, multiply by .75 to 336000
       minimum_bandwidth: 336000.0
   - name: Tesla T10 # PG150 SKU 220
-    id: 1e37
+    id: '1e37'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1342,7 +1342,7 @@ skus:
       # Got 304500 GB/s with dcgmproftester -t 1005, multiply by .75 to 228375
       minimum_bandwidth: 228375.0
   - name: V100S
-    id: 1df6
+    id: '1df6'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1376,7 +1376,7 @@ skus:
   # This allowlist covers both because they use the same PCI Device Id, so the settings are the
   # lowest value between the two
   - name: RTX 8000 and 6000 (Quadro)
-    id: 1e30
+    id: '1e30'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1410,7 +1410,7 @@ skus:
       # the lower value)
       minimum_bandwidth: 415275.0
   - name: GA100 SKU 20b8
-    id: 20b8
+    id: '20b8'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -1440,7 +1440,7 @@ skus:
       # Measured ~1566600. Multiple by .75 to get 1174950
       minimum_bandwidth: 1174950.0
   - name: GA100 SKU 20bf
-    id: 20bf
+    id: '20bf'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -1473,7 +1473,7 @@ skus:
       # Measured ~1495000. Multiple by .75 to get 1121250
       minimum_bandwidth: 1121250.0
   - name: GA100 20b0
-    id: 20b0
+    id: '20b0'
     targeted_power:
       # Skip the targeted power test for the same reason as 20bf. Once this is fixed we can allow it.
       is_allowed: true
@@ -1511,7 +1511,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: RTX 6000/8000 passive SKUs
-    id: 1e78
+    id: '1e78'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1544,7 +1544,7 @@ skus:
       # dcgmproftester -t 1005 for the 8000 says 480300, multiply by .75 to 360225
       minimum_bandwidth: 360225.0
   - name: A100 PCIe
-    id: 20f1
+    id: '20f1'
     targeted_power:
       # Skip the targeted power test for the same reason as 20bf. Once this is fixed we can allow it.
       is_allowed: true
@@ -1580,7 +1580,7 @@ skus:
       # proftester -t 1005 shows ~1293000. Multiply by .75 to get 969750
       minimum_bandwidth: 969750.0
   - name: A100-SXM4-80GB
-    id: 20b2
+    id: '20b2'
     targeted_power:
       # Skip the targeted power test for the same reason as 20bf. Once this is fixed we can allow it.
       is_allowed: true
@@ -1619,7 +1619,7 @@ skus:
       is_allowed: true
   # A100-SXM4-80GB-147f
   - name: A100-SXM4-80GB-147F
-    id: 20b2147f
+    id: '20b2147f'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -1656,7 +1656,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: A40
-    id: 2235
+    id: '2235'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1692,7 +1692,7 @@ skus:
       # proftester -t 1005 shows ~564900 GiB/sec. Multiply by .75 to get 423675
       minimum_bandwidth: 423675.0
   - name: A16 - PG171 SKU200
-    id: 25b6
+    id: '25b6'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1726,7 +1726,7 @@ skus:
       # proftester -t 1005 shows ~180000 GiB/sec. Multiply by .75 to get 135000
       minimum_bandwidth: 135000.0
   - name: A10c/noc - PG133 SKU215
-    id: 22361482
+    id: '22361482'
     targeted_power:
       # avoid collision with PRIS TS1 by appending ssid
       is_allowed: true
@@ -1763,7 +1763,7 @@ skus:
       # proftester -t 1005 shows ~640700 GiB/sec. Multiply by .75 to get 480525
       minimum_bandwidth: 480525.0
   - name: A10g - PG133 SKU210
-    id: 2237
+    id: '2237'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1799,7 +1799,7 @@ skus:
       # proftester -t 1005 shows ~483600 GiB/sec. Multiply by .75 to get 362700
       minimum_bandwidth: 362700.0
   - name: T4G
-    id: 1eb4
+    id: '1eb4'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1835,7 +1835,7 @@ skus:
       # proftester -t 1005 shows ~243500 GiB/sec. Multiply by .75 to get ~182600
       minimum_bandwidth: 182600.0
   - name: A30
-    id: 20b7
+    id: '20b7'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1871,7 +1871,7 @@ skus:
       # dcgmproftester -t 1005 shows ~780000 MiB/sec. Multiply by .75 to get 585000
       minimum_bandwidth: 585000.0
   - name: A30LC # P1001 SKU #215
-    id: 20b71804
+    id: '20b71804'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1907,7 +1907,7 @@ skus:
       # dcgmproftester -t 1005 shows ~780000 MiB/sec. Multiply by .75 to get 585000
       minimum_bandwidth: 585000.0
   - name: Nvidia Turing Auto Module
-    id: 1eba
+    id: '1eba'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1943,7 +1943,7 @@ skus:
       # dcgmproftester -t 1005 shows ~298900 MiB/sec. Multiply by .75 to get 224000
       minimum_bandwidth: 224000.0
   - name: A6000 PCIe
-    id: 2230
+    id: '2230'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -1978,7 +1978,7 @@ skus:
       # dcgmproftester -t 1005 shows ~674500 MiB/sec. Multiply by .75 to get ~506000
       minimum_bandwidth: 506000.0
   - name: PG506-230
-    id: 20b6
+    id: '20b6'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2014,7 +2014,7 @@ skus:
       # dcgmproftester -t 1005 shows ~1829800 MiB/sec. Multiply by .75 to get 1372350
       minimum_bandwidth: 1372350.0
   - name: EGX BF-2 A100
-    id: 2236149d
+    id: '2236149d'
     targeted_power:
       # Avoid collision with a10c by appending ssid
       is_allowed: true
@@ -2051,7 +2051,7 @@ skus:
       # dcgmproftester -t 1005 shows ~485000 MiB/sec. Multiply by .75 to get 363750
       minimum_bandwidth: 363750.0
   - name: A100-20F0
-    id: 20f0
+    id: '20f0'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2087,7 +2087,7 @@ skus:
       # dcgmproftester -t 1005 shows ~1187000 MiB/sec. Multiply by .75 to get 890250
       minimum_bandwidth: 890250.0
   - name: A100-20F2 80GB
-    id: 20f2
+    id: '20f2'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2123,7 +2123,7 @@ skus:
       # dcgmproftester -t 1005 shows ~ 1400000 MiB/sec. Multiply by .75 to get 1050000
       minimum_bandwidth: 1050000.0
   - name: NVIDIA Ampere Auto Module
-    id: 20bb
+    id: '20bb'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2160,7 +2160,7 @@ skus:
       # dcgmproftester -t 1005 shows 1171400 MiB/sec. Multiply by .75 to get ~875000
       minimum_bandwidth: 875000.0
   - name: A100-20b5
-    id: 20b5
+    id: '20b5'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2195,7 +2195,7 @@ skus:
       # dcgmproftester -t 1005 shows ~1495000. Multiply by .75 to get 1121250
       minimum_bandwidth: 1121250.0
   - name: A5000
-    id: 2231
+    id: '2231'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2230,7 +2230,7 @@ skus:
       # dcgmproftester -t 1005 shows ~676600. Multiply by .75 to get ~507500
       minimum_bandwidth: 507500.0
   - name: A4000
-    id: 24b0
+    id: '24b0'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2265,7 +2265,7 @@ skus:
       # dcgmproftester -t 1005 shows ~387700. Multiply by .75 to get ~290750
       minimum_bandwidth: 290750.0
   - name: PG50x-216
-    id: 1df2
+    id: '1df2'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2300,7 +2300,7 @@ skus:
       # dcgmproftester -t 1005 shows ~951000. Multiply by .75 to get ~713250
       minimum_bandwidth: 713250.0
   - name: P1004
-    id: 20b9
+    id: '20b9'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2335,7 +2335,7 @@ skus:
       # dcgmproftester -t 1005 shows ~931000. Multiply by .75 to get ~698250
       minimum_bandwidth: 698250.0
   - name: Nvidia A2
-    id: 25b6
+    id: '25b6'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2368,7 +2368,7 @@ skus:
       # dcgmproftester -t 1005 shows ~164300. Multiply by .75 to get ~123225
       minimum_bandwidth: 123225
   - name: PG506-242
-    id: 20b314a7
+    id: '20b314a7'
     targeted_power:
       starting_matrix_dim: 1024.0
       target_power: 499.0
@@ -2396,7 +2396,7 @@ skus:
       # dcgmproftester -t 1005 shows ~1315000. Multiply by .75 to get ~986250
       minimum_bandwidth: 986250
   - name: PG506-243
-    id: 20b314a8
+    id: '20b314a8'
     targeted_power:
       starting_matrix_dim: 1024.0
       target_power: 549.0
@@ -2424,7 +2424,7 @@ skus:
       # dcgmproftester -t 1005 shows ~1315000. Multiply by .75 to get ~986250
       minimum_bandwidth: 986250
   - name: Nvidia A2000_12GB
-    id: 2571
+    id: '2571'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2459,7 +2459,7 @@ skus:
       # dcgmproftester -t 1005 shows ~256000. Multiply by .75 to get ~192000
       minimum_bandwidth: 192000
   - name: Nvidia A2000_6GB
-    id: 2531
+    id: '2531'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2494,7 +2494,7 @@ skus:
       # dcgmproftester -t 1005 shows ~257000. Multiply by .75 to get ~192000
       minimum_bandwidth: 192750
   - name: Nvidia A10M
-    id: 2238
+    id: '2238'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2529,7 +2529,7 @@ skus:
       # dcgmproftester -t 1005 shows ~415000. Multiply by .75 to get ~311250
       minimum_bandwidth: 311250
   - name: Nvidia P1010
-    id: 2331
+    id: '2331'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2567,7 +2567,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: A800-20f5 80GB
-    id: 20f5
+    id: '20f5'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -2601,7 +2601,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: A100-20f6 40GB
-    id: 20f6
+    id: '20f6'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -2635,7 +2635,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: A800-SXM4-80GB Watercooled
-    id: 20f3179C
+    id: '20f3179C'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -2670,7 +2670,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: A800-SXM4-80GB
-    id: 20f3
+    id: '20f3'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -2704,7 +2704,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: Nvidia L40
-    id: 26f5
+    id: '26f5'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2739,7 +2739,7 @@ skus:
       # memory bandwidth test shows ~735670. Multiply by .75 to get ~551800
       minimum_bandwidth: 551800
   - name: H800 PCIe
-    id: 2322
+    id: '2322'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2776,7 +2776,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: PG133 SKU 255
-    id: 26b8
+    id: '26b8'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2811,7 +2811,7 @@ skus:
       # memory bandwidth test shows ~746850. Multiply by .75 to get ~560100
       minimum_bandwidth: 560100
   - name: Nvidia L40
-    id: 26b5
+    id: '26b5'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2848,7 +2848,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: Scout H100 94GB HBM2e
-    id: 2339
+    id: '2339'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2885,7 +2885,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: Nvidia H800 80GB
-    id: 2324
+    id: '2324'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2922,7 +2922,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: Nvidia L4
-    id: 27b8
+    id: '27b8'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2959,7 +2959,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: Scout H100 64GB HBM2e
-    id: 2337
+    id: '2337'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -2996,7 +2996,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: AX800
-    id: 20fd
+    id: '20fd'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3030,7 +3030,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: H100NVL
-    id: 2321
+    id: '2321'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -3069,7 +3069,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: SkinnyJoe
-    id: 237f
+    id: '237f'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -3110,7 +3110,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: H100NVL
-    id: 233a
+    id: '233a'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -3144,7 +3144,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: GH100-88K-A1
-    id: 2345
+    id: '2345'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -3178,7 +3178,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: NVIDIA L40S
-    id: 26b9
+    id: '26b9'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -3212,7 +3212,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: SkinnyJoe A02
-    id: 2342
+    id: '2342'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -3253,7 +3253,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: A800-20bd
-    id: 20bd
+    id: '20bd'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3291,7 +3291,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: L20
-    id: 26b7
+    id: '26b7'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3329,7 +3329,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: L20A
-    id: 26ba
+    id: '26ba'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3368,7 +3368,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: H20B
-    id: 2328
+    id: '2328'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3406,7 +3406,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: H20A
-    id: 2329
+    id: '2329'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3444,7 +3444,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: L2
-    id: 27b6
+    id: '27b6'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3482,7 +3482,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: L30
-    id: 26bb
+    id: '26bb'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3520,7 +3520,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: H200
-    id: 2335
+    id: '2335'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3557,7 +3557,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: NVIDIA RTX 2000 Ada Generation
-    id: 28b0
+    id: '28b0'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -3591,7 +3591,7 @@ skus:
       is_allowed: true
   # P1010 SKU 230 H200 NVL
   - name: H200
-    id: 233b
+    id: '233b'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3629,7 +3629,7 @@ skus:
       is_allowed: true
  # B100 SKU PG525
   - name: B100
-    id: 29bc
+    id: '29bc'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3666,7 +3666,7 @@ skus:
       is_allowed: true
   # SKU525_0200
   - name: TS4
-    id: 2920
+    id: '2920'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3702,7 +3702,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: H100 144GB HBM3
-    id: 2348
+    id: '2348'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024.0
@@ -3741,7 +3741,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: B100 DevId 197f
-    id: 2920197f
+    id: '2920197f'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3781,7 +3781,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: B200 DevId 20da
-    id: 290120da
+    id: '290120da'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3824,7 +3824,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: B200 DevId 1999
-    id: 29011999
+    id: '29011999'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3868,7 +3868,7 @@ skus:
       is_allowed: true
 
   - name: B200 DevId 199B10DE
-    id: 2901199b
+    id: '2901199b'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3913,8 +3913,8 @@ skus:
       is_allowed: true
       
   - name: B200 DevId 10DE
-    id: 2941
-    # subsystem id: 29412046
+    id: '2941'
+    # subsystem id: '29412046'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3959,7 +3959,7 @@ skus:
       is_allowed: true
 
   - name: H20 HBM3e
-    id: 232c
+    id: '232c'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -3998,7 +3998,7 @@ skus:
       is_allowed: true
 
   - name: H20 NVL16
-    id: 230e
+    id: '230e'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4041,7 +4041,7 @@ skus:
       is_allowed: true
 
   - name: PG153 SKU 210
-    id: 2bb5
+    id: '2bb5'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4079,7 +4079,7 @@ skus:
     nvbandwidth:
       is_allowed: true
   - name: B200
-    id: 2901
+    id: '2901'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4118,7 +4118,7 @@ skus:
       is_allowed: true
   # RTX 6000D
   - name: RTX6000D
-    id: 2bb9
+    id: '2bb9'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4156,7 +4156,7 @@ skus:
     pulse_test:
       is_allowed: true
   - name: P2021
-    id: 29bb
+    id: '29bb'
     targeted_power:
       is_allowed: false
       starting_matrix_dim: 1024
@@ -4197,8 +4197,8 @@ skus:
       is_allowed: true
 
   - name: B300 (20e6)
-    id: 3182
-    # subsystem id: 20E610DE
+    id: '3182'
+    # subsystem id: '20E610DE'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4244,7 +4244,7 @@ skus:
       is_allowed: true
 
   - name: GB300 NVL Bianca
-    id: 31c2
+    id: '31c2'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4291,9 +4291,8 @@ skus:
       is_allowed: true
     memtest:
       num_chunks: 8
-
   - name: GB300 NVL Galaxy
-    id: 31C220E5
+    id: '31C220E5'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4342,7 +4341,7 @@ skus:
       num_chunks: 8
 
   - name: H20_NVL16
-    id: 230c
+    id: '230c'
     targeted_power:
       # This fails on multiple simultaneous GPU stresses in a chassis, likely
       # due to thermal throttling. Specify -p targeted_power.is_allowed=true
@@ -4392,7 +4391,7 @@ skus:
       is_allowed: true
   - name: GB300 MaxQ
     # Subsystem is 2274
-    id: 31a1
+    id: '31a1'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4441,7 +4440,7 @@ skus:
       num_chunks: 8
   - name: GB203
     # Subsystem is 21f4
-    id: 2c3a
+    id: '2c3a'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4484,9 +4483,47 @@ skus:
       is_allowed: true
     nvbandwidth:
       is_allowed: true
+  - name: RTX6000D LC
+    id: '2bb92279'
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 249.00
+      use_dgemm: false
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 28193
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~37591. Multiply by .75 to get 28193
+      target_stress: 28193
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+    # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 1283333. Multiply by .75 to get 962499
+      minimum_bandwidth: 962499
+    nvbandwidth:
+      is_allowed: true
+    pulse_test:
+      is_allowed: true
   - name: HGX B200 168GB
     # Subsystem id is 22eb
-    id: 2909
+    id: '2909'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4525,8 +4562,57 @@ skus:
       is_allowed: true
     pulse_test:
       is_allowed: true
+  - name: GR100 PCIe Faber # NOTE: we need to re-test with newer CUDA at QS
+    # Subsystem is 2275
+    id: '3021'
+    targeted_power:
+      is_allowed: false
+      starting_matrix_dim: 1024
+      target_power: 2299.00
+      use_dgemv: true
+      use_dgemm: false
+      ops_per_requeue: 2
+      cuda_streams_per_gpu: 24
+      enable_fp16_gemm: true
+      fp64_gemm_ratio: 0.6
+      fp16_gemm_ratio: 0.4
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      #  Copied from sm stress target
+      target_stress: 11755
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~15600 Multiply by .75 to get 11755
+      target_stress: 11755
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 5395GB or 5395833. Multiply by .75 to get ~4046800
+      minimum_bandwidth: 4046800
+    pulse_test:
+      is_allowed: false
+    nvbandwidth:
+      is_allowed: true
+    memtest:
+      num_chunks: 8
   - name: Galaxy TS2 # NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition
-    id: 2bb4
+    id: '2bb4'
     targeted_power:
       is_allowed: true
       starting_matrix_dim: 1024
@@ -4569,6 +4655,56 @@ skus:
       minimum_bandwidth: 1147500
     pulse_test:
       is_allowed: true
+    nvbandwidth:
+      is_allowed: true
+    memtest:
+      num_chunks: 8
+  - name: rtx5000
+    # Subsystem is 227A
+    id: '2bb3'
+    targeted_power:
+      is_allowed: true
+      starting_matrix_dim: 1024
+      target_power: 349
+      use_dgemv: true
+      use_dgemm: false
+      ops_per_requeue: 2
+      cuda_streams_per_gpu: 24
+      enable_fp16_gemm: true
+      fp64_gemm_ratio: 0.6
+      fp16_gemm_ratio: 0.4
+    targeted_stress:
+      is_allowed: true
+      use_dgemm: false
+      always_use_tensor: true
+      #  Copied from sm stress target
+      target_stress: 32550
+    sm_stress:
+      is_allowed: true
+      # dcgmproftester -t 1007 measures ~43400.0 Multiply by .75 to get 32550
+      target_stress: 32550
+      use_dgemm: false
+    pcie:
+      is_allowed: true
+      h2d_d2h_single_pinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+      h2d_d2h_single_unpinned:
+        min_pci_generation: 3.0
+        min_pci_width: 16.0
+    memory:
+      is_allowed: true
+      # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
+    diagnostic:
+      is_allowed: true
+      matrix_dim: 8192.0
+      always_use_tensor: true
+    memory_bandwidth:
+      is_allowed: true
+      # dcgmproftester -t 1005 shows 1110GB or 1110000. Multiply by .75 to get ~832500
+      minimum_bandwidth: 832500
+    pulse_test:
+      is_allowed: false
     nvbandwidth:
       is_allowed: true
     memtest:

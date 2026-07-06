@@ -55,8 +55,8 @@ target_sources(dcgmi_objects_without_main PRIVATE
     Version.cpp
     Environment.cpp)
 
-target_link_libraries(dcgmi_objects PUBLIC dcgmi_objects_without_main)
-target_sources(dcgmi_objects PRIVATE main_dcgmi.cpp)
+target_link_libraries(dcgmi PUBLIC dcgmi_objects_without_main)
+target_sources(dcgmi PRIVATE main_dcgmi.cpp)
 
 target_link_libraries(dcgmi
     PRIVATE
@@ -66,7 +66,6 @@ target_link_libraries(dcgmi
         dcgm_interface
         dcgm_mutex
         dcgm_thread
-        dcgmi_objects
         fmt::fmt
         nvvs_interface)
 

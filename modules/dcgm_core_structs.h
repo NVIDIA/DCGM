@@ -99,6 +99,8 @@
 #define DCGM_CORE_SR_DETACH_DRIVER                          76 /* Detach driver from the DCGM */
 #define DCGM_CORE_SR_EMPTY_CACHE                            77 /* Empty Cache Mmanager cache */
 #define DCGM_CORE_SR_MARK_MODULES_RELOADABLE                78 /* Mark modules reloadable */
+#define DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4 \
+    79 /* Same as V3 with a smaller payload buffer so the message fits DCGM_PROTO_MAX_MESSAGE_SIZE */
 
 /*****************************************************************************/
 /* Subrequest message definitions */
@@ -371,6 +373,8 @@ typedef struct
 #define dcgm_core_msg_entities_get_latest_values_version2 \
     MAKE_DCGM_VERSION(dcgm_core_msg_entities_get_latest_values_v2, 2)
 
+/** @note dcgm_core_msg_entities_get_latest_values_v3 size exceeds DCGM_PROTO_MAX_MESSAGE_SIZE and
+will be truncated. */
 typedef struct
 {
     dcgm_module_command_header_t header;
@@ -379,6 +383,24 @@ typedef struct
 
 #define dcgm_core_msg_entities_get_latest_values_version3 \
     MAKE_DCGM_VERSION(dcgm_core_msg_entities_get_latest_values_v3, 3)
+
+/**
+ * Core-module wire message for DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4.
+ *
+ * The full structure size matches DCGM_PROTO_MAX_MESSAGE_SIZE; larger wire messages require a higher
+ * cap or a layout change.
+ *
+ * @note offsetof(., ev.buffer) matches dcgm_core_msg_entities_get_latest_values_v3 for prefix layout
+ *       compatibility.
+ */
+typedef struct
+{
+    dcgm_module_command_header_t header; //!< Command header
+    dcgmEntitiesGetLatestValues_v4 ev;   //!< Entities, field IDs, flags, and field-value blob
+} dcgm_core_msg_entities_get_latest_values_v4;
+
+#define dcgm_core_msg_entities_get_latest_values_version4 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_entities_get_latest_values_v4, 4)
 
 /* Used by DCGM 2.x clients */
 typedef struct
@@ -484,10 +506,17 @@ typedef struct
     dcgmGetTopologyMsg_v1 topo;
 } dcgm_core_msg_get_topology_v1;
 
-#define dcgm_core_msg_get_topology_version1 MAKE_DCGM_VERSION(dcgm_core_msg_get_topology_v1, 1)
-#define dcgm_core_msg_get_topology_version  dcgm_core_msg_get_topology_version1
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmGetTopologyMsg_v2 topo;
+} dcgm_core_msg_get_topology_v2;
 
-typedef dcgm_core_msg_get_topology_v1 dcgm_core_msg_get_topology_t;
+#define dcgm_core_msg_get_topology_version1 MAKE_DCGM_VERSION(dcgm_core_msg_get_topology_v1, 1)
+#define dcgm_core_msg_get_topology_version2 MAKE_DCGM_VERSION(dcgm_core_msg_get_topology_v2, 2)
+#define dcgm_core_msg_get_topology_version  dcgm_core_msg_get_topology_version2
+
+typedef dcgm_core_msg_get_topology_v2 dcgm_core_msg_get_topology_t;
 
 typedef struct
 {
@@ -540,9 +569,17 @@ typedef struct
 } dcgm_core_msg_get_nvlink_status_v3;
 
 #define dcgm_core_msg_get_nvlink_status_version3 MAKE_DCGM_VERSION(dcgm_core_msg_get_nvlink_status_v3, 3)
-#define dcgm_core_msg_get_nvlink_status_version  dcgm_core_msg_get_nvlink_status_version3
 
-typedef dcgm_core_msg_get_nvlink_status_v3 dcgm_core_msg_get_nvlink_status_t;
+typedef struct
+{
+    dcgm_module_command_header_t header;
+    dcgmGetNvLinkStatus_v4 info;
+} dcgm_core_msg_get_nvlink_status_v4;
+
+#define dcgm_core_msg_get_nvlink_status_version4 MAKE_DCGM_VERSION(dcgm_core_msg_get_nvlink_status_v4, 4)
+#define dcgm_core_msg_get_nvlink_status_version  dcgm_core_msg_get_nvlink_status_version4
+
+typedef dcgm_core_msg_get_nvlink_status_v4 dcgm_core_msg_get_nvlink_status_t;
 
 typedef struct
 {
@@ -758,10 +795,13 @@ typedef struct
     dcgmMsgNvmlInjectDevice_v2 info;     /* IN/OUT user request to process */
 } dcgm_core_msg_nvml_inject_device_v2;
 
-#define dcgm_core_msg_nvml_inject_device_version2 MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_v2, 2)
-#define dcgm_core_msg_nvml_inject_device_version  dcgm_core_msg_nvml_inject_device_version2
+/* v3: struct layout unchanged, size grew due to NVML_GPM_METRIC_MAX increase in simpleValue_t */
+typedef dcgm_core_msg_nvml_inject_device_v2 dcgm_core_msg_nvml_inject_device_v3;
 
-typedef dcgm_core_msg_nvml_inject_device_v2 dcgm_core_msg_nvml_inject_device_t;
+#define dcgm_core_msg_nvml_inject_device_version3 MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_v3, 3)
+#define dcgm_core_msg_nvml_inject_device_version  dcgm_core_msg_nvml_inject_device_version3
+
+typedef dcgm_core_msg_nvml_inject_device_v3 dcgm_core_msg_nvml_inject_device_t;
 
 typedef struct
 {
@@ -769,12 +809,15 @@ typedef struct
     dcgmMsgNvmlInjectDeviceForFollowingCalls_v2 info; /* IN/OUT user request to process */
 } dcgm_core_msg_nvml_inject_device_for_following_calls_v2;
 
-#define dcgm_core_msg_nvml_inject_device_for_following_calls_version2 \
-    MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_for_following_calls_v2, 2)
-#define dcgm_core_msg_nvml_inject_device_for_following_calls_version \
-    dcgm_core_msg_nvml_inject_device_for_following_calls_version2
+/* v3: struct layout unchanged, size grew due to NVML_GPM_METRIC_MAX increase in simpleValue_t */
+typedef dcgm_core_msg_nvml_inject_device_for_following_calls_v2 dcgm_core_msg_nvml_inject_device_for_following_calls_v3;
 
-typedef dcgm_core_msg_nvml_inject_device_for_following_calls_v2 dcgm_core_msg_nvml_inject_device_for_following_calls_t;
+#define dcgm_core_msg_nvml_inject_device_for_following_calls_version3 \
+    MAKE_DCGM_VERSION(dcgm_core_msg_nvml_inject_device_for_following_calls_v3, 3)
+#define dcgm_core_msg_nvml_inject_device_for_following_calls_version \
+    dcgm_core_msg_nvml_inject_device_for_following_calls_version3
+
+typedef dcgm_core_msg_nvml_inject_device_for_following_calls_v3 dcgm_core_msg_nvml_inject_device_for_following_calls_t;
 
 typedef struct
 {
@@ -929,7 +972,11 @@ DCGM_CASSERT(dcgm_core_msg_group_get_info_version2 == (long)0x2002138, 2);
 DCGM_CASSERT(dcgm_core_msg_job_cmd_version1 == (long)0x1000060, 1);
 DCGM_CASSERT(dcgm_core_msg_job_get_stats_version1 == (long)0x1009908, 1);
 DCGM_CASSERT(dcgm_core_msg_entities_get_latest_values_version1 == (long)0x1004334, 1);
+DCGM_CASSERT(dcgm_core_msg_entities_get_latest_values_version2 == (long)0x23fe334, 2);
+DCGM_CASSERT(dcgm_core_msg_entities_get_latest_values_version3 == (long)0x3400134, 3);
+DCGM_CASSERT(dcgm_core_msg_entities_get_latest_values_version4 == (long)0x4400000, 4);
 DCGM_CASSERT(dcgm_core_msg_get_multiple_values_for_field_version1 == (long)0x1004048, 1);
+DCGM_CASSERT(dcgm_core_msg_get_multiple_values_for_field_version2 == (long)0x23fe048, 2);
 DCGM_CASSERT(dcgm_core_msg_watch_field_value_version1 == (long)0x1000040, 1);
 DCGM_CASSERT(dcgm_core_msg_update_all_fields_version1 == (long)0x1000020, 1);
 DCGM_CASSERT(dcgm_core_msg_unwatch_field_value_version1 == (long)0x100002c, 1);
@@ -937,11 +984,13 @@ DCGM_CASSERT(dcgm_core_msg_inject_field_value_version1 == (long)0x1001040, 1);
 DCGM_CASSERT(dcgm_core_msg_get_cache_manager_field_info_version2 == (long)0x2000160, 1);
 DCGM_CASSERT(dcgm_core_msg_watch_fields_version1 == (long)0x1000038, 1);
 DCGM_CASSERT(dcgm_core_msg_get_topology_version1 == (long)0x10026e8, 1);
+DCGM_CASSERT(dcgm_core_msg_get_topology_version2 == (long)0x2003e30, 2);
 DCGM_CASSERT(dcgm_core_msg_get_topology_affinity_version1 == (long)0x1000930, 1);
 DCGM_CASSERT(dcgm_core_msg_select_topology_gpus_version1 == (long)0x1000040, 1);
 DCGM_CASSERT(dcgm_core_msg_get_all_devices_version1 == (long)0x10000a4, 1);
 DCGM_CASSERT(dcgm_core_msg_client_login_version1 == (long)0x1000020, 1);
 DCGM_CASSERT(dcgm_core_msg_get_nvlink_status_version3 == (long)0x30039d8, 3);
+DCGM_CASSERT(dcgm_core_msg_get_nvlink_status_version4 == (long)0x40042d8, 4);
 DCGM_CASSERT(dcgm_core_msg_get_nvlink_p2p_status_version1 == (long)0x10010a4, 1);
 DCGM_CASSERT(dcgm_core_msg_set_entity_nvlink_state_version1 == (long)0x1000034, 1);
 DCGM_CASSERT(dcgm_core_msg_fieldgroup_op_version1 == (long)0x1000230, 1);
@@ -967,7 +1016,7 @@ DCGM_CASSERT(dcgm_core_msg_empty_cache_version1 == (long)0x1000020, 1);
 DCGM_CASSERT(dcgm_core_msg_modules_reloadable_version1 == (long)0x1000020, 1);
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
-DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_version2 == (long)0x201e370, 2);
-DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_for_following_calls_version2 == (long)0x2096cb0, 2);
+DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_version3 == (long)0x3020AD0, 3);
+DCGM_CASSERT(dcgm_core_msg_nvml_inject_device_for_following_calls_version3 == (long)0x30A3190, 3);
 DCGM_CASSERT(dcgm_core_msg_nvml_injected_device_reset_version1 == (long)0x1000020, 1);
 #endif

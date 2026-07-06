@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 #include <DcgmError.h>
+#include <Defer.hpp>
 #include <ParsingUtility.h>
 #include <PluginStrings.h>
 #include <catch2/catch_all.hpp>
 #include <fstream>
 #include <stdexcept>
 
-#include <any>         // It must be included here before the hacky define below
-#define private public // Hack to directly manipulate private members
 #include <Allowlist.h>
 
 #define VALID_ID   "1194"
@@ -271,4 +270,60 @@ SCENARIO("UpdateGlobalsForDeviceId sets the appropriate global flags", "[.]")
 void TestAllowlist::WrapperUpdateGlobalsForDeviceId(const std::string &deviceId)
 {
     UpdateGlobalsForDeviceId(deviceId);
+}
+
+TEST_CASE("Allowlist applies configured defaults and global clock masks")
+{
+    auto const savedClockEventIgnoreMask = nvvsCommon.clocksEventIgnoreMask;
+    DcgmNs::Defer restoreClockEventIgnoreMask([&] { nvvsCommon.clocksEventIgnoreMask = savedClockEventIgnoreMask; });
+
+    ConfigFileParser_v2 parser("", fwcfg);
+    REQUIRE(parser.Init());
+
+    SECTION("known device ids are allowlisted")
+    {
+        Allowlist wl(parser);
+
+        CHECK(wl.IsAllowlisted(VALID_ID));
+        CHECK_FALSE(wl.IsAllowlisted(INVALID_ID));
+        CHECK(wl.IsAllowlisted("2236", "149d"));
+    }
+
+    SECTION("device-specific defaults override bootstrap values")
+    {
+        Allowlist wl(parser);
+        TestParameters tp;
+        tp.AddDouble(SMSTRESS_STR_TARGET_PERF, 0.0);
+        tp.AddString(SMSTRESS_STR_USE_DGEMM, "True");
+        tp.AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, 0.0);
+
+        wl.GetDefaultsByDeviceId(SMSTRESS_PLUGIN_NAME, "102d", &tp);
+
+        CHECK(tp.GetDouble(SMSTRESS_STR_TARGET_PERF) == 950.0);
+        CHECK(tp.GetString(SMSTRESS_STR_USE_DGEMM) == "False");
+        CHECK(tp.GetDouble(SMSTRESS_STR_TEMPERATURE_MAX) == 0.0);
+    }
+
+    SECTION("global clock masks are applied only when unset")
+    {
+        TestAllowlist wl(parser);
+
+        nvvsCommon.clocksEventIgnoreMask = DCGM_INT64_BLANK;
+        wl.WrapperUpdateGlobalsForDeviceId("102d");
+        CHECK(nvvsCommon.clocksEventIgnoreMask == MAX_CLOCKS_EVENT_IGNORE_MASK_VALUE);
+
+        nvvsCommon.clocksEventIgnoreMask = DCGM_INT64_BLANK;
+        wl.WrapperUpdateGlobalsForDeviceId("1df6");
+        CHECK(nvvsCommon.clocksEventIgnoreMask == DCGM_CLOCKS_EVENT_REASON_SW_THERMAL);
+
+        nvvsCommon.clocksEventIgnoreMask = DCGM_INT64_BLANK;
+        wl.WrapperUpdateGlobalsForDeviceId("1e30");
+        CHECK(nvvsCommon.clocksEventIgnoreMask
+              == (DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN | DCGM_CLOCKS_EVENT_REASON_HW_THERMAL
+                  | DCGM_CLOCKS_EVENT_REASON_SW_THERMAL));
+
+        nvvsCommon.clocksEventIgnoreMask = 1;
+        wl.WrapperUpdateGlobalsForDeviceId("102d");
+        CHECK(nvvsCommon.clocksEventIgnoreMask == 1);
+    }
 }

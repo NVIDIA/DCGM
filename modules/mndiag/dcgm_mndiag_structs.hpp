@@ -18,6 +18,7 @@
 #define DCGM_MNDIAG_STRUCTS_HPP
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <dcgm_module_structs.h>
 #include <dcgm_multinode_internal.h>
@@ -27,17 +28,28 @@
 
 namespace MnDiagConstants
 {
-// Environment variables
+//! Environment variables
 constexpr std::string_view ENV_MPIRUN_PATH       = "DCGM_MNDIAG_MPIRUN_PATH";
 constexpr std::string_view ENV_MNUBERGEMM_PATH   = "DCGM_MNDIAG_MNUBERGEMM_PATH";
 constexpr std::string_view ENV_SUPPORTED_SKUS    = "DCGM_MNDIAG_SUPPORTED_SKUS";
 constexpr std::string_view ENV_ALLOW_RUN_AS_ROOT = "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT";
 
-// Default paths
-constexpr std::string_view DEFAULT_MPIRUN_PATH = "/usr/bin/mpirun";
+//! Default paths
+constexpr std::string_view DEFAULT_MPIRUN_PATH             = "/usr/bin/mpirun";
+constexpr std::array<std::string_view, 3> TRUSTED_IP_PATHS = { "/sbin/ip", "/usr/sbin/ip", "/bin/ip" };
 
-// Default CUDA versions
+//! Default CUDA versions
 constexpr std::array<int, 2> CUDA_VERSIONS_SUPPORTED = { 13, 12 };
+
+//! Process detection retry parameters
+//! Total timeout for detecting MPI processes on GPUs (60 seconds)
+constexpr std::chrono::seconds PROCESS_DETECTION_TIMEOUT { 60 };
+constexpr std::chrono::milliseconds PROCESS_DETECTION_RETRY_INTERVAL { 500 };
+
+//! Timeout and duration constants
+constexpr std::chrono::milliseconds MAX_WAIT_MS { 5000 };            //! State machine stabilization timeout
+constexpr std::chrono::seconds DEFAULT_TIME_TO_RUN_SECONDS { 3600 }; //! Default diagnostic run time in seconds (1 hour)
+
 
 } //namespace MnDiagConstants
 
@@ -94,7 +106,7 @@ using dcgmStopMnDiagResponse_t = dcgmStopMnDiagResponse_v1;
  */
 struct dcgm_mndiag_msg_stop_v1
 {
-    dcgm_module_command_header_t header; /* Command header */
+    dcgm_module_command_header_t header; //!< Command header
     dcgmStopMnDiagResponse_v1 response;
 };
 using dcgm_mndiag_msg_stop_t = dcgm_mndiag_msg_stop_v1;
@@ -106,7 +118,7 @@ using dcgm_mndiag_msg_stop_t = dcgm_mndiag_msg_stop_v1;
  */
 struct dcgm_mndiag_msg_authorization_v1
 {
-    dcgm_module_command_header_t header; /* Command header */
+    dcgm_module_command_header_t header; //!< Command header
     dcgmMultinodeAuthorization_v1 authorization;
 };
 using dcgm_mndiag_msg_authorization_t = dcgm_mndiag_msg_authorization_v1;
@@ -118,7 +130,7 @@ using dcgm_mndiag_msg_authorization_t = dcgm_mndiag_msg_authorization_v1;
  */
 struct dcgm_mndiag_msg_resource_v1
 {
-    dcgm_module_command_header_t header; /* Command header */
+    dcgm_module_command_header_t header; //!< Command header
     dcgmMultinodeResource_v1 resource;
 };
 using dcgm_mndiag_msg_resource_t = dcgm_mndiag_msg_resource_v1;
@@ -130,19 +142,29 @@ using dcgm_mndiag_msg_resource_t = dcgm_mndiag_msg_resource_v1;
  */
 struct dcgm_mndiag_msg_run_params_v1
 {
-    dcgm_module_command_header_t header; /* Command header */
+    dcgm_module_command_header_t header; //!< Command header
     dcgmMultinodeRunParams_v1 runParams;
 };
-using dcgm_mndiag_msg_run_params_t = dcgm_mndiag_msg_run_params_v1;
+
+/**
+ * @brief Message structure for parameter broadcasting commands (version 2)
+ */
+struct dcgm_mndiag_msg_run_params_v2
+{
+    dcgm_module_command_header_t header; //!< Command header
+    dcgmMultinodeRunParams_v2 runParams;
+};
+using dcgm_mndiag_msg_run_params_t = dcgm_mndiag_msg_run_params_v2;
 #define dcgm_mndiag_msg_run_params_version1 MAKE_DCGM_VERSION(dcgm_mndiag_msg_run_params_v1, 1)
-#define dcgm_mndiag_msg_run_params_version  dcgm_mndiag_msg_run_params_version1
+#define dcgm_mndiag_msg_run_params_version2 MAKE_DCGM_VERSION(dcgm_mndiag_msg_run_params_v2, 2)
+#define dcgm_mndiag_msg_run_params_version  dcgm_mndiag_msg_run_params_version2
 
 /**
  * @brief Message structure for node info command
  */
 struct dcgm_mndiag_msg_node_info_v1
 {
-    dcgm_module_command_header_t header; /* Command header */
+    dcgm_module_command_header_t header; //!< Command header
     dcgmMultinodeNodeInfo_v1 nodeInfo;
 };
 using dcgm_mndiag_msg_node_info_t = dcgm_mndiag_msg_node_info_v1;

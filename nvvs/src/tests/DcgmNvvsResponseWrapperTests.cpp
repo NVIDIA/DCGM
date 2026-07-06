@@ -21,6 +21,7 @@
 #include <CpuSet.h>
 #include <DcgmBuildInfo.hpp>
 #include <DcgmStringHelpers.h>
+#include <Defer.hpp>
 #include <DiagResponseUtils.h>
 #include <GpuSet.h>
 #include <NvvsCommon.h>
@@ -585,6 +586,7 @@ TEST_CASE("DcgmNvvsResponseWrapper::SetSoftwareTestResult::v12::Edge Cases")
     SECTION("Overwrite whole SW test result")
     {
         auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        DcgmNs::Defer defer([&entitySets]() { ReleaseEntitySets(entitySets); });
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(dcgmDiagResponse_version12);
@@ -1215,9 +1217,9 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::MaxInfoMessages", "", dcgmDiagRespo
         auto const &rawResponse    = wrapper.ConstResponse<ResponseType>();
         auto const maxInfoMessages = std::size(rawResponse.info);
 
-        // Create more than the maximum number of info messages
+        // Assume we have more than the maximum number of info messages
         entityResults.numInfo = maxInfoMessages + 2;
-        for (unsigned int i = 0; i < entityResults.numInfo; ++i)
+        for (unsigned int i = 0; i < maxInfoMessages; ++i)
         {
             entityResults.info[i].entity = { .entityGroupId = DCGM_FE_GPU, .entityId = 0 };
             std::string msg              = fmt::format("Info message #{}", i);

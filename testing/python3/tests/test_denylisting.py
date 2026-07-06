@@ -37,7 +37,8 @@ from apps.app_runner import AppRunner
 
 
 def helper_test_denylist_briefly():
-    # Run a basic test of the denylist script to make sure we don't break compatibility
+    # Run a basic test of the denylist script to make sure we don't break
+    # compatibility
     denylistApp = dcgm_internal_helpers.createDenylistApp(instantaneous=True)
     try:
         denylistApp.run()
@@ -71,21 +72,22 @@ def helper_test_denylist_checks(handle, gpuIds):
     settings['watches'] = dcgm_structs.DCGM_HEALTH_WATCH_MEM | dcgm_structs.DCGM_HEALTH_WATCH_PCIE
     error_list = []
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0],
-                                                              dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 0, -50)
     denylist_recommendations.check_health(handleObj, settings, error_list)
 
     # Make sure the GPUs pass a basic health test before running this test
     for gpuObj in denylist_recommendations.g_gpus:
         if gpuObj.IsHealthy() == False:
             test_utils.skip_test(
-                "Skipping because GPU %d is not healthy. " % gpuObj.GetEntityId())
+                "Skipping because GPU %d is not healthy. " %
+                gpuObj.GetEntityId())
 
     # Inject a memory error and verify that we fail
     denylist_recommendations.g_gpus = []  # Reset g_gpus
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0],
-                                                              dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 1000, 10)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 1000, 10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     denylist_recommendations.check_health(handleObj, settings, error_list)

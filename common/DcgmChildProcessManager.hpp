@@ -170,6 +170,7 @@ private:
         PipeInfo stdErrPipe;
         PipeInfo stdOutPipe;
         PipeInfo dataChannelPipe;
+        pid_t hangDetectPid = 0;
     };
 
     std::unique_ptr<IoContext> m_ioContext;

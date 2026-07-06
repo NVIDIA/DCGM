@@ -35,7 +35,8 @@ from _test_helpers import skip_test_if_no_dcgm_nvml
 @test_utils.run_with_logging_on()
 @test_utils.run_only_if_mig_is_disabled()
 @test_utils.run_with_additional_fatal_kmsg_xid("999")
-@test_utils.run_with_current_system_injection_nvml(skuFileName="current_test_kmsg_fatal_xid_parsing.yaml")
+@test_utils.run_with_current_system_injection_nvml(
+    skuFileName="current_test_kmsg_fatal_xid_parsing.yaml")
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_only_with_live_gpus()
 def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
@@ -44,7 +45,7 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
     detecting a fatal XID in /dev/kmsg.
     By default, DcgmCacheManager assumes only XIDs 119 and 120 are fatal XIDs.
     This test first sets an environment variable to add XID 999 to this list,
-    and writes XID 999 to /dev/kmsg. It then verifies that 
+    and writes XID 999 to /dev/kmsg. It then verifies that
         - no new NVML calls are made
         - XID 999 event is recorded and can be read
         - field values read after this event return blank values
@@ -103,8 +104,10 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     for i in range(funcCallCounts.numFuncs):
-        logger.debug("NVML function {} called {} times".format(
-            funcCallCounts.funcCallInfo[i].funcName, funcCallCounts.funcCallInfo[i].funcCallCount))
+        logger.debug(
+            "NVML function {} called {} times".format(
+                funcCallCounts.funcCallInfo[i].funcName,
+                funcCallCounts.funcCallInfo[i].funcCallCount))
 
     assert funcCallCounts.numFuncs == 0, "numFuncs value: %u" % funcCallCounts.numFuncs
 
@@ -113,7 +116,7 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
     maxKeepEntries = 0  # no limit
 
     # Assert that the corresponding XID event was recorded
-    fieldId = dcgm_fields.DCGM_FI_DEV_XID_ERRORS
+    fieldId = dcgm_fields.DCGM_FI_DEV_XID_ERROR
     dcgm_agent_internal.dcgmWatchFieldValue(
         handle, gpuIds[0], fieldId, updateFreq, maxKeepAge, maxKeepEntries)
     dcgm_agent.dcgmUpdateAllFields(handle, 1)
@@ -122,7 +125,13 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
     startTs = 0
     endTs = 0
     values = dcgm_agent_internal.dcgmGetMultipleValuesForField(
-        handle, gpuIds[0], fieldId, maxCount, startTs, endTs, dcgm_structs.DCGM_ORDER_ASCENDING)
+        handle,
+        gpuIds[0],
+        fieldId,
+        maxCount,
+        startTs,
+        endTs,
+        dcgm_structs.DCGM_ORDER_ASCENDING)
     assert len(values) > 0, "No XID event registered"
     xidFound = False
     for fieldValue in values:
@@ -135,7 +144,7 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
     assert xidFound, "XID {} not found in registered XID events".format(xid)
 
     # Assert that the sample fields report blank values
-    fieldIds = [dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP,
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP_CELSIUS,
                 dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION]
     for fieldId in fieldIds:
         dcgm_agent_internal.dcgmWatchFieldValue(
@@ -146,9 +155,17 @@ def test_kmsg_fatal_xid_parsing(handle, gpuIds, xid):
         startTs = 0
         endTs = 0
         values = dcgm_agent_internal.dcgmGetMultipleValuesForField(
-            handle, gpuIds[0], fieldId, maxCount, startTs, endTs, dcgm_structs.DCGM_ORDER_ASCENDING)
+            handle,
+            gpuIds[0],
+            fieldId,
+            maxCount,
+            startTs,
+            endTs,
+            dcgm_structs.DCGM_ORDER_ASCENDING)
         assert len(values) > 0
 
         for fieldValue in values:
             fv = dcgm_field_helpers.DcgmFieldValue(fieldValue)
-            assert fv.isBlank, f"base field {fieldId} is not blank, has value {fv.value}"
+            assert fv.isBlank, (
+                f"base field {fieldId} is not blank, "
+                f"has value {fv.value}")

@@ -12,11 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(tests)
+if (NOT BUILD_TESTING)
+    return()
+endif()
 
-target_include_directories(nvvs_mock_interface INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_sources(nvvs_mock_interface INTERFACE
-    DcgmSystemMock.cpp
-    DcgmSystemMock.h
-)
-target_link_libraries(nvvs_mock_interface INTERFACE mock_interface)
+add_library(mock_nvvs STATIC)
+target_sources(mock_nvvs PRIVATE
+    MockDcgmSystem.cpp
+    MockDcgmSystem.h
+    MockPluginLib.h
+    MockSoftwarePluginFramework.h)
+
+target_include_directories(mock_nvvs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(mock_nvvs PUBLIC mock_common nvvs_interface)
+
+add_subdirectory(tests)

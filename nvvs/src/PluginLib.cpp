@@ -123,6 +123,57 @@ PluginLib &PluginLib::operator=(PluginLib &&other) noexcept
 }
 
 /*****************************************************************************/
+dcgmReturn_t PluginLib::LoadRequiredFuncs()
+{
+    // Logging for failing to load functions happens in LoadFunction
+    m_getPluginInterfaceVersionCB
+        = (dcgmDiagGetPluginInterfaceVersion_f)LoadFunction("GetPluginInterfaceVersion", LoadFunctionType::REQUIRED);
+    if (m_getPluginInterfaceVersionCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_getPluginInfoCB = (dcgmDiagGetPluginInfo_f)LoadFunction("GetPluginInfo", LoadFunctionType::REQUIRED);
+    if (m_getPluginInfoCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_initializeCB = (dcgmDiagInitializePlugin_f)LoadFunction("InitializePlugin", LoadFunctionType::REQUIRED);
+    if (m_initializeCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_runTestCB = (dcgmDiagRunTest_f)LoadFunction("RunTest", LoadFunctionType::REQUIRED);
+    if (m_runTestCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_retrieveStatsCB = (dcgmDiagRetrieveCustomStats_f)LoadFunction("RetrieveCustomStats", LoadFunctionType::REQUIRED);
+    if (m_retrieveStatsCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    m_retrieveResultsCB = (dcgmDiagRetrieveResults_f)LoadFunction("RetrieveResults", LoadFunctionType::REQUIRED);
+    if (m_retrieveResultsCB == nullptr)
+    {
+        return DCGM_ST_GENERIC_ERROR;
+    }
+
+    return DCGM_ST_OK;
+}
+
+/*****************************************************************************/
+void PluginLib::LoadOptionalFuncs()
+{
+    // Logging for failing to load functions happens in LoadFunction
+    m_shutdownPluginCB = (dcgmDiagShutdownPlugin_f)LoadFunction("ShutdownPlugin", LoadFunctionType::OPTIONAL);
+}
+
+/*****************************************************************************/
 dcgmReturn_t PluginLib::LoadPlugin(const std::string &path, const std::string &name)
 {
     m_pluginName = name;
@@ -131,77 +182,32 @@ dcgmReturn_t PluginLib::LoadPlugin(const std::string &path, const std::string &n
     if (m_pluginPtr == nullptr)
     {
         std::string dlopen_error = dlerror();
-        DCGM_LOG_ERROR << "Couldn't open " << path << ": " << dlopen_error;
+        log_error("Couldn't open {}: {}", path, dlopen_error);
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    // Logging for failing to load functions happens in LoadFunction
-    m_getPluginInterfaceVersionCB = (dcgmDiagGetPluginInterfaceVersion_f)LoadFunction("GetPluginInterfaceVersion");
+    if (auto const ret = LoadRequiredFuncs(); ret != DCGM_ST_OK)
+    {
+        return ret;
+    }
+    LoadOptionalFuncs();
+
     if (m_getPluginInterfaceVersionCB == nullptr)
     {
+        // Unexpected! LoadRequiredFuncs should have returned early with an error.
+        log_warning("Couldn't load required function GetPluginInterfaceVersion from plugin {}", GetName());
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    m_getPluginInfoCB = (dcgmDiagGetPluginInfo_f)LoadFunction("GetPluginInfo");
-    if (m_getPluginInfoCB == nullptr)
+    if (auto const pluginVersion = m_getPluginInterfaceVersionCB(); pluginVersion != DCGM_DIAG_PLUGIN_INTERFACE_VERSION)
     {
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    m_initializeCB = (dcgmDiagInitializePlugin_f)LoadFunction("InitializePlugin");
-    if (m_initializeCB == nullptr)
-    {
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    m_runTestCB = (dcgmDiagRunTest_f)LoadFunction("RunTest");
-    if (m_runTestCB == nullptr)
-    {
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    m_retrieveStatsCB = (dcgmDiagRetrieveCustomStats_f)LoadFunction("RetrieveCustomStats");
-    if (m_retrieveStatsCB == nullptr)
-    {
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    m_retrieveResultsCB = (dcgmDiagRetrieveResults_f)LoadFunction("RetrieveResults");
-    if (m_retrieveResultsCB == nullptr)
-    {
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    m_shutdownPluginCB = (dcgmDiagShutdownPlugin_f)LoadFunction("ShutdownPlugin");
-    if (m_shutdownPluginCB == nullptr)
-    {
-        log_debug("Plugin does not have a ShutdownPlugin function. This is not an error.");
-    }
-
-
-    if (m_getPluginInfoCB == nullptr || m_initializeCB == nullptr || m_runTestCB == nullptr
-        || m_retrieveStatsCB == nullptr || m_retrieveResultsCB == nullptr)
-    {
-        DCGM_LOG_ERROR << "All of the required functions must be defined in the plugin";
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    unsigned int pluginVersion;
-    if (m_getPluginInterfaceVersionCB == nullptr)
-    {
-        pluginVersion = DCGM_DIAG_PLUGIN_INTERFACE_VERSION_1;
-        DCGM_LOG_ERROR << "GetPluginInterfaceVersion is missing. Assuming version " << pluginVersion << ".";
-    }
-    else
-    {
-        pluginVersion = m_getPluginInterfaceVersionCB();
-    }
-
-    if (pluginVersion != DCGM_DIAG_PLUGIN_INTERFACE_VERSION)
-    {
-        DCGM_LOG_ERROR << "Unable to load plugin " << name << " shared library " << path << " due to version mismatch. "
-                       << "Our version: " << DCGM_DIAG_PLUGIN_INTERFACE_VERSION << ". Plugin version: " << pluginVersion
-                       << ".";
+        log_error(
+            "Unable to load plugin {} shared library {} due to version mismatch. Our version: {}. Plugin version: "
+            "{}.",
+            name,
+            path,
+            DCGM_DIAG_PLUGIN_INTERFACE_VERSION,
+            pluginVersion);
         return DCGM_ST_GENERIC_ERROR; /* Return a generic error so this isn't confused with an API version mismatch */
     }
 
@@ -258,22 +264,34 @@ PluginLib::~PluginLib() noexcept
 }
 
 /*****************************************************************************/
-void *PluginLib::LoadFunction(const char *funcname)
+void *PluginLib::LoadFunction(char const *funcname, LoadFunctionType const type)
 {
     // Clear any old errors
     dlerror();
     void *f = dlsym(m_pluginPtr, funcname);
     if (f == nullptr)
     {
-        std::string error = dlerror();
+        std::string error             = dlerror();
+        std::string const requiredStr = (type == LoadFunctionType::REQUIRED) ? "a required" : "an optional";
+        std::string errmsg;
+
         if (error.empty())
         {
-            DCGM_LOG_ERROR << "Couldn't load a definition for " << funcname << " in plugin " << GetName();
+            errmsg = fmt::format("Couldn't load {} definition for {} in plugin {}", requiredStr, funcname, GetName());
         }
         else
         {
-            DCGM_LOG_ERROR << "Couldn't load a definition for " << funcname << " in plugin " << GetName() << ": "
-                           << error;
+            errmsg = fmt::format(
+                "Couldn't load {} definition for {} in plugin {}: '{}'", requiredStr, funcname, GetName(), error);
+        }
+
+        if (type == LoadFunctionType::OPTIONAL)
+        {
+            log_verbose(errmsg);
+        }
+        else
+        {
+            log_error(errmsg);
         }
     }
     return f;

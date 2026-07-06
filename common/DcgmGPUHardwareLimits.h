@@ -29,4 +29,13 @@
 // RM has informed us that CRC errors only matter at rates of 100+ per second
 #define DCGM_LIMIT_MAX_NVLINK_CRC_ERROR 100.0
 
+//! Exponent floor for non-aggregated (per-link) Symbol BER
+#define DCGM_SYMBOL_BER_FLOOR_EXP_NON_AGGREGATED 255
+
+//! Exponent floor for aggregated Symbol BER (Blackwell+)
+#define DCGM_SYMBOL_BER_FLOOR_EXP_AGGREGATED 238
+
+// This number of uncorrectable row remaps indicates GPU is in a bad state
+#define DCGM_LIMIT_MAX_ROW_REMAP_UNCORRECTABLE 512
+
 #endif // DCGM_GPU_HARDWARE_LIMITS_H

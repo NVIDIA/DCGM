@@ -1166,10 +1166,11 @@ public:
 
     /*************************************************************************/
     /*
-     * Populate a dcgmNvLinkStatus_v4 response with the NvLink link states
+     * Populate a dcgmNvLinkStatus response with the NvLink link states
      * of every GPU and NvSwitch in the system
      */
     dcgmReturn_t PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v4 &nvLinkStatus);
+    dcgmReturn_t PopulateNvLinkLinkStatus(dcgmNvLinkStatus_v5 &nvLinkStatus);
 
     /*************************************************************************/
     /*
@@ -1586,6 +1587,9 @@ public:
 private:
 #endif
 
+    template <typename NvLinkStatus>
+    dcgmReturn_t PopulateNvLinkLinkStatusImpl(NvLinkStatus &nvLinkStatus, unsigned int version);
+
     int m_pollInLockStep; /* Whether to poll when told to (1) or at the
                                     frequency of the most frequent stat being tracked (0) */
 
@@ -1602,6 +1606,8 @@ private:
 
     std::atomic_bool
         m_driverIsR520OrNewer; /* Is the driver r450.00 or newer? This is the driver version of nvml_11.0.h APIs */
+
+    std::atomic_bool m_driverSupportsFabricInfoV3; /* Does the driver support nvmlGpuFabricInfo_v3 */
 
     unsigned int m_driverMajorVersion;                          /* Major driver version, eg. 470, 510, etc */
     unsigned int m_numGpus;                                     /* Number of entries in m_gpus[] that are valid */
@@ -2304,6 +2310,42 @@ private:
     dcgmReturn_t ReadAndCacheNvLinkPrm(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
 
     /**
+     * Cache and/or buffer the value for a PRM field whose link entity port is outside that field's PRM contract.
+     *
+     * @param[in,out] threadCtx Thread context containing watch info and/or live response buffer.
+     * @param[in] linkEntityId Link entity ID for the field.
+     * @param[in] fieldId DCGM field ID being read.
+     * @param[in] now Timestamp to use for the generated sample.
+     * @return DCGM_ST_OK because this helper emits the field value itself.
+     */
+    dcgmReturn_t CacheUnsupportedNvLinkPrmPort(dcgmcm_update_thread_t &threadCtx,
+                                               dcgm_field_eid_t linkEntityId,
+                                               unsigned short fieldId,
+                                               timelib64_t now);
+
+    /**
+     * Determine whether a PRM field uses the IB-specific port-addressing contract.
+     *
+     * @param[in] fieldId DCGM field ID to classify.
+     * @return true when the field keeps unshifted IB addressing, false otherwise.
+     */
+    bool IsNvLinkPrmIbField(unsigned short fieldId) const;
+
+    /**
+     * Translate a DCGM link entity port index into the NVML PRM local port value.
+     *
+     * Non-IB PRM fields accept DCGM ports 0..17 and translate them to NVML local
+     * ports 1..18. IB PRM fields keep unshifted addressing and accept 0..18.
+     *
+     * @param[in] fieldId DCGM field ID whose PRM addressing rules should be applied.
+     * @param[in] entityPortIndex DCGM-facing port index from the link entity ID.
+     * @return On success, the NVML local port. On failure, DCGM_ST_BADPARAM when the
+     *         entity port is not valid for the field's PRM contract.
+     */
+    DcgmResult<unsigned int> TranslateNvLinkPrmEntityPortToLocalPort(unsigned short fieldId,
+                                                                     unsigned int entityPortIndex) const;
+
+    /**
      * Read and cache the state of the NVLink links for a given GPU
      *
      * @param[in] threadCtx Thread context
@@ -2311,6 +2353,42 @@ private:
      * @return DCGM_ST_OK on success, error code on failure
      */
     dcgmReturn_t ReadAndCacheNvLinkState(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+
+    /**
+     * Read and cache a per-link NVLink throughput or error-counter metric keyed by a dcgm_link_t
+     * entity (DCGM_FE_LINK). Decodes the GPU and link index from the entity and dispatches to the
+     * NVML per-link bandwidth/error-counter readers. Covers DCGM_FI_DEV_NVLINK_THROUGHPUT_PER_LINK,
+     * _TX_THROUGHPUT, _RX_THROUGHPUT and the CRC_FLIT/CRC_DATA/REPLAY/RECOVERY error fields.
+     *
+     * @param[in] threadCtx Thread context
+     * @param[in] fieldMeta Field metadata containing field ID and entity information
+     * @return DCGM_ST_OK after buffering one value for supported fields, error code for unsupported fields
+     */
+    dcgmReturn_t ReadAndCacheNvLinkPerLinkMetric(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+
+    /**
+     * Read and cache a per-link NVLink GPM throughput byte counter keyed by a dcgm_link_t entity
+     * (DCGM_FE_LINK). Decodes the GPU from the entity, takes a GPM sample on that GPU and lets the
+     * GPM manager select the per-link metric from the link index. Covers
+     * DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK and DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK.
+     *
+     * @param[in] threadCtx Thread context
+     * @param[in] fieldMeta Field metadata containing field ID and entity information
+     * @return DCGM_ST_OK after buffering one value for supported fields, error code for unsupported fields
+     */
+    dcgmReturn_t ReadAndCacheNvLinkGpmBytes(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
+
+    /**
+     * @brief Read and cache NVLink COUNT field values for per-link queries (NVLink5+ only).
+     *
+     * Extracts gpuId and linkIndex from the dcgm_link_t entity ID and queries NVML
+     * with scopeId = linkIndex to retrieve per-link statistics.
+     *
+     * @param threadCtx The update thread context containing entity and watch information.
+     * @param fieldMeta Metadata for the field being queried.
+     * @return DCGM_ST_OK on success, appropriate error code on failure.
+     */
+    dcgmReturn_t ReadAndCacheNvLinkCountField(dcgmcm_update_thread_t &threadCtx, dcgm_field_meta_p fieldMeta);
 
     /**
      * Read and cache PRM counter values using the counter-based API
@@ -2324,7 +2402,7 @@ private:
     /*
      * @note This function must be called with the cache manager mutex locked.
      */
-    void CachePrmField(dcgmcm_update_thread_t const &threadCtx,
+    void CachePrmField(dcgmcm_update_thread_t &threadCtx,
                        dcgm_field_eid_t linkEntityId,
                        unsigned short fieldId,
                        unsigned short requestedFieldId,

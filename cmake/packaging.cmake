@@ -122,6 +122,7 @@ if (CPACK_GENERATOR MATCHES "DEB")
     endif()
 
     set(CPACK_COMPONENTS_GROUPING "IGNORE")
+    set(CPACK_DEBIAN_COMPRESSION_TYPE "zstd")
     set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
     set(CPACK_DEBIAN_PACKAGE_CONTROL_STRICT_PERMISSION TRUE)
     set(CPACK_PRE_BUILD_SCRIPTS
@@ -185,12 +186,12 @@ if (CPACK_GENERATOR MATCHES "DEB")
     set(CPACK_DEBIAN_MULTINODE_CUDA12_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_DEBIAN_MULTINODE_CUDA12_PACKAGE_DEPENDS
         "${CPACK_DEBIAN_MULTINODE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
-        "openmpi | libopenmpi3 (>= 4.1.1)") # Play nice with the clients using the NVIDIA DOCA package repository
+        "openmpi | libopenmpi40 | libopenmpi3 (>= 4.1.1)") # Play nice with the clients using the NVIDIA DOCA package repository
 
     set(CPACK_DEBIAN_MULTINODE_CUDA13_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_DEBIAN_MULTINODE_CUDA13_PACKAGE_DEPENDS
         "${CPACK_DEBIAN_MULTINODE_PACKAGE_NAME} (= ${CPACK_DEBIAN_PACKAGE_EPOCH}:${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})"
-        "openmpi | libopenmpi3 (>= 4.1.1)") # Play nice with the clients using the NVIDIA DOCA package repository
+        "openmpi | libopenmpi40 | libopenmpi3 (>= 4.1.1)") # Play nice with the clients using the NVIDIA DOCA package repository
 
     set(SUFFIX
         "_${CPACK_DEBIAN_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE}_${CPACK_DEBIAN_PACKAGE_ARCHITECTURE}.deb")
@@ -206,7 +207,7 @@ if (CPACK_GENERATOR MATCHES "DEB")
             ""
             "${CPACK_PACKAGE_DESCRIPTION}")
     endforeach()
-elseif(CPACK_GENERATOR MATCHES "TGZ")
+elseif(CPACK_GENERATOR MATCHES "TGZ" OR CPACK_GENERATOR MATCHES "TZST")
     if (CPACK_VMWARE)
         set(DCGM_TGZ_SUFFIX "${CPACK_TGZ_PACKAGE_ARCHITECTURE}-vmware")
     else()
@@ -254,6 +255,7 @@ elseif(CPACK_GENERATOR MATCHES "RPM")
         "${CMAKE_CURRENT_LIST_DIR}/cpack-rpm-prebuild.cmake")
 
     set(CPACK_RPM_BUILD_SOURCE_DIRS_PREFIX "/-")
+    set(CPACK_RPM_COMPRESSION_TYPE "zstd")
     set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
         "/usr/lib/systemd"
         "/usr/lib/systemd/system"
@@ -310,7 +312,7 @@ elseif(CPACK_GENERATOR MATCHES "RPM")
     # to the concrete package has been added to support RHEL 8
     string(JOIN ", " CPACK_RPM_CORE_PACKAGE_REQUIRES_PRE
         "(shadow or shadow-utils)"
-        "/sbin/nologin")
+        "(/usr/sbin/nologin or /sbin/nologin)")
 
     set(CPACK_RPM_CORE_POST_INSTALL_SCRIPT_FILE
         "${CMAKE_CURRENT_LIST_DIR}/../scripts/rpm/postinstall")
@@ -355,17 +357,17 @@ Recommends: libnuma.so.1()(64bit)")
     set(CPACK_RPM_MULTINODE_DEBUGINFO_PACKAGE TRUE)
     string(JOIN ", " CPACK_RPM_MULTINODE_PACKAGE_DEPENDS
         "${CPACK_RPM_CORE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
-        "openmpi >= 4.1.1")
+        "(openmpi >= 4.1.1 or openmpi4 >= 4.1.1)")
 
     set(CPACK_RPM_MULTINODE_CUDA12_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_RPM_MULTINODE_CUDA12_PACKAGE_REQUIRES
         "${CPACK_RPM_MULTINODE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
-        "openmpi >= 4.1.1")
+        "(openmpi >= 4.1.1 or openmpi4 >= 4.1.1)")
 
     set(CPACK_RPM_MULTINODE_CUDA13_DEBUGINFO_PACKAGE FALSE)
     string(JOIN ", " CPACK_RPM_MULTINODE_CUDA13_PACKAGE_REQUIRES
         "${CPACK_RPM_MULTINODE_PACKAGE_NAME} = ${CPACK_RPM_PACKAGE_EPOCH}:${CPACK_RPM_PACKAGE_VERSION}-${CPACK_RPM_PACKAGE_RELEASE}"
-        "openmpi >= 4.1.1")
+        "(openmpi >= 4.1.1 or openmpi4 >= 4.1.1)")
 
     foreach(component IN LISTS CPACK_COMPONENTS_ALL)
         string(TOUPPER "${component}" component)

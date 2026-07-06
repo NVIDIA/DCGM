@@ -57,12 +57,13 @@ class DcgmSystemDiscovery:
     '''
 
     def GetGpuAttributes(self, gpuId):
-        return dcgm_agent.dcgmGetDeviceAttributes(self._dcgmHandle.handle, gpuId)
+        return dcgm_agent.dcgmGetDeviceAttributes(
+            self._dcgmHandle.handle, gpuId)
 
     '''
     Get topology information for a given GPU ID
 
-    Returns a dcgm_structs.c_dcgmDeviceTopology_v1 structure representing the topology for the given GPU
+    Returns a dcgm_structs.c_dcgmDeviceTopology_t structure representing the topology for the given GPU
     '''
 
     def GetGpuTopology(self, gpuId):
@@ -89,7 +90,7 @@ class DcgmSystemDiscovery:
     '''
     Get the status of all of the NvLink links in the system.
 
-    Returns a dcgm_structs.c_dcgmNvLinkStatus_v4 object.
+    Returns a dcgm_structs.c_dcgmNvLinkStatus_v5 object.
     '''
 
     def GetNvLinkLinkStatus(self):
@@ -116,7 +117,8 @@ class DcgmSystemDiscovery:
     '''
 
     def SelectGpusByTopology(self, inputGpuIds, numGpus, hintFlags):
-        return dcgm_agent.dcgmSelectGpusByTopology(self._dcgmHandle.handle, inputGpuIds, numGpus, hintFlags)
+        return dcgm_agent.dcgmSelectGpusByTopology(
+            self._dcgmHandle.handle, inputGpuIds, numGpus, hintFlags)
 
     '''
     Get the status of the given GPU.
@@ -158,7 +160,8 @@ class DcgmSystemIntrospectMemory:
         Returns a dcgm_structs.c_dcgmIntrospectMemory_v1 object
         Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
         '''
-        return dcgm_agent.dcgmIntrospectGetHostengineMemoryUsage(self._dcgmHandle.handle, waitIfNoData)
+        return dcgm_agent.dcgmIntrospectGetHostengineMemoryUsage(
+            self._dcgmHandle.handle, waitIfNoData)
 
 
 class DcgmSystemIntrospectCpuUtil:
@@ -178,7 +181,8 @@ class DcgmSystemIntrospectCpuUtil:
         Returns a dcgm_structs.c_dcgmIntrospectCpuUtil_v1 object
         Raises an exception for DCGM_ST_NO_DATA if no data is available yet and \ref waitIfNoData is False
         '''
-        return dcgm_agent.dcgmIntrospectGetHostengineCpuUtilization(self._dcgmHandle.handle, waitIfNoData)
+        return dcgm_agent.dcgmIntrospectGetHostengineCpuUtilization(
+            self._dcgmHandle.handle, waitIfNoData)
 
 
 '''
@@ -264,7 +268,7 @@ class DcgmSystemProfiling:
 
     Call this API before you launch one of those tools and Resume() after the tool has completed.
 
-    DCGM will save BLANK values while profiling is paused. 
+    DCGM will save BLANK values while profiling is paused.
     Calling this while profiling activities are already paused is fine and will be treated as a no-op.
     '''
 
@@ -277,7 +281,7 @@ class DcgmSystemProfiling:
     Call this API after you have completed running other NVIDIA developer tools to reenable DCGM
     profiling metrics.
 
-    DCGM will save BLANK values while profiling is paused. 
+    DCGM will save BLANK values while profiling is paused.
 
     Calling this while profiling activities have already been resumed is fine and will be treated as a no-op.
     '''
@@ -336,7 +340,9 @@ class DcgmSystem:
     '''
 
     def GetDefaultGroup(self):
-        return pydcgm.DcgmGroup(self._dcgmHandle, groupId=dcgm_structs.DCGM_GROUP_ALL_GPUS)
+        return pydcgm.DcgmGroup(
+            self._dcgmHandle,
+            groupId=dcgm_structs.DCGM_GROUP_ALL_GPUS)
 
     '''
     Get an instance of DcgmGroup with no GPUs. Call AddGpu() on the returned

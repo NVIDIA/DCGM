@@ -138,7 +138,14 @@ def test_dcgm_health_invalid_group_embedded(handle):
         groupObj.health.Check(dcgm_structs.dcgmHealthResponse_version5)
 
 
-def helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplayCounter, expectingPcieIncident, errmsg):
+def helper_dcgm_health_check_pcie(
+        handle,
+        gpuIds,
+        pcieGen,
+        pcieLanes,
+        pcieReplayCounter,
+        expectingPcieIncident,
+        errmsg):
     """
     Verifies that a check error occurs when an error is injected
     Checks for call errors are done in the bindings except dcgmClientHealthCheck
@@ -156,23 +163,27 @@ def helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplay
     skip_test_if_unhealthy(groupObj)
 
     # inject PCIe Gen and width/lanes
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_GEN,
-                                                              pcieGen, 0)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_GEN, pcieGen, 0)
     assert (ret == dcgm_structs.DCGM_ST_OK)
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_WIDTH,
-                                                              pcieLanes, 0)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_WIDTH, pcieLanes, 0)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     response = groupObj.health.Check()
     # we expect that there will be no data here
 
     # inject an error into PCI
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-                                                              pcieReplayCounter, 100)  # set the injected data into the future
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL,
+        pcieReplayCounter,
+        100)  # set the injected data into the future
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -189,40 +200,52 @@ def helper_dcgm_health_check_pcie(handle, gpuIds, pcieGen, pcieLanes, pcieReplay
 
 
 def helper_reset_pcie_replay_counter(handle, gpuIds):
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-                                                              0, 100)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL, 0, 100)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_pcie_standalone(handle, gpuIds):
     # PCIe replay rate thresholds for each generation per lane.
     pcieGenReplayRatesPerLane = [
-        # Gen1 speed = 2.5 Gbps, (1x10^-12) * (2.5x10^9) * 60 = 0.15 errors/min per lane.
+        # Gen1 speed = 2.5 Gbps, (1x10^-12) * (2.5x10^9) * 60 = 0.15 errors/min
+        # per lane.
         2.5 / 1000 * 60,
-        # Gen2 speed = 5 Gbps, (1x10^-12) * (5x10^9) * 60 = 0.3 errors/min per lane.
+        # Gen2 speed = 5 Gbps, (1x10^-12) * (5x10^9) * 60 = 0.3 errors/min per
+        # lane.
         5.0 / 1000 * 60,
-        # Gen3 speed = 8 Gbps, (1x10^-12) * (8x10^9) * 60 = 0.48 errors/min per lane.
+        # Gen3 speed = 8 Gbps, (1x10^-12) * (8x10^9) * 60 = 0.48 errors/min per
+        # lane.
         8.0 / 1000 * 60,
-        # Gen4 speed = 16 Gbps, (1x10^-12) * (16x10^9) * 60 = 0.96 errors/min per lane.
+        # Gen4 speed = 16 Gbps, (1x10^-12) * (16x10^9) * 60 = 0.96 errors/min
+        # per lane.
         16.0 / 1000 * 60,
-        # Gen5 speed = 32 Gbps, (1x10^-12) * (32x10^9) * 60 = 1.92 errors/min per lane.
+        # Gen5 speed = 32 Gbps, (1x10^-12) * (32x10^9) * 60 = 1.92 errors/min
+        # per lane.
         32.0 / 1000 * 60,
-        # Gen6 speed = 64 Gbps, (1x10^-12) * (64x10^9) * 60 = 3.84 errors/min per lane.
+        # Gen6 speed = 64 Gbps, (1x10^-12) * (64x10^9) * 60 = 3.84 errors/min
+        # per lane.
         64.0 / 1000 * 60
     ]
 
-    # Run it multiple times to cover more combinations of pcieGen and pcieLanes.
+    # Run it multiple times to cover more combinations of pcieGen and
+    # pcieLanes.
     for i in range(3):
         pcieGen = 1
         # For each Gen, randomly select number of lanes and PCIe replay counter to inject to dcgm.
-        # If replay counter rate > expected rate, then make sure PCIe incident is present, no incident otherwise.
+        # If replay counter rate > expected rate, then make sure PCIe incident
+        # is present, no incident otherwise.
         for pcieGenReplayRatePerLane in pcieGenReplayRatesPerLane:
             pcieLanes = random.randint(1, 16)
             expectedPcieReplayCounterLimit = math.ceil(
                 pcieGenReplayRatePerLane * pcieLanes)
-            # Multiply by 2 to have uniform probability for pcieReplayCounter to give success or failure scenario.
+            # Multiply by 2 to have uniform probability for pcieReplayCounter
+            # to give success or failure scenario.
             pcieReplayCounter = random.randint(
                 1, 2 * expectedPcieReplayCounterLimit)
             expectingPcieIncident = True if pcieReplayCounter > expectedPcieReplayCounterLimit else False
@@ -230,12 +253,21 @@ def test_dcgm_health_check_pcie_standalone(handle, gpuIds):
                       f"expectedPcieReplayCounterLimit={expectedPcieReplayCounterLimit} pcieReplayCounter={pcieReplayCounter} "
                       f"expectingPcieIncident={expectingPcieIncident}")
             helper_dcgm_health_check_pcie(
-                handle, gpuIds, pcieGen, pcieLanes, pcieReplayCounter, expectingPcieIncident, errmsg)
-            # Reset after testing each failure test case i.e. if expecting PCIe incident.
+                handle,
+                gpuIds,
+                pcieGen,
+                pcieLanes,
+                pcieReplayCounter,
+                expectingPcieIncident,
+                errmsg)
+            # Reset after testing each failure test case i.e. if expecting PCIe
+            # incident.
             if expectingPcieIncident:
                 helper_reset_pcie_replay_counter(handle, gpuIds)
             pcieGen += 1
 
+
+# NO HARDWARE
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -314,8 +346,12 @@ def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
 
     skip_test_if_unhealthy(groupObj)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                                              2, -50)  # set the injected data to 50 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
+        2,
+        -50)  # set the injected data to 50 seconds ago
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -333,8 +369,8 @@ def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
             dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
 
     # Give it the same failure 45 seconds ago and make sure we fail again
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                                              2, -45)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 2, -45)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -352,8 +388,8 @@ def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
             dcgm_errors.DCGM_FR_VOLATILE_DBE_DETECTED)
 
     # Make the failure count go down to zero. This should clear the error
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                                              0, -40)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 0, -40)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -361,13 +397,17 @@ def helper_test_dcgm_health_check_mem_dbe(handle, gpuIds):
     assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_dbe(handle, gpuIds):
     helper_test_dcgm_health_check_mem_dbe(handle, gpuIds)
 
 
-def helper_verify_dcgm_health_watch_mem_result(groupObj, errorCode, verifyFail=False, gpuId=0):
+def helper_verify_dcgm_health_watch_mem_result(
+        groupObj, errorCode, verifyFail=False, gpuId=0):
     """
     Verify that memory health check result is what was expected. If verifyFail is False, verify a pass result,
     otherwise verify a failure occurred.
@@ -395,12 +435,14 @@ def helper_reset_page_retirements(handle, gpuId=0, reset_sbe=False):
     """
     Helper function to reset non volatile page retirements.
     """
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                                                              0, -30)  # set the injected data to 30 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, 0, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
     if reset_sbe:
-        ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-                                                                  0, -30)  # set the injected data to 30 seconds ago
+        ret = dcgm_field_injection_helpers.inject_field_value_i64(
+            # set the injected data to 30 seconds ago
+            handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL, 0, -30)
         assert (ret == dcgm_structs.DCGM_ST_OK)
 
 
@@ -427,28 +469,35 @@ def helper_test_dcgm_health_check_mem_retirements(handle, gpuIds):
     #### Condition 1 ####
     # Fail if the total number of page retirements (due to DBE or SBE) meets or exceeds 60
     # Test 1: >= 60 page retirements total should fail
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                                                              30, -30)  # set the injected data to 30 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, 30, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-                                                              30, -30)  # set the injected data to 30 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL, 30, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Make sure we get a failure
-    helper_verify_dcgm_health_watch_mem_result(groupObj, dcgm_errors.DCGM_FR_RETIRED_PAGES_LIMIT, verifyFail=True,
-                                               gpuId=gpuId)
+    helper_verify_dcgm_health_watch_mem_result(
+        groupObj,
+        dcgm_errors.DCGM_FR_RETIRED_PAGES_LIMIT,
+        verifyFail=True,
+        gpuId=gpuId)
     # Reset the field and verify clean result
     helper_reset_page_retirements(handle, gpuId=gpuId, reset_sbe=True)
     helper_verify_dcgm_health_watch_mem_result(groupObj, 0, gpuId=gpuId)
 
     # Test 2: 59 page retirements total should pass
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                                                              10, -30)  # set the injected data to 30 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, 10, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-                                                              49, -30)  # set the injected data to 30 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL, 49, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Make sure we pass
@@ -460,8 +509,9 @@ def helper_test_dcgm_health_check_mem_retirements(handle, gpuIds):
     #### Condition 2 ####
     # Fail if > 15 page retirement due to DBEs AND more than 1 DBE page retirement in past week
     # Test 1: 15 page retirements due to DBEs should pass
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                                                              15, -30)  # set the injected data to 30 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, 15, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Make sure we pass
@@ -470,21 +520,27 @@ def helper_test_dcgm_health_check_mem_retirements(handle, gpuIds):
     helper_reset_page_retirements(handle, gpuId=gpuId)
     helper_verify_dcgm_health_watch_mem_result(groupObj, 0, gpuId=gpuId)
 
-    # Test 2: 16 page retirements due to DBE should fail (since all 16 are inserted in current week)
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                                                              16, -30)  # set the injected data to 30 seconds ago
+    # Test 2: 16 page retirements due to DBE should fail (since all 16 are
+    # inserted in current week)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, 16, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Make sure we get a failure
-    helper_verify_dcgm_health_watch_mem_result(groupObj, dcgm_errors.DCGM_FR_RETIRED_PAGES_DBE_LIMIT,
-                                               verifyFail=True, gpuId=gpuId)
+    helper_verify_dcgm_health_watch_mem_result(
+        groupObj,
+        dcgm_errors.DCGM_FR_RETIRED_PAGES_DBE_LIMIT,
+        verifyFail=True,
+        gpuId=gpuId)
     # Reset the field and verify clean result
     helper_reset_page_retirements(handle, gpuId=gpuId)
     helper_verify_dcgm_health_watch_mem_result(groupObj, 0, gpuId=gpuId)
 
     # Test 3: 16 page retirements due to SBEs should pass
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-                                                              16, -30)  # set the injected data to 30 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL, 16, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Make sure we pass
@@ -495,12 +551,17 @@ def helper_test_dcgm_health_check_mem_retirements(handle, gpuIds):
 
     # Test 4: 16 page retirements due to DBEs (with first 15 pages inserted more than 1 week ago,
     # and 16th page inserted in current week) should pass
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                                                              15, -604860)  # set the injected data to 7 days and 1 minute ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
+        15,
+        -604860)  # set the injected data to 7 days and 1 minute ago
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
-                                                              1, -30)  # set the injected data to 30 seconds ago
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        # set the injected data to 30 seconds ago
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, 1, -30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Make sure we pass
@@ -510,6 +571,9 @@ def helper_test_dcgm_health_check_mem_retirements(handle, gpuIds):
     helper_verify_dcgm_health_watch_mem_result(groupObj, 0, gpuId=gpuId)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_retirements_standalone(handle, gpuIds):
@@ -533,12 +597,12 @@ def helper_test_dcgm_health_check_mem(handle, gpuIds):
 
     skip_test_if_unhealthy(groupObj)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
-                                                              100, -40)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING, 100, -40)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -558,17 +622,20 @@ def helper_test_dcgm_health_check_mem(handle, gpuIds):
         "Expected warning but found %d" % responseV5.incidents[0].health
 
     # Clear the error
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
-                                                              0, -35)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING, 0, -35)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Make sure we've set the monitor frequency to less than 35 seconds - that will make us around
     # half or less of the 60 seconds we give the data before calling it stale.
     cmFieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
-        handle, gpuId, dcgm_fields.DCGM_FE_GPU, dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING)
+        handle, gpuId, dcgm_fields.DCGM_FE_GPU, dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING)
     assert cmFieldInfo.monitorIntervalUsec < 35000000
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_standalone(handle, gpuIds):
@@ -598,6 +665,9 @@ def test_dcgm_standalone_health_set_thermal(handle):
     assert (currentSystems == newSystems)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_thermal(handle, gpuIds):
@@ -616,8 +686,8 @@ def test_dcgm_standalone_health_check_thermal(handle, gpuIds):
 
     skip_test_if_unhealthy(groupObj)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0],
-                                                              dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, 0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -626,8 +696,8 @@ def test_dcgm_standalone_health_check_thermal(handle, gpuIds):
     # assert (dcgm_structs.DCGM_ST_OK == result or dcgm_structs.DCGM_ST_NO_DATA == result)
 
     # inject an error into thermal
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuIds[0],
-                                                              dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, 1000, 10)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuIds[0], dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION, 1000, 10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -677,9 +747,11 @@ def helper_check_health_response_v4(entityIds, response):
     if response.overallHealth != dcgm_structs.DCGM_HEALTH_RESULT_PASS:
         numErrors += 1
         logger.error(
-            "bad response.overallHealth %d. Are these entities really healthy?" % response.overallHealth)
+            "bad response.overallHealth %d. Are these entities really healthy?" %
+            response.overallHealth)
         test_utils.skip_test(
-            "bad response.overallHealth %d. Are these entities really healthy?" % response.overallHealth)
+            "bad response.overallHealth %d. Are these entities really healthy?" %
+            response.overallHealth)
     if response.incidentCount > 0:
         numErrors += 1
         logger.error("bad response.incidentCount %d > 0" %
@@ -688,7 +760,8 @@ def helper_check_health_response_v4(entityIds, response):
     assert numErrors == 0, "Errors were encountered. See above."
 
 
-def helper_run_dcgm_health_check_sanity_connectx(handle, cxIds, system_to_check):
+def helper_run_dcgm_health_check_sanity_connectx(
+        handle, cxIds, system_to_check):
     """
     Verifies that the DCGM health checks return healthy for ConnectX devices on live systems.
     """
@@ -805,6 +878,9 @@ def test_dcgm_health_check_sanity_connectx_standalone(handle, cxIds):
 # End health sanity checks
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_power(handle, gpuIds):
@@ -822,8 +898,8 @@ def test_dcgm_standalone_health_check_power(handle, gpuIds):
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_POWER
     groupObj.health.Set(newSystems)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     skip_test_if_unhealthy(groupObj)
@@ -833,8 +909,8 @@ def test_dcgm_standalone_health_check_power(handle, gpuIds):
     # we expect that there will be no data here
 
     # inject an error into power
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
-                                                              1000, 10)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION, 1000, 10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -852,12 +928,18 @@ def test_dcgm_standalone_health_check_power(handle, gpuIds):
             dcgm_errors.DCGM_FR_CLOCKS_EVENT_POWER)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_health_check_nvlink(handle, gpuIds):
     helper_health_check_nvlink_error_counters(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_health_check_nvlink(handle, gpuIds):
@@ -905,14 +987,12 @@ def helper_health_check_nvlink_error_counters(handle, gpuIds):
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
     groupObj.health.Set(newSystems)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Capture baseline incident count
@@ -921,9 +1001,8 @@ def helper_health_check_nvlink_error_counters(handle, gpuIds):
     baselineIncidentCount = responseV5.incidentCount
 
     # inject an error into NV Link
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-                                                              100, 10)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL, 100, 10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -955,9 +1034,8 @@ def helper_nvlink_check_fatal_errors(handle, gpuIds):
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
     groupObj.health.Set(newSystems)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Capture baseline incident count
@@ -965,9 +1043,8 @@ def helper_nvlink_check_fatal_errors(handle, gpuIds):
         dcgm_structs.dcgmHealthResponse_version5)
     baselineIncidentCount = responseV5.incidentCount
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
-                                                              1, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL, 1, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -988,12 +1065,18 @@ def helper_nvlink_check_fatal_errors(handle, gpuIds):
     assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink_fatal(handle, gpuIds):
     helper_nvlink_check_fatal_errors(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_nvlink_fatal(handle, gpuIds):
@@ -1013,9 +1096,8 @@ def helper_nvlink_crc_fatal_threshold(handle, gpuIds):
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
     groupObj.health.Set(newSystems)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Capture baseline incident count
@@ -1024,9 +1106,8 @@ def helper_nvlink_crc_fatal_threshold(handle, gpuIds):
     baselineIncidentCount = responseV5.incidentCount
 
     # Trigger a failure by having more than 100 CRC errors per second
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-                                                              1000000, -20)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL, 1000000, -20)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1047,18 +1128,27 @@ def helper_nvlink_crc_fatal_threshold(handle, gpuIds):
     assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink_crc_threshold(handle, gpuIds):
     helper_nvlink_crc_fatal_threshold(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_nvlink_crc_threshold(handle, gpuIds):
     helper_nvlink_crc_fatal_threshold(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_nvlink_symbol_threshold(handle, gpuIds):
@@ -1074,9 +1164,8 @@ def test_dcgm_health_nvlink_symbol_threshold(handle, gpuIds):
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
     groupObj.health.Set(newSystems)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Capture baseline incident count
@@ -1084,9 +1173,8 @@ def test_dcgm_health_nvlink_symbol_threshold(handle, gpuIds):
         dcgm_structs.dcgmHealthResponse_version5)
     baselineIncidentCount = responseV5.incidentCount
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS,
-                                                              1, -20)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL, 1, -20)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1107,6 +1195,9 @@ def test_dcgm_health_nvlink_symbol_threshold(handle, gpuIds):
     assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_nvlink_effective_ber_threshold(handle, gpuIds):
@@ -1122,9 +1213,8 @@ def test_dcgm_health_nvlink_effective_ber_threshold(handle, gpuIds):
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
     groupObj.health.Set(newSystems)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER,
-                                                              4095, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, 4095, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Capture baseline incident count
@@ -1132,9 +1222,19 @@ def test_dcgm_health_nvlink_effective_ber_threshold(handle, gpuIds):
         dcgm_structs.dcgmHealthResponse_version5)
     baselineIncidentCount = responseV5.incidentCount
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId,
-                                                              dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER,
-                                                              1000, -20)
+    # 10e-13 == 1e-12 encoded as mantissa=10, exponent=13 -> ((10 << 8) | 13) = 2573
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, 2573, -20)
+    assert (ret == dcgm_structs.DCGM_ST_OK)
+
+    responseV5 = groupObj.health.Check(
+        dcgm_structs.dcgmHealthResponse_version5)
+    assert responseV5.incidentCount == baselineIncidentCount, (
+        "Effective BER at exactly 1e-12 should not create a new incident")
+
+    # 11e-13 == 1.1e-12 encoded as mantissa=11, exponent=13 -> ((11 << 8) | 13) = 2829
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, 2829, -20)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1155,7 +1255,13 @@ def test_dcgm_health_nvlink_effective_ber_threshold(handle, gpuIds):
     assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
 
 
-def helper_health_check_nvlink5_error_counters(handle, gpuIds):
+def helper_health_check_nvlink5_error_counters(
+        handle,
+        gpuIds,
+        test_fields=None,
+        symbol_ber_scenarios=None,
+        run_multi_field_case=True,
+        skip_if_unhealthy=False):
     """
     Test for NVLink 5 error counter health checks.
     """
@@ -1169,136 +1275,169 @@ def helper_health_check_nvlink5_error_counters(handle, gpuIds):
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
     groupObj.health.Set(newSystems)
 
-    test_fields = [
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_MALFORMED_PACKET_ERRORS,
-         "malformed packet errors"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_BUFFER_OVERRUN_ERRORS,
-         "buffer overrun errors"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS, "rx errors"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS, "rx remote errors"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS, "rx general errors"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS,
-         "local link integrity errors"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS,
-         "link recovery events"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS, "effective errors"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER, "symbol BER"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL, "ECC data errors"),
-    ]
+    if skip_if_unhealthy:
+        skip_test_if_unhealthy(groupObj)
+
+    if test_fields is None:
+        test_fields = [
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_PACKET_MALFORMED_TOTAL,
+             "malformed packet errors"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_PACKET_DROPPED_TOTAL,
+             "buffer overrun errors"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL, "rx errors"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_REMOTE_ERROR_TOTAL, "rx remote errors"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL, "rx general errors"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL,
+             "local link integrity errors"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
+             "link recovery events"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL, "effective errors"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW, "symbol BER"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_ECC_ERROR_TOTAL, "ECC data errors"),
+        ]
+
+    if symbol_ber_scenarios is None:
+        symbol_ber_scenarios = [
+            (4095, -60, 1000, -50),
+            (0, -40, 1000, -30),
+            (5, -20, 1000, -10),
+        ]
 
     for field_id, field_name in test_fields:
-        # Inject baseline value (healthy state)
-        # BER fields are encoded: 4095 = mantissa 15, exponent 255 (1.5e-254, healthy)
-        # Error counter fields use 0 as healthy
-        healthy_value = 4095 if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER else 0
-        ret = dcgm_field_injection_helpers.inject_field_value_i64(
-            handle, gpuId, field_id, healthy_value, -50)
-        assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject baseline for {field_name}"
+        # Symbol BER has two accepted healthy raw encodings; other counters use 0.
+        scenarios = symbol_ber_scenarios if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW else [
+            (0, -50, 1, -40)
+        ]
 
-        # Get baseline health check - should pass
-        responseV5 = groupObj.health.Check(
-            dcgm_structs.dcgmHealthResponse_version5)
-        baseline_incident_count = responseV5.incidentCount
+        for healthy_value, baseline_offset, error_value, error_offset in scenarios:
+            ret = dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, gpuId, field_id, healthy_value, baseline_offset)
+            assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject baseline for {field_name}"
 
-        # Inject error value exceeding threshold
-        # BER fields: any value != 4095 (unhealthy BER)
-        # Error counter fields: 1 or more errors
-        error_value = 1000 if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER else 1
-        ret = dcgm_field_injection_helpers.inject_field_value_i64(
-            handle, gpuId, field_id, error_value, -20)
-        assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject error for {field_name}"
+            responseV5 = groupObj.health.Check(
+                dcgm_structs.dcgmHealthResponse_version5)
+            baseline_incident_count = responseV5.incidentCount
 
-        # Verify health check fails
-        responseV5 = groupObj.health.Check(
-            dcgm_structs.dcgmHealthResponse_version5)
+            ret = dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, gpuId, field_id, error_value, error_offset)
+            assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject error for {field_name}"
 
-        new_incidents = max(0, responseV5.incidentCount -
-                            baseline_incident_count)
-        assert new_incidents == 1, f"Expected 1 new incident for {field_name}, got {new_incidents}"
+            responseV5 = groupObj.health.Check(
+                dcgm_structs.dcgmHealthResponse_version5)
 
-        # Verify incident details
-        incident = responseV5.incidents[baseline_incident_count]
-        assert incident.entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU, f"Wrong entity group for {field_name}"
-        assert incident.entityInfo.entityId == gpuId, f"Wrong entity ID for {field_name}"
-        assert incident.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK, f"Wrong system for {field_name}"
-        # BER fields use different error code than error counters
-        expected_error_code = dcgm_errors.DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER else dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL
-        assert incident.error.code == expected_error_code, f"Wrong error code for {field_name}"
-        assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL, f"Wrong health result for {field_name}"
+            new_incidents = max(0, responseV5.incidentCount -
+                                baseline_incident_count)
+            assert new_incidents == 1, f"Expected 1 new incident for {field_name}, got {new_incidents}"
 
-        # Cleanup: Reset field to healthy value at a more recent timestamp
-        healthy_value = 4095 if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER else 0
+            incident = responseV5.incidents[baseline_incident_count]
+            assert incident.entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU, f"Wrong entity group for {field_name}"
+            assert incident.entityInfo.entityId == gpuId, f"Wrong entity ID for {field_name}"
+            assert incident.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK, f"Wrong system for {field_name}"
+
+            expected_error_code = dcgm_errors.DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW else dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL
+
+            assert incident.error.code == expected_error_code, f"Wrong error code for {field_name}"
+            assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL, f"Wrong health result for {field_name}"
+
+        healthy_value = scenarios[0][0]
+
         ret = dcgm_field_injection_helpers.inject_field_value_i64(
             handle, gpuId, field_id, healthy_value, 0)
         assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to cleanup {field_name}"
 
         logger.debug(f"Health check test passed for {field_name}")
 
-    # Test multiple simultaneous errors
-    test_fields = [
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_ERRORS, "rx errors"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS,
-         "link recovery events"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER, "symbol BER"),
-    ]
+    if run_multi_field_case:
+        test_fields = [
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL, "rx errors"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
+                "link recovery events"),
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW, "symbol BER"),
+        ]
 
-    # Clear test fields with healthy values at a future timestamp
-    for field_id, field_name in test_fields:
-        healthy_value = 4095 if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER else 0
-        ret = dcgm_field_injection_helpers.inject_field_value_i64(
-            handle, gpuId, field_id, healthy_value, 10)
-        assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to clear {field_name}"
+        for field_id, field_name in test_fields:
+            healthy_value = (symbol_ber_scenarios[0][0]
+                             if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW
+                             else 0)
+            ret = dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, gpuId, field_id, healthy_value, 10)
+            assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to clear {field_name}"
 
-    # Get baseline health check - should pass
-    responseV5 = groupObj.health.Check(
-        dcgm_structs.dcgmHealthResponse_version5)
-    baselineIncidentCount = responseV5.incidentCount
+        responseV5 = groupObj.health.Check(
+            dcgm_structs.dcgmHealthResponse_version5)
+        baselineIncidentCount = responseV5.incidentCount
 
-    # Inject error values exceeding threshold at an even more recent timestamp
-    for field_id, field_name in test_fields:
-        ret = dcgm_field_injection_helpers.inject_field_value_i64(
-            handle, gpuId, field_id, 1000, 20)
-        assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject error for {field_name}"
+        for field_id, field_name in test_fields:
+            ret = dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, gpuId, field_id, 1000, 20)
+            assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject error for {field_name}"
 
-    # Verify health check fails
-    responseV5 = groupObj.health.Check(
-        dcgm_structs.dcgmHealthResponse_version5)
+        responseV5 = groupObj.health.Check(
+            dcgm_structs.dcgmHealthResponse_version5)
 
-    # Let newIncidents be the incidents of this health system, that are not already in the baseline [baseline_incident_count:]
-    newIncidents = [incident for incident in responseV5.incidents[baselineIncidentCount:]
-                    if incident.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK]
-    assert len(newIncidents) == len(
-        test_fields), f"Expected {len(test_fields)} new incidents, got {len(newIncidents)}"
+        newIncidents = [incident for incident in responseV5.incidents[baselineIncidentCount:]
+                        if incident.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK]
+        assert len(newIncidents) == len(test_fields), (
+            f"Expected {len(test_fields)} new incidents, "
+            f"got {len(newIncidents)}")
 
-    # Verify incident details
-    for incident in newIncidents:
-        assert incident.entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU, f"Wrong entity group for {incident.system}"
-        assert incident.entityInfo.entityId == gpuId, f"Wrong entity ID for {incident.system}"
-        assert incident.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK, f"Wrong system for {incident.system}"
-        assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL, f"Wrong health result for {incident.system}"
-        assert incident.error.code in [dcgm_errors.DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD, dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL], \
-            f"Unexpected error code {incident.error.code}"
+        for incident in newIncidents:
+            assert incident.entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU, (
+                f"Wrong entity group for {incident.system}")
+            assert incident.entityInfo.entityId == gpuId, (
+                f"Wrong entity ID for {incident.system}")
+            assert incident.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK, (
+                f"Wrong system for {incident.system}")
+            assert incident.health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL, (
+                f"Wrong health result for {incident.system}")
+            assert incident.error.code in [dcgm_errors.DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD,
+                                           dcgm_errors.DCGM_FR_NVLINK_ERROR_CRITICAL], f"Unexpected error code {incident.error.code}"
 
-    # Clean up - restore fields to healthy values at the most recent timestamp
-    for field_id, field_name in test_fields:
-        # BER fields are encoded: 4095 = mantissa 15, exponent 255 (1.5e-254, healthy)
-        # Error counter fields: 0 = healthy
-        healthy_value = 4095 if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_SYMBOL_BER else 0
-        ret = dcgm_field_injection_helpers.inject_field_value_i64(
-            handle, gpuId, field_id, healthy_value, 30)
-        assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to cleanup {field_name}"
+        for field_id, field_name in test_fields:
+            healthy_value = (symbol_ber_scenarios[0][0]
+                             if field_id == dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW
+                             else 0)
+            ret = dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, gpuId, field_id, healthy_value, 30)
+            assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to cleanup {field_name}"
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_standalone_nvlink5_error_counters(handle, gpuIds):
     helper_health_check_nvlink5_error_counters(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_dcgm_embedded_nvlink5_error_counters(handle, gpuIds):
     helper_health_check_nvlink5_error_counters(handle, gpuIds)
+
+
+# NO HARDWARE
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('B200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_standalone_blackwell_symbol_ber_aggregate_floor_health(handle, gpuIds):
+    helper_health_check_nvlink5_error_counters(
+        handle,
+        gpuIds,
+        test_fields=[
+            (dcgm_fields.DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW, "symbol BER"),
+        ],
+        symbol_ber_scenarios=[
+            (73710, -50, (15 << 8) | 237, -40),
+        ],
+        run_multi_field_case=False,
+        skip_if_unhealthy=True)
 
 
 @test_utils.run_with_standalone_host_engine(120)
@@ -1311,7 +1450,8 @@ def test_dcgm_standalone_health_large_groupid(handle, gpuIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
 
-    # Make a bunch of groups and delete them right away so our next groupId is large
+    # Make a bunch of groups and delete them right away so our next groupId is
+    # large
     for i in range(100):
         groupObj = systemObj.GetEmptyGroup("test_group_%d" % i)
         groupObj.Delete()
@@ -1324,14 +1464,21 @@ def test_dcgm_standalone_health_large_groupid(handle, gpuIds):
 
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_ALL
 
-    # Any of these will throw an exception on error. Making it past these = success
+    # Any of these will throw an exception on error. Making it past these =
+    # success
     groupObj.health.Set(newSystems)
     systemObj.UpdateAllFields(True)
     groupObj.health.Get()
     groupObj.health.Check()
 
 
-def helper_health_check_nvswitch_errors(handle, switchIds, fieldId, healthSystem, healthResult, errorCode):
+def helper_health_check_nvswitch_errors(
+        handle,
+        switchIds,
+        fieldId,
+        healthSystem,
+        healthResult,
+        errorCode):
     """
     Verifies that a check error occurs when an error is injected
     Checks for call errors are done in the bindings except dcgmClientHealthCheck
@@ -1356,8 +1503,8 @@ def helper_health_check_nvswitch_errors(handle, switchIds, fieldId, healthSystem
     field.ts = int((time.time() - 5) * 1000000.0)
     field.value.i64 = 0
 
-    ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_SWITCH,
-                                                         switchId, field)
+    ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(
+        handle, dcgm_fields.DCGM_FE_SWITCH, switchId, field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1366,8 +1513,8 @@ def helper_health_check_nvswitch_errors(handle, switchIds, fieldId, healthSystem
     field.ts = int((time.time() - 50) * 1000000.0)
     field.value.i64 = 0
 
-    ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_SWITCH,
-                                                         switchId, field)
+    ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(
+        handle, dcgm_fields.DCGM_FE_SWITCH, switchId, field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # we expect that there will be no data here
@@ -1376,8 +1523,8 @@ def helper_health_check_nvswitch_errors(handle, switchIds, fieldId, healthSystem
     field.ts = int((time.time() - 1) * 1000000.0)
     field.value.i64 = 5
 
-    ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_SWITCH,
-                                                         switchId, field)
+    ret = dcgm_agent_internal.dcgmInjectEntityFieldValue(
+        handle, dcgm_fields.DCGM_FE_SWITCH, switchId, field)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1392,24 +1539,34 @@ def helper_health_check_nvswitch_errors(handle, switchIds, fieldId, healthSystem
     assert (responseV5.incidents[0].error.code == errorCode)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_nvswitches()
 def test_health_check_nvswitch_fatal_errors_standalone(handle, switchIds):
-    helper_health_check_nvswitch_errors(handle, switchIds,
-                                        dcgm_fields.DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS,
-                                        dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL,
-                                        dcgm_structs.DCGM_HEALTH_RESULT_FAIL,
-                                        dcgm_errors.DCGM_FR_NVSWITCH_FATAL_ERROR)
+    helper_health_check_nvswitch_errors(
+        handle,
+        switchIds,
+        dcgm_fields.DCGM_FI_DEV_SXID_FATAL_ERROR,
+        dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_FATAL,
+        dcgm_structs.DCGM_HEALTH_RESULT_FAIL,
+        dcgm_errors.DCGM_FR_NVSWITCH_FATAL_ERROR)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_nvswitches()
 def test_health_check_nvswitch_nonfatal_errors_standalone(handle, switchIds):
-    helper_health_check_nvswitch_errors(handle, switchIds,
-                                        dcgm_fields.DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS,
-                                        dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL,
-                                        dcgm_structs.DCGM_HEALTH_RESULT_WARN,
-                                        dcgm_errors.DCGM_FR_NVSWITCH_NON_FATAL_ERROR)
+    helper_health_check_nvswitch_errors(
+        handle,
+        switchIds,
+        dcgm_fields.DCGM_FI_DEV_SXID_NON_FATAL_ERROR,
+        dcgm_structs.DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL,
+        dcgm_structs.DCGM_HEALTH_RESULT_WARN,
+        dcgm_errors.DCGM_FR_NVSWITCH_NON_FATAL_ERROR)
 
 
 def helper_health_check_nvlink_link_down_gpu(handle, gpuIds):
@@ -1426,7 +1583,11 @@ def helper_health_check_nvlink_link_down_gpu(handle, gpuIds):
     # Set all links of our injected GPU to Up
     for linkId in range(dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU):
         dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
-            handle, dcgm_fields.DCGM_FE_GPU, gpuId, linkId, dcgm_structs.DcgmNvLinkLinkStateUp)
+            handle,
+            dcgm_fields.DCGM_FE_GPU,
+            gpuId,
+            linkId,
+            dcgm_structs.DcgmNvLinkLinkStateUp)
 
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
     groupObj.health.Set(newSystems)
@@ -1439,7 +1600,11 @@ def helper_health_check_nvlink_link_down_gpu(handle, gpuIds):
     # Set a link to Down
     linkId = 3
     dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
-        handle, dcgm_fields.DCGM_FE_GPU, gpuId, linkId, dcgm_structs.DcgmNvLinkLinkStateDown)
+        handle,
+        dcgm_fields.DCGM_FE_GPU,
+        gpuId,
+        linkId,
+        dcgm_structs.DcgmNvLinkLinkStateDown)
 
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
@@ -1460,6 +1625,9 @@ def helper_health_check_nvlink_link_down_gpu(handle, gpuIds):
         linkId, incident.error.msg)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_link_down_gpu_standalone(handle, gpuIds):
@@ -1488,7 +1656,11 @@ def helper_health_check_nvlink_link_down_nvswitch(handle, switchIds):
 
     # Set a link to Down
     dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
-        handle, dcgm_fields.DCGM_FE_SWITCH, switchId, linkId, dcgm_structs.DcgmNvLinkLinkStateDown)
+        handle,
+        dcgm_fields.DCGM_FE_SWITCH,
+        switchId,
+        linkId,
+        dcgm_structs.DcgmNvLinkLinkStateDown)
 
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
@@ -1557,11 +1729,18 @@ def helper_health_check_nvlink_all_links_up(handle, gpuIds):
                               if x.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK]
         for incident in newNvLinkIncidents:
             logger.debug(
-                f"Unexpected new NVLink incident: health={incident.health}, error.code={incident.error.code}, msg='{incident.error.msg}'")
-        assert len(
-            newNvLinkIncidents) == 0, f"Expected 0 new NVLink incidents with all links Up, got {len(newNvLinkIncidents)}"
+                f"Unexpected new NVLink incident: "
+                f"health={incident.health}, "
+                f"error.code={incident.error.code}, "
+                f"msg='{incident.error.msg}'")
+        assert len(newNvLinkIncidents) == 0, (
+            f"Expected 0 new NVLink incidents with all links Up, "
+            f"got {len(newNvLinkIncidents)}")
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_all_links_up_standalone(handle, gpuIds):
@@ -1569,6 +1748,9 @@ def test_health_check_nvlink_all_links_up_standalone(handle, gpuIds):
     helper_health_check_nvlink_all_links_up(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_all_links_up_embedded(handle, gpuIds):
@@ -1585,27 +1767,39 @@ def helper_health_check_nvlink_one_link_down(handle, gpuIds):
     # Set one specific link to Down
     downLinkId = 2
     dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
-        handle, dcgm_fields.DCGM_FE_GPU, gpuId, downLinkId, dcgm_structs.DcgmNvLinkLinkStateDown)
+        handle,
+        dcgm_fields.DCGM_FE_GPU,
+        gpuId,
+        downLinkId,
+        dcgm_structs.DcgmNvLinkLinkStateDown)
 
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
     newIncidents = max(0, responseV5.incidentCount - baselineIncidentCount)
     newNvLinkIncidents = [x for x in responseV5.incidents[baselineIncidentCount:responseV5.incidentCount]
                           if x.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK]
-    assert len(
-        newNvLinkIncidents) == 1, f"Expected exactly 1 NVLink incident for one link Down, got {len(newNvLinkIncidents)} (total new incidents: {newIncidents})"
+    assert len(newNvLinkIncidents) == 1, (
+        f"Expected exactly 1 NVLink incident for one link Down, "
+        f"got {len(newNvLinkIncidents)} (total new incidents: "
+        f"{newIncidents})")
 
     nvlinkIncident = newNvLinkIncidents[0]
 
     # Check that the NVLink incident has the correct error code
-    assert nvlinkIncident.error.code == dcgm_errors.DCGM_FR_NVLINK_DOWN, \
-        f"Expected DCGM_FR_NVLINK_DOWN, but got error code {nvlinkIncident.error.code}. Incident msg: '{nvlinkIncident.error.msg}'"
+    assert nvlinkIncident.error.code == dcgm_errors.DCGM_FR_NVLINK_DOWN, (
+        f"Expected DCGM_FR_NVLINK_DOWN, but got error code "
+        f"{nvlinkIncident.error.code}. Incident msg: "
+        f"'{nvlinkIncident.error.msg}'")
 
     # Check that the error message contains the link ID
-    assert str(
-        downLinkId) in nvlinkIncident.error.msg, f"Expected error message to contain link ID {downLinkId}, got: {nvlinkIncident.error.msg}"
+    assert str(downLinkId) in nvlinkIncident.error.msg, (
+        f"Expected error message to contain link ID {downLinkId}, got: "
+        f"{nvlinkIncident.error.msg}")
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_one_link_down_standalone(handle, gpuIds):
@@ -1613,6 +1807,9 @@ def test_health_check_nvlink_one_link_down_standalone(handle, gpuIds):
     helper_health_check_nvlink_one_link_down(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_one_link_down_embedded(handle, gpuIds):
@@ -1629,10 +1826,18 @@ def helper_health_check_nvlink_not_supported_and_disabled(handle, gpuIds):
     # Set some links to NotSupported and some to Disabled
     for linkId in range(0, 3):
         dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
-            handle, dcgm_fields.DCGM_FE_GPU, gpuId, linkId, dcgm_structs.DcgmNvLinkLinkStateNotSupported)
+            handle,
+            dcgm_fields.DCGM_FE_GPU,
+            gpuId,
+            linkId,
+            dcgm_structs.DcgmNvLinkLinkStateNotSupported)
     for linkId in range(3, 6):
         dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
-            handle, dcgm_fields.DCGM_FE_GPU, gpuId, linkId, dcgm_structs.DcgmNvLinkLinkStateDisabled)
+            handle,
+            dcgm_fields.DCGM_FE_GPU,
+            gpuId,
+            linkId,
+            dcgm_structs.DcgmNvLinkLinkStateDisabled)
 
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
@@ -1642,21 +1847,33 @@ def helper_health_check_nvlink_not_supported_and_disabled(handle, gpuIds):
                               if x.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK]
         for incident in newNvLinkIncidents:
             logger.debug(
-                f"Unexpected NVLink incident: health={incident.health}, error.code={incident.error.code}, msg='{incident.error.msg}'")
+                f"Unexpected NVLink incident: health={incident.health}, "
+                f"error.code={incident.error.code}, "
+                f"msg='{incident.error.msg}'")
         assert len(
             newNvLinkIncidents) == 0, f"Expected 0 new NVLink incidents with NotSupported/Disabled links, got {len(newNvLinkIncidents)}"
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
-def test_health_check_nvlink_not_supported_and_disabled_standalone(handle, gpuIds):
+def test_health_check_nvlink_not_supported_and_disabled_standalone(
+        handle,
+        gpuIds):
     """Test NVLink health: NotSupported and Disabled links -> PASS (standalone)"""
     helper_health_check_nvlink_not_supported_and_disabled(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
-def test_health_check_nvlink_not_supported_and_disabled_embedded(handle, gpuIds):
+def test_health_check_nvlink_not_supported_and_disabled_embedded(
+        handle,
+        gpuIds):
     """Test NVLink health: NotSupported and Disabled links -> PASS (embedded)"""
     helper_health_check_nvlink_not_supported_and_disabled(handle, gpuIds)
 
@@ -1675,15 +1892,21 @@ def helper_health_check_nvlink_mig_down_without_mig(handle, gpuIds):
     # Set NVLink to Down
     downLinkId = 2
     dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
-        handle, dcgm_fields.DCGM_FE_GPU, gpuId, downLinkId, dcgm_structs.DcgmNvLinkLinkStateDown)
+        handle,
+        dcgm_fields.DCGM_FE_GPU,
+        gpuId,
+        downLinkId,
+        dcgm_structs.DcgmNvLinkLinkStateDown)
 
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
     newIncidents = max(0, responseV5.incidentCount - baselineIncidentCount)
     newNvLinkIncidents = [x for x in responseV5.incidents[baselineIncidentCount:responseV5.incidentCount]
                           if x.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK]
-    assert len(
-        newNvLinkIncidents) == 1, f"Expected exactly 1 NVLink incident for one link Down without MIG, got {len(newNvLinkIncidents)} (total new incidents: {newIncidents})"
+    assert len(newNvLinkIncidents) == 1, (
+        f"Expected exactly 1 NVLink incident for one link Down without MIG, "
+        f"got {len(newNvLinkIncidents)} (total new incidents: "
+        f"{newIncidents})")
 
     nvlinkIncident = newNvLinkIncidents[0]
     assert nvlinkIncident.entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU, \
@@ -1696,6 +1919,9 @@ def helper_health_check_nvlink_mig_down_without_mig(handle, gpuIds):
         f"Didn't find downLinkId {downLinkId} in {nvlinkIncident.error.msg}"
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_mig_down_without_mig_standalone(handle, gpuIds):
@@ -1703,6 +1929,9 @@ def test_health_check_nvlink_mig_down_without_mig_standalone(handle, gpuIds):
     helper_health_check_nvlink_mig_down_without_mig(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_nvlink_mig_down_without_mig_embedded(handle, gpuIds):
@@ -1724,15 +1953,21 @@ def helper_health_check_nvlink_mig_down_with_mig_enabled(handle, gpuIds):
     # Wait a moment for MIG mode to take effect
     time.sleep(0.1)
 
-    # Now set link Down - this should NOT generate any incidents due to MIG mode
+    # Now set link Down - this should NOT generate any incidents due to MIG
+    # mode
     downLinkId = 2
     dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
-        handle, dcgm_fields.DCGM_FE_GPU, gpuId, downLinkId, dcgm_structs.DcgmNvLinkLinkStateDown)
+        handle,
+        dcgm_fields.DCGM_FE_GPU,
+        gpuId,
+        downLinkId,
+        dcgm_structs.DcgmNvLinkLinkStateDown)
 
     # Wait for health check to process the Down link
     time.sleep(0.2)
 
-    # Check that no incidents were added (Down link should be treated as acceptable in MIG mode)
+    # Check that no incidents were added (Down link should be treated as
+    # acceptable in MIG mode)
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
 
@@ -1742,20 +1977,31 @@ def helper_health_check_nvlink_mig_down_with_mig_enabled(handle, gpuIds):
                               if x.system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK]
         for incident in newNvLinkIncidents:
             logger.debug(f"  NVLink incident: {incident.error.msg}")
-        assert len(
-            newNvLinkIncidents) == 0, f"MIG-aware logic failed: Found {len(newNvLinkIncidents)} NVLink failures with MIG enabled"
+        assert len(newNvLinkIncidents) == 0, (
+            f"MIG-aware logic failed: Found {len(newNvLinkIncidents)} NVLink "
+            f"failures with MIG enabled")
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
-def test_health_check_nvlink_mig_down_with_mig_enabled_standalone(handle, gpuIds):
+def test_health_check_nvlink_mig_down_with_mig_enabled_standalone(
+        handle,
+        gpuIds):
     """Test MIG-aware NVLink health: Down with MIG enabled -> PASS (standalone)"""
     helper_health_check_nvlink_mig_down_with_mig_enabled(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
-def test_health_check_nvlink_mig_down_with_mig_enabled_embedded(handle, gpuIds):
+def test_health_check_nvlink_mig_down_with_mig_enabled_embedded(
+        handle,
+        gpuIds):
     """Test MIG-aware NVLink health: Down with MIG enabled -> PASS (embedded)"""
     helper_health_check_nvlink_mig_down_with_mig_enabled(handle, gpuIds)
 
@@ -1775,23 +2021,23 @@ def helper_health_check_multiple_failures(handle, gpuIds):
     skip_test_if_unhealthy(groupObj)
 
     # inject a PCI Gen and width/lanes
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_GEN,
-                                                              4, 0)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_GEN, 4, 0)
     assert (ret == dcgm_structs.DCGM_ST_OK)
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_WIDTH,
-                                                              16, 0)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_LINK_WIDTH, 16, 0)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # inject a PCI error and a memory error, and make sure we report both
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
-                                                              4, 100)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, 4, 100)
     assert (ret == dcgm_structs.DCGM_ST_OK)
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
-                                                              100, 100)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL, 100, 100)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1827,6 +2073,9 @@ def helper_health_check_multiple_failures(handle, gpuIds):
                 dcgm_errors.DCGM_FR_PCI_REPLAY_RATE)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_standalone_multiple_failures(handle, gpuIds):
@@ -1844,8 +2093,8 @@ def helper_health_check_unreadable_power_usage(handle, gpuIds):
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_POWER
     groupObj.health.Set(newSystems)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_fp64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
-                                                               dcgmvalue.DCGM_FP64_BLANK, 50)
+    ret = dcgm_field_injection_helpers.inject_field_value_fp64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS, dcgmvalue.DCGM_FP64_BLANK, 50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1863,6 +2112,9 @@ def helper_health_check_unreadable_power_usage(handle, gpuIds):
             dcgm_errors.DCGM_FR_POWER_UNREADABLE)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_standalone_unreadable_power_usage(handle, gpuIds):
@@ -1877,7 +2129,7 @@ def helper_health_set_version2(handle, gpuIds):
     maxKeepAge = 1234.5
     maxKeepAgeUsec = int(maxKeepAge) * 1000000
 
-    fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER
+    fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL
     newSystems = dcgm_structs.DCGM_HEALTH_WATCH_PCIE
     groupObj.health.Set(newSystems, watchInterval, maxKeepAge)
 
@@ -1891,6 +2143,9 @@ def helper_health_set_version2(handle, gpuIds):
             cmfi.maxAgeUsec, maxKeepAgeUsec)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
 def test_health_set_version2_standalone(handle, gpuIds):
@@ -1913,8 +2168,12 @@ def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):
 
     skip_test_if_unhealthy(groupObj)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
-                                                              95, 0)  # set the injected data to now
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_XID_ERROR,
+        95,
+        0)  # set the injected data to now
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1932,6 +2191,9 @@ def helper_test_dcgm_health_check_uncontained_errors(handle, gpuIds):
             dcgm_errors.DCGM_FR_UNCONTAINED_ERROR)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_health_check_uncontained_errors(handle, gpuIds):
@@ -1954,8 +2216,12 @@ def helper_test_dcgm_health_check_row_remap_failure(handle, gpuIds):
 
     skip_test_if_unhealthy(groupObj)
 
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILURE,
-                                                              1, 0)  # set the injected data to now
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_ROW_REMAP_FAILED,
+        1,
+        0)  # set the injected data to now
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -1973,12 +2239,70 @@ def helper_test_dcgm_health_check_row_remap_failure(handle, gpuIds):
             dcgm_errors.DCGM_FR_ROW_REMAP_FAILURE)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
 def test_dcgm_health_check_row_remap_failure(handle, gpuIds):
     helper_test_dcgm_health_check_row_remap_failure(handle, gpuIds)
 
 
+def helper_test_dcgm_health_check_xid64_row_remap_failure(handle, gpuIds):
+    """
+    Verifies that XID 64 (row remapping failure) via the XID event path produces
+    DCGM_HEALTH_RESULT_FAIL, not WARN. NVIDIA guidance mandates immediate GPU reset
+    or host reboot for this event.
+    """
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetEmptyGroup("test1")
+    groupObj.AddGpu(gpuIds[0])
+    gpuIds = groupObj.GetGpuIds()  # Limit gpuIds to GPUs in our group
+    gpuId = gpuIds[0]
+
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_MEM
+    groupObj.health.Set(newSystems)
+
+    skip_test_if_unhealthy(groupObj)
+
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_XID_ERROR,
+        64,
+        0)  # set the injected data to now
+    assert (ret == dcgm_structs.DCGM_ST_OK), "inject_field_value_i64 returned %d" % ret
+
+    responseV5 = groupObj.health.Check(
+        dcgm_structs.dcgmHealthResponse_version5)
+    assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL), \
+        "Expected FAIL for XID 64 but got %d" % responseV5.overallHealth
+    assert (responseV5.incidentCount == 1), \
+        "Expected 1 incident but got %d" % responseV5.incidentCount
+    assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
+    assert (
+        responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
+    assert (responseV5.incidents[0].system ==
+            dcgm_structs.DCGM_HEALTH_WATCH_MEM)
+    assert (responseV5.incidents[0].health ==
+            dcgm_structs.DCGM_HEALTH_RESULT_FAIL), \
+        "Expected FAIL for XID 64 incident but got %d" % responseV5.incidents[0].health
+    assert (responseV5.incidents[0].error.code ==
+            dcgm_errors.DCGM_FR_ROW_REMAP_FAILURE)
+
+
+# NO HARDWARE
+
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_injection_gpus(2)
+def test_dcgm_health_check_xid64_row_remap_failure(handle, gpuIds):
+    helper_test_dcgm_health_check_xid64_row_remap_failure(handle, gpuIds)
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_cpus(1)
 @test_utils.run_with_injection_cpu_cores(1)
@@ -1992,18 +2316,28 @@ def test_dcgm_health_cpu_thermal(handle, cpuIds, coreIds):
     dcgmGroup.AddEntity(entityPair.entityGroupId, entityPair.entityId)
     dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_THERMAL)
 
-    injection_info = [[dcgm_fields.DCGM_FI_DEV_CPU_TEMP_CURRENT, 150.0],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_TEMP_WARNING, 100.1],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_TEMP_CRITICAL, 110.1],
+    injection_info = [[dcgm_fields.DCGM_FI_DEV_CPU_TEMP_CELSIUS, 150.0],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS, 100.1],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_TEMP_CRITICAL_CELSIUS, 110.1],
                       ]
     for ii in injection_info:
-        dcgm_field_injection_helpers.inject_value(handle, entityPair.entityId, ii[0],
-                                                  ii[1], -10, verifyInsertion=True,
-                                                  entityType=entityPair.entityGroupId)
+        dcgm_field_injection_helpers.inject_value(
+            handle,
+            entityPair.entityId,
+            ii[0],
+            ii[1],
+            -10,
+            verifyInsertion=True,
+            entityType=entityPair.entityGroupId)
     for ii in injection_info:
-        dcgm_field_injection_helpers.inject_value(handle, entityPair.entityId, ii[0],
-                                                  ii[1], 50, verifyInsertion=True,
-                                                  entityType=entityPair.entityGroupId)
+        dcgm_field_injection_helpers.inject_value(
+            handle,
+            entityPair.entityId,
+            ii[0],
+            ii[1],
+            50,
+            verifyInsertion=True,
+            entityType=entityPair.entityGroupId)
 
     responseV5 = dcgmGroup.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
@@ -2029,6 +2363,9 @@ def test_dcgm_health_cpu_thermal(handle, cpuIds, coreIds):
             dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_cpus(1)
 @test_utils.run_with_injection_cpu_cores(1)
@@ -2042,13 +2379,18 @@ def test_dcgm_health_cpu_power(handle, cpuIds, coreIds):
     dcgmGroup.AddEntity(entityPair.entityGroupId, entityPair.entityId)
     dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_POWER)
 
-    injection_info = [[dcgm_fields.DCGM_FI_DEV_CPU_POWER_LIMIT, 150.0],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT, 150.1],
+    injection_info = [[dcgm_fields.DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS, 150.0],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_POWER_WATTS, 150.1],
                       ]
     for ii in injection_info:
-        dcgm_field_injection_helpers.inject_value(handle, entityPair.entityId, ii[0],
-                                                  ii[1], 5, verifyInsertion=True,
-                                                  entityType=entityPair.entityGroupId)
+        dcgm_field_injection_helpers.inject_value(
+            handle,
+            entityPair.entityId,
+            ii[0],
+            ii[1],
+            5,
+            verifyInsertion=True,
+            entityType=entityPair.entityGroupId)
 
     responseV5 = dcgmGroup.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
@@ -2065,9 +2407,14 @@ def test_dcgm_health_cpu_power(handle, cpuIds, coreIds):
             dcgm_errors.DCGM_FR_FIELD_THRESHOLD_DBL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
-def test_dcgm_health_check_pcie_correctable_errors_field_injection_valid(handle, gpuIds):
+def test_dcgm_health_check_pcie_correctable_errors_field_injection_valid(
+        handle,
+        gpuIds):
     """Test PCIe correctable errors field value injection and retrieval"""
     gpuId = gpuIds[0]
     injection_value = 42
@@ -2075,7 +2422,7 @@ def test_dcgm_health_check_pcie_correctable_errors_field_injection_valid(handle,
     # Create field value for injection
     fv = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
     fv.version = dcgm_structs_internal.dcgmInjectFieldValue_version1
-    fv.fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS
+    fv.fieldId = dcgm_fields.DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL
     fv.status = 0
     fv.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
     fv.ts = int((time.time() - 5) * 1000000.0)
@@ -2087,19 +2434,26 @@ def test_dcgm_health_check_pcie_correctable_errors_field_injection_valid(handle,
 
     # Verify the injected value can be retrieved
     fieldValues = dcgm_agent_internal.dcgmGetLatestValuesForFields(
-        handle, gpuId, [dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS])
+        handle, gpuId, [dcgm_fields.DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL])
     assert len(
         fieldValues) == 1, f"Expected 1 field value, got {len(fieldValues)}"
-    assert fieldValues[
-        0].fieldId == dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS, f"Expected fieldId {dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS}, got {fieldValues[0].fieldId}"
-    assert fieldValues[
-        0].status == dcgm_structs.DCGM_ST_OK, f"Expected status OK, got {fieldValues[0].status}"
-    assert fieldValues[0].value.i64 == injection_value, f"Expected value {injection_value}, got {fieldValues[0].value.i64}"
+    assert fieldValues[0].fieldId == dcgm_fields.DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL, (
+        f"Expected fieldId "
+        f"{dcgm_fields.DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL}, got "
+        f"{fieldValues[0].fieldId}")
+    assert fieldValues[0].status == dcgm_structs.DCGM_ST_OK, (
+        f"Expected status OK, got {fieldValues[0].status}")
+    assert fieldValues[0].value.i64 == injection_value, (
+        f"Expected value {injection_value}, got {fieldValues[0].value.i64}")
 
     print(
-        f"Field injection and retrieval successful: value={fieldValues[0].value.i64}")
+        f"Field injection and retrieval successful: value="
+        f"{fieldValues[0].value.i64}")
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_check_mem_unrepairable_flag(handle, gpuIds):
@@ -2117,7 +2471,7 @@ def test_dcgm_health_check_mem_unrepairable_flag(handle, gpuIds):
 
     # Test Case 1: Inject flag = 0 (no unrepairable memory) - should pass
     ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpuId, dcgm_fields.DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG, 0, -50)
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_MEMORY_UNREPAIRABLE, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -2126,7 +2480,7 @@ def test_dcgm_health_check_mem_unrepairable_flag(handle, gpuIds):
 
     # Test Case 2: Inject flag = 1 (unrepairable memory detected) - should fail
     ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpuId, dcgm_fields.DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG, 1, -45)
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_MEMORY_UNREPAIRABLE, 1, -45)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -2145,7 +2499,7 @@ def test_dcgm_health_check_mem_unrepairable_flag(handle, gpuIds):
 
     # Test Case 3: Clear the flag back to 0 - should pass again
     ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpuId, dcgm_fields.DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG, 0, -40)
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_MEMORY_UNREPAIRABLE, 0, -40)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
@@ -2153,6 +2507,9 @@ def test_dcgm_health_check_mem_unrepairable_flag(handle, gpuIds):
     assert (responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 @skip_test_if_no_dcgm_nvml()
@@ -2170,8 +2527,8 @@ def test_dcgm_health_check_fabric_health_mask(handle, gpuIds):
     groupObj.health.Set(newSystems)
 
     # Inject healthy state (all bits = 0 or FALSE)
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK,
-                                                              0, -50)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK, 0, -50)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Verify baseline is actually healthy
@@ -2183,14 +2540,20 @@ def test_dcgm_health_check_fabric_health_mask(handle, gpuIds):
 
     # Inject Route Unhealthy incident (bit 4 set to TRUE = 1)
     route_unhealthy_mask = dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_TRUE << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_UNHEALTHY
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK,
-                                                              route_unhealthy_mask, 10)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK,
+        route_unhealthy_mask,
+        10)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
-    assert (responseV5.incidentCount ==
-            1), f"Expected 1 incident for Route Unhealthy, got {responseV5.incidentCount}"
+    assert (
+        responseV5.incidentCount == 1), (
+        f"Expected 1 incident for Route Unhealthy, got "
+        f"{responseV5.incidentCount}")
     assert (responseV5.incidents[0].entityInfo.entityId == gpuId)
     assert (
         responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU)
@@ -2204,14 +2567,16 @@ def test_dcgm_health_check_fabric_health_mask(handle, gpuIds):
     # Inject multiple incidents: Route Unhealthy + Bandwidth Degraded
     degraded_bw_mask = dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_TRUE << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_DEGRADED_BW
     combined_mask = route_unhealthy_mask | degraded_bw_mask
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK,
-                                                              combined_mask, 20)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK, combined_mask, 20)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
-    assert (responseV5.incidentCount >=
-            1), f"Expected at least 1 incident for combined errors, got {responseV5.incidentCount}"
+    assert (
+        responseV5.incidentCount >= 1), (
+        f"Expected at least 1 incident for combined errors, got "
+        f"{responseV5.incidentCount}")
 
     # Verify error message contains both conditions
     error_messages = ' '.join(
@@ -2220,21 +2585,23 @@ def test_dcgm_health_check_fabric_health_mask(handle, gpuIds):
     assert "Bandwidth Degraded" in error_messages, f"Expected 'Bandwidth Degraded' in error messages, got: {error_messages}"
 
     # Inject NOT_SUPPORTED state (all fields set to NOT_SUPPORTED)
-    not_supported_mask = (dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_DEGRADED_BW) | \
-                         (dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_UNHEALTHY) | \
-                         (dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_RECOVERY) | \
-                         (dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ACCESS_TIMEOUT_RECOVERY) | \
-                         (dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_NOT_SUPPORTED <<
-                          dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_INCORRECT_CONFIGURATION)
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK,
-                                                              not_supported_mask, 40)
+    not_supported_mask = (
+        dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_DEGRADED_BW) | (
+        dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_UNHEALTHY_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_UNHEALTHY) | (
+            dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_RECOVERY) | (
+                dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ACCESS_TIMEOUT_RECOVERY) | (
+                    dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_INCORRECT_CONFIGURATION_NOT_SUPPORTED << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_INCORRECT_CONFIGURATION)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK, not_supported_mask, 40)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Verify no incidents for NOT_SUPPORTED states
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
-    assert (responseV5.incidentCount ==
-            0), f"Expected no incidents for NOT_SUPPORTED states, got {responseV5.incidentCount}"
+    assert (
+        responseV5.incidentCount == 0), (
+        f"Expected no incidents for NOT_SUPPORTED states, got "
+        f"{responseV5.incidentCount}")
 
     # Inject healthy state again
     healthy_mask = (dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_DEGRADED_BW_FALSE << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_DEGRADED_BW) | \
@@ -2242,20 +2609,25 @@ def test_dcgm_health_check_fabric_health_mask(handle, gpuIds):
                    (dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ROUTE_RECOVERY_FALSE << dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ROUTE_RECOVERY) | \
                    (dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_ACCESS_TIMEOUT_RECOVERY_FALSE <<
                     dcgm_nvml.NVML_GPU_FABRIC_HEALTH_MASK_SHIFT_ACCESS_TIMEOUT_RECOVERY)
-    ret = dcgm_field_injection_helpers.inject_field_value_i64(handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK,
-                                                              healthy_mask, 30)
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK, healthy_mask, 30)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
     # Verify no incidents after clearing errors
     responseV5 = groupObj.health.Check(
         dcgm_structs.dcgmHealthResponse_version5)
-    assert (responseV5.incidentCount ==
-            0), f"Expected no incidents after clearing errors, got {responseV5.incidentCount}"
+    assert (
+        responseV5.incidentCount == 0), (
+        f"Expected no incidents after clearing errors, got "
+        f"{responseV5.incidentCount}")
 
     # Clear health watches
     groupObj.health.Set(0)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 @skip_test_if_no_dcgm_nvml()
@@ -2269,6 +2641,16 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
     groupObj.AddGpu(gpuId)
     groupObj.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_NVLINK)
 
+    # Set at least one NVLink to Up so SystemHasNvLinks() returns true
+    # for injection GPUs (which default all links to NotSupported)
+    for linkId in range(dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU):
+        dcgm_agent_internal.dcgmSetEntityNvLinkLinkState(
+            handle,
+            dcgm_fields.DCGM_FE_GPU,
+            gpuId,
+            linkId,
+            dcgm_structs.DcgmNvLinkLinkStateUp)
+
     # Helper function to inject IMEX domain status (string field)
     # IMEX fields are global scope (DCGM_FE_NONE), inject with entity 0
     def injectImexDomainStatus(status_str, offset_seconds):
@@ -2280,7 +2662,8 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
         field.ts = int((time.time() + offset_seconds) * 1000000.0)
         field.value.str = status_str.encode(
             'utf-8') if isinstance(status_str, str) else status_str
-        return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_NONE, 0, field)
+        return dcgm_agent_internal.dcgmInjectEntityFieldValue(
+            handle, dcgm_fields.DCGM_FE_NONE, 0, field)
 
     # Helper function to inject IMEX daemon status (int64 field)
     # IMEX fields are global scope (DCGM_FE_NONE), inject with entity 0
@@ -2292,7 +2675,8 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
         field.fieldType = ord(dcgm_fields.DCGM_FT_INT64)
         field.ts = int((time.time() + offset_seconds) * 1000000.0)
         field.value.i64 = status_int
-        return dcgm_agent_internal.dcgmInjectEntityFieldValue(handle, dcgm_fields.DCGM_FE_NONE, 0, field)
+        return dcgm_agent_internal.dcgmInjectEntityFieldValue(
+            handle, dcgm_fields.DCGM_FE_NONE, 0, field)
 
     # Helper function to run a single IMEX health test case
     def validateImexHealth(
@@ -2328,7 +2712,8 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
                 # Check incident attributes
                 assert responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
                 assert responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
-                # IMEX fields are global scope (DCGM_FE_NONE) so entityId should be 0
+                # IMEX fields are global scope (DCGM_FE_NONE) so entityId
+                # should be 0
                 assert responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_NONE
                 assert responseV5.incidents[0].entityInfo.entityId == 0
 
@@ -2345,7 +2730,8 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
     # treated as the latest sample.
     timestamp_offset = 0
 
-    # Establish healthy baseline to prevent skip_test_if_unhealthy from skipping
+    # Establish healthy baseline to prevent skip_test_if_unhealthy from
+    # skipping
     ret = injectImexDomainStatus("UP", timestamp_offset)
     assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject baseline domain status: {ret}"
     ret = injectImexDaemonStatus(5, timestamp_offset)  # 5 = READY
@@ -2457,47 +2843,55 @@ def test_dcgm_health_check_imex_status(handle, gpuIds):
     groupObj.health.Set(0)
 
 
-def clearNvlinkFields(handle, gpuId, timestamp):
+def clearNvlinkFields(handle, gpuId, timestamp, excluded_field_id=None):
     # Required fields that should be supported on most hardware
     nvlink_fields_required = [
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER,
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW,
          dcgmvalue.DCGM_INT64_BLANK),
         (dcgm_fields.DCGM_FI_DEV_FABRIC_HEALTH_MASK, 0),
         (dcgm_fields.DCGM_FI_DEV_FABRIC_MANAGER_STATUS, dcgmvalue.DCGM_INT64_BLANK),
     ]
 
     nvlink_fields_deprecated_blackwell_plus = [
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_ERROR_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_TOTAL, 0),
     ]
 
     # Blackwell+ optional fields (may not be supported on older hardware)
     nvlink_fields_blackwell_plus = [
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_SUCCESSFUL_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_FAILED_TOTAL, 0),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL, 0),
     ]
 
     # Clear required fields - must succeed
     for field_id, healthy_value in nvlink_fields_required:
+        if field_id == excluded_field_id:
+            continue
         ret = dcgm_field_injection_helpers.inject_field_value_i64(
             handle, gpuId, field_id, healthy_value, timestamp)
         assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to clear required field {field_id}: {ret}"
 
     # Clear Blackwell deprecated and Blackwell+ fields - tolerate NOT_SUPPORTED
-    for field_id, healthy_value in nvlink_fields_blackwell_plus + nvlink_fields_deprecated_blackwell_plus:
+    for field_id, healthy_value in nvlink_fields_blackwell_plus + \
+            nvlink_fields_deprecated_blackwell_plus:
+        if field_id == excluded_field_id:
+            continue
         ret = dcgm_field_injection_helpers.inject_field_value_i64(
             handle, gpuId, field_id, healthy_value, timestamp)
         assert ret in [dcgm_structs.DCGM_ST_OK, dcgm_structs.DCGM_ST_NOT_SUPPORTED], \
             f"Failed to clear Blackwell+ field {field_id}: {ret}"
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgm_health_fabric_manager_status(handle, gpuIds):
@@ -2524,9 +2918,14 @@ def test_dcgm_health_fabric_manager_status(handle, gpuIds):
         (6, "NvmlTooOld", 1, dcgm_structs.DCGM_HEALTH_RESULT_FAIL, None),
     ]
 
-    for idx, (status_value, status_desc, expected_incidents, expected_health, expected_msg) in enumerate(test_cases):
+    for idx, (status_value, status_desc, expected_incidents,
+              expected_health, expected_msg) in enumerate(test_cases):
         ret = dcgm_field_injection_helpers.inject_field_value_i64(
-            handle, gpuId, dcgm_fields.DCGM_FI_DEV_FABRIC_MANAGER_STATUS, status_value, idx * 10)
+            handle,
+            gpuId,
+            dcgm_fields.DCGM_FI_DEV_FABRIC_MANAGER_STATUS,
+            status_value,
+            idx * 10)
         assert ret == dcgm_structs.DCGM_ST_OK
 
         responseV5 = groupObj.health.Check(
@@ -2539,8 +2938,10 @@ def test_dcgm_health_fabric_manager_status(handle, gpuIds):
             assert responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_NVLINK
             assert responseV5.incidents[0].health == expected_health, \
                 f"Expected health {expected_health} for {status_desc}, got {responseV5.incidents[0].health}"
-            assert responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_FABRIC_PROBE_STATE, \
-                f"Expected error code {dcgm_errors.DCGM_FR_FABRIC_PROBE_STATE} for {status_desc}, got {responseV5.incidents[0].error.code}"
+            assert responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_FABRIC_PROBE_STATE, (
+                f"Expected error code "
+                f"{dcgm_errors.DCGM_FR_FABRIC_PROBE_STATE} for {status_desc}, "
+                f"got {responseV5.incidents[0].error.code}")
             if expected_msg:
                 assert expected_msg in responseV5.incidents[0].error.msg, \
                     f"Expected '{expected_msg}' in error message for {status_desc}, got: {responseV5.incidents[0].error.msg}"
@@ -2549,10 +2950,15 @@ def test_dcgm_health_fabric_manager_status(handle, gpuIds):
     groupObj.health.Set(0)
 
 
-def helper_health_check_gpu_recovery_action(handle, gpuIds, inject_value, expected_health,
-                                            expected_error_code=None,
-                                            health_watch=dcgm_structs.DCGM_HEALTH_WATCH_DRIVER,
-                                            verify_incident=True, cleanup=True):
+def helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        inject_value,
+        expected_health,
+        expected_error_code=None,
+        health_watch=dcgm_structs.DCGM_HEALTH_WATCH_DRIVER,
+        verify_incident=True,
+        cleanup=True):
     """
     Parameterized helper for testing GPU recovery action health checks
 
@@ -2580,7 +2986,7 @@ def helper_health_check_gpu_recovery_action(handle, gpuIds, inject_value, expect
     baselineCount = baselineResponse.incidentCount
 
     ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpuId, dcgm_fields.DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION, inject_value, 0)
+        handle, gpuId, dcgm_fields.DCGM_FI_DEV_GPU_RECOVERY_ACTION, inject_value, 0)
     assert ret == dcgm_structs.DCGM_ST_OK
 
     responseV5 = groupObj.health.Check(
@@ -2601,7 +3007,8 @@ def helper_health_check_gpu_recovery_action(handle, gpuIds, inject_value, expect
             }
             expected_error_code = error_code_map.get(inject_value)
 
-        # Expected keywords for each recovery action type (for message content verification)
+        # Expected keywords for each recovery action type (for message content
+        # verification)
         expected_keywords = {
             1: ["reset", "recover", "fault"],           # GPU_RESET
             2: ["reboot", "inconsistent"],              # NODE_REBOOT
@@ -2627,18 +3034,21 @@ def helper_health_check_gpu_recovery_action(handle, gpuIds, inject_value, expect
 
                 # Log the error message for debugging
                 logger.info(
-                    f"GPU Recovery Action incident message: {incident.error.msg}")
+                    f"GPU Recovery Action incident message: "
+                    f"{incident.error.msg}")
 
                 # Verify error message contains GPU ID
                 assert str(gpuId) in incident.error.msg, \
                     f"GPU ID {gpuId} not found in error message: {incident.error.msg}"
 
-                # Verify error message contains recovery action value (for non-NONE values)
+                # Verify error message contains recovery action value (for
+                # non-NONE values)
                 if inject_value > 0 and inject_value <= 4:
                     assert str(inject_value) in incident.error.msg, \
                         f"Recovery action value {inject_value} not found in error message: {incident.error.msg}"
 
-                # Verify message contains expected keywords for this recovery action
+                # Verify message contains expected keywords for this recovery
+                # action
                 if inject_value in expected_keywords:
                     msg_lower = incident.error.msg.lower()
                     for keyword in expected_keywords[inject_value]:
@@ -2652,26 +3062,45 @@ def helper_health_check_gpu_recovery_action(handle, gpuIds, inject_value, expect
 
     if cleanup and expected_health != dcgm_structs.DCGM_HEALTH_RESULT_PASS:
         ret = dcgm_field_injection_helpers.inject_field_value_i64(
-            handle, gpuId, dcgm_fields.DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION, 0, 0)
+            handle, gpuId, dcgm_fields.DCGM_FI_DEV_GPU_RECOVERY_ACTION, 0, 0)
         assert ret == dcgm_structs.DCGM_ST_OK
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_none_standalone(handle, gpuIds):
     """Test GPU recovery action health check - NONE value (0) should PASS"""
-    helper_health_check_gpu_recovery_action(handle, gpuIds, 0, dcgm_structs.DCGM_HEALTH_RESULT_PASS,
-                                            verify_incident=False, cleanup=False)
+    helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        0,
+        dcgm_structs.DCGM_HEALTH_RESULT_PASS,
+        verify_incident=False,
+        cleanup=False)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_none_embedded(handle, gpuIds):
     """Test GPU recovery action health check - NONE value (0) should PASS"""
-    helper_health_check_gpu_recovery_action(handle, gpuIds, 0, dcgm_structs.DCGM_HEALTH_RESULT_PASS,
-                                            verify_incident=False, cleanup=False)
+    helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        0,
+        dcgm_structs.DCGM_HEALTH_RESULT_PASS,
+        verify_incident=False,
+        cleanup=False)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_reset_standalone(handle, gpuIds):
@@ -2680,6 +3109,9 @@ def test_health_check_gpu_recovery_action_reset_standalone(handle, gpuIds):
         handle, gpuIds, 1, dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_reset_embedded(handle, gpuIds):
@@ -2688,6 +3120,9 @@ def test_health_check_gpu_recovery_action_reset_embedded(handle, gpuIds):
         handle, gpuIds, 1, dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_reboot_standalone(handle, gpuIds):
@@ -2696,6 +3131,9 @@ def test_health_check_gpu_recovery_action_reboot_standalone(handle, gpuIds):
         handle, gpuIds, 2, dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_reboot_embedded(handle, gpuIds):
@@ -2704,6 +3142,9 @@ def test_health_check_gpu_recovery_action_reboot_embedded(handle, gpuIds):
         handle, gpuIds, 2, dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_drain_p2p_standalone(handle, gpuIds):
@@ -2712,6 +3153,9 @@ def test_health_check_gpu_recovery_action_drain_p2p_standalone(handle, gpuIds):
         handle, gpuIds, 3, dcgm_structs.DCGM_HEALTH_RESULT_WARN)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_drain_p2p_embedded(handle, gpuIds):
@@ -2720,72 +3164,134 @@ def test_health_check_gpu_recovery_action_drain_p2p_embedded(handle, gpuIds):
         handle, gpuIds, 3, dcgm_structs.DCGM_HEALTH_RESULT_WARN)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
-def test_health_check_gpu_recovery_action_drain_and_reset_standalone(handle, gpuIds):
-    """Test GPU recovery action health check - DRAIN_AND_RESET value (4) should WARN"""
+def test_health_check_gpu_recovery_action_drain_and_reset_standalone(
+        handle,
+        gpuIds):
+    """Test GPU recovery action health check - DRAIN_AND_RESET value (4) should FAIL"""
     helper_health_check_gpu_recovery_action(
-        handle, gpuIds, 4, dcgm_structs.DCGM_HEALTH_RESULT_WARN)
+        handle, gpuIds, 4, dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
-def test_health_check_gpu_recovery_action_drain_and_reset_embedded(handle, gpuIds):
-    """Test GPU recovery action health check - DRAIN_AND_RESET value (4) should WARN"""
+def test_health_check_gpu_recovery_action_drain_and_reset_embedded(
+        handle,
+        gpuIds):
+    """Test GPU recovery action health check - DRAIN_AND_RESET value (4) should FAIL"""
     helper_health_check_gpu_recovery_action(
-        handle, gpuIds, 4, dcgm_structs.DCGM_HEALTH_RESULT_WARN)
+        handle, gpuIds, 4, dcgm_structs.DCGM_HEALTH_RESULT_FAIL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_blank_standalone(handle, gpuIds):
     """Test GPU recovery action health check - BLANK value should PASS"""
-    helper_health_check_gpu_recovery_action(handle, gpuIds, dcgmvalue.DCGM_INT64_BLANK,
-                                            dcgm_structs.DCGM_HEALTH_RESULT_PASS,
-                                            verify_incident=False, cleanup=False)
+    helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        dcgmvalue.DCGM_INT64_BLANK,
+        dcgm_structs.DCGM_HEALTH_RESULT_PASS,
+        verify_incident=False,
+        cleanup=False)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
 def test_health_check_gpu_recovery_action_blank_embedded(handle, gpuIds):
     """Test GPU recovery action health check - BLANK value should PASS"""
-    helper_health_check_gpu_recovery_action(handle, gpuIds, dcgmvalue.DCGM_INT64_BLANK,
-                                            dcgm_structs.DCGM_HEALTH_RESULT_PASS,
-                                            verify_incident=False, cleanup=False)
+    helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        dcgmvalue.DCGM_INT64_BLANK,
+        dcgm_structs.DCGM_HEALTH_RESULT_PASS,
+        verify_incident=False,
+        cleanup=False)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
-def test_health_check_gpu_recovery_action_all_watches_healthy_standalone(handle, gpuIds):
+def test_health_check_gpu_recovery_action_all_watches_healthy_standalone(
+        handle,
+        gpuIds):
     """Test GPU recovery action with ALL watches enabled - healthy state"""
-    helper_health_check_gpu_recovery_action(handle, gpuIds, 0, dcgm_structs.DCGM_HEALTH_RESULT_PASS,
-                                            health_watch=dcgm_structs.DCGM_HEALTH_WATCH_ALL,
-                                            verify_incident=False, cleanup=False)
+    helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        0,
+        dcgm_structs.DCGM_HEALTH_RESULT_PASS,
+        health_watch=dcgm_structs.DCGM_HEALTH_WATCH_ALL,
+        verify_incident=False,
+        cleanup=False)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
-def test_health_check_gpu_recovery_action_all_watches_healthy_embedded(handle, gpuIds):
+def test_health_check_gpu_recovery_action_all_watches_healthy_embedded(
+        handle,
+        gpuIds):
     """Test GPU recovery action with ALL watches enabled - healthy state"""
-    helper_health_check_gpu_recovery_action(handle, gpuIds, 0, dcgm_structs.DCGM_HEALTH_RESULT_PASS,
-                                            health_watch=dcgm_structs.DCGM_HEALTH_WATCH_ALL,
-                                            verify_incident=False, cleanup=False)
+    helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        0,
+        dcgm_structs.DCGM_HEALTH_RESULT_PASS,
+        health_watch=dcgm_structs.DCGM_HEALTH_WATCH_ALL,
+        verify_incident=False,
+        cleanup=False)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
-def test_health_check_gpu_recovery_action_all_watches_unhealthy_standalone(handle, gpuIds):
+def test_health_check_gpu_recovery_action_all_watches_unhealthy_standalone(
+        handle,
+        gpuIds):
     """Test GPU recovery action with ALL watches enabled - unhealthy state should be detected"""
-    helper_health_check_gpu_recovery_action(handle, gpuIds, 1, dcgm_structs.DCGM_HEALTH_RESULT_FAIL,
-                                            health_watch=dcgm_structs.DCGM_HEALTH_WATCH_ALL)
+    helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        1,
+        dcgm_structs.DCGM_HEALTH_RESULT_FAIL,
+        health_watch=dcgm_structs.DCGM_HEALTH_WATCH_ALL)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus()
-def test_health_check_gpu_recovery_action_all_watches_unhealthy_embedded(handle, gpuIds):
+def test_health_check_gpu_recovery_action_all_watches_unhealthy_embedded(
+        handle,
+        gpuIds):
     """Test GPU recovery action with ALL watches enabled - unhealthy state should be detected"""
-    helper_health_check_gpu_recovery_action(handle, gpuIds, 1, dcgm_structs.DCGM_HEALTH_RESULT_FAIL,
-                                            health_watch=dcgm_structs.DCGM_HEALTH_WATCH_ALL)
+    helper_health_check_gpu_recovery_action(
+        handle,
+        gpuIds,
+        1,
+        dcgm_structs.DCGM_HEALTH_RESULT_FAIL,
+        health_watch=dcgm_structs.DCGM_HEALTH_WATCH_ALL)
 
 
 def helper_health_check_gpu_recovery_action_multiple_gpus(handle, gpuIds):
@@ -2816,12 +3322,12 @@ def helper_health_check_gpu_recovery_action_multiple_gpus(handle, gpuIds):
     # Inject different recovery actions for each GPU
     # GPU 0: GPU_RESET (1) - should FAIL
     ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpu0, dcgm_fields.DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION, 1, 0)
+        handle, gpu0, dcgm_fields.DCGM_FI_DEV_GPU_RECOVERY_ACTION, 1, 0)
     assert ret == dcgm_structs.DCGM_ST_OK
 
     # GPU 1: DRAIN_P2P (3) - should WARN
     ret = dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpu1, dcgm_fields.DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION, 3, 0)
+        handle, gpu1, dcgm_fields.DCGM_FI_DEV_GPU_RECOVERY_ACTION, 3, 0)
     assert ret == dcgm_structs.DCGM_ST_OK
 
     responseV5 = groupObj.health.Check(
@@ -2831,13 +3337,16 @@ def helper_health_check_gpu_recovery_action_multiple_gpus(handle, gpuIds):
     assert responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL, \
         f"Expected overall health FAIL, got {responseV5.overallHealth}"
 
-    # Filter new DRIVER incidents (exclude old baseline incidents and non-DRIVER incidents)
+    # Filter new DRIVER incidents (exclude old baseline incidents and
+    # non-DRIVER incidents)
     newDriverIncidents = [incident for incident in responseV5.incidents[baselineCount:]
                           if incident.system == dcgm_structs.DCGM_HEALTH_WATCH_DRIVER]
 
     # Should have 2 new DRIVER incidents
-    assert len(newDriverIncidents) == 2, \
-        f"Expected 2 new DRIVER incidents, got {len(newDriverIncidents)} (baseline={baselineCount}, current={responseV5.incidentCount})"
+    assert len(newDriverIncidents) == 2, (
+        f"Expected 2 new DRIVER incidents, got "
+        f"{len(newDriverIncidents)} (baseline={baselineCount}, current="
+        f"{responseV5.incidentCount})")
 
     # Find and verify both incidents
     found_gpu0_incident = False
@@ -2881,21 +3390,31 @@ def helper_health_check_gpu_recovery_action_multiple_gpus(handle, gpuIds):
 
     # Cleanup: restore both GPUs to healthy state
     dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpu0, dcgm_fields.DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION, 0, 0)
+        handle, gpu0, dcgm_fields.DCGM_FI_DEV_GPU_RECOVERY_ACTION, 0, 0)
     dcgm_field_injection_helpers.inject_field_value_i64(
-        handle, gpu1, dcgm_fields.DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION, 0, 0)
+        handle, gpu1, dcgm_fields.DCGM_FI_DEV_GPU_RECOVERY_ACTION, 0, 0)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus(2)
-def test_health_check_gpu_recovery_action_multiple_gpus_standalone(handle, gpuIds):
+def test_health_check_gpu_recovery_action_multiple_gpus_standalone(
+        handle,
+        gpuIds):
     """Test GPU recovery action with multiple GPUs having different recovery states"""
     helper_health_check_gpu_recovery_action_multiple_gpus(handle, gpuIds)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(2)
-def test_health_check_gpu_recovery_action_multiple_gpus_embedded(handle, gpuIds):
+def test_health_check_gpu_recovery_action_multiple_gpus_embedded(
+        handle,
+        gpuIds):
     """Test GPU recovery action with multiple GPUs having different recovery states"""
     helper_health_check_gpu_recovery_action_multiple_gpus(handle, gpuIds)
 
@@ -2906,7 +3425,7 @@ def inject_gpu_arch(handle, gpuId, arch_major, arch_minor=0):
     """
     # Compute capability is encoded as: (major << 16) | minor
     compute_capability = (arch_major << 16) | arch_minor
-    fieldId = dcgm_fields.DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY
+    fieldId = dcgm_fields.DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY
 
     ret = dcgm_field_injection_helpers.inject_value(
         handle,
@@ -2920,7 +3439,8 @@ def inject_gpu_arch(handle, gpuId, arch_major, arch_minor=0):
     return compute_capability
 
 
-def helper_dcgmi_health_check_nvlink_arch_specific(handle, gpuIds, test_fields):
+def helper_dcgmi_health_check_nvlink_arch_specific(
+        handle, gpuIds, test_fields):
     """
     Helper to test architecture-specific NVLink error fields using dcgmi.
     """
@@ -2932,17 +3452,21 @@ def helper_dcgmi_health_check_nvlink_arch_specific(handle, gpuIds, test_fields):
         for field_id, field_name, error_value, arch_major in test_fields:
             inject_gpu_arch(handle, gpuId, arch_major=arch_major)
 
-            # Clear all NVLink fields before testing this field
-            clearNvlinkFields(handle, gpuId, -60)
-
             args = ["health", "--set", "n", "-g", str(groupId)]
             retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
                 args)
             assert retValue == 0, f"Failed to set health watches: {stderr_lines}"
 
+            # Clear other fields with a newer sample so prior loop iterations do not leak incidents.
+            clearNvlinkFields(handle, gpuId, 0, excluded_field_id=field_id)
+
+            ret = dcgm_field_injection_helpers.inject_field_value_i64(
+                handle, gpuId, field_id, 0, -10)
+            assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject baseline for {field_name}: {ret}"
+
             # Inject error value
             ret = dcgm_field_injection_helpers.inject_field_value_i64(
-                handle, gpuId, field_id, error_value, -10)
+                handle, gpuId, field_id, error_value, 10)
             assert ret == dcgm_structs.DCGM_ST_OK, f"Failed to inject field {field_id} ({field_name}): {ret}"
 
             args = ["health", "--check", "-g", str(groupId)]
@@ -2961,6 +3485,9 @@ def helper_dcgmi_health_check_nvlink_arch_specific(handle, gpuIds, test_fields):
         test_utils.delete_dcgmi_group(groupId)
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_dcgmi_health_check_nvlink_arch_specific_fields(handle, gpuIds):
@@ -2972,16 +3499,151 @@ def test_dcgmi_health_check_nvlink_arch_specific_fields(handle, gpuIds):
     """
     test_fields = [
         # Pre-Blackwell fields (arch 9)
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_CRC, "DL_CRC", 10, 9),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_RECOVERY, "DL_RECOVERY", 5, 9),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR_DL_REPLAY, "DL_REPLAY", 3, 9),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_ERROR_TOTAL, "DL_CRC", 10, 9),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_TOTAL, "DL_RECOVERY", 5, 9),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_TOTAL, "DL_REPLAY", 3, 9),
         # Blackwell+ fields (arch 10)
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS,
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_SUCCESSFUL_TOTAL,
          "Recovery Successful", 5, 10),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS,
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_FAILED_TOTAL,
          "Recovery Failed", 2, 10),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS,
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
          "Recovery Total", 10, 10),
     ]
     helper_dcgmi_health_check_nvlink_arch_specific(
         handle, gpuIds, test_fields=test_fields)
+
+
+def helper_test_dcgm_health_check_contained_error(handle, gpuIds):
+    """
+    Verifies that the health check reports a warning (not failure) when XID 94 (contained error)
+    is injected, per NVIDIA's official guidance that the GPU does not need to be isolated and
+    only the affected application needs to be restarted.
+    """
+    contained_error_xid = 94
+
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetEmptyGroup("test_contained_error")
+    groupObj.AddGpu(gpuIds[0])
+    gpuIds = groupObj.GetGpuIds()  # Limit gpuIds to GPUs in our group
+    gpuId = gpuIds[0]
+
+    newSystems = dcgm_structs.DCGM_HEALTH_WATCH_ALL
+    groupObj.health.Set(newSystems)
+
+    skip_test_if_unhealthy(groupObj)
+
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_XID_ERROR,
+        contained_error_xid,
+        0)  # set the injected data to now
+    assert ret == dcgm_structs.DCGM_ST_OK, "Failed to inject XID %d" % contained_error_xid
+
+    responseV5 = groupObj.health.Check(
+        dcgm_structs.dcgmHealthResponse_version5)
+    assert responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_WARN, \
+        "XID %d should produce WARN not FAIL - GPU does not need to be isolated per NVIDIA guidance" % contained_error_xid
+    assert responseV5.incidentCount == 1, \
+        "Expected exactly 1 incident for XID %d" % contained_error_xid
+    assert responseV5.incidents[0].entityInfo.entityId == gpuId
+    assert responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU
+    assert responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_ALL
+    assert responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN, \
+        "Incident health should be WARN for contained error"
+    assert responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_CONTAINED_ERROR, \
+        "Expected DCGM_FR_CONTAINED_ERROR (%d), got %d" % \
+        (dcgm_errors.DCGM_FR_CONTAINED_ERROR,
+         responseV5.incidents[0].error.code)
+
+
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_injection_gpus(2)
+def test_dcgm_health_check_contained_error(handle, gpuIds):
+    helper_test_dcgm_health_check_contained_error(handle, gpuIds)
+
+
+def helper_test_dcgm_health_check_xid93_arch_filter(handle, gpuIds, expect_warn):
+    """
+    Verifies XID 93 (corrupt InfoROM) health behavior based on GPU architecture.
+
+    When expect_warn is True (Volta GPU): must produce DCGM_FR_CORRUPT_INFOROM WARN.
+    When expect_warn is False (non-Volta GPU): must be silently ignored (PASS, 0 incidents).
+    """
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    systemObj = handleObj.GetSystem()
+    groupObj = systemObj.GetEmptyGroup("test_xid93_arch_filter")
+    groupObj.AddGpu(gpuIds[0])
+    gpuIds = groupObj.GetGpuIds()
+    gpuId = gpuIds[0]
+
+    groupObj.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_INFOROM)
+
+    skip_test_if_unhealthy(groupObj)
+
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_XID_ERROR,
+        93,
+        0)
+    assert ret == dcgm_structs.DCGM_ST_OK, "Failed to inject XID 93"
+
+    responseV5 = groupObj.health.Check(
+        dcgm_structs.dcgmHealthResponse_version5)
+
+    if expect_warn:
+        assert responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_WARN, \
+            "XID 93 must produce WARN on Volta GPUs but got health %d" % responseV5.overallHealth
+        assert responseV5.incidentCount == 1, \
+            "Expected 1 incident for XID 93 on Volta GPU, got %d" % responseV5.incidentCount
+        assert responseV5.incidents[0].entityInfo.entityId == gpuId
+        assert responseV5.incidents[0].entityInfo.entityGroupId == dcgm_fields.DCGM_FE_GPU
+        assert responseV5.incidents[0].system == dcgm_structs.DCGM_HEALTH_WATCH_INFOROM
+        assert responseV5.incidents[0].health == dcgm_structs.DCGM_HEALTH_RESULT_WARN
+        assert responseV5.incidents[0].error.code == dcgm_errors.DCGM_FR_CORRUPT_INFOROM, \
+            "Expected DCGM_FR_CORRUPT_INFOROM (%d), got %d" % \
+            (dcgm_errors.DCGM_FR_CORRUPT_INFOROM,
+             responseV5.incidents[0].error.code)
+    else:
+        assert responseV5.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS, \
+            "XID 93 must be ignored on non-Volta GPUs but got health %d" % responseV5.overallHealth
+        assert responseV5.incidentCount == 0, \
+            "Expected 0 incidents for XID 93 on non-Volta GPU, got %d" % responseV5.incidentCount
+
+    # Clear the injected XID so it does not persist into subsequent tests when
+    # running in --fast mode (amortized decorators share a single host engine).
+    ret = dcgm_field_injection_helpers.inject_field_value_i64(
+        handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_XID_ERROR,
+        0,
+        0)
+    assert ret == dcgm_structs.DCGM_ST_OK, "Failed to clear injected XID 93"
+
+
+# NO HARDWARE
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('V100.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_health_check_xid93_volta_reported(handle, gpuIds):
+    helper_test_dcgm_health_check_xid93_arch_filter(
+        handle, gpuIds, expect_warn=True)
+
+
+# NO HARDWARE
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_health_check_xid93_non_volta_ignored(handle, gpuIds):
+    helper_test_dcgm_health_check_xid93_arch_filter(
+        handle, gpuIds, expect_warn=False)

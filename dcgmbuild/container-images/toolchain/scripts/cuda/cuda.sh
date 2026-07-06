@@ -207,7 +207,7 @@ do
 
         TARGET_REPO_PACKAGE="$(dpkg --field $CUDA-target.deb Package)"
         DEB_ARCHITECTURE="$(dpkg --field $CUDA-target.deb Architecture)"
-        
+
         dpkg --add-architecture $DEB_ARCHITECTURE
         dpkg --install $CUDA-target.deb
         cp /var/cuda-repo-*-$VERSION_SUFFIX-local/cuda-*-keyring.gpg /usr/share/keyrings/
@@ -317,7 +317,7 @@ EOF
             esac
         fi
     done < <(find /usr/local/cuda-$VERSION/targets/$TARGET | sort)
-    
+
     pushd $SYSROOT/usr/local/cuda-$VERSION/
     ln --symbolic targets/$TARGET/include include
     ln --symbolic targets/$TARGET/lib lib64
@@ -326,12 +326,12 @@ EOF
     VERSION_MAJOR=${VERSION%.*}
     for ENTRY in "" $SYSROOT
     do
-        pushd $ENTRY/usr/local 
+        pushd $ENTRY/usr/local
         ln --symbolic cuda-$VERSION cuda-$VERSION_MAJOR
         popd
     done
 
-    cat <<EOF > $SYSROOT/../toolchain-$CUDA.cmake
+    cat <<EOF > $SYSROOT/../toolchain-gcc-$CUDA.cmake
 #
 # Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
@@ -347,7 +347,7 @@ EOF
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-include("\${CMAKE_CURRENT_LIST_DIR}/toolchain.cmake")
+include("\${CMAKE_CURRENT_LIST_DIR}/toolchain-gcc.cmake")
 
 set(CMAKE_CUDA_COMPILER "/usr/local/cuda-$VERSION_MAJOR/bin/nvcc")
 set(CMAKE_CUDA_COMPILER_TARGET "\${CMAKE_LIBRARY_ARCHITECTURE}")
@@ -360,8 +360,8 @@ string(JOIN " " CMAKE_CUDA_FLAGS_INIT
     "-Xcompiler=-static-libstdc++")
 EOF
 
-    cp $SYSROOT/../toolchain.meson.txt $SYSROOT/../toolchain-$CUDA.meson.txt
-    cat <<EOF >> $SYSROOT/../toolchain-$CUDA.meson.txt
+    cp $SYSROOT/../toolchain-gcc.meson.txt $SYSROOT/../toolchain-gcc-$CUDA.meson.txt
+    cat <<EOF >> $SYSROOT/../toolchain-gcc-$CUDA.meson.txt
 
 [binaries]
 cuda = [
@@ -370,7 +370,7 @@ cuda = [
     '--target-directory=$TARGET']
 
 [built-in options]
-cuda_ld = crossroot / 'bin' / target + '-ld' 
+cuda_ld = crossroot / 'bin' / target + '-ld'
 cuda_link_args = [
     '-Xcompiler=-static-libgcc',
     '-Xcompiler=-static-libstdc++'] + linker_paths

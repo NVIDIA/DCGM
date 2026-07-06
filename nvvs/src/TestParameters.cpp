@@ -125,48 +125,22 @@ TestParameters::TestParameters()
 }
 
 /*****************************************************************************/
-TestParameters::~TestParameters()
-{
-    std::map<std::string, TestParameterValue *>::iterator it;
-
-    for (it = m_globalParameters.begin(); it != m_globalParameters.end(); it++)
-    {
-        if (it->second)
-            delete (it->second);
-    }
-    m_globalParameters.clear();
-
-    std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
-
-    for (outerIt = m_subTestParameters.begin(); outerIt != m_subTestParameters.end(); outerIt++)
-    {
-        for (it = outerIt->second.begin(); it != outerIt->second.end(); it++)
-        {
-            delete (it->second);
-        }
-        outerIt->second.clear();
-    }
-    m_subTestParameters.clear();
-}
-
-/*****************************************************************************/
 TestParameters::TestParameters(TestParameters const &copyMe)
 {
     /* do a deep copy of the source object */
-    std::map<std::string, TestParameterValue *>::const_iterator it;
-
-    for (it = copyMe.m_globalParameters.begin(); it != copyMe.m_globalParameters.end(); it++)
+    for (auto it = copyMe.m_globalParameters.begin(); it != copyMe.m_globalParameters.end(); it++)
     {
-        m_globalParameters[std::string(it->first)] = new TestParameterValue(*(it->second));
+        std::string const key(it->first);
+        m_globalParameters[key] = std::make_unique<TestParameterValue>(*it->second);
     }
 
-    std::map<std::string, std::map<std::string, TestParameterValue *>>::const_iterator outerIt;
-
-    for (outerIt = copyMe.m_subTestParameters.begin(); outerIt != copyMe.m_subTestParameters.end(); outerIt++)
+    for (auto outerIt = copyMe.m_subTestParameters.begin(); outerIt != copyMe.m_subTestParameters.end(); outerIt++)
     {
-        for (it = outerIt->second.begin(); it != outerIt->second.end(); it++)
+        for (auto it = outerIt->second.begin(); it != outerIt->second.end(); it++)
         {
-            m_subTestParameters[outerIt->first][it->first] = new TestParameterValue(*(it->second));
+            std::string const &subtest         = outerIt->first;
+            std::string const &name            = it->first;
+            m_subTestParameters[subtest][name] = std::make_unique<TestParameterValue>(*it->second);
         }
     }
 }
@@ -180,14 +154,14 @@ TestParameters &TestParameters::operator=(const TestParameters &other)
 
     for (auto &[name, value] : other.m_globalParameters)
     {
-        m_globalParameters[name] = new TestParameterValue(*value);
+        m_globalParameters[name] = std::make_unique<TestParameterValue>(*value);
     }
 
     for (auto &[subtest, parameters] : other.m_subTestParameters)
     {
         for (auto &[name, value] : parameters)
         {
-            m_subTestParameters[subtest][name] = new TestParameterValue(*value);
+            m_subTestParameters[subtest][name] = std::make_unique<TestParameterValue>(*value);
         }
     }
 
@@ -203,7 +177,7 @@ int TestParameters::AddString(std::string key, std::string const &value)
         return TP_ST_ALREADYEXISTS;
     }
 
-    m_globalParameters[key] = new TestParameterValue((std::string)value);
+    m_globalParameters[key] = std::make_unique<TestParameterValue>((std::string)value);
     return TP_ST_OK;
 }
 
@@ -216,15 +190,15 @@ int TestParameters::AddDouble(std::string key, double value)
         return TP_ST_ALREADYEXISTS;
     }
 
-    m_globalParameters[key] = new TestParameterValue((double)value);
+    m_globalParameters[key] = std::make_unique<TestParameterValue>((double)value);
     return TP_ST_OK;
 }
 
 /*****************************************************************************/
 int TestParameters::AddSubTestString(std::string const &subTest, std::string const &key, std::string const &value)
 {
-    std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
-    std::map<std::string, TestParameterValue *>::iterator it;
+    std::map<std::string, std::map<std::string, std::unique_ptr<TestParameterValue>>>::iterator outerIt;
+    std::map<std::string, std::unique_ptr<TestParameterValue>>::iterator it;
 
     outerIt = m_subTestParameters.find(subTest);
     if (outerIt != m_subTestParameters.end())
@@ -240,15 +214,15 @@ int TestParameters::AddSubTestString(std::string const &subTest, std::string con
         }
     }
 
-    m_subTestParameters[subTest][key] = new TestParameterValue((std::string)value);
+    m_subTestParameters[subTest][key] = std::make_unique<TestParameterValue>((std::string)value);
     return TP_ST_OK;
 }
 
 /*****************************************************************************/
 int TestParameters::AddSubTestDouble(std::string const &subTest, std::string const &key, double value)
 {
-    std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
-    std::map<std::string, TestParameterValue *>::iterator it;
+    std::map<std::string, std::map<std::string, std::unique_ptr<TestParameterValue>>>::iterator outerIt;
+    std::map<std::string, std::unique_ptr<TestParameterValue>>::iterator it;
 
     outerIt = m_subTestParameters.find(subTest);
     if (outerIt != m_subTestParameters.end())
@@ -264,7 +238,7 @@ int TestParameters::AddSubTestDouble(std::string const &subTest, std::string con
         }
     }
 
-    m_subTestParameters[subTest][key] = new TestParameterValue((double)value);
+    m_subTestParameters[subTest][key] = std::make_unique<TestParameterValue>((double)value);
     return TP_ST_OK;
 }
 
@@ -305,7 +279,7 @@ int TestParameters::SetSubTestString(std::string const &subTest,
                                      std::string const &value,
                                      bool create)
 {
-    std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
+    std::map<std::string, std::map<std::string, std::unique_ptr<TestParameterValue>>>::iterator outerIt;
 
     outerIt = m_subTestParameters.find(subTest);
     if (outerIt == m_subTestParameters.end())
@@ -339,7 +313,7 @@ int TestParameters::SetSubTestString(std::string const &subTest,
 /*****************************************************************************/
 int TestParameters::SetSubTestDouble(std::string const &subTest, std::string const &key, double value)
 {
-    std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerIt;
+    std::map<std::string, std::map<std::string, std::unique_ptr<TestParameterValue>>>::iterator outerIt;
 
     outerIt = m_subTestParameters.find(subTest);
     if (outerIt == m_subTestParameters.end())
@@ -430,8 +404,7 @@ int TestParameters::GetBoolFromSubTestString(std::string const &subTest, std::st
 /*****************************************************************************/
 int TestParameters::OverrideFrom(TestParameters *sourceTp)
 {
-    std::map<std::string, TestParameterValue *>::iterator destIt, sourceIt;
-    TestParameterValue *deleteTpv = 0;
+    std::map<std::string, std::unique_ptr<TestParameterValue>>::iterator destIt;
 
     if (sourceTp == nullptr)
     {
@@ -445,21 +418,20 @@ int TestParameters::OverrideFrom(TestParameters *sourceTp)
         destIt = m_globalParameters.find(name);
         if (destIt == m_globalParameters.end())
         {
-            m_globalParameters[name] = new TestParameterValue(*value);
+            m_globalParameters[name] = std::make_unique<TestParameterValue>(*value);
             DCGM_LOG_DEBUG << "Added parameter " << name << "=" << value->GetString();
         }
         else
         {
-            deleteTpv                = destIt->second;
-            m_globalParameters[name] = new TestParameterValue(*value);
+            std::string const prev   = destIt->second->GetString();
+            m_globalParameters[name] = std::make_unique<TestParameterValue>(*value);
             DCGM_LOG_DEBUG << "Overrode parameter " << name << " with value " << value->GetString() << " (previously "
-                           << deleteTpv->GetString() << ")";
-            delete deleteTpv;
+                           << prev << ")";
         }
     }
 
     /* Subtest parameters */
-    std::map<std::string, std::map<std::string, TestParameterValue *>>::iterator outerDestIt, outerSourceIt;
+    std::map<std::string, std::map<std::string, std::unique_ptr<TestParameterValue>>>::iterator outerDestIt;
 
     for (auto &[subtestName, paramMap] : sourceTp->m_subTestParameters)
     {
@@ -471,22 +443,21 @@ int TestParameters::OverrideFrom(TestParameters *sourceTp)
                 destIt = outerDestIt->second.find(name);
                 if (destIt != outerDestIt->second.end())
                 {
-                    deleteTpv                              = m_subTestParameters[subtestName][name];
-                    m_subTestParameters[subtestName][name] = new TestParameterValue(*value);
+                    std::string const prev                 = m_subTestParameters[subtestName][name]->GetString();
+                    m_subTestParameters[subtestName][name] = std::make_unique<TestParameterValue>(*value);
                     DCGM_LOG_DEBUG << "Overrode subtest " << subtestName << " parameter " << name << " with value "
-                                   << value->GetString() << " (previously " << deleteTpv->GetString() << ")";
-                    delete deleteTpv;
+                                   << value->GetString() << " (previously " << prev << ")";
                 }
                 else
                 {
-                    m_subTestParameters[subtestName][name] = new TestParameterValue(*value);
+                    m_subTestParameters[subtestName][name] = std::make_unique<TestParameterValue>(*value);
                     DCGM_LOG_DEBUG << "Added subtest " << subtestName << " parameter " << name << "="
                                    << value->GetString();
                 }
             }
             else
             {
-                m_subTestParameters[subtestName][name] = new TestParameterValue(*value);
+                m_subTestParameters[subtestName][name] = std::make_unique<TestParameterValue>(*value);
                 DCGM_LOG_DEBUG << "Added subtest " << subtestName << " parameter " << name << "=" << value->GetString();
             }
         }
@@ -598,7 +569,7 @@ std::vector<dcgmDiagPluginTestParameter_t> TestParameters::GetParametersAsStruct
     {
         dcgmDiagPluginTestParameter_t param = {};
         snprintf(param.parameterName, sizeof(param.parameterName), "%s", name.c_str());
-        if (SetStructValue(value, param) != TP_ST_OK)
+        if (SetStructValue(value.get(), param) != TP_ST_OK)
         {
             DCGM_LOG_ERROR << "Unable to send parameter '" << name << "' to the plugin.";
             continue;
@@ -614,7 +585,7 @@ std::vector<dcgmDiagPluginTestParameter_t> TestParameters::GetParametersAsStruct
             dcgmDiagPluginTestParameter_t param = {};
             snprintf(param.parameterName, sizeof(param.parameterName), "%s.%s", name.c_str(), subtestName.c_str());
 
-            if (SetStructValue(value, param) != TP_ST_OK)
+            if (SetStructValue(value.get(), param) != TP_ST_OK)
             {
                 DCGM_LOG_ERROR << "Unable to send parameter '" << name << "' to the plugin.";
                 continue;

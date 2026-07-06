@@ -29,7 +29,7 @@ def _get_cuda_major_version():
         finally:
             # Shutdown only if init succeeded
             dcgm_nvml.nvmlShutdown()
-    except:
+    except BaseException:
         return 13
 
 
@@ -83,6 +83,31 @@ def live_binary_path():
 
 def is_live_binary_available():
     return os.path.isfile(live_binary_path())
+
+
+def is_nccl_functional():
+    """
+    Runs the live all_reduce_perf binary to verify NCCL can execute on this machine.
+    Applies the same pass/fail checks as NcclTestsPlugin: exit code 0 and
+    expected output lines present.
+    """
+    binary = live_binary_path()
+    if not os.path.isfile(binary):
+        return False
+
+    import subprocess
+    env = os.environ.copy()
+    env.update(HE_Env_Live())
+    try:
+        result = subprocess.run([binary], stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, universal_newlines=True, timeout=60, env=env)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+    if result.returncode != 0:
+        return False
+
+    return ("# Out of bounds values" in result.stdout and "# Avg bus bandwidth" in result.stdout)
 
 
 def HE_Env_Live(extra_env=None):

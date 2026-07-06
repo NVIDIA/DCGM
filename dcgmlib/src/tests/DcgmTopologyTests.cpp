@@ -96,6 +96,36 @@ TEST_CASE("Topology: ConvertVectorToBitmask")
     REQUIRE(bitmask == 0x5);
 }
 
+TEST_CASE("Topology: NvLinkScore supports expanded topology paths")
+{
+    REQUIRE(NvLinkScore(DCGM_TOPOLOGY_UNINITIALIZED) == 0);
+    REQUIRE(NvLinkScore(DCGM_TOPOLOGY_NVLINK1) == 1);
+    REQUIRE(NvLinkScore(DCGM_TOPOLOGY_NVLINK18) == 18);
+    REQUIRE(NvLinkScore(DCGM_TOPOLOGY_NVLINK36) == 36);
+    REQUIRE(NvLinkScore(static_cast<dcgmGpuTopologyLevel_t>(DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK36)) == 36);
+}
+
+TEST_CASE("Topology: NvLinkPathFromLinkQuantity")
+{
+    REQUIRE(NvLinkPathFromLinkQuantity(0) == DCGM_TOPOLOGY_UNINITIALIZED);
+    REQUIRE(NvLinkPathFromLinkQuantity(1) == DCGM_TOPOLOGY_NVLINK1);
+    REQUIRE(NvLinkPathFromLinkQuantity(18) == DCGM_TOPOLOGY_NVLINK18);
+    REQUIRE(NvLinkPathFromLinkQuantity(36) == DCGM_TOPOLOGY_NVLINK36);
+    REQUIRE(NvLinkPathFromLinkQuantity(37) == DCGM_TOPOLOGY_NVLINK36);
+    REQUIRE(NvLinkPathFromLinkQuantity(36, DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY3) == DCGM_TOPOLOGY_NVLINK18);
+    REQUIRE(NvLinkPathFromLinkQuantity(1, 0) == DCGM_TOPOLOGY_UNINITIALIZED);
+}
+
+TEST_CASE("Topology: TopologyPathToLegacy")
+{
+    REQUIRE(TopologyPathToLegacy(DCGM_TOPOLOGY_SYSTEM) == DCGM_TOPOLOGY_SYSTEM);
+    REQUIRE(TopologyPathToLegacy(DCGM_TOPOLOGY_NVLINK36) == DCGM_TOPOLOGY_NVLINK18);
+    REQUIRE(TopologyPathToLegacy(static_cast<dcgmGpuTopologyLevel_t>(DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK2))
+            == static_cast<dcgmGpuTopologyLevel_v1_t>(DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK2));
+    REQUIRE(TopologyPathToLegacy(static_cast<dcgmGpuTopologyLevel_t>(DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK36))
+            == static_cast<dcgmGpuTopologyLevel_v1_t>(DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK18));
+}
+
 TEST_CASE("Topology: AffinityBitmasksMatch")
 {
     dcgmAffinity_t affinity              = {};

@@ -35,19 +35,27 @@ def mock_mem_copy_util(handle, gpuId, nvmlReturn, value):
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
-@test_utils.run_with_current_system_injection_nvml(skuFileName="current_test_nvbandwidth_plugin_fail_if_mem_copy_util_is_larger_than_threshold.yaml")
+@test_utils.run_with_current_system_injection_nvml(
+    skuFileName="current_test_nvbandwidth_plugin_fail_if_mem_copy_util_is_larger_than_threshold.yaml")
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
 @test_utils.run_only_if_mig_is_disabled()
-def test_nvbandwidth_plugin_fail_if_mem_copy_util_is_larger_than_threshold(handle, gpuIds):
+def test_nvbandwidth_plugin_fail_if_mem_copy_util_is_larger_than_threshold(
+        handle,
+        gpuIds):
     '''
     Test to verify that the nvbandwidth plugin fails if the memory copy util is larger than the threshold.
     '''
     mock_mem_copy_util(handle, gpuIds[0], dcgm_nvml.NVML_SUCCESS, 11)
-    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]], testNamesStr="nvbandwidth",
-                           paramsStr="nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
+    dd = DcgmDiag.DcgmDiag(
+        gpuIds=[
+            gpuIds[0]],
+        testNamesStr="nvbandwidth",
+        paramsStr="nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
     response = test_utils.diag_execute_wrapper(dd, handle)
 
     nvbandwidth_test_idx = 1
@@ -63,19 +71,27 @@ def test_nvbandwidth_plugin_fail_if_mem_copy_util_is_larger_than_threshold(handl
         1, f"Error message: {err.msg}"
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_only_with_nvml()
-@test_utils.run_with_current_system_injection_nvml(skuFileName="current_test_nvbandwidth_plugin_will_not_fail_if_mem_copy_util_no_data.yaml")
+@test_utils.run_with_current_system_injection_nvml(
+    skuFileName="current_test_nvbandwidth_plugin_will_not_fail_if_mem_copy_util_no_data.yaml")
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
 @test_utils.run_only_if_mig_is_disabled()
-def test_nvbandwidth_plugin_will_not_fail_if_mem_copy_util_no_data(handle, gpuIds):
+def test_nvbandwidth_plugin_will_not_fail_if_mem_copy_util_no_data(
+        handle,
+        gpuIds):
     '''
     Test to verify that the nvbandwidth plugin will not fail if the memory copy util is no data.
     '''
     mock_mem_copy_util(handle, gpuIds[0], dcgm_nvml.NVML_ERROR_UNKNOWN, 11)
-    dd = DcgmDiag.DcgmDiag(gpuIds=[gpuIds[0]], testNamesStr="nvbandwidth",
-                           paramsStr="nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
+    dd = DcgmDiag.DcgmDiag(
+        gpuIds=[
+            gpuIds[0]],
+        testNamesStr="nvbandwidth",
+        paramsStr="nvbandwidth.is_allowed=true;nvbandwidth.testcases=0,1")
     response = test_utils.diag_execute_wrapper(dd, handle)
 
     nvbandwidth_test_idx = 1

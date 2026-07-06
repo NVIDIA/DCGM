@@ -16,6 +16,8 @@
 #include "cuda.h"
 #include "cuda_runtime.h"
 
+#include <cstdlib>
+
 /*
  * NOTE: This file isn't a complete stub for libcuda. We will need to add more definitions as we
  *       use this library for more plugins and potentially expand the usage of libcuda in the
@@ -23,12 +25,19 @@
  */
 
 int cudaAttributeValue;
-cudaError_t cudaStreamCreateResult = cudaSuccess;
+cudaError_t cudaStreamCreateResult        = cudaSuccess;
+cudaError_t cudaEventCreateResult         = cudaSuccess;
+cudaError_t cudaGetDeviceCountResult      = cudaSuccess;
+cudaError_t cudaGetDevicePropertiesResult = cudaSuccess;
+cudaError_t cudaHostAllocResult           = cudaSuccess;
+cudaError_t cudaMallocResult              = cudaSuccess;
+int cudaStubDeviceCount                   = 2;
+bool cudaStubAllocateMemory               = false;
 
 cudaError_t cudaGetDeviceCount(int *cudaDeviceCount)
 {
-    *cudaDeviceCount = 2;
-    return cudaSuccess;
+    *cudaDeviceCount = cudaStubDeviceCount;
+    return cudaGetDeviceCountResult;
 }
 
 cudaError_t cudaSetDevice(int /* id */)
@@ -87,13 +96,37 @@ const char *cudaGetErrorString(cudaError_t /* cudaReturn */)
     return nullptr;
 }
 
-cudaError_t cudaHostAlloc(void ** /* buf */, size_t /* size */, unsigned int /* flags */)
+cudaError_t cudaHostAlloc(void **buf, size_t size, unsigned int /* flags */)
 {
+    if (cudaHostAllocResult != cudaSuccess)
+    {
+        return cudaHostAllocResult;
+    }
+
+    if (cudaStubAllocateMemory)
+    {
+        *buf = std::malloc(size);
+        return *buf == nullptr ? cudaErrorMemoryAllocation : cudaSuccess;
+    }
+
+    *buf = nullptr;
     return cudaSuccess;
 }
 
-cudaError_t cudaMalloc(void ** /* buf */, size_t /* size */)
+cudaError_t cudaMalloc(void **buf, size_t size)
 {
+    if (cudaMallocResult != cudaSuccess)
+    {
+        return cudaMallocResult;
+    }
+
+    if (cudaStubAllocateMemory)
+    {
+        *buf = std::malloc(size);
+        return *buf == nullptr ? cudaErrorMemoryAllocation : cudaSuccess;
+    }
+
+    *buf = nullptr;
     return cudaSuccess;
 }
 
@@ -102,13 +135,23 @@ cudaError_t cudaMallocHost(void ** /* buf */, size_t /* size */)
     return cudaSuccess;
 }
 
-cudaError_t cudaFreeHost(void * /* buf */)
+cudaError_t cudaFreeHost(void *buf)
 {
+    if (cudaStubAllocateMemory)
+    {
+        std::free(buf);
+    }
+
     return cudaSuccess;
 }
 
-cudaError_t cudaFree(void * /* buf */)
+cudaError_t cudaFree(void *buf)
 {
+    if (cudaStubAllocateMemory)
+    {
+        std::free(buf);
+    }
+
     return cudaSuccess;
 }
 
@@ -152,7 +195,7 @@ cudaError_t cudaMemset(void * /* buf */, int /* value */, size_t /* size */)
 
 cudaError_t cudaEventCreate(cudaEvent_t * /* event */)
 {
-    return cudaSuccess;
+    return cudaEventCreateResult;
 }
 
 cudaError_t cudaEventRecord(cudaEvent_t /* event */, cudaStream_t /* stream */)
@@ -187,7 +230,7 @@ cudaError_t cudaStreamSynchronize(cudaStream_t /* stream */)
 
 cudaError_t cudaGetDeviceProperties(struct cudaDeviceProp * /* prop */, int /* device */)
 {
-    return cudaSuccess;
+    return cudaGetDevicePropertiesResult;
 }
 
 cudaError_t cudaEventQuery(cudaEvent_t /* event */)

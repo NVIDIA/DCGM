@@ -17,12 +17,9 @@ import dcgm_fields
 import dcgm_agent
 import os
 
-# logger is test infrastructure module and is only available when testing
-# framework is active
-if '__DCGM_TESTING_FRAMEWORK_ACTIVE' in os.environ and os.environ[
-        '__DCGM_TESTING_FRAMEWORK_ACTIVE'] == '1':
+try:
     import logger
-else:
+except ImportError:
     logger = None
 
 g_latestDiagResponseVer = dcgm_structs.dcgmDiagResponse_version12
@@ -40,9 +37,16 @@ class DcgmDiag:
         dcgm_structs.dcgmRunDiag_version10: 10,
     }
 
-    def __init__(self, gpuIds=None, cpuIds=None, testNamesStr='', paramsStr='',
-                 ignoreErrorCodesStr='', verbose=True, version=dcgm_structs.dcgmRunDiag_version10,
-                 timeout=0):
+    def __init__(
+            self,
+            gpuIds=None,
+            cpuIds=None,
+            testNamesStr='',
+            paramsStr='',
+            ignoreErrorCodesStr='',
+            verbose=True,
+            version=dcgm_structs.dcgmRunDiag_version10,
+            timeout=0):
         # Make sure version is valid
         if version not in DcgmDiag._versionMap:
             raise ValueError(
@@ -144,13 +148,13 @@ class DcgmDiag:
             self.SetDebugLevel(5)  # Collect logs at highest level for nvvs.
 
     def SetVerbose(self, val):
-        if val == True:
+        if val:
             self.runDiagInfo.flags |= dcgm_structs.DCGM_RUN_FLAGS_VERBOSE
         else:
             self.runDiagInfo.flags &= ~dcgm_structs.DCGM_RUN_FLAGS_VERBOSE
 
     def SetEnableHeartbeat(self, val):
-        if val == True:
+        if val:
             self.runDiagInfo.flags |= dcgm_structs.DCGM_RUN_FLAGS_ENABLE_HEARTBEAT
         else:
             self.runDiagInfo.flags &= ~dcgm_structs.DCGM_RUN_FLAGS_ENABLE_HEARTBEAT
@@ -193,16 +197,18 @@ class DcgmDiag:
         self.numTests += 1
 
     def SetStatsOnFail(self, val):
-        if val == True:
+        if val:
             self.runDiagInfo.flags |= dcgm_structs.DCGM_RUN_FLAGS_STATSONFAIL
 
     def SetClocksEventMask(self, value):
         if DcgmDiag._versionMap[self.version] < 3:
             raise ValueError(
                 "Clocks event mask requires minimum version 3 for dcgmRunDiag.")
-        if isinstance(value, str) and len(value) >= dcgm_structs.DCGM_CLOCKS_EVENT_MASK_LEN:
-            raise ValueError("Clocks event mask value '%s' exceeds max length %d."
-                             % (value, dcgm_structs.DCGM_CLOCKS_EVENT_MASK_LEN - 1))
+        if isinstance(value, str) and len(
+                value) >= dcgm_structs.DCGM_CLOCKS_EVENT_MASK_LEN:
+            raise ValueError(
+                "Clocks event mask value '%s' exceeds max length %d." %
+                (value, dcgm_structs.DCGM_CLOCKS_EVENT_MASK_LEN - 1))
 
         self.runDiagInfo.clocksEventMask = str(value)
 
@@ -224,12 +230,13 @@ class DcgmDiag:
             self.runDiagInfo.flags &= ~dcgm_structs.DCGM_RUN_FLAGS_FAIL_EARLY
 
     def Execute(self, handle):
-        return dcgm_agent.dcgmActionValidate_v2(handle, self.runDiagInfo, self.version)
+        return dcgm_agent.dcgmActionValidate_v2(
+            handle, self.runDiagInfo, self.version)
 
     def SetStatsPath(self, statsPath):
         if len(statsPath) >= dcgm_structs.DCGM_PATH_LEN:
-            err = "DcgmDiag cannot set statsPath '%s' because it exceeds max length %d." % \
-                (statsPath, dcgm_structs.DCGM_PATH_LEN)
+            err = "DcgmDiag cannot set statsPath '%s' because it exceeds max length %d." % (
+                statsPath, dcgm_structs.DCGM_PATH_LEN)
             raise ValueError(err)
 
         self.runDiagInfo.statsPath = statsPath
@@ -244,8 +251,9 @@ class DcgmDiag:
 
     def SetDebugLogFile(self, logFileName):
         if len(logFileName) >= dcgm_structs.DCGM_PATH_LEN:
-            raise ValueError("Cannot set debug file to '%s' because it exceeds max length %d."
-                             % (logFileName, dcgm_structs.DCGM_PATH_LEN))
+            raise ValueError(
+                "Cannot set debug file to '%s' because it exceeds max length %d." %
+                (logFileName, dcgm_structs.DCGM_PATH_LEN))
 
         self.runDiagInfo.debugLogFile = logFileName
 
@@ -269,7 +277,8 @@ class DcgmDiag:
 def find_test_in_response(response, testName):
     assert hasattr(response, 'tests') and hasattr(
         response, 'results'), "Response does not have tests or results"
-    for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
+    for test in response.tests[:min(
+            response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if test.name == testName:
             return test
 
@@ -280,19 +289,35 @@ def retrieve_diag_failure_message(response, entityPair, testName):
     test = find_test_in_response(response, testName)
     if not test:
         return None
-    for index in test.errorIndices[:min(test.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)]:
+    for index in test.errorIndices[:min(
+            test.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)]:
         if response.errors[index].entity == entityPair:
             return response.errors[index].msg
 
     return None
 
 
+def find_error_code(response, entityPair, testName, errorCode):
+    test = find_test_in_response(response, testName)
+    if not test:
+        return None
+
+    for index in test.errorIndices[:min(
+            test.numErrors, dcgm_structs.DCGM_DIAG_TEST_RUN_ERROR_INDICES_MAX)]:
+        error = response.errors[index]
+        if error.entity == entityPair and error.code == errorCode:
+            return error
+
+    return None
+
+
 def check_diag_result_fail(response, entityPair, testName):
-    # Returns `True` when there is a FAIL result associated with the specified `entityPair` and `testName`, `False` otherwise.
+    # Returns `True` when there is a FAIL result associated with the specified
+    # `entityPair` and `testName`, `False` otherwise.
     test = find_test_in_response(response, testName)
     assert test, "Expected fail result for test %s but none was found" % testName
-    if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL and cur.entity == entityPair,
-                   map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
+    if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL and cur.entity == entityPair, map(
+            lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
         msg = retrieve_diag_failure_message(response, entityPair, testName)
         if not msg:
             msg = "No error was found to accompany the test failure"
@@ -303,11 +328,12 @@ def check_diag_result_fail(response, entityPair, testName):
 
 
 def check_diag_result_pass(response, entityPair, testName):
-    # Returns `True` when there is a PASS result associated with the specified `entityPair` and `testName`, `False` otherwise.
+    # Returns `True` when there is a PASS result associated with the specified
+    # `entityPair` and `testName`, `False` otherwise.
     test = find_test_in_response(response, testName)
     assert test, "Expected pass result for test %s but none was found" % testName
-    if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_PASS and cur.entity == entityPair,
-                   map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
+    if next(filter(lambda cur: cur.result == dcgm_structs.DCGM_DIAG_RESULT_PASS and cur.entity == entityPair, map(
+            lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
         return True
 
     msg = retrieve_diag_failure_message(response, entityPair, testName)
@@ -331,19 +357,22 @@ def check_diag_result_skip(response, entityPair, testName):
 
 
 def check_diag_result_non_passing(response, entityPair, testName):
-    # Returns `False` if there are one or more passing results for `entityPair` and `testName`, `True` otherwise.
+    # Returns `False` if there are one or more passing results for
+    # `entityPair` and `testName`, `True` otherwise.
     return not check_diag_result_pass(response, entityPair, testName)
 
 
 def check_diag_result_non_failing(response, entityPair, testName):
-    # Returns `False` if there are one or more failing results for `entityPair` and `testName`, `True` otherwise.
+    # Returns `False` if there are one or more failing results for
+    # `entityPair` and `testName`, `True` otherwise.
     return not check_diag_result_fail(response, entityPair, testName)
 
 
 def check_diag_result_non_running(response, entityPair, testName):
     # Returns `False` if there are one or more tests running for `entityPair` and `testName`, `True` otherwise.
     # "nonrunning" in this sense matches [ SKIP, NOT_RUN ]
-    for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
+    for test in response.tests[:min(
+            response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if test.name == testName:
             break
     if test.name == testName:
@@ -353,21 +382,26 @@ def check_diag_result_non_running(response, entityPair, testName):
         if test.result in notRunResults:
             return True
         if next(filter(lambda cur: cur.result not in notRunResults and cur.entity == entityPair,
-                       map(lambda resIdx: response.results[resIdx], test.resultIndices[:min(test.numResults, dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])), None):
+                       map(lambda resIdx: response.results[resIdx],
+                           test.resultIndices[:min(test.numResults,
+                                                   dcgm_structs.DCGM_DIAG_TEST_RUN_RESULTS_MAX)])),
+                None):
             return False
     return True
 
 
 def GetEntityCount(response, entityGroupId):
-    # Returns the count of the specified entity group associated with the response.
+    # Returns the count of the specified entity group associated with the
+    # response.
     if hasattr(response, 'entities'):
         return sum(1 for entity in response.entities[:min(response.numEntities, dcgm_structs.DCGM_DIAG_RESPONSE_ENTITIES_MAX)]
                    if entity.entity.entityGroupId == entityGroupId)
     elif hasattr(response, 'gpuCount') and entityGroupId == dcgm_fields.DCGM_FE_GPU:
         return response.gpuCount
     else:
-        raise NotImplementedError("Entity type {} not handled for version {}.".format(
-            entityGroupId, response.version))
+        raise NotImplementedError(
+            "Entity type {} not handled for version {}.".format(
+                entityGroupId, response.version))
 
 
 def GetGpuCount(response):
@@ -394,12 +428,19 @@ def ResultToString(result):
 
 
 def DumpTestResults(logger, response, testNames=[]):
-    # Utility for debugging. Dump test results from the response, optionally for specified tests.
-    for test in response.tests[:min(response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
+    # Utility for debugging. Dump test results from the response, optionally
+    # for specified tests.
+    for test in response.tests[:min(
+            response.numTests, dcgm_structs.DCGM_DIAG_RESPONSE_TESTS_MAX)]:
         if not testNames or test.name in testNames:
             logger.info("Results for {}, overall: {}".format(
                 test.name, ResultToString(test.result)))
-            for result in map(lambda resIdx: response.results[resIdx], test.resultIndices[:test.numResults]):
-                logger.info("   testId: {} ent grp:{}, id:{}, result: {}".format(result.testId, result.entity.entityGroupId,
-                                                                                 result.entity.entityId,
-                                                                                 ResultToString(result.result)))
+            for result in map(
+                    lambda resIdx: response.results[resIdx], test.resultIndices[:test.numResults]):
+                logger.info(
+                    "   testId: {} ent grp:{}, id:{}, result: {}".format(
+                        result.testId,
+                        result.entity.entityGroupId,
+                        result.entity.entityId,
+                        ResultToString(
+                            result.result)))

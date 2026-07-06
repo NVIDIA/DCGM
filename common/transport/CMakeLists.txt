@@ -31,7 +31,7 @@ target_sources(transport_objects PRIVATE
     DcgmIpc.cpp
     )
 
-target_sources(transport_objects PUBLIC
+target_sources(transport_objects PRIVATE
     DcgmProtocol.h
     DcgmIpc.h
     )

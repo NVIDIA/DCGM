@@ -22,6 +22,8 @@ target_sources(plugincommontests
         PluginCommonTests.cpp
 )
 
+target_include_directories(plugincommontests PRIVATE ${PROJECT_SOURCE_DIR}/common/tests)
+
 # NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
 #       for any libdcgm function that is needed.
 target_link_libraries(plugincommontests

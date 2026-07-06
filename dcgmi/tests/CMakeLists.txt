@@ -19,14 +19,26 @@ endif()
 add_executable(dcgmitests)
 target_sources(dcgmitests
     PRIVATE
-    DiagTests.cpp
-    HealthTests.cpp
-    OutputTests.cpp
-    MigTestsHelper.cpp
-    QueryTests.cpp
     CommandLineParserTests.cpp
-    TopoTests.cpp
+    ConfigTests.cpp
+    ../mock/MockDcgmiGroupInfo.cpp
+    ../mock/MockDcgmiStatus.cpp
+    DcgmiCommonTests.cpp
+    DcgmiSettingsTests.cpp
+    DiagTests.cpp
+    EnvironmentTests.cpp
+    FieldGroupTests.cpp
+    GroupTests.cpp
+    HealthTests.cpp
+    MigTestsHelper.cpp
     MnDiagTests.cpp
+    ModuleTests.cpp
+    NvlinkTests.cpp
+    OutputTests.cpp
+    PolicyTests.cpp
+    QueryTests.cpp
+    TopoTests.cpp
+    VersionTests.cpp
 )
 
 # NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation

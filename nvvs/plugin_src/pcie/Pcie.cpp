@@ -33,6 +33,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <vector>
 
 namespace
@@ -66,7 +68,7 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     , test_14(true)
     , m_dcgmCommErrorOccurred(false)
     , m_printedConcurrentGpuErrorMessage(true)
-    , m_testParameters(nullptr)
+    , m_testParameters()
     , m_dcgmRecorder(handle)
     , m_testDuration(.0)
     , m_gpuNvlinksExpectedUp(0)
@@ -84,112 +86,112 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     m_infoStruct.selfParallel     = true;
     m_infoStruct.logFileTag       = PCIE_PLUGIN_NAME;
 
-    TestParameters *tp = new TestParameters();
-    tp->AddString(PCIE_STR_TEST_PINNED, "True");
-    tp->AddString(PCIE_STR_TEST_UNPINNED, "True");
-    tp->AddString(PCIE_STR_TEST_P2P_ON, "True");
-    tp->AddString(PCIE_STR_TEST_P2P_OFF, "True");
-    tp->AddString(PCIE_STR_TEST_BROKEN_P2P, "True");
-    tp->AddString(PCIE_STR_TEST_WITH_GEMM, "False");
-    tp->AddString(PCIE_STR_DISABLE_TESTS, "");
-    tp->AddDouble(PCIE_STR_GPU_NVLINKS_EXPECTED_UP, 0.0);
-    tp->AddDouble(PCIE_STR_NVSWITCH_NVLINKS_EXPECTED_UP, 0.0);
-    tp->AddString(PS_LOGFILE, "stats_pcie.json");
-    tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
-    tp->AddString(PS_IGNORE_ERROR_CODES, "");
+    m_defaultTestParameters.AddString(PCIE_STR_TEST_PINNED, "True");
+    m_defaultTestParameters.AddString(PCIE_STR_TEST_UNPINNED, "True");
+    m_defaultTestParameters.AddString(PCIE_STR_TEST_P2P_ON, "True");
+    m_defaultTestParameters.AddString(PCIE_STR_TEST_P2P_OFF, "True");
+    m_defaultTestParameters.AddString(PCIE_STR_TEST_BROKEN_P2P, "True");
+    m_defaultTestParameters.AddString(PCIE_STR_TEST_WITH_GEMM, "False");
+    m_defaultTestParameters.AddString(PCIE_STR_DISABLE_TESTS, "");
+    m_defaultTestParameters.AddDouble(PCIE_STR_GPU_NVLINKS_EXPECTED_UP, 0.0);
+    m_defaultTestParameters.AddDouble(PCIE_STR_NVSWITCH_NVLINKS_EXPECTED_UP, 0.0);
+    m_defaultTestParameters.AddString(PS_LOGFILE, "stats_pcie.json");
+    m_defaultTestParameters.AddDouble(PS_LOGFILE_TYPE, 0.0);
+    m_defaultTestParameters.AddString(PS_IGNORE_ERROR_CODES, "");
 
-    tp->AddString(PCIE_STR_IS_ALLOWED, "False");
+    m_defaultTestParameters.AddString(PCIE_STR_IS_ALLOWED, "False");
 
-    tp->AddDouble(PCIE_STR_MAX_PCIE_REPLAYS, 80.0);
-    tp->AddDouble(PCIE_STR_MAX_PCIE_CORRECTABLE_ERRORS, 0.0);
-    tp->AddDouble(PCIE_STR_MAX_NVLINK_RECOVERY_ERRORS, 0.0);
+    m_defaultTestParameters.AddDouble(PCIE_STR_MAX_PCIE_REPLAYS, 80.0);
+    m_defaultTestParameters.AddDouble(PCIE_STR_MAX_PCIE_CORRECTABLE_ERRORS, 0.0);
+    m_defaultTestParameters.AddDouble(PCIE_STR_MAX_NVLINK_RECOVERY_ERRORS, 0.0);
 
-    tp->AddDouble(PCIE_STR_MAX_MEMORY_CLOCK, 0.0);
-    tp->AddDouble(PCIE_STR_MAX_GRAPHICS_CLOCK, 0.0);
+    m_defaultTestParameters.AddDouble(PCIE_STR_MAX_MEMORY_CLOCK, 0.0);
+    m_defaultTestParameters.AddDouble(PCIE_STR_MAX_GRAPHICS_CLOCK, 0.0);
     // CRC_ERROR_THRESHOLD is the number of CRC errors per second, per RM recommendation
-    tp->AddDouble(PCIE_STR_CRC_ERROR_THRESHOLD, 100.0);
-    tp->AddString(PCIE_STR_NVSWITCH_NON_FATAL_CHECK, "False");
-    tp->AddDouble(PCIE_STR_AER_THRESHOLD, 480.0); /* 32/minute * 15 minutes */
-    tp->AddDouble(PCIE_STR_PARALLEL_BW_CHECK_DURATION, 15.0);
-    tp->AddString(PCIE_STR_DONT_BIND_NUMA, "False");
-    tp->AddString(PS_USE_GENERIC_MODE, "False");
+    m_defaultTestParameters.AddDouble(PCIE_STR_CRC_ERROR_THRESHOLD, 100.0);
+    m_defaultTestParameters.AddString(PCIE_STR_NVSWITCH_NON_FATAL_CHECK, "False");
+    m_defaultTestParameters.AddDouble(PCIE_STR_AER_THRESHOLD, 480.0); /* 32/minute * 15 minutes */
+    m_defaultTestParameters.AddDouble(PCIE_STR_PARALLEL_BW_CHECK_DURATION, 15.0);
+    m_defaultTestParameters.AddString(PCIE_STR_DONT_BIND_NUMA, "False");
+    m_defaultTestParameters.AddString(PS_USE_GENERIC_MODE, "False");
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_ITERATIONS, PCIE_DEFAULT_ITERATIONS);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
+    m_defaultTestParameters.AddSubTestDouble(
+        PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_ITERATIONS, PCIE_DEFAULT_ITERATIONS);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_PINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_GEN, 1.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_SINGLE_UNPINNED, PCIE_STR_MIN_PCI_WIDTH, 1.0);
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_ITERATIONS, 50.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_CONCURRENT_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_ITERATIONS, 5000.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_MAX_LATENCY, 100000.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_ITERATIONS, 5000.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_MAX_LATENCY, 100000.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_PINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_ITERATIONS, 5000.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MAX_LATENCY, 100000.0);
-    tp->AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_ITERATIONS, 5000.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MAX_LATENCY, 100000.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_H2D_D2H_LATENCY_UNPINNED, PCIE_STR_MIN_BANDWIDTH, 0.0);
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_P2P_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED,
-                         PCIE_STR_INTS_PER_COPY,
-                         PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED,
+                                             PCIE_STR_INTS_PER_COPY,
+                                             PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED,
-                         PCIE_STR_INTS_PER_COPY,
-                         PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED,
+                                             PCIE_STR_INTS_PER_COPY,
+                                             PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_P2P_BW_CONCURRENT_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_ENABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_INTS_PER_COPY, PCIE_HOPPER_AND_BEFORE_DEFAULT_INTS_PER_COPY);
-    tp->AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 50.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_ENABLED, PCIE_STR_ITERATIONS, 5000.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_ENABLED, PCIE_STR_ITERATIONS, 5000.0);
 
-    tp->AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED, PCIE_STR_ITERATIONS, 5000.0);
+    m_defaultTestParameters.AddSubTestDouble(PCIE_SUBTEST_P2P_LATENCY_P2P_DISABLED, PCIE_STR_ITERATIONS, 5000.0);
 
-    tp->AddSubTestDouble(
+    m_defaultTestParameters.AddSubTestDouble(
         PCIE_SUBTEST_BROKEN_P2P, PCIE_SUBTEST_BROKEN_P2P_SIZE_IN_KB, PCIE_HOPPER_AND_BEFORE_DEFAULT_BROKEN_P2P_SIZE);
 
     /* SM Stress related parameters */
-    tp->AddString(SMSTRESS_STR_USE_DGEMM, "True");
-    tp->AddDouble(SMSTRESS_STR_TEST_DURATION, 900.0);
-    tp->AddDouble(SMSTRESS_STR_TARGET_PERF, 100.0);
-    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, 512.0);
-    tp->AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE);
-    tp->AddDouble(SMSTRESS_STR_MATRIX_DIM, SMSTRESS_TEST_DIMENSION);
+    m_defaultTestParameters.AddString(SMSTRESS_STR_USE_DGEMM, "True");
+    m_defaultTestParameters.AddDouble(SMSTRESS_STR_TEST_DURATION, 900.0);
+    m_defaultTestParameters.AddDouble(SMSTRESS_STR_TARGET_PERF, 100.0);
+    m_defaultTestParameters.AddDouble(SMSTRESS_STR_MATRIX_DIM, 512.0);
+    m_defaultTestParameters.AddDouble(SMSTRESS_STR_TEMPERATURE_MAX, DUMMY_TEMPERATURE_VALUE);
+    m_defaultTestParameters.AddDouble(SMSTRESS_STR_MATRIX_DIM, SMSTRESS_TEST_DIMENSION);
 
-    m_testParameters = new TestParameters(*tp);
+    m_testParameters = std::make_unique<TestParameters>(m_defaultTestParameters);
 
-    m_infoStruct.defaultTestParameters = tp;
+    m_infoStruct.defaultTestParameters = &m_defaultTestParameters;
 }
 
 /*****************************************************************************/
@@ -314,10 +316,6 @@ BusGrind::~BusGrind()
 {
     /* Just call our cleanup function */
     Cleanup();
-    if (m_testParameters != nullptr)
-    {
-        delete m_testParameters;
-    }
 
     m_dcgmRecorder.Shutdown();
 }
@@ -338,7 +336,7 @@ void BusGrind::Cleanup(void)
 
     m_device.clear();
 
-    /* Do not delete m_testParameters. We don't own it */
+    /* m_testParameters is owned by std::unique_ptr; do not reset here */
 
     PluginDevice *bgGpu;
 
@@ -590,7 +588,7 @@ uint64_t getPciCorrectedErrorCount(DcgmRecorder &recorder, unsigned int gpuId)
 {
     dcgmFieldValue_v2 fieldValue = {};
 
-    if (auto ret = recorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS, fieldValue, 0);
+    if (auto ret = recorder.GetCurrentFieldValue(gpuId, DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL, fieldValue, 0);
         ret != DCGM_ST_OK)
     {
         log_warning(
@@ -801,7 +799,7 @@ dcgmReturn_t BusGrind::SetCudaCapabilityInfo()
     auto const &gpuList              = m_tests.at(GetPcieTestName()).GetGpuList();
     unsigned int const flags         = DCGM_FV_FLAG_LIVE_DATA; // Set the flag to get data without watching first
     dcgmReturn_t ret                 = m_dcgmRecorderPtr->GetCurrentFieldValue(
-        gpuList[0], DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, cudaComputeVal, flags);
+        gpuList[0], DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, cudaComputeVal, flags);
 
 
     if (ret != DCGM_ST_OK)
@@ -942,15 +940,15 @@ bool BusGrind::RunTest_sm(dcgmDiagPluginEntityList_v1 const *entityInfo)
         m_testParameters->SetSubTestDouble(PCIE_SUBTEST_1D_EXCH_BW_P2P_DISABLED, PCIE_STR_ITERATIONS, 1000);
     }
 
-    EarlyFailChecker efc(m_testParameters, failEarly, failCheckInterval, *entityInfo);
+    EarlyFailChecker efc(m_testParameters.get(), failEarly, failCheckInterval, *entityInfo);
 
     try /* Catch runtime errors */
     {
         /* Create and start all workers */
         for (size_t i = 0; i < m_device.size(); i++)
         {
-            workerThreads[i]
-                = new SmPerfWorker(m_device[i], *this, m_testParameters, m_dcgmRecorder, failEarly, failCheckInterval);
+            workerThreads[i] = new SmPerfWorker(
+                m_device[i], *this, m_testParameters.get(), m_dcgmRecorder, failEarly, failCheckInterval);
             workerThreads[i]->Start();
             Nrunning++;
 
@@ -1182,6 +1180,8 @@ void SmPerfWorker::run(void)
     int opsPerResync = 100; /* Maximum ops to do before checking to see if the plugin should exit
                                 early. Making this larger has less overhead for resyncing the clock
                                 but makes the plugin less responsive to CTRL-C or per-second statistics */
+
+    log_debug("SmPerfWorker started for GPU {}", m_device->gpuId);
 
     if (m_useDgemm)
     {

@@ -34,7 +34,7 @@ def test_dcgm_agent_get_values_for_fields(handle, gpuIds):
     Verifies that DCGM Engine can be initialized successfully
     """
     # Watch field so we can fetch it
-    fieldId = dcgm_fields.DCGM_FI_DEV_NAME
+    fieldId = dcgm_fields.DCGM_FI_DEV_GPU_NAME
     gpuId = gpuIds[0]
 
     ret = dcgm_agent_internal.dcgmWatchFieldValue(
@@ -62,7 +62,7 @@ def test_dcgm_engine_watch_field_values(handle, gpuIds):
     """
 
     # Watch field so we can fetch it
-    fieldId = dcgm_fields.DCGM_FI_DEV_NAME
+    fieldId = dcgm_fields.DCGM_FI_DEV_GPU_NAME
     gpuId = gpuIds[0]
 
     try:
@@ -94,7 +94,7 @@ def test_dcgm_engine_unwatch_field_value(handle, gpuIds):
     """
 
     # Watch field so we can fetch it
-    fieldId = dcgm_fields.DCGM_FI_DEV_NAME
+    fieldId = dcgm_fields.DCGM_FI_DEV_GPU_NAME
     gpuId = gpuIds[0]
 
     ret = dcgm_agent_internal.dcgmWatchFieldValue(
@@ -126,7 +126,7 @@ def helper_unwatch_field_values_public(handle, gpuIds):
     """
     Verifies that dcgm can unwatch a field value
     """
-    fieldId = dcgm_fields.DCGM_FI_DEV_NAME
+    fieldId = dcgm_fields.DCGM_FI_DEV_GPU_NAME
     fieldIds = [fieldId, ]
 
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -168,7 +168,8 @@ def helper_unwatch_field_values_public(handle, gpuIds):
     # Unwatch fields
     groupObj.samples.UnwatchFields(fieldGroup)
 
-    # Get watcher count after our unwatch. This should match our original watch count
+    # Get watcher count after our unwatch. This should match our original
+    # watch count
     for gpuId in gpuIds:
         fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
             handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
@@ -194,7 +195,7 @@ def helper_promote_field_values_watch_public(handle, gpuIds):
     """
     Verifies that dcgm can update a field value watch
     """
-    fieldId = dcgm_fields.DCGM_FI_DEV_NAME
+    fieldId = dcgm_fields.DCGM_FI_DEV_GPU_NAME
     fieldIds = [fieldId, ]
 
     handleObj = pydcgm.DcgmHandle(handle=handle)
@@ -215,29 +216,31 @@ def helper_promote_field_values_watch_public(handle, gpuIds):
     groupObj.samples.WatchFields(
         fieldGroup, updateFreq, maxKeepAge, maxKeepSamples)
 
-    # Get watcher info after our watch and verify that the updateFrequency matches
+    # Get watcher info after our watch and verify that the updateFrequency
+    # matches
     for gpuId in gpuIds:
         fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
             handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         numWatchersWithWatch[gpuId] = fieldInfo.numWatchers
-        assert fieldInfo.monitorIntervalUsec == updateFreq, "after watch: fieldInfo.monitorIntervalUsec %d != updateFreq %d" % \
-            (fieldInfo.monitorIntervalUsec, updateFreq)
+        assert fieldInfo.monitorIntervalUsec == updateFreq, "after watch: fieldInfo.monitorIntervalUsec %d != updateFreq %d" % (
+            fieldInfo.monitorIntervalUsec, updateFreq)
 
     # Update the watch with a faster update frequency
     updateFreq = 50000  # 50 msec
     groupObj.samples.WatchFields(
         fieldGroup, updateFreq, maxKeepAge, maxKeepSamples)
 
-    # Get watcher info after our second watch and verify that the updateFrequency matches
+    # Get watcher info after our second watch and verify that the
+    # updateFrequency matches
     for gpuId in gpuIds:
         fieldInfo = dcgm_agent_internal.dcgmGetCacheManagerFieldInfo(
             handleObj.handle, gpuId, dcgm_fields.DCGM_FE_GPU, fieldId)
         numWatchersAfter[gpuId] = fieldInfo.numWatchers
-        assert fieldInfo.monitorIntervalUsec == updateFreq, "after watch: fieldInfo.monitorIntervalUsec %d != updateFreq %d" % \
-            (fieldInfo.monitorIntervalUsec, updateFreq)
+        assert fieldInfo.monitorIntervalUsec == updateFreq, "after watch: fieldInfo.monitorIntervalUsec %d != updateFreq %d" % (
+            fieldInfo.monitorIntervalUsec, updateFreq)
 
-    assert numWatchersWithWatch == numWatchersAfter, "numWatchersWithWatch (%s) != numWatchersAfter (%s)" % \
-        (str(numWatchersWithWatch), str(numWatchersAfter))
+    assert numWatchersWithWatch == numWatchersAfter, "numWatchersWithWatch (%s) != numWatchersAfter (%s)" % (
+        str(numWatchersWithWatch), str(numWatchersAfter))
 
 
 @test_utils.run_with_embedded_host_engine()
@@ -280,7 +283,8 @@ def test_dcgm_cgroups_device_block():
         logger.debug("Exception was: %s" % e)
         test_utils.skip_test("Unable to find cgset or gclear, skipping test.")
 
-    if (not os.path.exists(cgsetPath.strip())) or (not os.path.exists(cgclearPath.strip())):
+    if (not os.path.exists(cgsetPath.strip())) or (
+            not os.path.exists(cgclearPath.strip())):
         test_utils.skip_test("Unable to find cgset or gclear, skipping test.")
 
     dcgmHandle = pydcgm.DcgmHandle()
@@ -305,16 +309,18 @@ def test_dcgm_cgroups_device_block():
                 PrevGpuUuid.append(
                     dcgmSystem.discovery.GetGpuAttributes(gpuId).identifiers.uuid)
 
-                logger.info("Blocking access to device %s using cgroups..." %
-                            dcgmSystem.discovery.GetGpuAttributes(gpuId).identifiers.deviceName)
+                logger.info(
+                    "Blocking access to device %s using cgroups..." %
+                    dcgmSystem.discovery.GetGpuAttributes(gpuId).identifiers.deviceName)
                 os.system("%s -r devices.deny='c 195:%d rwm' /" %
                           (cgsetPath.strip(), gpuId))
 
             GpuUuid = []
             for gpuId in allDcgmGpuIds:
                 # Release the cgroups restriction
-                logger.info("Freeing access device %s using cgroups..." %
-                            dcgmSystem.discovery.GetGpuAttributes(gpuId).identifiers.deviceName)
+                logger.info(
+                    "Freeing access device %s using cgroups..." %
+                    dcgmSystem.discovery.GetGpuAttributes(gpuId).identifiers.deviceName)
                 os.system("%s -r devices.allow='c 195:%d rwm' /" %
                           (cgsetPath.strip(), gpuId))
 
@@ -347,7 +353,8 @@ def test_dcgm_entity_api_sanity(handle, gpuIds):
     assert entityList == gpuIds, "entityList %s != gpuIds %s" % (
         str(entityList), str(gpuIds))
 
-    # Now check unsupported GPU IDs. This will only behave differently if you have an old GPU
+    # Now check unsupported GPU IDs. This will only behave differently if you
+    # have an old GPU
     gpuIds = systemObj.discovery.GetAllGpuIds()
     entityList = systemObj.discovery.GetEntityGroupEntities(
         dcgm_fields.DCGM_FE_GPU, False)
@@ -355,19 +362,15 @@ def test_dcgm_entity_api_sanity(handle, gpuIds):
         str(entityList), str(gpuIds))
 
 
-@test_utils.run_with_embedded_host_engine()
-@test_utils.run_only_with_all_supported_gpus()
-@test_utils.skip_denylisted_gpus(["GeForce GT 640"])
-@test_utils.run_with_injection_nvswitches(2)
-def test_dcgm_nvlink_link_state(handle, gpuIds, switchIds):
+def helper_dcgm_nvlink_link_state(handle, gpuIds, switchIds):
     handleObj = pydcgm.DcgmHandle(handle=handle)
     systemObj = handleObj.GetSystem()
 
     # Will throw an exception on API error
     linkStatus = systemObj.discovery.GetNvLinkLinkStatus()
 
-    assert linkStatus.version == dcgm_structs.dcgmNvLinkStatus_version4, "Version mismatch %d != %d" % (
-        linkStatus.version, dcgm_structs.dcgmNvLinkStatus_version4)
+    assert linkStatus.version == dcgm_structs.dcgmNvLinkStatus_version5, "Version mismatch %d != %d" % (
+        linkStatus.version, dcgm_structs.dcgmNvLinkStatus_version5)
 
     if len(systemObj.discovery.GetAllGpuIds()) == len(gpuIds):
         assert linkStatus.numGpus == len(gpuIds), "Gpu count mismatch: %d != %d" % (
@@ -402,7 +405,16 @@ def test_dcgm_nvlink_link_state(handle, gpuIds, switchIds):
                 ls, i, j)
 
 
-def helper_execute_dcgm_hostengine_environment_variable_api(handle, version, envVarToGet):
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_only_with_all_supported_gpus()
+@test_utils.skip_denylisted_gpus(["GeForce GT 640"])
+@test_utils.run_with_injection_nvswitches(2)
+def test_dcgm_nvlink_link_state(handle, gpuIds, switchIds):
+    helper_dcgm_nvlink_link_state(handle, gpuIds, switchIds)
+
+
+def helper_execute_dcgm_hostengine_environment_variable_api(
+        handle, version, envVarToGet):
     envVarInfo = dcgm_structs.c_dcgmEnvVarInfo_t()
     envVarInfo.version = version
     envVarInfo.envVarName = envVarToGet.encode('utf-8')
@@ -415,7 +427,8 @@ def helper_execute_dcgm_hostengine_environment_variable_api(handle, version, env
     return ret
 
 
-@test_utils.run_with_standalone_host_engine(20, heEnv={"CUDA_VISIBLE_DEVICES": "0,1,2"})
+@test_utils.run_with_standalone_host_engine(20,
+                                            heEnv={"CUDA_VISIBLE_DEVICES": "0,1,2"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_hostengine_environment_variable_ok(handle, gpuIds):
@@ -433,7 +446,8 @@ def test_dcgm_hostengine_environment_variable_not_configured(handle, gpuIds):
     assert ret == dcgm_structs.DCGM_ST_NOT_CONFIGURED, f"Expected DCGM_ST_NOT_CONFIGURED, got {ret}"
 
 
-@test_utils.run_with_standalone_host_engine(20, heEnv={"CUDA_VISIBLE_DEVICES": "0,1,2"})
+@test_utils.run_with_standalone_host_engine(20,
+                                            heEnv={"CUDA_VISIBLE_DEVICES": "0,1,2"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_hostengine_environment_variable_badparam_invalid(handle, gpuIds):
@@ -442,7 +456,8 @@ def test_dcgm_hostengine_environment_variable_badparam_invalid(handle, gpuIds):
     assert ret == dcgm_structs.DCGM_ST_BADPARAM, f"Expected DCGM_ST_BADPARAM, got {ret}"
 
 
-@test_utils.run_with_standalone_host_engine(20, heEnv={"CUDA_VISIBLE_DEVICES": "0,1,2"})
+@test_utils.run_with_standalone_host_engine(20,
+                                            heEnv={"CUDA_VISIBLE_DEVICES": "0,1,2"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_hostengine_environment_variable_badparam_empty(handle, gpuIds):
@@ -451,7 +466,8 @@ def test_dcgm_hostengine_environment_variable_badparam_empty(handle, gpuIds):
     assert ret == dcgm_structs.DCGM_ST_BADPARAM, f"Expected DCGM_ST_BADPARAM, got {ret}"
 
 
-@test_utils.run_with_standalone_host_engine(20, heEnv={"CUDA_VISIBLE_DEVICES": "0,1,2"})
+@test_utils.run_with_standalone_host_engine(20,
+                                            heEnv={"CUDA_VISIBLE_DEVICES": "0,1,2"})
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_dcgm_hostengine_environment_variable_ver_mismatch(handle, gpuIds):

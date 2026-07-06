@@ -68,7 +68,8 @@ def test_diag_nccl_tests_skips_when_env_not_set(handle, gpuIds):
     assert False, "Expected NVVS to report no available tests when env is unset"
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("pass"))
+@test_utils.run_with_standalone_host_engine(
+    120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("pass"))
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_diag_nccl_tests_pass(handle, gpuIds):
@@ -83,7 +84,8 @@ def test_diag_nccl_tests_pass(handle, gpuIds):
         f"Expected PASS, got {response.tests[nccl_test_idx].result}"
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("pass_exit_1"))
+@test_utils.run_with_standalone_host_engine(
+    120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("pass_exit_1"))
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_diag_nccl_tests_pass_output_nonzero_exit(handle, gpuIds):
@@ -104,7 +106,8 @@ def test_diag_nccl_tests_pass_output_nonzero_exit(handle, gpuIds):
         f"Expected DCGM_FR_NCCL_ERROR ({dcgm_errors.DCGM_FR_NCCL_ERROR}), got {err.code}"
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("fail_oob"))
+@test_utils.run_with_standalone_host_engine(
+    120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("fail_oob"))
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_diag_nccl_tests_fail_oob(handle, gpuIds):
@@ -125,7 +128,8 @@ def test_diag_nccl_tests_fail_oob(handle, gpuIds):
         f"Expected DCGM_FR_NCCL_ERROR ({dcgm_errors.DCGM_FR_NCCL_ERROR}), got {err.code}"
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("fail_bw"))
+@test_utils.run_with_standalone_host_engine(
+    120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("fail_bw"))
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_diag_nccl_tests_fail_bandwidth(handle, gpuIds):
@@ -146,7 +150,8 @@ def test_diag_nccl_tests_fail_bandwidth(handle, gpuIds):
         f"Expected DCGM_FR_NCCL_ERROR ({dcgm_errors.DCGM_FR_NCCL_ERROR}), got {err.code}"
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("none_exit_1"))
+@test_utils.run_with_standalone_host_engine(
+    120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("none_exit_1"))
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_diag_nccl_tests_nonzero_exit_no_output(handle, gpuIds):
@@ -167,7 +172,8 @@ def test_diag_nccl_tests_nonzero_exit_no_output(handle, gpuIds):
         f"Expected DCGM_FR_NCCL_ERROR ({dcgm_errors.DCGM_FR_NCCL_ERROR}), got {err.code}"
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("none_exit_0"))
+@test_utils.run_with_standalone_host_engine(
+    120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env("none_exit_0"))
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
 def test_diag_nccl_tests_zero_exit_no_output(handle, gpuIds):
@@ -188,13 +194,14 @@ def test_diag_nccl_tests_zero_exit_no_output(handle, gpuIds):
         f"Expected DCGM_FR_NCCL_ERROR ({dcgm_errors.DCGM_FR_NCCL_ERROR}), got {err.code}"
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env_Live())
-@test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
-@test_utils.for_all_same_sku_gpus()
+@test_utils.run_with_standalone_host_engine(
+    120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env_Live())
+@test_utils.run_only_with_live_gpus()
 # The all_reduce_perf binary built for tests is only available on CUDA
 # 12.8 and higher.
 @test_utils.run_only_with_minimum_cuda_version(12, 8)
+@test_utils.for_all_same_sku_gpus()
 def test_diag_nccl_tests_live_pass(handle, gpuIds):
     """
     Test that nccl_tests plugin passes with real all_reduce_perf binary.
@@ -206,17 +213,21 @@ def test_diag_nccl_tests_live_pass(handle, gpuIds):
     response = test_utils.diag_execute_wrapper(dd, handle)
 
     nccl_test_idx = _assert_nccl_present(response)
+    if response.tests[nccl_test_idx].result != dcgm_structs.DCGM_DIAG_RESULT_PASS:
+        if not test_helpers.helper_nccl_tests_plugin.is_nccl_functional():
+            test_utils.skip_test("NCCL is not functional on this machine")
     assert response.tests[nccl_test_idx].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, \
         f"Expected PASS, got {response.tests[nccl_test_idx].result}"
 
 
-@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env_Live({"NCCL_TESTS_MIN_BW": "99999"}))
-@test_utils.run_only_with_live_gpus()
 @test_utils.run_only_if_mig_is_disabled()
-@test_utils.for_all_same_sku_gpus()
+@test_utils.run_with_standalone_host_engine(
+    120, heEnv=test_helpers.helper_nccl_tests_plugin.HE_Env_Live({"NCCL_TESTS_MIN_BW": "99999"}))
+@test_utils.run_only_with_live_gpus()
 # The all_reduce_perf binary built for tests is only available on CUDA
 # 12.8 and higher.
 @test_utils.run_only_with_minimum_cuda_version(12, 8)
+@test_utils.for_all_same_sku_gpus()
 def test_diag_nccl_tests_live_fail_min_bw(handle, gpuIds):
     """
     Test that nccl_tests plugin fails when minimum bandwidth threshold is unreachable.

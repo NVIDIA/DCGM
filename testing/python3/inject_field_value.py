@@ -36,8 +36,11 @@ parser.add_argument('-v', '--value', dest='fieldValue',
                     type=int, required=True)
 parser.add_argument('-l', '--loop', dest='loop', action='store_true')
 parser.add_argument('--interval', dest='interval', type=float)
-parser.add_argument('--iterations', dest='iterations', type=int,
-                    help='Set to 0 to insert the given value until stopped via SIGINT')
+parser.add_argument(
+    '--iterations',
+    dest='iterations',
+    type=int,
+    help='Set to 0 to insert the given value until stopped via SIGINT')
 args = parser.parse_args()
 
 if args.loop and (args.interval is None or args.iterations is None):

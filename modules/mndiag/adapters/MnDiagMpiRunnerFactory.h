@@ -16,20 +16,36 @@
 
 #pragma once
 
+#include "MnDiagMpiMnubergemmRunner.h"
 #include "MnDiagMpiRunnerAdapter.h"
 #include "MnDiagMpiRunnerFactoryBase.h"
 
 /**
- * @brief Base class for creating MnDiagMpiRunner instances
+ * @brief Factory that instantiates the correct MnDiagMpiRunner subclass for a given test type.
+ *        Add a new case here when introducing a new MPI test type.
  */
 class MnDiagMpiRunnerFactory : public MnDiagMpiRunnerFactoryBase
 {
 public:
     /**
-     * @brief Create a new MnDiagMpiRunner instance
+     * Create a MnDiagMpiRunnerAdapter wrapping the runner for the requested test type.
+     *
+     * @param[in] coreProxy  Reference to the DCGM core proxy for GPU interactions.
+     * @param[in] testType   The multinode test type to create a runner for.
+     *
+     * @return Owning pointer to the adapter for known test types, or nullptr if testType is unrecognized.
      */
-    std::unique_ptr<MnDiagMpiRunnerBase> CreateMpiRunner(DcgmCoreProxyBase &coreProxy) override
+    [[nodiscard]] std::unique_ptr<MnDiagMpiRunnerBase> CreateMpiRunner(DcgmCoreProxyBase &coreProxy,
+                                                                       dcgmMultinodeTestType_t testType,
+                                                                       uid_t effectiveUid) override
     {
-        return std::make_unique<MnDiagMpiRunnerAdapter>(coreProxy);
+        switch (testType)
+        {
+            case dcgmMultinodeTestType_t::mnubergemm:
+                return std::make_unique<MnDiagMpiRunnerAdapter>(
+                    std::make_unique<MnDiagMpiMnubergemmRunner>(coreProxy, effectiveUid));
+            default:
+                return nullptr;
+        }
     }
 };

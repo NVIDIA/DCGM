@@ -16,14 +16,97 @@
 #pragma once
 
 #include "DcgmCacheManager.h"
+#include "FbcSessionOpsAnyPtr.hpp"
 #include "NvmlTaskRunner.hpp"
+#include "VgpuFieldValueOpsAnyPtr.hpp"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 
-#include <map>
-#include <memory>
-#include <vector>
+namespace DcgmVgpuDetail
+{
 
+/**
+ * Type-erased operation bundle for Frame Buffer Capture (FBC) session helpers.
+ *
+ * Production callers use the public overloads below. Tests construct this wrapper from a pointer to an
+ * object with matching member functions and pass it to the DcgmVgpuDetail FBC session overloads.
+ */
+using FbcSessionOps = FbcSessionOpsAnyPtr;
+
+/**
+ * Type-erased operation bundle for vGPU field value buffering.
+ *
+ * Production callers use the public overloads below. Tests construct this wrapper from a pointer to an
+ * object with matching member functions and pass it to the DcgmVgpuDetail field-buffering overload.
+ */
+using VgpuFieldValueOps = VgpuFieldValueOpsAnyPtr;
+
+
+/**
+ * Fetch and append FBC session information for a GPU through injected dependencies.
+ *
+ * @param[in,out] cm: Cache manager used by the dependency wrapper.
+ * @param[in,out] nvmlDriver: NVML task runner used by the dependency wrapper.
+ * @param[in] safeNvmlDevice: Safe NVML device handle for the target GPU.
+ * @param[in,out] threadCtx: Cache update context identifying the target entity and field.
+ * @param[in,out] watchInfo: Optional watch state updated with NVML status.
+ * @param[in] now: Timestamp to use for the appended value.
+ * @param[in] expireTime: Oldest timestamp to keep for the appended value.
+ * @param[in,out] deps: Dependency wrapper used for allocation, NVML, and cache appends.
+ * @returns: DCGM_ST_OK on success, or a DCGM error code.
+ */
+dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
+                                      NvmlTaskRunner &nvmlDriver,
+                                      SafeNvmlHandle safeNvmlDevice,
+                                      dcgmcm_update_thread_t &threadCtx,
+                                      dcgmcm_watch_info_p watchInfo,
+                                      timelib64_t now,
+                                      timelib64_t expireTime,
+                                      FbcSessionOps &ops);
+
+/**
+ * Fetch and append FBC session information for a vGPU through injected dependencies.
+ *
+ * @param[in,out] cm: Cache manager used by the dependency wrapper.
+ * @param[in,out] nvmlDriver: NVML task runner used by the dependency wrapper.
+ * @param[in] vgpuId: Safe vGPU instance handle for the target vGPU.
+ * @param[in,out] threadCtx: Cache update context identifying the target entity and field.
+ * @param[in,out] watchInfo: Optional watch state updated with NVML status.
+ * @param[in] now: Timestamp to use for the appended value.
+ * @param[in] expireTime: Oldest timestamp to keep for the appended value.
+ * @param[in,out] deps: Dependency wrapper used for allocation, NVML, and cache appends.
+ * @returns: DCGM_ST_OK on success, or a DCGM error code.
+ */
+dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
+                                            NvmlTaskRunner &nvmlDriver,
+                                            SafeVgpuInstance vgpuId,
+                                            dcgmcm_update_thread_t &threadCtx,
+                                            dcgmcm_watch_info_p watchInfo,
+                                            timelib64_t now,
+                                            timelib64_t expireTime,
+                                            FbcSessionOps &ops);
+
+/**
+ * Buffer or cache a vGPU field value through injected dependencies.
+ *
+ * @param[in,out] cm: Cache manager used by the dependency wrapper.
+ * @param[in,out] threadCtx: Cache update context identifying the target entity and field.
+ * @param[in,out] nvmlDriver: NVML task runner used by the dependency wrapper.
+ * @param[in] vgpuId: Safe vGPU instance handle for the target vGPU.
+ * @param[in] fieldMeta: Metadata for the field being queried.
+ * @param[in,out] ops: Operation bundle used for NVML, time, cache appends, and watch updates.
+ * @param[in,out] fbcOps: Operation bundle used when the requested field delegates to FBC session collection.
+ * @returns: DCGM_ST_OK on success, or a DCGM error code.
+ */
+dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
+                                          dcgmcm_update_thread_t &threadCtx,
+                                          NvmlTaskRunner &nvmlDriver,
+                                          SafeVgpuInstance vgpuId,
+                                          dcgm_field_meta_p fieldMeta,
+                                          VgpuFieldValueOps &ops,
+                                          FbcSessionOps &fbcOps);
+
+} // namespace DcgmVgpuDetail
 
 /*************************************************************************/
 /*
@@ -38,7 +121,7 @@ dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
                                       timelib64_t now,
                                       timelib64_t expireTime);
 
-dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager *cm,
+dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
                                             NvmlTaskRunner &nvmlDriver,
                                             SafeVgpuInstance vgpuId,
                                             dcgmcm_update_thread_t &threadCtx,

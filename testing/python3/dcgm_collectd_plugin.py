@@ -11,28 +11,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import sys
 import subprocess
 import signal
 import os
 import re
-import sys
+import threading
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 parent_dir_path = os.path.abspath(os.path.join(dir_path, os.pardir))
 sys.path.insert(0, parent_dir_path)
 
-import dcgm_fields_collectd
-import pydcgm
-import dcgm_fields
-import dcgm_structs
-import threading
-from DcgmReader import DcgmReader
+import dcgm_fields_collectd  # noqa: E402
+import pydcgm  # noqa: E402
+import dcgm_fields  # noqa: E402
+import dcgm_structs  # noqa: E402
+from DcgmReader import DcgmReader  # noqa: E402
 
 if 'DCGM_TESTING_FRAMEWORK' in os.environ:
     try:
         import collectd_tester_api as collectd
-    except:
+    except BaseException:
         import collectd
 else:
     import collectd
@@ -52,17 +52,18 @@ c_ONE_SEC_IN_USEC = 1000000
 
 g_intervalSec = 10  # Default
 
-g_dcgmIgnoreFields = [dcgm_fields.DCGM_FI_DEV_UUID]  # Fields not to publish
+# Fields not to publish
+g_dcgmIgnoreFields = [dcgm_fields.DCGM_FI_DEV_GPU_UUID]
 
 g_publishFieldIds = [
-    dcgm_fields.DCGM_FI_DEV_UUID,  # Needed for plugin instance
-    dcgm_fields.DCGM_FI_DEV_POWER_USAGE,
-    dcgm_fields.DCGM_FI_DEV_GPU_TEMP,
+    dcgm_fields.DCGM_FI_DEV_GPU_UUID,  # Needed for plugin instance
+    dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS,
+    dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS,
     dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
-    dcgm_fields.DCGM_FI_DEV_GPU_UTIL,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_PENDING,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_SBE,
-    dcgm_fields.DCGM_FI_DEV_RETIRED_DBE,
+    dcgm_fields.DCGM_FI_DEV_GPU_UTIL_RATIO,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
     dcgm_fields.DCGM_FI_DEV_ECC_SBE_VOL_TOTAL,
     dcgm_fields.DCGM_FI_DEV_ECC_DBE_VOL_TOTAL,
     dcgm_fields.DCGM_FI_DEV_ECC_SBE_AGG_TOTAL,
@@ -70,22 +71,22 @@ g_publishFieldIds = [
     dcgm_fields.DCGM_FI_DEV_FB_TOTAL,
     dcgm_fields.DCGM_FI_DEV_FB_FREE,
     dcgm_fields.DCGM_FI_DEV_FB_USED,
-    dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_COUNTER,
+    dcgm_fields.DCGM_FI_DEV_PCIE_REPLAY_TOTAL,
     dcgm_fields.DCGM_FI_DEV_POWER_VIOLATION,
     dcgm_fields.DCGM_FI_DEV_THERMAL_VIOLATION,
-    dcgm_fields.DCGM_FI_DEV_XID_ERRORS,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_XID_ERROR,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL,
     dcgm_fields.DCGM_FI_DEV_MEM_CLOCK,
-    dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP,
+    dcgm_fields.DCGM_FI_DEV_MEMORY_TEMP_CELSIUS,
     dcgm_fields.DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION,
     dcgm_fields.DCGM_FI_DEV_MEM_COPY_UTIL,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL,
-    dcgm_fields.DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL,
+    dcgm_fields.DCGM_FI_DEV_NVLINK_THROUGHPUT_TOTAL,
     dcgm_fields.DCGM_FI_DEV_PCIE_TX_THROUGHPUT,
     dcgm_fields.DCGM_FI_DEV_PCIE_RX_THROUGHPUT,
-    dcgm_fields.DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS
+    dcgm_fields.DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL
 ]
 
 g_fieldIntervalMap = None
@@ -142,8 +143,14 @@ class DcgmCollectdPlugin(DcgmReader):
 
         collectd.debug(
             'Initializing DCGM with interval={}s'.format(g_intervalSec))
-        DcgmReader.__init__(self, fieldIds=g_publishFieldIds, ignoreList=g_dcgmIgnoreFields, fieldGroupName='collectd_plugin',
-                            updateFrequency=g_intervalSec * c_ONE_SEC_IN_USEC, fieldIntervalMap=g_fieldIntervalMap)
+        DcgmReader.__init__(
+            self,
+            fieldIds=g_publishFieldIds,
+            ignoreList=g_dcgmIgnoreFields,
+            fieldGroupName='collectd_plugin',
+            updateFrequency=g_intervalSec *
+            c_ONE_SEC_IN_USEC,
+            fieldIntervalMap=g_fieldIntervalMap)
 
 
 ###########################################################################
@@ -175,15 +182,17 @@ class DcgmCollectdPlugin(DcgmReader):
                 # include latest one.
 
                 for val in gpuFv[fieldId][::-1]:
-                    # Skip blank values. Otherwise, we'd have to insert a placeholder blank value based on the fieldId
+                    # Skip blank values. Otherwise, we'd have to insert a
+                    # placeholder blank value based on the fieldId
                     if val.isBlank:
                         continue
 
                     # Round down to 1-second for now
                     valTimeSec1970 = (val.ts / c_ONE_SEC_IN_USEC)
                     if (lastValTime - valTimeSec1970) < 1.0:
-                        collectd.debug("DCGM sample for field ID %d too soon  at %f, last one sampled at %f" % (
-                            fieldId, valTimeSec1970, lastValTime))
+                        collectd.debug(
+                            "DCGM sample for field ID %d too soon  at %f, last one sampled at %f" %
+                            (fieldId, valTimeSec1970, lastValTime))
                         val.isBlank = True  # Filter this one out
                         continue
 
@@ -192,18 +201,26 @@ class DcgmCollectdPlugin(DcgmReader):
                 i = 0
 
                 for val in gpuFv[fieldId]:
-                    # Skip blank values. Otherwise, we'd have to insert a placeholder blank value based on the fieldId
+                    # Skip blank values. Otherwise, we'd have to insert a
+                    # placeholder blank value based on the fieldId
                     if val.isBlank:
                         continue
 
                     # Round down to 1-second for now
                     valTimeSec1970 = (val.ts / c_ONE_SEC_IN_USEC)
                     valueArray = [val.value, ]
-                    value.dispatch(type=fieldTag, type_instance=typeInstance,
-                                   time=valTimeSec1970, values=valueArray, plugin=value.plugin)
+                    value.dispatch(
+                        type=fieldTag,
+                        type_instance=typeInstance,
+                        time=valTimeSec1970,
+                        values=valueArray,
+                        plugin=value.plugin)
 
-                    collectd.debug("    gpuId %d, tag %s, sample %d, value %s, time %s" % (
-                        gpuId, fieldTag, i, str(val.value), str(val.ts)))  # pylint: disable=no-member
+                    collectd.debug(
+                        "    gpuId %d, tag %s, sample %d, value %s, time %s" %
+                        (gpuId, fieldTag, i, str(
+                            val.value), str(
+                            val.ts)))  # pylint: disable=no-member
                     i += 1
 
     ###########################################################################
@@ -246,7 +263,7 @@ def parse_config(config):
 
                 # We figure out if the default collectd sampling interval is
                 # to be used, or a different one.
-                if (interval_str == None) or (interval_str == ":"):
+                if (interval_str is None) or (interval_str == ":"):
                     interval = int(g_intervalSec * c_ONE_SEC_IN_USEC)
                 else:
                     # strip :
@@ -312,7 +329,7 @@ def config_dcgm(config=None):
     Interval is the default collectd sampling interval in seconds.
 
     FieldIds may appear several times. One is either a field ID by name or
-    number. A field ID list is either a single field ID or a list of same, 
+    number. A field ID list is either a single field ID or a list of same,
     separated by commas (,) and bounded by parenthesis ( ( and ) ). Each field
     ID list can be followed by an optional colon (:) and a floating point
     DCGM sampling interval. If no sampling interval is specified the default

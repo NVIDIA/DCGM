@@ -39,6 +39,8 @@ public:
 private:
     std::vector<unsigned int> m_gpus; /* List of GPUs to run on, copied in Init() */
 
+    bool m_fakeGpusOnly; /* True if only fake GPUs. Some tests not run, */
+
     /*************************************************************************/
     /*
      * Actual test cases. These should return a status like below

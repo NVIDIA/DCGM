@@ -39,6 +39,7 @@ target_link_libraries(diagnostictests
         nvvs_without_main_objects
         Catch2::Catch2WithMain
         testing_cuda_stubs
+        testing_cuda_stubs_interface
         testing_dcgm_cublas_stubs
         cuda_common_interface
 )

@@ -37,6 +37,8 @@ import os
 from ctypes import *
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
@@ -44,7 +46,14 @@ from ctypes import *
 def test_inject_memory_error_counter(handle, gpuIds):
     gpuId = gpuIds[0]
 
-    def mock_memory_error_counter(handle, gpuId, errorType, counterType, locationType, nvmlRet, value):
+    def mock_memory_error_counter(
+            handle,
+            gpuId,
+            errorType,
+            counterType,
+            locationType,
+            nvmlRet,
+            value):
         injectedRet = nvml_injection.c_injectNvmlRet_t()
         injectedRet.nvmlRet = nvmlRet
         injectedRet.values[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_ULONG_LONG
@@ -102,7 +111,7 @@ def test_inject_memory_error_counter(handle, gpuIds):
 
     With the exception of fields that are supported bit Turing, and
     Turing and later, the following normally are only supported either
-    pre-Turing or Turing and later. However, nvml-injection allows is to 
+    pre-Turing or Turing and later. However, nvml-injection allows is to
     fake-inject all of them to ensure the right parameters are passed to
     nvmlDeviceGetMemoryErrorCounter().
     """
@@ -272,7 +281,13 @@ def test_inject_memory_error_counter(handle, gpuIds):
     fieldIds = []
     for fieldId, keys in fieldMap.items():
         mock_memory_error_counter(
-            handle, gpuId, keys[0], keys[1], keys[2], dcgm_nvml.NVML_SUCCESS, fieldId)
+            handle,
+            gpuId,
+            keys[0],
+            keys[1],
+            keys[2],
+            dcgm_nvml.NVML_SUCCESS,
+            fieldId)
         fieldIds.append(fieldId)
 
     validate_ecc_values(handle, gpuId, fieldIds)

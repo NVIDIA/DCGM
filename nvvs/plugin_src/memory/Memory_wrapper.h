@@ -17,6 +17,7 @@
 #define _NVVS_NVVS_Memory_H_
 
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,7 @@ public:
 private:
     dcgmHandle_t m_handle;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
+    std::unique_ptr<TestParameters> m_defaultTestParameters;
 };
 
 

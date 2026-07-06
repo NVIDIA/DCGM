@@ -16,14 +16,15 @@ import math
 import sys
 from operator import itemgetter
 
-# Temp added to track down if log length issue happens again, Remove when nightly is fixed
+# Temp added to track down if log length issue happens again, Remove when
+# nightly is fixed
 import option_parser
 import os
 
 # add epsilon to all times to prevent division by 0
 epsilon = sys.float_info.epsilon
-import test_utils
-import logger
+import test_utils  # noqa: E402
+import logger  # noqa: E402
 
 __all__ = ['PerformanceStats']
 
@@ -47,13 +48,14 @@ def stdev(num_list):
 
 def _time_str(num_list):
     if len(num_list) > 1:
-        return "%.3fms\t%.3fms\t%.3fms" % (average(num_list) * 1000, stdev(num_list) * 1000, max(num_list) * 1000)
+        return "%.3fms\t%.3fms\t%.3fms" % (
+            average(num_list) * 1000, stdev(num_list) * 1000, max(num_list) * 1000)
     return "%.3fms" % (num_list[0] * 1000)
 
 
 class DebugLine:
     """ Class that matches DEBUG lines in trace log """
-    #                                             tid        timestamp     path         fname  line         content
+    # tid        timestamp     path         fname  line         content
     regexpDebugLine = re.compile(
         r"^DEBUG:\s*\[tid \d*\]\s*\[(\d+\.\d+)s - (\w?:?[^:]+):?(\w+)?:([0-9]+)\]\s*(.*)")
 
@@ -80,7 +82,8 @@ class DebugLine:
 
     def srcStr(self):
         if self.srcfunctionname:
-            return "%s:%s:%d" % (self.srcfilename, self.srcfunctionname, self.srcline)
+            return "%s:%s:%d" % (
+                self.srcfilename, self.srcfunctionname, self.srcline)
         else:
             return "%s:%d" % (self.srcfilename, self.srcline)
 
@@ -143,7 +146,8 @@ class RmCall:
             verbose_debug("RmCall: Failed match regexpRmCallDebug*")
             raise ValueError
 
-        if match1.group(1) != match2.group(1) or match1.group(2) != match2.group(2):
+        if match1.group(1) != match2.group(
+                1) or match1.group(2) != match2.group(2):
             verbose_debug(
                 "RmCall: Failed check where device and function strings should be the same*")
             raise ValueError
@@ -159,7 +163,8 @@ class RmCall:
             self) else None
 
     def is_simillar(self, b):
-        return isinstance(b, RmCall) and self.src.isInTheSamePlace(b.src) and self.function == b.function and self.returnCode == b.returnCode
+        return isinstance(b, RmCall) and self.src.isInTheSamePlace(
+            b.src) and self.function == b.function and self.returnCode == b.returnCode
 
     def __str__(self):
         dcgmParentStr = "(%.2f%% of %s)" % (self.time / self.dcgmParent.time *
@@ -224,10 +229,12 @@ class NvmlCall:
                 continue
 
             match2 = NvmlCall.regexpNvmlIntRelCallReturn.match(
-                line2.message) if self.internal else NvmlCall.regexpNvmlCallReturn.match(line2.message)
+                line2.message) if self.internal else NvmlCall.regexpNvmlCallReturn.match(
+                line2.message)
             if not match2:
                 verbose_debug(
-                    "NvmlCall: Sth went wrong. Found line2 \"%s\" that doesn't match the return but is in the same line" % (str(line2)))
+                    "NvmlCall: Sth went wrong. Found line2 \"%s\" that doesn't match the return but is in the same line" %
+                    (str(line2)))
                 raise ValueError
                 return
 
@@ -257,7 +264,8 @@ class NvmlCall:
         return "%s" % (self.function)
 
     def is_simillar(self, b):
-        return isinstance(b, NvmlCall) and self.src.isInTheSamePlace(b.src) and self.function == b.function and self.errcode == b.errcode
+        return isinstance(b, NvmlCall) and self.src.isInTheSamePlace(
+            b.src) and self.function == b.function and self.errcode == b.errcode
 
     def __str__(self):
         return "%s\t%s\t%s" % (_time_str(self.times), self.function, self.args)
@@ -275,7 +283,8 @@ class PerformanceStats(object):
         # only these contain start/stop function entry information
         lines = [x for x in [DebugLine.construct(y) for y in rawlines] if x]
 
-        # look for dcgm function calls and RM function calls inside of trace lines
+        # look for dcgm function calls and RM function calls inside of trace
+        # lines
         i = 0
         lastNvmlCall = None
         self.time_in_rm = 0.0 + epsilon
@@ -328,10 +337,26 @@ class PerformanceStats(object):
 
             fout.write("%s\t%s\n" %
                        (_time_str(self.times_total), "Total time"))
-            fout.write("%s\t%s (%.2f%% of total time)\n" % (_time_str(self.times_in_dcgm),
-                       "Time spent in NVML", average(self.times_in_dcgm) / average(self.times_total) * 100))
-            fout.write("%s\t%s (%.2f%% of total time)\n" % (_time_str(self.times_in_rm),
-                       "Time spent in RM", average(self.times_in_rm) / average(self.times_total) * 100))
+            fout.write(
+                "%s\t%s (%.2f%% of total time)\n" %
+                (_time_str(
+                    self.times_in_dcgm),
+                    "Time spent in NVML",
+                    average(
+                    self.times_in_dcgm) /
+                    average(
+                    self.times_total) *
+                    100))
+            fout.write(
+                "%s\t%s (%.2f%% of total time)\n" %
+                (_time_str(
+                    self.times_in_rm),
+                    "Time spent in RM",
+                    average(
+                    self.times_in_rm) /
+                    average(
+                    self.times_total) *
+                    100))
             fout.write("\n")
 
             # Print per function stats
@@ -341,8 +366,11 @@ class PerformanceStats(object):
 
             fout.write("Per function stats (sorted by avg):\n")
             fout.write("    avg\t  stdev\t    max\t%7s\t name\n" % avgsum)
-            per_function = [(average(calls[x]) * 1000, stdev(calls[x]) * 1000, max(calls[x])
-                             * 1000, sum(calls[x]) * 1000 / self._combined_stats_count, x) for x in calls]
+            per_function = [(average(calls[x]) * 1000,
+                             stdev(calls[x]) * 1000,
+                             max(calls[x]) * 1000,
+                             sum(calls[x]) * 1000 / self._combined_stats_count,
+                             x) for x in calls]
             per_function.sort(reverse=True)
             for function in per_function:
                 fout.write("%.3fms\t%.3fms\t%.3fms\t%.3fms\t%s\n" % function)
@@ -359,7 +387,8 @@ class PerformanceStats(object):
         with open(fname, "w") as fout:
             def format_stats(name, num_list):
                 if len(num_list) > 1:
-                    return "%s_avg, %.3f\n%s_stdev, %.3f\n%s_max,%.3f\n" % (name, average(num_list) * 1000, name, stdev(num_list) * 1000, name, max(num_list) * 1000)
+                    return "%s_avg, %.3f\n%s_stdev, %.3f\n%s_max,%.3f\n" % (name, average(
+                        num_list) * 1000, name, stdev(num_list) * 1000, name, max(num_list) * 1000)
                 return "%s, %.3f" % (name, num_list[0] * 1000)
 
             calls = dict()
@@ -383,7 +412,8 @@ class PerformanceStats(object):
 
         """
 
-        # Temp added to track down if log length issue happens again, Remove when nightly is fixed
+        # Temp added to track down if log length issue happens again, Remove
+        # when nightly is fixed
         if (len(perf_stat.stats) != len(self.stats)):
             log_perf_stat = ""
             log_self_stat = ""
@@ -411,8 +441,9 @@ class PerformanceStats(object):
         # assert len(perf_stat.stats) == len(self.stats), "One of the logs is of different length"
 
         if (len(perf_stat.stats) != len(self.stats)):
-            logger.warning("Perf logs mismatch. nvsmi perf data collected for %s run(s)" % str(
-                self._combined_stats_count))
+            logger.warning(
+                "Perf logs mismatch. nvsmi perf data collected for %s run(s)" % str(
+                    self._combined_stats_count))
             return
 
         for i in range(len(self.stats)):

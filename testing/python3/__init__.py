@@ -25,4 +25,5 @@ from apps.lspci_app import *
 from cuda.cuda_utils import *
 
 # once you "import apps" module you can refer
-# to all classes by apps.ClassName e.g. apps.XidApp instead of apps.xid_app.XidApp (a bit shorter)
+# to all classes by apps.ClassName e.g. apps.XidApp instead of
+# apps.xid_app.XidApp (a bit shorter)

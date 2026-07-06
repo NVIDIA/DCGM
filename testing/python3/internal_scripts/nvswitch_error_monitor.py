@@ -16,8 +16,9 @@
 try:
     import pydcgm
 except ImportError:
-    print("Unable to find pydcgm. You need to add the location of "
-          "pydcgm.py to your environment as PYTHONPATH=$PYTHONPATH:[path-to-pydcgm.py]")
+    print(
+        "Unable to find pydcgm. You need to add the location of "
+        "pydcgm.py to your environment as PYTHONPATH=$PYTHONPATH:[path-to-pydcgm.py]")
 
 import sys
 import os
@@ -40,36 +41,41 @@ class NvSwitchErrorMonitor:
         # NVSwitch error field Ids
         self._nvSwitchErrorFieldIds = []
         self._nvSwitchErrorFieldIds.append(
-            dcgm_fields.DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS)
+            dcgm_fields.DCGM_FI_DEV_SXID_FATAL_ERROR)
         self._nvSwitchErrorFieldIds.append(
-            dcgm_fields.DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS)
+            dcgm_fields.DCGM_FI_DEV_SXID_NON_FATAL_ERROR)
 
         # GPU error field Ids
         self._gpuErrorFieldIds = []
         self._gpuErrorFieldIds.append(
-            dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL)
+            dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL)
         self._gpuErrorFieldIds.append(
-            dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL)
+            dcgm_fields.DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL)
         self._gpuErrorFieldIds.append(
-            dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL)
+            dcgm_fields.DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL)
         self._gpuErrorFieldIds.append(
-            dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL)
-        self._gpuErrorFieldIds.append(dcgm_fields.DCGM_FI_DEV_XID_ERRORS)
+            dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL)
+        self._gpuErrorFieldIds.append(dcgm_fields.DCGM_FI_DEV_XID_ERROR)
         self._gpuErrorFieldIds.append(
-            dcgm_fields.DCGM_FI_DEV_GPU_NVLINK_ERRORS)
-        # self._gpuErrorFieldIds.append(dcgm_fields.DCGM_FI_DEV_GPU_TEMP) #Will always generate output
+            dcgm_fields.DCGM_FI_DEV_NVLINK_ERROR)
+        # self._gpuErrorFieldIds.append(dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS) #Will
+        # always generate output
 
     def _InitHandles(self):
         self._dcgmHandle = pydcgm.DcgmHandle(ipAddress=self._hostname)
 
         groupName = "error_mon_gpus" + self._pidPostfix
         self._allGpusGroup = pydcgm.DcgmGroup(
-            self._dcgmHandle, groupName=groupName, groupType=dcgm_structs.DCGM_GROUP_DEFAULT)
+            self._dcgmHandle,
+            groupName=groupName,
+            groupType=dcgm_structs.DCGM_GROUP_DEFAULT)
         print(("Found %d GPUs" % (len(self._allGpusGroup.GetEntities()))))
 
         groupName = "error_mon_nvswitches" + self._pidPostfix
         self._allNvSwitchesGroup = pydcgm.DcgmGroup(
-            self._dcgmHandle, groupName=groupName, groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES)
+            self._dcgmHandle,
+            groupName=groupName,
+            groupType=dcgm_structs.DCGM_GROUP_DEFAULT_NVSWITCHES)
         print(("Found %d NvSwitches" %
               len(self._allNvSwitchesGroup.GetEntities())))
 

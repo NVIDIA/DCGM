@@ -285,6 +285,16 @@ nvsdmRet_t NvsdmBase::nvsdmDeviceGetHealthStatus(nvsdmDevice_t const, nvsdmDevic
     return NVSDM_ERROR_FUNCTION_NOT_FOUND;
 }
 
+nvsdmRet_t NvsdmBase::nvsdmDeviceGetPCIInfo(nvsdmDevice_t const, nvsdmPCIInfo_t *)
+{
+    return NVSDM_ERROR_FUNCTION_NOT_FOUND;
+}
+
+nvsdmRet_t NvsdmBase::nvsdmDeviceGetFirmwareVersion(nvsdmDevice_t const, nvsdmVersionInfo_t *)
+{
+    return NVSDM_ERROR_FUNCTION_NOT_FOUND;
+}
+
 nvsdmRet_t NvsdmBase::nvsdmGetVersion(uint64_t *)
 {
     return NVSDM_ERROR_FUNCTION_NOT_FOUND;
@@ -499,6 +509,16 @@ nvsdmRet_t NvsdmLib::nvsdmDeviceGetHealthStatus(nvsdmDevice_t const device, nvsd
     return ::nvsdmDeviceGetHealthStatus(device, status);
 }
 
+nvsdmRet_t NvsdmLib::nvsdmDeviceGetPCIInfo(nvsdmDevice_t const device, nvsdmPCIInfo_t *info)
+{
+    return ::nvsdmDeviceGetPCIInfo(device, info);
+}
+
+nvsdmRet_t NvsdmLib::nvsdmDeviceGetFirmwareVersion(nvsdmDevice_t const device, nvsdmVersionInfo_t *version)
+{
+    return ::nvsdmDeviceGetFirmwareVersion(device, version);
+}
+
 nvsdmRet_t NvsdmLib::nvsdmGetVersion(uint64_t *version)
 {
     return ::nvsdmGetVersion(version);
@@ -604,6 +624,26 @@ nvsdmTelem_v1_t NvsdmMockPort::GetFieldValue(nvsdmPlatformTelemCounter_t const f
     return val;
 }
 
+void NvsdmMockPort::SetRemote(unsigned int devIdx, unsigned int portIdx)
+{
+    m_remote = std::make_pair(devIdx, portIdx);
+}
+
+std::optional<std::pair<unsigned int, unsigned int>> NvsdmMockPort::GetRemote() const
+{
+    return m_remote;
+}
+
+void NvsdmMockPort::SetDevIdx(unsigned int devIdx)
+{
+    m_devIdx = devIdx;
+}
+
+std::optional<unsigned int> NvsdmMockPort::GetDevIdx() const
+{
+    return m_devIdx;
+}
+
 NvsdmMockDevice::NvsdmMockDevice(nvsdmDevType type, uint16_t devID, uint32_t vendorID, uint32_t healthState)
     : m_type(type)
     , m_devID(devID)
@@ -636,6 +676,37 @@ uint32_t NvsdmMockDevice::GetHealthState() const
     return m_healthState;
 }
 
+std::optional<nvsdmPCIInfo_t> NvsdmMockDevice::GetPCIInfo() const
+{
+    return m_pciInfo;
+}
+
+void NvsdmMockDevice::SetPCIInfo(uint16_t domain, uint16_t bus, uint16_t dev, uint16_t func)
+{
+    nvsdmPCIInfo_t info {};
+    info.version = nvsdmPCIInfo_v1;
+    info.domain  = domain;
+    info.bus     = bus;
+    info.dev     = dev;
+    info.func    = func;
+    m_pciInfo    = info;
+}
+
+std::optional<nvsdmVersionInfo_t> NvsdmMockDevice::GetFirmwareVersion() const
+{
+    return m_firmwareVersion;
+}
+
+void NvsdmMockDevice::SetFirmwareVersion(uint32_t major, uint32_t minor, uint32_t patch)
+{
+    nvsdmVersionInfo_t ver {};
+    ver.version       = nvsdmVersionInfo_v1;
+    ver.majorVersion  = major;
+    ver.minorVersion  = minor;
+    ver.patchVersion  = patch;
+    m_firmwareVersion = ver;
+}
+
 nvsdmPortIter_t NvsdmMockDevice::GetPortsIterator()
 {
     return reinterpret_cast<nvsdmPortIter_t>(&m_ports);
@@ -646,6 +717,14 @@ void NvsdmMockDevice::AddPort(NvsdmMockPort const &port)
     m_ports.push_back(port);
 }
 
+NvsdmMockPort *NvsdmMockDevice::GetPort(unsigned int portIdx)
+{
+    if (portIdx >= m_ports.size())
+    {
+        return nullptr;
+    }
+    return &m_ports[portIdx];
+}
 
 void NvsdmMockDevice::SetFieldValue(nvsdmConnectXTelemCounter_t const field, nvsdmTelem_v1_t const value)
 {
@@ -831,6 +910,46 @@ nvsdmRet_t NvsdmMock::nvsdmDeviceGetHealthStatus(nvsdmDevice_t const device, nvs
     return NVSDM_SUCCESS;
 }
 
+nvsdmRet_t NvsdmMock::nvsdmDeviceGetFirmwareVersion(nvsdmDevice_t const device, nvsdmVersionInfo_t *version)
+{
+    if (!m_init)
+    {
+        return NVSDM_ERROR_UNINITIALIZED;
+    }
+    NvsdmMockDevice *mockDev = reinterpret_cast<NvsdmMockDevice *>(device);
+    if (!mockDev || !version)
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    auto fwVersion = mockDev->GetFirmwareVersion();
+    if (!fwVersion)
+    {
+        return NVSDM_ERROR_NOT_SUPPORTED;
+    }
+    *version = *fwVersion;
+    return NVSDM_SUCCESS;
+}
+
+nvsdmRet_t NvsdmMock::nvsdmDeviceGetPCIInfo(nvsdmDevice_t const device, nvsdmPCIInfo_t *info)
+{
+    if (!m_init)
+    {
+        return NVSDM_ERROR_UNINITIALIZED;
+    }
+    NvsdmMockDevice *mockDev = reinterpret_cast<NvsdmMockDevice *>(device);
+    if (!mockDev || !info)
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    auto pciInfo = mockDev->GetPCIInfo();
+    if (!pciInfo)
+    {
+        return NVSDM_ERROR_NOT_SUPPORTED;
+    }
+    *info = *pciInfo;
+    return NVSDM_SUCCESS;
+}
+
 nvsdmRet_t NvsdmMock::nvsdmDeviceGetPorts(nvsdmDevice_t const device, nvsdmPortIter_t *iter)
 {
     if (!m_init)
@@ -1003,6 +1122,65 @@ nvsdmRet_t NvsdmMock::nvsdmDeviceGetTelemetryValues(nvsdmDevice_t const device, 
     return NVSDM_SUCCESS;
 }
 
+nvsdmRet_t NvsdmMock::nvsdmPortGetRemote(nvsdmPort_t const port, nvsdmPort_t *remote)
+{
+    if (!m_init)
+    {
+        return NVSDM_ERROR_UNINITIALIZED;
+    }
+    if (!remote)
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    NvsdmMockPort *mockPort = reinterpret_cast<NvsdmMockPort *>(port);
+    if (!mockPort)
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    auto mockRemote = mockPort->GetRemote();
+    if (!mockRemote)
+    {
+        *remote = nullptr;
+        return NVSDM_SUCCESS;
+    }
+    auto [devIdx, portIdx] = *mockRemote;
+    if (devIdx >= m_devices.size())
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    NvsdmMockPort *remotePort = m_devices[devIdx].GetPort(portIdx);
+    if (!remotePort)
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    *remote = reinterpret_cast<nvsdmPort_t>(remotePort);
+    return NVSDM_SUCCESS;
+}
+
+nvsdmRet_t NvsdmMock::nvsdmPortGetDevice(nvsdmPort_t const port, nvsdmDevice_t *device)
+{
+    if (!m_init)
+    {
+        return NVSDM_ERROR_UNINITIALIZED;
+    }
+    if (!device)
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    NvsdmMockPort *mockPort = reinterpret_cast<NvsdmMockPort *>(port);
+    if (!mockPort)
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    auto devIdx = mockPort->GetDevIdx();
+    if (!devIdx || *devIdx >= m_devices.size())
+    {
+        return NVSDM_ERROR_INVALID_ARG;
+    }
+    *device = reinterpret_cast<nvsdmDevice_t>(&m_devices[*devIdx]);
+    return NVSDM_SUCCESS;
+}
+
 bool NvsdmMock::LoadYaml(std::string const &path)
 {
     YAML::Node root;
@@ -1023,6 +1201,21 @@ bool NvsdmMock::LoadYaml(std::string const &path)
             auto vendorId = device["vendor_id"].as<unsigned int>();
             auto health   = device["health_state"].as<unsigned int>();
             NvsdmMockDevice mockDev(type, devId, vendorId, health);
+            if (device["firmware_version"])
+            {
+                auto major = device["firmware_version"]["major"].as<uint32_t>();
+                auto minor = device["firmware_version"]["minor"].as<uint32_t>();
+                auto patch = device["firmware_version"]["patch"].as<uint32_t>();
+                mockDev.SetFirmwareVersion(major, minor, patch);
+            }
+            if (device["pci_info"])
+            {
+                auto domain = device["pci_info"]["domain"].as<uint16_t>();
+                auto bus    = device["pci_info"]["bus"].as<uint16_t>();
+                auto dev    = device["pci_info"]["dev"].as<uint16_t>();
+                auto func   = device["pci_info"]["func"].as<uint16_t>();
+                mockDev.SetPCIInfo(domain, bus, dev, func);
+            }
             for (auto const field : device["fields"])
             {
                 auto parsedFieldOpt = ParseFieldValue(field);
@@ -1047,6 +1240,13 @@ bool NvsdmMock::LoadYaml(std::string const &path)
                     out << port;
                     log_error("failed to parse [{}].", out.c_str());
                     continue;
+                }
+                parsedPortOpt->SetDevIdx(static_cast<unsigned int>(m_devices.size()));
+                if (port["remote"])
+                {
+                    auto devIdx  = port["remote"]["device_idx"].as<unsigned int>();
+                    auto portIdx = port["remote"]["port_idx"].as<unsigned int>();
+                    parsedPortOpt->SetRemote(devIdx, portIdx);
                 }
                 mockDev.AddPort(parsedPortOpt.value());
                 portNum += 1;

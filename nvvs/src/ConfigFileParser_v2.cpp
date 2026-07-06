@@ -270,9 +270,10 @@ static void parseSubTests(YAML::Node &dstTest, const YAML::Node srcTest)
 {
     for (auto srcIt = srcTest.begin(); srcIt != srcTest.end(); ++srcIt)
     {
-        std::string key      = srcIt->first.Scalar();
-        auto const &srcChild = srcIt->second;
-        auto dstChild        = dstTest[key];
+        auto const kv       = *srcIt;
+        std::string key     = kv.first.Scalar();
+        YAML::Node srcChild = kv.second;
+        auto dstChild       = dstTest[key];
         // TODO Check we have a valid key and valid value type
         if (!srcChild.IsScalar())
         {
@@ -287,8 +288,9 @@ static void parseTests(YAML::Node &dstSku, const YAML::Node srcSku)
 {
     for (auto srcTestIt = srcSku.begin(); srcTestIt != srcSku.end(); ++srcTestIt)
     {
-        std::string testKey = srcTestIt->first.Scalar();
-        auto srcTest        = srcTestIt->second;
+        auto const testKv   = *srcTestIt;
+        std::string testKey = testKv.first.Scalar();
+        YAML::Node srcTest  = testKv.second;
         auto dstTest        = dstSku[testKey];
 
         DCGM_LOG_VERBOSE << "Checking key: " << testKey;

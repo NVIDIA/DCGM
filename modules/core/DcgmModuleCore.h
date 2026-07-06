@@ -53,6 +53,15 @@ public:
     dcgmReturn_t ProcessEntitiesGetLatestValuesV1(dcgm_core_msg_entities_get_latest_values_v1 &msg);
     dcgmReturn_t ProcessEntitiesGetLatestValuesV2(dcgm_core_msg_entities_get_latest_values_v2 &msg);
     dcgmReturn_t ProcessEntitiesGetLatestValuesV3(dcgm_core_msg_entities_get_latest_values_v3 &msg);
+    /**
+     * Handles DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4.
+     *
+     * @param[in,out] msg Core message containing request parameters and receiving field-value data.
+     *
+     * @return DCGM_ST_OK when the subrequest was handled (including cases where msg.ev.cmdRet reports
+     *         the outcome), or a non-OK return from version validation.
+     */
+    dcgmReturn_t ProcessEntitiesGetLatestValuesV4(dcgm_core_msg_entities_get_latest_values_v4 &msg);
     dcgmReturn_t ProcessGetMultipleValuesForFieldV1(dcgm_core_msg_get_multiple_values_for_field_v1 &msg);
     dcgmReturn_t ProcessGetMultipleValuesForFieldV2(dcgm_core_msg_get_multiple_values_for_field_v2 &msg);
     dcgmReturn_t ProcessWatchFieldValueV1(dcgm_core_msg_watch_field_value_v1 &msg);
@@ -64,13 +73,15 @@ public:
     dcgmReturn_t ProcessEmptyCache(dcgm_core_msg_empty_cache_t &msg);
     dcgmReturn_t ProcessWatchFields(dcgm_core_msg_watch_fields_t &msg);
     dcgmReturn_t ProcessUnwatchFields(dcgm_core_msg_watch_fields_t &msg);
-    dcgmReturn_t ProcessGetTopology(dcgm_core_msg_get_topology_t &msg);
+    dcgmReturn_t ProcessGetTopology(dcgm_core_msg_get_topology_v1 &msg);
+    dcgmReturn_t ProcessGetTopology(dcgm_core_msg_get_topology_v2 &msg);
     dcgmReturn_t ProcessGetTopologyAffinity(dcgm_core_msg_get_topology_affinity_t &msg);
     dcgmReturn_t ProcessSelectGpusByTopology(dcgm_core_msg_select_topology_gpus_t &msg);
     dcgmReturn_t ProcessGetAllDevices(dcgm_core_msg_get_all_devices_t &msg);
     dcgmReturn_t ProcessClientLogin(dcgm_core_msg_client_login_t &msg);
     dcgmReturn_t ProcessSetEntityNvLinkState(dcgm_core_msg_set_entity_nvlink_state_t &msg);
-    dcgmReturn_t ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_t &msg);
+    dcgmReturn_t ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_v3 &msg);
+    dcgmReturn_t ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_v4 &msg);
     dcgmReturn_t ProcessGetNvLinkP2PStatus(dcgm_core_msg_get_nvlink_p2p_status_t &msg);
     dcgmReturn_t ProcessGetDeviceWorkloadPowerProfilesInfo(dcgm_core_msg_get_workload_power_profiles_status_v1 &msg);
     dcgmReturn_t ProcessFieldgroupOp(dcgm_core_msg_fieldgroup_op_t &msg);
@@ -107,6 +118,23 @@ public:
     dcgmModuleProcessMessage_f GetMessageProcessingCallback() const;
 
 private:
+    /**
+     * Shared implementation for DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V3 and V4.
+     *
+     * Payload layout is identical through the fixed prefix; only ev.buffer[] size differs between v3
+     * and v4 message types.
+     *
+     * @param[in,out] msg          Core message to validate, fill, and size (header.length, ev fields).
+     * @param[in]     versionMagic Expected dcgm_core_msg_entities_get_latest_values_version3 or
+     *                             dcgm_core_msg_entities_get_latest_values_version4.
+     *
+     * @return DCGM_ST_OK when the subrequest was handled (including early returns where msg.ev.cmdRet
+     *         carries status), or a non-OK return from DcgmModule::CheckVersion on version mismatch.
+     *
+     */
+    template <typename MsgT>
+    dcgmReturn_t ProcessEntitiesGetLatestValuesImpl(MsgT &msg, unsigned int versionMagic);
+
     DcgmCacheManager *m_cacheManager;
     DcgmGroupManager *m_groupManager;
     dcgmModuleProcessMessage_f m_processMsgCB;

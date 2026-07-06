@@ -21,9 +21,10 @@ mkdir --parents tclap/src
 
 pushd tclap/src
 git init
-git remote add origin $URL
-git fetch --depth 1 origin $COMMIT_SHA
-git checkout FETCH_HEAD
+git remote add origin "$URL"
+git fetch --depth 1 origin "$COMMIT_SHA"
+git checkout --detach FETCH_HEAD
+test "$(git rev-parse HEAD)" = "$COMMIT_SHA"
 popd
 
 cmake \
@@ -36,4 +37,4 @@ cmake \
 
 cmake --install tclap/build --component lib
 
-rm -rf tclap tclap.tar.gz
+rm -rf tclap

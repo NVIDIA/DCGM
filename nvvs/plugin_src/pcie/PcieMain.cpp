@@ -264,7 +264,8 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
         PluginDevice *gpu = bg.gpu[gpuIdx];
 
         /* First verify we are at P0 so that it's even valid to check PCI version */
-        dcgmReturn_t ret = bg.m_dcgmRecorder.GetCurrentFieldValue(gpu->gpuId, DCGM_FI_DEV_PSTATE, pstateValue, flags);
+        dcgmReturn_t ret
+            = bg.m_dcgmRecorderPtr->GetCurrentFieldValue(gpu->gpuId, DCGM_FI_DEV_GPU_PSTATE, pstateValue, flags);
         if (ret != DCGM_ST_OK)
         {
             DCGM_LOG_ERROR << "GPU " << gpu->gpuId << " cannot read pstate from DCGM: " << errorString(ret);
@@ -282,7 +283,7 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
         }
 
         /* Read the link generation */
-        ret = bg.m_dcgmRecorder.GetCurrentFieldValue(gpu->gpuId, DCGM_FI_DEV_PCIE_LINK_GEN, linkgenValue, flags);
+        ret = bg.m_dcgmRecorderPtr->GetCurrentFieldValue(gpu->gpuId, DCGM_FI_DEV_PCIE_LINK_GEN, linkgenValue, flags);
         if (ret != DCGM_ST_OK)
         {
             DCGM_LOG_WARNING << "GPU " << gpu->gpuId << " cannot read PCIE link gen from DCGM: " << errorString(ret);
@@ -290,7 +291,7 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
         }
 
         /* Read the link width now */
-        ret = bg.m_dcgmRecorder.GetCurrentFieldValue(gpu->gpuId, DCGM_FI_DEV_PCIE_LINK_WIDTH, widthValue, flags);
+        ret = bg.m_dcgmRecorderPtr->GetCurrentFieldValue(gpu->gpuId, DCGM_FI_DEV_PCIE_LINK_WIDTH, widthValue, flags);
         if (ret != DCGM_ST_OK)
         {
             DCGM_LOG_WARNING << "GPU " << gpu->gpuId << " cannot read PCIE link width from DCGM: " << errorString(ret);
@@ -298,10 +299,10 @@ int bg_check_pci_link(BusGrind &bg, std::string subTest)
         }
 
         /* Verify we are still in P0 after or the link width and generation aren't valid */
-        ret = bg.m_dcgmRecorder.GetCurrentFieldValue(gpuIdx, DCGM_FI_DEV_PSTATE, pstateValue, flags);
+        ret = bg.m_dcgmRecorderPtr->GetCurrentFieldValue(gpu->gpuId, DCGM_FI_DEV_GPU_PSTATE, pstateValue, flags);
         if (ret != DCGM_ST_OK)
         {
-            DCGM_LOG_ERROR << "GPU " << gpuIdx << " cannot read pstate from DCGM: " << errorString(ret);
+            DCGM_LOG_ERROR << "GPU " << gpu->gpuId << " cannot read pstate from DCGM: " << errorString(ret);
             continue;
         }
 
@@ -378,7 +379,7 @@ MemoryToGpuMap_t GetGpuMemoryAffinities(BusGrind &bg)
         for (unsigned int j = 0; j <= 3; j++)
         {
             dcgmReturn_t ret = bg.m_dcgmRecorder.GetCurrentFieldValue(
-                bg.gpu[i]->gpuId, DCGM_FI_DEV_MEM_AFFINITY_0 + j, memAffinityValue, flags);
+                bg.gpu[i]->gpuId, DCGM_FI_DEV_MEMORY_AFFINITY_0 + j, memAffinityValue, flags);
 
             if (ret != DCGM_ST_OK)
             {
@@ -1238,6 +1239,7 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
 
         tids.PushBack(syscall(SYS_gettid));
         tidsPosted.count_down();
+        log_debug("PCIe BW worker started for GPU {}", bg->gpu[d]->gpuId);
 
         cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
@@ -1251,8 +1253,11 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
         cudaCheckErrorOmp(cudaStreamCreate, (&stream1), PCIE_ERR_CUDA_STREAM_FAIL, d);
         cudaCheckErrorOmp(cudaStreamCreate, (&stream2), PCIE_ERR_CUDA_STREAM_FAIL, d);
 
+        log_debug("PCIe BW worker synchronizing device after setup");
         cudaDeviceSynchronize();
+        log_debug("PCIe BW worker waiting at initialization barrier");
         myBarrier.arrive_and_wait();
+        log_debug("PCIe BW worker ready");
 
         cudaEventRecord(start);
         // initiate H2D copies
@@ -1270,8 +1275,11 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
 
         bandwidthMatrix[0 * bg->gpu.size() + d] = gb / time_s;
 
+        log_debug("PCIe BW worker synchronizing device after host-to-device transfers");
         cudaDeviceSynchronize();
+        log_debug("PCIe BW worker waiting at host-to-device barrier");
         myBarrier.arrive_and_wait();
+        log_debug("PCIe BW worker host-to-device barrier completed");
 
         cudaEventRecord(start);
         for (int r = 0; r < repeat; r++)
@@ -1287,8 +1295,11 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
 
         bandwidthMatrix[1 * bg->gpu.size() + d] = gb / time_s;
 
+        log_debug("PCIe BW worker synchronizing device after device-to-host transfers");
         cudaDeviceSynchronize();
+        log_debug("PCIe BW worker waiting at device-to-host barrier");
         myBarrier.arrive_and_wait();
+        log_debug("PCIe BW worker device-to-host barrier completed");
 
         cudaEventRecord(start);
         // Bidirectional
@@ -1299,8 +1310,11 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
         }
 
         cudaEventRecord(stop);
+        log_debug("PCIe BW worker synchronizing device after bidirectional transfers");
         cudaCheckErrorOmp(cudaDeviceSynchronize, (), PCIE_ERR_CUDA_SYNC_FAIL, d);
+        log_debug("PCIe BW worker waiting at bidirectional barrier");
         myBarrier.arrive_and_wait();
+        log_debug("PCIe BW worker bidirectional barrier completed");
 
         cudaEventElapsedTime(&time_ms, start, stop);
         time_s = time_ms / 1e3;
@@ -1321,6 +1335,7 @@ int outputConcurrentHostDeviceBandwidthMatrix(BusGrind *bg, bool pinned)
         cudaCheckErrorOmp(cudaEventDestroy, (stop), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaStreamDestroy, (stream1), PCIE_ERR_CUDA_STREAM_FAIL, d);
         cudaCheckErrorOmp(cudaStreamDestroy, (stream2), PCIE_ERR_CUDA_STREAM_FAIL, d);
+        log_debug("PCIe BW worker completed");
     }; // end lambda
 
     {
@@ -1848,6 +1863,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
               int d) {
               tids.PushBack(syscall(SYS_gettid));
               tidsPosted.count_down();
+              log_debug("PCIe P2P worker started for GPU {}", bg->gpu[d]->gpuId);
 
               cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
@@ -1858,8 +1874,11 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
               cudaCheckErrorOmp(cudaEventCreate, (&stop[d]), PCIE_ERR_CUDA_EVENT_FAIL, d);
               cudaCheckErrorOmp(cudaStreamCreate, (&stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
 
+              log_debug("PCIe P2P worker synchronizing device after setup");
               cudaDeviceSynchronize();
+              log_debug("PCIe P2P worker waiting at initialization barrier");
               myBarrier.arrive_and_wait();
+              log_debug("PCIe P2P worker ready");
 
               cudaEventRecord(start[d], stream);
               // right to left tests
@@ -1885,8 +1904,11 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
                   bandwidthMatrix[0 * numGPUs / 2 + d / 2] = gb / time_s;
               }
 
+              log_debug("PCIe P2P worker synchronizing device after peer right-to-left transfers");
               cudaDeviceSynchronize();
+              log_debug("PCIe P2P worker waiting at peer right-to-left barrier");
               myBarrier.arrive_and_wait();
+              log_debug("PCIe P2P worker peer right-to-left barrier completed");
 
               cudaEventRecord(start[d], stream);
               // left to right tests
@@ -1912,8 +1934,11 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
                   bandwidthMatrix[1 * numGPUs / 2 + d / 2] = gb / time_s;
               }
 
+              log_debug("PCIe P2P worker synchronizing device after peer left-to-right transfers");
               cudaDeviceSynchronize();
+              log_debug("PCIe P2P worker waiting at peer left-to-right barrier");
               myBarrier.arrive_and_wait();
+              log_debug("PCIe P2P worker peer left-to-right barrier completed");
 
               cudaEventRecord(start[d], stream);
               // Bidirectional tests
@@ -1943,8 +1968,11 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
               }
 
               cudaEventRecord(stop[d], stream);
+              log_debug("PCIe P2P worker synchronizing device after peer bidirectional transfers");
               cudaDeviceSynchronize();
+              log_debug("PCIe P2P worker waiting at peer bidirectional barrier");
               myBarrier.arrive_and_wait();
+              log_debug("PCIe P2P worker peer bidirectional barrier completed");
 
               if (d % 2 == 0)
               {
@@ -1959,6 +1987,7 @@ int outputConcurrentPairsP2PBandwidthMatrix(BusGrind *bg, bool p2p)
               }
 
               cudaCheckErrorOmp(cudaStreamDestroy, (stream), PCIE_ERR_CUDA_STREAM_FAIL, d);
+              log_debug("PCIe P2P worker completed");
           }; // end lambda
 
 
@@ -2115,9 +2144,9 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
     ProtectedVector<unsigned int> tids;
 
     auto worker = [&tids, &tidsPosted, &myBarrier, bg, numElems, repeat, &bandwidthMatrix, &buffers, numGPUs](int d) {
-        unsigned int tid = syscall(SYS_gettid);
-        tids.PushBack(tid);
+        tids.PushBack(syscall(SYS_gettid));
         tidsPosted.count_down();
+        log_debug("PCIe 1D-exch worker started for GPU {}", bg->gpu[d]->gpuId);
 
         cudaSetDevice(bg->gpu[d]->cudaDeviceIdx);
 
@@ -2130,8 +2159,11 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
         cudaCheckErrorOmp(cudaEventCreate, (&stop), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaStreamCreate, (&stream1), PCIE_ERR_CUDA_STREAM_FAIL, d);
 
+        log_debug("PCIe 1D-exch worker synchronizing device after setup");
         cudaDeviceSynchronize();
+        log_debug("PCIe 1D-exch worker waiting at initialization barrier");
         myBarrier.arrive_and_wait();
+        log_debug("PCIe 1D-exch worker ready");
 
         cudaEventRecord(start, stream1);
         // L2R tests
@@ -2158,8 +2190,11 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
         if (d == numGPUs - 1)
             gb = 0;
         bandwidthMatrix[0 * numGPUs + d] = gb / time_s;
+        log_debug("PCIe 1D-exch worker synchronizing device after left-to-right exchange");
         cudaDeviceSynchronize();
+        log_debug("PCIe 1D-exch worker waiting at left-to-right barrier");
         myBarrier.arrive_and_wait();
+        log_debug("PCIe 1D-exch worker left-to-right barrier completed");
 
         cudaEventRecord(start, stream1);
         // R2L tests
@@ -2185,11 +2220,13 @@ int outputConcurrent1DExchangeBandwidthMatrix(BusGrind *bg, bool p2p)
 
         bandwidthMatrix[1 * numGPUs + d] = gb / time_s;
 
+        log_debug("PCIe 1D-exch worker synchronizing device before cleanup");
         cudaDeviceSynchronize();
 
         cudaCheckErrorOmp(cudaEventDestroy, (start), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaEventDestroy, (stop), PCIE_ERR_CUDA_EVENT_FAIL, d);
         cudaCheckErrorOmp(cudaStreamDestroy, (stream1), PCIE_ERR_CUDA_STREAM_FAIL, d);
+        log_debug("PCIe 1D-exch worker completed");
     }; // end lambda
 
     {
@@ -2441,17 +2478,17 @@ int main_init(BusGrind &bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
     /* Is binary logging enabled for this stat collection? */
 
     std::vector<unsigned short> fieldIds;
-    fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
-    fieldIds.push_back(DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL); // Previously unchecked
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL); // Previously unchecked
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_BANDWIDTH_TOTAL);
-    fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS);
-    fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER);
+    fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL); // Previously unchecked
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL); // Previously unchecked
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_THROUGHPUT_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_SXID_NON_FATAL_ERROR);
+    fieldIds.push_back(DCGM_FI_DEV_SXID_FATAL_ERROR);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW);
     char fieldGroupName[128];
     char groupName[128];
     snprintf(fieldGroupName, sizeof(fieldGroupName), "pcie_field_group");
@@ -2556,8 +2593,8 @@ dcgmReturn_t bg_check_per_second_error_conditions(BusGrind *bg,
     std::vector<unsigned short> fieldIds;
     std::vector<dcgmFieldValue_v1> failureThresholds;
 
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL);
 
     double crcErrorThreshold = bg->m_testParameters->GetDouble(PCIE_STR_CRC_ERROR_THRESHOLD);
     dcgmFieldValue_v1 fv     = {};
@@ -2585,22 +2622,22 @@ bool bg_check_error_conditions(BusGrind *bg,
                           >= NVVS_SUITE_PRODUCTION_TESTING)
                          || bg->m_testParameters->GetBoolFromString(PCIE_STR_TEST_WITH_GEMM);
 
-    fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_COUNTER);
+    fieldIds.push_back(DCGM_FI_DEV_PCIE_REPLAY_TOTAL);
 
     // Only check correctable errors if GEMM is not enabled (GEMM test has its own comprehensive AER checking via
     // CheckPassFailSingleGpu())
     if (!isGemmEnabled)
     {
-        fieldIds.push_back(DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS);
+        fieldIds.push_back(DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL);
     }
 
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL);
-    fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS);
-    fieldIds.push_back(DCGM_FI_DEV_NVLINK_COUNT_RX_SYMBOL_ERRORS);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL);
+    fieldIds.push_back(DCGM_FI_DEV_SXID_FATAL_ERROR);
+    fieldIds.push_back(DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL);
 
     if (bg->m_testParameters->GetBoolFromString(PCIE_STR_NVSWITCH_NON_FATAL_CHECK))
     {
-        fieldIds.push_back(DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS);
+        fieldIds.push_back(DCGM_FI_DEV_SXID_NON_FATAL_ERROR);
     }
     dcgmTimeseriesInfo_t dt;
     memset(&dt, 0, sizeof(dt));
@@ -2707,10 +2744,10 @@ bool pcie_gpu_id_in_list(unsigned int gpuId, const dcgmDiagPluginEntityList_v1 &
 
 void pcie_check_nvlink_status(BusGrind *bg, const dcgmDiagPluginEntityList_v1 &entityInfo)
 {
-    dcgmNvLinkStatus_v4 linkStatus;
+    dcgmNvLinkStatus_v5 linkStatus;
     memset(&linkStatus, 0, sizeof(linkStatus));
 
-    linkStatus.version = dcgmNvLinkStatus_version4;
+    linkStatus.version = dcgmNvLinkStatus_version5;
     dcgmReturn_t ret   = dcgmGetNvLinkLinkStatus(bg->GetHandle(), &linkStatus);
     bool downLinks     = false;
 

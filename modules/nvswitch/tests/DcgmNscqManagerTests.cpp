@@ -23,6 +23,36 @@
 
 using namespace DcgmNs;
 
+TEST_CASE("FieldIdFind")
+{
+    GIVEN("known NvSwitch field IDs")
+    {
+        auto const tempField = FieldIdFind(DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS);
+        auto const linkField = FieldIdFind(DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX);
+        auto const uuidField = FieldIdFind(DCGM_FI_DEV_NVSWITCH_UUID);
+
+        WHEN("the field definitions are looked up")
+        {
+            REQUIRE(tempField != nullptr);
+            CHECK(tempField->NscqPath() != nullptr);
+            CHECK(tempField->UpdateFunc() != nullptr);
+
+            REQUIRE(linkField != nullptr);
+            CHECK(linkField->NscqPath() != nullptr);
+            CHECK(linkField->UpdateFunc() != nullptr);
+
+            REQUIRE(uuidField != nullptr);
+            CHECK(uuidField->NscqPath() != nullptr);
+            CHECK(uuidField->UpdateFunc() != nullptr);
+        }
+    }
+
+    GIVEN("an unknown field ID")
+    {
+        CHECK(FieldIdFind(DCGM_FI_SYSTEM_FIELD_UNKNOWN) == nullptr);
+    }
+}
+
 TEST_CASE("Getting NvSwitch Ids")
 {
     dcgmCoreCallbacks_t dcc = {};
@@ -197,7 +227,7 @@ SCENARIO("Validating Fully Specialized entity matching methods")
 
         std::tuple<uuid_p> tup { 0 };
 
-        unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT;
+        unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS;
 
         dcgm_field_update_info_t entity;
 
@@ -230,7 +260,7 @@ SCENARIO("Validating Fully Specialized entity matching methods")
 
         std::tuple<uuid_p, link_id_t> tup { 0, 1 };
 
-        unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERRORS;
+        unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_REPLAY_ERROR_TOTAL;
         dcgm_link_t link;
 
         link.raw             = 0;
@@ -269,7 +299,7 @@ SCENARIO("Validating Fully Specialized entity matching methods")
 
         std::tuple<uuid_p, link_id_t, lane_vc_id_t> tup { 0, 1, 2 };
 
-        unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE2;
+        unsigned short fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L2_TOTAL;
         dcgm_link_t link;
 
         link.raw             = 0;
@@ -289,7 +319,7 @@ SCENARIO("Validating Fully Specialized entity matching methods")
 
         CHECK(nsm.Find(fieldId, entities, tup) != std::nullopt);
 
-        fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERRORS_LANE3;
+        fieldId = DCGM_FI_DEV_NVSWITCH_LINK_CRC_ERROR_L3_TOTAL;
 
         CHECK(nsm.Find(fieldId, entities, tup) == std::nullopt);
     }
@@ -313,19 +343,19 @@ SCENARIO("Validating Fully Specialized Storage classes")
         CHECK(out.value == 50);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS")
+    GIVEN("DCGM_FI_DEV_SXID_FATAL_ERROR")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS>::nscqFieldType in { 100, 1000 };
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS> out(in);
+        FieldIdControlType<DCGM_FI_DEV_SXID_FATAL_ERROR>::nscqFieldType in { 100, 1000 };
+        FieldIdStorageType<DCGM_FI_DEV_SXID_FATAL_ERROR> out(in);
 
         CHECK(out.value == 100);
         CHECK(out.time == 1000);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS")
+    GIVEN("DCGM_FI_DEV_SXID_NON_FATAL_ERROR")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS>::nscqFieldType in { 200, 2000 };
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_NON_FATAL_ERRORS> out(in);
+        FieldIdControlType<DCGM_FI_DEV_SXID_NON_FATAL_ERROR>::nscqFieldType in { 200, 2000 };
+        FieldIdStorageType<DCGM_FI_DEV_SXID_NON_FATAL_ERROR> out(in);
 
         CHECK(out.value == 200);
         CHECK(out.time == 2000);
@@ -397,10 +427,10 @@ SCENARIO("Validating Fully Specialized Storage classes")
         CHECK(out.value == 40);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0")
+    GIVEN("DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0>::nscqFieldType in(10, 20, 30, 40, 100);
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC0> out(in);
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL>::nscqFieldType in(10, 20, 30, 40, 100);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC0_TOTAL> out(in);
 
         CHECK(out.value == 100);
     }
@@ -437,10 +467,10 @@ SCENARIO("Validating Fully Specialized Storage classes")
         CHECK(out.value == 40);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1")
+    GIVEN("DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1>::nscqFieldType in(10, 20, 30, 40, 100);
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC1> out(in);
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL>::nscqFieldType in(10, 20, 30, 40, 100);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC1_TOTAL> out(in);
 
         CHECK(out.value == 100);
     }
@@ -477,10 +507,10 @@ SCENARIO("Validating Fully Specialized Storage classes")
         CHECK(out.value == 40);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2")
+    GIVEN("DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2>::nscqFieldType in(10, 20, 30, 40, 100);
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC2> out(in);
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL>::nscqFieldType in(10, 20, 30, 40, 100);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC2_TOTAL> out(in);
 
         CHECK(out.value == 100);
     }
@@ -517,10 +547,10 @@ SCENARIO("Validating Fully Specialized Storage classes")
         CHECK(out.value == 40);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3")
+    GIVEN("DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3>::nscqFieldType in(10, 20, 30, 40, 100);
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_COUNT_VC3> out(in);
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL>::nscqFieldType in(10, 20, 30, 40, 100);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_LINK_LATENCY_SAMPLE_VC3_TOTAL> out(in);
 
         CHECK(out.value == 100);
     }
@@ -613,26 +643,26 @@ SCENARIO("Validating Fully Specialized Storage classes")
         CHECK(out.value == 30);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_VDD")
+    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD>::nscqFieldType in(10, 20, 30);
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_VDD> out(in);
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS>::nscqFieldType in(10, 20, 30);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS> out(in);
 
         CHECK(out.value == 10);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_DVDD")
+    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD>::nscqFieldType in(10, 20, 30);
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD> out(in);
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS>::nscqFieldType in(10, 20, 30);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_DVDD_WATTS> out(in);
 
         CHECK(out.value == 20);
     }
 
-    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_HVDD")
+    GIVEN("DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS")
     {
-        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD>::nscqFieldType in(10, 20, 30);
-        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD> out(in);
+        FieldIdControlType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS>::nscqFieldType in(10, 20, 30);
+        FieldIdStorageType<DCGM_FI_DEV_NVSWITCH_POWER_HVDD_WATTS> out(in);
 
         CHECK(out.value == 30);
     }
@@ -665,6 +695,9 @@ dcgmReturn_t CustomPost(dcgm_module_command_header_t *req, void *poster)
                     case DCGM_FT_DOUBLE:
                         CHECK(values[i].value.dbl == DCGM_FP64_BLANK);
                         break;
+                    case DCGM_FT_STRING:
+                        CHECK(DCGM_STR_IS_BLANK(values[i].value.str));
+                        break;
                 }
             }
 
@@ -676,4 +709,61 @@ dcgmReturn_t CustomPost(dcgm_module_command_header_t *req, void *poster)
     }
 
     return DCGM_ST_OK;
+}
+
+TEST_CASE("GuidHexData stores uint64_t GUID as 0x-prefixed lowercase hex string for LINK_DEVICE_LINK_SID")
+{
+    using namespace DcgmNs::NvSwitch::Data;
+
+    SECTION("GUID with high bit set is represented correctly, avoiding sign loss from int64 interpretation")
+    {
+        GuidHexData d(0x9800000000000001ULL);
+        CHECK(std::string(d.value) == "0x9800000000000001");
+    }
+
+    SECTION("GUID without high bit set is represented correctly")
+    {
+        GuidHexData d(0x1234567890abcdefULL);
+        CHECK(std::string(d.value) == "0x1234567890abcdef");
+    }
+
+    SECTION("Zero GUID produces all-zero string")
+    {
+        GuidHexData d(0ULL);
+        CHECK(std::string(d.value) == "0x0000000000000000");
+    }
+
+    SECTION("Max uint64_t GUID is represented correctly")
+    {
+        GuidHexData d(0xffffffffffffffffULL);
+        CHECK(std::string(d.value) == "0xffffffffffffffff");
+    }
+
+    SECTION("Default constructor produces empty value")
+    {
+        GuidHexData d;
+        CHECK(std::string(d.value) == "");
+    }
+
+    SECTION("Str() returns the same string as value")
+    {
+        GuidHexData d(0xdeadbeefcafeULL);
+        CHECK(d.Str() == std::string(d.value));
+        CHECK(d.Str() == "0x0000deadbeefcafe");
+    }
+
+    SECTION("BufferAdd writes the hex string into the fv buffer")
+    {
+        DcgmFieldsInit();
+        GuidHexData d(0x1cda336851f4bbc8ULL);
+        DcgmFvBuffer buf;
+        d.BufferAdd(DCGM_FE_LINK, 0, DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID, 0, buf);
+
+        dcgmBufferedFvCursor_t cursor = 0;
+        dcgmBufferedFv_t *fv          = buf.GetNextFv(&cursor);
+        REQUIRE(fv != nullptr);
+        CHECK(fv->fieldId == DCGM_FI_DEV_NVSWITCH_LINK_REMOTE_LINK_SID);
+        CHECK(fv->status == DCGM_ST_OK);
+        CHECK(std::string(fv->value.str) == "0x1cda336851f4bbc8");
+    }
 }

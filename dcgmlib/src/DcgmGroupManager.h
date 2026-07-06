@@ -22,10 +22,13 @@
 
 #include "DcgmCacheManager.h"
 #include "dcgm_structs.h"
+#include "mocks/HostEngineHandler.h"
 #include <atomic>
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 /******************************************************************************
@@ -54,12 +57,18 @@ enum class DcgmGroupOption
     All,
 };
 
+namespace impl
+{
+template <typename HostEngineHandler>
 class DcgmGroupInfo;
 
+template <typename HostEngineHandler>
 class DcgmGroupManager
 {
 public:
-    DcgmGroupManager(DcgmCacheManager *cacheManager, bool createDefaultGroups = true);
+    DcgmGroupManager(DcgmCacheManager *cacheManager,
+                     HostEngineHandler const &hostEngine,
+                     bool createDefaultGroups = true);
     ~DcgmGroupManager();
 
     /*****************************************************************************
@@ -76,7 +85,7 @@ public:
      * DCGM_ST_?        :   On Error
      *****************************************************************************/
     dcgmReturn_t AddNewGroup(dcgm_connection_id_t connectionId,
-                             std::string groupName,
+                             std::string const &groupName,
                              dcgmGroupType_t type,
                              unsigned int *groupId);
 
@@ -90,7 +99,6 @@ public:
      * DCGM_ST_?        :   On Error
      *****************************************************************************/
     dcgmReturn_t RemoveGroup(unsigned int groupId);
-
 
     /*****************************************************************************
      * Removes all the groups corresponding to a connection
@@ -262,7 +270,6 @@ public:
      *****************************************************************************/
     dcgmReturn_t CreateDefaultGroups();
 
-
     /*****************************************************************************
      * The function to attach GPUs.
      *
@@ -273,6 +280,9 @@ public:
     dcgmReturn_t AttachGpus();
 
 private:
+    using GroupInfoType = DcgmGroupInfo<HostEngineHandler>;
+    using GroupIdMap    = std::map<unsigned int, GroupInfoType *>;
+
     /*****************************************************************************
      * Helper method to generate next groupId
      * @return
@@ -284,15 +294,15 @@ private:
     /******************************************************************************
      * Private helper to get a Group pointer by connectionId and groupId
      *
-     * NOTE: Assumes group manager has been locked with Lock()
+     * NOTE: Caller must hold the group manager lock — typically by acquiring it
+     *       with Lock() and a DcgmNs::Defer scope-exit guard that calls Unlock().
      *
      * @param groupId      IN  Group to get gpuIds of
      *
      * @return Group pointer on success.
      *         NULL if not found
      */
-
-    DcgmGroupInfo *GetGroupById(unsigned int groupId);
+    GroupInfoType *GetGroupById(unsigned int groupId);
 
     /*****************************************************************************
      * Add every entity of a given entityGroup to this group.
@@ -300,7 +310,7 @@ private:
      * @return: DCGM_ST_OK on success.
      *          Other DCGM_ST_? on error.
      */
-    dcgmReturn_t AddAllEntitiesToGroup(DcgmGroupInfo *pDcgmGrp, dcgm_field_entity_group_t entityGroupId);
+    dcgmReturn_t AddAllEntitiesToGroup(GroupInfoType *pDcgmGrp, dcgm_field_entity_group_t entityGroupId);
 
     /*****************************************************************************
      * Lock/Unlocks methods to protect the maps for group IDs and group Names
@@ -308,31 +318,28 @@ private:
     int Lock();
     int Unlock();
 
-    std::mutex mLock;                   /* Lock used for accessing table for the groups */
-    std::atomic_uint mGroupIdSequence;  /* Group ID sequence */
-    unsigned int mNumGroups;            /* Number of groups configured on the system */
-    unsigned int mAllGpusGroupId;       /* This is a cached group ID to a group containing all GPUs */
-    unsigned int mAllNvSwitchesGroupId; /* This is a cached group ID to a group containing all NvSwitches */
-
-    typedef std::map<unsigned int, DcgmGroupInfo *> GroupIdMap;
-
-    GroupIdMap mGroupIdMap; /* GroupId -> DcgmGroupInfo object map of all groups */
-
-    DcgmCacheManager *mpCacheManager; /* Pointer to the cache manager */
-
-    std::vector<dcgmGroupRemoveCBEntry_t> mOnRemoveCBs; /* Callbacks to invoke when a group is removed */
-
-    bool m_defaultGroupsCreated = false; /* Have we created default groups yet? */
+    std::mutex mLock;
+    std::atomic_uint mGroupIdSequence;
+    unsigned int mNumGroups;
+    unsigned int mAllGpusGroupId;
+    unsigned int mAllNvSwitchesGroupId;
+    GroupIdMap mGroupIdMap;
+    DcgmCacheManager *mpCacheManager;
+    [[no_unique_address]] HostEngineHandler m_hostEngine;
+    std::vector<dcgmGroupRemoveCBEntry_t> mOnRemoveCBs;
+    bool m_defaultGroupsCreated = false;
 };
 
+template <typename HostEngineHandler>
 class DcgmGroupInfo
 {
 public:
     DcgmGroupInfo(dcgm_connection_id_t connectionId,
                   std::string name,
                   unsigned int groupId,
-                  DcgmCacheManager *cacheManager);
-    virtual ~DcgmGroupInfo();
+                  DcgmCacheManager *cacheManager,
+                  HostEngineHandler *hostEngine);
+    ~DcgmGroupInfo();
 
     /*****************************************************************************
      * This method is used to add an entity to this group
@@ -404,11 +411,32 @@ public:
     bool AreAllTheSameSku();
 
 private:
-    unsigned int mGroupId;                          /* ID representing GPU group */
-    std::string mName;                              /* Name for the group group */
-    std::vector<dcgmGroupEntityPair_t> mEntityList; /* List of entities */
-    dcgm_connection_id_t mConnectionId;             /* Connection ID that created this group */
-    DcgmCacheManager *mpCacheManager;               /* Pointer to the cache manager */
+    unsigned int mGroupId;
+    std::string mName;
+    std::vector<dcgmGroupEntityPair_t> mEntityList;
+    dcgm_connection_id_t mConnectionId;
+    DcgmCacheManager *mpCacheManager;
+    HostEngineHandler *m_hostEngine;
+};
+} // namespace impl
+
+extern template class impl::DcgmGroupManager<HostEngineHandler>;
+extern template class impl::DcgmGroupInfo<HostEngineHandler>;
+
+class DcgmGroupManager : public impl::DcgmGroupManager<HostEngineHandler>
+{
+    using Base = impl::DcgmGroupManager<HostEngineHandler>;
+
+public:
+    using Base::Base;
 };
 
-#endif /* DCGMGROUPMANAGER_H */
+class DcgmGroupInfo : public impl::DcgmGroupInfo<HostEngineHandler>
+{
+    using Base = impl::DcgmGroupInfo<HostEngineHandler>;
+
+public:
+    using Base::Base;
+};
+
+#endif

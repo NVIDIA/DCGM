@@ -269,15 +269,15 @@ public:
 
         switch (m_fieldId)
         {
-            case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+            case DCGM_FI_PROF_FP16_UTIL_RATIO:
                 function = m_cudaDevice.m_cuFuncDoWorkFP16;
                 break;
 
-            case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+            case DCGM_FI_PROF_FP32_UTIL_RATIO:
                 function = m_cudaDevice.m_cuFuncDoWorkFP32;
                 break;
 
-            case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+            case DCGM_FI_PROF_FP64_UTIL_RATIO:
                 function = m_cudaDevice.m_cuFuncDoWorkFP64;
                 break;
 
@@ -331,7 +331,7 @@ class FieldWorkerGrActivity : public FieldWorkerBase
 {
 public:
     FieldWorkerGrActivity(CudaWorkerDevice_t cudaDevice)
-        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_GR_ENGINE_ACTIVE)
+        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO)
     {}
     ~FieldWorkerGrActivity() = default;
 
@@ -364,7 +364,7 @@ class FieldWorkerSmActivity : public FieldWorkerBase
 {
 public:
     FieldWorkerSmActivity(CudaWorkerDevice_t cudaDevice)
-        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_ACTIVE)
+        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_UTIL_RATIO)
     {}
 
     ~FieldWorkerSmActivity() = default;
@@ -394,7 +394,7 @@ class FieldWorkerSmOccupancy : public FieldWorkerBase
 {
 public:
     FieldWorkerSmOccupancy(CudaWorkerDevice_t cudaDevice)
-        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_OCCUPANCY)
+        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_OCCUPANCY_RATIO)
     {}
 
     ~FieldWorkerSmOccupancy() = default;
@@ -562,7 +562,7 @@ class FieldWorkerDramUtil : public FieldWorkerBase
 
 public:
     FieldWorkerDramUtil(CudaWorkerDevice_t cudaDevice)
-        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_DRAM_ACTIVE)
+        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_DRAM_UTIL_RATIO)
     {
         CUresult cuSt;
 
@@ -802,16 +802,16 @@ public:
         size_t valueSize = 0;
         switch (m_fieldId)
         {
-            case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+            case DCGM_FI_PROF_FP32_UTIL_RATIO:
                 valueSize = sizeof(float);
                 break;
-            case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+            case DCGM_FI_PROF_FP64_UTIL_RATIO:
                 valueSize = sizeof(double);
                 break;
-            case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
+            case DCGM_FI_PROF_FP16_UTIL_RATIO:
                 valueSize = sizeof(unsigned short);
                 break;
-            case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+            case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
                 m_arrayDim *= 2; /* Needed to saturate V100, A100 on cuda 11.1 */
                 valueSize = sizeof(unsigned short);
                 break;
@@ -869,7 +869,7 @@ public:
         static thread_local std::minstd_rand gen(std::random_device {}());
         switch (m_fieldId)
         {
-            case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+            case DCGM_FI_PROF_FP32_UTIL_RATIO:
             {
                 std::uniform_int_distribution<> dist;
 
@@ -883,7 +883,7 @@ public:
                 break;
             }
 
-            case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+            case DCGM_FI_PROF_FP64_UTIL_RATIO:
             {
                 std::uniform_int_distribution<> dist;
 
@@ -898,8 +898,8 @@ public:
                 break;
             }
 
-            case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
-            case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+            case DCGM_FI_PROF_FP16_UTIL_RATIO:
+            case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
             {
                 std::uniform_int_distribution<> dist(0, 65535);
 
@@ -943,7 +943,7 @@ public:
         }
 
         /* Should we enable tensor cores? */
-        if (m_fieldId == DCGM_FI_PROF_PIPE_TENSOR_ACTIVE)
+        if (m_fieldId == DCGM_FI_PROF_TENSOR_UTIL_RATIO)
         {
             cubSt = CublasProxy::CublasSetMathMode(m_cublasHandle, CUBLAS_TENSOR_OP_MATH);
         }
@@ -1043,7 +1043,7 @@ public:
             {
                 switch (m_fieldId)
                 {
-                    case DCGM_FI_PROF_PIPE_FP32_ACTIVE:
+                    case DCGM_FI_PROF_FP32_UTIL_RATIO:
                         cubSt = CublasProxy::CublasSgemm(m_cublasHandle,
                                                          CUBLAS_OP_N,
                                                          CUBLAS_OP_N,
@@ -1060,7 +1060,7 @@ public:
                                                          m_arrayDim);
                         break;
 
-                    case DCGM_FI_PROF_PIPE_FP64_ACTIVE:
+                    case DCGM_FI_PROF_FP64_UTIL_RATIO:
 #if (CUDA_VERSION_USED >= 11)
                         cubLtSt = DcgmNs::DcgmDgemm(m_cublasLtHandle,
                                                     CUBLAS_OP_N,
@@ -1094,8 +1094,8 @@ public:
 #endif
                         break;
 
-                    case DCGM_FI_PROF_PIPE_FP16_ACTIVE:
-                    case DCGM_FI_PROF_PIPE_TENSOR_ACTIVE:
+                    case DCGM_FI_PROF_FP16_UTIL_RATIO:
+                    case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
                         cubSt = CublasProxy::CublasHgemm(m_cublasHandle,
                                                          CUBLAS_OP_N,
                                                          CUBLAS_OP_N,

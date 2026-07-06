@@ -22,12 +22,17 @@
 #ifndef _NVVS_NVVS_TestFramework_H
 #define _NVVS_NVVS_TestFramework_H
 
+#include <map>
+#include <memory>
+#include <optional>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
 
 #include "DcgmRecorder.h"
+#include "DynamicLibraryLoader.h"
+#include "FileSystemOperator.h"
 #include "GoldenValueCalculator.h"
 #include "GpuSet.h"
 #include "HangDetectMonitor.h"
@@ -39,6 +44,20 @@
 #include <DcgmNvvsResponseWrapper.h>
 #include <dcgm_structs.h>
 
+namespace impl
+{
+
+/** @brief TestFramework is a base class for running NVVS tests.
+ *
+ * @tparam PluginLibT The type of the plugin library.
+ * @tparam DynamicLibraryLoaderT The type of the dynamic library loader.
+ * @tparam SoftwarePluginFrameworkT The type of the software plugin framework.
+ * @tparam FileSystemOperatorT The type of the filesystem operator.
+ */
+template <typename PluginLibT,
+          typename DynamicLibraryLoaderT,
+          typename SoftwarePluginFrameworkT,
+          typename FileSystemOperatorT>
 class TestFramework
 {
 public:
@@ -62,10 +81,26 @@ public:
         return m_testCategories;
     }
 
-    /*
-     * Runs the software plugin as a seperate entity
+    /**
+     * @brief Builds one @c SoftwarePluginFrameworkT per GPU entity set.
+     *
+     * Instances are stored in @c m_softwarePluginFrameworks. Call before @c Go() or @c RunSoftwarePlugin();
+     * callers may adjust instances (for example test mocks) after creation.
+     *
+     * @param[in] entitySets One framework is created for each GPU entity set in this vector.
      */
-    void runSoftwarePlugin(std::vector<std::unique_ptr<EntitySet>> const &entitySets,
+    void CreateSoftwarePluginFrameworks(std::vector<std::unique_ptr<EntitySet>> const &entitySets);
+
+    /**
+     * @brief Runs the software plugin as a separate entity.
+     *
+     * Requires @c m_softwarePluginFrameworks to match the GPU entity set count from
+     * @c CreateSoftwarePluginFrameworks(); otherwise logs an error, records failure, and returns without running.
+     *
+     * @param[in] entitySets GPU entity sets corresponding to the software plugin frameworks.
+     * @param[in] pluginAttr Plugin attributes passed to the software plugin run.
+     */
+    void RunSoftwarePlugin(std::vector<std::unique_ptr<EntitySet>> const &entitySets,
                            dcgmDiagPluginAttr_v1 const *pluginAttr);
 
     /********************************************************************/
@@ -100,7 +135,62 @@ public:
                                                       unsigned int cudaDriverMajorVersion,
                                                       unsigned int cudaDriverMinorVersion);
 
+protected:
+    /** @brief Put methods and members that are not part of the public interface in protected section so that the test
+ derived class can access them */
+
+    /** @brief Aggregated diagnostic response and result slots for NVVS. */
+    DcgmNvvsResponseWrapper m_diagResponse;
+
+    /** @brief One software plugin framework per GPU entity set (see @c CreateSoftwarePluginFrameworks). */
+    std::vector<std::unique_ptr<SoftwarePluginFrameworkT>> m_softwarePluginFrameworks;
+
+    /** @brief Loads and unloads plugin shared objects. */
+    DynamicLibraryLoaderT m_dynamicLibrary;
+
+    /** @brief Filesystem operations used to locate plugins and validate paths. */
+    FileSystemOperatorT m_fileSystem;
+
+    /**
+     * @brief Resolves and returns the absolute plugin base directory.
+     *
+     * Also records the NVVS binary owner and group for subsequent plugin permission checks.
+     *
+     * @return Path to the directory containing plugin subdirectories.
+     * @throws std::runtime_error If the binary path cannot be read, the binary cannot be stat'd, or no plugin directory
+     *         is found.
+     */
+    std::string GetPluginBaseDir();
+
+    /**
+     * @brief Returns the path to CUDA-free plugins (@c cudaless), under the plugin base directory.
+     *
+     * @return Base plugin path concatenated with @c "/cudaless/".
+     */
+    std::string GetPluginCudalessDir();
+
+    /**
+     * @brief Appends a loaded plugin library to the internal plugin list.
+     *
+     * Used when constructing the framework with pre-loaded or mock plugins (for example in unit tests).
+     *
+     * @param[in] plugin Ownership of the plugin library instance; stored in @c m_plugins.
+     */
+    void PushPlugin(std::unique_ptr<PluginLibT> plugin)
+    {
+        m_plugins.push_back(std::move(plugin));
+    }
+
 private:
+    /** @brief Number of tests that have completed execution. */
+    unsigned int m_completedTests;
+
+    /** @brief Optional hang-detection monitor set during @c loadPlugins. */
+    HangDetectMonitor *m_monitor;
+
+    /** @brief Total number of tests scheduled to run. */
+    unsigned int m_numTestsToRun;
+
     std::vector<Test *> m_testList;
     std::map<std::string, std::vector<Test *>> m_testCategories;
     std::list<void *> dlList;
@@ -111,24 +201,14 @@ private:
     // set. Since NVVS can only run on homogenous GPUs, this is sufficient for us to determine the CUDA version, GPU
     // Arch, etc.
     std::optional<dcgm_field_eid_t> m_validGpuId;
-    std::unique_ptr<SoftwarePluginFramework> m_softwarePluginFramework;
-    DcgmNvvsResponseWrapper m_diagResponse;
-    unsigned int m_completedTests;
-    unsigned int m_numTestsToRun;
-    HangDetectMonitor *m_monitor;
 
     // new plugin loading
-    std::vector<std::unique_ptr<PluginLib>> m_plugins;
+    std::vector<std::unique_ptr<PluginLibT>> m_plugins;
     std::vector<dcgmDiagPluginEntityInfo_v1> m_entityInfo;
     std::vector<std::string> m_skipLibraryList;
 
     // methods
-    std::string GetTestDisplayName(dcgmPerGpuTestIndices_t index);
     void InsertIntoTestCategory(std::string, Test *);
-    void GoList(Test::testClasses_enum suite,
-                std::vector<Test *> testsList,
-                EntitySet *entitySet,
-                bool checkFileCreation);
     void LoadLibrary(const char *libPath, const char *libName);
     void StartStatWatches(DcgmRecorder &dcgmRecorder, int pluginIndex, std::vector<Gpu *> gpuList);
     void EndStatWatches(DcgmRecorder &dcgmRecorder,
@@ -140,27 +220,7 @@ private:
     void LoadPluginWithDir(std::string const &pluginDir);
 
     /********************************************************************/
-    std::optional<std::string> GetPluginUsingDriverDir();
-
-    /********************************************************************/
-    std::string GetPluginCudalessDir();
-
-    /********************************************************************/
     std::vector<dcgmDiagPluginEntityInfo_v1> PopulateEntityInfoForPlugins(EntitySet &entitySet);
-
-    /********************************************************************/
-    /*
-     * Determines and returns the base directory for the plugins, and gets the
-     * appropriate permissions to check against later
-     */
-    std::string GetPluginBaseDir();
-
-    /********************************************************************/
-    /*
-     * Checks the driver version and returns /cuda{version} to load the correct plugins
-     * return std::nullopt if failed.
-     */
-    std::optional<std::string> GetPluginCudaDirExtension() const;
 
     /********************************************************************/
     /*
@@ -186,6 +246,48 @@ private:
      */
     void WriteDiagStatusToChannel(std::string_view pluginName, unsigned int errorCode) const;
 
-    friend class WrapperTestFramework;
+    /**
+     * @brief Returns the CUDA-version subdirectory name for driver-dependent plugins (for example @c "/cuda12/").
+     *
+     * Uses @c GetCompatibleCudaMajorVersion when a valid GPU id is known. Returns nullopt if the CUDA version cannot
+     * be determined or is not mapped to a plugin tree.
+     *
+     * @return Subdirectory name including leading and trailing slashes, or @c std::nullopt on failure.
+     */
+    std::optional<std::string> GetPluginCudaDirExtension() const;
+
+    /**
+     * @brief Runs a list of tests for one entity set by dequeuing parameters and invoking the loaded plugins.
+     *
+     * Iterates @p testsList for @p suite, pops @c TestParameters per test, validates plugin indices, and calls into the
+     * plugin @c RunTest path as appropriate for the entity set.
+     *
+     * @param[in] suite Test class / suite identifier used to select the argument vector on each @c Test.
+     * @param[in] testsList Tests to execute for this pass.
+     * @param[in,out] entitySet GPU entity set (GPUs and skip state) for this run; may be updated (for example skip
+     *                state) during execution.
+     * @param[in] checkFileCreation Reserved; currently unused in the implementation.
+     */
+    void GoList(Test::testClasses_enum suite,
+                std::vector<Test *> testsList,
+                EntitySet *entitySet,
+                bool checkFileCreation);
+
+    /**
+     * @brief Returns the full path to CUDA-specific, driver-dependent plugins.
+     *
+     * Combines @c GetPluginBaseDir() with @c GetPluginCudaDirExtension().
+     *
+     * @return Full plugin directory path, or @c std::nullopt if the CUDA extension cannot be resolved.
+     */
+    std::optional<std::string> GetPluginUsingDriverDir();
 };
+
+} // namespace impl
+
+/*
+ * Production type: default plugin backend is PluginLib. The class template lives in impl::TestFramework.
+ */
+using TestFramework = impl::TestFramework<PluginLib, DynamicLibraryLoader, SoftwarePluginFramework, FileSystemOperator>;
+
 #endif //  _NVVS_NVVS_TestFramework_H

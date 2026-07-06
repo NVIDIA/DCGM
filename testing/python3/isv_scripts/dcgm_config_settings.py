@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-sys.path.insert(0, '../')
-import dcgm_structs
-import dcgm_fields
-import dcgm_agent
-import dcgmvalue
 from threading import Thread
 from time import sleep
+
+sys.path.insert(0, '../')
+import dcgm_structs  # noqa: E402
+import dcgm_fields  # noqa: E402
+import dcgm_agent  # noqa: E402
+import dcgmvalue  # noqa: E402
 
 # Look at __name__ == "__main__" for entry point to the script
 
@@ -48,10 +49,9 @@ def convert_value_to_string(value):
             return "N/A"
         else:
             return v.__str__()
-    except:
+    except BaseException:
         # Exception is generally thorwn when int32 is
         # passed as an input. Use additional methods to fix it
-        sys.exc_clear()
         v = dcgmvalue.DcgmValue(0)
         v.SetFromInt32(value)
 
@@ -70,7 +70,7 @@ def helper_investigate_status(statusHandle):
     errorCount = 0
     errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
-    while (errorInfo != None):
+    while (errorInfo is not None):
         errorCount += 1
         print("Error%d" % errorCount)
         print(("  GPU Id: %d" % errorInfo.gpuId))
@@ -89,9 +89,14 @@ def agent_worker_function(handle, groupId, groupInfo, status_handle):
 
         # Get the current configuration for the group
         config_values = dcgm_agent.dcgmConfigGet(
-            handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+            handle,
+            groupId,
+            dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+            groupInfo.count,
+            status_handle)
 
-        # Since this is a group operation, Check for the status codes if any of the property failed
+        # Since this is a group operation, Check for the status codes if any of
+        # the property failed
         helper_investigate_status(status_handle)
         dcgm_agent.dcgmStatusClear(status_handle)
 

@@ -114,7 +114,8 @@ class c_dcgmInjectFieldValue_v1(dcgm_structs._PrintableStructure):
     ]
 
 
-# This structure is used to represent a field value to be injected into the cache manager
+# This structure is used to represent a field value to be injected into
+# the cache manager
 dcgmInjectFieldValue_version1 = dcgm_structs.make_dcgm_version(
     c_dcgmInjectFieldValue_v1, 1)
 

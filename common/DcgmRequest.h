@@ -41,7 +41,7 @@ public:
      * Returns DCGM_ST_SUCCESS on success.
      *         Other DCGM_ST_? status code on error
      */
-    virtual int ProcessMessage(std::unique_ptr<DcgmMessage> msg) = 0;
+    [[nodiscard]] virtual int ProcessMessage(std::unique_ptr<DcgmMessage> msg) = 0;
 
     /*************************************************************************/
 protected:

@@ -36,18 +36,18 @@ const long long defaultFrequency = 5000000; // update each field every 5 seconds
 
 errorType_t standardErrorFields[] = { { DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, TS_STR_SBE_ERROR_THRESHOLD },
                                       { DCGM_FI_DEV_ECC_DBE_VOL_TOTAL, nullptr },
-                                      { DCGM_FI_DEV_XID_ERRORS, nullptr },
-                                      { DCGM_FI_DEV_PCIE_REPLAY_COUNTER, PCIE_STR_MAX_PCIE_REPLAYS },
+                                      { DCGM_FI_DEV_XID_ERROR, nullptr },
+                                      { DCGM_FI_DEV_PCIE_REPLAY_TOTAL, PCIE_STR_MAX_PCIE_REPLAYS },
                                       { DCGM_FI_DEV_ROW_REMAP_PENDING, nullptr },
-                                      { DCGM_FI_DEV_ROW_REMAP_FAILURE, nullptr },
-                                      { DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS, nullptr },
+                                      { DCGM_FI_DEV_ROW_REMAP_FAILED, nullptr },
+                                      { DCGM_FI_DEV_SXID_FATAL_ERROR, nullptr },
                                       { 0, nullptr } };
 
-unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP,          DCGM_FI_DEV_GPU_UTIL,
-                                        DCGM_FI_DEV_POWER_USAGE,       DCGM_FI_DEV_SM_CLOCK,
-                                        DCGM_FI_DEV_MEM_CLOCK,         DCGM_FI_DEV_POWER_VIOLATION,
-                                        DCGM_FI_DEV_THERMAL_VIOLATION, DCGM_FI_DEV_CLOCKS_EVENT_REASONS,
-                                        DCGM_FI_DEV_MEMORY_TEMP,       0 };
+unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP_CELSIUS,    DCGM_FI_DEV_GPU_UTIL_RATIO,
+                                        DCGM_FI_DEV_BOARD_POWER_WATTS,   DCGM_FI_DEV_SM_CLOCK,
+                                        DCGM_FI_DEV_MEM_CLOCK,           DCGM_FI_DEV_POWER_VIOLATION,
+                                        DCGM_FI_DEV_THERMAL_VIOLATION,   DCGM_FI_DEV_CLOCKS_EVENT_REASONS,
+                                        DCGM_FI_DEV_MEMORY_TEMP_CELSIUS, 0 };
 
 dcgmReturn_t DcgmRecorderBase::GetCurrentFieldValue(unsigned int, unsigned short, dcgmFieldValue_v2 &, unsigned int)
 {
@@ -433,35 +433,35 @@ int DcgmRecorder::GetValueIndex(unsigned short fieldId)
 
         case DCGM_FI_DEV_ECC_SBE_VOL_TOTAL:
         case DCGM_FI_DEV_ECC_DBE_VOL_TOTAL:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L0:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L1:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L2:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L3:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L4:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L5:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L6:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L7:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L8:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L9:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L10:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_L11:
-        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_COUNT_TOTAL:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L0:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L1:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L2:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L3:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L4:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L5:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L6:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L7:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L8:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L9:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L10:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_L11:
-        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_COUNT_TOTAL:
-        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_COUNT_TOTAL:
-        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_COUNT_TOTAL:
-        case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L0_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L1_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L2_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L3_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L4_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L5_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L6_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L7_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L8_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L9_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L10_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_L11_TOTAL:
+        case DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L0_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L1_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L2_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L3_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L4_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L5_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L6_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L7_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L8_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L9_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L10_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L11_TOTAL:
+        case DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL:
+        case DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL:
+        case DCGM_FI_DEV_PCIE_REPLAY_TOTAL:
 
             // All of these should use DCGM_SUMMARY_DIFF
             index = 2;
@@ -493,7 +493,7 @@ void DcgmRecorder::FormatFieldViolationError(DcgmError &d,
 
             break;
 
-        case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
+        case DCGM_FI_DEV_PCIE_REPLAY_TOTAL:
 
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_PCIE_REPLAY_VIOLATION, d, intValue, fieldName.c_str(), gpuId);
 
@@ -523,12 +523,18 @@ void DcgmRecorder::FormatFieldViolationError(DcgmError &d,
             break;
         }
 
-        case DCGM_FI_DEV_XID_ERRORS:
+        case DCGM_FI_DEV_XID_ERROR:
         {
             if (intValue == 95)
             {
                 // XID 95 has its own error message
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_UNCONTAINED_ERROR, d);
+            }
+            else if (intValue == 94)
+            {
+                // XID 94: hardware self-contains the fault per official NVIDIA guidance.
+                // Only the affected application needs to be restarted; GPU does not need isolation.
+                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CONTAINED_ERROR, d);
             }
             else
             {
@@ -537,7 +543,7 @@ void DcgmRecorder::FormatFieldViolationError(DcgmError &d,
             break;
         }
 
-        case DCGM_FI_DEV_ROW_REMAP_FAILURE:
+        case DCGM_FI_DEV_ROW_REMAP_FAILED:
 
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_ROW_REMAP_FAILURE, d, gpuId);
 
@@ -549,7 +555,7 @@ void DcgmRecorder::FormatFieldViolationError(DcgmError &d,
 
             break;
 
-        case DCGM_FI_DEV_NVSWITCH_FATAL_ERRORS:
+        case DCGM_FI_DEV_SXID_FATAL_ERROR:
 
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_SXID_ERROR, d, intValue);
 
@@ -599,7 +605,7 @@ void DcgmRecorder::AddFieldThresholdViolationError(unsigned short fieldId,
     DcgmError d { gpuId };
     switch (fieldId)
     {
-        case DCGM_FI_DEV_PCIE_REPLAY_COUNTER:
+        case DCGM_FI_DEV_PCIE_REPLAY_TOTAL:
 
             DCGM_ERROR_FORMAT_MESSAGE(
                 DCGM_FR_PCIE_REPLAY_THRESHOLD_VIOLATION, d, intValue, fieldName.c_str(), gpuId, thresholdValue);
@@ -638,7 +644,7 @@ int DcgmRecorder::CheckXIDs(unsigned int gpuId,
     dcgmFieldValue_v1 values[DCGM_MAX_XID_INFO];
 
     int st = dcgmGetMultipleValuesForField(
-        m_dcgmHandle.GetHandle(), gpuId, DCGM_FI_DEV_XID_ERRORS, &count, startTime, 0, DCGM_ORDER_ASCENDING, values);
+        m_dcgmHandle.GetHandle(), gpuId, DCGM_FI_DEV_XID_ERROR, &count, startTime, 0, DCGM_ORDER_ASCENDING, values);
 
     if (st != DCGM_ST_OK)
     {
@@ -686,7 +692,7 @@ int DcgmRecorder::CheckErrorFields(std::vector<unsigned short> &fieldIds,
 
     for (size_t i = 0; i < fieldIds.size(); i++)
     {
-        if (fieldIds[i] == DCGM_FI_DEV_XID_ERRORS)
+        if (fieldIds[i] == DCGM_FI_DEV_XID_ERROR)
         {
             /* XID errors handled in CheckXIDs to avoid "summary" */
             continue;
@@ -897,7 +903,7 @@ int DcgmRecorder::CheckGpuTemperature(unsigned int gpuId,
     int st = DR_SUCCESS;
     dcgmFieldSummaryRequest_t fsr;
     memset(&fsr, 0, sizeof(fsr));
-    fsr.fieldId         = DCGM_FI_DEV_GPU_TEMP;
+    fsr.fieldId         = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
     fsr.entityGroupId   = DCGM_FE_GPU;
     fsr.entityId        = gpuId;
     fsr.summaryTypeMask = DCGM_SUMMARY_MAX | DCGM_SUMMARY_AVG;
@@ -1022,13 +1028,13 @@ int DcgmRecorder::CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &
 {
     dcgmFieldValue_v2 value;
     // First try cached data to allow injected test values to be detected
-    dcgmReturn_t ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER, value, 0);
+    dcgmReturn_t ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, value, 0);
 
     // If cached data is not available or not supported, try live data
     if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED || value.status == DCGM_ST_NO_DATA
         || value.status == DCGM_ST_NOT_WATCHED)
     {
-        ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER, value, DCGM_FV_FLAG_LIVE_DATA);
+        ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, value, DCGM_FV_FLAG_LIVE_DATA);
     }
     if (ret == DCGM_ST_NOT_SUPPORTED || value.status == DCGM_ST_NOT_SUPPORTED)
     {
@@ -1047,9 +1053,10 @@ int DcgmRecorder::CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &
     // Effective BER is the bit error rate itself, and a rate of 0 indicates a healthy system.
     // However, in NVML the smallest value is 1.5e-254, to be able to compare and avoid precision issues
     // with the decoded value, we decode it here and compare the mantissa and exponent to 15 and 255
-    // directly, rather than using the decoded field (i.e., DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT).
+    // directly, rather than using the decoded field (i.e., DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO).
     auto const [mantissa, exponent, ber] = DcgmNs::Utils::NvmlBerParser(effectiveBer);
-    if (mantissa != 15 && exponent != 255)
+    bool const exceedsThreshold          = DcgmNs::Utils::IsEffectiveBerThresholdExceeded(mantissa, exponent);
+    if (exceedsThreshold)
     {
         DcgmError d { gpuId };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD, d, ber, gpuId);
@@ -1091,7 +1098,7 @@ std::string DcgmRecorder::GetGpuUtilizationNote(unsigned int gpuId, timelib64_t 
     std::stringstream msg;
     dcgmFieldSummaryRequest_t fsr;
     memset(&fsr, 0, sizeof(fsr));
-    fsr.fieldId         = DCGM_FI_DEV_GPU_UTIL;
+    fsr.fieldId         = DCGM_FI_DEV_GPU_UTIL_RATIO;
     fsr.entityGroupId   = DCGM_FE_GPU;
     fsr.entityId        = gpuId;
     fsr.summaryTypeMask = DCGM_SUMMARY_MAX;
@@ -1142,7 +1149,8 @@ long long DcgmRecorder::DetermineMaxTemp(const dcgmDiagPluginEntityInfo_v1 &enti
         return fakeMaxTemp;
     }
 
-    dcgmReturn_t ret = GetCurrentFieldValue(entityInfo.entity.entityId, DCGM_FI_DEV_GPU_MAX_OP_TEMP, maxTempVal, flags);
+    dcgmReturn_t ret
+        = GetCurrentFieldValue(entityInfo.entity.entityId, DCGM_FI_DEV_GPU_MAX_OP_TEMP_CELSIUS, maxTempVal, flags);
 
     if (ret != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
     {
@@ -1287,7 +1295,7 @@ int DcgmRecorder::CheckHBMErrorFields(dcgmDiagPluginEntityInfo_v1 const &entityI
 
     // get the max temperature
     dcgmReturn_t returnValue = GetCurrentFieldValue(
-        entityInfo.entity.entityId, DCGM_FI_DEV_MEM_MAX_OP_TEMP, maxTempVal, DCGM_FV_FLAG_LIVE_DATA);
+        entityInfo.entity.entityId, DCGM_FI_DEV_MEMORY_MAX_OP_TEMP_CELSIUS, maxTempVal, DCGM_FV_FLAG_LIVE_DATA);
 
     if (returnValue != DCGM_ST_OK || DCGM_INT64_IS_BLANK(maxTempVal.value.i64))
     {
@@ -1347,7 +1355,7 @@ int DcgmRecorder::VerifyHBMTemperature(unsigned int gpuId,
     // field struct for current HBM temperature
     dcgmFieldSummaryRequest_t fsr;
     memset(&fsr, 0, sizeof(fsr));
-    fsr.fieldId         = DCGM_FI_DEV_MEMORY_TEMP;
+    fsr.fieldId         = DCGM_FI_DEV_MEMORY_TEMP_CELSIUS;
     fsr.entityGroupId   = DCGM_FE_GPU;
     fsr.entityId        = gpuId;
     fsr.summaryTypeMask = DCGM_SUMMARY_MAX | DCGM_SUMMARY_AVG;

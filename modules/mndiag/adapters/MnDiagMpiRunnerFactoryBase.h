@@ -18,6 +18,8 @@
 
 #include "DcgmCoreProxyBase.h"
 #include "MnDiagMpiRunnerBase.h"
+#include <dcgm_multinode_internal.h>
+#include <sys/types.h>
 /**
  * @brief Base class for creating MnDiagMpiRunner instances
  */
@@ -27,7 +29,14 @@ public:
     virtual ~MnDiagMpiRunnerFactoryBase() = default;
 
     /**
-     * @brief Create a new MnDiagMpiRunner instance
+     * Create a new MnDiagMpiRunner instance for the given test type
+     *
+     * @param[in] coreProxy Core proxy for GPU queries
+     * @param[in] testType  The test to run; determines which concrete runner is created
+     * @return Owning pointer to the runner, or nullptr if the test type is unknown
      */
-    virtual std::unique_ptr<MnDiagMpiRunnerBase> CreateMpiRunner(DcgmCoreProxyBase &) = 0;
+    virtual std::unique_ptr<MnDiagMpiRunnerBase> CreateMpiRunner(DcgmCoreProxyBase &coreProxy,
+                                                                 dcgmMultinodeTestType_t testType,
+                                                                 uid_t effectiveUid)
+        = 0;
 };

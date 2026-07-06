@@ -23,6 +23,7 @@ import dcgm_nvml
 from ctypes import *
 import nvml_injection
 import nvml_injection_structs
+import DcgmGroup
 from _test_helpers import skip_test_if_no_dcgm_nvml, maybe_dcgm_nvml
 
 
@@ -47,11 +48,26 @@ def helper_inject_struct(handle, gpuIds):
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     dcgm_agent_internal.dcgmWatchFieldValue(
-        dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FI_DEV_BAR1_TOTAL, 60000000, 3600.0, 0)
+        dcgmHandle.handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_BAR1_TOTAL,
+        60000000,
+        3600.0,
+        0)
     dcgm_agent_internal.dcgmWatchFieldValue(
-        dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FI_DEV_BAR1_USED, 60000000, 3600.0, 0)
+        dcgmHandle.handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_BAR1_USED,
+        60000000,
+        3600.0,
+        0)
     dcgm_agent_internal.dcgmWatchFieldValue(
-        dcgmHandle.handle, gpuId, dcgm_fields.DCGM_FI_DEV_BAR1_FREE, 60000000, 3600.0, 0)
+        dcgmHandle.handle,
+        gpuId,
+        dcgm_fields.DCGM_FI_DEV_BAR1_FREE,
+        60000000,
+        3600.0,
+        0)
     dcgmSystem.UpdateAllFields(1)
     values = dcgm_agent_internal.dcgmGetLatestValuesForFields(
         dcgmHandle.handle, gpuId, [dcgm_fields.DCGM_FI_DEV_BAR1_TOTAL, ])
@@ -63,6 +79,8 @@ def helper_inject_struct(handle, gpuIds):
         dcgmHandle.handle, gpuId, [dcgm_fields.DCGM_FI_DEV_BAR1_FREE, ])
     assert (values[0].value.i64 == 12300)
 
+
+# NO HARDWARE
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -89,7 +107,7 @@ def helper_inject_key_with_two_values(handle, gpuIds):
         handle, gpuId, "CudaComputeCapability", None, 0, injectedRet)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    fieldId = dcgm_fields.DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY
+    fieldId = dcgm_fields.DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     dcgm_agent_internal.dcgmWatchFieldValue(
@@ -100,6 +118,8 @@ def helper_inject_key_with_two_values(handle, gpuIds):
     expected = major << 16 | minor
     assert (values[0].value.i64 == expected)
 
+
+# NO HARDWARE
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -136,6 +156,8 @@ def helper_inject_with_extra_keys(handle, gpuIds):
         dcgmHandle.handle, gpuId, [fieldId, ])
     assert (values[0].value.i64 == injectedVal)
 
+
+# NO HARDWARE
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -188,6 +210,8 @@ def helper_inject_struct_for_following_calls(handle, gpuIds):
     checkField(dcgm_fields.DCGM_FI_DEV_BAR1_FREE, lambda x: x != 12345)
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
@@ -214,7 +238,7 @@ def helper_inject_key_with_two_values_for_following_calls(handle, gpuIds):
         handle, gpuId, "CudaComputeCapability", None, 0, injectedRets, 1)
     assert (ret == dcgm_structs.DCGM_ST_OK)
 
-    fieldId = dcgm_fields.DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY
+    fieldId = dcgm_fields.DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     dcgm_agent_internal.dcgmWatchFieldValue(
@@ -230,11 +254,15 @@ def helper_inject_key_with_two_values_for_following_calls(handle, gpuIds):
     assert (values[0].value.i64 != expected)
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_nvml_injected_gpus()
-def test_inject_key_with_two_values_for_following_calls_standalone(handle, gpuIds):
+def test_inject_key_with_two_values_for_following_calls_standalone(
+        handle,
+        gpuIds):
     helper_inject_key_with_two_values_for_following_calls(handle, gpuIds)
 
 
@@ -267,6 +295,8 @@ def helper_inject_with_extra_keys_for_following_calls(handle, gpuIds):
     assert (values[0].value.i64 == injectedVal)
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
@@ -274,6 +304,8 @@ def helper_inject_with_extra_keys_for_following_calls(handle, gpuIds):
 def test_inject_with_extra_keys_for_following_calls_standalone(handle, gpuIds):
     helper_inject_with_extra_keys_for_following_calls(handle, gpuIds)
 
+
+# NO HARDWARE
 
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
@@ -293,7 +325,8 @@ def test_inject_with_device_handle_parameter(handle, gpuIds):
         extraKeysArray = nvml_injection_structs.c_injectNvmlVal_t * 2
         extraKeys = extraKeysArray()
         extraKeys[0].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_DEVICE
-        # For device handle parameter, we pass the GPU id. The dcgmInjectNvmlDevice will translate it to the device handle.
+        # For device handle parameter, we pass the GPU id. The
+        # dcgmInjectNvmlDevice will translate it to the device handle.
         extraKeys[0].value.Device = targetGpuId
         extraKeys[1].type = nvml_injection_structs.c_injectionArgType_t.INJECTION_GPUP2PCAPSINDEX
         extraKeys[1].value.GpuP2PCapsIndex = dcgm_nvml.NVML_P2P_CAPS_INDEX_NVLINK
@@ -309,7 +342,7 @@ def test_inject_with_device_handle_parameter(handle, gpuIds):
         inject_p2p_status(handle, gpuId, targetGpuId,
                           dcgm_nvml.NVML_P2P_STATUS_UNKNOWN)
 
-    fieldId = dcgm_fields.DCGM_FI_DEV_P2P_NVLINK_STATUS
+    fieldId = dcgm_fields.DCGM_FI_DEV_NVLINK_P2P_STATUS
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
     dcgm_agent_internal.dcgmWatchFieldValue(
@@ -319,3 +352,37 @@ def test_inject_with_device_handle_parameter(handle, gpuIds):
         dcgmHandle.handle, gpuId, [fieldId, ])
     assert (values[0].value.i64 ==
             0b110), f"Actual value: {values[0].value.i64}"
+
+
+# NO HARDWARE
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_gpm_metrics_supported(handle, gpuIds):
+    '''
+    Test the GPM metrics supported in nvml injection mode.
+    '''
+    gpuId = gpuIds[0]
+    dcgmHandle = pydcgm.DcgmHandle(handle=handle)
+    dcgmSystem = dcgmHandle.GetSystem()
+    group = DcgmGroup.DcgmGroup(dcgmHandle,
+                                groupName="test_gpm_metrics_supported")
+    group.AddGpu(gpuId)
+    fieldGroup = pydcgm.DcgmFieldGroup(
+        dcgmHandle, "test_gpm_metrics_supported", [
+            dcgm_fields.DCGM_FI_DEV_GPM_SUPPORT, dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES])
+    group.samples.WatchFields(fieldGroup, 1000, 3600.0, 0)
+    values = group.samples.GetLatest_v2(fieldGroup)
+    assert not values.values[dcgm_fields.DCGM_FE_GPU][gpuId][dcgm_fields.DCGM_FI_DEV_GPM_SUPPORT][0].isBlank
+    assert values.values[dcgm_fields.DCGM_FE_GPU][gpuId][dcgm_fields.DCGM_FI_DEV_GPM_SUPPORT][0].value == 1
+    for _ in range(10):
+        # We need 2 samples for calculating the GPM metrics
+        dcgmSystem.UpdateAllFields(1)
+        values = group.samples.GetLatest_v2(fieldGroup)
+        if not values.values[dcgm_fields.DCGM_FE_GPU][gpuId][dcgm_fields.DCGM_FI_PROF_PCIE_TX_BYTES][0].isBlank:
+            break
+        time.sleep(0.1)
+    else:
+        raise AssertionError("The tx bytes should have been updated")

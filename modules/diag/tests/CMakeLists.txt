@@ -25,6 +25,10 @@ target_sources(diagtests
         ../DcgmDiagManager.cpp
         DcgmDiagCallersTests.cpp
         ../DcgmDiagCallers.cpp
+        DcgmDiagCommonTests.cpp
+        DcgmModuleDiagTests.cpp
+        ../DcgmModuleDiag.cpp
+        ../DcgmDiagCommon.cpp
 )
 
 target_include_directories(diagtests PRIVATE ${YAML_INCLUDE_DIR})
@@ -46,7 +50,8 @@ target_link_libraries(diagtests
         module_common_objects
         dcgm
         dcgm_mutex
-        mock_interface
+        mock_common
+        modules_objects
 )
 target_link_libraries(diagtests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
 target_link_libraries(diagtests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
@@ -54,5 +59,5 @@ target_link_libraries(diagtests PRIVATE sdk_nvml_loader)
 target_link_options(diagtests PRIVATE -rdynamic)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    catch_discover_tests(diagtests EXTRA_ARGS --colour-mode ansi)
+    catch_discover_tests(diagtests EXTRA_ARGS --colour-mode ansi PROPERTIES RESOURCE_LOCK serial_tests)
 endif()

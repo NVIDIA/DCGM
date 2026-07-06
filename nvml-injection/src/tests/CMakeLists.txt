@@ -22,7 +22,10 @@ add_executable(nvmlicoretests)
 target_sources(nvmlicoretests
     PRIVATE
         InjectedNvmlTests.cpp
+        InjectionArgumentCoverageTests.cpp
         NvmlInjectionUtilTests.cpp
+        NvmlReturnDeserializerCoverageTests.cpp
+        NvmlGeneratedStubsCoverageTests.cpp
         ../CompoundValue.cpp
         ../InjectedNvml.cpp
         ../InjectionArgument.cpp
@@ -52,6 +55,7 @@ target_link_libraries(nvmlicoretests
         dcgm_common
         dcgm
         common_interface
+        mock_common
         rt
         dl
         sdk_nvml_essentials_objects

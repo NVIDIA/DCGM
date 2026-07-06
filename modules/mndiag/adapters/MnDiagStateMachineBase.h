@@ -16,7 +16,11 @@
 
 #pragma once
 
+#include "MnDiagCommon.h"
+#include <chrono>
+#include <dcgm_structs.h>
 #include <optional>
+#include <string>
 
 
 /**
@@ -82,11 +86,11 @@ public:
     virtual void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds) = 0;
 
     /**
-     * @brief Set the path to the mnubergemm binary
+     * @brief Set the expected binary path
      *
-     * @param path The path to the mnubergemm binary
+     * @param path The path to the expected binary
      */
-    virtual void SetMnubergemmPath(std::string const &path) = 0;
+    virtual void SetExpectedBinaryPath(std::string const &path) = 0;
 
 private:
     // ... existing code ...

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,13 +34,14 @@ Usage: ${0} [options] [command]
         -a | --arch NAME       : Architecture to build for (amd64|x86_64, aarch64|arm64)
         -e | --env VAR=VALUE   : Environment variables for the launched container
         -n | --name            : Print docker image name and exit
+             --ccache          : Use a persistent host cache for ccache and sccache
         -h | --help            : Print this help and exit
 
     Command will be run inside the docker container
 "
 }
 
-LONG_OPTS=arch:,env:,help,name
+LONG_OPTS=arch:,ccache,env:,help,name
 SHORT_OPTS=a:,e:,h,n
 
 ! PARSED=$(getopt --options=${SHORT_OPTS} --longoptions=${LONG_OPTS} --name "${0}" -- "$@")
@@ -51,6 +52,7 @@ fi
 
 eval set -- "${PARSED}"
 
+CCACHE=0
 PRINT_NAME_ONLY=0
 TARGET_ARCH=$(uname -m) # Default to host architecture
 
@@ -61,6 +63,10 @@ while true; do
     -a|--arch)
         TARGET_ARCH=$2
         shift 2
+        ;;
+    --ccache)
+        CCACHE=1
+        shift
         ;;
     -e|--env)
         docker_args+=(--env "$2")
@@ -96,10 +102,10 @@ aarch64 | arm64 | arm)
     ;;
 *)
     >&2 echo "Unknown architecture $TARGET_ARCH"
-
     exit 1
     ;;
 esac
+
 image="$DCGM_DOCKER_IMAGE-$TARGET_ARCH"
 
 if [[ -z "$image" ]]; then
@@ -108,7 +114,7 @@ if [[ -z "$image" ]]; then
 fi
 
 if [[ $PRINT_NAME_ONLY -eq 1 ]]; then
-    echo $image
+    echo "$image"
     exit
 fi
 
@@ -131,16 +137,32 @@ if [[ -f "$DIR/.git" ]]; then
     GITDIR="$(git rev-parse --path-format=absolute --git-common-dir)"
 
     if [[ "$REMOTE_DIR" != "$DIR" ]]; then
-        docker_args+=( --mount "source=$DIR,target=$DIR,type=bind" )
+        docker_args+=(--mount "source=$DIR,target=$DIR,type=bind")
     fi
 
-    if [[ "$REMOTE_DIR" != "$(dirname $GITDIR)" ]]; then
-        docker_args+=( --mount "source=$GITDIR,target=$GITDIR,type=bind" )
+    if [[ "$REMOTE_DIR" != "$(dirname "$GITDIR")" ]]; then
+        docker_args+=(--mount "source=$GITDIR,target=$GITDIR,type=bind")
     fi
 fi
 
 if ! (docker info -f '{{println .SecurityOptions}}' | grep rootless); then
-    docker_args+=(--user $(id -u):$(id -g))
+    docker_args+=(--user "$(id -u):$(id -g)")
 fi
 
-docker run "${docker_args[@]}" $image "$@"
+if [[ $CCACHE -eq 1 ]]; then
+    CACHE_DIR="$DIR/_out/compiler-cache"
+    mkdir --parents "$CACHE_DIR"
+
+    docker_args+=(
+        --volume "$CACHE_DIR:/ccache"
+        --env CCACHE_BASEDIR="$REMOTE_DIR"
+        --env CCACHE_DIR=/ccache
+        --env CCACHE_COMPILERCHECK=content
+        --env CMAKE_C_COMPILER_LAUNCHER=ccache
+        --env CMAKE_CXX_COMPILER_LAUNCHER=ccache
+        --env SCCACHE_DIR=/ccache
+        --env CARGO_INCREMENTAL=0
+        --env RUSTC_WRAPPER=sccache)
+fi
+
+docker run "${docker_args[@]}" "$image" "$@"

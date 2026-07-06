@@ -169,7 +169,9 @@ typedef enum dcgmError_enum
     DCGM_FR_GPU_RECOVERY_DRAIN_RESET       = 128, //!< 128 GPU operating at reduced capacity, drain and reset required
     DCGM_FR_NCCL_ERROR                     = 129, //!< 129 Detected a NCCL error
     DCGM_FR_RETEST_REQUESTED               = 130, //!< 130 Retest requested before providing results
-    DCGM_FR_ERROR_SENTINEL                 = 131, //!< 131 MUST BE THE LAST ERROR CODE
+    DCGM_FR_CONTAINED_ERROR                = 131, //!< 131 GPU contained error
+    DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT  = 132, //!< 132 Uncorrectable row remap threshold exceeded
+    DCGM_FR_ERROR_SENTINEL                 = 133, //!< 133 MUST BE THE LAST ERROR CODE
 } dcgmError_t;
 
 typedef enum dcgmErrorSeverity_enum
@@ -440,10 +442,13 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 // gpu id
 #define DCGM_FR_ROW_REMAP_FAILURE_MSG            "GPU %u had uncorrectable memory errors and row remapping failed."
 #define DCGM_FR_UNCONTAINED_ERROR_MSG            "GPU had an uncontained error (XID 95)"
+#define DCGM_FR_CONTAINED_ERROR_MSG              "GPU had a contained error."
 #define DCGM_FR_EMPTY_GPU_LIST_MSG               "No valid GPUs passed to plugin"
 #define DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_MSG "Pending page retirements together with a DBE were detected on GPU %u."
 // gpu id, rows remapped
 #define DCGM_FR_UNCORRECTABLE_ROW_REMAP_MSG "GPU %u had uncorrectable memory errors and %u rows were remapped"
+// gpu id, rows remapped
+#define DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT_MSG "GPU %u exceeded uncorrectable row remap limit with %u remapped rows"
 // gpu id
 #define DCGM_FR_PENDING_ROW_REMAP_MSG "GPU %u had memory errors and row remappings are pending"
 // gpu id, test name
@@ -639,16 +644,20 @@ extern dcgm_error_meta_t dcgmErrorMeta[];
 #define DCGM_FR_GPU_OP_MODE_NEXT                                     \
     "Fix by running nvidia-smi as root with: nvidia-smi --gom=0 -i " \
     "<gpu index>"
-#define DCGM_FR_NO_MEMORY_CLOCKS_NEXT                ""
-#define DCGM_FR_NO_GRAPHICS_CLOCKS_NEXT              ""
-#define DCGM_FR_HAD_TO_RESTORE_STATE_NEXT            SYSTEM_TRIAGE_MSG
-#define DCGM_FR_L1TAG_UNSUPPORTED_NEXT               CONFIG_MSG
-#define DCGM_FR_L1TAG_MISCOMPARE_NEXT                TRIAGE_RUN_FIELD_DIAG_MSG
-#define DCGM_FR_ROW_REMAP_FAILURE_NEXT               TRIAGE_RUN_FIELD_DIAG_MSG
-#define DCGM_FR_UNCONTAINED_ERROR_NEXT               DCGM_FR_VOLATILE_DBE_DETECTED_NEXT
+#define DCGM_FR_NO_MEMORY_CLOCKS_NEXT     ""
+#define DCGM_FR_NO_GRAPHICS_CLOCKS_NEXT   ""
+#define DCGM_FR_HAD_TO_RESTORE_STATE_NEXT SYSTEM_TRIAGE_MSG
+#define DCGM_FR_L1TAG_UNSUPPORTED_NEXT    CONFIG_MSG
+#define DCGM_FR_L1TAG_MISCOMPARE_NEXT     TRIAGE_RUN_FIELD_DIAG_MSG
+#define DCGM_FR_ROW_REMAP_FAILURE_NEXT \
+    "Row remapping failure indicates unrecoverable memory hardware damage. Reset the GPU or reboot the node immediately."
+#define DCGM_FR_UNCONTAINED_ERROR_NEXT DCGM_FR_VOLATILE_DBE_DETECTED_NEXT
+#define DCGM_FR_CONTAINED_ERROR_NEXT \
+    "Restart the application that encountered the error. Other applications on the GPU can continue running. GPU reset can be deferred until a convenient time."
 #define DCGM_FR_DBE_PENDING_PAGE_RETIREMENTS_NEXT    "Drain the GPU and reset it or reboot the node to resolve this issue."
 #define DCGM_FR_EMPTY_GPU_LIST_NEXT                  CONFIG_MSG
 #define DCGM_FR_UNCORRECTABLE_ROW_REMAP_NEXT         ""
+#define DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT_NEXT   TRIAGE_RUN_FIELD_DIAG_MSG
 #define DCGM_FR_PENDING_ROW_REMAP_NEXT               SYSTEM_TRIAGE_MSG
 #define DCGM_FR_BROKEN_P2P_MEMORY_DEVICE_NEXT        BUG_REPORT_MSG
 #define DCGM_FR_BROKEN_P2P_WRITER_DEVICE_NEXT        BUG_REPORT_MSG

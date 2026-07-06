@@ -18,6 +18,7 @@
 #include <catch2/catch_all.hpp>
 #include <dcgm_structs.h>
 #include <filesystem>
+#include <initializer_list>
 #include <string>
 #include <tclap/ArgException.h>
 #include <unordered_set>
@@ -240,5 +241,101 @@ TEST_CASE("infer_mnubergemm_default_path")
 
         REQUIRE(result == DCGM_ST_NO_DATA);
         REQUIRE(mnubergemm_path.empty());
+    }
+}
+
+TEST_CASE("ParseTimeToRunSeconds")
+{
+    auto makeParams = [](std::initializer_list<std::string> entries) {
+        dcgmRunMnDiag_t p = {};
+        int i             = 0;
+        for (auto const &e : entries)
+        {
+            e.copy(p.testParms[i], DCGM_MAX_TEST_PARMS_LEN_V2 - 1);
+            ++i;
+        }
+        return p;
+    };
+
+    SECTION("Key absent returns 0")
+    {
+        auto p      = makeParams({});
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 0);
+    }
+
+    SECTION("Key present with valid value")
+    {
+        auto p      = makeParams({ "mnubergemm.time_to_run=300" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 300);
+    }
+
+    SECTION("Value extracted before semicolon delimiter")
+    {
+        auto p      = makeParams({ "mnubergemm.time_to_run=600;other=value" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 600);
+    }
+
+    SECTION("Key as suffix does not match (anchored-prefix fix)")
+    {
+        // "foo.mnubergemm.time_to_run=300" must NOT match key "mnubergemm.time_to_run"
+        auto p      = makeParams({ "foo.mnubergemm.time_to_run=300" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 0);
+    }
+
+    SECTION("Key present without '=' returns DCGM_ST_BADPARAM")
+    {
+        auto p      = makeParams({ "mnubergemm.time_to_run" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error() == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Key that is a prefix of a longer key does not match")
+    {
+        // "mnubergemm.time_to_run_extra=300" must NOT match key "mnubergemm.time_to_run"
+        auto p      = makeParams({ "mnubergemm.time_to_run_extra=300" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 0);
+    }
+
+    SECTION("Non-integer value returns DCGM_ST_BADPARAM")
+    {
+        auto p      = makeParams({ "mnubergemm.time_to_run=abc" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error() == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Zero value returns DCGM_ST_BADPARAM")
+    {
+        auto p      = makeParams({ "mnubergemm.time_to_run=0" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error() == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Negative value returns DCGM_ST_BADPARAM")
+    {
+        auto p      = makeParams({ "mnubergemm.time_to_run=-1" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE_FALSE(result.has_value());
+        REQUIRE(result.error() == DCGM_ST_BADPARAM);
+    }
+
+    SECTION("Matching entry among multiple entries")
+    {
+        auto p      = makeParams({ "other.param=1", "mnubergemm.time_to_run=120", "another.param=2" });
+        auto result = ParseTimeToRunSeconds(p, "mnubergemm.time_to_run");
+        REQUIRE(result.has_value());
+        REQUIRE(*result == 120);
     }
 }

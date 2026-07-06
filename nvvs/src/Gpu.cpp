@@ -57,7 +57,7 @@ dcgmReturn_t Gpu::Init()
     }
 
     dcgmFieldValue_v2 value = {};
-    ret = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, DCGM_FV_FLAG_LIVE_DATA, value);
+    ret = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, DCGM_FV_FLAG_LIVE_DATA, value);
     if (ret != DCGM_ST_OK)
     {
         log_error("Unable to get GPU {}'s compute capability: {}", m_index, dcgmHandle.RetToString(ret));
@@ -67,7 +67,7 @@ dcgmReturn_t Gpu::Init()
     m_gpuArch = value.value.i64;
 
     value = {};
-    ret   = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_GPU_MAX_OP_TEMP, DCGM_FV_FLAG_LIVE_DATA, value);
+    ret   = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_GPU_MAX_OP_TEMP_CELSIUS, DCGM_FV_FLAG_LIVE_DATA, value);
     if (ret != DCGM_ST_OK)
     {
         log_error("Unable to get GPU {}'s max operating temperature: {}", m_index, dcgmHandle.RetToString(ret));
@@ -77,7 +77,7 @@ dcgmReturn_t Gpu::Init()
     m_maxGpuOpTemp = value.value.i64;
 
     value = {};
-    ret   = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_SERIAL, DCGM_FV_FLAG_LIVE_DATA, value);
+    ret   = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_BOARD_SERIAL, DCGM_FV_FLAG_LIVE_DATA, value);
     if (ret != DCGM_ST_OK)
     {
         log_error("Unable to get GPU {}'s serial: {}", m_index, dcgmHandle.RetToString(ret));

@@ -20,10 +20,19 @@ class ParseDcgmProftesterSingleMetric:
     "class for parsing a single metric"
 
     def __init__(self):
-        self.data_lines_lines = ['PcieTxBytes', 'PcieRxBytes', 'GrActivity:', 'SmActivity',
-                                 'SmActivity:', 'SmOccupancy', 'SmOccupancy:',
-                                 'TensorEngineUtil', 'DramUtil', 'Fp64EngineUtil',
-                                 'Fp32EngineUtil', 'Fp16EngineUtil']
+        self.data_lines_lines = [
+            'PcieTxBytes',
+            'PcieRxBytes',
+            'GrActivity:',
+            'SmActivity',
+            'SmActivity:',
+            'SmOccupancy',
+            'SmOccupancy:',
+            'TensorEngineUtil',
+            'DramUtil',
+            'Fp64EngineUtil',
+            'Fp32EngineUtil',
+            'Fp16EngineUtil']
         self.d_cpu_count = {}
 
     def getDataString(self, metric):
@@ -100,11 +109,17 @@ def main(cmdArgs):
 def parseCommandLine():
     parser = argparse.ArgumentParser(
         description="Parse logs from dcgmLogs into a csv")
-    parser.add_argument("-f", "--fileName", required=True, help="fielName of the \
+    parser.add_argument("-f", "--fileName", required=True,
+                        help="fielName of the \
                         file to be parsed and outputted to csv")
-    parser.add_argument("-m", "--metric", required=True, help="metric for which the data is being \
+    parser.add_argument(
+        "-m",
+        "--metric",
+        required=True,
+        help="metric for which the data is being \
                         analyzed")
-    parser.add_argument("-i", "--gpu_index", required=False, default='0', help="metric for which \
+    parser.add_argument("-i", "--gpu_index", required=False,
+                        default='0', help="metric for which \
                         the data is being analyzed")
     args = parser.parse_args()
     return args

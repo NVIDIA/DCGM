@@ -61,5 +61,8 @@ if [[ $ARCHITECTURE != "x86_64" ]]
 then
 cat <<EOF >> /.cargo/config.toml
 runner = "/usr/bin/qemu-$ARCHITECTURE -L /opt/cross/$ARCHITECTURE-linux-gnu/sysroot"
+
+[target.x86_64-unknown-linux-gnu]
+linker = "/usr/bin/clang"
 EOF
 fi

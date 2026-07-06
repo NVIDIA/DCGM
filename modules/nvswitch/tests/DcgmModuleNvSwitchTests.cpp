@@ -67,7 +67,7 @@ TEST_CASE("RunOnce with active watches to test watch interval is honored.")
     REQUIRE(ret == DCGM_ST_OK);
 
     // Set up watch parameters on NvSwitch fields
-    unsigned short fieldIds[2] = { DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT, DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT };
+    unsigned short fieldIds[2] = { DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT, DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS };
     DcgmWatcher watcher;
     std::chrono::milliseconds nextUpdateMs;
     std::chrono::milliseconds constexpr LINK_STATUS_RESCAN_INTERVAL_MS = std::chrono::seconds(30);
@@ -139,4 +139,18 @@ TEST_CASE("RunOnce with active watches to test watch interval is honored.")
         // The returned value should be equal to the minimum update interval (1ms)
         CHECK(nextUpdateMs == MIN_UPDATE_INTERVAL_MS);
     }
+}
+
+TEST_CASE("DcgmModuleNvSwitch::ProcessMessage rejects null moduleCommand")
+{
+    auto ret = DcgmFieldsInit();
+    REQUIRE(ret == DCGM_ST_OK);
+
+    dcgmCoreCallbacks_t dcc
+        = { .version  = dcgmCoreCallbacks_version,
+            .postfunc = [](dcgm_module_command_header_t *, void *) -> dcgmReturn_t { return DCGM_ST_OK; },
+            .poster     = nullptr,
+            .loggerfunc = [](void const *) { /* do nothing */ } };
+    TestDcgmModuleNvSwitch nvSwitchModule(dcc);
+    CHECK(nvSwitchModule.ProcessMessage(nullptr) == DCGM_ST_BADPARAM);
 }

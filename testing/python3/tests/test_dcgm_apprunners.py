@@ -23,11 +23,13 @@ import apps
 import time
 
 
+# NO HARDWARE
+
 @test_utils.run_only_on_linux()
 @test_utils.run_only_on_bare_metal()
 def test_nv_hostengine_app():
     """
-    Verifies that nv-hostengine can be lauched properly and 
+    Verifies that nv-hostengine can be lauched properly and
     can run for whatever timeout it's given in seconds
     """
 
@@ -46,11 +48,13 @@ def test_nv_hostengine_app():
     logger.debug("nv-hostengine PID was %d" % pid)
 
 
+# NO HARDWARE
+
 @test_utils.run_only_on_linux()
 @test_utils.run_only_on_bare_metal()
 def test_dcgmi_app():
     """
-    Verifies that dcgmi can be lauched properly with 
+    Verifies that dcgmi can be lauched properly with
     2 parameters at least
     """
 
@@ -69,18 +73,13 @@ def test_dcgmi_app():
     logger.debug("dcgmi PID was %d" % pid)
 
 
-@test_utils.run_only_on_linux()
-@test_utils.run_only_on_bare_metal()
-@test_utils.run_only_with_all_supported_gpus()
-@test_utils.skip_denylisted_gpus(["GeForce GT 640"])
-@test_utils.run_only_with_nvml()
-def test_dcgm_unittests_app(*args, **kwargs):
+def helper_dcgm_unittests_app(args):
     """
     Runs the testdcgmunittests app and verifies if there are any failing tests
     """
 
     # Run testsdcgmunittests
-    unittest_app = apps.TestDcgmUnittestsApp()
+    unittest_app = apps.TestDcgmUnittestsApp(args)
     unittest_app.run(1000)
 
     # Getting testsdcgmunittests process id
@@ -91,3 +90,12 @@ def test_dcgm_unittests_app(*args, **kwargs):
     unittest_app.wait()
     unittest_app.validate()
     assert unittest_app._retvalue == 0, "Unittest failed with return code %s" % unittest_app._retvalue
+
+
+@test_utils.run_only_on_linux()
+@test_utils.run_only_on_bare_metal()
+@test_utils.run_only_with_all_supported_gpus()
+@test_utils.skip_denylisted_gpus(["GeForce GT 640"])
+@test_utils.run_only_with_nvml()
+def test_dcgm_unittests_app(*args, **kwargs):
+    helper_dcgm_unittests_app([])

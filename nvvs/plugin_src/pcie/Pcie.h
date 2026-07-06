@@ -22,6 +22,7 @@
 #include <cublas_proxy.hpp>
 #include <dcgm_structs.h>
 
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -104,7 +105,7 @@ class BusGrind : public Plugin
 {
 public:
     BusGrind(dcgmHandle_t handle);
-    ~BusGrind();
+    virtual ~BusGrind();
 
     /* Cached parameters */
     bool test_pinned;
@@ -133,7 +134,7 @@ public:
     bool m_dcgmCommErrorOccurred;
     bool m_printedConcurrentGpuErrorMessage;
 
-    TestParameters *m_testParameters; /* Parameters passed in from the framework */
+    std::unique_ptr<TestParameters> m_testParameters; /* Parameters passed in from the framework */
     DcgmRecorder m_dcgmRecorder;
 
     double m_testDuration; /* Test duration in seconds */
@@ -257,7 +258,10 @@ private:
 
     std::unique_ptr<DcgmRecorderBase, std::function<void(DcgmRecorderBase *)>> m_dcgmRecorderPtr;
 
+    TestParameters m_defaultTestParameters;
+
     friend class BusGrindTest;
+    friend int bg_check_pci_link(BusGrind &bg, std::string subTest);
 };
 
 namespace

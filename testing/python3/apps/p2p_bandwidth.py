@@ -42,4 +42,5 @@ class RunP2Pbandwidth(app_runner.AppRunner):
         self.stdout_readtillmatch(lambda x: x.find("test PASSED") != -1)
 
     def __str__(self):
-        return "RunP2Pbandwidth on all supported devices " + super(RunP2Pbandwidth, self).__str__()
+        return "RunP2Pbandwidth on all supported devices " + \
+            super(RunP2Pbandwidth, self).__str__()

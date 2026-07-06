@@ -43,9 +43,10 @@ def test_connection_disconnect_error_after_shutdown():
 
 
 @test_utils.run_with_standalone_host_engine(passAppAsArg=True)
-def test_dcgm_standalone_connection_disconnect_error_after_hostengine_terminate(handle, hostengineApp):
+def test_dcgm_standalone_connection_disconnect_error_after_hostengine_terminate(
+        handle, hostengineApp):
     '''
-    Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after 
+    Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after
     the hostengine process is terminated via `nv-hostengine --term`.
     '''
 
@@ -68,9 +69,11 @@ def test_dcgm_standalone_connection_disconnect_error_after_hostengine_terminate(
 
 
 @test_utils.run_with_standalone_host_engine(passAppAsArg=True)
-def test_dcgm_standalone_connection_disconnect_error_after_hostengine_murder(handle, hostengineApp):
+def test_dcgm_standalone_connection_disconnect_error_after_hostengine_murder(
+        handle,
+        hostengineApp):
     '''
-    Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after 
+    Test that DCGM_ST_CONNECTION_NOT_VALID is returned when the dcgm API is used after
     the hostengine process is killed via a `SIGKILL` signal.
     '''
     handle = pydcgm.DcgmHandle(handle)
@@ -94,7 +97,8 @@ def test_dcgm_connection_error_when_no_ip4_hostengine_exists():
 
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(
                                   dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID)):
-        # use a TEST-NET (rfc5737) addr instead of loopback in case a local hostengine is running
+        # use a TEST-NET (rfc5737) addr instead of loopback in case a local
+        # hostengine is running
         handle = pydcgm.DcgmHandle(ipAddress='192.0.2.0', timeoutMs=100)
 
 
@@ -106,7 +110,8 @@ def test_dcgm_connection_error_when_no_ipv6_hostengine_exists():
 
     with test_utils.assert_raises(dcgm_structs.dcgmExceptionClass(
                                   dcgm_structs.DCGM_ST_CONNECTION_NOT_VALID)):
-        # use a ULA (rfc4193) instead of loopback in case a local hostengine is running
+        # use a ULA (rfc4193) instead of loopback in case a local hostengine is
+        # running
         pydcgm.DcgmHandle(ipAddress='[fd00::7fff:42]', timeoutMs=100)
 
 
@@ -135,9 +140,10 @@ def test_dcgm_connection_client_cleanup(handle, gpuIds):
     '''
     Make sure that resources that were allocated by a client are cleaned up
     '''
-    fieldGroupFieldIds = [dcgm_fields.DCGM_FI_DEV_GPU_TEMP, ]
+    fieldGroupFieldIds = [dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS, ]
 
-    # Get a 2nd connection which we'll check for cleanup. Use the raw APIs so we can explicitly cleanup
+    # Get a 2nd connection which we'll check for cleanup. Use the raw APIs so
+    # we can explicitly cleanup
     connectParams = dcgm_structs.c_dcgmConnectV2Params_v1()
     connectParams.version = dcgm_structs.c_dcgmConnectV2Params_version
     connectParams.persistAfterDisconnect = 0
@@ -203,7 +209,9 @@ def _test_connection_helper(domainSocketName):
     v2Struct.version = dcgm_structs.c_dcgmConnectV2Params_version2
     v2Struct.addressIsUnixSocket = 1
     v2Handle = dcgm_agent.dcgmConnect_v2(
-        domainSocketName, v2Struct, dcgm_structs.c_dcgmConnectV2Params_version2)
+        domainSocketName,
+        v2Struct,
+        dcgm_structs.c_dcgmConnectV2Params_version2)
     # Use the handle, which will throw an exception on error
     gpuIds2 = dcgm_agent.dcgmGetAllSupportedDevices(v2Handle)
     dcgm_agent.dcgmDisconnect(v2Handle)
@@ -224,7 +232,9 @@ def _test_connection_helper(domainSocketName):
 # domainSocketFilename = '/tmp/dcgm_test%s' % (datetime.datetime.now().strftime("%j%f"))
 
 @test_utils.get_domainSocketFilename_and_heArgs()
-@test_utils.run_with_standalone_host_engine(20, heArgs=[], initializedClient=False)
+@test_utils.run_with_standalone_host_engine(20,
+                                            heArgs=[],
+                                            initializedClient=False)
 @test_utils.run_only_with_nvml()
 def test_dcgm_connection_domain_socket(domainSocketFilename):
     '''
@@ -238,7 +248,9 @@ defaultSocketFilename = '/tmp/nv-hostengine'
 
 
 @test_utils.run_only_as_root()
-@test_utils.run_with_standalone_host_engine(20, heArgs=['-d'], initializedClient=False)
+@test_utils.run_with_standalone_host_engine(20,
+                                            heArgs=['-d'],
+                                            initializedClient=False)
 @test_utils.run_only_with_nvml()
 def test_dcgm_connection_domain_socket_default():
     '''
@@ -285,25 +297,36 @@ def _connect_v3_helper(connectionString, connectParams):
     connectParams.persistAfterDisconnect = 0
     connectParams.timeoutMs = 1000
     handle = dcgm_agent.dcgmConnect_v3(
-        connectionString, connectParams, dcgm_structs.c_dcgmConnectV3Params_version)
+        connectionString,
+        connectParams,
+        dcgm_structs.c_dcgmConnectV3Params_version)
     gpuIds = dcgm_agent.dcgmGetAllSupportedDevices(handle)
     dcgm_agent.dcgmDisconnect(handle)
 
 
-@test_utils.run_with_standalone_host_engine(20, heArgs=['--port', '5545'], initializedClient=False)
+@test_utils.run_with_standalone_host_engine(
+    20, heArgs=['--port', '5545'], initializedClient=False)
 def test_dcgm_connect_v3_ip4():
     _connect_v3_helper(
         'localhost:5545', dcgm_structs.c_dcgmConnectV3Params_v1())
 
 
 @test_utils.run_with_ipv6_enabled()
-@test_utils.run_with_standalone_host_engine(20, heArgs=['-b', '[::1]', '--port', '5545'], initializedClient=False)
+@test_utils.run_with_standalone_host_engine(20,
+                                            heArgs=['-b',
+                                                    '[::1]',
+                                                    '--port',
+                                                    '5545'],
+                                            initializedClient=False)
 def test_dcgm_connect_v3_ip6():
     _connect_v3_helper('tcp://[::1]:5545',
                        dcgm_structs.c_dcgmConnectV3Params_v1())
 
 
-@test_utils.run_with_standalone_host_engine(20, heArgs=['-d', '/tmp/nv-hostengine_test'], initializedClient=False)
+@test_utils.run_with_standalone_host_engine(20,
+                                            heArgs=['-d',
+                                                    '/tmp/nv-hostengine_test'],
+                                            initializedClient=False)
 def test_dcgm_connect_v3_domain_socket():
     _connect_v3_helper('unix:///tmp/nv-hostengine_test',
                        dcgm_structs.c_dcgmConnectV3Params_v1())

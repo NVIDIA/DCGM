@@ -28,6 +28,7 @@ TestTopology::~TestTopology()
 int TestTopology::Init(const TestDcgmModuleInitParams &initParams)
 {
     m_gpus = initParams.liveGpuIds;
+
     return 0;
 }
 
@@ -83,12 +84,21 @@ int TestTopology::TestTopologyDevice()
     dcgmReturn_t result = DCGM_ST_OK;
     dcgmDeviceTopology_t topologyInfo;
     std::unique_ptr<dcgmGroupInfo_t> groupIdInfo = std::make_unique<dcgmGroupInfo_t>();
+    memset(&topologyInfo, 0, sizeof(topologyInfo));
     memset(groupIdInfo.get(), 0, sizeof(*groupIdInfo));
 
+    topologyInfo.version = dcgmDeviceTopology_version;
     groupIdInfo->version = dcgmGroupInfo_version;
     result               = dcgmGroupGetInfo(m_dcgmHandle, (dcgmGpuGrp_t)DCGM_GROUP_ALL_GPUS, groupIdInfo.get());
     if (result != DCGM_ST_OK)
         return -1;
+
+    if (m_gpus.size() == 0)
+    {
+        printf("No GPUs provided for TestTopologyDevice.");
+
+        return 0;
+    }
 
     result = dcgmGetDeviceTopology(m_dcgmHandle, m_gpus[0], &topologyInfo);
     if (result == DCGM_ST_NOT_SUPPORTED && m_gpus.size() < 2)
@@ -142,8 +152,10 @@ int TestTopology::TestTopologyGroup()
     dcgmGroupTopology_t groupInfo;
     dcgmGpuGrp_t groupId                         = 0;
     std::unique_ptr<dcgmGroupInfo_t> groupIdInfo = std::make_unique<dcgmGroupInfo_t>();
+    memset(&groupInfo, 0, sizeof(groupInfo));
     memset(groupIdInfo.get(), 0, sizeof(*groupIdInfo));
 
+    groupInfo.version = dcgmGroupTopology_version;
     // Create a group that consists of all GPUs
     result = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_DEFAULT, (char *)"TEST1", &groupId);
     if (result != DCGM_ST_OK)

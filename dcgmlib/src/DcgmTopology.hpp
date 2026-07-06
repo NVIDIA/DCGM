@@ -141,6 +141,19 @@ unsigned int NvLinkScore(dcgmGpuTopologyLevel_t path);
 
 /*************************************************************************/
 /*
+ * Translate an NvLink count into the one-hot topology path representation.
+ */
+dcgmGpuTopologyLevel_t NvLinkPathFromLinkQuantity(unsigned int linkQuantity,
+                                                  unsigned int maxLinks = DCGM_NVLINK_MAX_LINKS_PER_GPU);
+
+/*************************************************************************/
+/*
+ * Translate a 64-bit topology path into the legacy 32-bit topology path representation.
+ */
+dcgmGpuTopologyLevel_v1_t TopologyPathToLegacy(dcgmGpuTopologyLevel_t path);
+
+/*************************************************************************/
+/*
  * Determines whether or not connections has numGpus total gpus that can all be linked together.
  * If there are, outputGpus is set with the gpus from the connection.
  *

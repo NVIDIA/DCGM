@@ -25,7 +25,14 @@ class DcgmPolicyRequest : public DcgmRequest
 public:
     DcgmPolicyRequest(fpRecvUpdates callback, uint64_t userData);
     virtual ~DcgmPolicyRequest();
-    int ProcessMessage(std::unique_ptr<DcgmMessage> msg) override;
+
+    /**
+     * Processes an incoming DCGM message for policy requests.
+     *
+     * @param[in] msg The message to process
+     * @return Status code indicating success (0) or error (non-zero)
+     */
+    [[nodiscard]] int ProcessMessage(std::unique_ptr<DcgmMessage> msg) override;
 
 private:
     bool mIsAckRecvd;

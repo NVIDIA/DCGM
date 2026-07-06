@@ -44,13 +44,14 @@ dcgmReturn_t GetPluginInfo(unsigned int /* pluginInterfaceVersion */, dcgmDiagPl
                                      TS_STR_MAX_MEMORY_CLOCK,
                                      TS_STR_MAX_GRAPHICS_CLOCK,
                                      TS_STR_SBE_ERROR_THRESHOLD,
+                                     TS_STR_ALWAYS_USE_TENSOR,
                                      nullptr };
     char const *description      = "This plugin will keep the list of GPUs at a constant stress level.";
     const dcgmPluginValue_t paramTypes[]
         = { DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamFloat,
             DcgmPluginParamBool, DcgmPluginParamBool,  DcgmPluginParamInt,   DcgmPluginParamInt,
             DcgmPluginParamInt,  DcgmPluginParamFloat, DcgmPluginParamFloat, DcgmPluginParamInt,
-            DcgmPluginParamNone };
+            DcgmPluginParamBool, DcgmPluginParamNone };
     DCGM_CASSERT(sizeof(parameterNames) / sizeof(const char *) == sizeof(paramTypes) / sizeof(const dcgmPluginValue_t),
                  1);
 

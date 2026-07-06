@@ -12,19 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-sys.path.insert(0, '..')
-import test_utils
-import apps
 import time
-import dcgm_agent
-import dcgm_agent_internal
-import dcgm_structs
-import dcgm_fields
-import logger
-import option_parser
 import random
 
-from dcgm_structs import dcgmExceptionClass
+sys.path.insert(0, '..')
+import test_utils  # noqa: E402
+import apps  # noqa: E402
+import dcgm_agent  # noqa: E402
+import dcgm_agent_internal  # noqa: E402
+import dcgm_structs  # noqa: E402
+import dcgm_fields  # noqa: E402
+import logger  # noqa: E402
+import option_parser  # noqa: E402
+
+from dcgm_structs import dcgmExceptionClass  # noqa: E402
 
 g_processesPerSecond = 5  # How many processes should we launch per second
 g_processRunTime = 0.1  # How long should each process run in seconds
@@ -89,7 +90,7 @@ class ProcessStatsStress:
             self.gpus.append(newGpu)
 
             # Get the busid of the GPU
-            fieldId = dcgm_fields.DCGM_FI_DEV_PCI_BUSID
+            fieldId = dcgm_fields.DCGM_FI_DEV_PCI_BUS_ID
             updateFreq = 100000
             maxKeepAge = 3600.0  # one hour
             maxKeepEntries = 0  # no limit
@@ -115,7 +116,11 @@ class ProcessStatsStress:
         maxKeepAge = 3600.0
         maxKeepEntries = 0
         dcgm_agent.dcgmWatchPidFields(
-            self.heHandle, self.groupId, updateFreq, maxKeepAge, maxKeepEntries)
+            self.heHandle,
+            self.groupId,
+            updateFreq,
+            maxKeepAge,
+            maxKeepEntries)
 
     def StartAppOnGpus(self):
 
@@ -146,7 +151,8 @@ class ProcessStatsStress:
         # Do we have any pids that have finished yet? Clean them up
         while len(self.addedPids) > pidBuffer:
 
-            # Look up PID info on a random PID that should be done. Assuming 3 seconds is enough
+            # Look up PID info on a random PID that should be done. Assuming 3
+            # seconds is enough
             pidIndex = random.randint(0, len(self.addedPids) - pidBuffer)
 
             pidObj = self.addedPids[pidIndex]
@@ -154,11 +160,13 @@ class ProcessStatsStress:
             try:
                 processStats = dcgm_agent.dcgmGetPidInfo(
                     self.heHandle, self.groupId, pidObj.pid)
-                self.Log("Found pid stats for pid %d. gpuId %d. returned pid %d" % (
-                    pidObj.pid, pidObj.gpuId, processStats.pid))
+                self.Log(
+                    "Found pid stats for pid %d. gpuId %d. returned pid %d" %
+                    (pidObj.pid, pidObj.gpuId, processStats.pid))
             except dcgmExceptionClass(dcgm_structs.DCGM_ST_NO_DATA):
                 self.Log(
-                    "Pid %d hasn't finished yet. Sleeping to allow cuda to catch up" % pidObj.pid)
+                    "Pid %d hasn't finished yet. Sleeping to allow cuda to catch up" %
+                    pidObj.pid)
                 time.sleep(1.0)
                 break
 

@@ -1,0 +1,124 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+DCGM Field Naming Standard
+
+Source of truth for the EBNF grammar and terminal symbols governing
+DCGM field identifier names (DCGM_FI_*) in dcgm_fields.h.
+
+
+field_name = prefix "_" domain "_" subsystem "_" property ["_"unit] ["_"suffix]
+
+prefix     = "DCGM_FI"
+domain     = "CUDA" | "DEV" | "PROF" | ...
+subsystem  = "BOARD" | "CLOCKS" | "DEC" | ...
+property   = "BRAND" | "CLOCK" | "CLIQUE_ID" | ...
+unit       = "BYTES" | "CELSIUS" | "HERTZ" | ...
+suffix     = "RATIO" | "TOTAL"
+
+
+Notes:
+- Memory is MEMORY when used in subsystem, MEM when used in property.
+- Fields are GPU by default unless the subsystem specifies otherwise (e.g. CONNECTX, CPU).
+"""
+AFFINITY_SEGMENTS = {f"AFFINITY_{i}" for i in range(4)}
+DIAG_RESULTS = {
+    f"{test}_RESULT"
+    for test in (
+        "CPU_EUD", "DIAGNOSTIC", "EUD", "MEMORY", "MEMORY_BANDWIDTH",
+        "MEMTEST", "NCCL_TESTS", "NVBANDWIDTH", "PCIE", "PULSE_TEST",
+        "SOFTWARE", "TARGETED_POWER", "TARGETED_STRESS",
+    )
+}
+ECC_LOCATIONS = {
+    f"{error}_{persistence}_{location}"
+    for error in ("DBE", "SBE")
+    for persistence in ("AGG", "VOL")
+    for location in ("CBU", "DEV", "L1", "L2", "REG", "SHM", "SRM", "TEX")
+}
+NVLINK_ERRORS = {
+    f"{error}_ERROR_L{lane}"
+    for error in ("CRC_DATA", "CRC_FLIT", "RECOVERY", "REPLAY")
+    for lane in range(18)
+}
+NVSWITCH_ERRORS = {
+    f"LINK_{error}_ERROR_L{lane}"
+    for error in ("CRC", "ECC")
+    for lane in range(8)
+}
+NVSWITCH_LATENCY = {
+    f"LINK_LATENCY_{bucket}_VC{vc}"
+    for bucket in ("HIGH", "LOW", "MEDIUM", "PANIC", "SAMPLE")
+    for vc in range(4)
+}
+NVSWITCH_PCIE = {
+    f"LINK_{remote}PCIE_{field}"
+    for remote in ("", "REMOTE_")
+    for field in ("BUS", "DEVICE", "DOMAIN", "FUNCTION")
+}
+REMAP_AVAIL = {
+    f"REMAP_AVAIL_{bucket}"
+    for bucket in ("HIGH", "LOW", "MAX", "NONE", "PARTIAL")
+}
+UTIL_INDICES = {
+    f"UTIL_{index}"
+    for index in range(8)
+}
+
+
+PREFIX = {"DCGM_FI"}
+
+DOMAIN = {"CUDA", "DEV", "IMEX", "PROF", "SYSTEM"}
+
+SUBSYSTEM = {
+    "BANK", "BOARD", "C2C", "CC", "CLOCKS", "CONNECTX", "CPU", "DAEMON", "DEC", "DFMA", "DIAG", "DMMA", "DOMAIN", "DRAM", "DRIVER",
+    "ECC", "ENC", "FABRIC", "FABRIC_MANAGER", "FB", "FBC", "FIELD", "FP16", "FP32", "FP64", "GPM", "GPU", "GR_ENGINE", "GRAPHICS",
+    "HMMA", "IMMA", "INFOROM", "INT", "MEMORY", "MEMORY_COPY", "MIG", "MMA", "NVDEC", "NVJPG", "NVLINK", "NVML", "NVOFA", "NVSWITCH",
+    "PAGE", "PCI", "PCIE", "PLATFORM", "PROCESS", "ROW", "SM", "SRAM", "SXID", "TENSOR", "VBIOS", "VGPU", "XID",
+}
+
+PROPERTY = ({
+    "ACCOUNTING_STATS", "AFFINITY", "ATTRIBUTES", "AUTOBOOST_MODE", "BIND_EVENT", "BRAND", "BUS_ID", "CLOCK", "CLIQUE_ID",
+    "CLUSTER_UUID", "CHASSIS_SERIAL_NUMBER", "CHASSIS_SLOT_NUMBER", "CHECKSUM", "CI_INFO", "CREATABLE_IDS", "CRC_DATA_ERROR",
+    "CRC_ERROR", "CRC_FLIT_ERROR", "COMBINED_ID", "COMPUTE_CAPABILITY", "COMPUTE_MODE", "CORRECTABLE_ERROR", "CYCLES_ACTIVE",
+    "CYCLES_ELAPSED", "DBE_AGG", "DBE_VOL", "DRIVER_VERSION", "ECC_ERROR", "ECC_VERSION", "EFFECTIVE_BER", "EFFECTIVE_BER_RAW",
+    "EFFECTIVE_ERROR", "ENC_SESSIONS_INFO", "ENC_STATS", "ENERGY", "ERROR", "EVENT_REASONS", "EXCEEDED", "FATAL_ERROR",
+    "FBC_SESSIONS_INFO", "FRAME_RATE_LIMIT", "GI_INFO", "GPU_INSTANCE_ID", "HEALTH", "HEALTH_MASK", "HEALTH_SUMMARY", "HOST_ID",
+    "IMAGE_VERSION", "INDEX", "INFINIBAND_GUID", "INSTANCE_INFO", "INSTANCE_LICENSE_STATUS", "INTEGRITY_ERROR", "LICENSE_STATUS",
+    "LIMIT_THROTTLE", "LINK_CRC_ERROR", "LINK_ECC_ERROR", "LINK_FATAL_ERRORS", "LINK_FLIT_ERROR", "LINK_GEN", "LINK_ID",
+    "LINK_NON_FATAL_ERRORS", "LINK_QUANTITY", "LINK_RECOVERY_ERROR", "LINK_REMOTE_LINK_ID", "LINK_REMOTE_LINK_SID", "LINK_REPLAY_ERROR",
+    "LINK_STATUS", "LINK_TYPE", "LINK_WIDTH", "LOW_UTIL_THROTTLE", "MAX_OP_TEMP", "MAX_LINK_GEN", "MAX_LINK_WIDTH", "MAX_SLICES",
+    "MEM_FREE", "MEM_RESERVED", "MEM_USED", "MINOR_NUMBER", "MODE", "MODULE_ID", "NAME", "NON_FATAL_ERROR", "OCCUPANCY", "OEM_VERSION",
+    "P2P_STATUS", "PCI_ID", "PEER_TYPE", "PENDING", "PERSISTENCE_MODE", "PHYSICAL_ID", "PIDS", "POWER", "POWER_DVDD", "POWER_HVDD",
+    "POWER_LIMIT", "POWER_LIMIT_DEFAULT", "POWER_LIMIT_ENFORCED", "POWER_LIMIT_MAX", "POWER_LIMIT_MIN", "POWER_LIMIT_REQUESTED",
+    "POWER_PROFILE_ENFORCED_MASK", "POWER_PROFILE_REQUESTED_MASK", "POWER_PROFILE_SUPPORTED_MASK", "POWER_RAW", "POWER_THROTTLE",
+    "POWER_VDD", "POWER_VERSION", "PPCNT_PHYSICAL_LINK_DOWN", "PPCNT_PHYSICAL_RECOVERY_SUCCESSFUL", "PPCNT_PLR_RX_CODE",
+    "PPCNT_PLR_RX_CODE_ERROR", "PPCNT_PLR_RX_CODE_UNCORRECTABLE", "PPCNT_PLR_SYNC_EVENT", "PPCNT_PLR_TX_CODE",
+    "PPCNT_PLR_TX_RETRY_CODE", "PPCNT_PLR_TX_RETRY_EVENT", "PPCNT_RECOVERY_SUCCESSFUL", "PPRM_OPER_RECOVERY", "PROCESS_UTIL_INFO",
+    "PSTATE", "QUANTITY", "RECOVERY", "RECOVERY_ACTION", "RECOVERY_ERROR", "RECOVERY_EVENT", "RECOVERY_FAILED",
+    "RECOVERY_SUCCESSFUL", "RELIABILITY_THROTTLE", "REMAP_CORRECTABLE", "REMAP_FAILED", "REMAP_PENDING", "REMAP_UNCORRECTABLE",
+    "REPLAY", "REPLAY_ERROR", "RESET_REQUIRED", "RETIRED_DBE", "RETIRED_PENDING", "RETIRED_SBE", "RX", "RX_ERROR",
+    "RX_GENERAL_ERROR", "RX_PACKET", "RX_PACKET_DROPPED", "RX_PACKET_MALFORMED", "RX_REMOTE_ERROR", "RX_SYMBOL_ERROR", "SBE_AGG",
+    "SBE_VOL", "SERIAL", "SESSIONS_INFO", "STATS", "STATUS", "SUBSYS_ID", "SUPPORT", "SUPPORTED", "SUPPORTED_IDS", "SUPPORTED_INFO",
+    "SYMBOL_BER", "SYMBOL_BER_RAW", "SYNC_BOOST", "SYNC_BOOST_THROTTLE", "TEMP", "TEMP_CRITICAL", "TEMP_MARGIN", "TEMP_SHUTDOWN",
+    "TEMP_SLOWDOWN", "TEMP_WARNING", "THERMAL_THROTTLE", "THROUGHPUT", "TOPOLOGY", "TRAY_INDEX", "TX", "TX_PACKET", "TYPE",
+    "TYPE_CLASS", "TYPE_INFO", "TYPE_LICENSE", "TYPE_NAME", "UNCORRECTABLE_ERROR_MASK", "UNCORRECTABLE_ERROR_SEVERITY",
+    "UNCORRECTABLE_ERROR_STATUS", "UNKNOWN", "UNREPAIRABLE", "USED", "UTIL", "UTIL_INFO", "UUID", "VALID", "VERSION", "VIRTUAL_MODE",
+    "VISIBLE_DEVICES", "VM_ID", "VM_NAME",
+} | AFFINITY_SEGMENTS | DIAG_RESULTS | ECC_LOCATIONS | NVLINK_ERRORS | NVSWITCH_ERRORS | NVSWITCH_LATENCY | NVSWITCH_PCIE | REMAP_AVAIL |
+    UTIL_INDICES)
+
+UNIT = {"BYTES", "CELSIUS", "HERTZ", "JOULES", "SECONDS", "WATTS"}
+
+SUFFIX = {"RATIO", "TOTAL"}

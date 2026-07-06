@@ -21,10 +21,30 @@
 #include <dcgm_nvsdm.h>
 #include <dcgm_structs.h>
 
+#include <optional>
+#include <unordered_map>
+
 #include "NvsdmLib.h"
 
 namespace DcgmNs
 {
+
+struct PciInfo
+{
+    uint16_t domain = 0;
+    uint16_t bus    = 0;
+    uint16_t dev    = 0;
+    uint16_t func   = 0;
+};
+
+struct RemoteDeviceInfo
+{
+    nvsdmPort_t port        = nullptr;
+    unsigned int portNum    = 0;
+    uint64_t deviceGuid     = 0;
+    unsigned int deviceType = 0; // NVSDM_DEV_TYPE_SWITCH, NVSDM_DEV_TYPE_CA, etc.
+    std::optional<PciInfo> pci;
+};
 
 struct NvsdmPort
 {
@@ -36,6 +56,7 @@ struct NvsdmPort
     uint16_t lid;
     uint64_t guid;
     uint8_t gid[16];
+    std::optional<RemoteDeviceInfo> remoteDevice;
 };
 
 struct NvsdmDevice
@@ -43,11 +64,13 @@ struct NvsdmDevice
     unsigned int id;
     nvsdmDevice_t device;
     std::string longName;
-    unsigned int portIds[DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH];
+    size_t portIndices[DCGM_NVLINK_MAX_LINKS_PER_NVSWITCH];
     unsigned int numOfPorts;
     uint16_t devID;
     uint32_t vendorID;
     uint64_t guid;
+    std::optional<PciInfo> pci;
+    std::string firmwareVersion;
 };
 
 struct IbCxDevice
@@ -55,8 +78,6 @@ struct IbCxDevice
     NvsdmDevice nvsdmDevice;
     dcgm_ib_cx_info_t info;
 };
-
-enum class ValidateNvLinkIdResult;
 
 class DcgmNvsdmManager : public DcgmNvSwitchManagerBase
 {
@@ -185,9 +206,11 @@ public:
 #ifndef DCGM_NVSWITCH_TEST // Allow nvsdm tests to peek in
 protected:
 #endif
-    std::unique_ptr<NvsdmBase> m_nvsdm;                     // NVSDM Library functions
-    std::vector<NvsdmDevice> m_nvSwitchDevices;             // NVSDM NvSwitch Devices
-    std::vector<NvsdmPort> m_nvSwitchPorts;                 // NVSDM NvSwitch Ports
+    std::unique_ptr<NvsdmBase> m_nvsdm;         // NVSDM Library functions
+    std::vector<NvsdmDevice> m_nvSwitchDevices; // NVSDM NvSwitch Devices
+    std::vector<NvsdmPort> m_nvSwitchPorts;     // NVSDM NvSwitch Ports
+    std::unordered_map<dcgm_field_eid_t, size_t>
+        m_portIdToIndex;                                    // Maps encoded link entity ID -> m_nvSwitchPorts index
     std::vector<IbCxDevice> m_ibCxDevices;                  // NVSDM IB ConnectX Devices
     bool m_attachedToNvsdm = false;                         // Have we attached to nvsdm yet? */
     DcgmNvSwitchError m_fatalErrors[DCGM_MAX_NUM_SWITCHES]; // Fatal errors. Max 1 per switch
@@ -202,39 +225,17 @@ protected:
 
     /*************************************************************************/
     /**
-     * Returns true if the specified link id is present on the host, false otherwise
-     * @note Logs the specified link id if invalid
-     * @param[in] entityId: The link entity ID to validate
-     * @returns: true if valid, false otherwise
+     * Resolve a packed DCGM_FE_LINK entity id (dcgm_link_t.raw) to m_nvSwitchPorts index.
+     * Uses m_portIdToIndex for O(1) average lookup. This is the single boundary
+     * translation between external packed link entity IDs and internal vector indices;
+     * all public entry points that take a DCGM_FE_LINK entityId call this once at the
+     * boundary and then operate on the returned size_t index.
+     *
+     * @param[in] entityId  The packed link entity ID to resolve.
+     *
+     * @return Index into m_nvSwitchPorts if the entity ID is valid and found, std::nullopt otherwise.
      */
-    bool IsValidNvLinkId(dcgm_field_eid_t entityId) const;
-
-    /*************************************************************************/
-    /**
-     * Returns true if the specified link id is present on the host, false otherwise
-     * @note Logs the specified switch id and link id if invalid
-     * @param[in] switchEid: The switch entity ID for logging
-     * @param[in] portEid: The port entity ID to validate
-     * @returns: true if valid, false otherwise
-     */
-    bool IsValidNvLinkId(dcgm_field_eid_t switchEid, dcgm_field_eid_t portEid) const;
-
-    /**
-     * Returns the result of validating the specified link id
-     * @param[in] entityId: The link entity ID to validate
-     * @returns: The result of validating the specified link id
-     */
-    ValidateNvLinkIdResult ValidateNvLinkId(dcgm_field_eid_t entityId) const;
-
-    /**
-     * Logs the validation error based on the specified status
-     * @param[in] status: The validation status
-     * @param[in] entityId: The link entity ID that failed validation
-     * @param[in] switchEid: Optional switch entity ID for enhanced logging context
-     */
-    void LogNvLinkValidationError(ValidateNvLinkIdResult status,
-                                  dcgm_field_eid_t entityId,
-                                  std::optional<dcgm_field_eid_t> switchEid = std::nullopt) const;
+    [[nodiscard]] std::optional<size_t> FindPortVectorIndex(dcgm_field_eid_t entityId) const;
 
     /*************************************************************************/
     /**
@@ -252,6 +253,30 @@ protected:
                                         nvsdmTelemParam_t &param,
                                         timelib64_t now,
                                         DcgmFvBuffer &buf);
+
+    /*************************************************************************/
+    /**
+     * Handles info/topology fieldIds that return cached values from discovery.
+     * These fields use NVSDM info APIs (not telemetry) like nvsdmDeviceGetPCIInfo.
+     * Always writes an entry to @p buf; per-entry status is DCGM_ST_NOT_SUPPORTED
+     * when the underlying info was unavailable at discovery time.
+     *
+     * @param[in]     entityGroupId  DCGM_FE_SWITCH or DCGM_FE_LINK.
+     * @param[in]     entityId       Switch index into m_nvSwitchDevices, or packed dcgm_link_t.raw for links.
+     * @param[in]     fieldId        Info field ID (isInfoFieldId() == true).
+     * @param[in]     now            Timestamp in microseconds since epoch.
+     * @param[in,out] buf            Buffer to which the result entry is appended.
+     *
+     * @return DCGM_ST_OK            Entry written (value or NOT_SUPPORTED sentinel).
+     * @return DCGM_ST_BADPARAM      @p entityId out of range; no entry written.
+     * @return DCGM_ST_NOT_SUPPORTED Unsupported @p entityGroupId or @p fieldId;
+     *                               NOT_SUPPORTED entry written.
+     */
+    dcgmReturn_t HandleInfoField(dcgm_field_entity_group_t entityGroupId,
+                                 unsigned int entityId,
+                                 unsigned short fieldId,
+                                 timelib64_t now,
+                                 DcgmFvBuffer &buf);
 
     /*************************************************************************/
     /**

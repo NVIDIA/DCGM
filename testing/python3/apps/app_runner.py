@@ -86,7 +86,7 @@ class AppRunner(object):
 
     def run(self, timeout=default_timeout):
         """
-        Run the application and wait for it to finish. 
+        Run the application and wait for it to finish.
         Returns the app's error code/string
         """
         self.start(timeout)
@@ -108,7 +108,8 @@ class AppRunner(object):
         if utils.is_linux():
             if os.path.exists(self.executable):
                 # On linux, for binaries inside the package (not just commands in the path) test that they have +x
-                # e.g. if package is extracted on windows and copied to Linux, the +x privileges will be lost
+                # e.g. if package is extracted on windows and copied to Linux,
+                # the +x privileges will be lost
                 assert os.access(self.executable, os.X_OK), "Application binary %s is not executable! Make sure that the testing archive has been correctly extracted." % (
                     self.executable)
         self.startTime = datetime.datetime.now()
@@ -132,14 +133,20 @@ class AppRunner(object):
                 # Long file names are hard to read (hard to find the extension of the file)
                 # Also python sometimes complains about file names being too long.
                 #   IOError: [Errno 36] File name too long
-                return "_".join([utils.string_to_valid_file_name(x)[:16] for x in self.args])[:50]
+                return "_".join([utils.string_to_valid_file_name(x)[:16]
+                                for x in self.args])[:50]
             shortname = os.path.basename(
                 self.executable) + "_" + args_to_fname(self.args)
-            stdout_fname = os.path.relpath(os.path.join(
-                logger.log_dir, "app_%03d_%s_stdout.txt" % (self.process_nb, shortname)))
-            stderr_fname = os.path.relpath(os.path.join(
-                logger.log_dir, "app_%03d_%s_stderr.txt" % (self.process_nb, shortname)))
-            # If the app fails, this message will get printed. If it succeeds it'll get popped in _process_finish
+            stdout_fname = os.path.relpath(
+                os.path.join(
+                    logger.log_dir, "app_%03d_%s_stdout.txt" %
+                    (self.process_nb, shortname)))
+            stderr_fname = os.path.relpath(
+                os.path.join(
+                    logger.log_dir, "app_%03d_%s_stderr.txt" %
+                    (self.process_nb, shortname)))
+            # If the app fails, this message will get printed. If it succeeds
+            # it'll get popped in _process_finish
             self._info_message = logger.info("Starting %s...\nstdout in %s\nstderr in %s" % (
                 str(self)[:64],  # cut the string to make it more readable
                 stdout_fname, stderr_fname), defer=True)
@@ -166,7 +173,6 @@ class AppRunner(object):
         if self._logfile_stderr:
             self._logfile_stderr.close()
         self.remove()
-
         if self._retvalue != 0 and self._retvalue != AppRunner.RETVALUE_TERMINATED:
             AppRunner._processes_not_validated.append(self)
         else:
@@ -239,7 +245,8 @@ class AppRunner(object):
         If process finished with error but wasn't validated one of the subtest will fail.
 
         """
-        assert self.retvalue() != None, "This function shouldn't be called when process is still running"
+        assert self.retvalue(
+        ) is not None, "This function shouldn't be called when process is still running"
 
         if self._is_validated:
             return
@@ -352,8 +359,14 @@ class AppRunner(object):
         return self._subprocess.pid
 
     def __str__(self):
-        return ("AppRunner #%d: %s %s (cwd: %s; env: %s)" %
-                (self.process_nb, self.executable, " ".join(self.args), self.cwd, self.env))
+        return (
+            "AppRunner #%d: %s %s (cwd: %s; env: %s)" %
+            (self.process_nb,
+             self.executable,
+             " ".join(
+                 self.args),
+                self.cwd,
+                self.env))
 
     def __repr__(self):
         return str(self)

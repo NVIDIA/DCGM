@@ -15,22 +15,29 @@
  */
 
 #include "MnDiagMpiRunner.h"
+#include "MnDiagCommon.h"
+#include "MnDiagProcessUtils.h"
 #include <DcgmBuildInfo.hpp>
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
+#include <Defer.hpp>
+#include <arpa/inet.h>
 #include <chrono>
 #include <cstdlib>
 #include <dcgm_errors.h>
+#include <filesystem>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
+#include <netdb.h>
 #include <numeric>
 #include <regex>
 #include <set>
 #include <span>
-#include <sstream>
 #include <stdexcept>
+#include <stdio.h>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -67,23 +74,29 @@ std::vector<std::string> ConvertParamsMapToArgs(std::unordered_map<std::string, 
  * @brief Update a parameters map with a single parameter
  *
  * @param paramsMap Map to update
- * @param paramString Parameter string in format "mnubergemm.param=value" or "mnubergemm.flag"
+ * @param paramString Parameter string in format "<prefix>param=value" or "<prefix>flag"
+ * @param prefix The test-specific prefix to match (e.g. "mnubergemm.")
  * @return bool True if the parameter was valid and added to the map
  */
-bool UpdateParamsMapWithParameter(std::unordered_map<std::string, std::string> &paramsMap, std::string_view paramString)
+bool UpdateParamsMapWithParameter(std::unordered_map<std::string, std::string> &paramsMap,
+                                  std::string_view paramString,
+                                  std::string_view prefix)
 {
+    if (prefix.empty())
+    {
+        return false;
+    }
+
     std::string param(paramString);
 
-    // Check if the parameter is prefixed with "mnubergemm."
-    std::string_view expectedPrefix = "mnubergemm.";
-    if (param.compare(0, expectedPrefix.length(), expectedPrefix) != 0)
+    if (param.compare(0, prefix.length(), prefix) != 0)
     {
-        // Not a mnubergemm parameter, skip it
+        // Not a parameter for this test type, skip it
         return false;
     }
 
     size_t equalsPos = param.find('=');
-    size_t dotPos    = param.find('.');
+    size_t dotPos    = prefix.length() - 1; // dot is the last char of the prefix (e.g. "mnubergemm.")
 
     if (equalsPos != std::string::npos)
     {
@@ -106,94 +119,325 @@ bool UpdateParamsMapWithParameter(std::unordered_map<std::string, std::string> &
     return true;
 }
 
-/**
- * @brief Get the default parameters map for mnubergemm
- *
- * @return std::unordered_map<std::string, std::string> Map of parameter name to value
- */
-std::unordered_map<std::string, std::string> GetDefaultMnuberGemmParametersMap_v1()
-{
-    // Default parameters for GB200 NVL72x1 - 10kHz FP32 pulse configuration
-    // Corresponds to the 10khz test in gb200nvl_diag.sh
-    std::unordered_map<std::string, std::string> params = { { "time_to_run", "3600" },
-                                                            { "dynamic_adj", "" }, // Flag (no value)
-                                                            { "MM_max_workload", "65536" },
-                                                            { "max_workload", "65536" },
-                                                            { "MM_sm_count", "144" }, // No networking SMs
-                                                            { "workload", "GC" },     // GPU + Copy Engine workload
-                                                            { "CE_type", "H" },
-                                                            { "MM_N", "0" },
-                                                            { "CE_size", "200000" },    // 10kHz pulse CE size
-                                                            { "MM_type", "ST_ST_SSS" }, // FP32 as BF16 algorithm
-                                                            { "MM_M_per_sm", "32" },
-                                                            { "freq", "10000" }, // 10kHz frequency
-                                                            { "duty", "0.5" } }; // 50% duty cycle
+} // namespace
 
-    return params;
+namespace MnDiagMpiRunnerInternal
+{
+/**
+ * @brief Find the first executable `ip` binary from the list of trusted paths.
+ *
+ * The result is cached after the first successful lookup.
+ *
+ * @return The absolute path to the first executable `ip` binary found in
+ *         MnDiagConstants::TRUSTED_IP_PATHS, or an empty string if none of
+ *         the trusted paths point to an executable binary.
+ */
+std::string FindTrustedIpCommand()
+{
+    static std::string const cached = []() -> std::string {
+        for (auto const &path : MnDiagConstants::TRUSTED_IP_PATHS)
+        {
+            if (access(path.data(), X_OK) == 0)
+            {
+                log_debug("Using trusted ip command: {}", path);
+                return std::string(path);
+            }
+        }
+        log_error("Could not find ip command in any trusted path");
+        return {};
+    }();
+    return cached;
 }
 
-std::expected<bool, dcgmReturn_t> helper_HasMpiLaunchedEnoughProcesses(std::istream &dataStream,
-                                                                       unsigned int targetProcessCount,
-                                                                       std::chrono::seconds timeoutSec)
+/**
+ * @brief Parse the network interface name from `ip route get <host>` output.
+ *
+ * Example outputs handled:
+ *   "10.114.132.54 via 10.115.24.1 dev enP5p9s0 src 10.115.24.6 uid 1000"  → "enP5p9s0"
+ *   "local 10.115.24.6 dev lo src 10.115.24.6 uid 1000"                    → ""  (loopback, skip)
+ *
+ * @param ipRouteOutput  The stdout text produced by `ip route get <host>`.
+ * @return The value of the "dev" field (the network interface name), or an
+ *         empty string if the route is via the loopback interface (i.e. the
+ *         host resolves to the local node) or if the output cannot be parsed.
+ */
+std::string ParseRoutingInterface(std::string const &ipRouteOutput)
 {
-    // Go through the txt log file and search for lines with substring "INFO  hosthash"
-    // example lines:
-    // MNUB [[32mI[m] G: 2 gb-nvl-111-compute09 L: 2  INFO  hosthash=6927958042989175449 B0I=876263344
-    // MNUB [I] G: 11 gb-nvl-111-compute05 L: 3  INFO  hosthash=3926502156737869350 B0I=876263344
-    std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
-    constexpr std::chrono::milliseconds checkInterval { 500 }; // Check every 500ms
-
-    unsigned int numProcessesLaunched = 0;
-    std::streampos lastProcessedPos   = 0;
-
-    while (std::chrono::steady_clock::now() - startTime <= timeoutSec)
+    static std::regex const devRegex(R"(\bdev\s+(\S+))");
+    std::smatch match;
+    if (!std::regex_search(ipRouteOutput, match, devRegex) || match.size() <= 1)
     {
-        // Try to seek, but handle failure gracefully
-        if (!dataStream.seekg(lastProcessedPos))
-        {
-            // If seek fails, try to clear error state and continue
-            // The file might not be ready yet, so we need to retry
-            dataStream.clear();
-            dataStream.seekg(0);
-            lastProcessedPos = 0;
-
-            if (!dataStream.good() && !dataStream.eof())
-            {
-                log_debug("Stream not ready yet, will retry in {}ms", checkInterval.count());
-                std::this_thread::sleep_for(checkInterval);
-                continue; // Skip this iteration, try again
-            }
-        }
-        dataStream.clear();
-
-        std::string line;
-        while (std::getline(dataStream, line))
-        {
-            if (line.contains("INFO  hosthash"))
-            {
-                numProcessesLaunched++;
-                log_debug("Found process launch info, total processes: {}", numProcessesLaunched);
-                if (numProcessesLaunched >= targetProcessCount)
-                {
-                    log_info("MPI has launched enough processes: {} processes", numProcessesLaunched);
-                    return std::expected<bool, dcgmReturn_t>(true);
-                }
-            }
-        }
-
-        // Remember where we finished
-        lastProcessedPos = dataStream.tellg();
-
-        // Wait before checking for more data
-        std::this_thread::sleep_for(checkInterval);
+        return {};
     }
 
-    log_error("MPI has not launched enough processes within timeout: {} of {} processes launched",
-              numProcessesLaunched,
-              targetProcessCount);
-    return std::unexpected(DCGM_ST_TIMEOUT);
+    std::string iface = match[1].str();
+
+    // Loopback means we're talking to ourselves – skip it.
+    if (iface == "lo")
+    {
+        return {};
+    }
+
+    return iface;
 }
-} // namespace
+
+/**
+ * @brief Resolve a hostname to an IPv4 address string via getaddrinfo.
+ *
+ * If the host is already a numeric IP address it is returned unchanged.
+ * If DNS resolution fails the original host string is returned so that the
+ * caller can still attempt `ip route get` (which will likely fail, but the
+ * error is handled gracefully downstream).
+ *
+ * @note This function only resolves to IPv4 addresses (AF_INET). IPv6
+ *       addresses are not supported. While the input sanitization in
+ *       GetRoutingInterfacesForHosts allows colons (to accept IPv6-style
+ *       input), any such address will fail the AF_INET resolution here
+ *       and be returned as-is for downstream handling.
+ *
+ * @param host  The hostname or numeric IP address to resolve.
+ * @return The resolved IPv4 address as a dotted-decimal string. If the host
+ *         is already a numeric IP it is returned unchanged. If DNS resolution
+ *         fails, the original @p host string is returned unmodified.
+ */
+std::string ResolveHostnameToIp(std::string const &host)
+{
+    struct addrinfo hints = {};
+    hints.ai_family       = AF_INET;
+    hints.ai_socktype     = SOCK_STREAM;
+    hints.ai_flags        = AI_NUMERICHOST;
+
+    struct addrinfo *res = nullptr;
+
+    // Fast path: if the host is already a valid IP address, return it unchanged
+    if (getaddrinfo(host.c_str(), nullptr, &hints, &res) == 0)
+    {
+        freeaddrinfo(res);
+        log_debug("Resolved hostname '{}' to IP '{}'", host, host);
+        return host;
+    }
+
+    hints.ai_flags = 0;
+    if (getaddrinfo(host.c_str(), nullptr, &hints, &res) != 0 || res == nullptr)
+    {
+        log_warning("Could not resolve hostname '{}' to an IP address; ip route get may fail", host);
+        return host;
+    }
+
+    char ipStr[INET_ADDRSTRLEN] = {};
+    auto *addr                  = reinterpret_cast<struct sockaddr_in *>(res->ai_addr);
+    DcgmNs::Defer freeRes([res] { freeaddrinfo(res); });
+
+    if (inet_ntop(AF_INET, &addr->sin_addr, ipStr, sizeof(ipStr)) == nullptr)
+    {
+        log_warning("inet_ntop failed for host '{}'; using original hostname", host);
+        return host;
+    }
+
+    log_debug("Resolved hostname '{}' to IP '{}'", host, ipStr);
+    return std::string(ipStr);
+}
+
+/**
+ * @brief Determine which local network interfaces should be used to reach the
+ *        given list of remote hosts.
+ *
+ * For each host the hostname is first resolved to an IP address (if it isn't
+ * one already) and then `ip route get <ip>` is executed.  The "dev" field from
+ * the kernel's routing decision is collected; loopback results (the local node
+ * itself) are skipped.  The returned set contains the unique interface names
+ * that MPI should be restricted to.
+ *
+ * @param hostList       List of hostnames / IP addresses passed to --host.
+ * @param executor       (Optional) Command executor to use for running
+ *                       `ip route get`.  When nullptr (the default), an
+ *                       internal SystemCommandExecutor is used.
+ * @param ipCommandPath  (Optional) Explicit path to the `ip` binary.  When
+ *                       empty (the default), the path is resolved via
+ *                       FindTrustedIpCommand().
+ * @return Comma-separated interface names suitable for --mca btl_tcp_if_include,
+ *         or an empty string when no usable interface could be identified.
+ */
+std::string GetRoutingInterfacesForHosts(std::vector<std::string> const &hostList,
+                                         DcgmNs::Common::ProcessUtils::CommandExecutor *executor = nullptr,
+                                         std::string const &ipCommandPath                        = {})
+{
+    DcgmNs::Common::ProcessUtils::SystemCommandExecutor defaultExecutor;
+    DcgmNs::Common::ProcessUtils::CommandExecutor &exec = executor ? *executor : defaultExecutor;
+
+    std::string ipCmd = ipCommandPath.empty() ? FindTrustedIpCommand() : ipCommandPath;
+    if (ipCmd.empty())
+    {
+        log_warning("ip command not found; MPI will use default interface selection");
+        return {};
+    }
+
+    std::unordered_set<std::string> interfaces;
+
+    for (auto const &host : hostList)
+    {
+        // Sanitize: only allow alphanumeric, '.', '-', '_', ':' characters to
+        // prevent shell injection through a malformed host string.
+        static std::regex const safeHostRegex(R"(^[A-Za-z0-9.\-_:]+$)");
+        if (!std::regex_match(host, safeHostRegex))
+        {
+            log_warning("Skipping routing lookup for host with unexpected characters: {}", host);
+            continue;
+        }
+
+        std::string resolvedHost = ResolveHostnameToIp(host);
+
+        std::string cmd = fmt::format("{} route get {}", ipCmd, resolvedHost);
+        try
+        {
+            std::string output = exec.ExecuteCommand(cmd);
+            std::string iface  = ParseRoutingInterface(output);
+            if (!iface.empty())
+            {
+                if (interfaces.insert(iface).second)
+                {
+                    log_debug("Routing interface for host {}: {}", host, iface);
+                }
+            }
+            else
+            {
+                log_debug("No usable routing interface found for host {} (loopback or unparseable): {}", host, output);
+            }
+        }
+        catch (std::exception const &e)
+        {
+            log_warning("Failed to get routing interface for host {}: {}", host, e.what());
+        }
+    }
+
+    if (interfaces.empty())
+    {
+        log_warning("Could not determine routing interfaces for any host; MPI will use default interface selection");
+        return {};
+    }
+
+    return fmt::format("{}", fmt::join(interfaces, ","));
+}
+
+/**
+ * @brief Check whether automatic MPI interface detection is enabled via
+ *        testParms.
+ *
+ * Scans testParms for "openmpi.detect_interfaces=0" (or "=false").
+ * When found, automatic interface detection is disabled and the user is
+ * expected to configure MPI interfaces themselves (e.g. via the standard
+ * OMPI_MCA_btl_tcp_if_include / OMPI_MCA_oob_tcp_if_include env vars,
+ * which MPI reads natively from the process environment).
+ *
+ * @param drmnd  The diagnostic run parameters struct.
+ * @return true if auto-detection should run, false if the user disabled it.
+ */
+bool IsInterfaceDetectionEnabled(dcgmRunMnDiag_v1 const &drmnd)
+{
+    int testParmsSize = std::min(static_cast<size_t>(DCGM_MAX_TEST_PARMS), std::size(drmnd.testParms));
+
+    for (int i = 0; i < testParmsSize && drmnd.testParms[i][0] != '\0'; i++)
+    {
+        std::string_view parm(drmnd.testParms[i]);
+        constexpr std::string_view prefix = "openmpi.detect_interfaces=";
+        if (!parm.starts_with(prefix))
+        {
+            continue;
+        }
+
+        auto val = parm.substr(prefix.size());
+        return (val != "0" && val != "false");
+    }
+
+    return true;
+}
+
+/**
+ * @brief Log the values of MPI-related environment variables for debuggability.
+ *
+ * When OMPI_MCA_btl_tcp_if_include or OMPI_MCA_oob_tcp_if_include (or their
+ * PRTE_MCA_ equivalents) are set in the environment, MPI will honour them via
+ * normal env-var inheritance.  We intentionally do NOT promote them to -mca
+ * command-line args because that can interact with MPI's internal precedence
+ * rules in surprising ways.  Instead we log their values so operators can
+ * verify the effective configuration.
+ */
+void LogMpiInterfaceEnvVars()
+{
+    struct EnvVarEntry
+    {
+        char const *name;
+        char const *description;
+    };
+
+    static constexpr EnvVarEntry c_envVars[] = {
+        { "OMPI_MCA_btl_tcp_if_include", "Open MPI 4.x BTL TCP interface" },
+        { "OMPI_MCA_oob_tcp_if_include", "Open MPI 4.x OOB TCP interface" },
+        { "PRTE_MCA_oob_tcp_if_include", "Open MPI 5.x (PRRTE) OOB TCP interface" },
+    };
+
+    for (auto const &entry : c_envVars)
+    {
+        char const *val = std::getenv(entry.name);
+        if (val != nullptr)
+        {
+            log_info("{} is set via environment: {}='{}'", entry.description, entry.name, val);
+        }
+    }
+}
+
+/**
+ * @brief Resolve the MPI TCP interface -mca arguments to prepend to the
+ *        mpirun command, following a two-tier precedence chain.
+ *
+ * Precedence (highest to lowest):
+ *   1. openmpi.detect_interfaces=0 — user explicitly disables auto-detection;
+ *      no -mca args injected.  The user is expected to configure MPI
+ *      interfaces themselves (e.g. via the standard OMPI_MCA_btl_tcp_if_include
+ *      / OMPI_MCA_oob_tcp_if_include env vars, which MPI reads natively).
+ *   2. Automatic detection via `ip route get` — default behavior.
+ *
+ * In all cases the values of relevant OMPI_MCA_* / PRTE_MCA_* environment
+ * variables are logged for debuggability, but they are NOT forwarded as
+ * explicit -mca command-line args.  MPI reads its own env vars natively;
+ * promoting them to CLI args can interact with MPI's internal precedence
+ * rules in surprising ways.
+ *
+ * @param drmnd             The diagnostic run parameters (for openmpi.* extraction).
+ * @param hostList          Host list for auto-detection.
+ * @param interfaceResolver Optional resolver callable (for testing); null uses the real implementation.
+ * @return Vector of -mca arguments to insert at the front of the mpirun command.
+ *         Empty when no interface restriction should be applied.
+ */
+std::vector<std::string> ResolveMpiInterfaceArgs(dcgmRunMnDiag_v1 const &drmnd,
+                                                 std::vector<std::string> const &hostList,
+                                                 MnDiagMpiRunner::RoutingInterfaceResolver const &interfaceResolver)
+{
+    LogMpiInterfaceEnvVars();
+
+    if (!IsInterfaceDetectionEnabled(drmnd))
+    {
+        log_info("Automatic MPI interface detection disabled via openmpi.detect_interfaces=0");
+        return {};
+    }
+
+    // Automatic detection via ip route get.
+    std::string routingInterfaces
+        = interfaceResolver ? interfaceResolver(hostList) : GetRoutingInterfacesForHosts(hostList);
+    if (routingInterfaces.empty())
+    {
+        return {};
+    }
+
+    log_info("Auto-detected MPI TCP interfaces: {}. "
+             "Override with -p \"openmpi.detect_interfaces=0\" or "
+             "OMPI_MCA_btl_tcp_if_include / OMPI_MCA_oob_tcp_if_include env vars.",
+             routingInterfaces);
+
+    return { "-mca", "btl_tcp_if_include", routingInterfaces, "-mca", "oob_tcp_if_include", routingInterfaces };
+}
+
+} // namespace MnDiagMpiRunnerInternal
 
 void MnDiagMpiRunner::ConstructMpiCommand(void const *params)
 {
@@ -247,8 +491,18 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
     unsigned int deviceCount = m_coreProxy.GetGpuCount(GpuTypes::ActiveOnly);
     m_totalProcessCount      = hostList.size() * deviceCount;
 
+    // Resolve the test binary path via virtual dispatch
+    std::string testBinaryPath;
+    if (GetTestBinaryPath(testBinaryPath) != DCGM_ST_OK || testBinaryPath.empty())
+    {
+        log_error("Failed to get test binary path for command construction");
+        m_lastCommand.clear();
+        return;
+    }
+
     // Create the command arguments as a vector
-    m_lastCommand = { "--oversubscribe",
+    m_lastCommand = { "--timestamp-output",
+                      "--oversubscribe",
                       "-mca",
                       "orte_base_help_aggregate",
                       "0",
@@ -258,7 +512,13 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
                       fmt::format("{}", fmt::join(hostList, ",")),
                       "--map-by",
                       fmt::format("ppr:{}:node", deviceCount),
-                      m_mnubergemmPath };
+                      testBinaryPath };
+
+    auto mcaArgs = MnDiagMpiRunnerInternal::ResolveMpiInterfaceArgs(drmnd, hostList, m_routingInterfaceResolver);
+    if (!mcaArgs.empty())
+    {
+        m_lastCommand.insert(m_lastCommand.begin(), mcaArgs.begin(), mcaArgs.end());
+    }
 
     auto envAllowRunAsRoot = std::getenv(MnDiagConstants::ENV_ALLOW_RUN_AS_ROOT.data()) ? true : false;
     if (m_userInfo.has_value() && m_userInfo->second == 0 && envAllowRunAsRoot)
@@ -266,14 +526,15 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
         m_lastCommand.insert(m_lastCommand.begin(), "--allow-run-as-root");
     }
 
-    // Start with default parameters
-    std::unordered_map<std::string, std::string> paramsMap = GetDefaultMnuberGemmParametersMap_v1();
+    // Start with default parameters via virtual dispatch
+    std::unordered_map<std::string, std::string> paramsMap = GetDefaultParametersMap();
 
-    // Process any parameters provided by the user
-    int testParmsSize = std::min(static_cast<size_t>(DCGM_MAX_TEST_PARMS), std::size(drmnd.testParms));
+    // Process any parameters provided by the user; filter by this test's prefix
+    std::string_view testPrefix = GetTestPrefix();
+    int testParmsSize           = std::min(static_cast<size_t>(DCGM_MAX_TEST_PARMS), std::size(drmnd.testParms));
     for (int i = 0; i < testParmsSize && drmnd.testParms[i][0] != '\0'; i++)
     {
-        UpdateParamsMapWithParameter(paramsMap, drmnd.testParms[i]);
+        UpdateParamsMapWithParameter(paramsMap, drmnd.testParms[i], testPrefix);
     }
 
     if (m_totalProcessCount % 2 != 0)
@@ -295,44 +556,54 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
 
 std::string MnDiagMpiRunner::GetMpiBinPath() const
 {
-    // For mnubergemm, we might want to use a specific version of MPI
+    // For mnubergemm, we might want to use a specific version of MPI.
     // This could be customized based on environment variables, configuration files, etc.
 
-    // Check if a custom MPI path is specified in an environment variable
+    // Check if a custom MPI path is specified in an environment variable.
     char const *customMpiPath = std::getenv(MnDiagConstants::ENV_MPIRUN_PATH.data());
     if (customMpiPath && *customMpiPath != '\0')
     {
         log_debug("Using custom MPI path from environment: {}", customMpiPath);
+        CheckMpiVersionConsistency(customMpiPath);
         return std::string(customMpiPath);
     }
 
+    CheckMpiVersionConsistency(std::string(MnDiagConstants::DEFAULT_MPIRUN_PATH));
     return std::string(MnDiagConstants::DEFAULT_MPIRUN_PATH);
 }
 
-void MnDiagMpiRunner::SetMnubergemmPath(std::string const &mnubergemmPath)
+
+std::expected<std::chrono::milliseconds, dcgmReturn_t> MnDiagMpiRunner::GetTestRunTime(
+    dcgmRunMnDiag_t const &params) const
 {
-    m_mnubergemmPath = mnubergemmPath;
+    std::string const timeToRunKey = std::string(GetTestPrefix()) + "time_to_run";
+    auto result                    = ParseTimeToRunSeconds(params, timeToRunKey);
+    if (!result.has_value())
+    {
+        return std::unexpected(result.error());
+    }
+    if (*result > 0)
+    {
+        return std::chrono::seconds(*result);
+    }
+    return MnDiagConstants::DEFAULT_TIME_TO_RUN_SECONDS;
 }
 
-dcgmReturn_t MnDiagMpiRunner::MnDiagOutputCallback(std::istream &dataStream,
-                                                   void *responseStruct,
-                                                   nodeInfoMap_t const &nodeInfo)
+dcgmReturn_t MnDiagMpiRunner::MnDiagOutputCallback(int fd, void *responseStruct, nodeInfoMap_t const &nodeInfo)
 {
-    // Skip processing if no response struct is provided
     if (!responseStruct)
     {
         log_error("Null response struct passed to ParseMnuberGemmOutput");
         return DCGM_ST_BADPARAM;
     }
-    // Determine the version of the response struct
+
     dcgmMnDiagResponse_t *response = static_cast<dcgmMnDiagResponse_t *>(responseStruct);
     int version                    = response->version;
 
-    // Call the appropriate version-specific parser
     switch (version)
     {
         case dcgmMnDiagResponse_version1:
-            ParseMnUberGemmOutput_v1(dataStream, responseStruct, nodeInfo);
+            ParseTestOutput(fd, responseStruct, nodeInfo);
             break;
         default:
             log_error("Unsupported response struct version: {}", version);
@@ -341,429 +612,72 @@ dcgmReturn_t MnDiagMpiRunner::MnDiagOutputCallback(std::istream &dataStream,
     return DCGM_ST_OK;
 }
 
-void MnDiagMpiRunner::ParseMnUberGemmOutput_v1(std::istream &dataStream,
-                                               void *responseStruct,
-                                               nodeInfoMap_t const &nodeInfo)
+bool MnDiagMpiRunner::CheckMpiVersionConsistency(std::string const &mpirunPath,
+                                                 DcgmNs::Common::ProcessUtils::CommandExecutor *executor) const
 {
-    log_debug("Parsing MNUBERGEMM output");
-
-    auto *response    = reinterpret_cast<dcgmMnDiagResponse_v1 *>(responseStruct);
-    response->version = dcgmMnDiagResponse_version1;
-
-    response->numTests = 1;
-    if (response->tests[0].name[0] == '\0')
-    {
-        SafeCopyTo(response->tests[0].name, "MNUBERGEMM");
-    }
-
-    // Track unique hostnames found in the output (in sorted order)
-    std::set<std::string> uniqueHostnames;
-
-    // Map of hostname -> set of entity IDs (in sorted order)
-    std::unordered_map<std::string, std::set<unsigned int>> hostnameToEntities;
-
-    // Set of hostname+entityID combinations that have errors
-    std::unordered_set<std::string> entityErrors;
-
-    // Map of hostname+entityID -> error messages
-    std::unordered_map<std::string, std::vector<std::string>> entityErrorMessages;
-
-    // Flag to track if any errors were found
-    bool errorFound = false;
-
-    // Helper function to strip ANSI escape sequences from a string
-    auto StripAnsiCodes = [](std::string const &input) -> std::string {
-        std::string result;
-        result.reserve(input.length()); // Reserve space for efficiency
-
-        for (size_t i = 0; i < input.length(); ++i)
-        {
-            // Check for ESC character (ASCII 27, often represented as \033 or \x1B)
-            if (input[i] == '\x1B' && i + 1 < input.length() && input[i + 1] == '[')
-            {
-                // Skip until 'm' character which ends the ANSI sequence
-                i = input.find('m', i);
-                if (i == std::string::npos)
-                {
-                    break; // Malformed escape sequence, break out
-                }
-                // Don't include the 'm' in the result
-            }
-            else
-            {
-                // Regular character, include it
-                result.push_back(input[i]);
-            }
-        }
-        return result;
+    // Handles both formats: "mpirun (Open MPI) 4.1.9a1" and "Open MPI v4.1.6".
+    // Returns the first "X.Y[.Z[suffix]]" token found, or empty string if none.
+    auto const extractVersion = [](std::string const &text) -> std::string {
+        static std::regex const c_versionRe(R"(\bv?(\d+\.\d+(?:\.\d+)?[a-zA-Z0-9]*))", std::regex::optimize);
+        std::smatch m;
+        return std::regex_search(text, m, c_versionRe) ? m[1].str() : std::string {};
     };
 
-    auto StripTimestampPrefix = [](std::string &line) {
-        // Regex to match timestamp prefix, format [YYYY-MM-DD HH:MM:SS.mmm]
-        static const std::regex timestampRegex(R"(^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\])");
-        std::smatch match;
-        if (std::regex_search(line, match, timestampRegex))
-        {
-            line = line.substr(match.length());
-            // Strip leading whitespace
-            size_t firstNonWhitespace = line.find_first_not_of(" \t");
-            if (firstNonWhitespace != std::string::npos)
-            {
-                line.erase(0, firstNonWhitespace);
-            }
-            else
-            {
-                // Line contains only whitespace, clear it
-                line.clear();
-            }
-        }
-    };
-
-    // Helper function to create a unique key for hostname+entityID
-    auto MakeEntityKey = [](std::string_view hostname, unsigned int entityId) -> std::string {
-        return fmt::format("{}:{}", hostname, entityId);
-    };
-
-    std::string line_raw;
-    while (std::getline(dataStream, line_raw))
+    DcgmNs::Common::ProcessUtils::SystemCommandExecutor defaultExecutor;
+    if (!executor)
     {
-        // Strip ANSI escape sequences
-        std::string line = StripAnsiCodes(line_raw);
-        // Strip timestamp prefix if present
-        StripTimestampPrefix(line);
-
-        if (line.empty())
-        {
-            continue; // Line is empty, skip to next line
-        }
-
-        // Check if this is a MNUB message line
-        size_t mnubPos = line.find("MNUB [");
-        if (mnubPos == std::string::npos)
-        {
-            continue; // No MNUB message found, skip to next line
-        }
-
-        // If MNUB is not at the beginning (malformed timestamp case),
-        // adjust the line to start from MNUB
-        if (mnubPos != 0)
-        {
-            line = line.substr(mnubPos);
-        }
-
-        // Check if it's an error message
-        bool isError = (line.size() > 7 && line[6] == 'E');
-        bool isInfo  = (line.size() > 7 && line[6] == 'I');
-
-        if (!isError && !isInfo)
-        {
-            continue; // Not an error or info message
-        }
-
-        // Look for "G: <number>" pattern
-        size_t gPos = line.find("G:", 7);
-        if (gPos == std::string::npos)
-        {
-            continue; // No G: found, skip to next line
-        }
-
-        try
-        {
-            // Extract G number
-            size_t valueStart = gPos + 3; // Skip "G: " prefix
-            size_t valueEnd   = line.find_first_not_of("0123456789", valueStart);
-            if (valueEnd == std::string::npos || valueEnd >= line.length())
-            {
-                continue; // No complete G number found
-            }
-
-            std::string gNumStr = line.substr(valueStart, valueEnd - valueStart);
-            if (gNumStr.empty())
-            {
-                continue; // No G number found
-            }
-
-            // Extract hostname - look for text after the G number
-            size_t hostnameStart = line.find_first_not_of(" ", valueEnd);
-            if (hostnameStart == std::string::npos || hostnameStart >= line.length())
-            {
-                continue; // No hostname found
-            }
-
-            // Find the end of the hostname (at the next space)
-            size_t hostnameEnd = line.find_first_of(" ", hostnameStart);
-            if (hostnameEnd == std::string::npos || hostnameEnd >= line.length())
-            {
-                continue; // Incomplete hostname found
-            }
-
-            std::string hostname = line.substr(hostnameStart, hostnameEnd - hostnameStart);
-
-            // Look for "L: <number>" pattern to get entity ID
-            size_t lPos = line.find("L:", hostnameEnd);
-            if (lPos == std::string::npos || lPos + 3 >= line.length())
-            {
-                continue; // No L: found or at the end of the line
-            }
-
-            // Extract entity ID
-            size_t entityStart = lPos + 3; // Skip "L: " prefix
-            size_t entityEnd   = line.find_first_not_of("0123456789", entityStart);
-            if (entityEnd == std::string::npos)
-            {
-                entityEnd = line.length();
-            }
-
-            std::string entityIdStr = line.substr(entityStart, entityEnd - entityStart);
-            if (entityIdStr.empty())
-            {
-                continue; // No entity ID found
-            }
-
-            unsigned int entityId = std::stoi(entityIdStr);
-
-            // Create unique key for this entity
-            std::string entityKey = MakeEntityKey(hostname, entityId);
-
-            // Add hostname to the set of unique hostnames
-            uniqueHostnames.insert(hostname);
-
-            // Add entity ID to the set of entities for this hostname
-            hostnameToEntities[hostname].insert(entityId);
-
-            // Process errors
-            if (isError)
-            {
-                errorFound = true;
-                entityErrors.insert(entityKey);
-
-                // Extract the error message - look for pattern after "T:"
-                size_t tPos = line.find("T:", entityEnd);
-                if (tPos != std::string::npos && tPos + 3 < line.length())
-                {
-                    // Find the next space after "T:X"
-                    size_t msgStart = line.find_first_of(" ", tPos + 3);
-                    if (msgStart != std::string::npos && msgStart + 1 < line.length())
-                    {
-                        // Skip the space
-                        msgStart++;
-                        std::string errorMsg = line.substr(msgStart);
-
-                        // Add error message to the vector for this entity
-                        entityErrorMessages[entityKey].push_back(errorMsg);
-
-                        log_debug("Error message for entity {}: {}", entityKey, errorMsg);
-                    }
-                }
-            }
-        }
-        catch (...)
-        {
-            // Ignore parsing errors for this line
-            log_debug("Failed to parse from line: {}", line);
-        }
+        executor = &defaultExecutor;
     }
 
-    // Set overall result for the test
-    response->tests[0].result = errorFound ? DCGM_DIAG_RESULT_FAIL : DCGM_DIAG_RESULT_PASS;
+    // Use ompi_info from the same bin/ as mpirun to ensure both tools come from the same install.
+    // Redirect stderr → stdout; if ompi_info is absent, extractVersion returns empty and we skip.
+    // mpirunPath is admin-controlled (DCGM_MNDIAG_MPIRUN_PATH or default) — shell injection not a concern.
+    std::string const ompiInfoPath = (std::filesystem::path(mpirunPath).parent_path() / "ompi_info").string();
 
-    // Initialize error count
-    response->numErrors = 0;
+    std::string const mpirunVersionCmd   = fmt::format("{} --version 2>&1", mpirunPath);
+    std::string const ompiInfoVersionCmd = fmt::format("{} --version 2>&1", ompiInfoPath);
 
-    // Map each hostname to an index
-    std::unordered_map<std::string, unsigned int> hostnameToIndex;
-    unsigned int hostIndex = 0;
-    for (auto const &hostname : uniqueHostnames)
+    std::string mpirunOutput;
+    std::string ompiInfoOutput;
+    try
     {
-        hostnameToIndex[hostname] = hostIndex++;
+        log_debug("Querying mpirun version with command: {}", mpirunVersionCmd);
+        mpirunOutput = executor->ExecuteCommand(mpirunVersionCmd);
+
+        log_debug("Querying ompi_info version with command: {}", ompiInfoVersionCmd);
+        ompiInfoOutput = executor->ExecuteCommand(ompiInfoVersionCmd);
+    }
+    catch (std::exception const &e)
+    {
+        // Only reached if popen() itself fails (e.g. no shell available) — non-fatal.
+        log_debug("Could not query MPI version information: {}", e.what());
+        return true;
     }
 
-    // Create entity results for each unique hostname+entity combination
-    response->numResults = 0;
+    std::string const mpirunVersion   = extractVersion(mpirunOutput);
+    std::string const ompiInfoVersion = extractVersion(ompiInfoOutput);
 
-    for (auto const &[hostname, entities] : hostnameToEntities)
+    // Empty means not Open MPI (e.g. MVAPICH, Intel MPI) — nothing to compare.
+    if (mpirunVersion.empty() || ompiInfoVersion.empty())
     {
-        unsigned int idx = hostnameToIndex[hostname];
-
-        for (unsigned int entityId : entities)
-        {
-            if (response->numResults >= DCGM_MN_DIAG_RESPONSE_RESULTS_MAX)
-            {
-                log_error("Too many entity results, some will be omitted");
-                break;
-            }
-
-            // Add entity to the entities array
-            dcgmMnDiagEntity_v1 &entity = response->entities[response->numResults];
-            entity.entity.entityGroupId = DCGM_FE_GPU;
-            entity.entity.entityId      = entityId;
-            entity.hostId               = idx;
-            entity.serialNum[0]         = '\0';
-            entity.skuDeviceId[0]       = '\0';
-            response->numEntities++;
-
-            std::string entityKey             = MakeEntityKey(hostname, entityId);
-            dcgmMnDiagEntityResult_v1 &result = response->results[response->numResults];
-
-            // Set entity type to GPU
-            result.entity.entityGroupId = DCGM_FE_GPU;
-            result.entity.entityId      = entityId; // Use actual entity ID
-
-            // Set result (PASS by default, FAIL if this entity had errors)
-            result.result = entityErrors.contains(entityKey) ? DCGM_DIAG_RESULT_FAIL : DCGM_DIAG_RESULT_PASS;
-
-            // Set host and test information
-            result.hostId = idx; // Use hostname index as the host ID
-            result.testId = 0;   // We only have one test
-
-            // If this entity had an error, record the error message
-            if (result.result == DCGM_DIAG_RESULT_FAIL && entityErrorMessages.contains(entityKey)
-                && response->numErrors < DCGM_MN_DIAG_RESPONSE_ERRORS_MAX)
-            {
-                dcgmMnDiagError_v1 &error = response->errors[response->numErrors];
-                error.hostId              = idx; // Use hostname index as the host ID
-                error.testId              = 0;   // We only have one test
-
-                // Set the entity information for error matching
-                error.entity.entityGroupId = DCGM_FE_GPU;
-                error.entity.entityId      = entityId;
-
-                error.code     = DCGM_FR_UNKNOWN;
-                error.category = DCGM_FR_EC_HARDWARE_OTHER;
-                error.severity = DCGM_ERROR_TRIAGE;
-
-                // Join all error messages with "; " using fmt::join
-                const auto &messages    = entityErrorMessages[entityKey];
-                std::string combinedMsg = messages.empty() ? "" : fmt::format("{}", fmt::join(messages, "; "));
-
-                log_debug("Combined error message for entity {}: {}", entityKey, combinedMsg);
-
-                // Copy the combined error message to the error struct
-                SafeCopyTo(error.msg, combinedMsg.c_str());
-
-                response->numErrors++;
-            }
-
-            response->numResults++;
-        }
+        return true;
     }
 
-    // Set up host information
-    response->numHosts = std::min(static_cast<unsigned int>(uniqueHostnames.size()),
-                                  static_cast<unsigned int>(DCGM_MN_DIAG_RESPONSE_HOSTS_MAX));
-
-    // Initialize all hosts with default values
-    for (unsigned int i = 0; i < response->numHosts; i++)
+    if (mpirunVersion != ompiInfoVersion)
     {
-        dcgmMnDiagHosts_v1 &host = response->hosts[i];
-        SafeCopyTo(host.hostname, "unknown-host");
-        SafeCopyTo(host.dcgmVersion, "unknown");
-        SafeCopyTo(host.driverVersion, "See nvidia-smi");
-        host.numEntities = 0;
+        log_warning("MPI version mismatch: '{}' reports Open MPI {} but ompi_info reports Open MPI {}. "
+                    "This can cause segmentation faults at runtime. "
+                    "Set {}=<full path to the correct mpirun binary> to fix this "
+                    "(e.g., export {}=/usr/mpi/gcc/openmpi-{}/bin/mpirun).",
+                    mpirunPath,
+                    mpirunVersion,
+                    ompiInfoVersion,
+                    MnDiagConstants::ENV_MPIRUN_PATH,
+                    MnDiagConstants::ENV_MPIRUN_PATH,
+                    mpirunVersion);
+        return false;
     }
 
-    // Now populate the hosts array with the actual hostnames and their entities
-    for (auto const &[hostname, idx] : hostnameToIndex)
-    {
-        // Skip if this index exceeds our maximum allowed
-        if (idx >= DCGM_MN_DIAG_RESPONSE_HOSTS_MAX)
-        {
-            log_error("Host index {} exceeds maximum allowed hosts, skipping", idx);
-            continue;
-        }
-
-        dcgmMnDiagHosts_v1 &host = response->hosts[idx];
-
-        // Set hostname
-        SafeCopyTo(host.hostname, hostname.c_str());
-
-        // Set dcgmVersion and driverVersion
-        auto nodeInfoIt = nodeInfo.find(hostname);
-        if (nodeInfoIt != nodeInfo.end())
-        {
-            SafeCopyTo(host.dcgmVersion, nodeInfoIt->second.dcgmVersion.c_str());
-            SafeCopyTo(host.driverVersion, nodeInfoIt->second.driverVersion.c_str());
-        }
-        else
-        {
-            log_error("Host {} not found in nodeInfo, skipping setting dcgmVersion and driverVersion", hostname);
-        }
-
-        // Add entity indices for this host
-        for (unsigned int entityId : hostnameToEntities[hostname])
-        {
-            if (host.numEntities < DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
-            {
-                host.entityIndices[host.numEntities] = entityId;
-                host.numEntities++;
-            }
-            else
-            {
-                log_error("Too many entities for host {}, some will be omitted", hostname);
-                break;
-            }
-        }
-    }
-
-    response->tests[0].numResults = std::min(static_cast<unsigned short>(response->numResults),
-                                             static_cast<unsigned short>(DCGM_MN_DIAG_RESPONSE_RESULTS_MAX));
-    auto resultSpan               = std::span(response->tests[0].resultIndices, response->tests[0].numResults);
-    std::iota(resultSpan.begin(), resultSpan.end(), 0);
-
-    response->tests[0].numErrors = std::min(static_cast<unsigned short>(response->numErrors),
-                                            static_cast<unsigned short>(DCGM_MN_DIAG_RESPONSE_ERRORS_MAX));
-    auto errorSpan               = std::span(response->tests[0].errorIndices, response->tests[0].numErrors);
-    std::iota(errorSpan.begin(), errorSpan.end(), 0);
-
-    // Set entity count to match result count
-    response->numEntities = response->numResults;
-
-    // Count how many unique hostnames had errors
-    unsigned int hostsWithErrors = 0;
-    for (auto const &entityKey : entityErrors)
-    {
-        size_t colonPos = entityKey.find(':');
-        if (colonPos != std::string::npos)
-        {
-            std::string hostname = entityKey.substr(0, colonPos);
-            hostsWithErrors++;
-        }
-    }
-
-    log_info(
-        "MnUberGemm parse complete. Found {} unique hostnames with {} entities, {} hostnames with errors, {} error messages, overall result: {}",
-        uniqueHostnames.size(),
-        response->numResults,
-        hostsWithErrors,
-        response->numErrors,
-        (response->tests[0].result == DCGM_DIAG_RESULT_PASS) ? "PASS" : "FAIL");
-}
-
-
-std::expected<bool, dcgmReturn_t> MnDiagMpiRunner::HasMpiLaunchedEnoughProcesses()
-{
-    // From MR!2267, we experimented the latency value of seeing the string "First hosthash" in the stdout
-    // It was fairly consistent around 6-7 seconds, we are giving timeout more than 2 times that value to be safe
-    // However, on GB300, we saw the latency value to be around 20 seconds, so we are increasing the timeout to 60
-    // seconds
-    constexpr std::chrono::seconds timeout = std::chrono::seconds(60);
-    log_debug("Checking if MPI has launched enough processes with timeout: {}", timeout.count());
-    // Choose the appropriate input stream based on whether we're using files or memory
-    if (m_logFileNames.has_value())
-    {
-        // We were redirecting to files, so use the file as input
-        std::ifstream stdoutFileStream(m_logFileNames.value().first);
-        if (!stdoutFileStream.is_open())
-        {
-            log_error("Failed to open file: {}", m_logFileNames.value().first);
-            return std::unexpected(DCGM_ST_FILE_IO_ERROR);
-        }
-        return helper_HasMpiLaunchedEnoughProcesses(stdoutFileStream, m_totalProcessCount, timeout);
-    }
-    else
-    {
-        // We were redirecting to memory, so use the string stream as input
-        std::istringstream stdoutMemStream(m_stdoutMemoryStream.str());
-        return helper_HasMpiLaunchedEnoughProcesses(stdoutMemStream, m_totalProcessCount, timeout);
-    }
+    log_debug("MPI version check passed: mpirun and ompi_info both report Open MPI {}", mpirunVersion);
+    return true;
 }

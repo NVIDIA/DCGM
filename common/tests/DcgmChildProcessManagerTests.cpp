@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+#include "MockChildProcess.hpp"
 #include "MockFileSystemOperator.h"
-#include "mocks/MockChildProcess.hpp"
 #include <DcgmChildProcessManager.hpp>
 #include <DcgmStringHelpers.h>
 #include <HangDetect.h>
 #include <HangDetectMonitor.h>
-#include <mock/FileHandleMock.h>
+#include <MockFileHandle.h>
 
 #include <catch2/catch_all.hpp>
 #include <fmt/format.h>
@@ -514,7 +514,7 @@ TEST_CASE("WriteToFd")
 
     SECTION("normal case")
     {
-        FileHandleMock fileHandleMock;
+        MockFileHandle fileHandleMock;
 
         auto stopToken = std::stop_token();
         auto ret       = WriteToFd(buffer.data(), buffer.size(), fileHandleMock, stopToken);
@@ -524,7 +524,7 @@ TEST_CASE("WriteToFd")
 
     SECTION("EINTR")
     {
-        FileHandleMock fileHandleMock;
+        MockFileHandle fileHandleMock;
         fileHandleMock.AddSizeToTriggerEINTR(8);
         fileHandleMock.AddSizeToTriggerEINTR(64);
 

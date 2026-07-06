@@ -83,7 +83,7 @@ except ImportError:
     logger.warning(MOCK_MSG)
     DCGM_NVML_PRESENTED = False
 
-import nvml_injection_structs
+import nvml_injection_structs  # noqa: E402
 if not nvml_injection_structs.nvml_injection_usable:
     logger.warning(DCGM_NVML_VER_MSG)
     DCGM_NVML_PRESENTED = False

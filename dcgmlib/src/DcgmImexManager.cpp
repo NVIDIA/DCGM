@@ -30,34 +30,48 @@
 DcgmImexManager::DcgmImexManager()
     : m_mutex()
     , m_cachedStatus()
+    , m_runCmdHelper(std::make_unique<DcgmNs::Utils::RunCmdHelper>())
 {
-    // Initialize with invalid cache
     m_cachedStatus.isValid = false;
+}
+
+/*****************************************************************************/
+void DcgmImexManager::SetRunCmdHelper(std::unique_ptr<DcgmNs::Utils::RunCmdHelper> runCmdHelper)
+{
+    m_runCmdHelper = std::move(runCmdHelper);
 }
 
 /*****************************************************************************/
 std::string DcgmImexManager::GetDomainStatus(bool forceRefresh)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    if (forceRefresh || !IsCacheValid())
     {
-        RefreshStatus();
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!forceRefresh && IsCacheValid())
+        {
+            return DomainStatusToString(m_cachedStatus.domainStatus);
+        }
     }
 
+    RefreshStatus();
+
+    std::lock_guard<std::mutex> lock(m_mutex);
     return DomainStatusToString(m_cachedStatus.domainStatus);
 }
 
 /*****************************************************************************/
 int64_t DcgmImexManager::GetDaemonStatus(bool forceRefresh)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-
-    if (forceRefresh || !IsCacheValid())
     {
-        RefreshStatus();
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!forceRefresh && IsCacheValid())
+        {
+            return DaemonStatusToInt64(m_cachedStatus.daemonStatus);
+        }
     }
 
+    RefreshStatus();
+
+    std::lock_guard<std::mutex> lock(m_mutex);
     return DaemonStatusToInt64(m_cachedStatus.daemonStatus);
 }
 
@@ -93,19 +107,16 @@ dcgmReturn_t DcgmImexManager::RefreshStatus()
 {
     log_debug("Refreshing IMEX status from nvidia-imex-ctl");
 
-    timelib64_t now = timelib_usecSince1970();
-
-    // Get domain status
     DcgmImexDomainStatus domainStatus = GetDomainStatusFromCommand();
-
-    // Get daemon status
     DcgmImexDaemonStatus daemonStatus = GetDaemonStatusFromCommand();
 
-    // Update cache
-    m_cachedStatus.domainStatus = domainStatus;
-    m_cachedStatus.daemonStatus = daemonStatus;
-    m_cachedStatus.lastUpdated  = now;
-    m_cachedStatus.isValid      = true;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_cachedStatus.domainStatus = domainStatus;
+        m_cachedStatus.daemonStatus = daemonStatus;
+        m_cachedStatus.lastUpdated  = timelib_usecSince1970();
+        m_cachedStatus.isValid      = true;
+    }
 
     log_debug("IMEX status updated: domain={}, daemon={}",
               DomainStatusToString(domainStatus),
@@ -128,11 +139,19 @@ DcgmImexDomainStatus DcgmImexManager::GetDomainStatusFromCommand()
     std::string output;
     std::string command = fmt::format("{} -N -j", executablePath.value());
 
-    dcgmReturn_t result = DcgmNs::Utils::RunCmdAndGetOutput(command, output);
+    dcgmReturn_t result = m_runCmdHelper->RunCmdAndGetOutputWithTimeout(command, output, CMD_TIMEOUT);
+
+    if (result == DCGM_ST_TIMEOUT)
+    {
+        log_warning("'{}' timed out after {}ms",
+                    command,
+                    std::chrono::duration_cast<std::chrono::milliseconds>(CMD_TIMEOUT).count());
+        return DcgmImexDomainStatus::UNAVAILABLE;
+    }
 
     if (result != DCGM_ST_OK)
     {
-        log_error("Error executing nvidia-imex-ctl -N -j: {}", errorString(result));
+        log_error("Error executing '{}': {}", command, errorString(result));
         return DcgmImexDomainStatus::UNAVAILABLE;
     }
 
@@ -160,11 +179,19 @@ DcgmImexDaemonStatus DcgmImexManager::GetDaemonStatusFromCommand()
     std::string output;
     std::string command = fmt::format("{} -q", executablePath.value());
 
-    dcgmReturn_t result = DcgmNs::Utils::RunCmdAndGetOutput(command, output);
+    dcgmReturn_t result = m_runCmdHelper->RunCmdAndGetOutputWithTimeout(command, output, CMD_TIMEOUT);
+
+    if (result == DCGM_ST_TIMEOUT)
+    {
+        log_warning("'{}' timed out after {}ms",
+                    command,
+                    std::chrono::duration_cast<std::chrono::milliseconds>(CMD_TIMEOUT).count());
+        return DcgmImexDaemonStatus::COMMAND_ERROR;
+    }
 
     if (result != DCGM_ST_OK)
     {
-        log_error("Error executing nvidia-imex-ctl -q: {}", errorString(result));
+        log_error("Error executing '{}': {}", command, errorString(result));
         return DcgmImexDaemonStatus::COMMAND_ERROR;
     }
 
@@ -304,6 +331,11 @@ bool DcgmImexManager::IsImexCtlAvailable() const
 /*****************************************************************************/
 std::optional<std::string> DcgmImexManager::FindImexCtlExecutable() const
 {
+    if (m_overrideExecutablePath.has_value())
+    {
+        return m_overrideExecutablePath;
+    }
+
     std::vector<std::string> searchPaths = GetImexCtlSearchPaths();
     std::string executableDir; // Not used, but required by FindExecutable API
 

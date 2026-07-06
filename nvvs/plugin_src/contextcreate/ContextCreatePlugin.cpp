@@ -23,7 +23,6 @@ ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle)
     : m_handle(handle)
     , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
-    TestParameters *tp;
     m_infoStruct.testIndex        = DCGM_CONTEXT_CREATE_INDEX;
     m_infoStruct.shortDescription = "This plugin will attempt to create a CUDA context.";
     m_infoStruct.testCategories   = "";
@@ -31,14 +30,14 @@ ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle)
     m_infoStruct.logFileTag       = CTXCREATE_PLUGIN_NAME;
 
     // Populate default test parameters
-    tp = new TestParameters();
-    tp->AddString(PS_RUN_IF_GOM_ENABLED, "False");
-    tp->AddString(CTXCREATE_IGNORE_EXCLUSIVE, "False");
-    tp->AddString(CTXCREATE_IS_ALLOWED, "True");
-    tp->AddString(PS_LOGFILE, "stats_context.json");
-    tp->AddDouble(PS_LOGFILE_TYPE, 0.0);
-    tp->AddString(PS_IGNORE_ERROR_CODES, "");
-    m_infoStruct.defaultTestParameters = tp;
+    m_testParameters = std::make_unique<TestParameters>();
+    m_testParameters->AddString(PS_RUN_IF_GOM_ENABLED, "False");
+    m_testParameters->AddString(CTXCREATE_IGNORE_EXCLUSIVE, "False");
+    m_testParameters->AddString(CTXCREATE_IS_ALLOWED, "True");
+    m_testParameters->AddString(PS_LOGFILE, "stats_context.json");
+    m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
+    m_testParameters->AddString(PS_IGNORE_ERROR_CODES, "");
+    m_infoStruct.defaultTestParameters = m_testParameters.get();
 }
 
 void ContextCreatePlugin::Go(std::string const &testName,

@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-sys.path.insert(0, '../')
-import dcgm_structs
-import dcgm_fields
-import dcgm_agent
-import dcgmvalue
 from ctypes import *
+
+sys.path.insert(0, '../')
+import dcgm_structs  # noqa: E402
+import dcgm_fields  # noqa: E402
+import dcgm_agent  # noqa: E402
+import dcgmvalue  # noqa: E402
 
 C_FUNC = CFUNCTYPE(None, POINTER(
     dcgm_structs.c_dcgmPolicyCallbackResponse_v2), c_uint64)
@@ -75,7 +76,8 @@ if __name__ == "__main__":
         # to make sure everything is ready to run
         # currently this calls an outside diagnostic binary but eventually
         # that binary will be merged into the DCGM framework
-        # The "response" is a dcgmDiagResponse structure that can be parsed for errors
+        # The "response" is a dcgmDiagResponse structure that can be parsed for
+        # errors
         response = dcgm_agent.dcgmActionValidate_v2(handle, runDiagInfo)
 
         # This will perform an "eiplogue" diagnostic that will stress the system
@@ -88,10 +90,15 @@ if __name__ == "__main__":
         # corresponds to the error that occurred (PCI, DBE, etc.) but in the future it will be a
         # dcgmPolicyViolation_t or similar
         ret = dcgm_agent.dcgmPolicyRegister_v2(
-            handle, runDiagInfo.groupId, dcgm_structs.DCGM_POLICY_COND_PCI | dcgm_structs.DCGM_POLICY_COND_DBE, c_callback, 0)
+            handle,
+            runDiagInfo.groupId,
+            dcgm_structs.DCGM_POLICY_COND_PCI | dcgm_structs.DCGM_POLICY_COND_DBE,
+            c_callback,
+            0)
 
         # trigger the policy loop
-        # typically this would be looped in a separate thread or called on demand
+        # typically this would be looped in a separate thread or called on
+        # demand
         ret = dcgm_agent.dcgmPolicyTrigger(handle)
 
         # Destroy the group

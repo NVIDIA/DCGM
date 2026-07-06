@@ -234,7 +234,7 @@ std::vector<std::pair<PidTidPair, HangDetectMonitor::TaskWatch>> HangDetectMonit
                 }
                 else if (!result.has_value())
                 {
-                    log_error("Error checking hang state for process {}: {}", pid, result.error());
+                    log_verbose("Error checking hang state for process {}: {}", pid, result.error());
                 }
 
                 if (stateChanged)
@@ -313,7 +313,7 @@ std::vector<std::pair<PidTidPair, HangDetectMonitor::TaskWatch>> HangDetectMonit
                 }
                 else if (!result.has_value())
                 {
-                    log_error("Error checking hang state for thread {}/{}: {}", pid, tid, result.error());
+                    log_verbose("Error checking hang state for thread {}/{}: {}", pid, tid, result.error());
                 }
 
                 if (stateChanged)

@@ -17,6 +17,8 @@ from common.Struct import Struct
 from dcgm_fluentd import DcgmFluentd
 
 
+# NO HARDWARE
+
 def test_send_to_fluentd():
     # Can't create a proper closure in Python, so we create an object which acts
     # as a closure
@@ -41,6 +43,8 @@ def test_send_to_fluentd():
     assert (namespace.message == 'message')
     assert (namespace.dest == ('FAKE_HOST', 101010))
 
+
+# NO HARDWARE
 
 def test_fluentd_custom_json_handler():
     namespace = Struct(arg=None)

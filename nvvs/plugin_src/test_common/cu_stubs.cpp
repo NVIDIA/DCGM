@@ -13,24 +13,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <algorithm>
+#include <cstring>
 #include <cuda.h>
+#include <cuda_runtime.h>
 
-CUresult cuInitResult         = CUDA_SUCCESS;
-CUresult cuStreamCreateResult = CUDA_SUCCESS;
+CUresult cuInitResult                = CUDA_SUCCESS;
+CUresult cuStreamCreateResult        = CUDA_SUCCESS;
+CUresult cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
+CUresult cuModuleLoadDataResult      = CUDA_SUCCESS;
+CUdeviceptr_v2 cuMemcpyDtoHValue     = 0;
+CUresult cuMemAllocResult            = CUDA_SUCCESS;
+size_t cuMemGetInfoFree              = 0;
+size_t cuMemGetInfoTotal             = 0;
+const char *cuGetErrorStringValue    = nullptr;
 
 CUresult cuInit(unsigned int /* flags */)
 {
     return cuInitResult;
 }
 
-CUresult cuMemGetInfo_v2(size_t * /* free */, size_t * /* total */)
+CUresult cuMemGetInfo_v2(size_t *free, size_t *total)
 {
+    if (free)
+        *free = cuMemGetInfoFree;
+    if (total)
+        *total = cuMemGetInfoTotal;
     return CUDA_SUCCESS;
 }
 
 CUresult cuMemAlloc_v2(CUdeviceptr_v2 * /* dptr */, size_t /* size */)
 {
-    return CUDA_SUCCESS;
+    return cuMemAllocResult;
 }
 
 CUresult cuMemFree_v2(CUdeviceptr_v2 /* dptr */)
@@ -43,8 +57,9 @@ CUresult cuMemcpyHtoD_v2(CUdeviceptr_v2 /* dst */, const void * /* srcHost */, s
     return CUDA_SUCCESS;
 }
 
-CUresult cuMemcpyDtoH_v2(void * /* dstHost */, CUdeviceptr_v2 /* srcDevice */, size_t /* size */)
+CUresult cuMemcpyDtoH_v2(void *dstHost, CUdeviceptr_v2 /* srcDevice */, size_t size)
 {
+    memcpy(dstHost, &cuMemcpyDtoHValue, std::min(size, sizeof(cuMemcpyDtoHValue)));
     return CUDA_SUCCESS;
 }
 
@@ -80,7 +95,7 @@ CUresult cuCtxSetCurrent(CUcontext /* ctx */)
 
 CUresult cuModuleLoadData(CUmodule * /* module */, const void * /* image */)
 {
-    return CUDA_SUCCESS;
+    return cuModuleLoadDataResult;
 }
 
 CUresult cuModuleGetFunction(CUfunction * /* hfunc */, CUmodule /* module */, const char * /* name */)
@@ -108,14 +123,18 @@ CUresult cuLaunchKernel(CUfunction /* f */,
     return CUDA_SUCCESS;
 }
 
-CUresult cuGetErrorString(CUresult /* error */, const char ** /* strPtr */)
+CUresult cuGetErrorString(CUresult /* error */, const char **strPtr)
 {
+    if (strPtr != nullptr)
+    {
+        *strPtr = cuGetErrorStringValue;
+    }
     return CUDA_SUCCESS;
 }
 
 CUresult cuDeviceGetByPCIBusId(CUdevice * /* device */, const char * /* pciBusId */)
 {
-    return CUDA_SUCCESS;
+    return cuDeviceGetByPCIBusIdResult;
 }
 
 CUresult cuCtxSynchronize()
@@ -198,4 +217,19 @@ CUresult cuStreamDestroy(CUstream /* hStream */)
 CUresult cuDeviceGetCount(int * /* count */)
 {
     return CUDA_SUCCESS;
+}
+
+cudaError_t cudaMemGetInfo(size_t * /* free */, size_t * /* total */)
+{
+    return cudaSuccess;
+}
+
+CUresult cuEventSynchronize(CUevent /* hEvent */)
+{
+    return CUDA_SUCCESS;
+}
+
+cudaError_t cudaHostGetDevicePointer(void ** /* pDevice */, void * /* pHost */, unsigned int /* flags */)
+{
+    return cudaSuccess;
 }

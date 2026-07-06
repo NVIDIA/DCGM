@@ -72,6 +72,7 @@ int main_entry(const dcgmDiagPluginEntityInfo_v1 &entity, Memory *memObj, TestPa
 /*****************************************************************************/
 #ifdef MEMORY_UNIT_TESTS
 int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entityInfo);
+nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals);
 #endif
 
 /*****************************************************************************/

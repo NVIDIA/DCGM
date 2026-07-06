@@ -37,6 +37,8 @@ import os
 from ctypes import *
 
 
+# NO HARDWARE
+
 @skip_test_if_no_dcgm_nvml()
 @test_utils.run_with_injection_nvml_using_specific_sku('H200.yaml')
 @test_utils.run_with_standalone_host_engine(120)
@@ -60,7 +62,7 @@ def test_inject_sram_threshold(handle, gpuIds):
         entity.entityGroupId = dcgm_fields.DCGM_FE_GPU
         entity.entityId = gpuId
 
-        fieldIDs = [dcgm_fields.DCGM_FI_DEV_THRESHOLD_SRM]
+        fieldIDs = [dcgm_fields.DCGM_FI_DEV_SRAM_EXCEEDED]
 
         responses = {}
 

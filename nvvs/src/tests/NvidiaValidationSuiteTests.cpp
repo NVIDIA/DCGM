@@ -15,10 +15,17 @@
  */
 #include "PluginInterface.h"
 #include <catch2/catch_all.hpp>
+#include <catch2/matchers/catch_matchers_exception.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
+#include <dcgm_fields_internal.hpp>
 
 #include <Gpu.h>
 #include <NvidiaValidationSuite.h>
 #include <NvvsCommon.h>
+#include <NvvsExitCode.h>
+
+#include <array>
+#include <string_view>
 
 #define ARG_LENGTH 50
 
@@ -66,6 +73,214 @@ public:
     void WrapperInitializeParameters(const std::string &params, const ParameterValidator &pv);
 };
 
+TEST_CASE("NvvsCommon: value helpers and reset behavior")
+{
+    SECTION("copy, assignment, and Init preserve or reset public fields")
+    {
+        NvvsCommon common;
+        common.logFile                = "stats.json";
+        common.m_statsPath            = ".";
+        common.logFileType            = NVVS_LOGFILE_TYPE_TEXT;
+        common.parse                  = true;
+        common.quietMode              = true;
+        common.serialize              = true;
+        common.overrideMinMax         = true;
+        common.verbose                = true;
+        common.requirePersistenceMode = false;
+        common.configless             = true;
+        common.statsOnlyOnFail        = true;
+        common.errorMask              = 42;
+        common.mainReturnCode         = NVVS_ST_GENERIC_ERROR;
+        common.pluginPath             = "plugins";
+        common.desiredTest.insert("pcie");
+        common.isEudOnly              = true;
+        common.indexString            = "0,1";
+        common.fakegpusString         = "2";
+        common.parmsString            = "pcie.test=true";
+        common.parms["pcie"]["test"]  = "true";
+        common.dcgmHostname           = "localhost";
+        common.clocksEventIgnoreMask  = 7;
+        common.failEarly              = true;
+        common.failCheckInterval      = 13;
+        common.currentIteration       = 2;
+        common.totalIterations        = 5;
+        common.channelFd              = 9;
+        common.diagResponseVersion    = dcgmDiagResponse_version11;
+        common.rerunAsRoot            = true;
+        common.watchFrequency         = 123;
+        common.ignoreErrorCodesString = "gpu0:1";
+        common.parsedIgnoreErrorCodes[{ DCGM_FE_GPU, 0 }].insert(1);
+        common.hangDetectDisable   = true;
+        common.hangDetectExpirySec = 77;
+        common.genericMode         = true;
+
+        NvvsCommon copied(common);
+        REQUIRE(copied.logFile == common.logFile);
+        REQUIRE(copied.parms == common.parms);
+        REQUIRE(copied.parsedIgnoreErrorCodes == common.parsedIgnoreErrorCodes);
+        REQUIRE(copied.genericMode == true);
+
+        NvvsCommon assigned;
+        assigned = common;
+        REQUIRE(assigned.pluginPath == "plugins");
+        REQUIRE(assigned.desiredTest.contains("pcie"));
+        REQUIRE(assigned.hangDetectExpirySec == 77);
+
+        assigned.Init();
+        REQUIRE(assigned.logFile.empty());
+        REQUIRE(assigned.m_statsPath == "./");
+        REQUIRE(assigned.logFileType == NVVS_LOGFILE_TYPE_JSON);
+        REQUIRE(assigned.requirePersistenceMode == true);
+        REQUIRE(assigned.mainReturnCode == NVVS_ST_SUCCESS);
+        REQUIRE(assigned.desiredTest.empty());
+        REQUIRE(assigned.parms.empty());
+        REQUIRE(assigned.parsedIgnoreErrorCodes.empty());
+        REQUIRE(assigned.channelFd == -1);
+        REQUIRE(assigned.watchFrequency == 5000000);
+        REQUIRE(assigned.hangDetectExpirySec == 600);
+        REQUIRE(assigned.genericMode == false);
+    }
+
+    SECTION("SetStatsPath accepts empty and existing directories but rejects bad paths")
+    {
+        NvvsCommon common;
+        common.SetStatsPath("");
+        REQUIRE(common.m_statsPath == "./");
+
+        common.SetStatsPath(".");
+        REQUIRE(common.m_statsPath == ".");
+
+        REQUIRE_THROWS_MATCHES(common.SetStatsPath("/dev/null"),
+                               std::runtime_error,
+                               Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+                                   "Error: statspath '/dev/null' is not a directory.")));
+        REQUIRE_THROWS_MATCHES(common.SetStatsPath("/definitely/not/a/dcgm/stats/path"),
+                               std::runtime_error,
+                               Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+                                   "Error: cannot access statspath '/definitely/not/a/dcgm/stats/path'")));
+    }
+}
+
+TEST_CASE("NvvsCommon: test and result mappings")
+{
+    SECTION("display names and indices round-trip for known plugin tests")
+    {
+        constexpr auto testMappings = std::to_array<std::pair<dcgmPerGpuTestIndices_t, std::string_view>>({
+            { DCGM_MEMORY_INDEX, MEMORY_PLUGIN_NAME },
+            { DCGM_DIAGNOSTIC_INDEX, DIAGNOSTIC_PLUGIN_NAME },
+            { DCGM_PCI_INDEX, PCIE_PLUGIN_NAME },
+            { DCGM_SM_STRESS_INDEX, SMSTRESS_PLUGIN_NAME },
+            { DCGM_TARGETED_STRESS_INDEX, TS_PLUGIN_NAME },
+            { DCGM_TARGETED_POWER_INDEX, TP_PLUGIN_NAME },
+            { DCGM_MEMORY_BANDWIDTH_INDEX, MEMBW_PLUGIN_NAME },
+            { DCGM_SOFTWARE_INDEX, SW_PLUGIN_NAME },
+            { DCGM_CONTEXT_CREATE_INDEX, CTXCREATE_PLUGIN_NAME },
+            { DCGM_MEMTEST_INDEX, MEMTEST_PLUGIN_NAME },
+            { DCGM_PULSE_TEST_INDEX, PULSE_TEST_PLUGIN_NAME },
+            { DCGM_EUD_TEST_INDEX, EUD_PLUGIN_NAME },
+            { DCGM_NVBANDWIDTH_INDEX, NVBANDWIDTH_PLUGIN_NAME },
+            { DCGM_NCCL_TESTS_INDEX, NCCL_TESTS_PLUGIN_NAME },
+            { DCGM_RIST_TEST_INDEX, RIST_PLUGIN_NAME },
+        });
+
+        for (auto const &[index, name] : testMappings)
+        {
+            INFO("name: " << name);
+            REQUIRE(GetTestDisplayName(index) == name);
+            if (index == DCGM_NCCL_TESTS_INDEX)
+            {
+                REQUIRE(GetTestIndex(std::string(name)) == DCGM_UNKNOWN_INDEX);
+            }
+            else
+            {
+                REQUIRE(GetTestIndex(std::string(name)) == index);
+            }
+        }
+
+        REQUIRE(GetTestDisplayName(DCGM_UNKNOWN_INDEX) == "Unknown");
+        REQUIRE(GetTestIndex("not-a-plugin") == DCGM_UNKNOWN_INDEX);
+        REQUIRE(GetTestIndex("PCIE") == DCGM_PCI_INDEX);
+    }
+
+    SECTION("NVVS and diag result conversions cover all public states")
+    {
+        REQUIRE(NvvsPluginResultToDiagResult(NVVS_RESULT_PASS) == DCGM_DIAG_RESULT_PASS);
+        REQUIRE(NvvsPluginResultToDiagResult(NVVS_RESULT_WARN) == DCGM_DIAG_RESULT_WARN);
+        REQUIRE(NvvsPluginResultToDiagResult(NVVS_RESULT_FAIL) == DCGM_DIAG_RESULT_FAIL);
+        REQUIRE(NvvsPluginResultToDiagResult(NVVS_RESULT_SKIP) == DCGM_DIAG_RESULT_SKIP);
+        REQUIRE(NvvsPluginResultToDiagResult(static_cast<nvvsPluginResult_enum>(999)) == DCGM_DIAG_RESULT_FAIL);
+
+        REQUIRE(DcgmResultToNvvsResult(DCGM_DIAG_RESULT_PASS) == NVVS_RESULT_PASS);
+        REQUIRE(DcgmResultToNvvsResult(DCGM_DIAG_RESULT_WARN) == NVVS_RESULT_WARN);
+        REQUIRE(DcgmResultToNvvsResult(DCGM_DIAG_RESULT_FAIL) == NVVS_RESULT_FAIL);
+        REQUIRE(DcgmResultToNvvsResult(DCGM_DIAG_RESULT_SKIP) == NVVS_RESULT_SKIP);
+        REQUIRE(DcgmResultToNvvsResult(DCGM_DIAG_RESULT_NOT_RUN) == NVVS_RESULT_SKIP);
+        REQUIRE(DcgmResultToNvvsResult(static_cast<dcgmDiagResult_t>(999)) == NVVS_RESULT_SKIP);
+    }
+}
+
+TEST_CASE("Gpu: local attributes and getters")
+{
+    SECTION("constructor initializes defaults and NVML index")
+    {
+        Gpu gpu(7);
+
+        REQUIRE(gpu.GetGpuId() == 7);
+        REQUIRE(gpu.getDeviceIndex() == 7);
+        REQUIRE(gpu.getDeviceIsSupported() == false);
+        REQUIRE(gpu.getDeviceArchitecture() == 0);
+        REQUIRE(gpu.GetMaxOperatingTemperature() == 0);
+        REQUIRE(gpu.getDeviceSerial().empty());
+        REQUIRE(gpu.getDeviceId().empty());
+        REQUIRE_THROWS_MATCHES(gpu.getDeviceIndex(Gpu::NVVS_GPUENUM_LAST),
+                               std::runtime_error,
+                               Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+                                   "Illegal enumeration method given to getDeviceIndex")));
+    }
+
+    SECTION("SetAttributes populates PCI ids and serial-backed getters")
+    {
+        Gpu gpu(3);
+        dcgmDeviceAttributes_v3 attrs {};
+        attrs.version                         = dcgmDeviceAttributes_version3;
+        attrs.identifiers.pciDeviceId         = 0x23350000;
+        attrs.identifiers.pciSubSystemId      = 0x14590000;
+        attrs.powerLimits.enforcedPowerLimit  = 350;
+        attrs.settings.persistenceModeEnabled = 1;
+        attrs.thermalSettings.shutdownTemp    = 95;
+        attrs.thermalSettings.slowdownTemp    = 90;
+        SafeCopyTo(attrs.identifiers.serial, "serial-3");
+        SafeCopyTo(attrs.identifiers.brandName, "brand");
+        SafeCopyTo(attrs.identifiers.uuid, "GPU-uuid");
+        SafeCopyTo(attrs.identifiers.pciBusId, "0000:01:00.0");
+        SafeCopyTo(attrs.identifiers.deviceName, "device");
+        SafeCopyTo(attrs.identifiers.driverVersion, "555.42");
+
+        gpu.SetAttributes(attrs);
+        gpu.setDeviceIsSupported(true);
+        gpu.setDeviceEntityStatus(DcgmEntityStatusDetached);
+
+        REQUIRE(gpu.getDevicePciDeviceId() == "2335");
+        REQUIRE(gpu.getDevicePciSubsystemId().empty());
+        REQUIRE(gpu.getDeviceId() == "2335");
+        gpu.setUseSsid(true);
+        REQUIRE(gpu.getDeviceId() == "2335");
+        REQUIRE(gpu.getDeviceSerial() == "serial-3");
+        REQUIRE(gpu.getDeviceBrandAsString() == "brand");
+        REQUIRE(gpu.getDeviceGpuUuid() == "GPU-uuid");
+        REQUIRE(gpu.getDevicePciBusId() == "0000:01:00.0");
+        REQUIRE(gpu.getDeviceName() == "device");
+        REQUIRE(gpu.GetDriverVersion() == "555.42");
+        REQUIRE(gpu.GetEnforcedPowerLimit() == 350);
+        REQUIRE(gpu.PersistenceModeEnabled() == true);
+        REQUIRE(gpu.getDeviceIsSupported() == true);
+        REQUIRE(gpu.GetDeviceEntityStatus() == DcgmEntityStatusDetached);
+        REQUIRE(gpu.GetDeviceThermals().shutdownTemp == 95);
+        REQUIRE(gpu.GetDeviceThermals().slowdownTemp == 90);
+        REQUIRE(gpu.GetAttributes().identifiers.pciDeviceId == attrs.identifiers.pciDeviceId);
+    }
+}
+
 /* define this here so we can control when it fails */
 dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t /* handle */, dcgmMigHierarchy_v2 *hierarchy)
 {
@@ -99,7 +314,9 @@ dcgmReturn_t dcgmGetGpuInstanceHierarchy(dcgmHandle_t /* handle */, dcgmMigHiera
     return DCGM_ST_OK;
 }
 
-unsigned int fieldIntVal = 0;
+unsigned int fieldIntVal              = 0;
+long long g_unrepairableMemoryFlagVal = 0;
+char g_graphicsPidsBlobVal            = 0;
 dcgmReturn_t dcgmEntitiesGetLatestValues(dcgmHandle_t /* handle */,
                                          dcgmGroupEntityPair_t & /* entity */,
                                          unsigned int /* entityCount */,
@@ -123,9 +340,77 @@ dcgmReturn_t dcgmEntitiesGetLatestValues(dcgmHandle_t /* handle */,
         case DCGM_FI_DEV_MIG_MAX_SLICES:
             values[0].value.i64 = fieldIntVal;
             break;
+        case DCGM_FI_DEV_MEMORY_UNREPAIRABLE:
+            values[0].value.i64 = g_unrepairableMemoryFlagVal;
+            break;
+        case DCGM_FI_DEV_GRAPHICS_PIDS:
+            values[0].value.blob[0] = g_graphicsPidsBlobVal;
+            break;
     }
 
     return DCGM_ST_OK;
+}
+
+extern "C" dcgmReturn_t dcgmEntitiesGetLatestValues(dcgmHandle_t handle,
+                                                    dcgmGroupEntityPair_t entities[],
+                                                    unsigned int entityCount,
+                                                    unsigned short fieldIds[],
+                                                    unsigned int fieldCount,
+                                                    unsigned int flags,
+                                                    dcgmFieldValue_v2 values[])
+{
+    // Multi-entity would require per-entity field value storage, not needed as caller passes only one entity
+    REQUIRE(entityCount == 1);
+    return dcgmEntitiesGetLatestValues(handle, entities[0], entityCount, fieldIds, fieldCount, flags, values);
+}
+
+TEST_CASE("Gpu: MIG helpers use DCGM field mocks")
+{
+    Gpu gpu0(0);
+
+    SECTION("GetMigMode follows the mocked MIG mode field")
+    {
+        bool enabled = true;
+        migEnabled   = false;
+        REQUIRE(gpu0.GetMigMode(enabled) == DCGM_ST_OK);
+        REQUIRE(enabled == false);
+
+        migEnabled = true;
+        REQUIRE(gpu0.GetMigMode(enabled) == DCGM_ST_OK);
+        REQUIRE(enabled == true);
+    }
+
+    SECTION("IsMigModeDiagCompatible accepts full-GPU MIG layout")
+    {
+        incompatibleGpus = false;
+        migEnabled       = true;
+        hierarchyCount   = 1;
+        fieldIntVal      = DCGM_MAX_INSTANCES_PER_GPU;
+
+        auto validity = gpu0.IsMigModeDiagCompatible();
+
+        REQUIRE(validity.migEnabled == true);
+        REQUIRE(validity.migInvalidConfiguration == false);
+        REQUIRE(validity.gpuInstanceCount == 1);
+    }
+
+    SECTION("IsMigModeDiagCompatible rejects partial GPU instances")
+    {
+        incompatibleGpus = true;
+        migEnabled       = false;
+        hierarchyCount   = 4;
+        fieldIntVal      = DCGM_MAX_INSTANCES_PER_GPU;
+
+        auto validity = gpu0.IsMigModeDiagCompatible();
+
+        REQUIRE(validity.migInvalidConfiguration == true);
+        REQUIRE(validity.gpuInstanceCount == 1);
+    }
+
+    incompatibleGpus = false;
+    migEnabled       = false;
+    hierarchyCount   = 4;
+    fieldIntVal      = 0;
 }
 
 TEST_CASE("NvidiaValidationSuite: build common gpu list", "[.]")
@@ -459,7 +744,10 @@ SCENARIO("InitializeParameters accepts only valid global parameters")
 
     // Test with an invalid global parameter
     paramString = "planet=roshar";
-    REQUIRE_THROWS_AS(nvvs.WrapperInitializeParameters(paramString, pv), std::runtime_error);
+    REQUIRE_THROWS_MATCHES(nvvs.WrapperInitializeParameters(paramString, pv),
+                           std::runtime_error,
+                           Catch::Matchers::MessageMatches(Catch::Matchers::ContainsSubstring(
+                               "unable to parse test, parameter name, and value from string 'planet=roshar'")));
     CLEANUP();
 }
 

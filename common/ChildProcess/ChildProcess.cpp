@@ -34,6 +34,7 @@
 #include <atomic>
 #include <boost/process.hpp>
 #include <boost/process/extend.hpp>
+#include <cerrno>
 #include <latch>
 #include <thread>
 
@@ -338,32 +339,6 @@ struct ChildProcess::Impl
         expectedCoroutinesCount.fetch_add(1, std::memory_order_relaxed);
     }
 
-    /* Clarification on the Coverity suppression: If the possible boost::wrapexcept<std::bad_alloc> exception is thrown,
-     * terminating current process is the safest thing to do. std::bad_alloc is a fatal error and there is no way to
-     * recover from it.
-     */
-    // coverity[exn_spec_violation:SUPPRESS]
-    void Stop(bool force = false) noexcept
-    {
-        std::error_code ec;
-        bool isProcRunning = process.running(ec);
-        if (ec)
-        {
-            log_error("failed to check the isProcRunning state of process: [{}][{}].", ec.value(), ec.message());
-            return;
-        }
-        if (isProcRunning)
-        {
-            auto intent = force ? KillProcessIntent::Sigkill : KillProcessIntent::Sigterm;
-            kill(process.id(), static_cast<int>(intent));
-            log_info("Signal {} issued to process {}", static_cast<int>(intent), process.id());
-        }
-        else
-        {
-            log_debug("Process {} is not running", executable.string());
-        }
-    }
-
     enum class KillProcessIntent : std::uint8_t
     {
         Sigint  = SIGINT,
@@ -371,43 +346,80 @@ struct ChildProcess::Impl
         Sigterm = SIGTERM,
     };
 
+    std::optional<pid_t> SignalRunningProcess(KillProcessIntent intent) noexcept
+    {
+        std::latch signalLatch(1);
+        std::optional<pid_t> signaledPid;
+
+        // Boost's SIGCHLD handling runs on ioContext, so serialize signal delivery with exit handling.
+        boost::asio::dispatch(ioContext.Get(), [this, intent, &signalLatch, &signaledPid] {
+            auto cleanup = Defer([&signalLatch]() { signalLatch.count_down(); });
+            pid_t processPid;
+            auto const signalNumber = static_cast<int>(intent);
+            {
+                std::unique_lock<std::mutex> lock(lockProcessStatus);
+                if (!running.load(std::memory_order_relaxed))
+                {
+                    lock.unlock();
+                    log_debug("Process {} is not running", executable.string());
+                    return;
+                }
+                processPid = pid;
+                if (::kill(processPid, signalNumber) != 0)
+                {
+                    auto const killErrno = errno;
+                    lock.unlock();
+                    log_error("Failed to send signal {} to process {}. errno: {}", signalNumber, processPid, killErrno);
+                    return;
+                }
+
+                signaledPid = processPid;
+            }
+            log_info("Signal {} issued to process {}", signalNumber, processPid);
+        });
+
+        signalLatch.wait();
+        return signaledPid;
+    }
+
+    void Stop(bool force = false) noexcept
+    {
+        SignalRunningProcess(force ? KillProcessIntent::Sigkill : KillProcessIntent::Sigterm);
+    }
+
+    std::optional<pid_t> GetRunningPid() const
+    {
+        std::unique_lock<std::mutex> lock(lockProcessStatus);
+        if (!running.load(std::memory_order_relaxed))
+        {
+            return std::nullopt;
+        }
+        return pid;
+    }
+
     void Kill(int sigTermTimeoutSec = 10) noexcept
     {
-        std::error_code ec;
-        bool isProcRunning = process.running(ec);
-        if (ec)
+        if (!SignalRunningProcess(KillProcessIntent::Sigterm))
         {
-            log_error("failed to check the isProcRunning state of process: [{}][{}].", ec.value(), ec.message());
             return;
         }
-        if (isProcRunning)
-        {
-            using namespace std::chrono_literals;
-            log_info("Terminating process: {} with SIGTERM first.", process.id());
-            kill(process.id(), static_cast<int>(KillProcessIntent::Sigterm));
-            if (!process.wait_for(std::chrono::seconds(sigTermTimeoutSec)))
-            {
-                log_warning("Process {} did not terminate in time with SIGTERM", process.id());
-                log_info("Terminating process: {} with SIGKILL.", process.id());
-                kill(process.id(), static_cast<int>(KillProcessIntent::Sigkill));
-            }
 
-            if (!process.wait_for(std::chrono::seconds(1)))
-            {
-                log_error("Process {} did not terminate in time after SIGKILL", process.id());
-            }
-            else
-            {
-                {
-                    std::unique_lock<std::mutex> lock(lockProcessStatus);
-                    running.store(false, std::memory_order_relaxed);
-                }
-                cvProcessStatus.notify_one();
-            }
-        }
-        else
+        using namespace std::chrono_literals;
+        // on_exit owns child reaping; using child::wait_for here can race with it and throw ECHILD.
+        Wait(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::seconds(sigTermTimeoutSec)));
+
+        auto const sigKillPid = SignalRunningProcess(KillProcessIntent::Sigkill);
+        if (!sigKillPid)
         {
-            log_debug("Process {} is not running", executable.string());
+            return;
+        }
+
+        log_warning("Process {} did not terminate in time with SIGTERM", *sigKillPid);
+        Wait(std::chrono::duration_cast<std::chrono::milliseconds>(1s));
+
+        if (auto const remainingPid = GetRunningPid(); remainingPid)
+        {
+            log_error("Process {} did not terminate in time after SIGKILL", *remainingPid);
         }
     }
 

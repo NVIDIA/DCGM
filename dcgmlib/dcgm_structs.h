@@ -164,9 +164,9 @@
 
 /**
  * Number of NvLink links per GPU supported by DCGM
- * 18 for Hopper, 12 for Ampere, 6 for Volta, and 4 for Pascal
+ * 36 for newer GPUs, 18 for previous-generation GPUs, 12 for older GPUs, and 6/4 for legacy GPUs
  */
-#define DCGM_NVLINK_MAX_LINKS_PER_GPU 18
+#define DCGM_NVLINK_MAX_LINKS_PER_GPU 36
 
 /**
  * Number of nvlink errors supported by DCGM
@@ -191,6 +191,11 @@
  * Maximum NvLink links pre-Hopper
  */
 #define DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY2 12
+
+/**
+ * Maximum NvLink links for 18-link GPUs
+ */
+#define DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY3 18
 
 /**
  * Max number of NvSwitches supported by DCGM
@@ -526,9 +531,8 @@ typedef enum
 } DcgmLoggingSeverity_t;
 
 /**
- * Represents a link object. type should be one of DCGM_FE_GPU or
- * DCGM_FE_SWITCH; gpuId or switchID is the associated gpu or switch; and index
- * is the link index, 0-based, with TX (even) coming before RX (odd).
+ * Represents a link entity. `type` is the entity group; `gpuId` or `switchId` is the entity id
+ * within that group; `index` is the NVLink port index.
  */
 #pragma pack(push, 1)
 typedef struct dcgm_link_s
@@ -538,7 +542,7 @@ typedef struct dcgm_link_s
         struct
         {
             dcgm_field_entity_group_t type : 8;  /*!< Entity Group */
-            uint32_t index                 : 16; /*!< Link Index Tx before Rx */
+            uint32_t index                 : 16; /*!< NVLink port index */
             union
             {
                 dcgm_field_eid_t gpuId    : 8; /*!< Physical GPU ID */
@@ -2819,9 +2823,9 @@ typedef enum dcgmPerGpuTestIndices_enum
     DCGM_EUD_TEST_INDEX         = 9,  //!< EUD test index
     DCGM_NVBANDWIDTH_INDEX      = 10, //!< NVBandwidth index
     DCGM_NCCL_TESTS_INDEX       = 11, //!< Nccl-tests index
+    DCGM_RIST_TEST_INDEX        = 12, //!< RIST (Runtime In-System Test) index
     // Remaining tests are included for convenience but have different execution rules
     // See DCGM_PER_GPU_TEST_COUNT
-    DCGM_UNUSED3_TEST_INDEX   = 12,
     DCGM_UNUSED4_TEST_INDEX   = 13,
     DCGM_UNUSED5_TEST_INDEX   = 14,
     DCGM_SOFTWARE_INDEX       = 15, //!< Software test index
@@ -3150,25 +3154,77 @@ typedef enum dcgmGpuLevel_enum
     DCGM_TOPOLOGY_NVLINK10 = 0x20000,   //!< GPUs connected via ten NVLINK links
     DCGM_TOPOLOGY_NVLINK11 = 0x40000,   //!< GPUs connected via eleven NVLINK links
     DCGM_TOPOLOGY_NVLINK12 = 0x80000,   //!< GPUs connected via twelve NVLINK links
-    DCGM_TOPOLOGY_NVLINK13 = 0x100000,  //!< GPUs connected via twelve NVLINK links
-    DCGM_TOPOLOGY_NVLINK14 = 0x200000,  //!< GPUs connected via twelve NVLINK links
-    DCGM_TOPOLOGY_NVLINK15 = 0x400000,  //!< GPUs connected via twelve NVLINK links
-    DCGM_TOPOLOGY_NVLINK16 = 0x800000,  //!< GPUs connected via twelve NVLINK links
-    DCGM_TOPOLOGY_NVLINK17 = 0x1000000, //!< GPUs connected via twelve NVLINK links
-    DCGM_TOPOLOGY_NVLINK18 = 0x2000000, //!< GPUs connected via twelve NVLINK links
+    DCGM_TOPOLOGY_NVLINK13 = 0x100000,  //!< GPUs connected via thirteen NVLINK links
+    DCGM_TOPOLOGY_NVLINK14 = 0x200000,  //!< GPUs connected via fourteen NVLINK links
+    DCGM_TOPOLOGY_NVLINK15 = 0x400000,  //!< GPUs connected via fifteen NVLINK links
+    DCGM_TOPOLOGY_NVLINK16 = 0x800000,  //!< GPUs connected via sixteen NVLINK links
+    DCGM_TOPOLOGY_NVLINK17 = 0x1000000, //!< GPUs connected via seventeen NVLINK links
+    DCGM_TOPOLOGY_NVLINK18 = 0x2000000, //!< GPUs connected via eighteen NVLINK links
     /**@}*/
-} dcgmGpuTopologyLevel_t;
+} dcgmGpuTopologyLevel_v1_t;
+
+/**
+ * 64-bit GPU topology path bitmask. The lower 8 bits remain PCI topology and the upper bits represent the
+ * NVLINK connection count as a one-hot value.
+ */
+typedef uint64_t dcgmGpuTopologyLevel_t;
+
+#define DCGM_TOPOLOGY_NVLINK19 ((dcgmGpuTopologyLevel_t)0x4000000ULL)     //!< GPUs connected via 19 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK20 ((dcgmGpuTopologyLevel_t)0x8000000ULL)     //!< GPUs connected via 20 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK21 ((dcgmGpuTopologyLevel_t)0x10000000ULL)    //!< GPUs connected via 21 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK22 ((dcgmGpuTopologyLevel_t)0x20000000ULL)    //!< GPUs connected via 22 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK23 ((dcgmGpuTopologyLevel_t)0x40000000ULL)    //!< GPUs connected via 23 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK24 ((dcgmGpuTopologyLevel_t)0x80000000ULL)    //!< GPUs connected via 24 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK25 ((dcgmGpuTopologyLevel_t)0x100000000ULL)   //!< GPUs connected via 25 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK26 ((dcgmGpuTopologyLevel_t)0x200000000ULL)   //!< GPUs connected via 26 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK27 ((dcgmGpuTopologyLevel_t)0x400000000ULL)   //!< GPUs connected via 27 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK28 ((dcgmGpuTopologyLevel_t)0x800000000ULL)   //!< GPUs connected via 28 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK29 ((dcgmGpuTopologyLevel_t)0x1000000000ULL)  //!< GPUs connected via 29 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK30 ((dcgmGpuTopologyLevel_t)0x2000000000ULL)  //!< GPUs connected via 30 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK31 ((dcgmGpuTopologyLevel_t)0x4000000000ULL)  //!< GPUs connected via 31 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK32 ((dcgmGpuTopologyLevel_t)0x8000000000ULL)  //!< GPUs connected via 32 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK33 ((dcgmGpuTopologyLevel_t)0x10000000000ULL) //!< GPUs connected via 33 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK34 ((dcgmGpuTopologyLevel_t)0x20000000000ULL) //!< GPUs connected via 34 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK35 ((dcgmGpuTopologyLevel_t)0x40000000000ULL) //!< GPUs connected via 35 NVLINK links
+#define DCGM_TOPOLOGY_NVLINK36 ((dcgmGpuTopologyLevel_t)0x80000000000ULL) //!< GPUs connected via 36 NVLINK links
 
 // the PCI paths are the lower 8 bits of the path information
-#define DCGM_TOPOLOGY_PATH_PCI(x) (dcgmGpuTopologyLevel_t)((unsigned int)(x) & 0xFF)
+#define DCGM_TOPOLOGY_PATH_PCI(x) (dcgmGpuTopologyLevel_t)((uint64_t)(x) & 0xFFULL)
 
-// the NVLINK paths are the upper 24 bits of the path information
-#define DCGM_TOPOLOGY_PATH_NVLINK(x) (dcgmGpuTopologyLevel_t)((unsigned int)(x) & 0xFFFFFF00)
+// the NVLINK paths are the upper bits of the path information
+#define DCGM_TOPOLOGY_PATH_NVLINK(x) (dcgmGpuTopologyLevel_t)((uint64_t)(x) & 0xFFFFFFFFFFFFFF00ULL)
 
 #define DCGM_AFFINITY_BITMASK_ARRAY_SIZE 8
 
 /**
  * Device topology information
+ */
+typedef struct
+{
+    unsigned int version; //!< version number (dcgmDeviceTopology_version)
+
+    unsigned long cpuAffinityMask[DCGM_AFFINITY_BITMASK_ARRAY_SIZE]; //!< affinity mask for the specified GPU
+                                                                     //!< a 1 represents affinity to the CPU in that
+                                                                     //!< bit position supports up to 256 cores
+    unsigned int numGpus;                                            //!< number of valid entries in gpuPaths
+
+    struct
+    {
+        unsigned int gpuId;             //!< gpuId to which the path represents
+        dcgmGpuTopologyLevel_v1_t path; //!< path to the gpuId from this GPU. Note that this is a bit-mask
+                                        //!< of DCGM_TOPOLOGY_* values and can contain both PCIe topology
+                                        //!< and NvLink topology where applicable. For instance:
+                                        //!< 0x210 = DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK2
+                                        //!< Use the macros DCGM_TOPOLOGY_PATH_NVLINK and
+                                        //!< DCGM_TOPOLOGY_PATH_PCI to mask the NvLink and PCI paths, respectively.
+        unsigned int localNvLinkIds;    //!< bits representing the local links connected to gpuId
+                                        //!< e.g. if this field == 3, links 0 and 1 are connected,
+                                        //!< field is only valid if NVLINKS actually exist between GPUs
+    } gpuPaths[DCGM_MAX_NUM_DEVICES - 1];
+} dcgmDeviceTopology_v1;
+
+/**
+ * Device topology information with 64-bit topology path and NvLink link-id masks.
  */
 typedef struct
 {
@@ -3188,16 +3244,16 @@ typedef struct
                                      //!< 0x210 = DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK2
                                      //!< Use the macros DCGM_TOPOLOGY_PATH_NVLINK and
                                      //!< DCGM_TOPOLOGY_PATH_PCI to mask the NvLink and PCI paths, respectively.
-        unsigned int localNvLinkIds; //!< bits representing the local links connected to gpuId
+        uint64_t localNvLinkIds;     //!< bits representing the local links connected to gpuId
                                      //!< e.g. if this field == 3, links 0 and 1 are connected,
                                      //!< field is only valid if NVLINKS actually exist between GPUs
     } gpuPaths[DCGM_MAX_NUM_DEVICES - 1];
-} dcgmDeviceTopology_v1;
+} dcgmDeviceTopology_v2;
 
 /**
- * Typedef for \ref dcgmDeviceTopology_v1
+ * Typedef for \ref dcgmDeviceTopology_v2
  */
-typedef dcgmDeviceTopology_v1 dcgmDeviceTopology_t;
+typedef dcgmDeviceTopology_v2 dcgmDeviceTopology_t;
 
 /**
  * Version 1 for \ref dcgmDeviceTopology_v1
@@ -3205,9 +3261,14 @@ typedef dcgmDeviceTopology_v1 dcgmDeviceTopology_t;
 #define dcgmDeviceTopology_version1 MAKE_DCGM_VERSION(dcgmDeviceTopology_v1, 1)
 
 /**
+ * Version 2 for \ref dcgmDeviceTopology_v2
+ */
+#define dcgmDeviceTopology_version2 MAKE_DCGM_VERSION(dcgmDeviceTopology_v2, 2)
+
+/**
  * Latest version for \ref dcgmDeviceTopology_t
  */
-#define dcgmDeviceTopology_version dcgmDeviceTopology_version1
+#define dcgmDeviceTopology_version dcgmDeviceTopology_version2
 
 /**
  * Group topology information
@@ -3223,13 +3284,30 @@ typedef struct
     unsigned int numaOptimalFlag;                               //!< a zero value indicates that 1 or more GPUs
                                                                 //!< in the group have a different CPU affinity and thus
                                                                 //!< may not be optimal for certain algorithms
-    dcgmGpuTopologyLevel_t slowestPath;                         //!< the slowest path amongst GPUs in the group
+    dcgmGpuTopologyLevel_v1_t slowestPath;                      //!< the slowest path amongst GPUs in the group
 } dcgmGroupTopology_v1;
 
 /**
- * Typedef for \ref dcgmGroupTopology_v1
+ * Group topology information with 64-bit topology path.
  */
-typedef dcgmGroupTopology_v1 dcgmGroupTopology_t;
+typedef struct
+{
+    unsigned int version; //!< version number (dcgmGroupTopology_version)
+
+    unsigned long
+        groupCpuAffinityMask[DCGM_AFFINITY_BITMASK_ARRAY_SIZE]; //!< the CPU affinity mask for all GPUs in the group
+                                                                //!< a 1 represents affinity to the CPU in that bit
+                                                                //!< position supports up to 256 cores
+    unsigned int numaOptimalFlag;                               //!< a zero value indicates that 1 or more GPUs
+                                                                //!< in the group have a different CPU affinity and thus
+                                                                //!< may not be optimal for certain algorithms
+    dcgmGpuTopologyLevel_t slowestPath;                         //!< the slowest path amongst GPUs in the group
+} dcgmGroupTopology_v2;
+
+/**
+ * Typedef for \ref dcgmGroupTopology_v2
+ */
+typedef dcgmGroupTopology_v2 dcgmGroupTopology_t;
 
 /**
  * Version 1 for \ref dcgmGroupTopology_v1
@@ -3237,9 +3315,14 @@ typedef dcgmGroupTopology_v1 dcgmGroupTopology_t;
 #define dcgmGroupTopology_version1 MAKE_DCGM_VERSION(dcgmGroupTopology_v1, 1)
 
 /**
+ * Version 2 for \ref dcgmGroupTopology_v2
+ */
+#define dcgmGroupTopology_version2 MAKE_DCGM_VERSION(dcgmGroupTopology_v2, 2)
+
+/**
  * Latest version for \ref dcgmGroupTopology_t
  */
-#define dcgmGroupTopology_version dcgmGroupTopology_version1
+#define dcgmGroupTopology_version dcgmGroupTopology_version2
 
 /**
  * DCGM Memory usage information
@@ -3753,7 +3836,7 @@ typedef dcgmMnDiagResponse_v1 dcgmMnDiagResponse_t;
 #define DCGM_GEGE_FLAG_ONLY_SUPPORTED 0x00000001
 
 /**
- * Identifies a GPU NVLink error type returned by DCGM_FI_DEV_GPU_NVLINK_ERRORS
+ * Identifies a GPU NVLink error type returned by DCGM_FI_DEV_NVLINK_ERROR
  */
 typedef enum dcgmGpuNVLinkErrorType_enum
 {
@@ -3820,9 +3903,15 @@ typedef struct
 
 typedef struct
 {
+    dcgm_field_eid_t entityId;                                              //!< Entity ID of the GPU (gpuId)
+    dcgmNvLinkLinkState_t linkState[DCGM_NVLINK_MAX_LINKS_PER_GPU_LEGACY3]; //!< Per-GPU link states
+} dcgmNvLinkGpuLinkStatus_v3;
+
+typedef struct
+{
     dcgm_field_eid_t entityId;                                      //!< Entity ID of the GPU (gpuId)
     dcgmNvLinkLinkState_t linkState[DCGM_NVLINK_MAX_LINKS_PER_GPU]; //!< Per-GPU link states
-} dcgmNvLinkGpuLinkStatus_v3;
+} dcgmNvLinkGpuLinkStatus_v4;
 
 /**
  * State of NvLink links for a NvSwitch
@@ -3838,19 +3927,41 @@ typedef struct
  */
 typedef struct
 {
-    unsigned int version; //!< Version of this request. Should be dcgmNvLinkStatus_version1
+    unsigned int version; //!< Version of this request. Should be dcgmNvLinkStatus_version4
     unsigned int numGpus; //!< Number of entries in gpus[] that are populated
     dcgmNvLinkGpuLinkStatus_v3 gpus[DCGM_MAX_NUM_DEVICES]; //!< Per-GPU NvLink link statuses
     unsigned int numNvSwitches;                            //!< Number of entries in nvSwitches[] that are populated
     dcgmNvLinkNvSwitchLinkStatus_t nvSwitches[DCGM_MAX_NUM_SWITCHES]; //!< Per-NvSwitch link statuses
 } dcgmNvLinkStatus_v4;
 
-typedef dcgmNvLinkStatus_v4 dcgmNvLinkStatus_t;
+/**
+ * Status of all of the NvLinks in a given system
+ */
+typedef struct
+{
+    unsigned int version; //!< Version of this request. Should be dcgmNvLinkStatus_version5
+    unsigned int numGpus; //!< Number of entries in gpus[] that are populated
+    dcgmNvLinkGpuLinkStatus_v4 gpus[DCGM_MAX_NUM_DEVICES]; //!< Per-GPU NvLink link statuses
+    unsigned int numNvSwitches;                            //!< Number of entries in nvSwitches[] that are populated
+    dcgmNvLinkNvSwitchLinkStatus_t nvSwitches[DCGM_MAX_NUM_SWITCHES]; //!< Per-NvSwitch link statuses
+} dcgmNvLinkStatus_v5;
+
+typedef dcgmNvLinkStatus_v5 dcgmNvLinkStatus_t;
 
 /**
  * Version 4 of dcgmNvLinkStatus
  */
 #define dcgmNvLinkStatus_version4 MAKE_DCGM_VERSION(dcgmNvLinkStatus_v4, 4)
+
+/**
+ * Version 5 of dcgmNvLinkStatus
+ */
+#define dcgmNvLinkStatus_version5 MAKE_DCGM_VERSION(dcgmNvLinkStatus_v5, 5)
+
+/**
+ * Latest version of dcgmNvLinkStatus
+ */
+#define dcgmNvLinkStatus_version dcgmNvLinkStatus_version5
 
 /**
  * Nvlink P2P link status. This mirrors nvmlGpuP2PStatus_enum.

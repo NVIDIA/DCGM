@@ -20,6 +20,8 @@ import apps
 import time
 
 
+# NO HARDWARE
+
 @test_utils.run_only_on_linux()
 @test_utils.run_only_on_bare_metal()
 @test_utils.run_with_logging_on()
@@ -68,6 +70,8 @@ def test_logging_env_var():
     assert passed, errorString
 
 
+# NO HARDWARE
+
 @test_utils.run_with_logging_on()
 def test_logging_modules():
     """
@@ -96,7 +100,8 @@ def test_logging_modules():
             logger.debug("Read %d bytes from %s" %
                          (len(contents), nvhost_engine.dcgm_trace_fname))
 
-            # NVSwitch module is loaded on startup. So we check for records from that module
+            # NVSwitch module is loaded on startup. So we check for records
+            # from that module
             test_string = "Initialized logging for module 1"
 
             # Note that if --eris is passsed, we only log at WARNING level

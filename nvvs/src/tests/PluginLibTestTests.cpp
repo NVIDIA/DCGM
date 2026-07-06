@@ -112,9 +112,9 @@ TEST_CASE("PluginLibTest::PopulateEntityResults")
     REQUIRE(ret.numResults == entityResults.numResults);
     for (unsigned i = 0; i < ret.numResults; ++i)
     {
-        REQUIRE(ret.results[0].entity.entityGroupId == entityResults.results[0].entity.entityGroupId);
-        REQUIRE(ret.results[0].entity.entityId == entityResults.results[0].entity.entityId);
-        REQUIRE(ret.results[0].result == entityResults.results[0].result);
+        REQUIRE(ret.results[i].entity.entityGroupId == entityResults.results[i].entity.entityGroupId);
+        REQUIRE(ret.results[i].entity.entityId == entityResults.results[i].entity.entityId);
+        REQUIRE(ret.results[i].result == entityResults.results[i].result);
     }
     REQUIRE(pluginLibTest.GetAuxData() != std::nullopt);
 }
@@ -154,5 +154,58 @@ TEST_CASE("PluginLibTest::MaxInfoMessages")
         REQUIRE(ret.info[i].entity.entityId == i);
         std::string expectedMsg = fmt::format("{}{}", baseMsg, i);
         REQUIRE(std::string_view(ret.info[i].msg) == std::string_view(expectedMsg));
+    }
+}
+
+TEST_CASE("PluginLibTest::PopulateEntityResults clamps plugin-supplied counts to array capacity")
+{
+    dcgmDiagPluginTest_t pluginTest {};
+    PluginLibTest pluginLibTest(pluginTest);
+
+    auto pEntityResults = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+
+    SECTION("numErrors > capacity is clamped, no OOB read")
+    {
+        auto const cap            = std::size(pEntityResults->errors);
+        pEntityResults->numErrors = static_cast<unsigned char>(cap + 2);
+        for (size_t i = 0; i < cap; ++i)
+        {
+            pEntityResults->errors[i].entity
+                = { .entityGroupId = DCGM_FE_GPU, .entityId = static_cast<dcgm_field_eid_t>(i) };
+        }
+
+        pluginLibTest.PopulateEntityResults(*pEntityResults);
+        auto const &ret = pluginLibTest.GetEntityResults<dcgmDiagEntityResults_v2>();
+        REQUIRE(ret.numErrors == cap);
+    }
+
+    SECTION("numInfo > capacity is clamped, no OOB read")
+    {
+        auto const cap          = std::size(pEntityResults->info);
+        pEntityResults->numInfo = static_cast<unsigned char>(cap + 2);
+        for (size_t i = 0; i < cap; ++i)
+        {
+            pEntityResults->info[i].entity
+                = { .entityGroupId = DCGM_FE_GPU, .entityId = static_cast<dcgm_field_eid_t>(i) };
+        }
+
+        pluginLibTest.PopulateEntityResults(*pEntityResults);
+        auto const &ret = pluginLibTest.GetEntityResults<dcgmDiagEntityResults_v2>();
+        REQUIRE(ret.numInfo == cap);
+    }
+
+    SECTION("numResults > capacity is clamped, no OOB read")
+    {
+        auto const cap             = std::size(pEntityResults->results);
+        pEntityResults->numResults = static_cast<unsigned short>(cap + 2);
+        for (size_t i = 0; i < cap; ++i)
+        {
+            pEntityResults->results[i].entity
+                = { .entityGroupId = DCGM_FE_GPU, .entityId = static_cast<dcgm_field_eid_t>(i) };
+        }
+
+        pluginLibTest.PopulateEntityResults(*pEntityResults);
+        auto const &ret = pluginLibTest.GetEntityResults<dcgmDiagEntityResults_v2>();
+        REQUIRE(ret.numResults == cap);
     }
 }

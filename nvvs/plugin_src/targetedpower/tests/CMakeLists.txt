@@ -19,7 +19,7 @@ endif()
 add_executable(targetedpowertests)
 target_sources(targetedpowertests
     PRIVATE
-    TargetedPower_wrapperTests.cpp
+        TargetedPower_wrapperTests.cpp
         ../TargetedPower_wrapper.cpp
 )
 

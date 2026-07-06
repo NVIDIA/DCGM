@@ -59,4 +59,8 @@ class DcgmTelegraf(DcgmJsonReader):
 
 
 if __name__ == '__main__':  # pragma: no cover
-    main(DcgmTelegraf, TELEGRAF_NAME, DEFAULT_TELEGRAF_PORT, add_target_host=True)
+    main(
+        DcgmTelegraf,
+        TELEGRAF_NAME,
+        DEFAULT_TELEGRAF_PORT,
+        add_target_host=True)

@@ -16,6 +16,9 @@ if (NOT BUILD_TESTING)
     return()
 endif()
 
+add_library(common_tests_includes INTERFACE)
+target_include_directories(common_tests_includes INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 add_executable(commontests)
 target_sources(commontests
     PRIVATE
@@ -39,17 +42,23 @@ target_sources(commontests
         HangDetectHandlerTests.cpp
         HangDetectMonitorTests.cpp
         MockFileSystemOperatorTests.cpp
-        mocks/MockChildProcess.cpp
         DcgmChildProcessManagerTests.cpp
         UriParserTests.cpp
+        DcgmLibTests.cpp
         PermissionCheckTests.cpp
         DcgmMutexTests.cpp
+        DcgmStatusTests.cpp
+        DcgmFvBufferTests.cpp
         EnvConfigTests.cpp
+        FileSystemOperatorTests.cpp
+        DcgmIpcTests.cpp
+        DcgmPolicyRequestTests.cpp
 )
 
 target_link_libraries(commontests
     PRIVATE
         Catch2::Catch2WithMain
+        common_tests_includes
         common_interface
         transport_objects
         childprocess
@@ -60,7 +69,8 @@ target_link_libraries(commontests
         sdk_nvml_essentials_objects
         sdk_nvml_interface
         sdk_nvml_loader
-        mock_interface
+        mock_common
+        mock_childprocess
         ${CMAKE_THREAD_LIBS_INIT}
         fmt::fmt
         rt

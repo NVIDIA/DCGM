@@ -72,4 +72,7 @@ NVSDM_FUNCTION(nvsdmRet_t, nvsdmSetLogFile, (char const *logFile), logFile);
 NVSDM_FUNCTION(nvsdmRet_t, nvsdmDeviceGetHealthStatus,
                (nvsdmDevice_t const device, nvsdmDeviceHealthStatus_t *status), device, status);
 
+NVSDM_FUNCTION(nvsdmRet_t, nvsdmDeviceGetPCIInfo,
+               (nvsdmDevice_t const device, nvsdmPCIInfo_t *info), device, info);
+
 #endif // __NVSDM_API_MAP_H__

@@ -183,6 +183,24 @@ dcgmReturn_t DcgmCoreProxy::GetAllGpuInfo(std::vector<dcgmcm_gpu_info_cached_t> 
     return ret;
 }
 
+DcgmResult<dcgmChipArchitecture_t> DcgmCoreProxy::GetGpuChipArch(dcgm_field_eid_t gpuId)
+{
+    std::vector<dcgmcm_gpu_info_cached_t> gpuInfos;
+    if (dcgmReturn_t const ret = GetAllGpuInfo(gpuInfos); ret != DCGM_ST_OK)
+    {
+        return std::unexpected(ret);
+    }
+
+    for (auto const &info : gpuInfos)
+    {
+        if (info.gpuId == gpuId)
+        {
+            return info.arch;
+        }
+    }
+    return std::unexpected(DCGM_ST_BADPARAM);
+}
+
 unsigned int DcgmCoreProxy::NvmlIndexToGpuId(int nvmlIndex)
 {
     dcgmCoreBasicQuery_t bq = {};
@@ -1403,7 +1421,7 @@ dcgmReturn_t DcgmCoreProxy::GetCudaVersion(int &cudaVersion)
 dcgmReturn_t DcgmCoreProxy::GetCudaComputeCapabilityMajorVersion(dcgm_field_eid_t entityId, int &arch)
 {
     dcgmcm_sample_t sample {};
-    dcgmReturn_t ret = GetLatestSample(DCGM_FE_GPU, entityId, DCGM_FI_DEV_CUDA_COMPUTE_CAPABILITY, &sample, nullptr);
+    dcgmReturn_t ret = GetLatestSample(DCGM_FE_GPU, entityId, DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, &sample, nullptr);
 
     if (ret == DCGM_ST_OK && !DCGM_INT64_IS_BLANK(sample.val.i64))
     {

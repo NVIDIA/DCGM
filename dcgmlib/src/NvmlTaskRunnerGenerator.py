@@ -96,7 +96,8 @@ def GetFunctionSignature(entryPoint, first):
     # Remove all line breaks, remove the extra whitespace on the ends, and then get
     # get rid of the parenthesis around the string
     # We are left with something in the form of:
-    # funcname, tsapiFuncname, (argument list), "(argument type matching)", arg1, arg2, ...)
+    # funcname, tsapiFuncname, (argument list), "(argument type matching)",
+    # arg1, arg2, ...)
 
     # Example:
     # NVML_ENTRY_POINT(nvmlDeviceGetComputeMode,
@@ -113,18 +114,28 @@ def GetFunctionSignature(entryPoint, first):
     preg = re.compile(r"(nvml\w+),[^)]+(\([^)]+\)),\s+\"[^\"]+\",\s+([^)]+)")
     m = preg.search(entryPoint)
     if m:
-        return RemoveExtraSpaces(m.group(1)), RemoveExtraSpaces(m.group(2)), RemoveExtraSpaces(m.group(3))
+        return RemoveExtraSpaces(
+            m.group(1)), RemoveExtraSpaces(
+            m.group(2)), RemoveExtraSpaces(
+            m.group(3))
     else:
         if entryPoint == "include \"dcgm_nvml.h":
             pass
-        # Ignore errors on the first token because it is everything from before the first entry point
+        # Ignore errors on the first token because it is everything from before
+        # the first entry point
         elif not first:
             logging.debug(f"no match found in entry point = '{entryPoint}'")
         return None, None, None
 
 
 class FunctionInfo:
-    def __init__(self, originalFuncname, generatedFuncname, argList, originalArgNames, argNamesWithoutFirst):
+    def __init__(
+            self,
+            originalFuncname,
+            generatedFuncname,
+            argList,
+            originalArgNames,
+            argNamesWithoutFirst):
         self.originalFuncname = originalFuncname  # e.g., nvmlDeviceGetPcieSpeed
         self.generatedFuncname = generatedFuncname  # e.g., NvmlDeviceGetPcieSpeed
         # e.g., (SafeNvmlHandle device, nvmlPcieSpeed_t *speed)
@@ -133,7 +144,8 @@ class FunctionInfo:
         self.argNamesWithoutFirst = argNamesWithoutFirst  # e.g., speed
 
 
-# These device-related functions are not auto-generated, we have to manually add them to the NvmlTaskRunner.cpp if needed.
+# These device-related functions are not auto-generated, we have to
+# manually add them to the NvmlTaskRunner.cpp if needed.
 NOT_AUTO_GENERATED_FUNCTIONS = [
     "nvmlDeviceGetCount",  # no device argument
     "nvmlDeviceGetCount_v2",  # no device argument
@@ -163,7 +175,11 @@ NOT_AUTO_GENERATED_FUNCTIONS = [
 ]
 
 
-def ProcessDeviceFunctionIfAny(funcname, argList, argNames, allDevicesFunctions):
+def ProcessDeviceFunctionIfAny(
+        funcname,
+        argList,
+        argNames,
+        allDevicesFunctions):
     # GPM functions also take nvmlDevice as their first argument.
     if (not funcname.startswith("nvmlDevice") and
             funcname != "nvmlGpmMigSampleGet" and
@@ -183,7 +199,11 @@ def ProcessDeviceFunctionIfAny(funcname, argList, argNames, allDevicesFunctions)
     return True
 
 
-def ProcessGpuInstanceFunctionIfAny(funcname, argList, argNames, gpuInstanceFunctions):
+def ProcessGpuInstanceFunctionIfAny(
+        funcname,
+        argList,
+        argNames,
+        gpuInstanceFunctions):
     if not funcname.startswith("nvmlGpuInstance"):
         return False
     originalFuncname = funcname
@@ -200,7 +220,11 @@ def ProcessGpuInstanceFunctionIfAny(funcname, argList, argNames, gpuInstanceFunc
     return True
 
 
-def ProcessComputeInstanceFunctionIfAny(funcname, argList, argNames, computeInstanceFunctions):
+def ProcessComputeInstanceFunctionIfAny(
+        funcname,
+        argList,
+        argNames,
+        computeInstanceFunctions):
     if not funcname.startswith("nvmlComputeInstance"):
         return False
     originalFuncname = funcname
@@ -208,7 +232,8 @@ def ProcessComputeInstanceFunctionIfAny(funcname, argList, argNames, computeInst
     generatedFuncname = "N" + funcname[1:]
     # (nvmlComputeInstance_t computeInstance, nvmlComputeInstanceInfo_t *info) => (SafeComputeInstance computeInstance, nvmlClockType_t type, unsigned int *clock)
     argList = argList.replace(
-        "(nvmlComputeInstance_t computeInstance", "(SafeComputeInstance computeInstance")
+        "(nvmlComputeInstance_t computeInstance",
+        "(SafeComputeInstance computeInstance")
     # computeInstance, info => info
     argNamesWithoutFirst = ", ".join(argNames.split(",")[1:])
     fi = FunctionInfo(originalFuncname, generatedFuncname,
@@ -217,7 +242,11 @@ def ProcessComputeInstanceFunctionIfAny(funcname, argList, argNames, computeInst
     return True
 
 
-def ProcessVgpuInstanceFunctionIfAny(funcname, argList, argNames, vgpuInstanceFunctions):
+def ProcessVgpuInstanceFunctionIfAny(
+        funcname,
+        argList,
+        argNames,
+        vgpuInstanceFunctions):
     if not funcname.startswith("nvmlVgpuInstance"):
         return False
     originalFuncname = funcname
@@ -234,7 +263,11 @@ def ProcessVgpuInstanceFunctionIfAny(funcname, argList, argNames, vgpuInstanceFu
     return True
 
 
-def ProcessVgpuTypeFunctionIfAny(funcname, argList, argNames, vgpuTypeFunctions):
+def ProcessVgpuTypeFunctionIfAny(
+        funcname,
+        argList,
+        argNames,
+        vgpuTypeFunctions):
     if not funcname.startswith("nvmlVgpuType"):
         return False
     originalFuncname = funcname
@@ -275,7 +308,8 @@ def GetEntryPointsAllFunctions(entryPointsContents):
         first = False
         if not funcname or not argList:
             continue
-        if funcname in NOT_AUTO_GENERATED_FUNCTIONS or funcname.startswith("nvmlDeviceGetHandleBy"):
+        if funcname in NOT_AUTO_GENERATED_FUNCTIONS or funcname.startswith(
+                "nvmlDeviceGetHandleBy"):
             continue
         processed = ProcessDeviceFunctionIfAny(
             funcname, argList, argNames, allDevicesFunctions)
@@ -292,7 +326,10 @@ def GetEntryPointsAllFunctions(entryPointsContents):
     return allDevicesFunctions, gpuInstanceFunctions, computeInstanceFunctions, vgpuInstanceFunctions, vgpuTypeFunctions, otherFunctions
 
 
-def GetGeneratedFunction(identity: str, identityAccessNvml: str, fi: FunctionInfo):
+def GetGeneratedFunction(
+        identity: str,
+        identityAccessNvml: str,
+        fi: FunctionInfo):
     '''
      This function generates the C++ code for a given FunctionInfo, producing both the main
      async (Enqueue-based) task runner method and its implementation for the NvmlTaskRunner class.
@@ -318,7 +355,8 @@ def GetGeneratedFunction(identity: str, identityAccessNvml: str, fi: FunctionInf
         argNamesWithoutFirst=argNamesWithoutFirst,
         identity=identity,
         identityAccessNvml=identityAccessNvml,
-        argsToAccessNvml=f'{", " + argNamesWithoutFirst if argNamesWithoutFirst else ""}')
+        argsToAccessNvml=(
+            f'{", " + argNamesWithoutFirst if argNamesWithoutFirst else ""}'))
     return functionTemplate
 
 
@@ -363,7 +401,8 @@ def WriteOtherFunctions(file, nonDevicesFunctions):
         generatedFuncname = fi.generatedFuncname
         argList = fi.argList
         originalArgNames = fi.originalArgNames
-        argsToAccessNvml = f'{", " + originalArgNames if originalArgNames else ""}'
+        argsToAccessNvml = (
+            f'{", " + originalArgNames if originalArgNames else ""}')
         functionTemplate = NVML_BASIC_FUNCTION_TEMPLATE.substitute(
             generatedFuncname=generatedFuncname,
             argList=argList,
@@ -372,7 +411,14 @@ def WriteOtherFunctions(file, nonDevicesFunctions):
         file.write(functionTemplate)
 
 
-def WriteCppFile(allDevicesFunctions, gpuInstanceFunctions, computeInstanceFunctions, vgpuInstanceFunctions, vgpuTypeFunctions, otherFunctions, outputFolder):
+def WriteCppFile(
+        allDevicesFunctions,
+        gpuInstanceFunctions,
+        computeInstanceFunctions,
+        vgpuInstanceFunctions,
+        vgpuTypeFunctions,
+        otherFunctions,
+        outputFolder):
     with open(outputFolder + "NvmlTaskRunnerGenerated.cpp", "w") as file:
         file.write(COPYRIGHT_NOTICE)
         file.write(AUTO_GENERATED_NOTICE)
@@ -389,7 +435,14 @@ def WriteCppFile(allDevicesFunctions, gpuInstanceFunctions, computeInstanceFunct
         file.write('#pragma GCC diagnostic pop\n')
 
 
-def WriteHeaderFiles(allDevicesFunctions, gpuInstanceFunctions, computeInstanceFunctions, vgpuInstanceFunctions, vgpuTypeFunctions, otherFunctions, outputFolder):
+def WriteHeaderFiles(
+        allDevicesFunctions,
+        gpuInstanceFunctions,
+        computeInstanceFunctions,
+        vgpuInstanceFunctions,
+        vgpuTypeFunctions,
+        otherFunctions,
+        outputFolder):
     with open(outputFolder + "NvmlTaskRunnerGeneratedPrivate.h", "w") as file:
         file.write(COPYRIGHT_NOTICE)
         file.write(AUTO_GENERATED_NOTICE)
@@ -442,7 +495,8 @@ def WriteHeaderFiles(allDevicesFunctions, gpuInstanceFunctions, computeInstanceF
 
 
 def IsInDcgmRoot():
-    return os.path.exists("./dcgmlib") and os.path.exists("./dcgmi") and os.path.exists("./nvml-injection")
+    return os.path.exists(
+        "./dcgmlib") and os.path.exists("./dcgmi") and os.path.exists("./nvml-injection")
 
 
 def main():
@@ -456,7 +510,8 @@ def main():
                   "Example:\n" \
                   "\t# dcgmlib/src/NvmlTaskRunnerGenerator.py -i sdk/nvidia/nvml/nvml_entry_points.h -o dcgmlib/src/"
     parser = argparse.ArgumentParser(
-        formatter_class=argparse.RawDescriptionHelpFormatter, description=description)
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=description)
     parser.add_argument('-i', '--input-file',
                         default=NVML_ENTRY_POINTS_FILE, dest='inputPath')
     parser.add_argument('-o', '--output-folder',
@@ -472,10 +527,22 @@ def main():
         entryPointsContents = file.read()
     allDevicesFunctions, gpuInstanceFunctions, computeInstanceFunctions, vgpuInstanceFunctions, vgpuTypeFunctions, otherFunctions = GetEntryPointsAllFunctions(
         entryPointsContents)
-    WriteCppFile(allDevicesFunctions, gpuInstanceFunctions, computeInstanceFunctions,
-                 vgpuInstanceFunctions, vgpuTypeFunctions, otherFunctions, args.outputFolder)
-    WriteHeaderFiles(allDevicesFunctions, gpuInstanceFunctions, computeInstanceFunctions,
-                     vgpuInstanceFunctions, vgpuTypeFunctions, otherFunctions, args.outputFolder)
+    WriteCppFile(
+        allDevicesFunctions,
+        gpuInstanceFunctions,
+        computeInstanceFunctions,
+        vgpuInstanceFunctions,
+        vgpuTypeFunctions,
+        otherFunctions,
+        args.outputFolder)
+    WriteHeaderFiles(
+        allDevicesFunctions,
+        gpuInstanceFunctions,
+        computeInstanceFunctions,
+        vgpuInstanceFunctions,
+        vgpuTypeFunctions,
+        otherFunctions,
+        args.outputFolder)
 
 
 if __name__ == "__main__":

@@ -12,24 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(tests)
-target_compile_definitions(cuda_mock_interface INTERFACE
+if (NOT BUILD_TESTING)
+    return()
+endif()
+
+add_library(mock_cuda_lib STATIC)
+target_sources(mock_cuda_lib PRIVATE
+    MockCudaLib.cpp
+    MockCudaLib.h)
+
+target_compile_definitions(mock_cuda_lib PUBLIC
     CUDA_VERSION_USED=12)
 
-target_include_directories(cuda_mock_interface INTERFACE
-    "${CUDA12_INCLUDE_DIR}")
-target_include_directories(cuda_mock_interface INTERFACE
+target_include_directories(mock_cuda_lib PUBLIC
+    "${CUDA12_INCLUDE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(cuda_mock_interface INTERFACE
+target_link_libraries(mock_cuda_lib PUBLIC
     dcgm
     dcgm_common
     dcgm_logging
     fmt::fmt
-    cuda_lib_base_interface
+    cuda_lib_base
     dl
     rt)
 
-target_sources(cuda_mock_interface INTERFACE
-    CudaLibMock.cpp
-    CudaLibMock.h)
+add_subdirectory(tests)

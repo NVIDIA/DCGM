@@ -16,6 +16,10 @@
 
 #include "MockChildProcess.hpp"
 
+#include <algorithm>
+#include <functional>
+#include <thread>
+
 namespace DcgmNs::Common::RemoteConn::Mock
 {
 

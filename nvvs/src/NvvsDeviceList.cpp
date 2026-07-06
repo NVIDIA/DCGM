@@ -62,7 +62,7 @@ int NvvsDevice::SaveState(std::string const &testName, nvvs_device_state_t *save
     savedState->populated = 1;
 
     /* Save compute mode */
-    dcgmReturn_t ret = dcgmSystem.GetGpuLatestValue(m_gpuId, DCGM_FI_DEV_COMPUTE_MODE, flags, computeModeVal);
+    dcgmReturn_t ret = dcgmSystem.GetGpuLatestValue(m_gpuId, DCGM_FI_DEV_GPU_COMPUTE_MODE, flags, computeModeVal);
 
     if (ret != DCGM_ST_OK)
     {

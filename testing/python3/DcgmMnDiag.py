@@ -25,8 +25,14 @@ class DcgmMnDiag:
     Python wrapper for DCGM Multi-Node Diagnostics
     """
 
-    def __init__(self, hostList=None, hostEngineAddress=None, testName=None, parameters=[],
-                 handle=None, version=dcgm_structs.dcgmRunMnDiag_version1):
+    def __init__(
+            self,
+            hostList=None,
+            hostEngineAddress=None,
+            testName=None,
+            parameters=[],
+            handle=None,
+            version=dcgm_structs.dcgmRunMnDiag_version1):
         """
         Constructor for DcgmMnDiag
 
@@ -54,7 +60,9 @@ class DcgmMnDiag:
             self.numHosts = len(hostList)
             if self.numHosts > dcgm_structs.DCGM_MAX_NUM_HOSTS:
                 raise ValueError(
-                    f"Cannot add more than {dcgm_structs.DCGM_MAX_NUM_HOSTS} hosts, got {self.numHosts}")
+                    f"Cannot add more than "
+                    f"{dcgm_structs.DCGM_MAX_NUM_HOSTS} hosts, "
+                    f"got {self.numHosts}")
 
         if testName:
             self.runMnDiagInfo.testName = testName
@@ -71,13 +79,16 @@ class DcgmMnDiag:
             self.numParams = len(parameters)
             if self.numParams > dcgm_structs.DCGM_MAX_TEST_PARMS:
                 raise ValueError(
-                    f"Cannot add more than {dcgm_structs.DCGM_MAX_TEST_PARMS} parameters, got {self.numParams}")
+                    f"Cannot add more than "
+                    f"{dcgm_structs.DCGM_MAX_TEST_PARMS} parameters, "
+                    f"got {self.numParams}")
 
     def AddHost(self, hostname):
         """Add a host to the diagnostic run"""
         if len(hostname) >= dcgm_structs.DCGM_MAX_STR_LENGTH:
             raise ValueError(
-                f"Hostname exceeds maximum length of {dcgm_structs.DCGM_MAX_STR_LENGTH}")
+                f"Hostname exceeds maximum length of "
+                f"{dcgm_structs.DCGM_MAX_STR_LENGTH}")
 
         # Convert string to bytes and copy to the correct host slot
         host_bytes = hostname.encode('utf-8')
@@ -90,20 +101,24 @@ class DcgmMnDiag:
 
         if self.numHosts > dcgm_structs.DCGM_MAX_NUM_HOSTS:
             raise ValueError(
-                f"Cannot add more than {dcgm_structs.DCGM_MAX_NUM_HOSTS} hosts, got {self.numHosts}")
+                f"Cannot add more than "
+                f"{dcgm_structs.DCGM_MAX_NUM_HOSTS} hosts, "
+                f"got {self.numHosts}")
 
     def SetTestName(self, testName):
         """Set the test name"""
         if len(testName) >= dcgm_structs.DCGM_MAX_STR_LENGTH:
             raise ValueError(
-                f"Test name exceeds maximum length of {dcgm_structs.DCGM_MAX_STR_LENGTH}")
+                f"Test name exceeds maximum length of "
+                f"{dcgm_structs.DCGM_MAX_STR_LENGTH}")
         self.runMnDiagInfo.testName = testName
 
     def AddParameter(self, parameterStr):
         """Add a parameter to the diagnostic run"""
         if len(parameterStr) >= dcgm_structs.DCGM_MAX_TEST_PARMS_LEN:
             raise ValueError(
-                f"Parameter exceeds maximum length of {dcgm_structs.DCGM_MAX_TEST_PARMS_LEN}")
+                f"Parameter exceeds maximum length of "
+                f"{dcgm_structs.DCGM_MAX_TEST_PARMS_LEN}")
 
         # Convert string to bytes and copy to the correct parameter slot
         param_bytes = parameterStr.encode('utf-8')
@@ -116,7 +131,8 @@ class DcgmMnDiag:
 
         if self.numParams > dcgm_structs.DCGM_MAX_TEST_PARMS:
             raise ValueError(
-                f"Cannot add more than {dcgm_structs.DCGM_MAX_TEST_PARMS} parameters, got {self.numParams}")
+                f"Cannot add more than {dcgm_structs.DCGM_MAX_TEST_PARMS} "
+                f"parameters, got {self.numParams}")
 
     def GetStruct(self):
         return self.runMnDiagInfo

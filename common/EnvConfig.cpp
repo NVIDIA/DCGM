@@ -17,7 +17,9 @@
 #include "EnvConfig.h"
 
 #include <cstdlib>
+#include <filesystem>
 #include <string_view>
+#include <system_error>
 
 EnvConfig::EnvConfig()
 {
@@ -31,4 +33,21 @@ EnvConfig::EnvConfig()
 bool EnvConfig::SupportNonNvidiaCpu() const
 {
     return m_supportNonNvidiaCpu;
+}
+
+bool EnvConfig::IsEnvVarPathToRegularFile(char const *envVarName) const
+{
+    if (envVarName == nullptr)
+    {
+        return false;
+    }
+
+    char const *pathEnv = std::getenv(envVarName);
+    if (pathEnv == nullptr || pathEnv[0] == '\0')
+    {
+        return false;
+    }
+
+    std::error_code ec;
+    return std::filesystem::is_regular_file(std::filesystem::path(pathEnv), ec);
 }

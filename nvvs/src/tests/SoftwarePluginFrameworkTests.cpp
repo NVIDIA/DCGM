@@ -39,10 +39,11 @@ public:
     std::vector<Gpu> m_gpuStorage;
     std::vector<Gpu *> m_visibleGpus;
     std::vector<int> m_gpuIds;
-    static constexpr std::array<std::string_view, 12> m_testNameVec = { "CUDA Main Library",
+    static constexpr std::array<std::string_view, 13> m_testNameVec = { "CUDA Main Library",
                                                                         "Denylist",
                                                                         "Environmental Variables",
                                                                         "Fabric Manager",
+                                                                        "GPU Recovery State",
                                                                         "Graphics Processes",
                                                                         "Inforom",
                                                                         "Memory Health",

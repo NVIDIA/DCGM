@@ -16,8 +16,11 @@
 
 #include "FileSystemOperator.h"
 
+#include <dirent.h>
 #include <glob.h>
 
+#include <cerrno>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -63,4 +66,62 @@ std::optional<std::vector<std::string>> FileSystemOperator::Glob(std::string_vie
 bool FileSystemOperator::Unlink(std::string_view path)
 {
     return unlink(std::string(path).c_str()) == 0;
+}
+
+ssize_t FileSystemOperator::ReadLink(std::string_view path, char *buf, size_t bufsize)
+{
+    return readlink(std::string(path).c_str(), buf, bufsize);
+}
+
+int FileSystemOperator::Stat(char const *path, struct stat *buf)
+{
+    return stat(path, buf);
+}
+
+int FileSystemOperator::Access(char const *path, int mode)
+{
+    return access(path, mode);
+}
+
+bool FileSystemOperator::IsDirectory(std::string const &path)
+{
+    struct stat st = {};
+    if (Stat(path.c_str(), &st) != 0)
+    {
+        return false;
+    }
+    return S_ISDIR(st.st_mode);
+}
+
+std::optional<std::vector<std::string>> FileSystemOperator::ListDirectoryEntries(std::string const &path)
+{
+    DIR *const dir = opendir(path.c_str());
+    if (dir == nullptr)
+    {
+        return std::nullopt;
+    }
+
+    std::vector<std::string> names;
+    errno = 0;
+    while (dirent *const entry = readdir(dir))
+    {
+        names.emplace_back(entry->d_name);
+    }
+
+    int const readdirErrno = errno; // distinguish readdir(3) failure from EOF (see errno after NULL return)
+    if (closedir(dir) != 0 || readdirErrno != 0)
+    {
+        return std::nullopt;
+    }
+    return names;
+}
+
+char *FileSystemOperator::GetCurrentWorkingDirectory(char *buf, size_t size)
+{
+    return getcwd(buf, size);
+}
+
+int FileSystemOperator::ChangeDirectory(char const *path)
+{
+    return chdir(path);
 }

@@ -35,7 +35,8 @@ DCGM_INT64_NOT_SUPPORTED = (DCGM_INT64_BLANK + 2)
 DCGM_FP64_NOT_SUPPORTED = (DCGM_FP64_BLANK + 2.0)
 DCGM_STR_NOT_SUPPORTED = "<<<NOT_SUPPORTED>>>"
 
-# Represents and error where fetching the value is not allowed with our current credentials
+# Represents and error where fetching the value is not allowed with our
+# current credentials
 DCGM_INT32_NOT_PERMISSIONED = (DCGM_INT32_BLANK + 3)
 DCGM_INT64_NOT_PERMISSIONED = (DCGM_INT64_BLANK + 3)
 DCGM_FP64_NOT_PERMISSIONED = (DCGM_FP64_BLANK + 3.0)
@@ -84,7 +85,8 @@ def DCGM_STR_IS_BLANK(val):
 
 class DcgmValue:
     def __init__(self, value):
-        # Contains either an integer (int64), string, or double of the actual value
+        # Contains either an integer (int64), string, or double of the actual
+        # value
         self.value = value
 
     ###########################################################################
@@ -115,14 +117,14 @@ class DcgmValue:
         '''
         if self.value is None:
             return True
-        elif type(self.value) == int or type(self.value) == int:
+        elif isinstance(self.value, int):
             return DCGM_INT64_IS_BLANK(self.value)
-        elif type(self.value) == float:
+        elif isinstance(self.value, float):
             return DCGM_FP64_IS_BLANK(self.value)
-        elif type(self.value) == str:
+        elif isinstance(self.value, str):
             return DCGM_STR_IS_BLANK(self.value)
         else:
-            raise Exception("Unknown type: %s") % str(type(self.value))
+            raise Exception("Unknown type: %s" % str(type(self.value)))
 
     ###########################################################################
     def __str__(self):

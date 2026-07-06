@@ -19,8 +19,11 @@ import dcgm_structs
 import test_utils
 import time
 import DcgmReader
+import logger
 from . import nvsdm_helpers
 
+
+# NO HARDWARE
 
 @test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
 @test_utils.run_with_standalone_host_engine()
@@ -31,6 +34,8 @@ def test_nvsdm_list_switches(handle):
     assert len(switchIds) > 0
 
 
+# NO HARDWARE
+
 @test_utils.run_with_nvsdm_mock_config("one_cx.yaml")
 @test_utils.run_with_standalone_host_engine()
 def test_nvsdm_list_ib_cx(handle):
@@ -40,6 +45,9 @@ def test_nvsdm_list_ib_cx(handle):
     assert len(ibCxIds) > 0
 
 
+# NO HARDWARE
+
+@test_utils.run_with_injection_nvml()
 @test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_nvml()
@@ -52,7 +60,6 @@ def test_nvsdm_port_telemetry(handle):
     guidPortNumLshift = 32
     guidPortLidLshift = 16
     nvsdmPortLID = 1
-    numOfNvsdmStubbedPorts = 2
 
     flags = 0
     linkIds = dcgm_agent.dcgmGetEntityGroupEntities(
@@ -66,11 +73,11 @@ def test_nvsdm_port_telemetry(handle):
         entityPair.entityId = link
         linkEntities.append(entityPair)
 
-    dcgmGroup = dcgmSystem.GetGroupWithEntities('linkGroup', linkEntities)
+    _dcgmGroup = dcgmSystem.GetGroupWithEntities('linkGroup', linkEntities)
 
     fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_TX,
                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX,
-                dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_UUID,
                 ]
 
     updateFrequencyUsec = 200000  # 200ms
@@ -78,7 +85,10 @@ def test_nvsdm_port_telemetry(handle):
     sleepTime = updateFrequencyUsec / 1000000 * 2
 
     dr = DcgmReader.DcgmReader(
-        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=linkEntities)
+        fieldIds=fieldIds,
+        updateFrequency=updateFrequencyUsec,
+        maxKeepAge=30.0,
+        entities=linkEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
@@ -113,14 +123,17 @@ def test_nvsdm_port_telemetry(handle):
                 assert len(linkLatest[linkId]) == len(fieldIds), errmsg
 
             # Verify the GUID for each NvLink
-            receivedGUID = linkLatest[linkId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID]
-            nvsdmPortNum = nvsdmPortId = linkId % numOfNvsdmStubbedPorts
+            # linkId is a packed dcgm_link_t.raw value; bits 23-8 encode the port index (port.num).
+            receivedGUID = linkLatest[linkId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_UUID]
+            nvsdmPortNum = nvsdmPortId = (linkId >> 8) & 0xFFFF
             expectedGUID = str((nvsdmPortNum << guidPortNumLshift) | (
                 nvsdmPortLID << guidPortLidLshift) | nvsdmPortId)
             errmsg = "NvLink: Expected GUID=%s, received GUID=%s" % (
                 expectedGUID, receivedGUID)
             assert expectedGUID == receivedGUID, errmsg
 
+
+# NO HARDWARE
 
 @test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
 @test_utils.run_with_standalone_host_engine()
@@ -147,12 +160,12 @@ def test_nvsdm_platform_telemetry(handle):
         entityPair.entityId = switch
         switchEntities.append(entityPair)
 
-    dcgmGroup = dcgmSystem.GetGroupWithEntities('switchGroup', switchEntities)
+    _dcgmGroup = dcgmSystem.GetGroupWithEntities('switchGroup', switchEntities)
 
     fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT,
-                dcgm_fields.DCGM_FI_DEV_NVSWITCH_POWER_VDD,
-                dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMPERATURE_CURRENT,
-                dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_POWER_VDD_WATTS,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS,
+                dcgm_fields.DCGM_FI_DEV_NVSWITCH_UUID,
                 ]
 
     updateFrequencyUsec = 200000  # 200ms
@@ -160,7 +173,10 @@ def test_nvsdm_platform_telemetry(handle):
     sleepTime = updateFrequencyUsec / 1000000 * 2
 
     dr = DcgmReader.DcgmReader(
-        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=switchEntities)
+        fieldIds=fieldIds,
+        updateFrequency=updateFrequencyUsec,
+        maxKeepAge=30.0,
+        entities=switchEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
@@ -195,13 +211,15 @@ def test_nvsdm_platform_telemetry(handle):
                 assert len(switchLatest[switchId]) == len(fieldIds), errmsg
 
             # Verify the GUID for each NvSwitch.
-            receivedGUID = switchLatest[switchId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_DEVICE_UUID]
+            receivedGUID = switchLatest[switchId][dcgm_fields.DCGM_FI_DEV_NVSWITCH_UUID]
             expectedGUID = str((nvsdmSwitchVendorID << guidDeviceVendorIDLshift) | (
                 switchId << guidDeviceDevIDLshift) | nvsdmDeviceTypeSwitch)
             errmsg = "NvSwitch: Expected GUID=%s, received GUID=%s" % (
                 expectedGUID, receivedGUID)
             assert expectedGUID == receivedGUID, errmsg
 
+
+# NO HARDWARE
 
 @test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
 @test_utils.run_with_standalone_host_engine()
@@ -219,6 +237,8 @@ def test_nvsdm_nvlink_status(handle):
                 assert (linkStatus.nvSwitches[i].linkState[j] !=
                         dcgm_structs.DcgmNvLinkLinkStateDown), errmsg
 
+
+# NO HARDWARE
 
 @test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
 @test_utils.run_with_standalone_host_engine()
@@ -244,6 +264,8 @@ def test_nvsdm_nvswitch_health_check(handle):
     assert (group_health.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_PASS)
 
 
+# NO HARDWARE
+
 @test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
 @test_utils.run_with_standalone_host_engine()
 def test_nvsdm_composite_field_telemetry(handle):
@@ -265,11 +287,12 @@ def test_nvsdm_composite_field_telemetry(handle):
         entityPair.entityId = switch
         switchEntities.append(entityPair)
 
-    dcgmGroup = dcgmSystem.GetGroupWithEntities('switchGroup', switchEntities)
+    _dcgmGroup = dcgmSystem.GetGroupWithEntities('switchGroup', switchEntities)
 
     fieldIds = [dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX,
                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_THROUGHPUT_RX,
-                # This isn't composite nvsdm field. Adding here to test mixed fields.
+                # This isn't composite nvsdm field. Adding here to test mixed
+                # fields.
                 dcgm_fields.DCGM_FI_DEV_NVSWITCH_VOLTAGE_MVOLT,
                 ]
 
@@ -278,7 +301,10 @@ def test_nvsdm_composite_field_telemetry(handle):
     sleepTime = updateFrequencyUsec / 1000000 * 2
 
     dr = DcgmReader.DcgmReader(
-        fieldIds=fieldIds, updateFrequency=updateFrequencyUsec, maxKeepAge=30.0, entities=switchEntities)
+        fieldIds=fieldIds,
+        updateFrequency=updateFrequencyUsec,
+        maxKeepAge=30.0,
+        entities=switchEntities)
     dr.SetHandle(handle)
 
     for i in range(5):
@@ -313,11 +339,15 @@ def test_nvsdm_composite_field_telemetry(handle):
                 assert len(switchLatest[switchId]) == len(fieldIds), errmsg
 
 
+# NO HARDWARE
+
 @test_utils.run_with_nvsdm_mock_config("one_switch_and_one_cx.yaml")
 @test_utils.run_with_standalone_host_engine()
 def test_nvsdm_mock_pause_resume(handle):
     nvsdm_helpers.helper_nvsdm_pause_resume(handle)
 
+
+# NO HARDWARE
 
 @test_utils.run_with_nvsdm_mock_config("one_cx_with_errors.yaml")
 @test_utils.run_with_standalone_host_engine()
@@ -330,20 +360,23 @@ def test_nvsdm_connectx_error_injection(handle):
         dcgm_fields.DCGM_FE_CONNECTX, cxId) for cxId in cxIds]
 
     fieldIds = [
-        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS,
-        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK,
-        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY,
+        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_STATUS,
+        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_MASK,
+        dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_SEVERITY,
     ]
     dr = DcgmReader.DcgmReader(
-        fieldIds=fieldIds, updateFrequency=200000, maxKeepAge=30.0, entities=cxEntities)
+        fieldIds=fieldIds,
+        updateFrequency=200000,
+        maxKeepAge=30.0,
+        entities=cxEntities)
     dr.SetHandle(handle)
 
     cxLatest = dr.GetLatestEntityValuesAsFieldIdDict()[
         dcgm_fields.DCGM_FE_CONNECTX]
     for cxId in cxIds:
-        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS] == 104856
-        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK] == 1572864
-        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY] == 4599824
+        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_STATUS] == 104856
+        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_MASK] == 1572864
+        assert cxLatest[cxId][dcgm_fields.DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_SEVERITY] == 4599824
 
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmGroup = pydcgm.DcgmGroup(dcgmHandle, groupName="cxGroup")
@@ -353,7 +386,8 @@ def test_nvsdm_connectx_error_injection(handle):
     dcgmGroup.health.Set(dcgm_structs.DCGM_HEALTH_WATCH_CONNECTX)
     group_health = dcgmGroup.health.Check()
 
-    assert group_health.incidentCount == 2, f"Expected 2 incidents, got {group_health.incidentCount}"
+    assert group_health.incidentCount == 2, (
+        f"Expected 2 incidents, got {group_health.incidentCount}")
     assert group_health.overallHealth == dcgm_structs.DCGM_HEALTH_RESULT_FAIL
 
     expectedIncidents = {
@@ -372,8 +406,32 @@ def test_nvsdm_connectx_error_injection(handle):
         for keyword, (value, expectedSeverity) in expectedIncidents.items():
             if keyword in errorMsg.lower() and value in errorMsg:
                 incidentsSeen[keyword] = incident.health
-                assert incident.health == expectedSeverity, f"{keyword}: expected severity {expectedSeverity}, got {incident.health}"
+                assert incident.health == expectedSeverity, (
+                    f"{keyword}: expected severity {expectedSeverity}, "
+                    f"got {incident.health}")
                 break
 
-    assert len(
-        incidentsSeen) == 2, f"Expected 2 incident types, saw: {list(incidentsSeen.keys())}"
+    assert len(incidentsSeen) == 2, (
+        f"Expected 2 incident types, saw: "
+        f"{list(incidentsSeen.keys())}")
+
+
+@test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
+@test_utils.run_with_standalone_host_engine()
+def test_nvsdm_switch_topology_fields(handle):
+    """
+    Read switch-level topology/info fields from NVSDM mock.
+    Tests fields 863 (PHYS_ID), 864 (RESET_REQUIRED), PCIe (866-869)
+    and 1524 (FIRMWARE_VERSION).
+    """
+    nvsdm_helpers.helper_nvsdm_switch_topology_fields(handle)
+
+
+@test_utils.run_with_nvsdm_mock_config("one_switch_and_one_cx.yaml")
+@test_utils.run_with_standalone_host_engine()
+def test_nvsdm_link_topology_fields(handle):
+    """
+    Read link-level topology/info fields from NVSDM mock.
+    Tests fields 865 (LINK_ID) and 870-877 (link status, type, remote device info).
+    """
+    nvsdm_helpers.helper_nvsdm_link_topology_fields(handle)

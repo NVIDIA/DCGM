@@ -23,7 +23,7 @@ import time
 parser = argparse.ArgumentParser(
     description="""
 Verifies that DCGM reports the expected value for the specified field id and GPU.
-Waits a maximum of maxWait seconds to see the expectedValue for the given field. 
+Waits a maximum of maxWait seconds to see the expectedValue for the given field.
 The expectedValue must be reported by DCGM at least numMatches times for the check to be considered successful.
 Returns 0 on success and prints "Passed" to stdout.
 Returns 20 on failure and prints "Failed" to stdout.
@@ -33,12 +33,25 @@ parser.add_argument('-f', '--fieldId', type=int, required=True)
 parser.add_argument('-v', '--expectedValue', type=int,
                     required=True, help='The expected value for the field')
 parser.add_argument('-i', '--gpuId', type=int, required=True)
-parser.add_argument('-w', '--maxWait', type=float, required=True,
-                    help='The maximum number of seconds the script should wait for the expected value before failing')
-parser.add_argument('--checkInterval', type=float, required=False, default=0.5,
-                    help='How often the field value should be updated in seconds')
-parser.add_argument('-n', '--numMatches', type=int, required=False, default=3,
-                    help='The number of occurences of expected value to look for before treating it as a success')
+parser.add_argument(
+    '-w',
+    '--maxWait',
+    type=float,
+    required=True,
+    help='The maximum number of seconds the script should wait for the expected value before failing')
+parser.add_argument(
+    '--checkInterval',
+    type=float,
+    required=False,
+    default=0.5,
+    help='How often the field value should be updated in seconds')
+parser.add_argument(
+    '-n',
+    '--numMatches',
+    type=int,
+    required=False,
+    default=3,
+    help='The number of occurences of expected value to look for before treating it as a success')
 
 args = parser.parse_args()
 
@@ -56,7 +69,7 @@ PASSED = False
 class FieldReader(DcgmReader):
     def CustomFieldHandler(self, gpuId, fieldId, fieldTag, val):
         '''
-        This method is called once for each field for each GPU each 
+        This method is called once for each field for each GPU each
         time that its Process() method is invoked, and it will be skipped
         for blank values and fields in the ignore list.
 
@@ -79,7 +92,11 @@ class FieldReader(DcgmReader):
 def main():
     interval_in_usec = int(args.checkInterval * 1000000)
     fr = FieldReader(
-        fieldIds=[args.fieldId], updateFrequency=interval_in_usec, gpuIds=[args.gpuId])
+        fieldIds=[
+            args.fieldId],
+        updateFrequency=interval_in_usec,
+        gpuIds=[
+            args.gpuId])
 
     start = time.time()
     while True:

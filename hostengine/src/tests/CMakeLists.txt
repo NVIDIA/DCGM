@@ -21,7 +21,8 @@ target_compile_definitions(hostenginetests PRIVATE HOSTENGINE_TESTS)
 
 target_sources(hostenginetests
                PRIVATE
-               HostEngineCommandLineTests.cpp)
+               HostEngineCommandLineTests.cpp
+               HostEngineOutputTests.cpp)
 
 target_link_libraries(hostenginetests PRIVATE 
     hostengine_lib

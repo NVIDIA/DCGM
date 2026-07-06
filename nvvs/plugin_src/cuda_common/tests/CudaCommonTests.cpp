@@ -17,8 +17,10 @@
 #include "dcgm_fields.h"
 #include <CudaCommon.h>
 #include <catch2/catch_all.hpp>
+#include <cu_stubs_control.h>
 
 #include <Plugin.h>
+#include <PluginCommon.h>
 #include <PluginInterface.h>
 #include <UniquePtrUtil.h>
 
@@ -33,6 +35,29 @@ public:
 
     ~TestPlugin()
     {}
+};
+
+class CuGetErrorStringGuard
+{
+public:
+    explicit CuGetErrorStringGuard(char const *value)
+        : m_previousValue(cuGetErrorStringValue)
+    {
+        cuGetErrorStringValue = value;
+    }
+
+    CuGetErrorStringGuard(CuGetErrorStringGuard const &)            = delete;
+    CuGetErrorStringGuard(CuGetErrorStringGuard &&)                 = delete;
+    CuGetErrorStringGuard &operator=(CuGetErrorStringGuard const &) = delete;
+    CuGetErrorStringGuard &operator=(CuGetErrorStringGuard &&)      = delete;
+
+    ~CuGetErrorStringGuard()
+    {
+        cuGetErrorStringValue = m_previousValue;
+    }
+
+private:
+    char const *m_previousValue;
 };
 
 void initializePluginWithGpus(Plugin &p, std::string const &testName, unsigned int count)
@@ -126,6 +151,67 @@ TEST_CASE("AddAPIError Details")
     // Shouldn't append the GPU index since it isn't a GPU specific failure
     errText = AddAPIError(&p, testName, "bridgeFour", "rock not found", 0, 0, false);
     CHECK(errText.find(gpuSpecficErrorPiece) == std::string::npos);
+}
+
+TEST_CASE("CUDA common error string helpers")
+{
+    SECTION("AppendCudaDriverError leaves the message unchanged when CUDA has no string")
+    {
+        CHECK(AppendCudaDriverError("base error", CUDA_ERROR_INVALID_VALUE) == "base error");
+    }
+
+    SECTION("AppendCudaDriverError appends CUDA driver strings when available")
+    {
+        CuGetErrorStringGuard errorStringGuard("driver exploded");
+        CHECK(AppendCudaDriverError("base error", CUDA_ERROR_INVALID_VALUE) == "base error: 'driver exploded'.");
+    }
+
+    SECTION("cublasGetErrorString maps known statuses")
+    {
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_SUCCESS)) == "CUBLAS_STATUS_SUCCESS");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_NOT_INITIALIZED)) == "CUBLAS_STATUS_NOT_INITIALIZED");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_ALLOC_FAILED)) == "CUBLAS_STATUS_ALLOC_FAILED");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_INVALID_VALUE)) == "CUBLAS_STATUS_INVALID_VALUE");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_ARCH_MISMATCH)) == "CUBLAS_STATUS_ARCH_MISMATCH");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_MAPPING_ERROR)) == "CUBLAS_STATUS_MAPPING_ERROR");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_EXECUTION_FAILED)) == "CUBLAS_STATUS_EXECUTION_FAILED");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_INTERNAL_ERROR)) == "CUBLAS_STATUS_INTERNAL_ERROR");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_NOT_SUPPORTED)) == "CUBLAS_STATUS_NOT_SUPPORTED");
+        CHECK(std::string(cublasGetErrorString(CUBLAS_STATUS_LICENSE_ERROR)) == "CUBLAS_STATUS_LICENSE_ERROR");
+    }
+
+    SECTION("cublasGetErrorString labels unknown statuses")
+    {
+        CHECK(std::string(cublasGetErrorString(static_cast<cublasStatus_t>(999))) == "Unknown error");
+    }
+
+    SECTION("GetAdditionalCuInitDetail identifies fabric-manager guidance")
+    {
+        CHECK(std::string(GetAdditionalCuInitDetail(CUDA_ERROR_NOT_INITIALIZED)) == CHECK_FABRIC_MANAGER_MSG);
+        CHECK(std::string(GetAdditionalCuInitDetail(CUDA_ERROR_INVALID_VALUE)).empty());
+    }
+}
+
+TEST_CASE("CUDA common CUresult logging handles known and unknown driver strings")
+{
+    TestPlugin p;
+    std::string const testName = "capoo";
+    initializePluginWithGpus(p, testName, 1);
+
+    SECTION("unknown CUresult strings use a fallback")
+    {
+        CuGetErrorStringGuard errorStringGuard(nullptr);
+        std::string errText = AddCudaError(&p, testName, "cuMemAlloc", CUDA_ERROR_INVALID_VALUE, 0, 0, true);
+        CHECK(errText.find("Unknown error") != std::string::npos);
+    }
+
+    SECTION("cuInit includes extra guidance")
+    {
+        CuGetErrorStringGuard errorStringGuard("not initialized");
+        std::string errText = AddCudaError(&p, testName, "cuInit", CUDA_ERROR_NOT_INITIALIZED, 0, 0, true);
+        CHECK(errText.find("not initialized") != std::string::npos);
+        CHECK(errText.find(RUN_CUDA_KERNEL_REC) != std::string::npos);
+    }
 }
 
 TEST_CASE("Negative test for DCGM_FR_API_FAIL")

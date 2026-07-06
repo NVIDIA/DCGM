@@ -16,14 +16,18 @@
 #include "dcgm_fields.h"
 #include <catch2/catch_all.hpp>
 
+#include <Defer.hpp>
 #include <DiagnosticPlugin.h>
 #include <PluginInterface.h>
+#include <UniquePtrUtil.h>
+
+#include <cu_stubs_control.h>
 
 char DcgmFieldGetType(unsigned short fieldId)
 {
     switch (fieldId)
     {
-        case DCGM_FI_DEV_POWER_USAGE:
+        case DCGM_FI_DEV_BOARD_POWER_WATTS:
             return DCGM_FT_DOUBLE;
         case DCGM_FI_DEV_SM_CLOCK:
             return DCGM_FT_INT64;
@@ -54,6 +58,26 @@ void InitializeDiagPlugin(GpuBurnPlugin &gbp, unsigned int gpuCount, DcgmEntityS
 {
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = GetEntityList(gpuCount, status);
     gbp.InitializeForEntityList(gbp.GetDiagnosticTestName(), *entityList);
+}
+
+bool CheckPassFailWithDevices(GpuBurnPlugin &gbp,
+                              std::vector<unsigned int> const &gpuIds,
+                              std::vector<long long> const &errorCount,
+                              std::vector<long long> const &nanCount)
+{
+    auto &devices = GpuBurnPluginTester::GetDeviceList(gbp);
+    std::vector<std::unique_ptr<GpuBurnDevice>> burnDevices;
+    burnDevices.reserve(gpuIds.size());
+    for (auto gpuId : gpuIds)
+    {
+        burnDevices.push_back(std::make_unique<GpuBurnDevice>());
+        devices.push_back(burnDevices.back().get());
+        burnDevices.back()->gpuId = gpuId;
+    }
+
+    DcgmNs::Defer cleanup([&devices] { devices.clear(); });
+    bool result = GpuBurnPluginTester::CheckPassFail(gbp, errorCount, nanCount);
+    return result;
 }
 
 TEST_CASE("Diagnostic: SetPrecisionFromString")
@@ -198,4 +222,102 @@ TEST_CASE("Diagnostic: CheckAveragesForExcessiveVariation")
     indices   = GpuBurnPluginTester::GetIndicesBelowMinThreshold(gbp, powerAvgsBad, minThresh);
     REQUIRE(indices.size() == 1);
     CHECK(indices[0] == 3);
+}
+
+TEST_CASE("Diagnostic: negative test for DCGM_FR_CUDA_UNBOUND")
+{
+    unsigned int gpuCount { 2 };
+    unsigned int unboundGpuId { 0 };
+    int unboundCudaDeviceIdx { 0 };
+
+    cuInitResult = CUDA_SUCCESS;
+    DcgmNs::Defer restoreStub([&] { cuInitResult = CUDA_SUCCESS; });
+
+    GpuBurnPlugin gbp((dcgmHandle_t)0);
+    InitializeDiagPlugin(gbp, gpuCount, DcgmEntityStatusOk);
+
+    // Default-constructed GpuBurnDevice leaves cuContext as nullptr, triggering the unbound error path
+    GpuBurnDevice gbd;
+    gbd.gpuId         = unboundGpuId;
+    gbd.cudaDeviceIdx = unboundCudaDeviceIdx;
+
+    DcgmRecorder dr;
+    GpuBurnWorker gbw(&gbd, gbp, DIAG_SINGLE_PRECISION, 15.0, 2048, dr, false, 1001);
+
+    int result = gbw.Bind();
+    REQUIRE(result == -1);
+
+    // Verify the error is reported for the correct entity with the expected error code
+    auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
+
+    dcgmReturn_t ret = gbp.GetResults(gbp.GetDiagnosticTestName(), &entityResults);
+    CHECK(ret == DCGM_ST_OK);
+    REQUIRE(entityResults.numErrors == 1);
+    CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_GPU);
+    CHECK(entityResults.errors[0].entity.entityId == unboundGpuId);
+    CHECK(entityResults.errors[0].code == DCGM_FR_CUDA_UNBOUND);
+
+    // Confirm only the affected GPU received the error, all other entities should have none
+    nvvsPluginEntityErrors_t errorsPerEntity = gbp.GetEntityErrors(gbp.GetDiagnosticTestName());
+
+    unsigned int count { 0 };
+    for (auto const &[entityPair, diagErrors] : errorsPerEntity)
+    {
+        if (entityPair.entityGroupId == DCGM_FE_GPU && entityPair.entityId == unboundGpuId)
+        {
+            REQUIRE(diagErrors.size() == 1);
+            count++;
+        }
+        else
+        {
+            REQUIRE(diagErrors.size() == 0);
+        }
+    }
+    REQUIRE(count == 1);
+}
+
+TEST_CASE("Diagnostic: negative test for DCGM_FR_FAULTY_MEMORY")
+{
+    unsigned int gpuCount { 2 };
+    unsigned int faultyGpuId { 1 };
+
+    GpuBurnPlugin gbp((dcgmHandle_t)0);
+    InitializeDiagPlugin(gbp, gpuCount, DcgmEntityStatusOk);
+
+    std::vector<unsigned int> gpuIds { 0, 1 };
+    std::vector<long long> errorCount { 0, 3 };
+    std::vector<long long> nanCount { 0, 0 };
+
+    // GPU 1 has non-zero error count, which triggers the faulty memory error path
+    bool allPassed = CheckPassFailWithDevices(gbp, gpuIds, errorCount, nanCount);
+    REQUIRE(allPassed == false);
+
+    // Verify the error is reported for the correct entity with the expected error code
+    auto pEntityResults = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+
+    dcgmReturn_t ret = gbp.GetResults(gbp.GetDiagnosticTestName(), pEntityResults.get());
+    CHECK(ret == DCGM_ST_OK);
+    REQUIRE(pEntityResults->numErrors == 1);
+    CHECK(pEntityResults->errors[0].entity.entityGroupId == DCGM_FE_GPU);
+    CHECK(pEntityResults->errors[0].entity.entityId == faultyGpuId);
+    CHECK(pEntityResults->errors[0].code == DCGM_FR_FAULTY_MEMORY);
+
+    // Confirm only the affected GPU received the error, all other entities should have none
+    nvvsPluginEntityErrors_t errorsPerEntity = gbp.GetEntityErrors(gbp.GetDiagnosticTestName());
+
+    unsigned int count { 0 };
+    for (auto const &[entityPair, diagErrors] : errorsPerEntity)
+    {
+        if (entityPair.entityGroupId == DCGM_FE_GPU && entityPair.entityId == faultyGpuId)
+        {
+            CHECK(diagErrors.size() == 1);
+            count++;
+        }
+        else
+        {
+            CHECK(diagErrors.size() == 0);
+        }
+    }
+    REQUIRE(count == 1);
 }

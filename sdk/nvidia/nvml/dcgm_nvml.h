@@ -334,7 +334,7 @@ typedef enum nvmlBridgeChipType_enum
 /**
  * Maximum number of NvLink links supported
  */
-#define NVML_NVLINK_MAX_LINKS 18
+#define NVML_NVLINK_MAX_LINKS 36
 
 /**
  * Enum to represent the NvLink utilization counter packet units
@@ -2305,38 +2305,38 @@ typedef enum nvmlDeviceGpuRecoveryAction_s  {
 #define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13                  248 //!< Count of symbol errors that are corrected - bin 13
 #define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14                  249 //!< Count of symbol errors that are corrected - bin 14
 #define NVML_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15                  250 //!< Count of symbol errors that are corrected - bin 15
+/* Power Smoothing */
+#define NVML_FI_PWR_SMOOTHING_ENABLED                                   251 //!< Enablement (0/DISABLED or 1/ENABLED)
+#define NVML_FI_PWR_SMOOTHING_PRIV_LVL                                  252 //!< Current privilege level
+#define NVML_FI_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED                     253 //!< Immediate ramp down enablement (0/DISABLED or 1/ENABLED)
+#define NVML_FI_PWR_SMOOTHING_APPLIED_TMP_CEIL                          254 //!< Applied TMP ceiling value in Watts
+#define NVML_FI_PWR_SMOOTHING_APPLIED_TMP_FLOOR                         255 //!< Applied TMP floor value in Watts
+#define NVML_FI_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING             256 //!< Max % TMP Floor value
+#define NVML_FI_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING             257 //!< Min % TMP Floor value
+#define NVML_FI_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING   258 //!< HW Circuitry % lifetime remaining
+#define NVML_FI_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES                   259 //!< Max number of preset profiles
+#define NVML_FI_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR                 260 //!< % TMP floor for a given profile
+#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE                      261 //!< Ramp up rate in mW/s for a given profile
+#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE                    262 //!< Ramp down rate in mW/s for a given profile
+#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL                263 //!< Ramp down hysteresis value in ms for a given profile
+#define NVML_FI_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE                     264 //!< Active preset profile number
+#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR          265 //!< % TMP floor for a given profile
+#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE               266 //!< Ramp up rate in mW/s for a given profile
+#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE             267 //!< Ramp down rate in mW/s for a given profile
+#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL         268 //!< Ramp down hysteresis value in ms for a given profile
+
 /**
  * Field values for Clock Throttle Reason Counters
  * All counters are in nanoseconds
  */
 #define NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_POWER_CAP             NVML_FI_DEV_PERF_POLICY_POWER      //!< Throttling to not exceed currently set power limits in ns
 #define NVML_FI_DEV_CLOCKS_EVENT_REASON_SYNC_BOOST               NVML_FI_DEV_PERF_POLICY_SYNC_BOOST //!< Throttling to match minimum possible clock across Sync Boost Group in ns
-#define NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN        251 //!< Throttling to ensure ((GPU temp < GPU Max Operating Temp) && (Memory Temp < Memory Max Operating Temp)) in ns
-#define NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_THERM_SLOWDOWN        252 //!< Throttling due to temperature being too high (reducing core clocks by a factor of 2 or more) in ns
-#define NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN  253 //!< Throttling due to external power brake assertion trigger (reducing core clocks by a factor of 2 or more) in ns
+#define NVML_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN        269 //!< Throttling to ensure ((GPU temp < GPU Max Operating Temp) && (Memory Temp < Memory Max Operating Temp)) in ns
+#define NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_THERM_SLOWDOWN        270 //!< Throttling due to temperature being too high (reducing core clocks by a factor of 2 or more) in ns
+#define NVML_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN  271 //!< Throttling due to external power brake assertion trigger (reducing core clocks by a factor of 2 or more) in ns
 
-#define NVML_FI_DEV_POWER_SYNC_BALANCING_FREQ                    254 //!< Accumulated frequency of the GPU to be used for averaging
-#define NVML_FI_DEV_POWER_SYNC_BALANCING_AF                      255 //!< Accumulated activity factor of the GPU to be used for averaging
-
-/* Power Smoothing */
-#define NVML_FI_PWR_SMOOTHING_ENABLED                                   256 //!< Enablement (0/DISABLED or 1/ENABLED)
-#define NVML_FI_PWR_SMOOTHING_PRIV_LVL                                  257 //!< Current privilege level
-#define NVML_FI_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED                     258 //!< Immediate ramp down enablement (0/DISABLED or 1/ENABLED)
-#define NVML_FI_PWR_SMOOTHING_APPLIED_TMP_CEIL                          259 //!< Applied TMP ceiling value in Watts
-#define NVML_FI_PWR_SMOOTHING_APPLIED_TMP_FLOOR                         260 //!< Applied TMP floor value in Watts
-#define NVML_FI_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING             261 //!< Max % TMP Floor value
-#define NVML_FI_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING             262 //!< Min % TMP Floor value
-#define NVML_FI_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING   263 //!< HW Circuitry % lifetime remaining
-#define NVML_FI_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES                   264 //!< Max number of preset profiles
-#define NVML_FI_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR                 265 //!< % TMP floor for a given profile
-#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE                      266 //!< Ramp up rate in mW/s for a given profile
-#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE                    267 //!< Ramp down rate in mW/s for a given profile
-#define NVML_FI_PWR_SMOOTHING_PROFILE_RAMP_DOWN_HYST_VAL                268 //!< Ramp down hysteresis value in ms for a given profile
-#define NVML_FI_PWR_SMOOTHING_ACTIVE_PRESET_PROFILE                     269 //!< Active preset profile number
-#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_PERCENT_TMP_FLOOR          270 //!< % TMP floor for a given profile
-#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_UP_RATE               271 //!< Ramp up rate in mW/s for a given profile
-#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_RATE             272 //!< Ramp down rate in mW/s for a given profile
-#define NVML_FI_PWR_SMOOTHING_ADMIN_OVERRIDE_RAMP_DOWN_HYST_VAL         273 //!< Ramp down hysteresis value in ms for a given profile
+#define NVML_FI_DEV_POWER_SYNC_BALANCING_FREQ                    272 //!< Accumulated frequency of the GPU to be used for averaging
+#define NVML_FI_DEV_POWER_SYNC_BALANCING_AF                      273 //!< Accumulated activity factor of the GPU to be used for averaging
 
 #define NVML_FI_MAX                                              274 //!< One greater than the largest field ID defined above
 
@@ -3234,13 +3234,13 @@ typedef struct {
     NVML_GPU_FABRIC_HEALTH_MASK##type##val) //!< Macro to test GPU fabric health status.
 
 /**
-* GPU Fabric information (v2).
-*
-* Version 2 adds the \ref nvmlGpuFabricInfo_v2_t.version field
-* to the start of the structure, and the \ref nvmlGpuFabricInfo_v2_t.healthMask
-* field to the end. This structure is not backwards-compatible with
-* \ref nvmlGpuFabricInfo_t.
-*/
+ * GPU Fabric information (v2).
+ *
+ * Version 2 adds the \ref nvmlGpuFabricInfo_v2_t.version field
+ * to the start of the structure, and the \ref nvmlGpuFabricInfo_v2_t.healthMask
+ * field to the end. This structure is not backwards-compatible with
+ * \ref nvmlGpuFabricInfo_t.
+ */
 typedef struct {
     unsigned int         version;                               //!< Structure version identifier (set to nvmlGpuFabricInfo_v2)
     unsigned char        clusterUuid[NVML_GPU_FABRIC_UUID_LEN]; //!< Uuid of the cluster to which this GPU belongs
@@ -3250,12 +3250,30 @@ typedef struct {
     unsigned int         healthMask;                            //!< GPU Fabric health Status Mask
 } nvmlGpuFabricInfo_v2_t;
 
-typedef nvmlGpuFabricInfo_v2_t nvmlGpuFabricInfoV_t;
+/**
+ * Version identifier value for \ref nvmlGpuFabricInfo_v2_t.version.
+ */
+#define nvmlGpuFabricInfo_v2 NVML_STRUCT_VERSION(GpuFabricInfo, 2)
 
 /**
-* Version identifier value for \ref nvmlGpuFabricInfo_v2_t.version.
-*/
-#define nvmlGpuFabricInfo_v2 NVML_STRUCT_VERSION(GpuFabricInfo, 2)
+ * GPU Fabric information (v3).
+ */
+typedef struct {
+    unsigned int         version;                               //!< Structure version identifier (set to nvmlGpuFabricInfo_v3)
+    unsigned char        clusterUuid[NVML_GPU_FABRIC_UUID_LEN]; //!< Uuid of the cluster to which this GPU belongs
+    nvmlReturn_t         status;                                //!< Probe Error status, if any. Must be checked only if Probe state returns "complete".
+    unsigned int         cliqueId;                              //!< ID of the fabric clique to which this GPU belongs
+    nvmlGpuFabricState_t state;                                 //!< Current Probe State of GPU registration process. See NVML_GPU_FABRIC_STATE_*
+    unsigned int         healthMask;                            //!< GPU Fabric health Status Mask. See NVML_GPU_FABRIC_HEALTH_MASK_*
+    unsigned char        healthSummary;                         //!< GPU Fabric health summary. See NVML_GPU_FABRIC_HEALTH_SUMMARY_*
+} nvmlGpuFabricInfo_v3_t;
+
+typedef nvmlGpuFabricInfo_v3_t nvmlGpuFabricInfoV_t;
+
+/**
+ * Version identifier value for \ref nvmlGpuFabricInfo_v3_t.version.
+ */
+#define nvmlGpuFabricInfo_v3 NVML_STRUCT_VERSION(GpuFabricInfo, 3)
 
 /** @} */
 
@@ -11998,6 +12016,7 @@ typedef enum
     NVML_GPM_METRIC_ANY_TENSOR_UTIL             = 5,    //!< Percentage of time the GPU's SMs were doing ANY tensor operations. 0.0 - 100.0
     NVML_GPM_METRIC_DFMA_TENSOR_UTIL            = 6,    //!< Percentage of time the GPU's SMs were doing DFMA tensor operations. 0.0 - 100.0
     NVML_GPM_METRIC_HMMA_TENSOR_UTIL            = 7,    //!< Percentage of time the GPU's SMs were doing HMMA tensor operations. 0.0 - 100.0
+    NVML_GPM_METRIC_DMMA_TENSOR_UTIL            = 8,    //!< Percentage of time the GPU's SMs were doing DMMA tensor operations. 0.0 - 100.0
     NVML_GPM_METRIC_IMMA_TENSOR_UTIL            = 9,    //!< Percentage of time the GPU's SMs were doing IMMA tensor operations. 0.0 - 100.0
     NVML_GPM_METRIC_DRAM_BW_UTIL                = 10,   //!< Percentage of DRAM bw used vs theoretical maximum. 0.0 - 100.0 */
     NVML_GPM_METRIC_FP64_UTIL                   = 11,   //!< Percentage of time the GPU's SMs were doing non-tensor FP64 math. 0.0 - 100.0
@@ -12128,7 +12147,136 @@ typedef enum
     NVML_GPM_METRIC_PEERMEM_CACHE_MISS          = 163,
     NVML_GPM_METRIC_DRAM_CACHE_HIT              = 164,
     NVML_GPM_METRIC_DRAM_CACHE_MISS             = 165,
-    NVML_GPM_METRIC_MAX                         = 166,  //!< Maximum value above +1. Note that changing this should also change NVML_GPM_METRICS_GET_VERSION due to struct size change
+    NVML_GPM_METRIC_NVENC_0_UTIL                = 166,
+    NVML_GPM_METRIC_NVENC_1_UTIL                = 167,
+    NVML_GPM_METRIC_NVENC_2_UTIL                = 168,
+    NVML_GPM_METRIC_NVENC_3_UTIL                = 169,
+    NVML_GPM_METRIC_GR0_CTXSW_CYCLES_ELAPSED    = 170,
+    NVML_GPM_METRIC_GR0_CTXSW_CYCLES_ACTIVE     = 171,
+    NVML_GPM_METRIC_GR0_CTXSW_REQUESTS          = 172,
+    NVML_GPM_METRIC_GR0_CTXSW_CYCLES_PER_REQ    = 173,
+    NVML_GPM_METRIC_GR0_CTXSW_ACTIVE_PCT        = 174,
+    NVML_GPM_METRIC_GR1_CTXSW_CYCLES_ELAPSED    = 175,
+    NVML_GPM_METRIC_GR1_CTXSW_CYCLES_ACTIVE     = 176,
+    NVML_GPM_METRIC_GR1_CTXSW_REQUESTS          = 177,
+    NVML_GPM_METRIC_GR1_CTXSW_CYCLES_PER_REQ    = 178,
+    NVML_GPM_METRIC_GR1_CTXSW_ACTIVE_PCT        = 179,
+    NVML_GPM_METRIC_GR2_CTXSW_CYCLES_ELAPSED    = 180,
+    NVML_GPM_METRIC_GR2_CTXSW_CYCLES_ACTIVE     = 181,
+    NVML_GPM_METRIC_GR2_CTXSW_REQUESTS          = 182,
+    NVML_GPM_METRIC_GR2_CTXSW_CYCLES_PER_REQ    = 183,
+    NVML_GPM_METRIC_GR2_CTXSW_ACTIVE_PCT        = 184,
+    NVML_GPM_METRIC_GR3_CTXSW_CYCLES_ELAPSED    = 185,
+    NVML_GPM_METRIC_GR3_CTXSW_CYCLES_ACTIVE     = 186,
+    NVML_GPM_METRIC_GR3_CTXSW_REQUESTS          = 187,
+    NVML_GPM_METRIC_GR3_CTXSW_CYCLES_PER_REQ    = 188,
+    NVML_GPM_METRIC_GR3_CTXSW_ACTIVE_PCT        = 189,
+    NVML_GPM_METRIC_GR4_CTXSW_CYCLES_ELAPSED    = 190,
+    NVML_GPM_METRIC_GR4_CTXSW_CYCLES_ACTIVE     = 191,
+    NVML_GPM_METRIC_GR4_CTXSW_REQUESTS          = 192,
+    NVML_GPM_METRIC_GR4_CTXSW_CYCLES_PER_REQ    = 193,
+    NVML_GPM_METRIC_GR4_CTXSW_ACTIVE_PCT        = 194,
+    NVML_GPM_METRIC_GR5_CTXSW_CYCLES_ELAPSED    = 195,
+    NVML_GPM_METRIC_GR5_CTXSW_CYCLES_ACTIVE     = 196,
+    NVML_GPM_METRIC_GR5_CTXSW_REQUESTS          = 197,
+    NVML_GPM_METRIC_GR5_CTXSW_CYCLES_PER_REQ    = 198,
+    NVML_GPM_METRIC_GR5_CTXSW_ACTIVE_PCT        = 199,
+    NVML_GPM_METRIC_GR6_CTXSW_CYCLES_ELAPSED    = 200,
+    NVML_GPM_METRIC_GR6_CTXSW_CYCLES_ACTIVE     = 201,
+    NVML_GPM_METRIC_GR6_CTXSW_REQUESTS          = 202,
+    NVML_GPM_METRIC_GR6_CTXSW_CYCLES_PER_REQ    = 203,
+    NVML_GPM_METRIC_GR6_CTXSW_ACTIVE_PCT        = 204,
+    NVML_GPM_METRIC_GR7_CTXSW_CYCLES_ELAPSED    = 205,
+    NVML_GPM_METRIC_GR7_CTXSW_CYCLES_ACTIVE     = 206,
+    NVML_GPM_METRIC_GR7_CTXSW_REQUESTS          = 207,
+    NVML_GPM_METRIC_GR7_CTXSW_CYCLES_PER_REQ    = 208,
+    NVML_GPM_METRIC_GR7_CTXSW_ACTIVE_PCT        = 209,
+    NVML_GPM_METRIC_NVLINK_L18_RX_PER_SEC       = 212,  //!< NvLink read bandwidth for link 18 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L18_TX_PER_SEC       = 213,  //!< NvLink write bandwidth for link 18 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L19_RX_PER_SEC       = 214,  //!< NvLink read bandwidth for link 19 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L19_TX_PER_SEC       = 215,  //!< NvLink write bandwidth for link 19 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L20_RX_PER_SEC       = 216,  //!< NvLink read bandwidth for link 20 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L20_TX_PER_SEC       = 217,  //!< NvLink write bandwidth for link 20 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L21_RX_PER_SEC       = 218,  //!< NvLink read bandwidth for link 21 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L21_TX_PER_SEC       = 219,  //!< NvLink write bandwidth for link 21 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L22_RX_PER_SEC       = 220,  //!< NvLink read bandwidth for link 22 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L22_TX_PER_SEC       = 221,  //!< NvLink write bandwidth for link 22 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L23_RX_PER_SEC       = 222,  //!< NvLink read bandwidth for link 23 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L23_TX_PER_SEC       = 223,  //!< NvLink write bandwidth for link 23 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L24_RX_PER_SEC       = 224,  //!< NvLink read bandwidth for link 24 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L24_TX_PER_SEC       = 225,  //!< NvLink write bandwidth for link 24 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L25_RX_PER_SEC       = 226,  //!< NvLink read bandwidth for link 25 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L25_TX_PER_SEC       = 227,  //!< NvLink write bandwidth for link 25 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L26_RX_PER_SEC       = 228,  //!< NvLink read bandwidth for link 26 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L26_TX_PER_SEC       = 229,  //!< NvLink write bandwidth for link 26 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L27_RX_PER_SEC       = 230,  //!< NvLink read bandwidth for link 27 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L27_TX_PER_SEC       = 231,  //!< NvLink write bandwidth for link 27 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L28_RX_PER_SEC       = 232,  //!< NvLink read bandwidth for link 28 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L28_TX_PER_SEC       = 233,  //!< NvLink write bandwidth for link 28 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L29_RX_PER_SEC       = 234,  //!< NvLink read bandwidth for link 29 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L29_TX_PER_SEC       = 235,  //!< NvLink write bandwidth for link 29 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L30_RX_PER_SEC       = 236,  //!< NvLink read bandwidth for link 30 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L30_TX_PER_SEC       = 237,  //!< NvLink write bandwidth for link 30 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L31_RX_PER_SEC       = 238,  //!< NvLink read bandwidth for link 31 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L31_TX_PER_SEC       = 239,  //!< NvLink write bandwidth for link 31 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L32_RX_PER_SEC       = 240,  //!< NvLink read bandwidth for link 32 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L32_TX_PER_SEC       = 241,  //!< NvLink write bandwidth for link 32 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L33_RX_PER_SEC       = 242,  //!< NvLink read bandwidth for link 33 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L33_TX_PER_SEC       = 243,  //!< NvLink write bandwidth for link 33 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L34_RX_PER_SEC       = 244,  //!< NvLink read bandwidth for link 34 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L34_TX_PER_SEC       = 245,  //!< NvLink write bandwidth for link 34 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L35_RX_PER_SEC       = 246,  //!< NvLink read bandwidth for link 35 in MiB/sec
+    NVML_GPM_METRIC_NVLINK_L35_TX_PER_SEC       = 247,  //!< NvLink write bandwidth for link 35 in MiB/sec
+    NVML_GPM_METRIC_SM_CYCLES_ELAPSED           = 248,  //!< The GPU's SM cycles elapsed since reboot
+    NVML_GPM_METRIC_SM_CYCLES_ACTIVE            = 249,  //!< The GPU's SM activity since reboot
+    NVML_GPM_METRIC_MMA_CYCLES_ACTIVE           = 250,  //!< The GPU's SM MMA tensor activity since reboot
+    NVML_GPM_METRIC_DMMA_CYCLES_ACTIVE          = 251,  //!< The GPU's SM DMMA tensor activity since reboot
+    NVML_GPM_METRIC_HMMA_CYCLES_ACTIVE          = 252,  //!< The GPU's SM HMMA tensor activity since reboot
+    NVML_GPM_METRIC_IMMA_CYCLES_ACTIVE          = 253,  //!< The GPU's SM IMMA tensor activity since reboot
+    NVML_GPM_METRIC_DFMA_CYCLES_ACTIVE          = 254,  //!< The GPU's SM DFMA tensor activity since reboot
+    NVML_GPM_METRIC_PCIE_TX                     = 255,  //!< The PCIe TX traffic since reboot
+    NVML_GPM_METRIC_PCIE_RX                     = 256,  //!< The PCIe RX traffic since reboot
+    NVML_GPM_METRIC_INTEGER_CYCLES_ACTIVE       = 257,  //!< The GPU's SM integer activity since reboot
+    NVML_GPM_METRIC_FP64_CYCLES_ACTIVE          = 258,  //!< The GPU's SM FP64 activity since reboot
+    NVML_GPM_METRIC_FP32_CYCLES_ACTIVE          = 259,  //!< The GPU's SM FP64 activity since reboot
+    NVML_GPM_METRIC_FP16_CYCLES_ACTIVE          = 260,  //!< The GPU's SM FP64 activity since reboot
+    NVML_GPM_METRIC_NVLINK_L0_RX                = 261,  //!< NvLink read for link 0 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L0_TX                = 262,  //!< NvLink write for link 0 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L1_RX                = 263,  //!< NvLink read for link 1 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L1_TX                = 264,  //!< NvLink write for link 1 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L2_RX                = 265,  //!< NvLink read for link 2 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L2_TX                = 266,  //!< NvLink write for link 2 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L3_RX                = 267,  //!< NvLink read for link 3 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L3_TX                = 268,  //!< NvLink write for link 3 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L4_RX                = 269,  //!< NvLink read for link 4 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L4_TX                = 270,  //!< NvLink write for link 4 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L5_RX                = 271,  //!< NvLink read for link 5 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L5_TX                = 272,  //!< NvLink write for link 5 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L6_RX                = 273,  //!< NvLink read for link 6 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L6_TX                = 274,  //!< NvLink write for link 6 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L7_RX                = 275,  //!< NvLink read for link 7 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L7_TX                = 276,  //!< NvLink write for link 7 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L8_RX                = 277,  //!< NvLink read for link 8 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L8_TX                = 278,  //!< NvLink write for link 8 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L9_RX                = 279,  //!< NvLink read for link 9 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L9_TX                = 280,  //!< NvLink write for link 9 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L10_RX               = 281,  //!< NvLink read for link 10 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L10_TX               = 282,  //!< NvLink write for link 10 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L11_RX               = 283,  //!< NvLink read for link 11 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L11_TX               = 284,  //!< NvLink write for link 11 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L12_RX               = 285,  //!< NvLink read for link 12 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L12_TX               = 286,  //!< NvLink write for link 12 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L13_RX               = 287,  //!< NvLink read for link 13 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L13_TX               = 288,  //!< NvLink write for link 13 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L14_RX               = 289,  //!< NvLink read for link 14 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L14_TX               = 290,  //!< NvLink write for link 14 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L15_RX               = 291,  //!< NvLink read for link 15 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L15_TX               = 292,  //!< NvLink write for link 15 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L16_RX               = 293,  //!< NvLink read for link 16 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L16_TX               = 294,  //!< NvLink write for link 16 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L17_RX               = 295,  //!< NvLink read for link 17 in bytes since reboot
+    NVML_GPM_METRIC_NVLINK_L17_TX               = 296,  //!< NvLink write for link 17 in bytes since reboot
+    NVML_GPM_METRIC_MAX                         = 333,  //!< Maximum value above +1. Note that changing this should also change NVML_GPM_METRICS_GET_VERSION due to struct size change
 } nvmlGpmMetricId_t;
 
 /** @} */ // @defgroup nvmlGpmEnums

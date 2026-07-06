@@ -18,12 +18,16 @@
 #include "DcgmError.h"
 #include "DcgmLogging.h"
 #include "Gpu.h"
+#include <fmt/format.h>
+
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <sysexits.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -139,3 +143,30 @@ std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex);
 dcgmPerGpuTestIndices_t GetTestIndex(const std::string &testName);
 dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult);
 nvvsPluginResult_t DcgmResultToNvvsResult(dcgmDiagResult_t const result);
+
+/**
+ * Common formatter for test-end debug logging.
+ *
+ * @param[in] testName   Display name of the test (e.g. `"CUDA Main Library"`); callers must use the same name in
+ *                       the matching `Test {} start` log line.
+ * @param[in] result     Final result of the test; shown as the underlying integer.
+ * @param[in] duration   Elapsed time of the test, measured by the caller; shown as ms.
+ * @param[in] configless `true` when NVVS is running in configless mode.
+ *
+ * @return The formatted log message, intended for `log_debug("{}", …)` so source-location capture stays at the
+ *         caller.
+ *
+ * @note Does not throw under normal operation; may throw `std::bad_alloc` if string formatting cannot allocate.
+ */
+[[nodiscard]] inline std::string FormatTestEndMessage(std::string_view testName,
+                                                      nvvsPluginResult_t result,
+                                                      std::chrono::milliseconds duration,
+                                                      bool configless)
+{
+    std::chrono::duration<double> const seconds = duration;
+    return fmt::format("Test {} had result {}. Duration {:.3f}s. Configless is {}",
+                       testName,
+                       static_cast<int>(result),
+                       seconds.count(),
+                       configless);
+}

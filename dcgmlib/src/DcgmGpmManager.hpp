@@ -99,6 +99,15 @@ public:
 typedef std::map<timelib64_t, DcgmGpmSample> dcgmSampleMap;
 
 /**
+ * Compute the max sample age from specified max update interval.
+ *
+ * @param maxUpdateInterval[in] : The max update interval.
+ *
+ * @return The max sample age.
+ */
+timelib64_t GetDerivedMaxSampleAge(timelib64_t maxUpdateInterval);
+
+/**
  * Represents a single entity's GPM sample array and watch table
  *
  */
@@ -109,7 +118,8 @@ public:
         : m_entityPair(entityPair)
         , m_minUpdateInterval(0)
         , m_maxUpdateInterval(0)
-        , m_maxSampleAge(0)
+        , m_watchMaxSampleAge(0)
+        , m_derivedMaxSampleAge(0)
     {}
 
     /*************************************************************************/
@@ -186,8 +196,8 @@ private:
     timelib64_t m_maxUpdateInterval;              /* Maximum update interval contained in m_watchTable.
                                                      this is used for determining how long to keep samples
                                                      in m_gpmSamples */
-    timelib64_t m_maxSampleAge;                   /* Maximum sample age across all watches. Used for
-                                                     garbage collection */
+    timelib64_t m_watchMaxSampleAge;              /* Maximum sample age across all watches */
+    timelib64_t m_derivedMaxSampleAge;            /* Interval-derived sample age horizon used for pruning */
 };
 
 /**

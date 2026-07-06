@@ -15,16 +15,152 @@
  */
 #include <catch2/catch_all.hpp>
 
+#include "TestHelpers.hpp"
+
 #include <Health.h>
 #include <UniquePtrUtil.h>
 #include <dcgm_errors.h>
 #include <dcgm_structs.h>
 
-#include <sstream>
+#include <iostream>
+#include <string_view>
 
 // Constants for DcgmiOutputTree formatting
 static constexpr int TREE_COLUMN_WIDTH = 28;
 static constexpr int TREE_VALUE_WIDTH  = 60;
+
+namespace
+{
+struct HealthApiState
+{
+    dcgmReturn_t getReturn   = DCGM_ST_OK;
+    dcgmReturn_t setReturn   = DCGM_ST_OK;
+    dcgmReturn_t checkReturn = DCGM_ST_OK;
+
+    int getCallCount   = 0;
+    int setCallCount   = 0;
+    int checkCallCount = 0;
+
+    dcgmHandle_t lastHandle     = 0;
+    dcgmGpuGrp_t lastGroupId    = 0;
+    dcgmHealthSystems_t systems = static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_POWER);
+    dcgmHealthSetParams_v2 lastSetParams {};
+    dcgmHealthResponse_t response {};
+};
+
+HealthApiState g_healthApi;
+
+class TestGetHealth : public GetHealth
+{
+public:
+    using GetHealth::GetHealth;
+
+    dcgmReturn_t RunWithHandle(dcgmHandle_t handle)
+    {
+        m_dcgmHandle = handle;
+        return DoExecuteConnected();
+    }
+};
+
+class TestSetHealth : public SetHealth
+{
+public:
+    using SetHealth::SetHealth;
+
+    dcgmReturn_t RunWithHandle(dcgmHandle_t handle)
+    {
+        m_dcgmHandle = handle;
+        return DoExecuteConnected();
+    }
+};
+
+class TestCheckHealth : public CheckHealth
+{
+public:
+    using CheckHealth::CheckHealth;
+
+    dcgmReturn_t RunWithHandle(dcgmHandle_t handle)
+    {
+        m_dcgmHandle = handle;
+        return DoExecuteConnected();
+    }
+};
+
+void ResetHealthApi()
+{
+    g_healthApi                  = {};
+    g_healthApi.getReturn        = DCGM_ST_OK;
+    g_healthApi.setReturn        = DCGM_ST_OK;
+    g_healthApi.checkReturn      = DCGM_ST_OK;
+    g_healthApi.systems          = static_cast<dcgmHealthSystems_t>(DCGM_HEALTH_WATCH_PCIE | DCGM_HEALTH_WATCH_POWER);
+    g_healthApi.response.version = dcgmHealthResponse_version;
+    g_healthApi.response.overallHealth = DCGM_HEALTH_RESULT_PASS;
+}
+
+bool OutputHasSystemState(std::string_view output, std::string_view system, std::string_view state)
+{
+    size_t pos = 0;
+    while ((pos = output.find(system, pos)) != std::string_view::npos)
+    {
+        size_t end      = output.find('\n', pos);
+        size_t statePos = output.find(state, pos);
+        if (statePos != std::string_view::npos && (end == std::string_view::npos || statePos < end))
+        {
+            return true;
+        }
+        ++pos;
+    }
+    return false;
+}
+} //namespace
+
+extern "C" dcgmReturn_t dcgmHealthGet(dcgmHandle_t handle, dcgmGpuGrp_t groupId, dcgmHealthSystems_t *systems)
+{
+    g_healthApi.getCallCount++;
+    g_healthApi.lastHandle  = handle;
+    g_healthApi.lastGroupId = groupId;
+    if (systems == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    if (g_healthApi.getReturn != DCGM_ST_OK)
+    {
+        return g_healthApi.getReturn;
+    }
+    *systems = g_healthApi.systems;
+    return DCGM_ST_OK;
+}
+
+extern "C" dcgmReturn_t dcgmHealthSet_v2(dcgmHandle_t handle, dcgmHealthSetParams_v2 *params)
+{
+    g_healthApi.setCallCount++;
+    g_healthApi.lastHandle = handle;
+    if (params == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    g_healthApi.lastGroupId   = params->groupId;
+    g_healthApi.lastSetParams = *params;
+    return g_healthApi.setReturn;
+}
+
+extern "C" dcgmReturn_t dcgmHealthCheck(dcgmHandle_t handle, dcgmGpuGrp_t groupId, dcgmHealthResponse_t *results)
+{
+    g_healthApi.checkCallCount++;
+    g_healthApi.lastHandle  = handle;
+    g_healthApi.lastGroupId = groupId;
+    if (results == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    if (g_healthApi.checkReturn != DCGM_ST_OK)
+    {
+        return g_healthApi.checkReturn;
+    }
+    *results = g_healthApi.response;
+    return DCGM_ST_OK;
+}
 
 void add_incident(dcgmHealthResponse_t &response,
                   dcgm_field_eid_t entityId,
@@ -233,5 +369,132 @@ SCENARIO("Health::ConnectX Output Formatting")
         CHECK(output.find("GPU memory issue") != std::string::npos);
         CHECK(output.find("fatal errors") != std::string::npos);
         CHECK(output.find("0x1000") != std::string::npos);
+    }
+}
+
+TEST_CASE("Health watch APIs")
+{
+    GIVEN("a mocked health API")
+    {
+        ResetHealthApi();
+        Health health;
+        auto handle          = static_cast<dcgmHandle_t>(0x95);
+        dcgmGpuGrp_t groupId = 4;
+
+        SECTION("GetWatches displays enabled systems")
+        {
+            CoutCapture capture;
+
+            CHECK(health.GetWatches(handle, groupId, false) == DCGM_ST_OK);
+            auto output = capture.str();
+            CHECK(OutputHasSystemState(output, "PCIe", "On"));
+            CHECK(OutputHasSystemState(output, "Power", "On"));
+            CHECK(OutputHasSystemState(output, "Memory", "Off"));
+            CHECK(OutputHasSystemState(output, "NVLINK", "Off"));
+            CHECK(g_healthApi.getCallCount == 1);
+            CHECK(g_healthApi.lastHandle == handle);
+            CHECK(g_healthApi.lastGroupId == groupId);
+        }
+
+        SECTION("GetWatches reports DCGM failures as generic errors")
+        {
+            g_healthApi.getReturn = DCGM_ST_NOT_CONFIGURED;
+            CoutCapture capture;
+
+            CHECK(health.GetWatches(handle, groupId, true) == DCGM_ST_GENERIC_ERROR);
+            CHECK(g_healthApi.getCallCount == 1);
+        }
+
+        SECTION("SetWatches converts seconds to microseconds")
+        {
+            CoutCapture capture;
+
+            CHECK(health.SetWatches(handle, groupId, DCGM_HEALTH_WATCH_MEM, 2.5, 30.0) == DCGM_ST_OK);
+            CHECK(g_healthApi.setCallCount == 1);
+            CHECK(g_healthApi.lastHandle == handle);
+            CHECK(g_healthApi.lastSetParams.version == dcgmHealthSetParams_version2);
+            CHECK(g_healthApi.lastSetParams.groupId == groupId);
+            CHECK(g_healthApi.lastSetParams.systems == DCGM_HEALTH_WATCH_MEM);
+            CHECK(g_healthApi.lastSetParams.updateInterval == 2500000);
+            CHECK(g_healthApi.lastSetParams.maxKeepAge == 30.0);
+        }
+
+        SECTION("SetWatches reports DCGM failures as generic errors")
+        {
+            g_healthApi.setReturn = DCGM_ST_BADPARAM;
+            CoutCapture capture;
+
+            CHECK(health.SetWatches(handle, groupId, DCGM_HEALTH_WATCH_MEM, 1.0, 2.0) == DCGM_ST_GENERIC_ERROR);
+            CHECK(g_healthApi.setCallCount == 1);
+        }
+
+        SECTION("CheckWatches displays the health response")
+        {
+            add_incident(g_healthApi.response,
+                         2,
+                         DCGM_FE_GPU,
+                         DCGM_HEALTH_WATCH_POWER,
+                         DCGM_HEALTH_RESULT_WARN,
+                         "power warning");
+            g_healthApi.systems = DCGM_HEALTH_WATCH_POWER;
+            CoutCapture capture;
+
+            CHECK(health.CheckWatches(handle, groupId, false) == DCGM_ST_OK);
+            auto output = capture.str();
+            CHECK(output.find("power warning") != std::string::npos);
+            CHECK(output.find("Warning") != std::string::npos);
+            CHECK(g_healthApi.checkCallCount == 1);
+            CHECK(g_healthApi.getCallCount == 1);
+        }
+
+        SECTION("CheckWatches requires watches to be enabled")
+        {
+            g_healthApi.systems = static_cast<dcgmHealthSystems_t>(0);
+            CoutCapture capture;
+
+            CHECK(health.CheckWatches(handle, groupId, false) == DCGM_ST_GENERIC_ERROR);
+            CHECK(g_healthApi.checkCallCount == 1);
+            CHECK(g_healthApi.getCallCount == 1);
+        }
+    }
+}
+
+TEST_CASE("Health command wrappers")
+{
+    GIVEN("health commands with a connected handle")
+    {
+        ResetHealthApi();
+        auto handle = static_cast<dcgmHandle_t>(0x96);
+
+        SECTION("GetHealth forwards to GetWatches")
+        {
+            CoutCapture capture;
+            TestGetHealth command("localhost", 3, false);
+
+            CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
+            CHECK(g_healthApi.getCallCount == 1);
+            CHECK(g_healthApi.lastGroupId == 3);
+        }
+
+        SECTION("SetHealth forwards to SetWatches")
+        {
+            CoutCapture capture;
+            TestSetHealth command("localhost", 3, DCGM_HEALTH_WATCH_SM, 1.0, 10.0);
+
+            CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
+            CHECK(g_healthApi.setCallCount == 1);
+            CHECK(g_healthApi.lastSetParams.systems == DCGM_HEALTH_WATCH_SM);
+        }
+
+        SECTION("CheckHealth forwards to CheckWatches")
+        {
+            g_healthApi.systems = DCGM_HEALTH_WATCH_ALL;
+            CoutCapture capture;
+            TestCheckHealth command("localhost", 3, true);
+
+            CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
+            CHECK(g_healthApi.checkCallCount == 1);
+            CHECK(g_healthApi.lastGroupId == 3);
+        }
     }
 }

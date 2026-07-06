@@ -18,13 +18,13 @@ import time
 try:
     import pydcgm
     import dcgm_structs
-except:
+except BaseException:
     print("The DCGM modules were not found. Make sure to provide the 'PYTHONPATH=../' environmental variable")
     sys.exit(1)
 
 try:
     import psutil
-except:
+except BaseException:
     print("psutil is missing. Install with 'pip3 install psutil'")
     sys.exit(1)
 
@@ -139,8 +139,9 @@ for i in range(numClients):
     # print("Sleeping %.1f seconds to allow DCP to work in the background" % sleepTime)
     time.sleep(sleepTime)
     pct = getProcessPct(dcgmProcess)
-    print("DCGM used %.2f%% CPU (%.2f%% PROD cpu) with %d clients with watches but no field retrieval" % (
-        pct, (pct / prodDivisor), len(watchers)))
+    print(
+        "DCGM used %.2f%% CPU (%.2f%% PROD cpu) with %d clients with watches but no field retrieval" %
+        (pct, (pct / prodDivisor), len(watchers)))
     time.sleep(0.5)  # psutil suggests this as a minimum polling interval
 
 
@@ -155,8 +156,9 @@ for numClientsToPoll in range(numClients):
         time.sleep(watchInterval)
 
     pct = getProcessPct(dcgmProcess)
-    print("DCGM used %.2f%% CPU (%.2f%% PROD cpu) with %d clients with watches + samples" %
-          (pct, (pct / prodDivisor), numClientsToPoll + 1))
+    print(
+        "DCGM used %.2f%% CPU (%.2f%% PROD cpu) with %d clients with watches + samples" %
+        (pct, (pct / prodDivisor), numClientsToPoll + 1))
 
 
 del watchers

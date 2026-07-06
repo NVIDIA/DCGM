@@ -16,9 +16,12 @@
 #include "DcgmStringHelpers.h"
 #include "MigIdParser.hpp"
 #include "dcgm_fields.h"
+#include "dcgm_structs.h"
 #include <catch2/catch_all.hpp>
 
 #include <EntityListHelpers.h>
+
+#include <limits>
 
 namespace
 {
@@ -642,5 +645,420 @@ TEST_CASE("ParseExpectedNumEntitiesForGpus")
         err                 = DcgmNs::ParseExpectedNumEntitiesForGpus(expectedNumEntities, gpuCount);
         CHECK(gpuCount == 0);
         CHECK(!err.empty());
+    }
+}
+
+TEST_CASE("EntityListParser link raw entity ids")
+{
+    SECTION("accepts decimal packed dcgm_link_t.raw")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("link:259", entityGroups);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 1);
+        CHECK(entityGroups[0].entityGroupId == DCGM_FE_LINK);
+        CHECK(entityGroups[0].entityId == 259);
+    }
+
+    SECTION("short name l: accepts decimal")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("l:259", entityGroups);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 1);
+        CHECK(entityGroups[0].entityGroupId == DCGM_FE_LINK);
+        CHECK(entityGroups[0].entityId == 259);
+    }
+
+    SECTION("accepts multiple decimal link ids")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        // 3 == 0x03 (switch 0, port 0), 259 == 0x103 (switch 0, port 1)
+        std::string err = DcgmNs::EntityListParser("link:3,link:259", entityGroups);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 2);
+        CHECK(entityGroups[0].entityGroupId == DCGM_FE_LINK);
+        CHECK(entityGroups[0].entityId == 3);
+        CHECK(entityGroups[1].entityGroupId == DCGM_FE_LINK);
+        CHECK(entityGroups[1].entityId == 259);
+    }
+
+    SECTION("accepts boundary values 0 and UINT32_MAX")
+    {
+        // The parser does not semantically validate the packed dcgm_link_t bitfields;
+        // any value in [0, UINT32_MAX] is a syntactically valid raw link id.
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("link:0,link:4294967295", entityGroups);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 2);
+        CHECK(entityGroups[0].entityGroupId == DCGM_FE_LINK);
+        CHECK(entityGroups[0].entityId == 0);
+        CHECK(entityGroups[1].entityGroupId == DCGM_FE_LINK);
+        CHECK(entityGroups[1].entityId == std::numeric_limits<dcgm_field_eid_t>::max());
+    }
+
+    SECTION("accepts hex packed dcgm_link_t.raw")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("link:0x103", entityGroups);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 1);
+        CHECK(entityGroups[0].entityGroupId == DCGM_FE_LINK);
+        CHECK(entityGroups[0].entityId == 259); // 0x103 == 259
+    }
+
+    SECTION("accepts uppercase hex prefix 0X")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("link:0X103", entityGroups);
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 1);
+        CHECK(entityGroups[0].entityGroupId == DCGM_FE_LINK);
+        CHECK(entityGroups[0].entityId == 259);
+    }
+
+    SECTION("rejects invalid formats")
+    {
+        static constexpr std::string_view badInputs[] = {
+            "link:abc",     // non-digit, non-hex
+            "link:-1",      // negative number
+            "link:",        // empty id
+            "link:1.5",     // floating point
+            "link:1 2",     // space in id
+            "link:0x",      // hex prefix with no digits
+            "link:{3-259}", // range syntax not supported for raw link ids
+        };
+
+        for (auto const &input : badInputs)
+        {
+            CAPTURE(input);
+            std::vector<dcgmGroupEntityPair_t> entityGroups;
+            CHECK_FALSE(DcgmNs::EntityListParser(std::string(input), entityGroups).empty());
+        }
+    }
+
+    SECTION("rejects out-of-range values and leaves entityGroups unmodified")
+    {
+        // dcgm_field_eid_t is uint32_t, max == 4294967295
+        static constexpr std::string_view badInputs[] = {
+            "link:4294967296",  // UINT32_MAX + 1
+            "link:99999999999", // well beyond uint32_t
+        };
+
+        for (auto const &input : badInputs)
+        {
+            CAPTURE(input);
+            std::vector<dcgmGroupEntityPair_t> entityGroups;
+            std::string err = DcgmNs::EntityListParser(std::string(input), entityGroups);
+            CHECK_FALSE(err.empty());
+            CHECK(entityGroups.empty());
+        }
+    }
+}
+
+TEST_CASE("EntityListParser gpu_link format")
+{
+    SECTION("Parses gpu_link entity correctly")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("gpu_link:0:5", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 1);
+        CHECK(entityGroups[0].entityGroupId == DCGM_FE_LINK);
+
+        dcgm_link_t link { .raw = entityGroups[0].entityId };
+        CHECK(link.parsed.type == DCGM_FE_GPU);
+        CHECK(link.parsed.gpuId == 0);
+        CHECK(link.parsed.index == 5);
+    }
+
+    SECTION("Parses multiple gpu_link entities")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("gpu_link:0:0,gpu_link:1:10", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 2);
+
+        dcgm_link_t link0 { .raw = entityGroups[0].entityId };
+        CHECK(link0.parsed.gpuId == 0);
+        CHECK(link0.parsed.index == 0);
+
+        dcgm_link_t link1 { .raw = entityGroups[1].entityId };
+        CHECK(link1.parsed.gpuId == 1);
+        CHECK(link1.parsed.index == 10);
+    }
+
+    SECTION("Returns error for all invalid formats")
+    {
+        static constexpr std::string_view badInputs[] = {
+            "gpu_link:0",        // missing second colon
+            "gpu_link:abc:5",    // non-digit gpuId
+            "gpu_link:0:{0-5",   // missing closing brace on linkIndex
+            "gpu_link:{0-1:3",   // missing closing brace on gpuId
+            "gpu_link:0:{a-b}",  // non-digit range content in linkIndex
+            "gpu_link:{x-y}:0",  // non-digit range content in gpuId
+            "gpu_link:0:{0-5}x", // trailing characters after closing brace
+        };
+        for (auto const &input : badInputs)
+        {
+            CAPTURE(input);
+            std::vector<dcgmGroupEntityPair_t> entityGroups;
+            CHECK_FALSE(DcgmNs::EntityListParser(std::string(input), entityGroups).empty());
+        }
+    }
+
+    SECTION("Returns error for out-of-range values and leaves entityGroups unmodified")
+    {
+        static constexpr std::string_view badInputs[] = {
+            "gpu_link:256:5",           // gpuId exceeds uint8_t max (255)
+            "gpu_link:70000:5",         // gpuId exceeds uint8_t max (255)
+            "gpu_link:0:70000",         // linkIndex exceeds uint16_t max
+            "gpu_link:100000:100000",   // both out of range
+            "gpu_link:{254-256}:0",     // range includes gpuId > uint8_t
+            "gpu_link:0:{65534-65536}", // range includes linkIndex > uint16_t
+        };
+        for (auto const &input : badInputs)
+        {
+            CAPTURE(input);
+            std::vector<dcgmGroupEntityPair_t> entityGroups;
+            std::string err = DcgmNs::EntityListParser(std::string(input), entityGroups);
+            CHECK_FALSE(err.empty());
+            CHECK(err.find("out of range") != std::string::npos);
+            CHECK(entityGroups.empty()); // no partial writes
+        }
+    }
+
+    SECTION("Parses link index range gpu_link:0:{0-5}")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("gpu_link:0:{0-5}", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 6);
+        for (unsigned int i = 0; i < 6; ++i)
+        {
+            CAPTURE(i);
+            CHECK(entityGroups[i].entityGroupId == DCGM_FE_LINK);
+            dcgm_link_t link { .raw = entityGroups[i].entityId };
+            CHECK(link.parsed.type == DCGM_FE_GPU);
+            CHECK(link.parsed.gpuId == 0);
+            CHECK(link.parsed.index == i);
+        }
+    }
+
+    SECTION("Parses GPU range gpu_link:{0-1}:3")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("gpu_link:{0-1}:3", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 2);
+
+        dcgm_link_t link0 { .raw = entityGroups[0].entityId };
+        CHECK(link0.parsed.gpuId == 0);
+        CHECK(link0.parsed.index == 3);
+
+        dcgm_link_t link1 { .raw = entityGroups[1].entityId };
+        CHECK(link1.parsed.gpuId == 1);
+        CHECK(link1.parsed.index == 3);
+    }
+
+    SECTION("Parses both ranges gpu_link:{0-1}:{0-3} as Cartesian product")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("gpu_link:{0-1}:{0-3}", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 8);
+
+        // Verify all (gpuId, linkIndex) combinations are present
+        std::array<std::pair<uint8_t, uint16_t>, 8> constexpr expected
+            = { { { 0, 0 }, { 0, 1 }, { 0, 2 }, { 0, 3 }, { 1, 0 }, { 1, 1 }, { 1, 2 }, { 1, 3 } } };
+        for (size_t i = 0; i < expected.size(); ++i)
+        {
+            CAPTURE(i);
+            dcgm_link_t link { .raw = entityGroups[i].entityId };
+            CHECK(link.parsed.gpuId == expected[i].first);
+            CHECK(link.parsed.index == expected[i].second);
+        }
+    }
+
+    SECTION("Parses mixed range and plain gpu_link:0:{0-2},gpu_link:1:5")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("gpu_link:0:{0-2},gpu_link:1:5", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 4);
+
+        for (int i = 0; i < 3; ++i)
+        {
+            CAPTURE(i);
+            dcgm_link_t link { .raw = entityGroups[i].entityId };
+            CHECK(link.parsed.gpuId == 0);
+            CHECK(link.parsed.index == static_cast<uint16_t>(i));
+        }
+        dcgm_link_t last { .raw = entityGroups[3].entityId };
+        CHECK(last.parsed.gpuId == 1);
+        CHECK(last.parsed.index == 5);
+    }
+}
+
+TEST_CASE("EntityListParser switch_link format")
+{
+    SECTION("Parses switch_link entity correctly")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("switch_link:0:5", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 1);
+        CHECK(entityGroups[0].entityGroupId == DCGM_FE_LINK);
+
+        dcgm_link_t link { .raw = entityGroups[0].entityId };
+        CHECK(link.parsed.type == DCGM_FE_SWITCH);
+        CHECK(link.parsed.switchId == 0);
+        CHECK(link.parsed.index == 5);
+    }
+
+    SECTION("Parses multiple switch_link entities")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("switch_link:0:0,switch_link:1:10", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 2);
+
+        dcgm_link_t link0 { .raw = entityGroups[0].entityId };
+        CHECK(link0.parsed.type == DCGM_FE_SWITCH);
+        CHECK(link0.parsed.switchId == 0);
+        CHECK(link0.parsed.index == 0);
+
+        dcgm_link_t link1 { .raw = entityGroups[1].entityId };
+        CHECK(link1.parsed.type == DCGM_FE_SWITCH);
+        CHECK(link1.parsed.switchId == 1);
+        CHECK(link1.parsed.index == 10);
+    }
+
+    SECTION("Returns error for all invalid formats")
+    {
+        static constexpr std::string_view badInputs[] = {
+            "switch_link:0",        // missing second colon
+            "switch_link:abc:5",    // non-digit switchId
+            "switch_link:0:{0-5",   // missing closing brace on linkIndex
+            "switch_link:{0-1:3",   // missing closing brace on switchId
+            "switch_link:0:{a-b}",  // non-digit range content in linkIndex
+            "switch_link:{x-y}:0",  // non-digit range content in switchId
+            "switch_link:0:{0-5}x", // trailing characters after closing brace
+        };
+
+        for (auto const &input : badInputs)
+        {
+            CAPTURE(input);
+            std::vector<dcgmGroupEntityPair_t> entityGroups;
+            CHECK_FALSE(DcgmNs::EntityListParser(std::string(input), entityGroups).empty());
+        }
+    }
+
+    SECTION("Returns error for out-of-range values and leaves entityGroups unmodified")
+    {
+        static constexpr std::string_view badInputs[] = {
+            "switch_link:256:5",           // switchId exceeds uint8_t max (255)
+            "switch_link:70000:5",         // switchId exceeds uint8_t max (255)
+            "switch_link:0:70000",         // linkIndex exceeds uint16_t max
+            "switch_link:100000:100000",   // both out of range
+            "switch_link:{254-256}:0",     // range includes switchId > uint8_t
+            "switch_link:0:{65534-65536}", // range includes linkIndex > uint16_t
+        };
+        for (auto const &input : badInputs)
+        {
+            CAPTURE(input);
+            std::vector<dcgmGroupEntityPair_t> entityGroups;
+            std::string err = DcgmNs::EntityListParser(std::string(input), entityGroups);
+            CHECK_FALSE(err.empty());
+            CHECK(err.find("out of range") != std::string::npos);
+            CHECK(entityGroups.empty()); // no partial writes
+        }
+    }
+
+    SECTION("Parses link index range switch_link:0:{0-5}")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("switch_link:0:{0-5}", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 6);
+        for (unsigned int i = 0; i < 6; ++i)
+        {
+            CAPTURE(i);
+            CHECK(entityGroups[i].entityGroupId == DCGM_FE_LINK);
+            dcgm_link_t link { .raw = entityGroups[i].entityId };
+            CHECK(link.parsed.type == DCGM_FE_SWITCH);
+            CHECK(link.parsed.switchId == 0);
+            CHECK(link.parsed.index == i);
+        }
+    }
+
+    SECTION("Parses switch range switch_link:{0-1}:3")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("switch_link:{0-1}:3", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 2);
+
+        dcgm_link_t link0 { .raw = entityGroups[0].entityId };
+        CHECK(link0.parsed.type == DCGM_FE_SWITCH);
+        CHECK(link0.parsed.switchId == 0);
+        CHECK(link0.parsed.index == 3);
+
+        dcgm_link_t link1 { .raw = entityGroups[1].entityId };
+        CHECK(link1.parsed.type == DCGM_FE_SWITCH);
+        CHECK(link1.parsed.switchId == 1);
+        CHECK(link1.parsed.index == 3);
+    }
+
+    SECTION("Parses both ranges switch_link:{0-1}:{0-3} as Cartesian product")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("switch_link:{0-1}:{0-3}", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 8);
+
+        std::array<std::pair<uint8_t, uint16_t>, 8> constexpr expected
+            = { { { 0, 0 }, { 0, 1 }, { 0, 2 }, { 0, 3 }, { 1, 0 }, { 1, 1 }, { 1, 2 }, { 1, 3 } } };
+        for (size_t i = 0; i < expected.size(); ++i)
+        {
+            CAPTURE(i);
+            dcgm_link_t link { .raw = entityGroups[i].entityId };
+            CHECK(link.parsed.type == DCGM_FE_SWITCH);
+            CHECK(link.parsed.switchId == expected[i].first);
+            CHECK(link.parsed.index == expected[i].second);
+        }
+    }
+
+    SECTION("Parses mixed switch_link:0:{0-2},switch_link:1:5")
+    {
+        std::vector<dcgmGroupEntityPair_t> entityGroups;
+        std::string err = DcgmNs::EntityListParser("switch_link:0:{0-2},switch_link:1:5", entityGroups);
+
+        CHECK(err.empty());
+        REQUIRE(entityGroups.size() == 4);
+
+        for (int i = 0; i < 3; ++i)
+        {
+            CAPTURE(i);
+            dcgm_link_t link { .raw = entityGroups[i].entityId };
+            CHECK(link.parsed.type == DCGM_FE_SWITCH);
+            CHECK(link.parsed.switchId == 0);
+            CHECK(link.parsed.index == static_cast<uint16_t>(i));
+        }
+        dcgm_link_t last { .raw = entityGroups[3].entityId };
+        CHECK(last.parsed.type == DCGM_FE_SWITCH);
+        CHECK(last.parsed.switchId == 1);
+        CHECK(last.parsed.index == 5);
     }
 }

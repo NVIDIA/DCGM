@@ -87,7 +87,7 @@ ENV TARGET=$ARCHITECTURE-linux-gnu
 
 COPY --from=crosstool-ng --chown=root:root /opt/cross/$TARGET /opt/cross
 
-RUN tee /opt/cross/$TARGET/toolchain.cmake <<EOF
+RUN tee /opt/cross/$TARGET/toolchain-gcc.cmake <<EOF
 #
 # Copyright (c) 2023-2026, NVIDIA CORPORATION.  All rights reserved.
 #
@@ -153,9 +153,62 @@ $(echo \
 | awk '/#include <...> search starts here/{ f = 1; next } /End of search list/{ f = 0 } f'))
 EOF
 
-ENV CMAKE_TOOLCHAIN_FILE=/opt/cross/$TARGET/toolchain.cmake
+RUN tee /opt/cross/$TARGET/toolchain-clang.cmake <<EOF
+#
+# Copyright (c) 2023-2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-COPY <<EOF /opt/cross/$TARGET/toolchain.meson.txt
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR $ARCHITECTURE)
+
+set(CMAKE_LIBRARY_ARCHITECTURE "\${CMAKE_SYSTEM_PROCESSOR}-linux-gnu")
+set(CMAKE_SYSROOT "/opt/cross/\${CMAKE_LIBRARY_ARCHITECTURE}/sysroot")
+
+set(CMAKE_C_COMPILER "/usr/bin/clang")
+set(CMAKE_C_COMPILER_TARGET "${CMAKE_LIBRARY_ARCHITECTURE}")
+# When clang is used as the frontend for linking binaries that only contain
+# object files containing C code (in other words, when the LINKER_LANGUAGE for
+# that binary is C), clang issues an -Wunused-command-line-argument finding for
+# the -static-libstdc++ flag. Although CMake provides mechanisms for using flags
+# based on LINKER_LANGUAGE, they cannot be used in toolchain files. Silencing
+# that warning is a compromise, as other unused flags will not be reported
+set(CMAKE_C_FLAGS_INIT "--gcc-toolchain=/opt/cross/ -Wno-unused-command-line-argument")
+
+set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
+set(CMAKE_CXX_COMPILER_TARGET "${CMAKE_LIBRARY_ARCHITECTURE}")
+set(CMAKE_CXX_FLAGS_INIT "--gcc-toolchain=/opt/cross/")
+
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "-static-libstdc++")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-static-libstdc++")
+
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+
+if (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL CMAKE_SYSTEM_PROCESSOR)
+  set(CMAKE_CROSSCOMPILING_EMULATOR
+      "/usr/bin/qemu-$ARCHITECTURE"
+      "-L"
+      "\${CMAKE_SYSROOT}")
+endif()
+EOF
+
+ENV CMAKE_TOOLCHAIN_FILE=/opt/cross/$TARGET/toolchain-gcc.cmake
+
+COPY <<EOF /opt/cross/$TARGET/toolchain-gcc.meson.txt
 #
 # Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
@@ -224,14 +277,15 @@ RUN --mount=type=bind,source=scripts/rust,target=/tmp/scripts/rust \
  && CC=/usr/bin/clang CXX=/usr/bin/clang++ cargo install --force \
                   --locked \
                   --root=$RUST_INSTALL_PREFIX \
-                  cargo-audit@0.21.2 \
-                  cargo-auditable@0.7.0 \
-                  cargo-about@0.7.1 \
-                  cargo-deny@0.18.4 \
+                  cargo-audit@0.22.1 \
+                  cargo-auditable@0.7.4 \
+                  cargo-about@0.8.4 \
+                  cargo-deny@0.19.4 \
                   cargo-make@0.37.24 \
-                  cargo-vet@0.10.1 \
+                  cargo-vet@0.10.2 \
+                  cargo-vendor-filterer@0.5.18 \
                   bindgen-cli@0.72.1 \
-                  bacon \
+                  bacon@3.22.0 \
  && rm -rf $HOME/.cargo \
  && /tmp/scripts/rust/corrosion.sh /tmp/scripts/rust/urls.txt
 

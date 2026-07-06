@@ -30,7 +30,9 @@ def gpu_is_healthy_and_support_memtest(handle, gpuId):
 
     testName = "memtest"
     dd = DcgmDiag.DcgmDiag(
-        gpuIds=[gpuId], testNamesStr=testName, paramsStr="memtest.test_duration=2")
+        gpuIds=[gpuId],
+        testNamesStr=testName,
+        paramsStr="memtest.test_duration=2")
     start_time = time.time()
     response = test_utils.diag_execute_wrapper(dd, handle)
     end_time = time.time()

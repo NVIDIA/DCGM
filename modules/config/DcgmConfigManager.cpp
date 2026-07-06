@@ -27,14 +27,15 @@
 
 #include <fmt/ranges.h>
 #include <sstream>
+#include <type_traits>
 
-namespace
-{
-dcgmReturn_t GetConsistentErrorCode(DcgmConfigManagerStatusList const *statusList)
+dcgmReturn_t DcgmConfigManager::GetConsistentErrorCode(DcgmConfigManagerStatusList const *statusList)
 {
     // If no status list or no errors, use generic error
     if (!statusList || *(statusList->m_errorCount) == 0)
+    {
         return DCGM_ST_GENERIC_ERROR;
+    }
 
     // Check if all errors are the same
     dcgmReturn_t commonError = statusList->m_statuses[0].errorCode;
@@ -50,7 +51,6 @@ dcgmReturn_t GetConsistentErrorCode(DcgmConfigManagerStatusList const *statusLis
     // All errors are the same, return the common error
     return commonError;
 }
-} //namespace
 
 DcgmConfigManager::DcgmConfigManager(dcgmCoreCallbacks_t &dcc)
     : mpCoreProxy(dcc)
@@ -178,7 +178,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetPowerLimit(unsigned int gpuId, dcgmConf
     memset(&value, 0, sizeof(value));
     value.val.d = setConfig->powerLimit.val;
 
-    dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, &value);
+    dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS, &value);
     switch (dcgmRet)
     {
         case DCGM_ST_OK:
@@ -245,7 +245,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
         /* Reenable auto boosted clocks when app clocks are disabled */
         memset(&value, 0, sizeof(value));
         value.val.i64 = 1; // Enable Auto Boost Mode
-        dcgmRet       = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_AUTOBOOST, &value);
+        dcgmRet       = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_CLOCKS_AUTOBOOST_MODE, &value);
         if (dcgmRet == DCGM_ST_NOT_SUPPORTED)
         {
             /* Not an error for >= Pascal. NVML returns NotSupported */
@@ -296,7 +296,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetPerfState(unsigned int gpuId, dcgmConfi
     /* Disable auto boosted clocks when app clocks are set */
     memset(&value, 0, sizeof(value));
     value.val.i64 = 0; // Disable Auto Boost Mode
-    dcgmRet       = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_AUTOBOOST, &value);
+    dcgmRet       = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_CLOCKS_AUTOBOOST_MODE, &value);
     if (dcgmRet == DCGM_ST_NOT_SUPPORTED)
     {
         /* Not an error for >= Pascal. NVML returns NotSupported */
@@ -336,7 +336,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetComputeMode(unsigned int gpuId, dcgmCon
     memset(&value, 0, sizeof(value));
     value.val.i64 = config->computeMode;
 
-    dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_COMPUTE_MODE, &value);
+    dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_GPU_COMPUTE_MODE, &value);
     switch (dcgmRet)
     {
         case DCGM_ST_OK:
@@ -444,7 +444,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetWorkloadPowerProfiles(
               gpuId,
               newCmWorkloadPowerProfiles.action,
               DcgmNs::Utils::HelperDisplayPowerBitmask(newCmWorkloadPowerProfiles.profileMask));
-    dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &value);
+    dcgmRet = mpCoreProxy.SetValue(gpuId, DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK, &value);
     switch (dcgmRet)
     {
         case DCGM_ST_OK:
@@ -532,14 +532,14 @@ void DcgmConfigManager::HelperMergeTargetConfiguration(unsigned int gpuId,
 
     switch (fieldId)
     {
-        case DCGM_FI_DEV_ECC_CURRENT:
+        case DCGM_FI_DEV_ECC_MODE:
         {
             if (!DCGM_INT32_IS_BLANK(setConfig->eccMode))
                 targetConfig->eccMode = setConfig->eccMode;
             break;
         }
 
-        case DCGM_FI_DEV_POWER_MGMT_LIMIT:
+        case DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS:
         {
             if (!DCGM_INT32_IS_BLANK(setConfig->powerLimit.val))
                 targetConfig->powerLimit.val = setConfig->powerLimit.val;
@@ -556,7 +556,7 @@ void DcgmConfigManager::HelperMergeTargetConfiguration(unsigned int gpuId,
             break;
         }
 
-        case DCGM_FI_DEV_COMPUTE_MODE:
+        case DCGM_FI_DEV_GPU_COMPUTE_MODE:
         {
             if (!DCGM_INT32_IS_BLANK(setConfig->computeMode))
                 targetConfig->computeMode = setConfig->computeMode;
@@ -564,14 +564,14 @@ void DcgmConfigManager::HelperMergeTargetConfiguration(unsigned int gpuId,
             break;
         }
 
-        case DCGM_FI_SYNC_BOOST:
+        case DCGM_FI_SYSTEM_GPU_SYNC_BOOST:
         {
             if (!DCGM_INT32_IS_BLANK(setConfig->perfState.syncBoost))
                 targetConfig->perfState.syncBoost = setConfig->perfState.syncBoost;
             break;
         }
 
-        case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
+        case DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK:
         {
             // SetConfig already has the target workload power profiles set
             memcpy(targetConfig->workloadPowerProfiles,
@@ -600,26 +600,26 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
 
     if (!m_aliveEntities.contains({ DCGM_FE_GPU, gpuId }))
     {
-        statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_GPU_IS_LOST);
+        statusList->AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_GPU_IS_LOST);
         return DCGM_ST_GPU_IS_LOST;
     }
 
     if (!setConfig)
     {
-        statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
+        statusList->AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_BADPARAM);
         return DCGM_ST_BADPARAM;
     }
 
     if (setConfig->version != dcgmConfig_version)
     {
-        statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_VER_MISMATCH);
+        statusList->AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_VER_MISMATCH);
         return DCGM_ST_VER_MISMATCH;
     }
 
     if (!DcgmNs::Utils::IsRunningAsRoot())
     {
         log_debug("SetConfig not supported for non-root");
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
         return DCGM_ST_REQUIRES_ROOT;
     }
 
@@ -640,16 +640,16 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
         // re-attached.
         case DCGM_ST_OK:
         case DCGM_ST_GPU_IS_LOST:
-            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_ECC_CURRENT, setConfig);
+            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_ECC_MODE, setConfig);
             break;
         default:
         {
             multiPropertyRetCode++;
-            statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_CURRENT, dcgmRet);
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_MODE, dcgmRet);
 
             if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
             {
-                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_ECC_CURRENT, setConfig);
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_ECC_MODE, setConfig);
             }
         }
         break;
@@ -672,16 +672,16 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
         // re-attached.
         case DCGM_ST_OK:
         case DCGM_ST_GPU_IS_LOST:
-            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, setConfig);
+            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS, setConfig);
             break;
         default:
         {
             multiPropertyRetCode++;
-            statusList->AddStatus(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, dcgmRet);
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS, dcgmRet);
 
             if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
             {
-                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, setConfig);
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS, setConfig);
             }
         }
         break;
@@ -716,15 +716,15 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
         // re-attached.
         case DCGM_ST_OK:
         case DCGM_ST_GPU_IS_LOST:
-            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_COMPUTE_MODE, setConfig);
+            HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_GPU_COMPUTE_MODE, setConfig);
             break;
         default:
         {
             multiPropertyRetCode++;
-            statusList->AddStatus(gpuId, DCGM_FI_DEV_COMPUTE_MODE, dcgmRet);
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_GPU_COMPUTE_MODE, dcgmRet);
 
             if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
-                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_COMPUTE_MODE, setConfig);
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_GPU_COMPUTE_MODE, setConfig);
         }
         break;
     }
@@ -749,19 +749,19 @@ dcgmReturn_t DcgmConfigManager::SetConfigGpu(unsigned int gpuId,
         case DCGM_ST_GPU_IS_LOST:
             if (needsMerge)
             {
-                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &mergeConfig);
+                HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK, &mergeConfig);
             }
             break;
         default:
         {
             multiPropertyRetCode++;
-            statusList->AddStatus(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, dcgmRet);
+            statusList->AddStatus(gpuId, DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK, dcgmRet);
 
             if ((dcgmRet != DCGM_ST_BADPARAM) && (dcgmRet != DCGM_ST_NOT_SUPPORTED))
             {
                 if (needsMerge)
                 {
-                    HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &mergeConfig);
+                    HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK, &mergeConfig);
                 }
             }
         }
@@ -793,12 +793,12 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
     entityPair.entityId      = gpuId;
     entities.push_back(entityPair);
 
-    fieldIds.push_back(DCGM_FI_DEV_ECC_CURRENT);
+    fieldIds.push_back(DCGM_FI_DEV_ECC_MODE);
     fieldIds.push_back(DCGM_FI_DEV_APP_MEM_CLOCK);
     fieldIds.push_back(DCGM_FI_DEV_APP_SM_CLOCK);
-    fieldIds.push_back(DCGM_FI_DEV_POWER_MGMT_LIMIT);
-    fieldIds.push_back(DCGM_FI_DEV_COMPUTE_MODE);
-    fieldIds.push_back(DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK);
+    fieldIds.push_back(DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS);
+    fieldIds.push_back(DCGM_FI_DEV_GPU_COMPUTE_MODE);
+    fieldIds.push_back(DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK);
 
     dcgmReturn = mpCoreProxy.GetMultipleLatestLiveSamples(entities, fieldIds, &fvBuffer);
     if (dcgmReturn != DCGM_ST_OK)
@@ -829,7 +829,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
 
         switch (fv->fieldId)
         {
-            case DCGM_FI_DEV_ECC_CURRENT:
+            case DCGM_FI_DEV_ECC_MODE:
                 config->eccMode = nvcmvalue_int64_to_int32(fv->value.i64);
                 break;
 
@@ -841,16 +841,16 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfigGpu(unsigned int gpuId, dcgmConf
                 config->perfState.targetClocks.smClock = nvcmvalue_int64_to_int32(fv->value.i64);
                 break;
 
-            case DCGM_FI_DEV_POWER_MGMT_LIMIT:
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS:
                 config->powerLimit.type = DCGM_CONFIG_POWER_CAP_INDIVIDUAL;
                 config->powerLimit.val  = nvcmvalue_double_to_int32(fv->value.dbl);
                 break;
 
-            case DCGM_FI_DEV_COMPUTE_MODE:
+            case DCGM_FI_DEV_GPU_COMPUTE_MODE:
                 config->computeMode = nvcmvalue_int64_to_int32(fv->value.i64);
                 break;
 
-            case DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK:
+            case DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK:
                 memcpy(config->workloadPowerProfiles, fv->value.blob, sizeof(config->workloadPowerProfiles));
                 break;
 
@@ -882,7 +882,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
     if (!DcgmNs::Utils::IsRunningAsRoot())
     {
         log_debug("GetCurrentConfig not supported for non-root");
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
         return DCGM_ST_REQUIRES_ROOT;
     }
 
@@ -892,7 +892,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
     {
         /* Implies Invalid group ID */
         log_error("Config Get Err: Cannot get group Info from group id : {}", groupId);
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_BADPARAM);
         return DCGM_ST_BADPARAM;
     }
 
@@ -901,7 +901,7 @@ dcgmReturn_t DcgmConfigManager::GetCurrentConfig(unsigned int groupId,
     {
         /* Implies group is not configured */
         log_error("Config Get Err: No GPUs configured for the group id : {}", groupId);
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_BADPARAM);
         return DCGM_ST_BADPARAM;
     }
 
@@ -944,7 +944,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
     if (!DcgmNs::Utils::IsRunningAsRoot())
     {
         log_debug("GetTargetConfig not supported for non-root");
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
         return DCGM_ST_REQUIRES_ROOT;
     }
 
@@ -952,7 +952,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Error {} from GetAllGroupIds", (int)dcgmReturn);
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_BADPARAM);
         return dcgmReturn;
     }
 
@@ -961,7 +961,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
     {
         /* Implies group is not configured */
         log_error("Config Get Err: No GPUs configured for the group id : {}", groupId);
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_BADPARAM);
         return DCGM_ST_BADPARAM;
     }
 
@@ -980,7 +980,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
 
             if (!m_aliveEntities.contains({ DCGM_FE_GPU, gpuId }))
             {
-                statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_GPU_IS_LOST);
+                statusList->AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_GPU_IS_LOST);
                 multiRetCode = DCGM_ST_GPU_IS_LOST;
                 continue;
             }
@@ -988,7 +988,7 @@ dcgmReturn_t DcgmConfigManager::GetTargetConfig(unsigned int groupId,
             if (!activeConfig)
             {
                 unexpectedGpus.push_back(gpuId);
-                statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_MEMORY);
+                statusList->AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_MEMORY);
                 multiRetCode = DCGM_ST_MEMORY;
                 continue;
             }
@@ -1019,7 +1019,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     dcgmConfig_t *activeConfig = m_activeConfig[gpuId];
     if (!activeConfig)
     {
-        statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_NOT_CONFIGURED);
+        statusList->AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_NOT_CONFIGURED);
         return DCGM_ST_NOT_CONFIGURED;
     }
 
@@ -1028,7 +1028,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     if (dcgmReturn != DCGM_ST_OK)
     {
         log_error("Unable to get the current configuration for gpuId {}. st {}", gpuId, dcgmReturn);
-        statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, dcgmReturn);
+        statusList->AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, dcgmReturn);
         return dcgmReturn;
     }
 
@@ -1039,7 +1039,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     if (DCGM_ST_OK != dcgmReturn)
     {
         multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_CURRENT, dcgmReturn);
+        statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_MODE, dcgmReturn);
     }
 
     if (isResetNeeded)
@@ -1047,7 +1047,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
         log_warning("For GPU ID {}, reset can't be performed: {}", gpuId, dcgmReturn);
 
         multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_CURRENT, DCGM_ST_RESET_REQUIRED);
+        statusList->AddStatus(gpuId, DCGM_FI_DEV_ECC_MODE, DCGM_ST_RESET_REQUIRED);
     }
 
     /* Set Power Limit */
@@ -1055,7 +1055,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     if (DCGM_ST_OK != dcgmReturn)
     {
         multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_POWER_MGMT_LIMIT, dcgmReturn);
+        statusList->AddStatus(gpuId, DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS, dcgmReturn);
     }
 
     /* Set Perf States */
@@ -1072,7 +1072,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     if (DCGM_ST_OK != dcgmReturn)
     {
         multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_COMPUTE_MODE, dcgmReturn);
+        statusList->AddStatus(gpuId, DCGM_FI_DEV_GPU_COMPUTE_MODE, dcgmReturn);
     }
 
     /* Set Workload Power Profiles */
@@ -1089,7 +1089,7 @@ dcgmReturn_t DcgmConfigManager::HelperEnforceConfig(unsigned int gpuId, DcgmConf
     if (DCGM_ST_OK != dcgmReturn)
     {
         multiPropertyRetCode++;
-        statusList->AddStatus(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, dcgmReturn);
+        statusList->AddStatus(gpuId, DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK, dcgmReturn);
     }
 
     /* If any of the operation failed. Return it as an generic error */
@@ -1109,14 +1109,14 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGpu(unsigned int gpuId, DcgmConfigM
     if (!DcgmNs::Utils::IsRunningAsRoot())
     {
         log_debug("EnforceConfig not supported for non-root");
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_REQUIRES_ROOT);
         return DCGM_ST_REQUIRES_ROOT;
     }
 
     if (gpuId >= DCGM_MAX_NUM_DEVICES)
     {
         DCGM_LOG_ERROR << "EnforceConfigGpu got invalid gpuId " << gpuId;
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_UNKNOWN, DCGM_ST_BADPARAM);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_BADPARAM);
         return DCGM_ST_BADPARAM;
     }
 
@@ -1125,7 +1125,7 @@ dcgmReturn_t DcgmConfigManager::EnforceConfigGpu(unsigned int gpuId, DcgmConfigM
 
     if (!m_aliveEntities.contains({ DCGM_FE_GPU, gpuId }))
     {
-        statusList->AddStatus(gpuId, DCGM_FI_UNKNOWN, DCGM_ST_GPU_IS_LOST);
+        statusList->AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_GPU_IS_LOST);
         return DCGM_ST_GPU_IS_LOST;
     }
 
@@ -1151,9 +1151,14 @@ dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles(
     // Initialize the merged workload power profiles to the target config
     memcpy(mergedWorkloadPowerProfiles, targetConfig.workloadPowerProfiles, sizeof(mergedWorkloadPowerProfiles));
 
-    switch (newWorkloadPowerProfile.action)
+    // Switch on the underlying integer type: switching on an enum object whose value is not a
+    // declared enumerator is undefined behavior and is diagnosed by -fsanitize=undefined
+    // (trap-on-error yields SIGILL).
+    using ActionInt                    = std::underlying_type_t<dcgmWorkloadProfileAction_t>;
+    ActionInt const actionAsUnderlying = static_cast<ActionInt>(newWorkloadPowerProfile.action);
+    switch (actionAsUnderlying)
     {
-        case DCGM_WORKLOAD_PROFILE_ACTION_SET:
+        case static_cast<ActionInt>(DCGM_WORKLOAD_PROFILE_ACTION_SET):
         {
             newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET;
             for (unsigned int i = 0; i < N; i++)
@@ -1167,7 +1172,7 @@ dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles(
             }
             break;
         }
-        case DCGM_WORKLOAD_PROFILE_ACTION_CLEAR:
+        case static_cast<ActionInt>(DCGM_WORKLOAD_PROFILE_ACTION_CLEAR):
         {
             newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_CLEAR;
             for (unsigned int i = 0; i < N; i++)
@@ -1182,7 +1187,7 @@ dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles(
             }
             break;
         }
-        case DCGM_WORKLOAD_PROFILE_ACTION_SET_AND_OVERWRITE:
+        case static_cast<ActionInt>(DCGM_WORKLOAD_PROFILE_ACTION_SET_AND_OVERWRITE):
         {
             newCmWorkloadPowerProfiles.action = DCGM_CM_WORKLOAD_POWER_PROFILE_ACTION_SET_AND_OVERWRITE;
             memcpy(
@@ -1191,7 +1196,7 @@ dcgmReturn_t DcgmConfigManager::HelperGetWorkloadPowerProfiles(
         }
         default:
         {
-            log_error("Invalid workload power profile action used. Action: {}", newWorkloadPowerProfile.action);
+            log_error("Invalid workload power profile action used. Action: {}", actionAsUnderlying);
             return DCGM_ST_BADPARAM;
         }
     }
@@ -1239,7 +1244,7 @@ dcgmReturn_t DcgmConfigManager::HelperSetWorkloadPowerProfileGpu(unsigned int gp
     memcpy(newConfig.workloadPowerProfiles, targetWorkloadPowerProfiles, sizeof(newConfig.workloadPowerProfiles));
 
     // Merge the current config with the new config
-    HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_REQUESTED_POWER_PROFILE_MASK, &newConfig);
+    HelperMergeTargetConfiguration(gpuId, DCGM_FI_DEV_BOARD_POWER_PROFILE_REQUESTED_MASK, &newConfig);
 
     return dcgmRet;
 }
@@ -1301,7 +1306,7 @@ dcgmReturn_t DcgmConfigManager::SetWorkloadPowerProfile(dcgmWorkloadPowerProfile
             if (DCGM_ST_OK != dcgmReturn)
             {
                 failedSetWorkloadPowerProfile.push_back({ gpuId, dcgmReturn });
-                statusList.AddStatus(gpuId, DCGM_FI_UNKNOWN, dcgmReturn);
+                statusList.AddStatus(gpuId, DCGM_FI_SYSTEM_FIELD_UNKNOWN, dcgmReturn);
             }
         }
     }
@@ -1333,13 +1338,13 @@ dcgmReturn_t DcgmConfigManager::SetSyncBoost(unsigned int /* gpuIdList */[],
 
     if (count <= 1)
     {
-        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYNC_BOOST, DCGM_ST_BADPARAM);
+        statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_GPU_SYNC_BOOST, DCGM_ST_BADPARAM);
         log_error("Error: At least two GPUs needed to set sync boost");
         return DCGM_ST_BADPARAM;
     }
 
     /* Sync boost is no longer supported */
-    statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYNC_BOOST, DCGM_ST_NOT_SUPPORTED);
+    statusList->AddStatus(DCGM_INT32_BLANK, DCGM_FI_SYSTEM_GPU_SYNC_BOOST, DCGM_ST_NOT_SUPPORTED);
     return DCGM_ST_OK;
 }
 

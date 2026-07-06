@@ -22,6 +22,7 @@
 #include <fmt/format.h>
 #include <ranges>
 #include <stdexcept>
+#include <utility>
 
 #include <DcgmThread/DcgmThread.h>
 #include <EarlyFailChecker.h>
@@ -86,7 +87,10 @@ ConstantPower::ConstantPower(dcgmHandle_t handle)
     m_testParameters->AddString(PS_LOGFILE, "stats_targeted_power.json");
     m_testParameters->AddDouble(PS_LOGFILE_TYPE, 0.0);
     m_testParameters->AddString(PS_IGNORE_ERROR_CODES, "");
-    m_infoStruct.defaultTestParameters = new TestParameters(*m_testParameters);
+    m_testParameters->AddString(PS_USE_GENERIC_MODE, "False");
+
+    m_defaultTestParameters            = std::make_unique<TestParameters>(*m_testParameters);
+    m_infoStruct.defaultTestParameters = m_defaultTestParameters.get();
 }
 
 /*************************************************************************/
@@ -139,7 +143,7 @@ void ConstantPower::Cleanup()
 
     for (size_t deviceIdx = 0; deviceIdx < m_device.size(); deviceIdx++)
     {
-        device = m_device[deviceIdx];
+        device = m_device[deviceIdx].get();
 
         cudaSetDevice(device->cudaDeviceIdx);
 
@@ -231,7 +235,7 @@ bool ConstantPower::Init(dcgmDiagPluginEntityList_v1 const *entityInfo)
         }
 
         /* At this point, we consider this GPU part of our set */
-        m_device.push_back(device.release());
+        m_device.push_back(std::move(device));
     }
 
     return true;
@@ -351,7 +355,7 @@ int ConstantPower::CudaInit(mallocFunc mallocImpl)
     /* Do per-device initialization */
     for (size_t deviceIdx = 0; deviceIdx < m_device.size(); deviceIdx++)
     {
-        device               = m_device[deviceIdx];
+        device               = m_device[deviceIdx].get();
         device->minMatrixDim = 1;
 
         /* Make all subsequent cuda calls link to this device */
@@ -630,11 +634,22 @@ void ConstantPower::Go(std::string const &testName,
 
     if (!m_testParameters->GetBoolFromString(TP_STR_IS_ALLOWED))
     {
-        DcgmError d { DcgmError::GpuIdTag::Unknown };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, TP_PLUGIN_NAME);
-        AddInfo(testName, d.GetMessage());
-        SetResult(testName, NVVS_RESULT_SKIP);
-        return;
+        if (m_testParameters->GetBoolFromString(PS_USE_GENERIC_MODE) == false)
+        {
+            DcgmError d { DcgmError::GpuIdTag::Unknown };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEST_DISABLED, d, TP_PLUGIN_NAME);
+            AddInfo(testName, d.GetMessage());
+            SetResult(testName, NVVS_RESULT_SKIP);
+            return;
+        }
+        else
+        {
+            log_debug("Proceeding in generic mode.");
+            AddInfoVerbose(testName,
+                           "Running in generic mode: power threshold disabled; "
+                           "result reflects stability, not calibrated performance.");
+            m_testParameters->SetDouble(TP_STR_TARGET_POWER_MIN_RATIO, 0.0);
+        }
     }
 
     ParseIgnoreErrorCodesParam(testName, m_testParameters->GetString(PS_IGNORE_ERROR_CODES));
@@ -674,7 +689,7 @@ bool ConstantPower::CheckGpuPowerUsage(CPDevice *device,
     dcgmFieldSummaryRequest_t fsr;
 
     memset(&fsr, 0, sizeof(fsr));
-    fsr.fieldId         = DCGM_FI_DEV_POWER_USAGE;
+    fsr.fieldId         = DCGM_FI_DEV_BOARD_POWER_WATTS;
     fsr.entityGroupId   = DCGM_FE_GPU;
     fsr.entityId        = device->gpuId;
     fsr.summaryTypeMask = DCGM_SUMMARY_MAX | DCGM_SUMMARY_AVG;
@@ -781,7 +796,7 @@ bool ConstantPower::CheckPassFail(timelib64_t startTime, timelib64_t earliestSto
         }
 
         errorList.clear();
-        passed = CheckPassFailSingleGpu(m_device[i], errorList, startTime, earliestStopTime);
+        passed = CheckPassFailSingleGpu(m_device[i].get(), errorList, startTime, earliestStopTime);
         CheckAndSetResult(
             this, GetTargetedPowerTestName(), gpuList, i, passed, errorList, allPassed, m_dcgmCommErrorOccurred);
         if (m_dcgmCommErrorOccurred)
@@ -957,7 +972,7 @@ bool ConstantPower::RunTest(dcgmDiagPluginEntityList_v1 const *entityInfo)
             if (m_device[i]->m_lowPowerLimit == false)
             {
                 workerThreads[i] = new ConstantPowerWorker(
-                    m_device[i], *this, m_testParameters.get(), m_dcgmRecorder, failEarly, failCheckInterval);
+                    m_device[i].get(), *this, m_testParameters.get(), m_dcgmRecorder, failEarly, failCheckInterval);
                 workerThreads[i]->Start();
                 Nrunning++;
                 auto const tid = workerThreads[i]->GetCachedTid();
@@ -1120,14 +1135,14 @@ double ConstantPowerWorker::ReadPower()
     dcgmFieldValue_v2 powerUsage;
 
     // First try cached data to allow injected test values to be detected
-    st = m_dcgmRecorder.GetCurrentFieldValue(m_device->gpuId, DCGM_FI_DEV_POWER_USAGE, powerUsage, 0);
+    st = m_dcgmRecorder.GetCurrentFieldValue(m_device->gpuId, DCGM_FI_DEV_BOARD_POWER_WATTS, powerUsage, 0);
 
     // If cached data is not available or not supported, try live data
     if (st == DCGM_ST_NO_DATA || st == DCGM_ST_NOT_WATCHED || powerUsage.status == DCGM_ST_NO_DATA
         || powerUsage.status == DCGM_ST_NOT_WATCHED)
     {
         st = m_dcgmRecorder.GetCurrentFieldValue(
-            m_device->gpuId, DCGM_FI_DEV_POWER_USAGE, powerUsage, DCGM_FV_FLAG_LIVE_DATA);
+            m_device->gpuId, DCGM_FI_DEV_BOARD_POWER_WATTS, powerUsage, DCGM_FV_FLAG_LIVE_DATA);
     }
     if (st)
     {

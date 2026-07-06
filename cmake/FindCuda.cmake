@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-set(_Cuda_VERSIONS 11.8 12.9 13.0)
+set(_Cuda_VERSIONS 11.8 12.9 13.2)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     set(_Cuda_TARGET_DIR "targets/x86_64-linux")

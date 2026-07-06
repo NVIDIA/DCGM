@@ -301,11 +301,12 @@ class TestData:
         def convertToDatetime(timeStr):
             try:
                 return datetime.datetime.strptime(timeStr, "%H:%M:%S.%f")
-            except:
+            except BaseException:
                 return datetime.datetime.strptime(timeStr, "%H:%M:%S")
 
         def maxTimeOfRun(tData):
-            return max(convertToDatetime(run["timeOfRun"]) for run in tData["runData"])
+            return max(convertToDatetime(run["timeOfRun"])
+                       for run in tData["runData"])
 
         # logic
         data = self.dataMapFinal["testSuite"]
@@ -313,8 +314,11 @@ class TestData:
 
         # sorting tests within each module based on timeofrun
         for module in data:
-            sortedTestKeys = sorted(data[module].keys(), key=lambda x: maxTimeOfRun(
-                data[module][x]), reverse=True)
+            sortedTestKeys = sorted(
+                data[module].keys(),
+                key=lambda x: maxTimeOfRun(
+                    data[module][x]),
+                reverse=True)
             mapOfSortedTests[module] = {t: data[module][t]
                                         for t in sortedTestKeys}
 

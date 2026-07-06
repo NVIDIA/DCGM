@@ -51,16 +51,16 @@ ParameterValidator InitializeParameterValidator()
 SCENARIO("Basic Checks")
 {
     ParameterValidator pv = InitializeParameterValidator();
-    REQUIRE(pv.IsValidTest("sm stress"));
-    REQUIRE(pv.IsValidTest("sm_stress")); // make sure space or underscore is irrelevant
-    REQUIRE(pv.IsValidTest("diagnostic"));
-    REQUIRE(pv.IsValidTest("Diagnostic")); // make sure capitalization is ignored
-    REQUIRE(pv.IsValidTest("targeted power"));
-    REQUIRE(pv.IsValidTest("targeted stress"));
-    REQUIRE(pv.IsValidTest("pcie"));
-    REQUIRE(pv.IsValidTest("MEMORY"));
-    REQUIRE(!pv.IsValidTest("zemory"));
-    REQUIRE(!pv.IsValidTest("bob"));
+    REQUIRE(pv.IsValidTestName("sm stress"));
+    REQUIRE(pv.IsValidTestName("sm_stress")); // make sure space or underscore is irrelevant
+    REQUIRE(pv.IsValidTestName("diagnostic"));
+    REQUIRE(pv.IsValidTestName("Diagnostic")); // make sure capitalization is ignored
+    REQUIRE(pv.IsValidTestName("targeted power"));
+    REQUIRE(pv.IsValidTestName("targeted stress"));
+    REQUIRE(pv.IsValidTestName("pcie"));
+    REQUIRE(pv.IsValidTestName("MEMORY"));
+    REQUIRE(!pv.IsValidTestName("zemory"));
+    REQUIRE(!pv.IsValidTestName("bob"));
 
     REQUIRE(pv.IsValidParameter("sm_stress", "test_duration"));
     REQUIRE(!pv.IsValidParameter("sm_stress", "test duration")); // underscores matter for parameter names
@@ -72,4 +72,57 @@ SCENARIO("Basic Checks")
     REQUIRE(pv.IsValidParameter("dIaGNostiC", "is_allowed"));
     REQUIRE(!pv.IsValidParameter("diagnostic", "roshar"));
     REQUIRE(!pv.IsValidParameter("diagnostic", "brandosando"));
+}
+
+TEST_CASE("ParameterValidator helper behavior")
+{
+    SECTION("TransformTestName lowercases and replaces spaces")
+    {
+        CHECK(ParameterValidator::TransformTestName("SM Stress") == "sm_stress");
+        CHECK(ParameterValidator::TransformTestName("Targeted Power") == "targeted_power");
+    }
+
+    SECTION("default validator has no valid tests")
+    {
+        ParameterValidator pv;
+
+        CHECK_FALSE(pv.IsValidTestName("diagnostic"));
+        CHECK_FALSE(pv.IsValidParameter("diagnostic", "is_allowed"));
+        CHECK_FALSE(pv.IsValidSubtest("diagnostic", "is_allowed"));
+        CHECK_FALSE(pv.IsValidSubtestParameter("diagnostic", "subtest", "is_allowed"));
+    }
+}
+
+TEST_CASE("ParameterValidator validates subtest aliases through parameters")
+{
+    ParameterValidator pv = InitializeParameterValidator();
+
+    GIVEN("parameters are used for subtest validation")
+    {
+        THEN("subtest and subtest-parameter checks follow parameter membership")
+        {
+            CHECK(pv.IsValidSubtest("pcie", "test_pinned"));
+            CHECK_FALSE(pv.IsValidSubtest("pcie", "missing"));
+            CHECK(pv.IsValidSubtestParameter("pcie", "ignored", "test_pinned"));
+            CHECK_FALSE(pv.IsValidSubtestParameter("pcie", "ignored", "missing"));
+            CHECK_FALSE(pv.IsValidSubtestParameter("missing", "ignored", "test_pinned"));
+        }
+    }
+}
+
+TEST_CASE("TestInfo clears name, parameters, and subtests")
+{
+    TestInfo info;
+    info.SetName("diagnostic");
+    info.AddParameter("is_allowed");
+    info.m_subtests["subtest"].testname = "subtest";
+
+    REQUIRE(info.HasParameter("is_allowed"));
+    REQUIRE(info.HasSubtest("is_allowed"));
+
+    info.Clear();
+
+    CHECK(info.m_info.testname.empty());
+    CHECK(info.m_info.parameters.empty());
+    CHECK(info.m_subtests.empty());
 }

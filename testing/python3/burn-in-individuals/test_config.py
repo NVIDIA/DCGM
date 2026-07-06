@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-sys.path.insert(0, '..')
-import dcgm_agent
-import dcgm_agent_internal
-import dcgm_structs
-import dcgm_fields
-import dcgmvalue
-import dcgm_structs_internal
 from ctypes import *
 import time
+
+sys.path.insert(0, '..')
+import dcgm_agent  # noqa: E402
+import dcgm_agent_internal  # noqa: E402
+import dcgm_structs  # noqa: E402
+import dcgm_fields  # noqa: E402
+import dcgmvalue  # noqa: E402
+import dcgm_structs_internal  # noqa: E402
 
 
 def helper_get_status_list(statusHandle):
@@ -31,16 +32,23 @@ def helper_get_status_list(statusHandle):
 
     errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
-    while (errorInfo != None):
+    while (errorInfo is not None):
         errorList.append(errorInfo)
         errorInfo = dcgm_agent.dcgmStatusPopError(statusHandle)
 
     return errorList
 
 
-def helper_verify_config_values_standalone(handle, groupId, expected_power, expected_ecc,
-                                           expected_proc_clock, expected_mem_clock, expected_compute_mode,
-                                           expected_sync_boost, expected_auto_boost):
+def helper_verify_config_values_standalone(
+        handle,
+        groupId,
+        expected_power,
+        expected_ecc,
+        expected_proc_clock,
+        expected_mem_clock,
+        expected_compute_mode,
+        expected_sync_boost,
+        expected_auto_boost):
     """
     Helper Method to verify all the values for the current configuration are as expected
     """
@@ -50,7 +58,11 @@ def helper_verify_config_values_standalone(handle, groupId, expected_power, expe
     status_handle = dcgm_agent.dcgmStatusCreate()
 
     config_values = dcgm_agent.dcgmConfigGet(
-        handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, status_handle)
+        handle,
+        groupId,
+        dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+        groupInfo.count,
+        status_handle)
     assert len(
         config_values) > 0, "Failed to get configuration using dcgmConfigGet"
 
@@ -98,7 +110,7 @@ devices = dcgm_agent.dcgmGetAllDevices(handle)
 validDevices = list()
 for x in devices:
     fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(
-        handle, x, [dcgm_fields.DCGM_FI_DEV_RETIRED_DBE, ])
+        handle, x, [dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL, ])
     if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
         validDevices.append(x)
 
@@ -135,7 +147,7 @@ for attribute in attributesForDevices:
 
 powerLimit_set = dcgmvalue.DCGM_INT32_BLANK
 fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(
-    handle, x, [dcgm_fields.DCGM_FI_DEV_POWER_MGMT_LIMIT, ])
+    handle, x, [dcgm_fields.DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS, ])
 if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
     powerLimit_set = (attributesForDevices[0].powerLimits.maxPowerLimit +
                       attributesForDevices[0].powerLimits.minPowerLimit) / 2
@@ -143,7 +155,7 @@ if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
 
 autoBoost_set = dcgmvalue.DCGM_INT32_BLANK
 fvSupported = dcgm_agent_internal.dcgmGetLatestValuesForFields(
-    handle, x, [dcgm_fields.DCGM_FI_DEV_AUTOBOOST, ])
+    handle, x, [dcgm_fields.DCGM_FI_DEV_CLOCKS_AUTOBOOST_MODE, ])
 if (fvSupported[0].value.i64 != dcgmvalue.DCGM_INT64_NOT_SUPPORTED):
     autoBoost_set = 1
     print("configure autobost")
@@ -159,7 +171,11 @@ ecc_set = 1
 groupInfo = dcgm_agent.dcgmGroupGetInfo(
     handle, groupId, dcgm_structs.c_dcgmGroupInfo_version3)
 config_values = dcgm_agent.dcgmConfigGet(
-    handle, groupId, dcgm_structs.DCGM_CONFIG_CURRENT_STATE, groupInfo.count, 0)
+    handle,
+    groupId,
+    dcgm_structs.DCGM_CONFIG_CURRENT_STATE,
+    groupInfo.count,
+    0)
 assert len(config_values) > 0, "Failed to work with NULL status handle"
 eccmodeOnGroupExisting = config_values[0].mEccMode
 
@@ -194,13 +210,21 @@ ecc_to_verify = ecc_set
 if len(errors) > 0:
     # Possible that reset failed. Check the error codes
     for error in errors:
-        if error.fieldId == dcgm_fields.DCGM_FI_DEV_ECC_CURRENT:
+        if error.fieldId == dcgm_fields.DCGM_FI_DEV_ECC_MODE:
             ecc_to_verify = eccmodeOnGroupExisting
 
 # assert(ret == dcgm_structs.DCGM_ST_OK), "Failed to set configuration for the group: %s" % ret
 dcgm_agent.dcgmStatusClear(statusHandle)
-helper_verify_config_values_standalone(handle, groupId, powerLimit_set, ecc_to_verify,
-                                       proc_clk_set, mem_clk_set, compute_set, syncboost_set, autoBoost_set)
+helper_verify_config_values_standalone(
+    handle,
+    groupId,
+    powerLimit_set,
+    ecc_to_verify,
+    proc_clk_set,
+    mem_clk_set,
+    compute_set,
+    syncboost_set,
+    autoBoost_set)
 
 print("Verification Successful")
 

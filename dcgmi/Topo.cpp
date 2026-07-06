@@ -313,7 +313,7 @@ std::string Topo::HelperGetAffinity(unsigned long const *cpuAffinity)
 
 
 // **************************************************************************************************
-std::string Topo::HelperGetPciPath(dcgmGpuTopologyLevel_t &path)
+std::string Topo::HelperGetPciPath(dcgmGpuTopologyLevel_t path)
 {
     dcgmGpuTopologyLevel_t pciPath = DCGM_TOPOLOGY_PATH_PCI(path);
     switch (pciPath)
@@ -336,83 +336,90 @@ std::string Topo::HelperGetPciPath(dcgmGpuTopologyLevel_t &path)
 }
 
 // **************************************************************************************************
-std::string Topo::HelperGetNvLinkPath(dcgmGpuTopologyLevel_t &path, unsigned int linkMask)
+std::string Topo::HelperGetNvLinkPath(dcgmGpuTopologyLevel_t path, uint64_t linkMask)
 {
     std::stringstream pathSS;
-    unsigned int maxLinks = DCGM_NVLINK_MAX_LINKS_PER_GPU;
+    unsigned int maxLinks                     = DCGM_NVLINK_MAX_LINKS_PER_GPU;
+    static char const *const linkCountWords[] = {
+        "",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+        "twenty",
+        "twenty-one",
+        "twenty-two",
+        "twenty-three",
+        "twenty-four",
+        "twenty-five",
+        "twenty-six",
+        "twenty-seven",
+        "twenty-eight",
+        "twenty-nine",
+        "thirty",
+        "thirty-one",
+        "thirty-two",
+        "thirty-three",
+        "thirty-four",
+        "thirty-five",
+        "thirty-six",
+    };
 
     pathSS << "Connected via ";
 
     dcgmGpuTopologyLevel_t nvLinkPath = DCGM_TOPOLOGY_PATH_NVLINK(path);
-    switch (nvLinkPath)
+    uint64_t nvLinkPathBits           = static_cast<uint64_t>(nvLinkPath) >> 8;
+    unsigned int linkCount            = 0;
+    while (nvLinkPathBits != 0)
     {
-        case DCGM_TOPOLOGY_NVLINK1:
-            pathSS << "one NVLINK ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK2:
-            pathSS << "two NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK3:
-            pathSS << "three NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK4:
-            pathSS << "four NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK5:
-            pathSS << "five NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK6:
-            pathSS << "six NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK7:
-            pathSS << "seven NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK8:
-            pathSS << "eight NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK9:
-            pathSS << "nine NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK10:
-            pathSS << "ten NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK11:
-            pathSS << "eleven NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK12:
-            pathSS << "twelve NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK13:
-            pathSS << "thirteen NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK14:
-            pathSS << "fourteen NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK15:
-            pathSS << "fifteen NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK16:
-            pathSS << "sixteen NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK17:
-            pathSS << "seventeen NVLINKs ";
-            break;
-        case DCGM_TOPOLOGY_NVLINK18:
-            pathSS << "eighteen NVLINKs ";
-            break;
-        default:
-            return "Unknown";
+        linkCount++;
+        nvLinkPathBits >>= 1;
     }
 
-    if (nvLinkPath == DCGM_TOPOLOGY_NVLINK1)
+    if (linkCount == 0)
+    {
+        return "Unknown";
+    }
+
+    if (linkCount < (sizeof(linkCountWords) / sizeof(linkCountWords[0])))
+    {
+        pathSS << linkCountWords[linkCount];
+    }
+    else
+    {
+        pathSS << linkCount;
+    }
+    pathSS << " NVLINK";
+    if (linkCount != 1)
+    {
+        pathSS << "s";
+    }
+    pathSS << " ";
+
+    if (linkCount == 1)
         pathSS << "(Link: ";
     else
         pathSS << "(Links: ";
 
     bool startedLinkList = false;
-    for (unsigned int i = 0; i < maxLinks; i++)
+    for (unsigned int i = 0; i < maxLinks && i < sizeof(linkMask) * 8; i++)
     {
-        unsigned int mask = 1 << i;
+        uint64_t mask = 1ULL << i;
 
         if (mask & linkMask)
         {

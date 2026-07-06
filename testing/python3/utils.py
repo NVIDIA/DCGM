@@ -51,8 +51,12 @@ def cache():
 
     """
 
-    def decorating_function(user_function,
-                            tuple=tuple, sorted=sorted, len=len, KeyError=KeyError):
+    def decorating_function(
+            user_function,
+            tuple=tuple,
+            sorted=sorted,
+            len=len,
+            KeyError=KeyError):
 
         cache = dict()
         hits_misses = [0, 0]
@@ -88,7 +92,7 @@ def cache():
     return decorating_function
 
 
-# ----- Example ----------------------------------------------------------------
+# ----- Example ----------------------------------------------------------
 
 if __name__ == '__main__':
 
@@ -105,8 +109,8 @@ if __name__ == '__main__':
     print(results)
     print((fib.cache_info()))
 
-    expected_output = '''[1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 
-         233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657, 
+    expected_output = '''[1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144,
+         233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946, 17711, 28657,
          46368, 75025, 121393, 196418, 317811, 514229, 832040]
          CacheInfo(hits=56, misses=30, maxsize=None, currsize=30)
     '''
@@ -135,7 +139,8 @@ def is_real_user_root():
     if is_linux():
         return os.getuid() == 0
     else:
-        # Windows can't change user so implementation is the same as in is_root()
+        # Windows can't change user so implementation is the same as in
+        # is_root()
         return ctypes.windll.shell32.IsUserAnAdmin()
 
 
@@ -158,7 +163,13 @@ def get_name_by_uid(uid):
 script_dir = os.path.realpath(sys.path[0])
 
 
-def find_files(path=script_dir, mask="*", skipdirs=None, recurse=True, test_file_name="", skip_file_name=""):
+def find_files(
+        path=script_dir,
+        mask="*",
+        skipdirs=None,
+        recurse=True,
+        test_file_name="",
+        skip_file_name=""):
     skipdirs = skipdirs or []
     # Recurse subdirectories?
     if recurse:
@@ -305,7 +316,8 @@ def is_system_64bit():
     return platform.machine() in ["x86_64", "AMD64"]
 
 
-# 32-bit Python on 64-bit Windows reports incorrect architecture, therefore not using platform.architecture() directly
+# 32-bit Python on 64-bit Windows reports incorrect architecture,
+# therefore not using platform.architecture() directly
 platform_identifier = current_os + "_" + ("64bit" if is_64bit() else "32bit")
 if platform.machine() == "aarch64":
     platform_identifier = "Linux_aarch64"
@@ -386,22 +398,25 @@ def format_dev_sub_dev_id(pciIdPair):
     return "(0x%08X, 0x%08X)" % pciIdPair
 
 
-# permission of:      other                         owner                         group
+# permission of:      other                         owner
+# group
 stat_everyone_read_write = stat.S_IROTH | stat.S_IWOTH | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP
 
-# Exit if the current (effective) user can't create a file in the base test directory
+# Exit if the current (effective) user can't create a file in the base
+# test directory
 
 
 def verify_file_permissions(user):
 
-    # Not a complete check, but enough to verify absolute path permission issues
+    # Not a complete check, but enough to verify absolute path permission
+    # issues
     try:
         filename = os.path.join(os.path.realpath(script_dir), "test.txt")
         f = open(filename, "w")
         f.write("Permission test")
         f.close()
         os.remove(filename)
-    except:
+    except BaseException:
         print("Please run the test framework under a less restrictive directory, with RW access to the full path.")
         print("The user '%s' doesn't have sufficient permissions here." % user)
         sys.exit(1)
@@ -433,7 +448,7 @@ def verify_user_file_permissions():
 def verify_localhost_dns():
     try:
         host_ip = socket.gethostbyname("localhost")
-    except:
+    except BaseException:
         print("Unable to resolve localhost")
         sys.exit(1)
     if host_ip != "127.0.0.1":
@@ -477,7 +492,7 @@ def shorten_path(path, shorten_to_levels=2):
 
 def create_dir(path):
     '''
-    Create the full directory structure specified by path.  If the directory cannot be created 
+    Create the full directory structure specified by path.  If the directory cannot be created
     due to permission issues or because part of the path already exists and is not a directory
     then an OSError is raised.
     '''
@@ -520,7 +535,7 @@ def verify_nvidia_fabricmanager_service_active_if_needed():
         cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, _ = p.communicate()
     out = out_buf.decode('utf-8')
-    if not "nvswitch" in out.rstrip():
+    if "nvswitch" not in out.rstrip():
         return
 
     # Fabricmanager must be running if there are nvswitch devices.
@@ -529,7 +544,7 @@ def verify_nvidia_fabricmanager_service_active_if_needed():
         cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out_buf, _ = p.communicate()
     out = out_buf.decode('utf-8')
-    if not "running" in out.rstrip():
+    if "running" not in out.rstrip():
         logException(
             "Tests cannot run because the Nvidia Fabricmanager service is not active on systems with nvswitches")
 
@@ -556,13 +571,15 @@ def checkDmesgForProblems():
     ignore_problems = option_parser.options.ignore_dmesg_checks
 
     # Lines matching these patterns only emit warnings.
-    # If a pattern is a refinement of an 'abort_on_...' pattern, it will prevent the abort.
+    # If a pattern is a refinement of an 'abort_on_...' pattern, it will
+    # prevent the abort.
     warn_on_these = [
         r'NVRM: nvAssertFailed: Assertion failed: 0 @ g_kernel_gsp_nvoc.h',
         r'NVRM: .*Possible bad register read',
     ]
 
-    # Lines matching these patterns only abort when --dvssc-testing is set (unless ignored).
+    # Lines matching these patterns only abort when --dvssc-testing is set
+    # (unless ignored).
     abort_on_these_if_dvssc = [
         r'NVRM: A GPU crash dump has been created',
         r'NVRM: .*GPU recovery action changed.*Reboot Required',
@@ -579,7 +596,8 @@ def checkDmesgForProblems():
             logger.info(
                 "Maximum problems displayed. Further potential problems may be present and not displayed here.")
 
-    # Read up to `history_len` lines from dmesg. This could use a time-based search or starting with the most recent driver load.
+    # Read up to `history_len` lines from dmesg. This could use a time-based
+    # search or starting with the most recent driver load.
     history_len = 25000
     cmd = f"/usr/bin/dmesg | /usr/bin/tail -{int(history_len)}"
     p = subprocess.Popen(
@@ -600,7 +618,8 @@ def checkDmesgForProblems():
             '|'.join(warn_on_these + abort_on_these_if_dvssc))
         abort_pattern = re.compile('|'.join(abort_on_these))
 
-    # Don't spam output on a messy system. Print the first few messages, then stop. Abort still means abort.
+    # Don't spam output on a messy system. Print the first few messages, then
+    # stop. Abort still means abort.
     display_limit = 5
 
     for line in out_buf.decode('utf-8').split('\n'):
@@ -610,22 +629,29 @@ def checkDmesgForProblems():
                 if ignore_problems:
                     if display_limit > 0:
                         logger.warning(
-                            f'Potential problem found in dmesg: "{abort_match.string}". ({ignore_reason}).')
+                            f'Potential problem found in dmesg: '
+                            f'"{abort_match.string}". '
+                            f'({ignore_reason}).')
                         display_limit -= 1
                         check_display_limit()
                 else:
-                    logException(f'Tests cannot run because dmesg contains this problem: \'{abort_match.string}\'. '
-                                 'Resolve the problem before proceeding.')
+                    logException(
+                        f'Tests cannot run because dmesg contains this '
+                        f'problem: \'{abort_match.string}\'. '
+                        f'Resolve the problem before proceeding.')
             elif display_limit > 0:
                 logger.warning(
-                    f'Potential problem found in dmesg: "{abort_match.string}". (Ignored as it is believed to be non-fatal).')
+                    f'Potential problem found in dmesg: '
+                    f'"{abort_match.string}". '
+                    f'(Ignored as it is believed to be non-fatal).')
                 display_limit -= 1
                 check_display_limit()
         else:
             warn_match = warn_pattern.search(line)
             if warn_match and display_limit > 0:
                 logger.warning(
-                    f'Potential problem found in dmesg: "{warn_match.string}".')
+                    f'Potential problem found in dmesg: '
+                    f'"{warn_match.string}".')
                 display_limit -= 1
                 check_display_limit()
 
@@ -660,7 +686,7 @@ def checkSystemLoad():
         nproc = os.cpu_count()
         warnAt = 0.85 * nproc
         failAt = 1.0 * nproc
-    except:
+    except BaseException:
         logger.warning(
             "Unable to get system cpu count, host CPU load not checked")
         return
@@ -742,20 +768,26 @@ def checkMemoryPressure():
 
     memUsed = (memTotal - memAvail) / memTotal
     if memUsed > failAtMem:
-        msg = f"Tests cannot run because memory available memory is {round(memUsed * 100.0), 1}%."
+        msg = (
+            f"Tests cannot run because memory available memory is "
+            f"{round(memUsed * 100.0, 1)}%.")
         if option_parser.options.ignore_mem_checks:
             logger.warning(
                 f'{msg} Resolve memory pressure and retry before filing a bug report. (Ignored by user request).')
         else:
             logException(f'{msg} Resolve memory pressure before proceeding.')
     if memUsed > warnAtMem:
-        logger.Warning(f'Available memory is {round(memUsed * 100.0, 1)}%. Resolve memory pressure and '
-                       'retry before filing a bug report.')
+        logger.Warning(
+            f'Available memory is {round(memUsed * 100.0, 1)}%. '
+            f'Resolve memory pressure and retry before filing a bug '
+            f'report.')
 
     if swapTotal > 0:
         swapUsed = (swapTotal - swapFree) / swapTotal
         if swapUsed > failAtSwap:
-            msg = f'Tests cannot run because available swap is {round(swapUsed * 100.0, 1)}%.'
+            msg = (
+                f'Tests cannot run because available swap is '
+                f'{round(swapUsed * 100.0, 1)}%.')
             if option_parser.options.ignore_mem_checks:
                 logger.warning(
                     f'{msg} Resolve memory pressure and retry before filing a bug report. (Ignored by user request).')
@@ -763,8 +795,10 @@ def checkMemoryPressure():
                 logException(
                     f'{msg} Resolve memory pressure before proceeding.')
         if swapUsed > warnAtSwap:
-            logger.Warning(f'Available swap is {round(swapUsed * 100.0, 1)}%. Resolve memory pressure and '
-                           'retry before filing a bug report.')
+            logger.warning(
+                f'Available swap is {round(swapUsed * 100.0, 1)}%. '
+                f'Resolve memory pressure and retry before filing a bug '
+                f'report.')
 
 
 def verifyEcosystem():

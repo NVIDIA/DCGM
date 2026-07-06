@@ -75,7 +75,7 @@ typedef enum testResult
     TEST_RESULT_COUNT,
 } testResult_t;
 
-static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
+nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
 {
     CUdeviceptr_v2 error_h = 0;
     size_t totalMem        = 0;
@@ -178,7 +178,7 @@ static nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_MEMORY_ALLOC, d, minAllocationFraction * 100, memGlobals->dcgmGpuIndex);
             memGlobals->memory->AddError(memGlobals->memory->GetMemoryTestName(), d);
             log_error(d.GetMessage());
-            goto error_no_cleanup;
+            return NVVS_RESULT_FAIL;
         }
         cuRes = cuMemAlloc_v2(&alloc, size);
     } while (CUDA_ERROR_OUT_OF_MEMORY == cuRes);
@@ -531,15 +531,14 @@ int main_entry(const dcgmDiagPluginEntityInfo_v1 &entityInfo, Memory *memory, Te
     // check if this card supports ECC and be good about skipping/warning etc.
     dcgmFieldValue_v2 eccCurrentVal = {};
     // First try cached data to allow injected test values to be detected
-    dcgmReturn_t ret
-        = memGlobals->m_dcgmRecorder->GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ECC_CURRENT, eccCurrentVal, 0);
+    dcgmReturn_t ret = memGlobals->m_dcgmRecorder->GetCurrentFieldValue(gpuId, DCGM_FI_DEV_ECC_MODE, eccCurrentVal, 0);
 
     // If cached data is not available or not supported, try live data
     if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED || eccCurrentVal.status == DCGM_ST_NO_DATA
         || eccCurrentVal.status == DCGM_ST_NOT_WATCHED)
     {
         ret = memGlobals->m_dcgmRecorder->GetCurrentFieldValue(
-            gpuId, DCGM_FI_DEV_ECC_CURRENT, eccCurrentVal, DCGM_FV_FLAG_LIVE_DATA);
+            gpuId, DCGM_FI_DEV_ECC_MODE, eccCurrentVal, DCGM_FV_FLAG_LIVE_DATA);
     }
     if (ret != DCGM_ST_OK)
     {

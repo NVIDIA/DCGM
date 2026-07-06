@@ -1,17 +1,19 @@
 {
-  "version": 3,
+  "$schema": "cmake/presets_schema.json",
+  "version": 10,
   "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 21,
+    "major": 4,
+    "minor": 0,
     "patch": 0
   },
+  "$comment": "DCGM CMakePresets.json",
   "configurePresets": [
     {
-      "name": "Debug",
-      "installDir": "_out/Linux-amd64-debug",
+      "hidden": true,
+      "name": "base",
+      "binaryDir": "_out/build/Linux-amd64-$penv{ARCHITECTURE}-${presetName}",
+      "installDir": "_out/Linux-amd64-$penv{ARCHITECTURE}-${presetName}",
       "generator": "Ninja",
-      "binaryDir": "_out/build/Linux-amd64-debug",
-      "description": "Debug",
       "vendor": {
         "jetbrains.com/clion": {
           "toolchain": "Default"
@@ -22,35 +24,324 @@
       }
     },
     {
-      "name": "Release",
-      "installDir": "_out/Linux-amd64-release",
-      "generator": "Ninja",
-      "binaryDir": "_out/build/Linux-amd64-release",
-      "description": "Release",
-      "vendor": {
-        "jetbrains.com/clion": {
-          "toolchain": "Default"
-        }
-      },
+      "name": "Debug",
+      "inherits": "base",
       "environment": {
-        "DCGM_SKIP_PYTHON_LINTING": "1"
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "RelWithDebInfo",
+      "inherits": "base",
+      "environment": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "Release",
+      "inherits": "base",
+      "environment": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "hidden": true,
+      "name": "Package",
+      "inherits": "RelWithDebInfo",
+      "cacheVariables": {
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "DEB",
+      "inherits": "Package",
+      "cacheVariables": {
+        "CMAKE_INSTALL_LIBDIR": "lib/$penv{TARGET}",
+        "CMAKE_INSTALL_SO_NO_EXE": "ON"
+      }
+    },
+    {
+      "name": "RPM",
+      "inherits": "Package",
+      "cacheVariables": {
+        "CMAKE_INSTALL_LIBDIR": "lib64",
+        "CMAKE_INSTALL_SO_NO_EXE": "OFF"
+      }
+    },
+    {
+      "name": "TGZ",
+      "inherits": "Package",
+      "cacheVariables": {
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "CMAKE_INSTALL_SO_NO_EXE": "OFF"
       }
     }
   ],
   "buildPresets": [
     {
       "name": "Debug",
+      "configurePreset": "Debug"
+    },
+    {
+      "name": "DebugInstall",
       "configurePreset": "Debug",
-      "jobs": 12,
-      "inheritConfigureEnvironment": true,
-      "configuration": "Debug"
+      "targets": ["install"]
+    },
+    {
+      "name": "RelWithDebInfo",
+      "configurePreset": "RelWithDebInfo"
+    },
+    {
+      "name": "RelWithDebInfoInstall",
+      "configurePreset": "RelWithDebInfo",
+      "targets": ["install"]
     },
     {
       "name": "Release",
+      "configurePreset": "Release"
+    },
+    {
+      "name": "ReleaseInstall",
       "configurePreset": "Release",
-      "jobs": 12,
-      "inheritConfigureEnvironment": true,
-      "configuration": "Release"
+      "targets": ["install"]
+    },
+    {
+      "name": "DEB",
+      "configurePreset": "DEB"
+    },
+    {
+      "name": "RPM",
+      "configurePreset": "RPM"
+    },
+    {
+      "name": "TGZ",
+      "configurePreset": "TGZ"
+    }
+  ],
+  "testPresets": [
+    {
+      "hidden": true,
+      "name": "base",
+      "output": {"outputOnFailure": true}
+    },
+    {
+      "name": "Debug",
+      "inherits": "base",
+      "configurePreset": "Debug"
+    },
+    {
+      "name": "RelWithDebInfo",
+      "inherits": "base",
+      "configurePreset": "RelWithDebInfo"
+    },
+    {
+      "name": "Release",
+      "inherits": "base",
+      "configurePreset": "Release"
+    }
+  ],
+  "packagePresets": [
+    {
+      "name": "DEB",
+      "configurePreset": "DEB",
+      "generators": [
+        "DEB"
+      ]
+    },
+    {
+      "name": "RPM",
+      "configurePreset": "RPM",
+      "generators": [
+        "RPM"
+      ]
+    },
+    {
+      "name": "TGZ",
+      "configurePreset": "TGZ",
+      "generators": [
+        "TGZ"
+      ]
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "Debug",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "Debug"
+        },
+        {
+          "type": "build",
+          "name": "Debug"
+        }
+      ]
+    },
+    {
+      "name": "DebugTest",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "Debug"
+        },
+        {
+          "type": "build",
+          "name": "Debug"
+        },
+        {
+          "type": "test",
+          "name": "Debug"
+        }
+      ]
+    },
+    {
+      "name": "DebugInstall",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "Debug"
+        },
+        {
+          "type": "build",
+          "name": "DebugInstall"
+        }
+      ]
+    },
+    {
+      "name": "RelWithDebInfo",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "RelWithDebInfo"
+        },
+        {
+          "type": "build",
+          "name": "RelWithDebInfo"
+        }
+      ]
+    },
+    {
+      "name": "RelWithDebInfoTest",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "RelWithDebInfo"
+        },
+        {
+          "type": "build",
+          "name": "RelWithDebInfo"
+        },
+        {
+          "type": "test",
+          "name": "RelWithDebInfo"
+        }
+      ]
+    },
+    {
+      "name": "RelWithDebInfoInstall",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "RelWithDebInfo"
+        },
+        {
+          "type": "build",
+          "name": "RelWithDebInfoInstall"
+        }
+      ]
+    },{
+      "name": "Release",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "Release"
+        },
+        {
+          "type": "build",
+          "name": "Release"
+        }
+      ]
+    },
+    {
+      "name": "ReleaseTest",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "Release"
+        },
+        {
+          "type": "build",
+          "name": "Release"
+        },
+        {
+          "type": "test",
+          "name": "Release"
+        }
+      ]
+    },
+    {
+      "name": "ReleaseInstall",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "Release"
+        },
+        {
+          "type": "build",
+          "name": "ReleaseInstall"
+        }
+      ]
+    },
+    {
+      "name": "PackageDEB",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "DEB"
+        },
+        {
+          "type": "build",
+          "name": "DEB"
+        },
+        {
+          "type": "package",
+          "name": "DEB"
+        }
+      ]
+    },
+    {
+      "name": "PackageRPM",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "RPM"
+        },
+        {
+          "type": "build",
+          "name": "RPM"
+        },
+        {
+          "type": "package",
+          "name": "RPM"
+        }
+      ]
+    },
+    {
+      "name": "PackageTGZ",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "TGZ"
+        },
+        {
+          "type": "build",
+          "name": "TGZ"
+        },
+        {
+          "type": "package",
+          "name": "TGZ"
+        }
+      ]
     }
   ]
 }

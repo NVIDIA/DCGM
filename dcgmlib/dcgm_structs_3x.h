@@ -30,7 +30,7 @@ extern "C" {
  */
 typedef struct
 {
-    unsigned int version; //!< Version of this request. Should be dcgmNvLinkStatus_version1
+    unsigned int version; //!< Version of this request. Should be dcgmNvLinkStatus_version
     unsigned int numGpus; //!< Number of entries in gpus[] that are populated
     dcgmNvLinkGpuLinkStatus_v3 gpus[DCGM_MAX_NUM_DEVICES]; //!< Per-GPU NvLink link statuses
     unsigned int numNvSwitches;                            //!< Number of entries in nvSwitches[] that are populated

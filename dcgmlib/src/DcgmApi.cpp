@@ -26,6 +26,7 @@
 #include "DcgmPolicyRequest.h"
 #include "DcgmSettings.h"
 #include "DcgmStatus.h"
+#include "DcgmTopology.hpp"
 #include "DcgmVersion.hpp"
 #include "dcgm_config_structs.h"
 #include "dcgm_diag_structs.h"
@@ -41,10 +42,11 @@
 
 #include <fmt/core.h>
 
-#include <bit>
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <iterator>
 #include <type_traits>
 #include <unistd.h>
 
@@ -133,6 +135,76 @@ static void dcgmGlobalsUnlock(void)
 {
     g_dcgmGlobalsMutex.unlock();
 }
+
+namespace
+{
+/**
+ * @brief Safely casts a constructor argument to the \c To type and back
+ *
+ * This class is meant to be used as a argument placeholder during a function call.
+ * This is an adopted version of std::bit_cast that is more relaxed and unsafe - it does not check that the size of the
+ * source and target types match.
+ * This class copies memory from the memory the constructors \a inputArgument points to into an internal storage of the
+ * type \c To.
+ * When the object is destroyed the memory of the internal storage is copied back to the original location the \a
+ * inputArguments points to.
+ * Object of this class can be implicitly casted to the reference of the To type (aka To&), so any changes made to the
+ * To& storage will be copied back to the original location \a inputArgument points to.
+ * @example
+ * @code{.cpp}
+ *      struct ParamV1 { int version; ... };
+ *      struct ParamV2 { int version; char name[255]; ... };
+ *      void APIFunc(ParamV1 *ptr) {
+ *          if (ptr->version == 1) Func(*ptr);
+ *          else if (ptr->version == 2) Func(SafeArgumentCast<ParamV2>{ptr});
+ *      }
+ *      void Func(ParamV1& v1) {...}
+ *      void Func(ParamV2& v2) {... memcpy(v2.name, "Hello", 6); }
+ *
+ *      void main() {
+ *          ParamV1 v1 {.version = 1 };
+ *          ParamV2 v2 {.version = 2; .name = {}};
+ *          APIFunc(&v1);
+ *          APIFunc((ParamV1*)&v2);
+ *          assert("Hello" == v2.name);
+ *      }
+ * @endcode
+ *
+ * @tparam To The target type of the versioned argument. The \c To type is required to be trivial.
+ */
+template <class To>
+    requires std::is_trivial_v<To>
+class SafeArgumentCast
+{
+public:
+    SafeArgumentCast(SafeArgumentCast const &)            = delete;
+    SafeArgumentCast(SafeArgumentCast &&)                 = delete;
+    SafeArgumentCast &operator=(SafeArgumentCast const &) = delete;
+    SafeArgumentCast &operator=(SafeArgumentCast &&)      = delete;
+
+    template <class From>
+    explicit SafeArgumentCast(From *inputArgument)
+        : m_target(inputArgument)
+    {
+        assert(inputArgument != nullptr);
+        memcpy(&m_storage, m_target, sizeof(To));
+    }
+
+    ~SafeArgumentCast()
+    {
+        memcpy(m_target, &m_storage, sizeof(To));
+    }
+
+    operator To &() // NOLINT(google-explicit-constructor)
+    {
+        return m_storage;
+    }
+
+private:
+    void *m_target;
+    To m_storage {};
+};
+} // namespace
 
 /*****************************************************************************
  *****************************************************************************/
@@ -310,6 +382,13 @@ dcgmReturn_t processModuleCommandAtEmbeddedHostEngine(dcgm_module_command_header
     {
         DCGM_LOG_ERROR << "DcgmHostEngineHandler::Instance() returned NULL";
         return DCGM_ST_UNINITIALIZED;
+    }
+
+    if (DcgmHostEngineHandler::IsCoreModuleSubcommandDenied(moduleCommand))
+    {
+        log_debug("Rejecting client module command: subCommand {} is not available via public interfaces",
+                  moduleCommand->subCommand);
+        return DCGM_ST_NOT_SUPPORTED;
     }
 
     if (request != nullptr)
@@ -619,28 +698,26 @@ dcgmReturn_t helperGroupGetInfo(dcgmHandle_t pDcgmHandle,
     return DCGM_ST_OK;
 }
 
-/*****************************************************************************
- * This method is a common helper to get value for multiple fields
+/**
+ * Common helper to retrieve the latest field values for multiple entities and fields.
  *
- * dcgmHandle       IN: Handle to the host engine
- * groupId          IN: Optional groupId that will be resolved by the host engine.
- *                      This is ignored if entityList is provided.
- * entityList       IN: List of entities to retrieve values for. This value takes
- *                      precedence over groupId
- * entityListCount  IN: How many entries are contained in entityList[]
- * fieldGroupId     IN: Optional fieldGroupId that will be resolved by the host engine.
- *                      This is ignored if fieldIdList[] is provided
- * fieldIdList      IN: List of field IDs to retrieve values for. This value takes
- *                      precedence over fieldGroupId
- * fieldIdListCount IN: How many entries are contained in fieldIdList
- * fvBuffer        OUT: Field value buffer to save values into
- * flags            IN: Mask of DCGM_GMLV_FLAG_? flags that modify this request
+ * Sends DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4 using dcgm_core_msg_entities_get_latest_values_v4.
  *
+ * @param[in]     dcgmHandle        Handle to the host engine.
+ * @param[in]     groupId           Optional group id resolved by the host engine; ignored when entityList is set.
+ * @param[in]     entityList        List of entities; takes precedence over groupId when non-null.
+ * @param[in]     entityListCount   Number of entries in entityList.
+ * @param[in]     fieldGroupId      Optional field group id resolved by the host engine; ignored when fieldIdList is
+ * set.
+ * @param[in]     fieldIdList       List of field ids; takes precedence over fieldGroupId when non-null.
+ * @param[in]     fieldIdListCount  Number of entries in fieldIdList.
+ * @param[out]    fvBuffer          Field-value buffer populated from the response blob.
+ * @param[in]     flags             Mask of DCGM_FV_FLAG_? flags that modify this request.
  *
- * @return DCGM_ST_OK on success
- *         Other DCGM_ST_? status code on error
+ * @return DCGM_ST_OK on success, or another DCGM_ST_* status code on error.
  *
- *****************************************************************************/
+ * @note Uses the v4 core message so the fixed host request buffer fits DCGM_PROTO_MAX_MESSAGE_SIZE.
+ */
 dcgmReturn_t helperGetLatestValuesForFields(dcgmHandle_t dcgmHandle,
                                             dcgmGpuGrp_t groupId,
                                             dcgmGroupEntityPair_t *entityList,
@@ -654,14 +731,12 @@ dcgmReturn_t helperGetLatestValuesForFields(dcgmHandle_t dcgmHandle,
     dcgmReturn_t ret;
 
     // Don't put a 4 MB object on the stack
-    std::unique_ptr<dcgm_core_msg_entities_get_latest_values_v3> msg
-        = std::make_unique<dcgm_core_msg_entities_get_latest_values_v3>();
+    auto msg = std::make_unique<dcgm_core_msg_entities_get_latest_values_v4>();
 
-    msg->header.length
-        = sizeof(*msg) - SAMPLES_BUFFER_SIZE_V2; /* avoid transferring the large buffer when making request */
+    msg->header.length     = sizeof(*msg) - sizeof(msg->ev.buffer);
     msg->header.moduleId   = DcgmModuleIdCore;
-    msg->header.subCommand = DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V3;
-    msg->header.version    = dcgm_core_msg_entities_get_latest_values_version3;
+    msg->header.subCommand = DCGM_CORE_SR_ENTITIES_GET_LATEST_VALUES_V4;
+    msg->header.version    = dcgm_core_msg_entities_get_latest_values_version4;
 
     if ((entityList && !entityListCount) || (fieldIdList && !fieldIdListCount) || !fvBuffer
         || entityListCount > DCGM_GROUP_MAX_ENTITIES_V2 || fieldIdListCount > DCGM_MAX_FIELD_IDS_PER_FIELD_GROUP)
@@ -833,30 +908,30 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
     }
 
 
-    fieldIds[count++] = DCGM_FI_DEV_SLOWDOWN_TEMP;
-    fieldIds[count++] = DCGM_FI_DEV_SHUTDOWN_TEMP;
-    fieldIds[count++] = DCGM_FI_DEV_ENFORCED_POWER_LIMIT;
-    fieldIds[count++] = DCGM_FI_DEV_POWER_MGMT_LIMIT;
-    fieldIds[count++] = DCGM_FI_DEV_POWER_MGMT_LIMIT_DEF;
-    fieldIds[count++] = DCGM_FI_DEV_POWER_MGMT_LIMIT_MAX;
-    fieldIds[count++] = DCGM_FI_DEV_POWER_MGMT_LIMIT_MIN;
-    fieldIds[count++] = DCGM_FI_DEV_SUPPORTED_CLOCKS;
-    fieldIds[count++] = DCGM_FI_DEV_UUID;
+    fieldIds[count++] = DCGM_FI_DEV_GPU_TEMP_SLOWDOWN_CELSIUS;
+    fieldIds[count++] = DCGM_FI_DEV_GPU_TEMP_SHUTDOWN_CELSIUS;
+    fieldIds[count++] = DCGM_FI_DEV_BOARD_POWER_LIMIT_ENFORCED_WATTS;
+    fieldIds[count++] = DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS;
+    fieldIds[count++] = DCGM_FI_DEV_BOARD_POWER_LIMIT_DEFAULT_WATTS;
+    fieldIds[count++] = DCGM_FI_DEV_BOARD_POWER_LIMIT_MAX_WATTS;
+    fieldIds[count++] = DCGM_FI_DEV_BOARD_POWER_LIMIT_MIN_WATTS;
+    fieldIds[count++] = DCGM_FI_DEV_CLOCKS_SUPPORTED;
+    fieldIds[count++] = DCGM_FI_DEV_GPU_UUID;
     fieldIds[count++] = DCGM_FI_DEV_VBIOS_VERSION;
-    fieldIds[count++] = DCGM_FI_DEV_INFOROM_IMAGE_VER;
-    fieldIds[count++] = DCGM_FI_DEV_BRAND;
-    fieldIds[count++] = DCGM_FI_DEV_NAME;
-    fieldIds[count++] = DCGM_FI_DEV_SERIAL;
-    fieldIds[count++] = DCGM_FI_DEV_PCI_BUSID;
+    fieldIds[count++] = DCGM_FI_DEV_INFOROM_IMAGE_VERSION;
+    fieldIds[count++] = DCGM_FI_DEV_GPU_BRAND;
+    fieldIds[count++] = DCGM_FI_DEV_GPU_NAME;
+    fieldIds[count++] = DCGM_FI_DEV_BOARD_SERIAL;
+    fieldIds[count++] = DCGM_FI_DEV_PCI_BUS_ID;
     fieldIds[count++] = DCGM_FI_DEV_PCI_COMBINED_ID;
     fieldIds[count++] = DCGM_FI_DEV_PCI_SUBSYS_ID;
     fieldIds[count++] = DCGM_FI_DEV_BAR1_TOTAL;
     fieldIds[count++] = DCGM_FI_DEV_FB_TOTAL;
     fieldIds[count++] = DCGM_FI_DEV_FB_USED;
     fieldIds[count++] = DCGM_FI_DEV_FB_FREE;
-    fieldIds[count++] = DCGM_FI_DRIVER_VERSION;
-    fieldIds[count++] = DCGM_FI_DEV_VIRTUAL_MODE;
-    fieldIds[count++] = DCGM_FI_DEV_PERSISTENCE_MODE;
+    fieldIds[count++] = DCGM_FI_SYSTEM_DRIVER_VERSION;
+    fieldIds[count++] = DCGM_FI_DEV_GPU_VIRTUAL_MODE;
+    fieldIds[count++] = DCGM_FI_DEV_GPU_PERSISTENCE_MODE;
     fieldIds[count++] = DCGM_FI_DEV_MIG_MODE;
     fieldIds[count++] = DCGM_FI_DEV_CC_MODE;
 
@@ -890,37 +965,37 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
     {
         switch (fv->fieldId)
         {
-            case DCGM_FI_DEV_SLOWDOWN_TEMP:
+            case DCGM_FI_DEV_GPU_TEMP_SLOWDOWN_CELSIUS:
                 pDcgmDeviceAttr->thermalSettings.slowdownTemp = (unsigned int)nvcmvalue_int64_to_int32(fv->value.i64);
                 break;
 
-            case DCGM_FI_DEV_SHUTDOWN_TEMP:
+            case DCGM_FI_DEV_GPU_TEMP_SHUTDOWN_CELSIUS:
                 pDcgmDeviceAttr->thermalSettings.shutdownTemp = (unsigned int)nvcmvalue_int64_to_int32(fv->value.i64);
                 break;
 
-            case DCGM_FI_DEV_POWER_MGMT_LIMIT:
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_REQUESTED_WATTS:
                 pDcgmDeviceAttr->powerLimits.curPowerLimit = (unsigned int)nvcmvalue_double_to_int32(fv->value.dbl);
                 break;
 
-            case DCGM_FI_DEV_ENFORCED_POWER_LIMIT:
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_ENFORCED_WATTS:
                 pDcgmDeviceAttr->powerLimits.enforcedPowerLimit
                     = (unsigned int)nvcmvalue_double_to_int32(fv->value.dbl);
                 break;
 
-            case DCGM_FI_DEV_POWER_MGMT_LIMIT_DEF:
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_DEFAULT_WATTS:
                 pDcgmDeviceAttr->powerLimits.defaultPowerLimit = (unsigned int)nvcmvalue_double_to_int32(fv->value.dbl);
 
                 break;
 
-            case DCGM_FI_DEV_POWER_MGMT_LIMIT_MAX:
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_MAX_WATTS:
                 pDcgmDeviceAttr->powerLimits.maxPowerLimit = (unsigned int)nvcmvalue_double_to_int32(fv->value.dbl);
                 break;
 
-            case DCGM_FI_DEV_POWER_MGMT_LIMIT_MIN:
+            case DCGM_FI_DEV_BOARD_POWER_LIMIT_MIN_WATTS:
                 pDcgmDeviceAttr->powerLimits.minPowerLimit = (unsigned int)nvcmvalue_double_to_int32(fv->value.dbl);
                 break;
 
-            case DCGM_FI_DEV_UUID:
+            case DCGM_FI_DEV_GPU_UUID:
             {
                 size_t length;
                 length = strlen(fv->value.str);
@@ -954,7 +1029,7 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 break;
             }
 
-            case DCGM_FI_DEV_INFOROM_IMAGE_VER:
+            case DCGM_FI_DEV_INFOROM_IMAGE_VERSION:
             {
                 size_t length;
                 length = strlen(fv->value.str);
@@ -971,7 +1046,7 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 break;
             }
 
-            case DCGM_FI_DEV_BRAND:
+            case DCGM_FI_DEV_GPU_BRAND:
             {
                 size_t length;
                 length = strlen(fv->value.str);
@@ -988,7 +1063,7 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 break;
             }
 
-            case DCGM_FI_DEV_NAME:
+            case DCGM_FI_DEV_GPU_NAME:
             {
                 size_t length;
                 length = strlen(fv->value.str);
@@ -1005,7 +1080,7 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 break;
             }
 
-            case DCGM_FI_DEV_SERIAL:
+            case DCGM_FI_DEV_BOARD_SERIAL:
             {
                 size_t length;
                 length = strlen(fv->value.str);
@@ -1022,7 +1097,7 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 break;
             }
 
-            case DCGM_FI_DEV_PCI_BUSID:
+            case DCGM_FI_DEV_PCI_BUS_ID:
             {
                 size_t length;
                 length = strlen(fv->value.str);
@@ -1039,14 +1114,14 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 break;
             }
 
-            case DCGM_FI_DEV_SUPPORTED_CLOCKS:
+            case DCGM_FI_DEV_CLOCKS_SUPPORTED:
             {
                 dcgmDeviceSupportedClockSets_t *supClocks = (dcgmDeviceSupportedClockSets_t *)fv->value.blob;
 
                 if (!supClocks)
                 {
                     memset(&pDcgmDeviceAttr->clockSets, 0, sizeof(pDcgmDeviceAttr->clockSets));
-                    log_error("Null field value for DCGM_FI_DEV_SUPPORTED_CLOCKS");
+                    log_error("Null field value for DCGM_FI_DEV_CLOCKS_SUPPORTED");
                 }
                 else if (supClocks->version != dcgmDeviceSupportedClockSets_version)
                 {
@@ -1061,7 +1136,7 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                                       + (supClocks->count * sizeof(supClocks->clockSet[0]));
                     if (payloadSize > (int)(fv->length - (sizeof(*fv) - sizeof(fv->value))))
                     {
-                        log_error("DCGM_FI_DEV_SUPPORTED_CLOCKS calculated size {} > possible size {}",
+                        log_error("DCGM_FI_DEV_CLOCKS_SUPPORTED calculated size {} > possible size {}",
                                   payloadSize,
                                   (int)(fv->length - (sizeof(*fv) - sizeof(fv->value))));
                         memset(&pDcgmDeviceAttr->clockSets, 0, sizeof(pDcgmDeviceAttr->clockSets));
@@ -1099,7 +1174,7 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 pDcgmDeviceAttr->memoryUsage.fbFree = fv->value.i64;
                 break;
 
-            case DCGM_FI_DRIVER_VERSION:
+            case DCGM_FI_SYSTEM_DRIVER_VERSION:
             {
                 size_t length;
                 length = strlen(fv->value.str);
@@ -1116,11 +1191,11 @@ dcgmReturn_t helperDeviceGetAttributes(dcgmHandle_t pDcgmHandle, int gpuId, dcgm
                 break;
             }
 
-            case DCGM_FI_DEV_VIRTUAL_MODE:
+            case DCGM_FI_DEV_GPU_VIRTUAL_MODE:
                 pDcgmDeviceAttr->identifiers.virtualizationMode = (unsigned int)nvcmvalue_int64_to_int32(fv->value.i64);
                 break;
 
-            case DCGM_FI_DEV_PERSISTENCE_MODE:
+            case DCGM_FI_DEV_GPU_PERSISTENCE_MODE:
                 pDcgmDeviceAttr->settings.persistenceModeEnabled = fv->value.i64;
                 break;
 
@@ -1154,7 +1229,7 @@ dcgmReturn_t helperWatchFieldValue(dcgmHandle_t pDcgmHandle,
         return DCGM_ST_BADPARAM;
 
     dcgm_field_meta_p fieldMeta = DcgmFieldGetById((unsigned short)fieldId);
-    if (NULL == fieldMeta || fieldMeta->fieldId == DCGM_FI_UNKNOWN)
+    if (NULL == fieldMeta || fieldMeta->fieldId == DCGM_FI_SYSTEM_FIELD_UNKNOWN)
     {
         DCGM_LOG_ERROR << "field ID " << fieldId << " is not a valid field ID";
         return DCGM_ST_BADPARAM;
@@ -1246,11 +1321,11 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
         return DCGM_ST_VER_MISMATCH;
     }
 
-    unsigned short fieldIds[] = { DCGM_FI_DEV_SUPPORTED_TYPE_INFO,
-                                  DCGM_FI_DEV_CREATABLE_VGPU_TYPE_IDS,
-                                  DCGM_FI_DEV_VGPU_INSTANCE_IDS,
-                                  DCGM_FI_DEV_VGPU_UTILIZATIONS,
-                                  DCGM_FI_DEV_GPU_UTIL,
+    unsigned short fieldIds[] = { DCGM_FI_DEV_VGPU_SUPPORTED_INFO,
+                                  DCGM_FI_DEV_VGPU_CREATABLE_IDS,
+                                  DCGM_FI_DEV_VGPU_INSTANCE_INFO,
+                                  DCGM_FI_DEV_VGPU_UTIL_INFO,
+                                  DCGM_FI_DEV_GPU_UTIL_RATIO,
                                   DCGM_FI_DEV_MEM_COPY_UTIL,
                                   DCGM_FI_DEV_ENC_UTIL,
                                   DCGM_FI_DEV_DEC_UTIL };
@@ -1314,7 +1389,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
     {
         switch (fv->fieldId)
         {
-            case DCGM_FI_DEV_SUPPORTED_TYPE_INFO:
+            case DCGM_FI_DEV_VGPU_SUPPORTED_INFO:
             {
                 dcgmDeviceVgpuTypeInfo_t *vgpuTypeInfo = (dcgmDeviceVgpuTypeInfo_t *)fv->value.blob;
 
@@ -1323,7 +1398,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                     memset(&pDcgmVgpuDeviceAttr->supportedVgpuTypeInfo,
                            0,
                            sizeof(pDcgmVgpuDeviceAttr->supportedVgpuTypeInfo));
-                    log_error("Null field value for DCGM_FI_DEV_SUPPORTED_VGPU_TYPE_IDS");
+                    log_error("Null field value for DCGM_FI_DEV_VGPU_SUPPORTED_INFO");
                     pDcgmVgpuDeviceAttr->supportedVgpuTypeCount = 0;
                     break;
                 }
@@ -1352,7 +1427,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                 break;
             }
 
-            case DCGM_FI_DEV_CREATABLE_VGPU_TYPE_IDS:
+            case DCGM_FI_DEV_VGPU_CREATABLE_IDS:
             {
                 unsigned int *temp = (unsigned int *)fv->value.blob;
 
@@ -1361,7 +1436,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                     memset(&pDcgmVgpuDeviceAttr->creatableVgpuTypeIds,
                            0,
                            sizeof(pDcgmVgpuDeviceAttr->creatableVgpuTypeIds));
-                    log_error("Null field value for DCGM_FI_DEV_CREATABLE_VGPU_TYPE_IDS");
+                    log_error("Null field value for DCGM_FI_DEV_VGPU_CREATABLE_IDS");
                     pDcgmVgpuDeviceAttr->creatableVgpuTypeCount = 0;
                     break;
                 }
@@ -1389,7 +1464,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                 break;
             }
 
-            case DCGM_FI_DEV_VGPU_INSTANCE_IDS:
+            case DCGM_FI_DEV_VGPU_INSTANCE_INFO:
             {
                 unsigned int *temp = (unsigned int *)fv->value.blob;
 
@@ -1398,7 +1473,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                     memset(&pDcgmVgpuDeviceAttr->activeVgpuInstanceIds,
                            0,
                            sizeof(pDcgmVgpuDeviceAttr->activeVgpuInstanceIds));
-                    log_error("Null field value for DCGM_FI_DEV_VGPU_INSTANCE_IDS");
+                    log_error("Null field value for DCGM_FI_DEV_VGPU_INSTANCE_INFO");
                     pDcgmVgpuDeviceAttr->activeVgpuInstanceCount = 0;
                     break;
                 }
@@ -1426,14 +1501,14 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                 break;
             }
 
-            case DCGM_FI_DEV_VGPU_UTILIZATIONS:
+            case DCGM_FI_DEV_VGPU_UTIL_INFO:
             {
                 dcgmDeviceVgpuUtilInfo_t *vgpuUtilInfo = (dcgmDeviceVgpuUtilInfo_t *)fv->value.blob;
 
                 if (!vgpuUtilInfo)
                 {
                     memset(&pDcgmVgpuDeviceAttr->vgpuUtilInfo, 0, sizeof(pDcgmVgpuDeviceAttr->vgpuUtilInfo));
-                    log_error("Null field value for DCGM_FI_DEV_VGPU_UTILIZATIONS");
+                    log_error("Null field value for DCGM_FI_DEV_VGPU_UTIL_INFO");
                     break;
                 }
 
@@ -1454,7 +1529,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                 break;
             }
 
-            case DCGM_FI_DEV_GPU_UTIL:
+            case DCGM_FI_DEV_GPU_UTIL_RATIO:
             {
                 pDcgmVgpuDeviceAttr->gpuUtil = fv->value.i64;
                 break;
@@ -1519,7 +1594,7 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
                                   DCGM_FI_DEV_VGPU_UUID,
                                   DCGM_FI_DEV_VGPU_DRIVER_VERSION,
                                   DCGM_FI_DEV_VGPU_MEMORY_USAGE,
-                                  DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE,
+                                  DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATUS,
                                   DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT };
     const unsigned int count  = sizeof(fieldIds) / sizeof(fieldIds[0]);
     DCGM_CASSERT(count <= 32, 0);
@@ -1615,7 +1690,7 @@ dcgmReturn_t helperVgpuInstanceGetAttributes(dcgmHandle_t pDcgmHandle,
                 pDcgmVgpuInstanceAttr->fbUsage = fv->value.i64;
                 break;
 
-            case DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE:
+            case DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATUS:
                 pDcgmVgpuInstanceAttr->licenseStatus = fv->value.i64;
                 break;
 
@@ -2045,17 +2120,22 @@ static dcgmReturn_t helperGetMultipleValuesForFieldFvBuffer(dcgmHandle_t pDcgmHa
 }
 
 /*****************************************************************************/
-static dcgmReturn_t helperGetMultipleValuesForFieldFV1s(dcgmHandle_t pDcgmHandle,
-                                                        dcgm_field_entity_group_t entityGroup,
-                                                        dcgm_field_eid_t entityId,
-                                                        unsigned int fieldId,
-                                                        int *count,
-                                                        long long startTs,
-                                                        long long endTs,
-                                                        dcgmOrder_t order,
-                                                        dcgmFieldValue_v1 values[])
+dcgmReturn_t helperGetMultipleValuesForFieldFV1s(dcgmHandle_t pDcgmHandle,
+                                                 dcgm_field_entity_group_t entityGroup,
+                                                 dcgm_field_eid_t entityId,
+                                                 unsigned int fieldId,
+                                                 int *count,
+                                                 long long startTs,
+                                                 long long endTs,
+                                                 dcgmOrder_t order,
+                                                 dcgmFieldValue_v1 values[])
 {
     int i;
+
+    if (!count || (*count) < 1 || !values)
+    {
+        return DCGM_ST_BADPARAM;
+    }
 
     memset(values, 0, sizeof(values[0]) * (*count));
 
@@ -2090,7 +2170,7 @@ dcgmReturn_t tsapiEngineUnwatchFieldValue(dcgmHandle_t pDcgmHandle, int gpuId, u
         return DCGM_ST_BADPARAM;
 
     dcgm_field_meta_p fieldMeta = DcgmFieldGetById((unsigned short)fieldId);
-    if (NULL == fieldMeta || fieldMeta->fieldId == DCGM_FI_UNKNOWN)
+    if (NULL == fieldMeta || fieldMeta->fieldId == DCGM_FI_SYSTEM_FIELD_UNKNOWN)
     {
         log_error("field ID {} is not a valid field ID", fieldId);
         return DCGM_ST_BADPARAM;
@@ -3206,6 +3286,12 @@ uid_t helperGetEffectiveUid()
 
 dcgmReturn_t helperRunMnDiag(dcgmHandle_t dcgmHandle, dcgmRunMnDiag_v1 const *drmnd, dcgmMnDiagResponse_v1 *response)
 {
+    if (!drmnd || !response)
+    {
+        log_error("drmnd {} or response {} was nullptr.", (void *)drmnd, (void *)response);
+        return DCGM_ST_BADPARAM;
+    }
+
     std::unique_ptr<dcgm_mndiag_msg_run_v1> msg = std::make_unique<dcgm_mndiag_msg_run_v1>();
     dcgmReturn_t dcgmReturn { DCGM_ST_OK };
 
@@ -3796,21 +3882,20 @@ dcgmReturn_t tsapiDeleteMigEntity(dcgmHandle_t dcgmHandle, dcgmDeleteMigEntity_t
     return dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
 }
 
-dcgmReturn_t tsapiGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v4 *linkStatus)
+template <typename MsgType, typename LinkStatusType>
+dcgmReturn_t helperGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle,
+                                       dcgmNvLinkStatus_v5 *linkStatus,
+                                       unsigned int messageVersion)
 {
-    if (!linkStatus)
-        return DCGM_ST_BADPARAM;
-
-    if (linkStatus->version != dcgmNvLinkStatus_version4)
-        return DCGM_ST_VER_MISMATCH;
-
-    dcgm_core_msg_get_nvlink_status_t msg = {};
+    MsgType msg = {};
+    SafeArgumentCast<LinkStatusType> versionedLinkStatusCast { linkStatus };
+    LinkStatusType &versionedLinkStatus = versionedLinkStatusCast;
 
     msg.header.length     = sizeof(msg);
     msg.header.moduleId   = DcgmModuleIdCore;
     msg.header.subCommand = DCGM_CORE_SR_GET_NVLINK_STATUS;
-    msg.header.version    = dcgm_core_msg_get_nvlink_status_version;
-    memcpy(&msg.info.ls, linkStatus, sizeof(msg.info.ls));
+    msg.header.version    = messageVersion;
+    memcpy(&msg.info.ls, &versionedLinkStatus, sizeof(msg.info.ls));
 
     // coverity[overrun-buffer-arg]
     dcgmReturn_t ret = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
@@ -3824,16 +3909,38 @@ dcgmReturn_t tsapiGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_
     /* Check the status of the DCGM command */
     if (msg.info.cmdRet != DCGM_ST_OK)
     {
-        DCGM_LOG_ERROR << "Return code " << ret;
+        DCGM_LOG_ERROR << "Return code " << msg.info.cmdRet;
         return (dcgmReturn_t)msg.info.cmdRet;
     }
 
-    memcpy(linkStatus, &msg.info.ls, sizeof(msg.info.ls));
+    memcpy(&versionedLinkStatus, &msg.info.ls, sizeof(msg.info.ls));
 
-    DCGM_LOG_DEBUG << "Got " << linkStatus->numGpus << " GPUs and " << linkStatus->numNvSwitches
+    DCGM_LOG_DEBUG << "Got " << versionedLinkStatus.numGpus << " GPUs and " << versionedLinkStatus.numNvSwitches
                    << " back. Return: " << msg.info.cmdRet;
 
     return (dcgmReturn_t)msg.info.cmdRet;
+}
+
+dcgmReturn_t tsapiGetNvLinkLinkStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkStatus_v5 *linkStatus)
+{
+    if (!linkStatus)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    switch (linkStatus->version)
+    {
+        case dcgmNvLinkStatus_version5:
+            return helperGetNvLinkLinkStatus<dcgm_core_msg_get_nvlink_status_v4, dcgmNvLinkStatus_v5>(
+                dcgmHandle, linkStatus, dcgm_core_msg_get_nvlink_status_version4);
+
+        case dcgmNvLinkStatus_version4:
+            return helperGetNvLinkLinkStatus<dcgm_core_msg_get_nvlink_status_v3, dcgmNvLinkStatus_v4>(
+                dcgmHandle, linkStatus, dcgm_core_msg_get_nvlink_status_version3);
+
+        default:
+            return DCGM_ST_VER_MISMATCH;
+    }
 }
 
 dcgmReturn_t tsapiGetNvLinkP2PStatus(dcgmHandle_t dcgmHandle, dcgmNvLinkP2PStatus_v1 *linkStatus)
@@ -3903,6 +4010,62 @@ dcgmReturn_t helperGetCpuHierarchySysmonMsg(dcgmHandle_t dcgmHandle, dcgm_sysmon
     return DCGM_ST_OK;
 }
 
+/**
+ * Populate a v1 CPU hierarchy structure from a sysmon CPU message while
+ * respecting the destination array bounds.
+ *
+ * @param[out] cpuHierarchy Destination hierarchy to populate.
+ * @param[in] sysmonMsg Source CPU hierarchy message from sysmon.
+ *
+ * @return DCGM_ST_OK after copying the available CPU entries.
+ */
+dcgmReturn_t helperFillCpuHierarchyV1(dcgmCpuHierarchy_v1 *cpuHierarchy, dcgm_sysmon_msg_get_cpus_t const &sysmonMsg)
+{
+    cpuHierarchy->numCpus = 0;
+
+    auto const count = std::min(sysmonMsg.cpuCount, static_cast<unsigned int>(std::size(cpuHierarchy->cpus)));
+    for (unsigned int node = 0; node < count; node++)
+    {
+        auto const &nodeObject = sysmonMsg.cpus[node];
+
+        cpuHierarchy->cpus[node].cpuId      = nodeObject.cpuId;
+        cpuHierarchy->cpus[node].ownedCores = nodeObject.ownedCores;
+        cpuHierarchy->numCpus++;
+    }
+
+    return DCGM_ST_OK;
+}
+
+/**
+ * Populate a v2 CPU hierarchy structure from a sysmon CPU message while
+ * respecting the destination array bounds.
+ *
+ * In addition to the v1 fields, this helper also copies the CPU serial number
+ * into each populated entry.
+ *
+ * @param[out] cpuHierarchy Destination hierarchy to populate.
+ * @param[in] sysmonMsg Source CPU hierarchy message from sysmon.
+ *
+ * @return DCGM_ST_OK after copying the available CPU entries.
+ */
+dcgmReturn_t helperFillCpuHierarchyV2(dcgmCpuHierarchy_v2 *cpuHierarchy, dcgm_sysmon_msg_get_cpus_t const &sysmonMsg)
+{
+    cpuHierarchy->numCpus = 0;
+
+    auto const count = std::min(sysmonMsg.cpuCount, static_cast<unsigned int>(std::size(cpuHierarchy->cpus)));
+    for (unsigned int node = 0; node < count; node++)
+    {
+        auto const &nodeObject = sysmonMsg.cpus[node];
+
+        cpuHierarchy->cpus[node].cpuId      = nodeObject.cpuId;
+        cpuHierarchy->cpus[node].ownedCores = nodeObject.ownedCores;
+        cpuHierarchy->numCpus++;
+        SafeCopyTo(cpuHierarchy->cpus[node].serial, (char *)nodeObject.serial);
+    }
+
+    return DCGM_ST_OK;
+}
+
 dcgmReturn_t tsapiGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *cpuHierarchy)
 {
     if (!cpuHierarchy)
@@ -3918,16 +4081,7 @@ dcgmReturn_t tsapiGetCpuHierarchy(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v1 *
         return dcgmReturn;
     }
 
-    for (unsigned int node = 0; node < sysmonMsg.cpuCount; node++)
-    {
-        const auto &nodeObject = sysmonMsg.cpus[node];
-
-        cpuHierarchy->cpus[node].cpuId      = nodeObject.cpuId;
-        cpuHierarchy->cpus[node].ownedCores = nodeObject.ownedCores;
-        cpuHierarchy->numCpus++;
-    }
-
-    return DCGM_ST_OK;
+    return helperFillCpuHierarchyV1(cpuHierarchy, sysmonMsg);
 }
 
 dcgmReturn_t tsapiGetCpuHierarchy_v2(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v2 *cpuHierarchy)
@@ -3949,17 +4103,7 @@ dcgmReturn_t tsapiGetCpuHierarchy_v2(dcgmHandle_t dcgmHandle, dcgmCpuHierarchy_v
         return dcgmReturn;
     }
 
-    for (unsigned int node = 0; node < sysmonMsg.cpuCount; node++)
-    {
-        const auto &nodeObject = sysmonMsg.cpus[node];
-
-        cpuHierarchy->cpus[node].cpuId      = nodeObject.cpuId;
-        cpuHierarchy->cpus[node].ownedCores = nodeObject.ownedCores;
-        cpuHierarchy->numCpus++;
-        SafeCopyTo(cpuHierarchy->cpus[node].serial, (char *)nodeObject.serial);
-    }
-
-    return DCGM_ST_OK;
+    return helperFillCpuHierarchyV2(cpuHierarchy, sysmonMsg);
 }
 
 static dcgmReturn_t tsapiEngineGetDeviceAttributes(dcgmHandle_t pDcgmHandle,
@@ -4413,7 +4557,8 @@ static dcgmReturn_t helperMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultino
         return DCGM_ST_BADPARAM;
     }
 
-    if (pRequest->version != dcgmMultinodeRequest_version1)
+    // Version incompatibility is not supported between the head node and the remote nodes
+    if (pRequest->version != dcgmMultinodeRequest_version2)
     {
         return DCGM_ST_VER_MISMATCH;
     }
@@ -4428,7 +4573,7 @@ static dcgmReturn_t helperMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultino
     dcgmReturn_t dcgmReturn { DCGM_ST_OK };
     std::unique_ptr<dcgm_mndiag_msg_resource_v1> resourceMsg;
     std::unique_ptr<dcgm_mndiag_msg_authorization_v1> authorizationMsg;
-    std::unique_ptr<dcgm_mndiag_msg_run_params_v1> runParamsMsg;
+    std::unique_ptr<dcgm_mndiag_msg_run_params_v2> runParamsMsg;
     std::unique_ptr<dcgm_mndiag_msg_node_info_v1> nodeInfoMsg;
 
     auto initResourceMsg = [&resourceMsg, &pRequest](unsigned int subCommand) {
@@ -4454,10 +4599,10 @@ static dcgmReturn_t helperMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultino
     };
 
     auto initRunParamsMsg = [&runParamsMsg, &pRequest](unsigned int subCommand) {
-        runParamsMsg = std::make_unique<dcgm_mndiag_msg_run_params_v1>();
+        runParamsMsg = std::make_unique<dcgm_mndiag_msg_run_params_v2>();
         memset(runParamsMsg.get(), 0, sizeof(*runParamsMsg));
         runParamsMsg->header.length     = sizeof(*runParamsMsg);
-        runParamsMsg->header.version    = dcgm_mndiag_msg_run_params_version1;
+        runParamsMsg->header.version    = dcgm_mndiag_msg_run_params_version2;
         runParamsMsg->header.moduleId   = DcgmModuleIdMnDiag;
         runParamsMsg->header.subCommand = subCommand;
         memcpy(&runParamsMsg->runParams, &pRequest->requestData.runParams, sizeof(pRequest->requestData.runParams));
@@ -4794,25 +4939,51 @@ static dcgmReturn_t tsapiEngineGetWorkloadPowerProfileInfo(dcgmHandle_t pDcgmHan
     return (dcgmReturn_t)msg.cmdRet;
 }
 
-static dcgmReturn_t tsapiEngineGetDeviceTopology(dcgmHandle_t pDcgmHandle,
-                                                 unsigned int gpuId,
-                                                 dcgmDeviceTopology_t *deviceTopology)
+static unsigned int NvLinkLinkMaskToLegacy(uint64_t linkMask)
+{
+    return static_cast<unsigned int>(linkMask & 0xFFFFFFFFULL);
+}
+
+static void FillDeviceTopologyPath(dcgmDeviceTopology_v2 *deviceTopology,
+                                   unsigned int topologyIndex,
+                                   unsigned int gpuId,
+                                   dcgmTopologyElement_v2 const &element,
+                                   bool useAtoBPath)
+{
+    deviceTopology->gpuPaths[topologyIndex].gpuId = gpuId;
+    deviceTopology->gpuPaths[topologyIndex].path  = element.path;
+    deviceTopology->gpuPaths[topologyIndex].localNvLinkIds
+        = useAtoBPath ? element.AtoBNvLinkIds : element.BtoANvLinkIds;
+}
+
+static void FillDeviceTopologyPath(dcgmDeviceTopology_v1 *deviceTopology,
+                                   unsigned int topologyIndex,
+                                   unsigned int gpuId,
+                                   dcgmTopologyElement_v2 const &element,
+                                   bool useAtoBPath)
+{
+    deviceTopology->gpuPaths[topologyIndex].gpuId = gpuId;
+    deviceTopology->gpuPaths[topologyIndex].path  = TopologyPathToLegacy(element.path);
+    deviceTopology->gpuPaths[topologyIndex].localNvLinkIds
+        = NvLinkLinkMaskToLegacy(useAtoBPath ? element.AtoBNvLinkIds : element.BtoANvLinkIds);
+}
+
+template <typename DeviceTopology>
+static dcgmReturn_t FillDeviceTopology(dcgmHandle_t pDcgmHandle,
+                                       unsigned int gpuId,
+                                       DeviceTopology *deviceTopology,
+                                       unsigned int version)
 {
     dcgmTopology_t groupTopology;
     dcgmAffinity_t groupAffinity;
     dcgmReturn_t ret = DCGM_ST_OK;
 
-    if (!deviceTopology)
-    {
-        DCGM_LOG_ERROR << "bad deviceTopology " << (void *)deviceTopology;
-        return DCGM_ST_BADPARAM;
-    }
-
     unsigned int numGpusInTopology = 0;
 
     memset(&groupTopology, 0, sizeof(groupTopology));
     memset(&groupAffinity, 0, sizeof(groupAffinity));
-    deviceTopology->version = dcgmDeviceTopology_version;
+    memset(deviceTopology, 0, sizeof(*deviceTopology));
+    deviceTopology->version = version;
 
     ret = helperGetTopologyPci(pDcgmHandle,
                                (dcgmGpuGrp_t)DCGM_GROUP_ALL_GPUS,
@@ -4833,16 +5004,16 @@ static dcgmReturn_t tsapiEngineGetDeviceTopology(dcgmHandle_t pDcgmHandle,
 
         if (gpuA == gpuId || gpuB == gpuId)
         {
-            deviceTopology->gpuPaths[numGpusInTopology].gpuId = (gpuA == gpuId) ? gpuB : gpuA;
-            deviceTopology->gpuPaths[numGpusInTopology].path  = groupTopology.element[index].path;
+            bool useAtoBPath = gpuA == gpuId;
             // the GPU topo info is store always lowGpuId connected to highGpuId
             // i.e. 0->1, 1->2, 1->4 ... never 3->1.
             // thus if gpuId == gpuA then we need to use the AtoBNvLinkIds entry as GPU A will always be a lower number
             // if gpuId == gpuB then use BtoANvLinkIds.
-            if (gpuA == gpuId)
-                deviceTopology->gpuPaths[numGpusInTopology].localNvLinkIds = groupTopology.element[index].AtoBNvLinkIds;
-            else
-                deviceTopology->gpuPaths[numGpusInTopology].localNvLinkIds = groupTopology.element[index].BtoANvLinkIds;
+            FillDeviceTopologyPath(deviceTopology,
+                                   numGpusInTopology,
+                                   useAtoBPath ? gpuB : gpuA,
+                                   groupTopology.element[index],
+                                   useAtoBPath);
             numGpusInTopology++;
         }
     }
@@ -4889,6 +5060,33 @@ static dcgmReturn_t tsapiEngineGetDeviceTopology(dcgmHandle_t pDcgmHandle,
     return ret;
 }
 
+static dcgmReturn_t tsapiEngineGetDeviceTopology(dcgmHandle_t pDcgmHandle,
+                                                 unsigned int gpuId,
+                                                 dcgmDeviceTopology_v2 *deviceTopology)
+{
+    if (!deviceTopology)
+    {
+        DCGM_LOG_ERROR << "bad deviceTopology " << (void *)deviceTopology;
+        return DCGM_ST_BADPARAM;
+    }
+
+    switch (deviceTopology->version)
+    {
+        case dcgmDeviceTopology_version2:
+            return FillDeviceTopology(pDcgmHandle, gpuId, deviceTopology, dcgmDeviceTopology_version2);
+
+        case dcgmDeviceTopology_version1:
+        {
+            SafeArgumentCast<dcgmDeviceTopology_v1> legacyDeviceTopology { deviceTopology };
+            dcgmDeviceTopology_v1 &versionedDeviceTopology = legacyDeviceTopology;
+            return FillDeviceTopology(pDcgmHandle, gpuId, &versionedDeviceTopology, dcgmDeviceTopology_version1);
+        }
+
+        default:
+            return DCGM_ST_VER_MISMATCH;
+    }
+}
+
 /*
  * Compare two topologies. Returns -1 if a is better than b. 0 if same. 1 if b is better than a.
  * This is meant to be used in a qsort() callback, resulting in the elements being sorted in descending order of P2P
@@ -4898,11 +5096,11 @@ static int dcgmGpuTopologyLevelCmpCB(dcgmGpuTopologyLevel_t a, dcgmGpuTopologyLe
 {
     // This code has to be complicated because a lower PCI value is better
     // but a higher NvLink value is better. All NvLinks are better than all PCI
-    unsigned int nvLinkPathA = DCGM_TOPOLOGY_PATH_NVLINK(a);
-    unsigned int pciPathA    = DCGM_TOPOLOGY_PATH_PCI(a);
+    dcgmGpuTopologyLevel_t nvLinkPathA = DCGM_TOPOLOGY_PATH_NVLINK(a);
+    dcgmGpuTopologyLevel_t pciPathA    = DCGM_TOPOLOGY_PATH_PCI(a);
 
-    unsigned int nvLinkPathB = DCGM_TOPOLOGY_PATH_NVLINK(b);
-    unsigned int pciPathB    = DCGM_TOPOLOGY_PATH_PCI(b);
+    dcgmGpuTopologyLevel_t nvLinkPathB = DCGM_TOPOLOGY_PATH_NVLINK(b);
+    dcgmGpuTopologyLevel_t pciPathB    = DCGM_TOPOLOGY_PATH_PCI(b);
 
     /* If both have NvLinks, compare those. More is better */
     if (nvLinkPathA && nvLinkPathB)
@@ -4947,27 +5145,36 @@ dcgmGpuTopologyLevel_t GetSlowestPath(dcgmTopology_t &topology)
     return slowestPath;
 }
 
-static dcgmReturn_t tsapiEngineGroupTopology(dcgmHandle_t pDcgmHandle,
-                                             dcgmGpuGrp_t groupId,
-                                             dcgmGroupTopology_t *groupTopology)
+static void SetGroupTopologySlowestPath(dcgmGroupTopology_v2 *groupTopology, dcgmGpuTopologyLevel_t slowestPath)
+{
+    groupTopology->slowestPath = slowestPath;
+}
+
+static void SetGroupTopologySlowestPath(dcgmGroupTopology_v1 *groupTopology, dcgmGpuTopologyLevel_t slowestPath)
+{
+    groupTopology->slowestPath = TopologyPathToLegacy(slowestPath);
+}
+
+template <typename GroupTopology>
+static dcgmReturn_t FillGroupTopology(dcgmHandle_t pDcgmHandle,
+                                      dcgmGpuGrp_t groupId,
+                                      GroupTopology *groupTopology,
+                                      unsigned int version)
 {
     dcgmTopology_t topology;
     dcgmAffinity_t affinity;
     dcgmReturn_t ret = DCGM_ST_OK;
 
-    if (!groupTopology)
-    {
-        DCGM_LOG_ERROR << "bad groupTopology " << (void *)groupTopology;
-        return DCGM_ST_BADPARAM;
-    }
-
-    groupTopology->version = dcgmGroupTopology_version;
+    memset(&topology, 0, sizeof(topology));
+    memset(&affinity, 0, sizeof(affinity));
+    memset(groupTopology, 0, sizeof(*groupTopology));
+    groupTopology->version = version;
 
     ret = helperGetTopologyPci(pDcgmHandle, groupId, &topology); // retrieve the topology for this group
     if (DCGM_ST_OK != ret && DCGM_ST_NO_DATA != ret)
         return ret;
 
-    groupTopology->slowestPath = GetSlowestPath(topology);
+    SetGroupTopologySlowestPath(groupTopology, GetSlowestPath(topology));
 
     ret = helperGetTopologyAffinity(pDcgmHandle, groupId, &affinity);
     if (DCGM_ST_OK != ret)
@@ -4990,6 +5197,33 @@ static dcgmReturn_t tsapiEngineGroupTopology(dcgmHandle_t pDcgmHandle,
 
     groupTopology->numaOptimalFlag = (foundDifference) ? 0 : 1;
     return ret;
+}
+
+static dcgmReturn_t tsapiEngineGroupTopology(dcgmHandle_t pDcgmHandle,
+                                             dcgmGpuGrp_t groupId,
+                                             dcgmGroupTopology_v2 *groupTopology)
+{
+    if (!groupTopology)
+    {
+        DCGM_LOG_ERROR << "bad groupTopology (nullptr)";
+        return DCGM_ST_BADPARAM;
+    }
+
+    switch (groupTopology->version)
+    {
+        case dcgmGroupTopology_version2:
+            return FillGroupTopology(pDcgmHandle, groupId, groupTopology, dcgmGroupTopology_version2);
+
+        case dcgmGroupTopology_version1:
+        {
+            SafeArgumentCast<dcgmGroupTopology_v1> legacyGroupTopology { groupTopology };
+            dcgmGroupTopology_v1 &versionedGroupTopology = legacyGroupTopology;
+            return FillGroupTopology(pDcgmHandle, groupId, &versionedGroupTopology, dcgmGroupTopology_version1);
+        }
+
+        default:
+            return DCGM_ST_VER_MISMATCH;
+    }
 }
 
 static dcgmReturn_t tsapiIntrospectGetHostengineMemoryUsage(dcgmHandle_t dcgmHandle,
@@ -5852,76 +6086,6 @@ dcgmReturn_t StartEmbeddedV2(dcgmStartEmbeddedV2Params_v3 &params)
 
     return DCGM_ST_OK;
 }
-
-/**
- * @brief Safely casts a constructor argument to the \c To type and back
- *
- * This class is meant to be used as a argument placeholder during a function call.
- * This is an adopted version of std::bit_cast that is more relaxed and unsafe - it does not check that the size of the
- * source and target types match.
- * This class copies memory from the memory the constructors \a inputArgument points to into an internal storage of the
- * type \c To.
- * When the object is destroyed the memory of the internal storage is copied back to the original location the \a
- * inputArguments points to.
- * Object of this class can be implicitly casted to the reference of the To type (aka To&), so any changes made to the
- * To& storage will be copied back to the original location \a inputArgument points to.
- * @example
- * @code{.cpp}
- *      struct ParamV1 { int version; ... };
- *      struct ParamV2 { int version; char name[255]; ... };
- *      void APIFunc(ParamV1 *ptr) {
- *          if (ptr->version == 1) Func(*ptr);
- *          else if (ptr->version == 2) Func(SafeArgumentCast<ParamV2>{ptr});
- *      }
- *      void Func(ParamV1& v1) {...}
- *      void Func(ParamV2& v2) {... memcpy(v2.name, "Hello", 6); }
- *
- *      void main() {
- *          ParamV1 v1 {.version = 1 };
- *          ParamV2 v2 {.version = 2; .name = {}};
- *          APIFunc(&v1);
- *          APIFunc((ParamV1*)&v2);
- *          assert("Hello" == v2.name);
- *      }
- * @endcode
- *
- * @tparam To The target type of the versioned argument. The \c To type is required to be trivially copyable and
- *            trivially constructible (aka trivial type). Additionally, the \c To should have unique object
- *            representation in memory - i.e. if \c To is a structure, it should not be padded. Also, it will not work
- *            if a structure has float or double fields.
- */
-template <class To>
-    requires std::is_trivial_v<To> && std::has_unique_object_representations_v<To>
-class SafeArgumentCast
-{
-public:
-    SafeArgumentCast(SafeArgumentCast const &)            = delete;
-    SafeArgumentCast(SafeArgumentCast &&)                 = delete;
-    SafeArgumentCast &operator=(SafeArgumentCast const &) = delete;
-    SafeArgumentCast &operator=(SafeArgumentCast &&)      = delete;
-
-    template <class From>
-    explicit SafeArgumentCast(From *inputArgument)
-        : m_target(inputArgument)
-    {
-        assert(inputArgument != nullptr);
-        memcpy(&m_storage, m_target, sizeof(To));
-    }
-
-    ~SafeArgumentCast()
-    {
-        memcpy(m_target, &m_storage, sizeof(To));
-    }
-
-    operator To &() // NOLINT(google-explicit-constructor)
-    {
-        return m_storage;
-    }
-
-private:
-    void *m_target;
-    To m_storage {};
-};
 
 } // namespace
 

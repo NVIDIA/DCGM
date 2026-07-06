@@ -42,8 +42,7 @@ def test_pcie_libnuma_error_handling(handle, gpuIds):
         gpuIds=[testGpuId],
         testNamesStr=testName,
         paramsStr="pcie.test_duration=5;pcie.is_allowed=true;pcie.test_with_gemm=false",
-        version=dcgm_structs.dcgmRunDiag_version10
-    )
+        version=dcgm_structs.dcgmRunDiag_version10)
 
     response = test_utils.diag_execute_wrapper(dd, handle)
 
@@ -61,4 +60,5 @@ def test_pcie_libnuma_error_handling(handle, gpuIds):
                     f"Libnuma error found but missing solution message. Error: {error_msg}"
 
     # If no libnuma errors found, test passes (normal case)
-    # If libnuma errors found, they must contain our solution message (verified above)
+    # If libnuma errors found, they must contain our solution message
+    # (verified above)
