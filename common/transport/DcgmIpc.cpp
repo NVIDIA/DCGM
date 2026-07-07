@@ -770,18 +770,26 @@ void DcgmIpc::ConnectTcpAsyncImpl(DcgmIpcConnectTcp &tcpConnect)
     bufferevent_setcb(bev, DcgmIpc::StaticReadCB, NULL, DcgmIpc::StaticEventCB, this);
     bufferevent_enable(bev, EV_READ | EV_WRITE);
 
-    /* Allow IPv6 IPs to override family */
-    sa_family_t family    = AF_INET;
+    /* Determine address family:
+     * - Bracketed or literal IPv6 address -> AF_INET6
+     * - Literal IPv4 address -> AF_INET
+     * - Hostname -> AF_UNSPEC so libevent resolves it to whichever family DNS returns */
+    sa_family_t family    = AF_UNSPEC;
     std::string &hostname = tcpConnect.m_hostname;
+    char buf[sizeof(struct in6_addr)];
+    memset(buf, 0, sizeof(buf));
     if (hostname.size() >= 3 && hostname[0] == '[' && hostname[hostname.size() - 1] == ']')
     {
         hostname = hostname.substr(1, hostname.size() - 2);
+        family   = AF_INET6;
     }
-    char buf[16];
-    memset(buf, 0, sizeof(buf));
-    if (inet_pton(AF_INET6, hostname.c_str(), buf) > 0)
+    else if (inet_pton(AF_INET6, hostname.c_str(), buf) > 0)
     {
         family = AF_INET6;
+    }
+    else if (inet_pton(AF_INET, hostname.c_str(), buf) > 0)
+    {
+        family = AF_INET;
     }
 
     int ret = bufferevent_socket_connect_hostname(bev, m_dnsBase, family, hostname.c_str(), tcpConnect.m_port);
