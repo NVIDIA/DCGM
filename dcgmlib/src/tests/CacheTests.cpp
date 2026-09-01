@@ -1300,6 +1300,80 @@ TEST_CASE("DcgmCacheManager: NVLink TX/RX throughput watches with NVML field inj
     }
 }
 
+TEST_CASE("DcgmCacheManager: DCGM_FI_DEV_MEMORY_TEMP_CELSIUS honors the per-field nvmlReturn")
+{
+    auto restoreEnv = WithNvmlInjectionSkuFile("H200.yaml");
+    if (!restoreEnv)
+    {
+        SKIP("Sku file not found: H200.yaml");
+    }
+
+    DcgmFieldsInit();
+    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+
+    REQUIRE(nvmlInit_v2() == NVML_SUCCESS);
+    DcgmNs::Defer deferNvml([&] { nvmlShutdown(); });
+
+    DcgmCacheManager cacheManager;
+    /* Initialize in manual mode */
+    REQUIRE(cacheManager.Init(1, 14400.0, true) == DCGM_ST_OK);
+    cacheManager.Start();
+
+    unsigned int constexpr gpuId     = 0;
+    unsigned short constexpr fieldId = DCGM_FI_DEV_MEMORY_TEMP_CELSIUS;
+    DcgmWatcher watcher(DcgmWatcherTypeClient, 5588);
+
+    /* nvmlDeviceGetFieldValues() returns NVML_SUCCESS whenever it populated the array, so the
+       per-value nvmlReturn is what says whether this GPU has a memory temperature sensor. */
+    auto injectMemoryTemp = [&](nvmlReturn_t perFieldReturn, unsigned int uiVal) {
+        nvmlDevice_t nvmlDevice {};
+        REQUIRE(nvmlDeviceGetHandleByIndex(gpuId, &nvmlDevice) == NVML_SUCCESS);
+
+        nvmlFieldValue_t nvmlFv {};
+        nvmlFv.fieldId     = NVML_FI_DEV_MEMORY_TEMP;
+        nvmlFv.scopeId     = 0;
+        nvmlFv.nvmlReturn  = perFieldReturn;
+        nvmlFv.timestamp   = timelib_usecSince1970();
+        nvmlFv.valueType   = NVML_VALUE_TYPE_UNSIGNED_INT;
+        nvmlFv.value.uiVal = uiVal;
+        REQUIRE(nvmlDeviceInjectFieldValue(nvmlDevice, &nvmlFv) == NVML_SUCCESS);
+    };
+
+    bool wereFirstWatcher = false;
+    REQUIRE(
+        cacheManager.AddFieldWatch(DCGM_FE_GPU, gpuId, fieldId, 0, 14400.0, 2, watcher, false, false, wereFirstWatcher)
+        == DCGM_ST_OK);
+    DcgmNs::Defer deferWatch([&] { cacheManager.RemoveFieldWatch(DCGM_FE_GPU, gpuId, fieldId, 0, watcher); });
+
+    SECTION("GIVEN a GPU with no memory temperature sensor THEN the cached value is not supported")
+    {
+        /* What an L4 reports: the call succeeds, the per-field status says the sensor is absent,
+           and the value is left at its zero-initialized state. */
+        injectMemoryTemp(NVML_ERROR_NOT_SUPPORTED, 0);
+
+        REQUIRE(cacheManager.UpdateAllFields(1) == DCGM_ST_OK);
+
+        dcgmcm_sample_t sample {};
+        REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+        CHECK(sample.val.i64 == DCGM_INT64_NOT_SUPPORTED);
+        REQUIRE(cacheManager.FreeSamples(&sample, 1, fieldId) == DCGM_ST_OK);
+    }
+
+    SECTION("GIVEN a GPU with a memory temperature sensor THEN the reading is cached")
+    {
+        unsigned int constexpr expectedTemp = 42;
+        injectMemoryTemp(NVML_SUCCESS, expectedTemp);
+
+        REQUIRE(cacheManager.UpdateAllFields(1) == DCGM_ST_OK);
+
+        dcgmcm_sample_t sample {};
+        REQUIRE(cacheManager.GetLatestSample(DCGM_FE_GPU, gpuId, fieldId, &sample, nullptr) == DCGM_ST_OK);
+        CHECK_FALSE(DCGM_INT64_IS_BLANK(sample.val.i64));
+        CHECK(sample.val.i64 == expectedTemp);
+        REQUIRE(cacheManager.FreeSamples(&sample, 1, fieldId) == DCGM_ST_OK);
+    }
+}
+
 TEST_CASE("DcgmCacheManager::IsGpuMigEnabled & IsMigEnabledAnywhere")
 {
     DcgmCacheManager cacheManager;

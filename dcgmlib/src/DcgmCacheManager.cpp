@@ -10990,10 +10990,12 @@ dcgmReturn_t DcgmCacheManager::BufferOrCacheLatestGpuValue(dcgmcm_update_thread_
                              : m_nvmlDriver->NvmlDeviceGetFieldValues(safeNvmlDevice, 1, &value);
             if (watchInfo)
                 watchInfo->lastStatus = nvmlReturn;
-            if ((nvmlReturn != NVML_SUCCESS) || (value.value.uiVal > 200))
+            if ((nvmlReturn != NVML_SUCCESS) || (value.nvmlReturn != NVML_SUCCESS) || (value.value.uiVal > 200))
             {
-                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
-                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlReturn);
+                nvmlReturn_t nvmlErr = nvmlReturn == NVML_SUCCESS ? value.nvmlReturn : nvmlReturn;
+
+                AppendEntityInt64(threadCtx, NvmlErrorToInt64Value(nvmlErr), 0, now, expireTime);
+                return DcgmNs::Utils::NvmlReturnToDcgmReturn(nvmlErr);
             }
 
             /* Ignore value.valueType, WaR for nvml setting type as double */
