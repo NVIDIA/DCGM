@@ -244,6 +244,8 @@ TEST_CASE("Invalid Endpoint Parsing")
         CHECK_FALSE(ParseEndpoint("tcp://[]:8080").has_value());         // Empty brackets
         CHECK_FALSE(ParseEndpoint("tcp://[:]:8080").has_value());        // Malformed IPv6 brackets content
         CHECK_FALSE(ParseEndpoint("tcp://[::1:8080").has_value());       // Missing closing bracket
+        CHECK_FALSE(ParseEndpoint("tcp://[::1]:80]").has_value());       // Extra bracket hides the port
+        CHECK_FALSE(ParseEndpoint("tcp://[::1]:99999]").has_value());    // Out of range port hidden the same way
         CHECK_FALSE(ParseEndpoint("tcp://::1]:8080").has_value());       // Missing opening bracket
         CHECK_FALSE(ParseEndpoint("tcp://host:port_text").has_value());  // Invalid port text
         CHECK_FALSE(ParseEndpoint("tcp://host:99999").has_value());      // Port out of uint16_t range
