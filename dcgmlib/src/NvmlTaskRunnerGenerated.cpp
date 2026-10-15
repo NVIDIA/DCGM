@@ -9094,6 +9094,31 @@ nvmlReturn_t NvmlTaskRunner::NvmlEventSetCreate(nvmlEventSet_t * set)
     return InvokeNvmlFunction(::nvmlEventSetCreate, set);
 }
 
+nvmlReturn_t NvmlTaskRunner::NvmlEventSetRegisterGpuOperationalEvents_v1(nvmlEventSet_t eventSet, const nvmlGpuOperationalEventConfig_v1_t *config)
+{
+    return InvokeNvmlFunction(::nvmlEventSetRegisterGpuOperationalEvents_v1, eventSet, config);
+}
+
+nvmlReturn_t NvmlTaskRunner::NvmlEventSetGetContextCount_v1(nvmlEventSet_t set, nvmlEventSetGetContextCount_v1_t *params)
+{
+    return InvokeNvmlFunction(::nvmlEventSetGetContextCount_v1, set, params);
+}
+
+nvmlReturn_t NvmlTaskRunner::NvmlEventSetGetContextInfo_v1(nvmlEventSet_t set, nvmlEventSetGetContextInfo_v1_t *params)
+{
+    return InvokeNvmlFunction(::nvmlEventSetGetContextInfo_v1, set, params);
+}
+
+nvmlReturn_t NvmlTaskRunner::NvmlEventSetGetContextData_v1(nvmlEventSet_t set, nvmlEventSetGetContextData_v1_t *params)
+{
+    return InvokeNvmlFunction(::nvmlEventSetGetContextData_v1, set, params);
+}
+
+nvmlReturn_t NvmlTaskRunner::NvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nvmlEventSet_t set, nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *params)
+{
+    return InvokeNvmlFunction(::nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1, set, params);
+}
+
 nvmlReturn_t NvmlTaskRunner::NvmlEventSetFree(nvmlEventSet_t set)
 {
     return InvokeNvmlFunction(::nvmlEventSetFree, set);

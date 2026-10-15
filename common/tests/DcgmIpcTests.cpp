@@ -17,6 +17,7 @@
 #include "Defer.hpp"
 #include "HangDetect.h"
 #include "HangDetectMonitor.h"
+#include <TempDir.hpp>
 
 #include <catch2/catch_all.hpp>
 #include <dcgm_structs.h>
@@ -29,13 +30,9 @@
 class DcgmIpcTestFixture
 {
 protected:
-    // Use PID in socket path to avoid collisions during parallel test runs
-    std::string socketPath = "/tmp/dcgm_ipc_test_" + std::to_string(getpid()) + ".sock";
+    TempDir socketDir      = TempDir::Random("dcgm-ipc-test-");
+    std::string socketPath = (socketDir.Path() / "dcgm-ipc-test.sock").string();
     DcgmIpcDomainServerParams_t domainParams;
-
-    // Use PID-derived port to avoid collisions during parallel test runs
-    unsigned short tcpPort = 30000 + (getpid() % 20000);
-    DcgmIpcTcpServerParams_t tcpParams;
 
     // No-op callbacks for tests that don't need message handling
     DcgmIpcProcessMessageFunc_f noopMessage = [](dcgm_connection_id_t, std::unique_ptr<DcgmMessage>, void *) {
@@ -139,17 +136,36 @@ protected:
         return tcpParams;
     }
 
-    static dcgmReturn_t InitTcpServerOnReservedPort(DcgmIpc &server,
-                                                    TcpPortReservation &reservedPort,
+    static dcgmReturn_t InitTcpServerOnReservedPort(std::unique_ptr<DcgmIpc> &serverOut,
+                                                    DcgmIpcTcpServerParams_t &tcpParamsOut,
                                                     DcgmIpcProcessMessageFunc_f processMessage,
                                                     void *processMessageUserData,
                                                     DcgmIpcProcessDisconnectFunc_f processDisconnect,
-                                                    void *processDisconnectUserData)
+                                                    void *processDisconnectUserData,
+                                                    std::string bindIPAddress = "127.0.0.1")
     {
-        auto tcpParams = MakeTcpParams(reservedPort.Port());
-        reservedPort.Release();
-        return server.Init(
-            tcpParams, std::move(processMessage), processMessageUserData, processDisconnect, processDisconnectUserData);
+        dcgmReturn_t result = DCGM_ST_GENERIC_ERROR;
+
+        // Attempt binding the port up to 10 times to virtually eliminate TOCTOU risk in tests
+        for (int attempt = 0; attempt < 10; attempt++)
+        {
+            auto reservedPort = ReserveUnusedTcpPort();
+            auto tcpParams    = MakeTcpParams(reservedPort.Port(), bindIPAddress);
+            reservedPort.Release();
+
+            // Allows us to build a fresh DcgmIpc object in each attempt
+            serverOut = std::make_unique<DcgmIpc>(1);
+            result    = serverOut->Init(
+                tcpParams, processMessage, processMessageUserData, processDisconnect, processDisconnectUserData);
+            if (result == DCGM_ST_OK)
+            {
+                tcpParamsOut = tcpParams;
+                return DCGM_ST_OK;
+            }
+            serverOut.reset();
+        }
+
+        return result;
     }
 
     /**
@@ -159,7 +175,6 @@ protected:
     {
         unlink(socketPath.c_str());
         domainParams.domainSocketPath = socketPath;
-        tcpParams.port                = tcpPort;
     }
 
     ~DcgmIpcTestFixture()
@@ -409,12 +424,10 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::Connections")
 
     SECTION("Client connects to server via TCP")
     {
-        auto reservedPort = ReserveUnusedTcpPort();
-        auto tcpParams    = MakeTcpParams(reservedPort.Port());
-
-        DcgmIpc tcpServer(1);
+        std::unique_ptr<DcgmIpc> tcpServer;
+        DcgmIpcTcpServerParams_t tcpParams;
         auto serverInit
-            = InitTcpServerOnReservedPort(tcpServer, reservedPort, noopMessage, nullptr, noopDisconnect, nullptr);
+            = InitTcpServerOnReservedPort(tcpServer, tcpParams, noopMessage, nullptr, noopDisconnect, nullptr);
         REQUIRE(serverInit == DCGM_ST_OK);
 
         DcgmIpc client(1);
@@ -494,12 +507,10 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::Messaging")
 
     SECTION("TCP client sends message to server")
     {
-        auto reservedPort = ReserveUnusedTcpPort();
-        auto tcpParams    = MakeTcpParams(reservedPort.Port());
-
-        DcgmIpc tcpServer(1);
+        std::unique_ptr<DcgmIpc> tcpServer;
+        DcgmIpcTcpServerParams_t tcpParams;
         auto serverInit
-            = InitTcpServerOnReservedPort(tcpServer, reservedPort, capturingHandler, nullptr, noopDisconnect, nullptr);
+            = InitTcpServerOnReservedPort(tcpServer, tcpParams, capturingHandler, nullptr, noopDisconnect, nullptr);
         REQUIRE(serverInit == DCGM_ST_OK);
 
         DcgmIpc client(1);
@@ -615,8 +626,9 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::ErrorCases")
         auto clientInit = client.Init(std::nullopt, noopMessage, nullptr, noopDisconnect, nullptr);
         REQUIRE(clientInit == DCGM_ST_OK);
 
+        auto missingSocketPath            = (socketDir.Path() / "dcgm-ipc-no-server.sock").string();
         dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE;
-        auto result                       = client.ConnectDomain("/tmp/dcgm_ipc_no_server.sock", connectionId, 1000);
+        auto result                       = client.ConnectDomain(missingSocketPath, connectionId, 1000);
         REQUIRE(result != DCGM_ST_OK);
     }
 
@@ -899,55 +911,52 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpLifecycle")
     SECTION("Init with TCP, no bind address (all interfaces)")
     {
         // Empty bindIPAddress, binds all interfaces via IPv6 with IPV6_V6ONLY=0
-        DcgmIpc ipc(1);
-        auto result = ipc.Init(tcpParams, noopMessage, nullptr, noopDisconnect, nullptr);
+        std::unique_ptr<DcgmIpc> ipc;
+        DcgmIpcTcpServerParams_t boundParams;
+        auto result = InitTcpServerOnReservedPort(ipc, boundParams, noopMessage, nullptr, noopDisconnect, nullptr, "");
         REQUIRE(result == DCGM_ST_OK);
     }
 
     SECTION("Init with TCP, IPv4 bind address")
     {
-        DcgmIpcTcpServerParams_t params;
-        params.port          = tcpPort;
-        params.bindIPAddress = "127.0.0.1";
-
-        DcgmIpc ipc(1);
-        auto result = ipc.Init(params, noopMessage, nullptr, noopDisconnect, nullptr);
-        REQUIRE(result == DCGM_ST_OK);
+        std::unique_ptr<DcgmIpc> tcpServer;
+        DcgmIpcTcpServerParams_t tcpParams;
+        auto serverInit
+            = InitTcpServerOnReservedPort(tcpServer, tcpParams, noopMessage, nullptr, noopDisconnect, nullptr);
+        REQUIRE(serverInit == DCGM_ST_OK);
     }
 
     SECTION("Init with TCP, IPv6 bind address")
     {
-        DcgmIpcTcpServerParams_t params;
-        params.port          = tcpPort;
-        params.bindIPAddress = "::1";
-
-        DcgmIpc ipc(1);
-        auto result = ipc.Init(params, noopMessage, nullptr, noopDisconnect, nullptr);
-        REQUIRE(result == DCGM_ST_OK);
+        std::unique_ptr<DcgmIpc> tcpServer;
+        DcgmIpcTcpServerParams_t tcpParams;
+        auto serverInit
+            = InitTcpServerOnReservedPort(tcpServer, tcpParams, noopMessage, nullptr, noopDisconnect, nullptr, "::1");
+        REQUIRE(serverInit == DCGM_ST_OK);
     }
 
     SECTION("Init with TCP, invalid bind address fails")
     {
         // Neither inet_aton nor inet_pton can parse this, returns DCGM_ST_GENERIC_ERROR
-        DcgmIpcTcpServerParams_t params;
-        params.port          = tcpPort;
-        params.bindIPAddress = "not.an.ip";
-
-        DcgmIpc ipc(1);
-        auto result = ipc.Init(params, noopMessage, nullptr, noopDisconnect, nullptr);
-        REQUIRE(result != DCGM_ST_OK);
+        std::unique_ptr<DcgmIpc> tcpServer;
+        DcgmIpcTcpServerParams_t tcpParams;
+        auto serverInit = InitTcpServerOnReservedPort(
+            tcpServer, tcpParams, noopMessage, nullptr, noopDisconnect, nullptr, "not.an.ip");
+        REQUIRE(serverInit != DCGM_ST_OK);
     }
 
     SECTION("Init with TCP, port already in use fails")
     {
-        // First instance binds the port successfully
-        DcgmIpc first(1);
-        auto firstResult = first.Init(tcpParams, noopMessage, nullptr, noopDisconnect, nullptr);
+        // First instance binds a reserved port successfully
+        std::unique_ptr<DcgmIpc> first;
+        DcgmIpcTcpServerParams_t boundParams;
+        auto firstResult
+            = InitTcpServerOnReservedPort(first, boundParams, noopMessage, nullptr, noopDisconnect, nullptr);
         REQUIRE(firstResult == DCGM_ST_OK);
 
         // Second instance on the same port should fail at bind()
         DcgmIpc second(1);
-        auto secondResult = second.Init(tcpParams, noopMessage, nullptr, noopDisconnect, nullptr);
+        auto secondResult = second.Init(boundParams, noopMessage, nullptr, noopDisconnect, nullptr);
         REQUIRE(secondResult != DCGM_ST_OK);
     }
 }
@@ -955,8 +964,10 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpLifecycle")
 TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpConnections")
 {
     // Server instance, shared by all sections
-    DcgmIpc server(1);
-    auto initResult = server.Init(tcpParams, noopMessage, nullptr, noopDisconnect, nullptr);
+    std::unique_ptr<DcgmIpc> server;
+    DcgmIpcTcpServerParams_t tcpParams;
+    auto initResult = InitTcpServerOnReservedPort(
+        server, tcpParams, noopMessage, nullptr, noopDisconnect, nullptr, /*bindIPAddress=*/"");
     REQUIRE(initResult == DCGM_ST_OK);
 
     SECTION("Client connects to server via TCP (IPv4)")
@@ -966,7 +977,7 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpConnections")
         REQUIRE(clientInit == DCGM_ST_OK);
 
         dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE;
-        auto result                       = client.ConnectTcp("127.0.0.1", tcpPort, connectionId, 5000);
+        auto result                       = client.ConnectTcp("127.0.0.1", tcpParams.port, connectionId, 5000);
 
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(connectionId != DCGM_CONNECTION_ID_NONE);
@@ -980,7 +991,7 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpConnections")
         REQUIRE(clientInit == DCGM_ST_OK);
 
         dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE;
-        auto result                       = client.ConnectTcp("::1", tcpPort, connectionId, 5000);
+        auto result                       = client.ConnectTcp("::1", tcpParams.port, connectionId, 5000);
 
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(connectionId != DCGM_CONNECTION_ID_NONE);
@@ -994,7 +1005,7 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpConnections")
         REQUIRE(clientInit == DCGM_ST_OK);
 
         dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE;
-        auto result                       = client.ConnectTcp("[::1]", tcpPort, connectionId, 5000);
+        auto result                       = client.ConnectTcp("[::1]", tcpParams.port, connectionId, 5000);
 
         REQUIRE(result == DCGM_ST_OK);
         REQUIRE(connectionId != DCGM_CONNECTION_ID_NONE);
@@ -1009,10 +1020,10 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpConnections")
         dcgm_connection_id_t connId1 = DCGM_CONNECTION_ID_NONE;
         dcgm_connection_id_t connId2 = DCGM_CONNECTION_ID_NONE;
 
-        auto connectResult1 = client.ConnectTcp("127.0.0.1", tcpPort, connId1, 5000);
+        auto connectResult1 = client.ConnectTcp("127.0.0.1", tcpParams.port, connId1, 5000);
         REQUIRE(connectResult1 == DCGM_ST_OK);
 
-        auto connectResult2 = client.ConnectTcp("127.0.0.1", tcpPort, connId2, 5000);
+        auto connectResult2 = client.ConnectTcp("127.0.0.1", tcpParams.port, connId2, 5000);
         REQUIRE(connectResult2 == DCGM_ST_OK);
 
         REQUIRE(connId1 != DCGM_CONNECTION_ID_NONE);
@@ -1027,7 +1038,7 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpConnections")
         REQUIRE(clientInit == DCGM_ST_OK);
 
         dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE;
-        auto connectResult                = client.ConnectTcp("127.0.0.1", tcpPort, connectionId, 5000);
+        auto connectResult                = client.ConnectTcp("127.0.0.1", tcpParams.port, connectionId, 5000);
         REQUIRE(connectResult == DCGM_ST_OK);
         REQUIRE(connectionId != DCGM_CONNECTION_ID_NONE);
 
@@ -1037,8 +1048,9 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpConnections")
 
     SECTION("ConnectTcp to a closed local port fails")
     {
-        // Pick a port deliberately not bound by our server fixture
-        unsigned short closedPort = tcpPort + 1;
+        auto reservedPort = ReserveUnusedTcpPort();
+        auto closedPort   = static_cast<unsigned short>(reservedPort.Port());
+        reservedPort.Release();
 
         DcgmIpc client(1);
         auto clientInit = client.Init(std::nullopt, noopMessage, nullptr, noopDisconnect, nullptr);
@@ -1062,9 +1074,11 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpMessaging")
         receivedPromise.set_value(std::vector<char>(bytes->begin(), bytes->end()));
     };
 
-    DcgmIpc server(1);
-    auto initResult = server.Init(tcpParams, capturingHandler, nullptr, noopDisconnect, nullptr);
-    REQUIRE(initResult == DCGM_ST_OK);
+    std::unique_ptr<DcgmIpc> tcpServer;
+    DcgmIpcTcpServerParams_t tcpParams;
+    auto serverInit
+        = InitTcpServerOnReservedPort(tcpServer, tcpParams, capturingHandler, nullptr, noopDisconnect, nullptr);
+    REQUIRE(serverInit == DCGM_ST_OK);
 
     SECTION("Client sends message to server")
     {
@@ -1073,7 +1087,7 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpMessaging")
         REQUIRE(clientInit == DCGM_ST_OK);
 
         dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE;
-        auto connectResult                = client.ConnectTcp("127.0.0.1", tcpPort, connectionId, 5000);
+        auto connectResult = client.ConnectTcp(tcpParams.bindIPAddress, tcpParams.port, connectionId, 5000);
         REQUIRE(connectResult == DCGM_ST_OK);
 
         std::string payload = "hello from client";
@@ -1099,7 +1113,7 @@ TEST_CASE_METHOD(DcgmIpcTestFixture, "DcgmIpc::TcpMessaging")
         REQUIRE(clientInit == DCGM_ST_OK);
 
         dcgm_connection_id_t connectionId = DCGM_CONNECTION_ID_NONE;
-        auto connectResult                = client.ConnectTcp("127.0.0.1", tcpPort, connectionId, 5000);
+        auto connectResult = client.ConnectTcp(tcpParams.bindIPAddress, tcpParams.port, connectionId, 5000);
         REQUIRE(connectResult == DCGM_ST_OK);
 
         std::string payload = "fire and forget";

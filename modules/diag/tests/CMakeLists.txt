@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,14 +31,9 @@ target_sources(diagtests
         ../DcgmDiagCommon.cpp
 )
 
-target_include_directories(diagtests PRIVATE ${YAML_INCLUDE_DIR})
-target_include_directories(diagtests PRIVATE ${JSONCPP_INCLUDE_DIR})
-target_include_directories(diagtests PRIVATE ..)
-
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
 target_link_libraries(diagtests
     PRIVATE
+        test-utils
         dcgm_logging
         Catch2::Catch2WithMain
         fmt::fmt
@@ -47,14 +42,17 @@ target_link_libraries(diagtests
         dcgm_common
         diag_interface
         childprocess
+        mock_file_handle
         module_common_objects
         dcgm
         dcgm_mutex
         mock_common
+        mock_user_credentials
         modules_objects
+        user_credentials
 )
-target_link_libraries(diagtests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
-target_link_libraries(diagtests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(diagtests PRIVATE yaml-cpp::yaml-cpp jsoncpp_static rt dl)
+target_link_libraries(diagtests PRIVATE Threads::Threads)
 target_link_libraries(diagtests PRIVATE sdk_nvml_loader)
 target_link_options(diagtests PRIVATE -rdynamic)
 

@@ -18,16 +18,24 @@ if (NOT BUILD_TESTING)
     return()
 endif()
 
+add_definitions(-DUNIT_TEST)
+
 add_executable(nvmlicoretests)
 target_sources(nvmlicoretests
     PRIVATE
         InjectedNvmlTests.cpp
         InjectionArgumentCoverageTests.cpp
+        InjectionArgumentGeneratedArrayTests.cpp
+        InjectionArgumentPrimitiveOwnershipTests.cpp
+        InjectionArgumentGeneratedStructTests.cpp
+        NvmlInjectionLogging.cpp
+        NvmlLoggerDependency.cpp
         NvmlInjectionUtilTests.cpp
         NvmlReturnDeserializerCoverageTests.cpp
         NvmlGeneratedStubsCoverageTests.cpp
         ../CompoundValue.cpp
         ../InjectedNvml.cpp
+        ../NvmlLogging.cpp
         ../InjectionArgument.cpp
         ../InjectionKeys.cpp
         ../NvmlFuncReturn.cpp
@@ -42,14 +50,14 @@ target_sources(nvmlicoretests
 target_include_directories(nvmlicoretests
     PRIVATE
         ..
-        ${YAML_INCLUDE_DIR}
         ${UNIT_TEST_HELPERS_HEADER_DIR} # for UnitTestHelpers.cpp to be able to include generated header (WithInjectionSku.h).
 )
 
 target_link_libraries(nvmlicoretests
     PRIVATE
         Catch2::Catch2WithMain
-        ${YAML_STATIC_LIBS}
+        test-utils
+        yaml-cpp::yaml-cpp
         nvmli_interface
         sdk_nvml_interface
         dcgm_common

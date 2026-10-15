@@ -20,6 +20,7 @@
 #include "dcgm_structs.h"
 
 #include <DcgmLogging.h>
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmUtilities.h>
 
 #include <fmt/core.h>
@@ -203,27 +204,24 @@ typedef struct dcgmi_entity_pair_t
     }
 } dcgmi_entity_pair_t;
 
-/*****************************************************************************/
-/*
- * Create an entity group with the entities in entityList as members
+/**
+ * Create an entity group with the entities in entityList as members.
  *
- * This helper can be used if you don't care about the name of your entity group
- * one will randomly be assigned
+ * This helper can be used if the caller does not care about the entity group name;
+ * one will be assigned automatically.
  *
- * dcgmHandle     IN: Connection handle to the host engine
- * groupType      IN: Type of group to create (empty, all gpus, ...etc)
- * groupId       OUT: group ID handle of the group that was created. This is only
- *                    valid if the return was DCGM_ST_OK
- * entityList     IN: List of entities to add to the group
- *
- * Returns: DCGM_ST_OK if the group was successfully created
- *          Other DCGM_ST_* error if a problem occurred. This will print an error to stdout
- *
+ * @param[in] dcgmHandle Connection handle to the host engine.
+ * @param[in] groupType Type of group to create.
+ * @param[out] groupId Group ID handle of the group that was created. This is only valid if the return is DCGM_ST_OK.
+ * @param[in] entityList List of entities to add to the group.
+ * @param[in] dcgmOps DCGM operations wrapper used to invoke the underlying DCGM APIs.
+ * @return DCGM_ST_OK if the group was successfully created, or another DCGM_ST_* error code if a problem occurred.
  */
 dcgmReturn_t dcgmi_create_entity_group(dcgmHandle_t dcgmHandle,
                                        dcgmGroupType_t groupType,
                                        dcgmGpuGrp_t *groupId,
-                                       std::vector<dcgmGroupEntityPair_t> &entityList);
+                                       std::vector<dcgmGroupEntityPair_t> &entityList,
+                                       DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 /*****************************************************************************/
 /*
@@ -256,25 +254,23 @@ bool dcgmi_entity_group_id_is_special(std::string &groupIdStr, dcgmGroupType_t *
  */
 dcgmReturn_t dcgmi_parse_field_id_list_string(std::string input, std::vector<unsigned short> &fieldIds, bool validate);
 
-/*****************************************************************************/
-/*
- * Create a field group with the field IDs in fieldIds as members
+/**
+ * Create a field group with the field IDs in fieldIds as members.
  *
- * This helper can be used if you don't care about the name of your field group.
- * one will randomly be assigned
+ * This helper can be used if the caller does not care about the field group name;
+ * one will be assigned automatically.
  *
- * dcgmHandle     IN: Connection handle to the host engine
- * groupId       OUT: group ID handle of the group that was created. This is only
- *                    valid if the return was DCGM_ST_OK
- * fieldIds       IN: List of field IDs to add to the group
- *
- * Returns: DCGM_ST_OK if the group was successfully created
- *          Other DCGM_ST_* error if a problem occurred. This will print an error to stdout
- *
+ * @param[in] dcgmHandle Connection handle to the host engine.
+ * @param[out] groupId Field group ID handle of the group that was created. This is only valid if the return is
+ * DCGM_ST_OK.
+ * @param[in] fieldIds List of field IDs to add to the group. The list must not be empty.
+ * @param[in] dcgmOps DCGM operations wrapper used to invoke the underlying DCGM APIs.
+ * @return DCGM_ST_OK if the group was successfully created, or another DCGM_ST_* error code if a problem occurred.
  */
 dcgmReturn_t dcgmi_create_field_group(dcgmHandle_t dcgmHandle,
                                       dcgmFieldGrp_t *groupId,
-                                      std::vector<unsigned short> &fieldIds);
+                                      std::vector<unsigned short> const &fieldIds,
+                                      DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 /*****************************************************************************/
 /*

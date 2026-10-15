@@ -153,46 +153,55 @@ def run_tests():
 
         dcgmGpuCount = 0
 
-        if option_parser.options.use_running_hostengine:
-            hostengineFn = test_utils.RunStandaloneHostEngine
+        if option_parser.options.no_hw:
+            logger.info(
+                "Skipping initial hardware discovery because --no-hw is "
+                "enabled.")
+            test_utils.nvmlNotLoaded = False
+            test_utils.save_current_skus_env("")
+            test_utils.save_gpu_count(0)
         else:
-            hostengineFn = test_utils.RunEmbeddedHostEngine
-
-        with hostengineFn() as hostengine:
             if option_parser.options.use_running_hostengine:
-                initFn = test_utils.RunClientInitShutdown
-                handle = None
+                hostengineFn = test_utils.RunStandaloneHostEngine
             else:
-                handle = hostengine.Handle()
-                initFn = WithWrapper
+                hostengineFn = test_utils.RunEmbeddedHostEngine
 
-            with initFn(hostengine, handle=handle) as wrapper:
-                handle = wrapper.Handle()
+            with hostengineFn() as hostengine:
+                if option_parser.options.use_running_hostengine:
+                    initFn = test_utils.RunClientInitShutdown
+                    handle = None
+                else:
+                    handle = hostengine.Handle()
+                    initFn = WithWrapper
 
-                try:
-                    dcgmGpuCount = test_utils.log_gpu_information(handle)
-                except dcgm_structs.dcgmExceptionClass(dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
-                    logger.debug('NVML not loaded')
-                    test_utils.nvmlNotLoaded = True
+                with initFn(hostengine, handle=handle) as wrapper:
+                    handle = wrapper.Handle()
 
-                # We do this to cache it for tests/test_dcgm_mndiag.py
-                # decorator.
-                currentSkusEnv = test_utils.get_current_skus_env(handle)
-                test_utils.save_current_skus_env(currentSkusEnv)
+                    try:
+                        dcgmGpuCount = test_utils.log_gpu_information(handle)
+                    except dcgm_structs.dcgmExceptionClass(
+                            dcgm_structs.DCGM_ST_NVML_NOT_LOADED):
+                        logger.debug('NVML not loaded')
+                        test_utils.nvmlNotLoaded = True
 
-                if not test_utils.nvmlNotLoaded and dcgmGpuCount > 0:
-                    # Persistence mode is required
-                    (_, error) = nvidia_smi_utils.enable_persistence_mode()
-                    if error:
-                        logger.error(error)
-                        return
+                    # We do this to cache it for tests/test_dcgm_mndiag.py
+                    # decorator.
+                    currentSkusEnv = test_utils.get_current_skus_env(handle)
+                    test_utils.save_current_skus_env(currentSkusEnv)
 
-                test_utils.save_gpu_count(dcgmGpuCount)
+                    if not test_utils.nvmlNotLoaded and dcgmGpuCount > 0:
+                        # Persistence mode is required
+                        (_, error) = nvidia_smi_utils.enable_persistence_mode()
+                        if error:
+                            logger.error(error)
+                            return
 
-                try:
-                    runInitialDiag(handle)
-                except TestSkipped as tse:
-                    logger.info(str(tse))
+                    test_utils.save_gpu_count(dcgmGpuCount)
+
+                    try:
+                        runInitialDiag(handle)
+                    except TestSkipped as tse:
+                        logger.info(str(tse))
 
         with test_utils.SubTest("restore state", quiet=True):
             test_utils.RestoreDefaultEnvironment.restore()  # restore the nvml settings
@@ -319,13 +328,19 @@ def print_test_info():
     """
     # Convert module subdirectory into module dot path like tests/nvvs/x =>
     # tests.nvvs.x
-    testDirWithDots = test_utils.test_directory.replace("/", ".")
+    testDirsWithDots = sorted(
+        [d.replace("/", ".") for d in test_utils.test_directories],
+        key=len, reverse=True)
 
     test_content = test_utils.get_test_content()
     for module in test_content:
         module_name = module[0].__name__
-        # all tests are in testDir. module there's no use in printing that
-        module_name = module_name.replace("%s." % testDirWithDots, "", 1)
+        # all tests are in one of the test directories; no use in printing that prefix
+        for testDirWithDots in testDirsWithDots:
+            prefix = "%s." % testDirWithDots
+            if module_name.startswith(prefix):
+                module_name = module_name[len(prefix):]
+                break
         for function in module[1]:
             function_name = function.__name__
             function_doc = function.__doc__

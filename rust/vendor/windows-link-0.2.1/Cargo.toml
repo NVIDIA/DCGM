@@ -1,0 +1,26 @@
+[lib]
+path = "src/lib.rs"
+
+[lints.rust]
+missing_unsafe_on_extern = "warn"
+
+[lints.rust.unexpected_cfgs]
+check-cfg = ["cfg(windows_raw_dylib, windows_slim_errors)"]
+level = "warn"
+priority = 0
+
+[package]
+autobenches = false
+autobins = false
+autoexamples = false
+autolib = false
+autotests = false
+categories = ["os::windows-apis"]
+description = "Linking for Windows"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+name = "windows-link"
+readme = "readme.md"
+repository = "https://github.com/microsoft/windows-rs"
+rust-version = "1.71"
+version = "0.2.1"

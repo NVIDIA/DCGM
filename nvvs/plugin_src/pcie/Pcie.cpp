@@ -19,6 +19,7 @@
 #include "PcieMain.h"
 
 #include <CudaCommon.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <DcgmStringHelpers.h>
 #include <DcgmThread/DcgmThread.h>
 #include <EarlyFailChecker.h>
@@ -35,6 +36,7 @@
 #include <string>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 namespace
@@ -43,8 +45,14 @@ constexpr unsigned int BLACKWELL_COMPAT = 10;
 } //namespace
 
 /*****************************************************************************/
-BusGrind::BusGrind(dcgmHandle_t handle)
-    : test_pinned(true)
+BusGrind::BusGrind(dcgmHandle_t handle,
+                   DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                   CudaOpsAnyUniquePtr cudaOps,
+                   CublasOpsAnyUniquePtr cublasOps,
+                   CudaCommonAnyUniquePtr cudaCommon,
+                   NvvsCommon *nvvsCommon)
+    : Plugin(dcgmOps.AsAnyPtr())
+    , test_pinned(true)
     , test_unpinned(true)
     , test_p2p_on(true)
     , test_p2p_off(true)
@@ -66,10 +74,14 @@ BusGrind::BusGrind(dcgmHandle_t handle)
     , test_12(true)
     , test_13(true)
     , test_14(true)
+    , m_dcgmOpsUnique(std::move(dcgmOps))
     , m_dcgmCommErrorOccurred(false)
     , m_printedConcurrentGpuErrorMessage(true)
     , m_testParameters()
-    , m_dcgmRecorder(handle)
+    , m_cudaOps(std::move(cudaOps))
+    , m_cublasOps(std::move(cublasOps))
+    , m_cudaCommon(std::move(cudaCommon))
+    , m_dcgmRecorder(handle, m_dcgmOps, nvvsCommon)
     , m_testDuration(.0)
     , m_gpuNvlinksExpectedUp(0)
     , m_nvSwitchNvlinksExpectedUp(0)
@@ -233,7 +245,7 @@ void BusGrind::Go(std::string const &testName,
 
     m_testParameters->SetFromStruct(numParameters, tpStruct);
 
-    if (main_init(*this, *entityInfo) != DCGM_ST_OK)
+    if (main_init(*this, *entityInfo, m_dcgmOps, m_handle, m_cudaOps.AsAnyPtr()) != DCGM_ST_OK)
     {
         // The error has been logged by main_init()
         log_error("Failed while initializing the PCIe plugin.");
@@ -261,7 +273,7 @@ void BusGrind::Go(std::string const &testName,
     ParseIgnoreErrorCodesParam(testName, m_testParameters->GetString(PS_IGNORE_ERROR_CODES));
     m_dcgmRecorder.SetIgnoreErrorCodes(GetIgnoreErrorCodes(testName));
 
-    st = main_entry(this, *entityInfo);
+    st = main_entry(this, *entityInfo, m_dcgmOps, m_handle, m_cudaOps.AsAnyPtr());
     if (main_should_stop)
     {
         DcgmError d { DcgmError::GpuIdTag::Unknown };
@@ -306,11 +318,6 @@ void BusGrind::Go(std::string const &testName,
 }
 
 /*****************************************************************************/
-dcgmHandle_t BusGrind::GetHandle()
-{
-    return m_handle;
-}
-
 /*****************************************************************************/
 BusGrind::~BusGrind()
 {
@@ -330,7 +337,7 @@ void BusGrind::Cleanup(void)
     for (size_t deviceIdx = 0; deviceIdx < m_device.size(); deviceIdx++)
     {
         smDevice = m_device[deviceIdx];
-        cudaSetDevice(smDevice->cudaDeviceIdx);
+        m_cudaOps->cudaSetDevice(smDevice->cudaDeviceIdx);
         delete smDevice;
     }
 
@@ -383,7 +390,11 @@ bool BusGrind::Init(dcgmDiagPluginEntityList_v1 const *entityInfo)
             smDevice = new SmPerfDevice(GetPcieTestName(),
                                         entityInfo->entities[gpuListIndex].entity.entityId,
                                         entityInfo->entities[gpuListIndex].auxField.gpu.attributes.identifiers.pciBusId,
-                                        this);
+                                        this,
+                                        m_dcgmOps,
+                                        m_handle,
+                                        m_cudaOps.AsAnyPtr(),
+                                        m_cublasOps.AsAnyPtr());
         }
         catch (DcgmError &d)
         {
@@ -460,17 +471,16 @@ void BusGrind::ParseDisableTests(std::string tests)
 /*****************************************************************************/
 int BusGrind::CudaInit(void)
 {
-    using namespace Dcgm;
     int count, valueSize;
     size_t arrayByteSize, arrayNelem;
     cudaError_t cuSt;
     cublasStatus_t cubSt;
     unsigned int hostAllocFlags = 0;
 
-    cuSt = cudaGetDeviceCount(&count);
+    cuSt = m_cudaOps->cudaGetDeviceCount(&count);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR(GetPcieTestName(), "cudaGetDeviceCount", cuSt, 0, 0, false);
+        LOG_CUDA_ERROR(m_cudaCommon, GetPcieTestName(), "cudaGetDeviceCount", cuSt, 0, 0, false);
         return -1;
     }
 
@@ -498,27 +508,27 @@ int BusGrind::CudaInit(void)
         }
 
         /* Make all subsequent cuda calls link to this device */
-        cudaSetDevice(device->cudaDeviceIdx);
+        m_cudaOps->cudaSetDevice(device->cudaDeviceIdx);
 
         /* Fill the arrays with random values */
         srand(time(NULL));
 
-        cuSt = cudaHostAlloc(&device->hostA, arrayByteSize, hostAllocFlags);
+        cuSt = m_cudaOps->cudaHostAlloc(&device->hostA, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(m_cudaCommon, GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
-        cuSt = cudaHostAlloc(&device->hostB, arrayByteSize, hostAllocFlags);
+        cuSt = m_cudaOps->cudaHostAlloc(&device->hostB, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(m_cudaCommon, GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
-        cuSt = cudaHostAlloc(&device->hostC, arrayByteSize, hostAllocFlags);
+        cuSt = m_cudaOps->cudaHostAlloc(&device->hostC, arrayByteSize, hostAllocFlags);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(m_cudaCommon, GetPcieTestName(), "cudaHostAlloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
 
@@ -551,32 +561,32 @@ int BusGrind::CudaInit(void)
         }
 
         /* Initialize cublas */
-        cubSt = Dcgm::CublasProxy::CublasCreate(&device->cublasHandle);
+        cubSt = m_cublasOps->cublasCreate_v2(&device->cublasHandle);
         if (cubSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR(GetPcieTestName(), "cublasCreate", cubSt, device->gpuId);
+            LOG_CUBLAS_ERROR(m_cudaCommon, GetPcieTestName(), "cublasCreate_v2", cubSt, device->gpuId);
             return -1;
         }
-        log_debug("cublasCreate cudaDeviceIdx {}, handle {}", device->cudaDeviceIdx, (void *)device->cublasHandle);
+        log_debug("cublasCreate_v2 cudaDeviceIdx {}, handle {}", device->cudaDeviceIdx, (void *)device->cublasHandle);
         device->allocatedCublasHandle = 1;
 
         /* Allocate device memory */
-        cuSt = cudaMalloc((void **)&device->deviceA, arrayByteSize);
+        cuSt = m_cudaOps->cudaMalloc((void **)&device->deviceA, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(m_cudaCommon, GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
-        cuSt = cudaMalloc((void **)&device->deviceB, arrayByteSize);
+        cuSt = m_cudaOps->cudaMalloc((void **)&device->deviceB, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(m_cudaCommon, GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
-        cuSt = cudaMalloc((void **)&device->deviceC, arrayByteSize);
+        cuSt = m_cudaOps->cudaMalloc((void **)&device->deviceC, arrayByteSize);
         if (cuSt != cudaSuccess)
         {
-            LOG_CUDA_ERROR(GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
+            LOG_CUDA_ERROR(m_cudaCommon, GetPcieTestName(), "cudaMalloc", cuSt, device->gpuId, arrayByteSize);
             return -1;
         }
     }
@@ -695,8 +705,7 @@ bool BusGrind::CheckPassFailSingleGpu(SmPerfDevice *device,
 
         auto const startTimeEC = std::chrono::microseconds(data[0].timestamp);
         auto const endTimeEC   = std::chrono::microseconds(data[1].timestamp);
-        unsigned int elapsed   = std::chrono::duration_cast<std::chrono::minutes>(endTimeEC).count()
-                                 - std::chrono::duration_cast<std::chrono::minutes>(startTimeEC).count();
+        unsigned int elapsed   = ElapsedMinutes(startTimeEC, endTimeEC);
 
         log_debug("PCIe test ran {} minutes with {} total corrected PCIe errors", elapsed, totalCorrectedErrors);
 
@@ -969,7 +978,7 @@ bool BusGrind::RunTest_sm(dcgmDiagPluginEntityList_v1 const *entityInfo)
         while (Nrunning > 0)
         {
             log_info("Launching PCIe tests while running background sm stress");
-            main_entry(this, *entityInfo);
+            main_entry(this, *entityInfo, m_dcgmOps, m_handle, m_cudaOps.AsAnyPtr());
             Nrunning = 0;
             /* Just go in a round-robin loop around our workers until
              * they have all exited. These calls will return immediately
@@ -1098,53 +1107,60 @@ int SmPerfWorker::DoOneMatrixMultiplication(float *floatAlpha,
                                             float *floatBeta,
                                             double *doubleBeta)
 {
-    using namespace Dcgm;
     cublasStatus_t cublasSt;
 
     if (m_useDgemm)
     {
-        cublasSt = CublasProxy::CublasDgemm(m_device->cublasHandle,
-                                            CUBLAS_OP_N,
-                                            CUBLAS_OP_N,
-                                            m_matrixDim,
-                                            m_matrixDim,
-                                            m_matrixDim,
-                                            doubleAlpha,
-                                            (double *)m_device->deviceA,
-                                            m_matrixDim,
-                                            (double *)m_device->deviceB,
-                                            m_matrixDim,
-                                            doubleBeta,
-                                            (double *)m_device->deviceC,
-                                            m_matrixDim);
+        cublasSt = m_device->cublasOps->cublasDgemm_v2(m_device->cublasHandle,
+                                                       CUBLAS_OP_N,
+                                                       CUBLAS_OP_N,
+                                                       m_matrixDim,
+                                                       m_matrixDim,
+                                                       m_matrixDim,
+                                                       doubleAlpha,
+                                                       (double *)m_device->deviceA,
+                                                       m_matrixDim,
+                                                       (double *)m_device->deviceB,
+                                                       m_matrixDim,
+                                                       doubleBeta,
+                                                       (double *)m_device->deviceC,
+                                                       m_matrixDim);
         if (cublasSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(
-                &m_plugin, m_plugin.GetPcieTestName(), "cublasDgemm", cublasSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(m_plugin.m_cudaCommon.AsAnyPtr(),
+                                        &m_plugin,
+                                        m_plugin.GetPcieTestName(),
+                                        "cublasDgemm_v2",
+                                        cublasSt,
+                                        m_device->gpuId);
             DcgmLockGuard lock(&m_sync_mutex);
             return -1;
         }
     }
     else
     {
-        cublasSt = CublasProxy::CublasSgemm(m_device->cublasHandle,
-                                            CUBLAS_OP_N,
-                                            CUBLAS_OP_N,
-                                            m_matrixDim,
-                                            m_matrixDim,
-                                            m_matrixDim,
-                                            floatAlpha,
-                                            (float *)m_device->deviceA,
-                                            m_matrixDim,
-                                            (float *)m_device->deviceB,
-                                            m_matrixDim,
-                                            floatBeta,
-                                            (float *)m_device->deviceC,
-                                            m_matrixDim);
+        cublasSt = m_device->cublasOps->cublasSgemm_v2(m_device->cublasHandle,
+                                                       CUBLAS_OP_N,
+                                                       CUBLAS_OP_N,
+                                                       m_matrixDim,
+                                                       m_matrixDim,
+                                                       m_matrixDim,
+                                                       floatAlpha,
+                                                       (float *)m_device->deviceA,
+                                                       m_matrixDim,
+                                                       (float *)m_device->deviceB,
+                                                       m_matrixDim,
+                                                       floatBeta,
+                                                       (float *)m_device->deviceC,
+                                                       m_matrixDim);
         if (cublasSt != CUBLAS_STATUS_SUCCESS)
         {
-            LOG_CUBLAS_ERROR_FOR_PLUGIN(
-                &m_plugin, m_plugin.GetPcieTestName(), "cublasSgemm", cublasSt, m_device->gpuId);
+            LOG_CUBLAS_ERROR_FOR_PLUGIN(m_plugin.m_cudaCommon.AsAnyPtr(),
+                                        &m_plugin,
+                                        m_plugin.GetPcieTestName(),
+                                        "cublasSgemm_v2",
+                                        cublasSt,
+                                        m_device->gpuId);
             DcgmLockGuard lock(&m_sync_mutex);
             return -1;
         }
@@ -1164,7 +1180,6 @@ void SmPerfWorker::recordPciCorrErrorCount()
 /*****************************************************************************/
 void SmPerfWorker::run(void)
 {
-    using namespace Dcgm;
     double doubleAlpha, doubleBeta;
     float floatAlpha, floatBeta;
     double startTime;
@@ -1173,6 +1188,7 @@ void SmPerfWorker::run(void)
     double now, elapsed;
     long long Nops = 0, NopsBefore;
     cudaError_t cuSt;
+    CudaOpsAnyPtr cudaOps = m_device->cudaOps;
     int valueSize, arrayByteSize;
     int st;
 
@@ -1194,20 +1210,30 @@ void SmPerfWorker::run(void)
     arrayByteSize = valueSize * m_matrixDim * m_matrixDim;
 
     /* Copy the host arrays to the device arrays */
-    cuSt = cudaMemcpyAsync(m_device->deviceA, m_device->hostA, arrayByteSize, cudaMemcpyHostToDevice);
+    cuSt = cudaOps->cudaMemcpyAsync(m_device->deviceA, m_device->hostA, arrayByteSize, cudaMemcpyHostToDevice);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(
-            &m_plugin, m_plugin.GetPcieTestName(), "cudaMemcpy", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin.m_cudaCommon,
+                                  &m_plugin,
+                                  m_plugin.GetPcieTestName(),
+                                  "cudaMemcpy",
+                                  cuSt,
+                                  m_device->gpuId,
+                                  arrayByteSize);
         DcgmLockGuard lock(&m_sync_mutex);
         m_stopTime = timelib_usecSince1970();
         return;
     }
-    cuSt = cudaMemcpyAsync(m_device->deviceB, m_device->hostB, arrayByteSize, cudaMemcpyHostToDevice);
+    cuSt = cudaOps->cudaMemcpyAsync(m_device->deviceB, m_device->hostB, arrayByteSize, cudaMemcpyHostToDevice);
     if (cuSt != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(
-            &m_plugin, m_plugin.GetPcieTestName(), "cudaMemcpyAsync", cuSt, m_device->gpuId, arrayByteSize);
+        LOG_CUDA_ERROR_FOR_PLUGIN(m_plugin.m_cudaCommon,
+                                  &m_plugin,
+                                  m_plugin.GetPcieTestName(),
+                                  "cudaMemcpyAsync",
+                                  cuSt,
+                                  m_device->gpuId,
+                                  arrayByteSize);
         DcgmLockGuard lock(&m_sync_mutex);
         m_stopTime = timelib_usecSince1970();
         return;
@@ -1233,7 +1259,7 @@ void SmPerfWorker::run(void)
     recordPciCorrErrorCount();
 
     /* Lock to our assigned GPU */
-    cudaSetDevice(m_device->cudaDeviceIdx);
+    cudaOps->cudaSetDevice(m_device->cudaDeviceIdx);
 
     std::stringstream ss;
     ss << "Running for " << m_testDuration << " seconds";

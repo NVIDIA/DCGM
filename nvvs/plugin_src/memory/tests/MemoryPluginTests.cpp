@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,78 @@
 #include "dcgm_fields.h"
 #include <catch2/catch_all.hpp>
 
-#define MEMORY_UNIT_TESTS
+#include <CudaCommonAnyPtr.hpp>
+#include <CudaCommonAnyUniquePtr.hpp>
+#include <CudaOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <Defer.hpp>
 #include <L1TagCuda.h>
 #include <Memory_wrapper.h>
+#include <MockCudaCommon.h>
+#include <MockCudaOps.h>
+#include <MockDcgmOps.h>
+#include <NvvsCommon.h>
 #include <PluginInterface.h>
+#include <ScopedEnvVars.hpp>
 #include <UniquePtrUtil.h>
 #include <memory_plugin.h>
 
-#include <cu_stubs_control.h>
+#include <utility>
 
-TEST_CASE("mem_init")
+
+namespace
 {
-    mem_globals_t memGlobals                                = {};
+struct MemoryPluginTestFixture
+{
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique = std::make_unique<DcgmNs::MockDcgmOps>();
+    DcgmNs::MockDcgmOps *mockDcgmOps                       = mockDcgmOpsUnique.get();
+    std::unique_ptr<MockCudaOps> mockCudaOpsUnique         = std::make_unique<MockCudaOps>();
+    MockCudaOps *mockCudaOps                               = mockCudaOpsUnique.get();
+    CudaOpsAnyPtr cudaOpsPtr { mockCudaOps };
+    std::unique_ptr<MockCudaCommon> mockCudaCommonUnique = std::make_unique<MockCudaCommon>();
+    MockCudaCommon *mockCudaCommon                       = mockCudaCommonUnique.get();
+    CudaCommonAnyPtr cudaCommonPtr { mockCudaCommon };
+    NvvsCommon nvvsCommon;
+    std::unique_ptr<Memory> memory;
+
+    void InitializeMemory(dcgmHandle_t handle)
+    {
+        memory = std::make_unique<Memory>(handle,
+                                          std::move(mockDcgmOpsUnique),
+                                          std::move(mockCudaOpsUnique),
+                                          std::move(mockCudaCommonUnique),
+                                          &nvvsCommon);
+    }
+};
+} // namespace
+
+namespace
+{
+void ConfigureEccValue(DcgmNs::MockDcgmOps &mockDcgmOps,
+                       int64_t currentValue,
+                       dcgmReturn_t returnCode  = DCGM_ST_OK,
+                       dcgmReturn_t fieldStatus = DCGM_ST_OK)
+{
+    mockDcgmOps.m_entitiesGetLatestValuesState.handler
+        = [currentValue, returnCode, fieldStatus](dcgmHandle_t,
+                                                  dcgmGroupEntityPair_t *,
+                                                  unsigned int,
+                                                  unsigned short fields[],
+                                                  unsigned int,
+                                                  unsigned int,
+                                                  dcgmFieldValue_v2 values[]) {
+              memset(&values[0], 0, sizeof(values[0]));
+              values[0].fieldId   = fields[0];
+              values[0].status    = fieldStatus;
+              values[0].fieldType = DCGM_FT_INT64;
+              values[0].value.i64 = currentValue;
+              return returnCode;
+          };
+}
+} // namespace
+
+TEST_CASE_METHOD(MemoryPluginTestFixture, "mem_init")
+{
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
     entityList->numEntities = 4;
@@ -38,29 +97,32 @@ TEST_CASE("mem_init")
         entityList->entities[i].entity.entityGroupId = DCGM_FE_GPU;
         entityList->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
     }
-    Memory mem((dcgmHandle_t)0);
+    InitializeMemory((dcgmHandle_t)0);
+    mem_globals_t memGlobals(*memory,
+                             nullptr,
+                             0,
+                             mockDcgmOps,
+                             entityList->entities[1].entity.entityId,
+                             cudaOpsPtr,
+                             cudaCommonPtr,
+                             &nvvsCommon);
 
-    memGlobals.memory = &mem;
-
-    cuInitResult = CUDA_ERROR_INVALID_DEVICE;
-    mem.InitializeForEntityList(mem.GetMemoryTestName(), *entityList);
+    mockCudaOps->cuInitResult = CUDA_ERROR_INVALID_DEVICE;
+    memory->InitializeForEntityList(memory->GetMemoryTestName(), *entityList);
     REQUIRE(mem_init(&memGlobals, entityList->entities[1]) == 1);
 
     auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
-    dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+    dcgmReturn_t ret = memory->GetResults(memory->GetMemoryTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(entityResults.numErrors == 1);
     CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_GPU);
     CHECK(entityResults.errors[0].entity.entityId == 1);
-
-    delete memGlobals.nvvsDevice;
 }
 
-TEST_CASE("Memory: negative test for DCGM_FR_CUDA_DEVICE")
+TEST_CASE_METHOD(MemoryPluginTestFixture, "Memory: negative test for DCGM_FR_CUDA_DEVICE")
 {
-    mem_globals_t memGlobals                                = {};
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
     entityList->numEntities = 4;
@@ -71,38 +133,30 @@ TEST_CASE("Memory: negative test for DCGM_FR_CUDA_DEVICE")
         entityList->entities[i].auxField.gpu.status                             = DcgmEntityStatusOk;
         entityList->entities[i].auxField.gpu.attributes.identifiers.pciDeviceId = 1;
     }
-    Memory mem((dcgmHandle_t)0);
-
-    memGlobals.memory = &mem;
+    InitializeMemory((dcgmHandle_t)0);
+    mem_globals_t memGlobals(*memory,
+                             nullptr,
+                             0,
+                             mockDcgmOps,
+                             entityList->entities[1].entity.entityId,
+                             cudaOpsPtr,
+                             cudaCommonPtr,
+                             &nvvsCommon);
 
     // AddError is only called when CUDA_VISIBLE_DEVICES is set
-    const char *oldValue = getenv("CUDA_VISIBLE_DEVICES");
-    setenv("CUDA_VISIBLE_DEVICES", "0,1,2,3", 1);
-    DcgmNs::Defer restoreEnv([oldValue] {
-        if (oldValue)
-        {
-            setenv("CUDA_VISIBLE_DEVICES", oldValue, 1);
-        }
-        else
-        {
-            unsetenv("CUDA_VISIBLE_DEVICES");
-        }
-    });
+    ScopedEnvVars envVars("CUDA_VISIBLE_DEVICES", "0,1,2,3");
 
-    cuInitResult                = CUDA_SUCCESS;
-    cuDeviceGetByPCIBusIdResult = CUDA_ERROR_INVALID_DEVICE;
-    DcgmNs::Defer restoreStub([&] { cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS; });
-    mem.InitializeForEntityList(mem.GetMemoryTestName(), *entityList);
+    mockCudaOps->cuInitResult                = CUDA_SUCCESS;
+    mockCudaOps->cuDeviceGetByPCIBusIdResult = CUDA_ERROR_INVALID_DEVICE;
+    DcgmNs::Defer restoreStub([&] { mockCudaOps->cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS; });
+    memory->InitializeForEntityList(memory->GetMemoryTestName(), *entityList);
     REQUIRE(mem_init(&memGlobals, entityList->entities[1]) == 1);
-    DcgmNs::Defer cleanupDevice([&] {
-        delete memGlobals.nvvsDevice;
-        memGlobals.nvvsDevice = nullptr;
-    });
+    DcgmNs::Defer cleanupDevice([&] { mem_cleanup(&memGlobals); });
 
     auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
-    dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+    dcgmReturn_t ret = memory->GetResults(memory->GetMemoryTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);
     REQUIRE(entityResults.numErrors == 2);
 
@@ -117,30 +171,7 @@ TEST_CASE("Memory: negative test for DCGM_FR_CUDA_DEVICE")
     CHECK(entityResults.errors[1].code == DCGM_FR_CUDA_DEVICE);
 }
 
-/*
- * Spoof this dcgmlib function so we can control program execution
- */
-int64_t injectedEccCurrentValue     = 1;
-dcgmReturn_t injectedEccReturnCode  = DCGM_ST_OK;
-dcgmReturn_t injectedEccFieldStatus = DCGM_ST_OK;
-
-dcgmReturn_t dcgmEntitiesGetLatestValues(dcgmHandle_t /* handle */,
-                                         dcgmGroupEntityPair_t /* entities */[],
-                                         unsigned int /* entityCount */,
-                                         unsigned short fields[],
-                                         unsigned int /* fieldCount */,
-                                         unsigned int /* flags */,
-                                         dcgmFieldValue_v2 values[])
-{
-    memset(&values[0], 0, sizeof(values[0]));
-    values[0].fieldId   = fields[0];
-    values[0].status    = injectedEccFieldStatus;
-    values[0].fieldType = DCGM_FT_INT64;
-    values[0].value.i64 = injectedEccCurrentValue;
-    return injectedEccReturnCode;
-}
-
-TEST_CASE("Memory: negative test for DCGM_FR_ECC_DISABLED")
+TEST_CASE_METHOD(MemoryPluginTestFixture, "Memory: negative test for DCGM_FR_ECC_DISABLED")
 {
     unsigned int gpuCount    = 4;
     unsigned int targetGpuId = 1;
@@ -153,23 +184,24 @@ TEST_CASE("Memory: negative test for DCGM_FR_ECC_DISABLED")
         entityList->entities[i].entity.entityGroupId = DCGM_FE_GPU;
         entityList->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
     }
+    ConfigureEccValue(*mockDcgmOps, 0);
+    InitializeMemory((dcgmHandle_t)42);
+    memory->InitializeForEntityList(memory->GetMemoryTestName(), *entityList);
 
-    Memory mem((dcgmHandle_t)42);
-    mem.InitializeForEntityList(mem.GetMemoryTestName(), *entityList);
-
-    injectedEccCurrentValue = 0;
-    injectedEccReturnCode   = DCGM_ST_OK;
-    DcgmNs::Defer restoreEcc([&] {
-        injectedEccCurrentValue = 1;
-        injectedEccReturnCode   = DCGM_ST_OK;
-    });
-
-    REQUIRE(main_entry(entityList->entities[targetGpuId], &mem, nullptr) == 1);
+    REQUIRE(main_entry(entityList->entities[targetGpuId],
+                       memory.get(),
+                       nullptr,
+                       42,
+                       mockDcgmOps,
+                       cudaOpsPtr,
+                       cudaCommonPtr,
+                       &nvvsCommon)
+            == 1);
 
     auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
-    dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+    dcgmReturn_t ret = memory->GetResults(memory->GetMemoryTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);
 
     // ECC disabled is a skip, not a failure -- no errors expected
@@ -181,7 +213,7 @@ TEST_CASE("Memory: negative test for DCGM_FR_ECC_DISABLED")
     CHECK(entityResults.info[0].entity.entityId == targetGpuId);
 }
 
-TEST_CASE("Memory: negative test for DCGM_FR_CUDA_DBE")
+TEST_CASE_METHOD(MemoryPluginTestFixture, "Memory: negative test for DCGM_FR_CUDA_DBE")
 {
     unsigned int gpuCount    = 4;
     unsigned int targetGpuId = 1;
@@ -194,9 +226,9 @@ TEST_CASE("Memory: negative test for DCGM_FR_CUDA_DBE")
         entityList->entities[i].entity.entityGroupId = DCGM_FE_GPU;
         entityList->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
     }
-
-    Memory mem((dcgmHandle_t)42);
-    mem.InitializeForEntityList(mem.GetMemoryTestName(), *entityList);
+    ConfigureEccValue(*mockDcgmOps, 1);
+    InitializeMemory((dcgmHandle_t)42);
+    memory->InitializeForEntityList(memory->GetMemoryTestName(), *entityList);
 
     // Three parameters read, but unused, on the code path to DCGM_FR_CUDA_DBE
     TestParameters tp;
@@ -204,40 +236,40 @@ TEST_CASE("Memory: negative test for DCGM_FR_CUDA_DBE")
     tp.AddDouble(MEMORY_STR_MAX_FREE_MEMORY_MB, 0.0);
     tp.AddString(MEMORY_L1TAG_STR_IS_ALLOWED, "False");
 
-    injectedEccCurrentValue = 1;
-    injectedEccReturnCode   = DCGM_ST_OK;
-
-    cuInitResult                = CUDA_SUCCESS;
-    cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
-    cuModuleLoadDataResult      = CUDA_ERROR_ECC_UNCORRECTABLE;
+    mockCudaOps->cuInitResult                = CUDA_SUCCESS;
+    mockCudaOps->cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
+    mockCudaOps->cuModuleLoadDataResult      = CUDA_ERROR_ECC_UNCORRECTABLE;
     DcgmNs::Defer restoreStubs([&] {
-        cuInitResult                = CUDA_SUCCESS;
-        cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
-        cuModuleLoadDataResult      = CUDA_SUCCESS;
+        mockCudaOps->cuInitResult                = CUDA_SUCCESS;
+        mockCudaOps->cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
+        mockCudaOps->cuModuleLoadDataResult      = CUDA_SUCCESS;
     });
 
-    REQUIRE(main_entry(entityList->entities[targetGpuId], &mem, &tp) == 1);
+    REQUIRE(main_entry(entityList->entities[targetGpuId],
+                       memory.get(),
+                       &tp,
+                       42,
+                       mockDcgmOps,
+                       cudaOpsPtr,
+                       cudaCommonPtr,
+                       &nvvsCommon)
+            == 1);
 
     auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
-    dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+    dcgmReturn_t ret = memory->GetResults(memory->GetMemoryTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);
 
-    REQUIRE(entityResults.numErrors == 2);
-
-    // NvvsDevice::Init() → SaveState() fails in stub environment (no real DCGM backend)
-    CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_GPU);
-    CHECK(entityResults.errors[0].entity.entityId == targetGpuId);
-    CHECK(entityResults.errors[0].code == DCGM_FR_DCGM_API);
+    REQUIRE(entityResults.numErrors == 1);
 
     // cuModuleLoadData returns CUDA_ERROR_ECC_UNCORRECTABLE → DCGM_FR_CUDA_DBE
-    CHECK(entityResults.errors[1].entity.entityGroupId == DCGM_FE_GPU);
-    CHECK(entityResults.errors[1].entity.entityId == targetGpuId);
-    CHECK(entityResults.errors[1].code == DCGM_FR_CUDA_DBE);
+    CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_GPU);
+    CHECK(entityResults.errors[0].entity.entityId == targetGpuId);
+    CHECK(entityResults.errors[0].code == DCGM_FR_CUDA_DBE);
 }
 
-TEST_CASE("Memory: negative test for DCGM_FR_ECC_UNSUPPORTED")
+TEST_CASE_METHOD(MemoryPluginTestFixture, "Memory: negative test for DCGM_FR_ECC_UNSUPPORTED")
 {
     unsigned int gpuCount    = 4;
     unsigned int targetGpuId = 1;
@@ -250,23 +282,24 @@ TEST_CASE("Memory: negative test for DCGM_FR_ECC_UNSUPPORTED")
         entityList->entities[i].entity.entityGroupId = DCGM_FE_GPU;
         entityList->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
     }
+    ConfigureEccValue(*mockDcgmOps, 1, DCGM_ST_OK, DCGM_ST_NOT_SUPPORTED);
+    InitializeMemory((dcgmHandle_t)42);
+    memory->InitializeForEntityList(memory->GetMemoryTestName(), *entityList);
 
-    Memory mem((dcgmHandle_t)42);
-    mem.InitializeForEntityList(mem.GetMemoryTestName(), *entityList);
-
-    injectedEccFieldStatus = DCGM_ST_NOT_SUPPORTED;
-    injectedEccReturnCode  = DCGM_ST_OK;
-    DcgmNs::Defer restoreEcc([&] {
-        injectedEccFieldStatus = DCGM_ST_OK;
-        injectedEccReturnCode  = DCGM_ST_OK;
-    });
-
-    REQUIRE(main_entry(entityList->entities[targetGpuId], &mem, nullptr) == 1);
+    REQUIRE(main_entry(entityList->entities[targetGpuId],
+                       memory.get(),
+                       nullptr,
+                       42,
+                       mockDcgmOps,
+                       cudaOpsPtr,
+                       cudaCommonPtr,
+                       &nvvsCommon)
+            == 1);
 
     auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
-    dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+    dcgmReturn_t ret = memory->GetResults(memory->GetMemoryTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);
 
     // ECC unsupported is a skip, not a failure -- no errors expected
@@ -278,7 +311,7 @@ TEST_CASE("Memory: negative test for DCGM_FR_ECC_UNSUPPORTED")
     CHECK(entityResults.info[0].entity.entityId == targetGpuId);
 }
 
-TEST_CASE("Memory: negative test for DCGM_FR_MEMORY_MISMATCH")
+TEST_CASE_METHOD(MemoryPluginTestFixture, "Memory: negative test for DCGM_FR_MEMORY_MISMATCH")
 {
     unsigned int gpuCount    = 4;
     unsigned int targetGpuId = 1;
@@ -291,9 +324,9 @@ TEST_CASE("Memory: negative test for DCGM_FR_MEMORY_MISMATCH")
         entityList->entities[i].entity.entityGroupId = DCGM_FE_GPU;
         entityList->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
     }
-
-    Memory mem((dcgmHandle_t)42);
-    mem.InitializeForEntityList(mem.GetMemoryTestName(), *entityList);
+    ConfigureEccValue(*mockDcgmOps, 1);
+    InitializeMemory((dcgmHandle_t)42);
+    memory->InitializeForEntityList(memory->GetMemoryTestName(), *entityList);
 
     // Parameters read on the code path to the memory mismatch check
     TestParameters tp;
@@ -301,39 +334,39 @@ TEST_CASE("Memory: negative test for DCGM_FR_MEMORY_MISMATCH")
     tp.AddDouble(MEMORY_STR_MAX_FREE_MEMORY_MB, 0.0);
     tp.AddString(MEMORY_L1TAG_STR_IS_ALLOWED, "False");
 
-    injectedEccCurrentValue = 1;
-    injectedEccReturnCode   = DCGM_ST_OK;
-
-    cuInitResult                = CUDA_SUCCESS;
-    cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
-    cuModuleLoadDataResult      = CUDA_SUCCESS;
-    cuMemcpyDtoHValue           = 1;
+    mockCudaOps->cuInitResult                = CUDA_SUCCESS;
+    mockCudaOps->cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
+    mockCudaOps->cuModuleLoadDataResult      = CUDA_SUCCESS;
+    mockCudaOps->cuMemcpyDtoHValue           = 1;
     DcgmNs::Defer restoreStubs([&] {
-        cuInitResult                = CUDA_SUCCESS;
-        cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
-        cuModuleLoadDataResult      = CUDA_SUCCESS;
-        cuMemcpyDtoHValue           = 0;
+        mockCudaOps->cuInitResult                = CUDA_SUCCESS;
+        mockCudaOps->cuDeviceGetByPCIBusIdResult = CUDA_SUCCESS;
+        mockCudaOps->cuModuleLoadDataResult      = CUDA_SUCCESS;
+        mockCudaOps->cuMemcpyDtoHValue           = 0;
     });
 
-    REQUIRE(main_entry(entityList->entities[targetGpuId], &mem, &tp) == 1);
+    REQUIRE(main_entry(entityList->entities[targetGpuId],
+                       memory.get(),
+                       &tp,
+                       42,
+                       mockDcgmOps,
+                       cudaOpsPtr,
+                       cudaCommonPtr,
+                       &nvvsCommon)
+            == 1);
 
     auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
-    dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+    dcgmReturn_t ret = memory->GetResults(memory->GetMemoryTestName(), &entityResults);
     CHECK(ret == DCGM_ST_OK);
 
-    REQUIRE(entityResults.numErrors == 2);
-
-    // NvvsDevice::Init() → SaveState() fails in stub environment (no real DCGM backend)
-    CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_GPU);
-    CHECK(entityResults.errors[0].entity.entityId == targetGpuId);
-    CHECK(entityResults.errors[0].code == DCGM_FR_DCGM_API);
+    REQUIRE(entityResults.numErrors == 1);
 
     // cuMemcpyDtoH copies back non-zero error count, triggering a memory mismatch failure
-    CHECK(entityResults.errors[1].entity.entityGroupId == DCGM_FE_GPU);
-    CHECK(entityResults.errors[1].entity.entityId == targetGpuId);
-    CHECK(entityResults.errors[1].code == DCGM_FR_MEMORY_MISMATCH);
+    CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_GPU);
+    CHECK(entityResults.errors[0].entity.entityId == targetGpuId);
+    CHECK(entityResults.errors[0].code == DCGM_FR_MEMORY_MISMATCH);
 }
 
 class L1TagCudaTest : public L1TagCuda
@@ -344,7 +377,7 @@ public:
     using L1TagCuda::SetGpuIndex;
 };
 
-TEST_CASE("Memory: negative test for DCGM_FR_MEMORY_ALLOC")
+TEST_CASE_METHOD(MemoryPluginTestFixture, "Memory: negative test for DCGM_FR_MEMORY_ALLOC")
 {
     unsigned int gpuCount    = 4;
     unsigned int targetGpuId = 1;
@@ -357,29 +390,24 @@ TEST_CASE("Memory: negative test for DCGM_FR_MEMORY_ALLOC")
         entityList->entities[i].entity.entityGroupId = DCGM_FE_GPU;
         entityList->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
     }
-
-    Memory mem((dcgmHandle_t)42);
-    mem.InitializeForEntityList(mem.GetMemoryTestName(), *entityList);
+    InitializeMemory((dcgmHandle_t)42);
+    memory->InitializeForEntityList(memory->GetMemoryTestName(), *entityList);
 
     SECTION("runTestDeviceMemory path")
     {
-        mem_globals_t memGlobals = {};
-        memGlobals.memory        = &mem;
-        memGlobals.dcgmGpuIndex  = targetGpuId;
-
         TestParameters tp;
         tp.AddString(MEMORY_STR_MIN_ALLOCATION_PERCENTAGE, "75");
         tp.AddDouble(MEMORY_STR_MAX_FREE_MEMORY_MB, 0.0);
-        memGlobals.testParameters = &tp;
+        mem_globals_t memGlobals(*memory, &tp, 42, mockDcgmOps, targetGpuId, cudaOpsPtr, cudaCommonPtr, &nvvsCommon);
 
         // cuMemAlloc_v2 always returns OOM, causing allocation to shrink below targetAllocation
-        cuMemGetInfoFree  = 1024 * 1024 * 1024;
-        cuMemGetInfoTotal = 1024 * 1024 * 1024;
-        cuMemAllocResult  = CUDA_ERROR_OUT_OF_MEMORY;
+        mockCudaOps->cuMemGetInfoFree  = 1024 * 1024 * 1024;
+        mockCudaOps->cuMemGetInfoTotal = 1024 * 1024 * 1024;
+        mockCudaOps->cuMemAllocResult  = CUDA_ERROR_OUT_OF_MEMORY;
         DcgmNs::Defer restoreStubs([&] {
-            cuMemGetInfoFree  = 0;
-            cuMemGetInfoTotal = 0;
-            cuMemAllocResult  = CUDA_SUCCESS;
+            mockCudaOps->cuMemGetInfoFree  = 0;
+            mockCudaOps->cuMemGetInfoTotal = 0;
+            mockCudaOps->cuMemAllocResult  = CUDA_SUCCESS;
         });
 
         REQUIRE(runTestDeviceMemory(&memGlobals) == NVVS_RESULT_FAIL);
@@ -387,7 +415,7 @@ TEST_CASE("Memory: negative test for DCGM_FR_MEMORY_ALLOC")
         auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
         dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
-        dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+        dcgmReturn_t ret = memory->GetResults(memory->GetMemoryTestName(), &entityResults);
         CHECK(ret == DCGM_ST_OK);
 
         REQUIRE(entityResults.numErrors == 1);
@@ -400,17 +428,14 @@ TEST_CASE("Memory: negative test for DCGM_FR_MEMORY_ALLOC")
 
     SECTION("L1TagCuda::AllocDeviceMem path")
     {
-        mem_globals_t memGlobals = {};
-        memGlobals.memory        = &mem;
-        memGlobals.dcgmGpuIndex  = targetGpuId;
-
         TestParameters tp;
-        L1TagCudaTest ltc(&mem, &tp, &memGlobals);
+        mem_globals_t memGlobals(*memory, &tp, 42, mockDcgmOps, targetGpuId, cudaOpsPtr, cudaCommonPtr, &nvvsCommon);
+        L1TagCudaTest ltc(memory.get(), &tp, &memGlobals);
         ltc.SetGpuIndex(targetGpuId);
 
         // GPU memory allocation fails, producing DCGM_FR_MEMORY_ALLOC for the target GPU
-        cuMemAllocResult = CUDA_ERROR_OUT_OF_MEMORY;
-        DcgmNs::Defer restoreStubs([&] { cuMemAllocResult = CUDA_SUCCESS; });
+        mockCudaOps->cuMemAllocResult = CUDA_ERROR_OUT_OF_MEMORY;
+        DcgmNs::Defer restoreStubs([&] { mockCudaOps->cuMemAllocResult = CUDA_SUCCESS; });
 
         CUdeviceptr_v2 ptr = 0;
         REQUIRE(ltc.AllocDeviceMem(1024, &ptr) == 1);
@@ -418,7 +443,7 @@ TEST_CASE("Memory: negative test for DCGM_FR_MEMORY_ALLOC")
         auto pEntityResults                    = MakeUniqueZero<dcgmDiagEntityResults_v2>();
         dcgmDiagEntityResults_v2 entityResults = *(pEntityResults.get());
 
-        dcgmReturn_t ret = mem.GetResults(mem.GetMemoryTestName(), &entityResults);
+        dcgmReturn_t ret = memory->GetResults(memory->GetMemoryTestName(), &entityResults);
         CHECK(ret == DCGM_ST_OK);
 
         REQUIRE(entityResults.numErrors == 1);

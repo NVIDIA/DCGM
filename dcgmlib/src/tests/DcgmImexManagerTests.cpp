@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <ScopedDcgmFields.hpp>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -30,34 +31,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-// Test fixture to ensure DCGM fields are initialized
-class DcgmFieldsFixture
-{
-public:
-    DcgmFieldsFixture()
-    {
-        // Initialize the DCGM fields system
-        fieldsInitialized = (DcgmFieldsInit() == 0);
-    }
-
-    ~DcgmFieldsFixture()
-    {
-        // Clean up the DCGM fields system
-        if (fieldsInitialized)
-        {
-            DcgmFieldsTerm();
-        }
-    }
-
-    bool isInitialized() const
-    {
-        return fieldsInitialized;
-    }
-
-private:
-    bool fieldsInitialized;
-};
 
 SCENARIO("DcgmImexManager basic functionality")
 {
@@ -134,9 +107,7 @@ SCENARIO("IMEX field definitions")
 
     SECTION("Field metadata is registered")
     {
-        // Use the fixture to ensure fields are initialized
-        DcgmFieldsFixture fixture;
-        REQUIRE(fixture.isInitialized());
+        ScopedDcgmFields fields;
 
         // Test that the fields are properly registered in the DCGM field system
         dcgm_field_meta_p domainMeta = DcgmFieldGetById(DCGM_FI_IMEX_DOMAIN_STATUS);
@@ -162,8 +133,6 @@ SCENARIO("IMEX field definitions")
             REQUIRE(daemonMeta->entityLevel == DCGM_FE_NONE);
             REQUIRE(std::string(daemonMeta->tag) == "imex_daemon_status");
         }
-
-        // Fixture destructor will clean up automatically
     }
 }
 

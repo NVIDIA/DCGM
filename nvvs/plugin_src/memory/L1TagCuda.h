@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 
 #include "L1CudaUtils.h"
 #include "memory_plugin.h"
+#include <CudaCommonAnyPtr.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
 #include <cuda.h>
 #include <stdint.h>
 
@@ -31,11 +33,13 @@ public:
         : m_gpuIndex(0)
         , m_plugin(plugin)
         , m_testParameters(tp)
-        , m_nvvsDevice(memGlobals->nvvsDevice)
+        , m_cudaOps(memGlobals->cudaOps)
+        , m_cudaCommon(memGlobals->cudaCommon)
+        , m_nvvsDevice(memGlobals->nvvsDevice.get())
         , m_cuDevice(memGlobals->cuDevice)
         , m_cuCtx(memGlobals->cuCtx)
         , m_cuMod(NULL)
-        , m_dcgmRecorder(memGlobals->m_dcgmRecorder)
+        , m_dcgmRecorder(memGlobals->m_dcgmRecorder.get())
         , m_hostErrorLog(NULL)
         , m_l1Data((CUdeviceptr_v2)NULL)
         , m_devMiscompareCount((CUdeviceptr_v2)NULL)
@@ -72,6 +76,8 @@ private:
     unsigned int m_gpuIndex;
     Memory *m_plugin;
     TestParameters *m_testParameters;
+    CudaOpsAnyPtr m_cudaOps;
+    CudaCommonAnyPtr m_cudaCommon;
 
     NvvsDevice *m_nvvsDevice;
 

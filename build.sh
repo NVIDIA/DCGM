@@ -28,6 +28,7 @@ PROJECT="$(basename "$DIR")"
 
 DCGM_SKIP_LFS_INSTALL=${DCGM_SKIP_LFS_INSTALL:-0}
 DCGM_SKIP_PYTHON_LINTING=${DCGM_SKIP_PYTHON_LINTING:-0}
+PRINT_UNCOMMITED_CHANGES=${PRINT_UNCOMMITED_CHANGES:-0}
 
 function die() {
     echo "$@" >&2
@@ -71,6 +72,7 @@ Usage: ${0} [options] [-- [any additional cmake arguments]]
     NPROC               : Specifies number of parallel builds allowed. Equals to -jNPROC
     DCGM_SKIP_LFS_INSTALL    : Set to 1 if you want to skip git-lfs verification and installation
     DCGM_SKIP_PYTHON_LINTING : Set to 1 if you do not want running pylint after each build
+    PRINT_UNCOMMITED_CHANGES : Set to 1 if you want to print current uncommitted git changes
 
     Note: Sanitizers (--*-san) will turn off static linking with libstdc++ and non-test packages
           will be disabled as well. Testing packages will contain shared libstdc++ and corresponding
@@ -93,9 +95,11 @@ declare -a cmake_arguments
 declare -a cmake_build_types
 declare -a intodocker_arguments
 
-intodocker_arguments=( --env DCGM_SKIP_PYTHON_LINTING=$DCGM_SKIP_PYTHON_LINTING )
+intodocker_arguments=(
+    --env DCGM_SKIP_PYTHON_LINTING=$DCGM_SKIP_PYTHON_LINTING
+    --env PRINT_UNCOMMITED_CHANGES=$PRINT_UNCOMMITED_CHANGES)
 
-for VARIABLE in BUILD_NUMBER DEBUG_BUILD_SCRIPT NPROC PRINT_UNCOMMITED_CHANGES
+for VARIABLE in BUILD_NUMBER DEBUG_BUILD_SCRIPT NPROC
 do
     if [[ -n "${!VARIABLE:-}" ]]; then
        intodocker_arguments+=(--env "$VARIABLE=${!VARIABLE}")
@@ -204,6 +208,24 @@ fi
 
 cmake_arguments+=(-D BUILD_TESTING=$TESTS)
 
+# Set by the host side of this script when it re-enters through the container,
+# so their presence marks that nested call: whoever ran first already asked git.
+if [[ -z "${GIT_COMMIT_SHA:-}" ]] && git rev-parse --git-dir >/dev/null 2>&1; then
+    # diff-index compares cached stat data, not file contents, and never
+    # refreshes it. Under rootless Docker a host-shared worktree mismatches on
+    # ownership alone, which would mark every tracked file modified.
+    git update-index --refresh >/dev/null || true
+
+    GIT_COMMIT_SHA=$(git rev-parse HEAD)
+    git diff-index --quiet HEAD -- || GIT_COMMIT_SHA+="(dirty)"
+
+    GIT_COMMIT_REF=$(git for-each-ref --count=1 --format='%(refname:short)' --points-at HEAD)
+
+    if [[ "${PRINT_UNCOMMITED_CHANGES}" == "1" ]]; then
+        git diff-index --patch HEAD --
+    fi
+fi
+
 if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -eq 0 ]]; then
     if [[ $DCGM_SKIP_LFS_INSTALL -eq 0 ]]; then
         if ! git config --local --get filter.lfs.smudge > /dev/null; then
@@ -212,6 +234,10 @@ if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -eq 0 ]]; then
         fi
         git lfs pull
     fi
+
+    intodocker_arguments+=(
+        --env "GIT_COMMIT_SHA=${GIT_COMMIT_SHA:-unknown}"
+        --env "GIT_COMMIT_REF=${GIT_COMMIT_REF:-unknown}")
 
     for architecture in "${architectures[@]:-amd64}"; do
         "$DIR/intodocker.sh" "${intodocker_arguments[@]}" \
@@ -225,6 +251,10 @@ fi
 test -v ARCHITECTURE || die "
 Required ARCHITECTURE environment variable is not defined in the build
 environment. Please check if you are using the proper DCGM build container."
+
+cmake_arguments+=(
+    -D GIT_COMMIT_SHA="${GIT_COMMIT_SHA:-unknown}"
+    -D GIT_COMMIT_REF="${GIT_COMMIT_REF:-unknown}")
 
 # Docker can run this script as a numeric UID without a writable HOME. In that
 # case Cargo falls back to /.cargo and fails while updating the registry cache.
@@ -254,6 +284,10 @@ CMAKE_INSTALL_SO_NO_EXE[TGZ]=FALSE
 aarch64=aarch64
 x86_64=amd64
 
+Cuda_LIBRARY_CACHE_DIR="$PWD/_out/build/cuda-library-cache"
+mkdir -p "$Cuda_LIBRARY_CACHE_DIR"
+cmake_arguments+=(-D Cuda_LIBRARY_CACHE_DIR="$Cuda_LIBRARY_CACHE_DIR")
+
 if command -v ninja > /dev/null; then
     cmake_arguments+=(-G Ninja)
 fi
@@ -278,6 +312,7 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
 
     cp --force "$CMAKE_BINARY_DIR/compile_commands.json" "$CMAKE_SOURCE_DIR/"
 
+    (set -x; cmake --build "$CMAKE_BINARY_DIR" --target cuda-library-cache)
     (set -x; cmake --build "$CMAKE_BINARY_DIR")
 
     if [[ $TESTS -eq 1 ]]; then
@@ -292,10 +327,39 @@ for CMAKE_BUILD_TYPE in "${cmake_build_types[@]:-RelWithDebInfo}"; do
 
         (set -x; ctest --output-on-failure --parallel "${NPROC:-$(nproc)}" --test-dir "$CMAKE_BINARY_DIR")
 
+        # Keep `cargo test --workspace` on the same triple as Corrosion.
+        case "${ARCHITECTURE}" in
+            x86_64)
+                DCGM_RUST_CARGO_TARGET=x86_64-unknown-linux-gnu
+                ;;
+            aarch64)
+                DCGM_RUST_CARGO_TARGET=aarch64-unknown-linux-gnu
+                ;;
+            *)
+                die "Unsupported ARCHITECTURE=${ARCHITECTURE} for Rust workspace tests"
+                ;;
+        esac
+
+        command -v cargo > /dev/null ||
+            die "cargo is required to run Rust workspace tests when build-time testing is enabled (BUILD_TESTING=ON), but it was not found in PATH"
+
+        cargo_profile_args=()
+        if [[ "${CMAKE_BUILD_TYPE,,}" != "debug" ]]; then
+            cargo_profile_args+=(--release)
+        fi
+
         if [[ $COVERAGE -eq 1 ]]; then
-            cmake --build "$CMAKE_BINARY_DIR" \
-                  --target gcovr-cobertura gcovr-html gcovr-json \
-                  --parallel 1
+            (set -x;
+             cmake --build "$CMAKE_BINARY_DIR" --target coverage-html coverage-cobertura)
+        else
+            (set -x;
+             cargo test \
+                 --manifest-path "$CMAKE_SOURCE_DIR/Cargo.toml" \
+                 --workspace \
+                 --locked \
+                 --no-fail-fast \
+                 --target "${DCGM_RUST_CARGO_TARGET}" \
+                 "${cargo_profile_args[@]}")
         fi
     fi
 

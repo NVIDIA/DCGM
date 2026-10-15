@@ -334,6 +334,28 @@ auto const &GetModuleCommandMetadata()
                                                                                           DCGM_POLICY_SR_REGISTER),
         MakeCommandMetadata<dcgm_policy_msg_unregister_t, dcgm_policy_msg_unregister_version>(
             DcgmModuleIdPolicy, DCGM_POLICY_SR_UNREGISTER),
+        MakeCommandMetadata<dcgm_policy_msg_create_t, dcgm_policy_msg_create_version>(DcgmModuleIdPolicy,
+                                                                                      DCGM_POLICY_SR_CREATE),
+        MakeCommandMetadata<dcgm_policy_msg_modify_t, dcgm_policy_msg_modify_version>(DcgmModuleIdPolicy,
+                                                                                      DCGM_POLICY_SR_MODIFY),
+        MakeCommandMetadata<dcgm_policy_msg_delete_t, dcgm_policy_msg_delete_version>(DcgmModuleIdPolicy,
+                                                                                      DCGM_POLICY_SR_DELETE),
+        MakeCommandMetadata<dcgm_policy_msg_set_state_t, dcgm_policy_msg_set_state_version>(DcgmModuleIdPolicy,
+                                                                                            DCGM_POLICY_SR_ENABLE),
+        MakeCommandMetadata<dcgm_policy_msg_set_state_t, dcgm_policy_msg_set_state_version>(DcgmModuleIdPolicy,
+                                                                                            DCGM_POLICY_SR_DISABLE),
+        MakeCommandMetadata<dcgm_policy_msg_get_one_t, dcgm_policy_msg_get_one_version>(DcgmModuleIdPolicy,
+                                                                                        DCGM_POLICY_SR_GET_ONE),
+        MakeCommandMetadata<dcgm_policy_msg_get_all_t, dcgm_policy_msg_get_all_version>(DcgmModuleIdPolicy,
+                                                                                        DCGM_POLICY_SR_GET_ALL),
+        MakeCommandMetadata<dcgm_policy_msg_import_t, dcgm_policy_msg_import_version>(DcgmModuleIdPolicy,
+                                                                                      DCGM_POLICY_SR_IMPORT),
+        MakeCommandMetadata<dcgm_policy_msg_get_violations_t, dcgm_policy_msg_get_violations_version>(
+            DcgmModuleIdPolicy, DCGM_POLICY_SR_GET_VIOLATIONS),
+        MakeCommandMetadata<dcgm_policy_msg_register_callback_t, dcgm_policy_msg_register_callback_version>(
+            DcgmModuleIdPolicy, DCGM_POLICY_SR_REGISTER_CALLBACK),
+        MakeCommandMetadata<dcgm_policy_msg_unregister_callback_t, dcgm_policy_msg_unregister_callback_version>(
+            DcgmModuleIdPolicy, DCGM_POLICY_SR_UNREGISTER_CALLBACK),
         MakeCommandMetadata<dcgm_config_msg_get_t, dcgm_config_msg_get_version>(DcgmModuleIdConfig, DCGM_CONFIG_SR_GET),
         MakeCommandMetadata<dcgm_config_msg_set_t, dcgm_config_msg_set_version>(DcgmModuleIdConfig, DCGM_CONFIG_SR_SET),
         MakeCommandMetadata<dcgm_config_msg_enforce_group_v1, dcgm_config_msg_enforce_group_version>(

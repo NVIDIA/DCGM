@@ -293,6 +293,8 @@ class DcgmGroupHealth:
 
 
 class DcgmGroupPolicy:
+    """Deprecated legacy group-policy wrapper. Use the field-policy APIs in dcgm_agent instead."""
+
     def __init__(self, dcgmHandle, groupId, dcgmGroup):
         self._dcgmHandle = dcgmHandle
         self._groupId = groupId
@@ -301,6 +303,8 @@ class DcgmGroupPolicy:
         self._condition = 0
 
     '''
+    Deprecated. Get the legacy group violation policy.
+
     Get the current violation policy inside the policy manager. Given a groupId, a number of
     policy structures are retrieved.
 
@@ -325,6 +329,8 @@ class DcgmGroupPolicy:
             statusHandle)
 
     '''
+    Deprecated. Set the legacy group violation policy.
+
     Set the current violation policy inside the policy manager.  Given the conditions within "policy",
     if a violation has occurred, subsequent action(s) may be performed to either
     report or contain the failure.
@@ -347,6 +353,8 @@ class DcgmGroupPolicy:
         self._policy = policy
 
     '''
+    Deprecated. Register for legacy group-policy updates.
+
     Register a function to be called when a specific policy condition (see dcgm_structs.c_dcgmPolicy_v1.condition)
     has been violated.  This callback will be called automatically when in DCGM_OPERATION_MODE_AUTO mode and only after
     DcgmPolicy.Trigger when in DCGM_OPERATION_MODE_MANUAL mode.
@@ -381,6 +389,8 @@ class DcgmGroupPolicy:
         self._condition |= condition
 
     '''
+    Deprecated. Unregister from legacy group-policy updates.
+
     Unregister a function to be called for a specific policy condition (see dcgm_structs.c_dcgmPolicy_v1.condition) .
     This function will unregister all callbacks for a given condition.
 
@@ -397,6 +407,8 @@ class DcgmGroupPolicy:
         self._condition &= ~condition
 
     '''
+    Deprecated. Trigger the legacy manual policy loop.
+
     Inform the policy manager loop to perform an iteration and trigger the callbacks of any
     registered functions. Callback functions will be called from a separate thread as the calling function.
 

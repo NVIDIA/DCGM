@@ -17,10 +17,20 @@
 #include "Pcie.h"
 #include "dcgm_fields.h"
 
+#include <DcgmOps.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <PluginCommon.h>
 #include <PluginInterface.h>
 #include <PluginLib.h>
 #include <PluginStrings.h>
+
+#include <CublasOps.hpp>
+#include <CublasOpsAnyUniquePtr.hpp>
+#include <CudaCommon.h>
+#include <CudaCommonAnyUniquePtr.hpp>
+#include <CudaOps.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <memory>
 
 extern "C" {
 
@@ -32,7 +42,6 @@ unsigned int const *GetFieldIds(size_t &fieldCount)
             DCGM_FI_DEV_NVLINK_THROUGHPUT_TOTAL,
             DCGM_FI_DEV_SXID_NON_FATAL_ERROR,
             DCGM_FI_DEV_SXID_FATAL_ERROR,
-            DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW,
             DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL,
             DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL,
 
@@ -194,6 +203,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              NvvsCommonPtr nvvsCommon,
                               HangDetectMonitor *monitor)
 {
     if (statFieldIds != nullptr)
@@ -205,12 +215,19 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
         std::copy(fieldIds, fieldIds + fieldCount, statFieldIds->fieldIds);
     }
 
-    BusGrind *bg = new BusGrind(handle);
-    *userData    = bg;
+    CudaOpsAnyUniquePtr cudaOps       = std::make_unique<CudaOps>();
+    CudaCommonAnyUniquePtr cudaCommon = std::make_unique<CudaCommon>(cudaOps.AsAnyPtr());
+    auto bg                           = std::make_unique<BusGrind>(handle,
+                                                                   std::make_unique<DcgmNs::DcgmOps>(),
+                                                                   std::move(cudaOps),
+                                                                   std::make_unique<CublasOps>(),
+                                                                   std::move(cudaCommon),
+                                                                   nvvsCommon);
 
     bg->SetPluginAttr(pluginAttr);
     bg->SetHangDetectMonitor(monitor);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, bg->GetDisplayName());
+    *userData = bg.release();
 
     return DCGM_ST_OK;
 }

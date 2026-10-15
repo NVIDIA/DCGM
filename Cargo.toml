@@ -1,0 +1,165 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[workspace]
+members = [
+    "nvvs/plugin_src/cpu_sdc",
+    "rust/child-process",
+    "rust/dcgm-bindgen",
+    "rust/dcgm-logging",
+    "rust/dcgm_utils",
+    "rust/module_log_test",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+authors = ["NVIDIA Corporation"]
+edition = "2024"
+license = "Apache-2.0"
+categories = ["gpu", "monitoring", "performance", "diagnostics", "health"]
+keywords = ["nvidia", "dcgm", "monitoring", "utilities", "gpu", "performance", "diagnostics", "health"]
+publish = false
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+warnings = "deny"
+
+[workspace.lints.clippy]
+all = "deny"
+cargo = "deny"
+nursery = "deny"
+pedantic = "deny"
+# Production code must not use .expect(), panic!(), or .unwrap().
+# Tests may opt in to these by adding a local #![allow(...)] attribute.
+expect_used = "deny"
+panic = "deny"
+unwrap_used = "deny"
+multiple_unsafe_ops_per_block = "deny"
+undocumented_unsafe_blocks = "deny"
+
+# Settings for cargo vendor-filterer. Used to remove vendored crates for other
+# platforms
+[workspace.metadata.vendor-filter]
+platforms = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+tier = "1"
+all-features = true
+keep-dep-kinds = "no-dev"
+exclude-crate-paths = [
+    { name = "*", exclude = "**/tests" },
+    { name = "*", exclude = "**/windows" },
+    { name = "*", exclude = "*.dll" },
+
+    { name = "libc-0.2.189", exclude = "src/fuchsia" },
+    { name = "libc-0.2.189", exclude = "src/new/aix" },
+    { name = "libc-0.2.189", exclude = "src/new/apple" },
+    { name = "libc-0.2.189", exclude = "src/new/bionic_libc" },
+    { name = "libc-0.2.189", exclude = "src/new/cygwin" },
+    { name = "libc-0.2.189", exclude = "src/new/dragonfly" },
+    { name = "libc-0.2.189", exclude = "src/new/emscripten" },
+    { name = "libc-0.2.189", exclude = "src/new/espidf" },
+    { name = "libc-0.2.189", exclude = "src/new/freebsd" },
+    { name = "libc-0.2.189", exclude = "src/new/fuchsia" },
+    { name = "libc-0.2.189", exclude = "src/new/haiku" },
+    { name = "libc-0.2.189", exclude = "src/new/hermit_abi" },
+    { name = "libc-0.2.189", exclude = "src/new/horizon" },
+    { name = "libc-0.2.189", exclude = "src/new/hurd" },
+    { name = "libc-0.2.189", exclude = "src/new/illumos" },
+    { name = "libc-0.2.189", exclude = "src/new/l4re" },
+    { name = "libc-0.2.189", exclude = "src/new/musl" },
+    { name = "libc-0.2.189", exclude = "src/new/netbsd" },
+    { name = "libc-0.2.189", exclude = "src/new/newlib" },
+    { name = "libc-0.2.189", exclude = "src/new/nto" },
+    { name = "libc-0.2.189", exclude = "src/new/nuttx" },
+    { name = "libc-0.2.189", exclude = "src/new/openbsd" },
+    { name = "libc-0.2.189", exclude = "src/new/qurt" },
+    { name = "libc-0.2.189", exclude = "src/new/redox" },
+    { name = "libc-0.2.189", exclude = "src/new/relibc" },
+    { name = "libc-0.2.189", exclude = "src/new/rtems" },
+    { name = "libc-0.2.189", exclude = "src/new/sgx" },
+    { name = "libc-0.2.189", exclude = "src/new/solaris" },
+    { name = "libc-0.2.189", exclude = "src/new/solid" },
+    { name = "libc-0.2.189", exclude = "src/new/teeos" },
+    { name = "libc-0.2.189", exclude = "src/new/trusty" },
+    { name = "libc-0.2.189", exclude = "src/new/uclibc" },
+    { name = "libc-0.2.189", exclude = "src/new/ucrt" },
+    { name = "libc-0.2.189", exclude = "src/new/vita" },
+    { name = "libc-0.2.189", exclude = "src/new/vxworks" },
+    { name = "libc-0.2.189", exclude = "src/new/wasi" },
+    { name = "libc-0.2.189", exclude = "src/new/xous" },
+    { name = "libc-0.2.189", exclude = "src/qurt" },
+    { name = "libc-0.2.189", exclude = "src/solid" },
+    { name = "libc-0.2.189", exclude = "src/teeos" },
+    { name = "libc-0.2.189", exclude = "src/unix/aix" },
+    { name = "libc-0.2.189", exclude = "src/unix/bsd" },
+    { name = "libc-0.2.189", exclude = "src/unix/cygwin" },
+    { name = "libc-0.2.189", exclude = "src/unix/haiku" },
+    { name = "libc-0.2.189", exclude = "src/unix/hurd" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/android" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/emscripten" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/l4re/" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/arch/mips" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/arch/powerpc" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/arch/sparc" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/gnu/b32" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/gnu/b64/loongarch64" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/gnu/b64/mips64" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/gnu/b64/powerpc64" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/gnu/b64/riscv64" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/gnu/b64/sparc64" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/musl" },
+    { name = "libc-0.2.189", exclude = "src/unix/linux_like/linux/uclibc" },
+    { name = "libc-0.2.189", exclude = "src/unix/newlib" },
+    { name = "libc-0.2.189", exclude = "src/unix/nto" },
+    { name = "libc-0.2.189", exclude = "src/unix/nuttx" },
+    { name = "libc-0.2.189", exclude = "src/unix/redox" },
+    { name = "libc-0.2.189", exclude = "src/unix/solarish" },
+    { name = "libc-0.2.189", exclude = "src/vxworks" },
+    { name = "libc-0.2.189", exclude = "src/wasi" },
+    { name = "libc-0.2.189", exclude = "src/windows" },
+]
+
+[workspace.dependencies]
+child_process = { path = "rust/child-process" }
+dcgm-bindgen = { path = "rust/dcgm-bindgen" }
+dcgm-logging = { path = "rust/dcgm-logging" }
+dcgm_utils = { path = "rust/dcgm_utils" }
+arc-swap = "1.9.2"
+bindgen = "0.72.1"
+bytes = "1.12.1"
+chrono = "0.4.45"
+clap = { version = "4.6.1", features = ["default", "cargo", "color", "derive", "env", "error-context", "std", "suggestions", "usage", "wrap_help", "help"] }
+futures = "0.3.32"
+libc = "0.2.186"
+log = "0.4.33"
+mockall = "0.15.0"
+nix = { version = "0.31.3", features = ["fs", "user"] }
+rand = "0.10.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+serial_test = { version = "3.5.0", features = ["default", "file_locks"] }
+simple_logger = { version = "5.2.0", default-features = false, features = ["timestamps"] }
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["rt", "process", "io-util", "time", "macros", "sync", "net"] }
+tokio-util = { version = "0.7.18", features = ["codec"] }
+
+# Profile used for source-based coverage builds (cargo-llvm-cov, driven by the
+# CMake cargo-llvm-cov-* targets under `build.sh --coverage`). Inherits `dev` so
+# optimization stays off and full debug info is retained -- both are required for
+# faithful line/region mapping under `-Cinstrument-coverage`. Keeping it separate
+# from `dev`/`release` means coverage runs are independent of whether the caller
+# passed `--debug` or `--release`.
+[profile.coverage]
+inherits = "dev"
+debug = true

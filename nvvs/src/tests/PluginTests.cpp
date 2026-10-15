@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 #include "PluginInterface.h"
 #include "dcgm_fields.h"
 #include <DcgmError.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
+#include <MockDcgmOps.h>
 #include <Plugin.h>
 #include <UniquePtrUtil.h>
 #include <dcgm_structs.h>
@@ -60,16 +62,102 @@ public:
 
 class UnitTestPlugin : public Plugin
 {
+public:
+    explicit UnitTestPlugin(DcgmNs::DcgmOpsAnyUniquePtr dcgmOps)
+        : Plugin(dcgmOps.AsAnyPtr())
+        , m_dcgmOpsUnique(std::move(dcgmOps))
+    {}
+
     void Go(std::string const & /* testName */,
             dcgmDiagPluginEntityList_v1 const * /* entityInfo */,
             unsigned int /* numParameters */,
             const dcgmDiagPluginTestParameter_t * /* testParameters */) override
     {}
+
+private:
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique;
 };
 
-TEST_CASE("Plugin Results Reporting")
+struct PluginTestFixture
 {
-    UnitTestPlugin p;
+    PluginTestFixture()
+        : mockDcgmOpsUnique(std::make_unique<DcgmNs::MockDcgmOps>())
+        , mockDcgmOps(mockDcgmOpsUnique.get())
+        , mockDcgmOpsUnique2(std::make_unique<DcgmNs::MockDcgmOps>())
+        , mockDcgmOps2(mockDcgmOpsUnique2.get())
+        , plugin(std::move(mockDcgmOpsUnique))
+        , plugin2(std::move(mockDcgmOpsUnique2))
+    {}
+
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique;
+    DcgmNs::MockDcgmOps *mockDcgmOps;
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique2;
+    DcgmNs::MockDcgmOps *mockDcgmOps2;
+    UnitTestPlugin plugin;
+    UnitTestPlugin plugin2;
+};
+
+SCENARIO("Plugin: overall result precedence")
+{
+    auto const [caseName, results, expected]
+        = GENERATE(table<char const *, nvvsPluginGpuResults_t, nvvsPluginResult_t>({
+            { "empty", {}, NVVS_RESULT_SKIP },
+            { "all pass", { { 0, NVVS_RESULT_PASS }, { 1, NVVS_RESULT_PASS } }, NVVS_RESULT_PASS },
+            { "all skip", { { 0, NVVS_RESULT_SKIP }, { 1, NVVS_RESULT_SKIP } }, NVVS_RESULT_SKIP },
+            { "pass and skip", { { 0, NVVS_RESULT_PASS }, { 1, NVVS_RESULT_SKIP } }, NVVS_RESULT_PASS },
+            { "warn and pass", { { 0, NVVS_RESULT_WARN }, { 1, NVVS_RESULT_PASS } }, NVVS_RESULT_WARN },
+            { "warn and fail", { { 0, NVVS_RESULT_WARN }, { 1, NVVS_RESULT_FAIL } }, NVVS_RESULT_FAIL },
+            { "unknown and pass",
+              { { 0, static_cast<nvvsPluginResult_t>(999) }, { 1, NVVS_RESULT_PASS } },
+              NVVS_RESULT_PASS },
+        }));
+    CAPTURE(caseName);
+
+    CHECK(Plugin::GetOverallResult(results) == expected);
+}
+
+SCENARIO_METHOD(PluginTestFixture, "Plugin: preserves per-test state independently")
+{
+    GIVEN("two named tests initialized with the same GPU entity list")
+    {
+        auto pEntityList                        = std::make_unique<dcgmDiagPluginEntityList_v1>();
+        dcgmDiagPluginEntityList_v1 &entityList = *pEntityList;
+        dcgmGroupEntityPair_t gpu0 { .entityGroupId = DCGM_FE_GPU, .entityId = 0 };
+        dcgmGroupEntityPair_t gpu1 { .entityGroupId = DCGM_FE_GPU, .entityId = 1 };
+        entityList.numEntities        = 2;
+        entityList.entities[0].entity = gpu0;
+        entityList.entities[1].entity = gpu1;
+
+        plugin.InitializeForEntityList("first", entityList);
+        plugin.InitializeForEntityList("second", entityList);
+
+        WHEN("results, metrics, and stats are recorded on different tests")
+        {
+            plugin.SetResultForGpu("first", gpu0.entityId, NVVS_RESULT_FAIL);
+            plugin.SetResultForEntity("second", gpu1, NVVS_RESULT_WARN);
+            plugin.RecordObservedMetric("first", gpu0.entityId, "metric", 7.5);
+            plugin.SetGpuStat("second", gpu1.entityId, "samples", 4LL);
+
+            THEN("each test retains its own results and metric state")
+            {
+                CHECK(plugin.GetResult("first") == NVVS_RESULT_FAIL);
+                CHECK(plugin.GetResult("second") == NVVS_RESULT_PASS);
+                CHECK(plugin.GetEntityResults("second").at(gpu1) == NVVS_RESULT_WARN);
+                CHECK(plugin.GetObservedMetrics("first").at("metric").at(gpu0.entityId) == 7.5);
+                CHECK(plugin.GetObservedMetrics("second").empty());
+
+                auto const secondStats = plugin.GetCustomGpuStat("second", gpu1.entityId, "samples");
+                REQUIRE(secondStats.size() == 1);
+                CHECK(secondStats[0].isInt);
+                CHECK(secondStats[0].val.i64 == 4);
+                CHECK(plugin.GetCustomGpuStat("first", gpu1.entityId, "samples").empty());
+            }
+        }
+    }
+}
+
+TEST_CASE_METHOD(PluginTestFixture, "Plugin Results Reporting")
+{
     auto pEntityResults                     = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 &entityResults = *(pEntityResults.get());
 
@@ -82,15 +170,15 @@ TEST_CASE("Plugin Results Reporting")
     entityList.numEntities                      = 1;
     entityList.entities[0].entity.entityGroupId = DCGM_FE_GPU;
     entityList.entities[0].entity.entityId      = 0;
-    p.InitializeForEntityList(testName, entityList);
+    plugin.InitializeForEntityList(testName, entityList);
 
     DcgmError d { DcgmError::GpuIdTag::Unknown };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_DOWN, d, 0, 1);
-    p.AddError(testName, d);
+    plugin.AddError(testName, d);
     memset(&entityResults, 0, sizeof(entityResults));
 
-    CHECK(p.GetResults(testName, static_cast<dcgmDiagEntityResults_v2 *>(nullptr)) == DCGM_ST_BADPARAM);
-    CHECK(p.GetResults(testName, &entityResults) == DCGM_ST_OK);
+    CHECK(plugin.GetResults(testName, static_cast<dcgmDiagEntityResults_v2 *>(nullptr)) == DCGM_ST_BADPARAM);
+    CHECK(plugin.GetResults(testName, &entityResults) == DCGM_ST_OK);
     CHECK(entityResults.numErrors == 1);
     CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_NONE);
     CHECK(entityResults.errors[0].entity.entityId == 0);
@@ -99,10 +187,10 @@ TEST_CASE("Plugin Results Reporting")
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d1, 10000, tempViolationSrc, 0, 95);
     const unsigned int GPU_ID = 0;
     d1.SetGpuId(GPU_ID);
-    p.AddError(testName, d1);
+    plugin.AddError(testName, d1);
     memset(&entityResults, 0, sizeof(entityResults));
 
-    CHECK(p.GetResults(testName, &entityResults) == DCGM_ST_OK);
+    CHECK(plugin.GetResults(testName, &entityResults) == DCGM_ST_OK);
     CHECK(entityResults.numErrors == 2); // it will still have the first error
     CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_NONE);
     CHECK(entityResults.errors[0].entity.entityId == 0);
@@ -111,19 +199,17 @@ TEST_CASE("Plugin Results Reporting")
 
     DcgmError d2 { 1 };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d2, 10000, tempViolationSrc, 0, 95);
-    p.AddError(testName, d2);
+    plugin.AddError(testName, d2);
     memset(&entityResults, 0, sizeof(entityResults));
 
-    CHECK(p.GetResults(testName, &entityResults) == DCGM_ST_OK);
+    CHECK(plugin.GetResults(testName, &entityResults) == DCGM_ST_OK);
     CHECK(entityResults.numErrors == 3); // it will still have the first error
     CHECK(entityResults.errors[2].entity.entityGroupId == DCGM_FE_GPU);
     CHECK(entityResults.errors[2].entity.entityId == 1);
 }
 
-TEST_CASE("Plugin Duplicate Errors")
+TEST_CASE_METHOD(PluginTestFixture, "Plugin Duplicate Errors")
 {
-    UnitTestPlugin p;
-
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityListUptr = std::make_unique<dcgmDiagPluginEntityList_v1>();
     dcgmDiagPluginEntityList_v1 &entityList                     = *entityListUptr;
 
@@ -133,28 +219,28 @@ TEST_CASE("Plugin Duplicate Errors")
     entityList.numEntities                      = 1;
     entityList.entities[0].entity.entityGroupId = DCGM_FE_GPU;
     entityList.entities[0].entity.entityId      = 0;
-    p.InitializeForEntityList(testName, entityList);
+    plugin.InitializeForEntityList(testName, entityList);
     unsigned int gpuId = 0;
     DcgmError d { gpuId };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d, 99, tempViolationSrc, gpuId, 95);
     DcgmError dDup { gpuId };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, dDup, 99, tempViolationSrc, gpuId, 95);
-    p.AddError(testName, d);
-    p.AddError(testName, dDup);
+    plugin.AddError(testName, d);
+    plugin.AddError(testName, dDup);
 
     auto entityResultsUptr                  = MakeUniqueZero<dcgmDiagEntityResults_v2>();
     dcgmDiagEntityResults_v2 &entityResults = *entityResultsUptr;
 
-    CHECK(p.GetResults(testName, &entityResults) == DCGM_ST_OK);
+    CHECK(plugin.GetResults(testName, &entityResults) == DCGM_ST_OK);
     CHECK(entityResults.numErrors == 1); // it shouldn't have added the second error
     CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_GPU);
     CHECK(entityResults.errors[0].entity.entityId == gpuId);
 
     DcgmError dG { DcgmError::GpuIdTag::Unknown };
     DcgmError dGDup { DcgmError::GpuIdTag::Unknown };
-    p.AddError(testName, dG);
-    p.AddError(testName, dGDup);
-    CHECK(p.GetResults(testName, &entityResults) == DCGM_ST_OK);
+    plugin.AddError(testName, dG);
+    plugin.AddError(testName, dGDup);
+    CHECK(plugin.GetResults(testName, &entityResults) == DCGM_ST_OK);
     CHECK(entityResults.numErrors == 2);
     // m_errorsPerEntity sorted by entity group
     CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_NONE);
@@ -167,9 +253,9 @@ TEST_CASE("Plugin Duplicate Errors")
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, d2, 99, tempViolationSrc, gpuId2, 95);
     DcgmError dDup2 { gpuId2 };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_TEMP_VIOLATION, dDup2, 99, tempViolationSrc, gpuId2, 95);
-    p.AddError(testName, d2);
-    p.AddError(testName, dDup2);
-    CHECK(p.GetResults(testName, &entityResults) == DCGM_ST_OK);
+    plugin.AddError(testName, d2);
+    plugin.AddError(testName, dDup2);
+    CHECK(plugin.GetResults(testName, &entityResults) == DCGM_ST_OK);
     CHECK(entityResults.numErrors == 3);
     // m_errorsPerEntity sorted by entity group
     CHECK(entityResults.errors[0].entity.entityGroupId == DCGM_FE_NONE);
@@ -180,12 +266,10 @@ TEST_CASE("Plugin Duplicate Errors")
     CHECK(entityResults.errors[2].entity.entityId == gpuId2);
 }
 
-TEST_CASE("Entity-Centric Results Reporting")
+TEST_CASE_METHOD(PluginTestFixture, "Entity-Centric Results Reporting")
 {
     SECTION("AddError(entity, diagError)")
     {
-        UnitTestPlugin p;
-
         auto pEntityList                        = std::make_unique<dcgmDiagPluginEntityList_v1>();
         dcgmDiagPluginEntityList_v1 &entityList = *(pEntityList.get());
 
@@ -194,7 +278,7 @@ TEST_CASE("Entity-Centric Results Reporting")
         entityList.numEntities                      = 1;
         entityList.entities[0].entity.entityGroupId = DCGM_FE_GPU;
         entityList.entities[0].entity.entityId      = 0;
-        p.InitializeForEntityList(testName, entityList);
+        plugin.InitializeForEntityList(testName, entityList);
         dcgmDiagError_v1 de {};
         de.entity   = entityList.entities[0].entity;
         de.severity = DCGM_ERROR_NONE;
@@ -202,12 +286,12 @@ TEST_CASE("Entity-Centric Results Reporting")
         de.code     = DCGM_FR_OK;
         SafeCopyTo(de.msg, static_cast<char const *>("This is an unimportant message. Please stand by."));
 
-        auto const &entityError = p.GetEntityErrors(testName);
+        auto const &entityError = plugin.GetEntityErrors(testName);
         for (auto const &[entity, errors] : entityError)
         {
             CHECK(errors.empty());
         }
-        p.AddError(testName, de);
+        plugin.AddError(testName, de);
         for (auto const &[entity, errors] : entityError)
         {
             CHECK(entity == de.entity);
@@ -216,10 +300,8 @@ TEST_CASE("Entity-Centric Results Reporting")
     }
 }
 
-TEST_CASE("Optional Errors")
+TEST_CASE_METHOD(PluginTestFixture, "Optional Errors")
 {
-    UnitTestPlugin p;
-    UnitTestPlugin p2;
     unsigned int gpuId = 1;
     DcgmError gpuError { gpuId };
     DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_VOLATILE_DBE_DETECTED, gpuError, 1, gpuId);
@@ -238,18 +320,18 @@ TEST_CASE("Optional Errors")
     entityList.numEntities                      = 1;
     entityList.entities[0].entity.entityGroupId = DCGM_FE_GPU;
     entityList.entities[0].entity.entityId      = 0;
-    p.InitializeForEntityList(testName, entityList);
-    p2.InitializeForEntityList(testName, entityList);
+    plugin.InitializeForEntityList(testName, entityList);
+    plugin2.InitializeForEntityList(testName, entityList);
 
-    p.AddError(testName, gpuError);
-    p.AddOptionalError(testName, globalError1);
-    p.AddOptionalError(testName, globalError2);
+    plugin.AddError(testName, gpuError);
+    plugin.AddOptionalError(testName, globalError1);
+    plugin.AddOptionalError(testName, globalError2);
 
     {
         auto entityResults1Uptr                  = MakeUniqueZero<dcgmDiagEntityResults_v2>();
         dcgmDiagEntityResults_v2 &entityResults1 = *entityResults1Uptr;
 
-        p.GetResults(testName, &entityResults1);
+        plugin.GetResults(testName, &entityResults1);
         CHECK(entityResults1.numErrors == 1);
         CHECK(entityResults1.errors[0].entity.entityGroupId == DCGM_FE_GPU);
         CHECK(entityResults1.errors[0].entity.entityId == gpuId);
@@ -260,9 +342,9 @@ TEST_CASE("Optional Errors")
         auto entityResults2Uptr                  = MakeUniqueZero<dcgmDiagEntityResults_v2>();
         dcgmDiagEntityResults_v2 &entityResults2 = *entityResults2Uptr;
 
-        p2.AddOptionalError(testName, globalError1);
-        p2.AddOptionalError(testName, globalError2);
-        p2.GetResults(testName, &entityResults2);
+        plugin2.AddOptionalError(testName, globalError1);
+        plugin2.AddOptionalError(testName, globalError2);
+        plugin2.GetResults(testName, &entityResults2);
         CHECK(entityResults2.numErrors == 2);
         CHECK(entityResults2.errors[0].entity.entityGroupId == DCGM_FE_NONE);
         CHECK(entityResults2.errors[0].entity.entityId == 0);
@@ -273,9 +355,8 @@ TEST_CASE("Optional Errors")
     }
 }
 
-TEST_CASE("Plugin::InitializeForEntityList")
+TEST_CASE_METHOD(PluginTestFixture, "Plugin::InitializeForEntityList")
 {
-    UnitTestPlugin p;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
     std::string const testName                              = "capoo";
 
@@ -287,43 +368,40 @@ TEST_CASE("Plugin::InitializeForEntityList")
     entityList->entities[2].entity.entityId      = 0;
     entityList->entities[2].entity.entityGroupId = DCGM_FE_CPU;
 
-    p.InitializeForEntityList(testName, *entityList);
-    CHECK(p.GetEntityErrors(testName).size() == 3);
-    CHECK(p.GetGpuWarnings(testName).size() == 2);
-    CHECK(p.GetGpuErrors(testName).size() == 2);
-    CHECK(p.GetGpuVerboseInfo(testName).size() == 2);
-    CHECK(p.GetGpuResults(testName).size() == 2);
+    plugin.InitializeForEntityList(testName, *entityList);
+    CHECK(plugin.GetEntityErrors(testName).size() == 3);
+    CHECK(plugin.GetGpuWarnings(testName).size() == 2);
+    CHECK(plugin.GetGpuErrors(testName).size() == 2);
+    CHECK(plugin.GetGpuVerboseInfo(testName).size() == 2);
+    CHECK(plugin.GetGpuResults(testName).size() == 2);
 }
 
-TEST_CASE("Plugin Attribute")
+TEST_CASE_METHOD(PluginTestFixture, "Plugin Attribute")
 {
     SECTION("Set and get")
     {
-        UnitTestPlugin p;
         constexpr int pluginId = 0xc8763;
         dcgmDiagPluginAttr_v1 pluginAttr { .pluginId = pluginId };
 
-        p.SetPluginAttr(&pluginAttr);
-        CHECK(p.GetPluginId() == pluginId);
+        plugin.SetPluginAttr(&pluginAttr);
+        CHECK(plugin.GetPluginId() == pluginId);
     }
 
     SECTION("Set nullptr to plugin attribute")
     {
-        UnitTestPlugin p;
         constexpr int pluginId = 0xc8763;
         dcgmDiagPluginAttr_v1 pluginAttr { .pluginId = pluginId };
 
-        p.SetPluginAttr(&pluginAttr);
-        CHECK_NOTHROW(p.SetPluginAttr(nullptr));
+        plugin.SetPluginAttr(&pluginAttr);
+        CHECK_NOTHROW(plugin.SetPluginAttr(nullptr));
 
         // should not affect already set value
-        CHECK(p.GetPluginId() == pluginId);
+        CHECK(plugin.GetPluginId() == pluginId);
     }
 }
 
-TEST_CASE("Plugin AddInfoVerbose")
+TEST_CASE_METHOD(PluginTestFixture, "Plugin AddInfoVerbose")
 {
-    UnitTestPlugin p;
     auto pEntityList                        = std::make_unique<dcgmDiagPluginEntityList_v1>();
     dcgmDiagPluginEntityList_v1 &entityList = *(pEntityList.get());
     std::string const testName              = "capoo";
@@ -331,15 +409,16 @@ TEST_CASE("Plugin AddInfoVerbose")
     entityList.numEntities                      = 1;
     entityList.entities[0].entity.entityGroupId = DCGM_FE_GPU;
     entityList.entities[0].entity.entityId      = 0;
-    p.InitializeForEntityList(testName, entityList);
+    plugin.InitializeForEntityList(testName, entityList);
 
-    p.AddInfoVerbose(testName, "InfoVerbose without entity context");
-    p.AddInfoVerboseForGpu(testName, static_cast<int>(DcgmError::GpuIdTag::Unknown), "InfoVerbose with GPU context");
+    plugin.AddInfoVerbose(testName, "InfoVerbose without entity context");
+    plugin.AddInfoVerboseForGpu(
+        testName, static_cast<int>(DcgmError::GpuIdTag::Unknown), "InfoVerbose with GPU context");
 
     dcgmGroupEntityPair_t entity { DCGM_FE_CPU, static_cast<dcgm_field_eid_t>(-1) };
-    p.AddInfoVerboseForEntity(testName, entity, "InfoVerbose with global CPU context");
+    plugin.AddInfoVerboseForEntity(testName, entity, "InfoVerbose with global CPU context");
 
-    nvvsPluginEntityMsgs_t const &entityVerboseInfo = p.GetEntityVerboseInfo(testName);
+    nvvsPluginEntityMsgs_t const &entityVerboseInfo = plugin.GetEntityVerboseInfo(testName);
     CHECK(entityVerboseInfo.size() == 3);
 
     entity.entityGroupId = DCGM_FE_NONE;
@@ -363,57 +442,55 @@ TEST_CASE("Plugin AddInfoVerbose")
     CHECK(find_result == entityVerboseInfo.end());
 }
 
-TEST_CASE("Plugin operates on non-existing test")
+TEST_CASE_METHOD(PluginTestFixture, "Plugin operates on non-existing test")
 {
-    UnitTestPlugin p;
     std::string const nonExistingTestName = "dogdog";
 
-    CHECK_THROWS(p.GetResult(nonExistingTestName));
-    CHECK_THROWS(p.GetGpuResults(nonExistingTestName));
-    CHECK_THROWS(p.SetResult(nonExistingTestName, NVVS_RESULT_PASS));
-    CHECK_THROWS(p.SetResultForGpu(nonExistingTestName, 0, NVVS_RESULT_PASS));
-    CHECK_THROWS(p.SetResultForEntity(nonExistingTestName, dcgmGroupEntityPair_t(), NVVS_RESULT_PASS));
-    CHECK_THROWS(p.SetNonGpuResult(nonExistingTestName, NVVS_RESULT_PASS));
-    CHECK_THROWS(p.GetWarnings(nonExistingTestName));
-    CHECK_THROWS(p.GetErrors(nonExistingTestName));
-    CHECK_THROWS(p.GetEntityErrors(nonExistingTestName));
-    CHECK_THROWS(p.GetGpuErrors(nonExistingTestName));
-    CHECK_THROWS(p.GetGpuWarnings(nonExistingTestName));
-    CHECK_THROWS(p.GetVerboseInfo(nonExistingTestName));
-    CHECK_THROWS(p.GetEntityVerboseInfo(nonExistingTestName));
-    CHECK_THROWS(p.GetGpuVerboseInfo(nonExistingTestName));
-    CHECK_THROWS(p.RecordObservedMetric(nonExistingTestName, 0, "key", 0));
-    CHECK_THROWS(p.GetObservedMetrics(nonExistingTestName));
-    CHECK_THROWS(p.UsingFakeGpus(nonExistingTestName));
-    CHECK_THROWS(p.AddError(nonExistingTestName, dcgmDiagError_v1()));
-    CHECK_THROWS(p.AddError(nonExistingTestName, DcgmError(0)));
-    CHECK_THROWS(p.AddOptionalError(nonExistingTestName, DcgmError(0)));
-    CHECK_THROWS(p.AddInfo(nonExistingTestName, "info"));
-    CHECK_THROWS(p.AddInfoVerbose(nonExistingTestName, "info"));
-    CHECK_THROWS(p.AddInfoVerboseForEntity(nonExistingTestName, dcgmGroupEntityPair_t(), "info"));
-    CHECK_THROWS(p.AddInfoVerboseForGpu(nonExistingTestName, 0, "info"));
-    CHECK_THROWS(p.GetResults(nonExistingTestName, static_cast<dcgmDiagEntityResults_v2 *>(nullptr)));
-    CHECK_THROWS(p.SetGpuStat(nonExistingTestName, 0, "key", 0.0));
-    CHECK_THROWS(p.SetGpuStat(nonExistingTestName, 0, "key", 0LL));
-    CHECK_THROWS(p.SetSingleGroupStat(nonExistingTestName, "0", "key", "value"));
-    CHECK_THROWS(p.SetGroupedStat(nonExistingTestName, "0", "key", 0.0));
-    CHECK_THROWS(p.SetGroupedStat(nonExistingTestName, "0", "key", 0LL));
-    CHECK_THROWS(p.GetCustomGpuStat(nonExistingTestName, 0, "key"));
+    CHECK_THROWS(plugin.GetResult(nonExistingTestName));
+    CHECK_THROWS(plugin.GetGpuResults(nonExistingTestName));
+    CHECK_THROWS(plugin.SetResult(nonExistingTestName, NVVS_RESULT_PASS));
+    CHECK_THROWS(plugin.SetResultForGpu(nonExistingTestName, 0, NVVS_RESULT_PASS));
+    CHECK_THROWS(plugin.SetResultForEntity(nonExistingTestName, dcgmGroupEntityPair_t(), NVVS_RESULT_PASS));
+    CHECK_THROWS(plugin.SetNonGpuResult(nonExistingTestName, NVVS_RESULT_PASS));
+    CHECK_THROWS(plugin.GetWarnings(nonExistingTestName));
+    CHECK_THROWS(plugin.GetErrors(nonExistingTestName));
+    CHECK_THROWS(plugin.GetEntityErrors(nonExistingTestName));
+    CHECK_THROWS(plugin.GetGpuErrors(nonExistingTestName));
+    CHECK_THROWS(plugin.GetGpuWarnings(nonExistingTestName));
+    CHECK_THROWS(plugin.GetVerboseInfo(nonExistingTestName));
+    CHECK_THROWS(plugin.GetEntityVerboseInfo(nonExistingTestName));
+    CHECK_THROWS(plugin.GetGpuVerboseInfo(nonExistingTestName));
+    CHECK_THROWS(plugin.RecordObservedMetric(nonExistingTestName, 0, "key", 0));
+    CHECK_THROWS(plugin.GetObservedMetrics(nonExistingTestName));
+    CHECK_THROWS(plugin.UsingFakeGpus(nonExistingTestName));
+    CHECK_THROWS(plugin.AddError(nonExistingTestName, dcgmDiagError_v1()));
+    CHECK_THROWS(plugin.AddError(nonExistingTestName, DcgmError(0)));
+    CHECK_THROWS(plugin.AddOptionalError(nonExistingTestName, DcgmError(0)));
+    CHECK_THROWS(plugin.AddInfo(nonExistingTestName, "info"));
+    CHECK_THROWS(plugin.AddInfoVerbose(nonExistingTestName, "info"));
+    CHECK_THROWS(plugin.AddInfoVerboseForEntity(nonExistingTestName, dcgmGroupEntityPair_t(), "info"));
+    CHECK_THROWS(plugin.AddInfoVerboseForGpu(nonExistingTestName, 0, "info"));
+    CHECK_THROWS(plugin.GetResults(nonExistingTestName, static_cast<dcgmDiagEntityResults_v2 *>(nullptr)));
+    CHECK_THROWS(plugin.SetGpuStat(nonExistingTestName, 0, "key", 0.0));
+    CHECK_THROWS(plugin.SetGpuStat(nonExistingTestName, 0, "key", 0LL));
+    CHECK_THROWS(plugin.SetSingleGroupStat(nonExistingTestName, "0", "key", "value"));
+    CHECK_THROWS(plugin.SetGroupedStat(nonExistingTestName, "0", "key", 0.0));
+    CHECK_THROWS(plugin.SetGroupedStat(nonExistingTestName, "0", "key", 0LL));
+    CHECK_THROWS(plugin.GetCustomGpuStat(nonExistingTestName, 0, "key"));
 }
 
-TEST_CASE("Plugin HangDetectRegisterTask")
+TEST_CASE_METHOD(PluginTestFixture, "Plugin HangDetectRegisterTask")
 {
-    UnitTestPlugin p;
     StubHangDetectMonitor stubMonitor;
 
     SECTION("Register task")
     {
         // Set the stub as the monitor
-        p.SetHangDetectMonitor(&stubMonitor);
+        plugin.SetHangDetectMonitor(&stubMonitor);
 
         pid_t const testPid = 1234;
         pid_t const testTid = 5678;
-        auto result         = p.HangDetectRegisterTask(testPid, testTid);
+        auto result         = plugin.HangDetectRegisterTask(testPid, testTid);
         CHECK(result == DCGM_ST_OK);
         REQUIRE(stubMonitor.calls.size() == 1);
         REQUIRE(stubMonitor.calls[0].type == StubHangDetectMonitor::Call::Type::AddMonitoredTask);
@@ -425,12 +502,12 @@ TEST_CASE("Plugin HangDetectRegisterTask")
     SECTION("Unregister task")
     {
         // Set the stub as the monitor
-        p.SetHangDetectMonitor(&stubMonitor);
+        plugin.SetHangDetectMonitor(&stubMonitor);
 
         pid_t const testPid = 1234;
         pid_t const testTid = 5678;
 
-        auto result = p.HangDetectUnregisterTask(testPid, testTid);
+        auto result = plugin.HangDetectUnregisterTask(testPid, testTid);
         CHECK(result == DCGM_ST_OK);
         CHECK(stubMonitor.calls.size() == 1);
         CHECK(stubMonitor.calls[0].type == StubHangDetectMonitor::Call::Type::RemoveMonitoredTask);

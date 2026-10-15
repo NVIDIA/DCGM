@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 #include "DcgmGdFieldGroup.h"
-#include "DcgmLogging.h"
-#include "dcgm_agent.h"
 
-DcgmGdFieldGroup::DcgmGdFieldGroup()
+#include <DcgmOpsAnyPtr.hpp>
+
+#include "DcgmLogging.h"
+
+DcgmGdFieldGroup::DcgmGdFieldGroup(DcgmNs::DcgmOpsAnyPtr dcgmOps)
     : m_fieldGroupId((dcgmFieldGrp_t) nullptr)
     , m_handle((dcgmHandle_t) nullptr)
+    , m_dcgmOps(dcgmOps)
 {}
 
 DcgmGdFieldGroup::~DcgmGdFieldGroup()
@@ -61,7 +64,7 @@ dcgmReturn_t DcgmGdFieldGroup::Init(dcgmHandle_t handle,
 
     snprintf(nameBuf, sizeof(nameBuf), "%s", fieldGroupName.c_str());
 
-    return dcgmFieldGroupCreate(m_handle, numFieldIds, fieldIdArray, nameBuf, &m_fieldGroupId);
+    return m_dcgmOps->dcgmFieldGroupCreate(m_handle, numFieldIds, fieldIdArray, nameBuf, &m_fieldGroupId);
 }
 
 dcgmReturn_t DcgmGdFieldGroup::Cleanup()
@@ -71,7 +74,7 @@ dcgmReturn_t DcgmGdFieldGroup::Cleanup()
         return DCGM_ST_OK;
     }
 
-    dcgmReturn_t ret = dcgmFieldGroupDestroy(m_handle, m_fieldGroupId);
+    dcgmReturn_t ret = m_dcgmOps->dcgmFieldGroupDestroy(m_handle, m_fieldGroupId);
 
     if (ret == DCGM_ST_OK)
     {

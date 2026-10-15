@@ -60,3 +60,53 @@ def test_deprecated_access_emits_warning():
         f"expected 1 DeprecationWarning, got {len(deprecations)}"
     assert old in str(deprecations[0].message), f"warning should mention {old}"
     assert new in str(deprecations[0].message), f"warning should mention {new}"
+
+
+def test_deprecated_nvlink_field_ids_keep_historical_values():
+    """Deprecated NVLink profiling fields resolve to their historical numeric IDs."""
+    if dcgm_fields.DCGM_DEPRECATED == 0:
+        return
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        for name, (field_id, _) in dcgm_fields._DEPRECATED_FIELD_IDS.items():
+            assert getattr(dcgm_fields, name) == field_id, \
+                f"{name} should retain historical ID {field_id}"
+
+
+def test_deprecated_nvlink_field_access_emits_warning():
+    """Fixed-value deprecated fields warn and identify the canonical LINK replacement."""
+    if dcgm_fields.DCGM_DEPRECATED == 0:
+        return
+
+    name = "DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK"
+    field_id, replacement = dcgm_fields._DEPRECATED_FIELD_IDS[name]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert getattr(dcgm_fields, name) == field_id
+
+    deprecations = [
+        warning for warning in caught
+        if issubclass(warning.category, DeprecationWarning)
+    ]
+    assert len(deprecations) == 1, \
+        f"expected 1 DeprecationWarning, got {len(deprecations)}"
+    message = str(deprecations[0].message)
+    assert name in message
+    assert replacement in message
+    assert "DCGM 5.0" in message
+
+
+def test_deprecated_nvlink_fields_can_be_disabled():
+    """DCGM_DEPRECATED=0 hides fixed-value deprecated fields."""
+    name = "DCGM_FI_PROF_NVLINK_L0_TX_BYTES"
+    original = dcgm_fields.DCGM_DEPRECATED
+    dcgm_fields.DCGM_DEPRECATED = 0
+    try:
+        try:
+            getattr(dcgm_fields, name)
+        except AttributeError:
+            return
+        raise AssertionError(f"expected AttributeError for {name}")
+    finally:
+        dcgm_fields.DCGM_DEPRECATED = original

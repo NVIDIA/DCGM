@@ -17,7 +17,10 @@
 
 #include "Command.h"
 #include "DcgmiOutput.h"
-#include "dcgm_structs.h"
+
+#include <DcgmOpsAnyPtr.hpp>
+#include <dcgm_structs.h>
+
 
 class DcgmiSettingsSetLoggingSeverity : public Command
 {
@@ -29,7 +32,8 @@ public:
     DcgmiSettingsSetLoggingSeverity(const std::string &hostname,
                                     const std::string &targetLogger,
                                     const std::string &targetSeverity,
-                                    bool outputAsJson);
+                                    bool outputAsJson,
+                                    DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -41,7 +45,7 @@ private:
     bool m_attach;
 
 public:
-    DcgmiSettingsAttachDetachDriver(std::string hostname, bool attach);
+    DcgmiSettingsAttachDetachDriver(std::string hostname, bool attach, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

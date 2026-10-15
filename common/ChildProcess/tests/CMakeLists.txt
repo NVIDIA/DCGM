@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ add_executable(childprocesstests)
 target_sources(childprocesstests PRIVATE
     FramedChannelTests.cpp
     ChildProcessBuilderTests.cpp
+    ChildProcessTests.cpp
     StdLinesTests.cpp
     PipeTests.cpp
     IoContextTests.cpp
@@ -28,8 +29,9 @@ target_sources(childprocesstests PRIVATE
 target_link_libraries(childprocesstests
     PRIVATE
     childprocess
+    mock_childprocess
     Catch2::Catch2WithMain
-    ${CMAKE_THREAD_LIBS_INIT}
+    Threads::Threads
     fmt::fmt
     rt
 )
@@ -42,8 +44,9 @@ target_sources(runcmdandcollectoutputtests PRIVATE
 target_link_libraries(runcmdandcollectoutputtests
     PRIVATE
     dcgm_common
+    dcgm
     Catch2::Catch2WithMain
-    ${CMAKE_THREAD_LIBS_INIT}
+    Threads::Threads
     fmt::fmt
     rt
 )

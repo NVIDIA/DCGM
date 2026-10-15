@@ -42,37 +42,6 @@ const char *EntityToString(dcgm_field_entity_group_t entityGroupId);
 namespace
 {
 /**
- * Returns true when symbol BER exceeds the no-error threshold.
- *
- * @param[in] mantissa The mantissa of the BER value
- * @param[in] exponent The exponent of the BER value
- * @param[in] floorExponent Exponent for the healthy floor
- * @return true if the symbol BER should be treated as a failure,
- *         false otherwise
- *
- * @note Healthy when mantissa is 0 (BER 0), or BER not worse than the floor
- */
-[[nodiscard]] bool IsSymbolBerThresholdExceeded(uint64_t mantissa, uint64_t exponent, uint64_t floorExponent)
-{
-    uint64_t constexpr floorMantissa = 15;
-
-    if (mantissa == 0)
-    {
-        return false;
-    }
-
-    if (exponent == floorExponent)
-    {
-        return mantissa > floorMantissa;
-    }
-    if (exponent < floorExponent)
-    {
-        return true;
-    }
-    return false;
-}
-
-/**
  * Outcome of inspecting a single configured XID for a GPU entity in
  * MonitorSubsystemXids.
  *
@@ -321,7 +290,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
             case DCGM_FE_GPU:
             case DCGM_FE_GPU_I:
             case DCGM_FE_GPU_CI:
-                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V3; bitIndex++)
+                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V4; bitIndex++)
                 {
                     unsigned int bit = 1 << bitIndex;
                     switch (bit)
@@ -410,7 +379,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                 break;
 
             case DCGM_FE_CPU:
-                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V3; bitIndex++)
+                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V4; bitIndex++)
                 {
                     unsigned int bit = 1 << bitIndex;
                     switch (bit)
@@ -447,7 +416,7 @@ dcgmReturn_t DcgmHealthWatch::SetWatches(unsigned int groupId,
                 break;
 
             case DCGM_FE_CONNECTX:
-                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V3; bitIndex++)
+                for (unsigned int bitIndex = 0; bitIndex < DCGM_HEALTH_WATCH_COUNT_V4; bitIndex++)
                 {
                     unsigned int bit = 1 << bitIndex;
                     switch (bit)
@@ -680,11 +649,11 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
     if (healthSystemsMask == 0)
         return DCGM_ST_OK; /* This is the same as walking over the loops below and doing nothing */
 
-    // Filter out NVLINK bit if the group has no GPUs with NVLinks
+    // Filter out NVLINK and IMEX bits if the group has no GPUs with NVLinks
     dcgmHealthSystems_t globalMask = healthSystemsMask;
-    if ((globalMask & DCGM_HEALTH_WATCH_NVLINK) && !SystemHasNvLinks(entities))
+    if ((globalMask & (DCGM_HEALTH_WATCH_NVLINK | DCGM_HEALTH_WATCH_IMEX)) && !SystemHasNvLinks(entities))
     {
-        globalMask = static_cast<dcgmHealthSystems_t>(globalMask & ~DCGM_HEALTH_WATCH_NVLINK);
+        globalMask = static_cast<dcgmHealthSystems_t>(globalMask & ~DCGM_HEALTH_WATCH_NVLINK & ~DCGM_HEALTH_WATCH_IMEX);
     }
 
     // Perform global (system-wide) health checks before per-entity checks
@@ -702,7 +671,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorWatches(unsigned int groupId,
 
         MonitorDevastatingXids(entityGroupId, entityId, response);
 
-        for (index = 0; index < DCGM_HEALTH_WATCH_COUNT_V3; index++)
+        for (index = 0; index < DCGM_HEALTH_WATCH_COUNT_V4; index++)
         {
             unsigned int bit = 1 << index;
 
@@ -794,7 +763,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorGlobalHealthChecks(dcgmHealthSystems_t heal
 {
     dcgmReturn_t ret = DCGM_ST_OK;
 
-    if (healthSystemsMask & DCGM_HEALTH_WATCH_NVLINK)
+    if (healthSystemsMask & DCGM_HEALTH_WATCH_IMEX)
     {
         dcgmReturn_t tmpRet = MonitorImex(DCGM_FE_NONE, 0, response);
         if (tmpRet != DCGM_ST_OK)
@@ -849,6 +818,9 @@ std::string DcgmHealthWatch::GetHealthSystemAsString(dcgmHealthSystems_t system)
             break; // NOT REACHED
         case DCGM_HEALTH_WATCH_CONNECTX:
             return "ConnectX";
+            break; // NOT REACHED
+        case DCGM_HEALTH_WATCH_IMEX:
+            return "IMEX";
             break; // NOT REACHED
         default:
             return "Unknown";
@@ -1421,7 +1393,6 @@ dcgmReturn_t DcgmHealthWatch::SetNVLink(dcgm_field_entity_group_t entityGroupId,
     ADD_WATCH(DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL);
-    ADD_WATCH(DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_RX_PACKET_MALFORMED_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_RX_PACKET_DROPPED_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL);
@@ -1429,7 +1400,6 @@ dcgmReturn_t DcgmHealthWatch::SetNVLink(dcgm_field_entity_group_t entityGroupId,
     ADD_WATCH(DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL);
-    ADD_WATCH(DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW);
     ADD_WATCH(DCGM_FI_DEV_NVLINK_ECC_ERROR_TOTAL);
     ADD_WATCH(DCGM_FI_DEV_FABRIC_HEALTH_MASK);
     ADD_WATCH(DCGM_FI_DEV_FABRIC_MANAGER_STATUS);
@@ -1503,8 +1473,8 @@ dcgmReturn_t DcgmHealthWatch::SetGlobalChecks(dcgmHealthSystems_t systems,
 {
     dcgmReturn_t ret = DCGM_ST_OK;
 
-    // Add global watches for IMEX status fields (part of NVLink health system)
-    if (systems & DCGM_HEALTH_WATCH_NVLINK)
+    // Add global watches for IMEX status fields
+    if (systems & DCGM_HEALTH_WATCH_IMEX)
     {
         ADD_GLOBAL_WATCH(DCGM_FI_IMEX_DOMAIN_STATUS);
         ADD_GLOBAL_WATCH(DCGM_FI_IMEX_DAEMON_STATUS);
@@ -2055,7 +2025,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorImex(dcgm_field_entity_group_t /* entityGro
             SetResponse(normalizedEntityGroupId,
                         normalizedEntityId,
                         DCGM_HEALTH_RESULT_FAIL,
-                        DCGM_HEALTH_WATCH_NVLINK,
+                        DCGM_HEALTH_WATCH_IMEX,
                         d,
                         response);
         }
@@ -2096,12 +2066,8 @@ dcgmReturn_t DcgmHealthWatch::MonitorImex(dcgm_field_entity_group_t /* entityGro
         DcgmError d { normalizedEntityId };
         auto const statusStr = std::to_string(sample.val.i64);
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_IMEX_UNHEALTHY, d, "daemon", statusStr.c_str(), "not READY");
-        SetResponse(normalizedEntityGroupId,
-                    normalizedEntityId,
-                    DCGM_HEALTH_RESULT_FAIL,
-                    DCGM_HEALTH_WATCH_NVLINK,
-                    d,
-                    response);
+        SetResponse(
+            normalizedEntityGroupId, normalizedEntityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_IMEX, d, response);
     }
 
     return DCGM_ST_OK;
@@ -2139,7 +2105,7 @@ dcgmReturn_t DcgmHealthWatch::MonitorGpuRecoveryAction(dcgm_field_entity_group_t
         return DCGM_ST_OK;
     }
 
-    if (sample.val.i64 < NVML_GPU_RECOVERY_ACTION_NONE || sample.val.i64 > NVML_GPU_RECOVERY_ACTION_DRAIN_AND_RESET)
+    if (sample.val.i64 < NVML_GPU_RECOVERY_ACTION_NONE || sample.val.i64 > NVML_GPU_RECOVERY_ACTION_RECOVER_IMEX_DOMAIN)
     {
         log_warning("Invalid GPU recovery action value {} for eg {} eid {}", sample.val.i64, entityGroupId, entityId);
         return DCGM_ST_OK;
@@ -2181,6 +2147,14 @@ dcgmReturn_t DcgmHealthWatch::MonitorGpuRecoveryAction(dcgm_field_entity_group_t
         {
             DcgmError d { entityId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GPU_RECOVERY_DRAIN_RESET, d, entityId, sample.val.i64);
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_DRIVER, d, response);
+            break;
+        }
+
+        case NVML_GPU_RECOVERY_ACTION_RECOVER_IMEX_DOMAIN:
+        {
+            DcgmError d { entityId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_GPU_RECOVERY_IMEX_DOMAIN, d, entityId, sample.val.i64);
             SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_DRIVER, d, response);
             break;
         }
@@ -2810,20 +2784,13 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink5Fields(dcgm_field_entity_group_t ent
                                                    long long endTime,
                                                    DcgmHealthResponse &response)
 {
-    dcgmReturn_t ret              = DCGM_ST_OK;
-    std::array constexpr fieldIds = { DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW,
-                                      DCGM_FI_DEV_NVLINK_RX_PACKET_MALFORMED_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_RX_PACKET_DROPPED_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_RX_REMOTE_ERROR_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL,
-                                      // Shouldn't see Symbol at all. Symbol means FEC didn't succeed to fix the error.
-                                      DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW,
-                                      DCGM_FI_DEV_NVLINK_ECC_ERROR_TOTAL };
+    dcgmReturn_t ret = DCGM_ST_OK;
+    std::array constexpr fieldIds
+        = { DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL,   DCGM_FI_DEV_NVLINK_RX_PACKET_MALFORMED_TOTAL,
+            DCGM_FI_DEV_NVLINK_RX_PACKET_DROPPED_TOTAL, DCGM_FI_DEV_NVLINK_RX_ERROR_TOTAL,
+            DCGM_FI_DEV_NVLINK_RX_REMOTE_ERROR_TOTAL,   DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL,
+            DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL,   DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
+            DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL,   DCGM_FI_DEV_NVLINK_ECC_ERROR_TOTAL };
 
     dcgmcm_sample_t startValue     = {};
     dcgmcm_sample_t endValue       = {};
@@ -2885,61 +2852,15 @@ dcgmReturn_t DcgmHealthWatch::MonitorNVLink5Fields(dcgm_field_entity_group_t ent
             continue;
         }
 
-        if (field == DCGM_FI_DEV_NVLINK_SYMBOL_BER_RAW || field == DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW)
+        // Handle all other error counters
+        int64_t const nvLinkError = (startValue.val.i64 >= endValue.val.i64) ? (startValue.val.i64 - endValue.val.i64)
+                                                                             : (endValue.val.i64 - startValue.val.i64);
+
+        if (nvLinkError >= DCGM_LIMIT_MAX_NVLINK_ERROR)
         {
-            auto const berValue = endValue.val.i64;
-            // Compare packed mantissa/exponent instead of decoded float where applicable.
-            auto const [mantissa, exponent, ber] = DcgmNs::Utils::NvmlBerParser(berValue);
-            bool exceedsThreshold;
-            if (field == DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW)
-            {
-                exceedsThreshold = DcgmNs::Utils::IsEffectiveBerThresholdExceeded(mantissa, exponent);
-            }
-            else
-            {
-                auto const parentGpuId = GetParentGpuIdForEntity(entityGroupId, entityId);
-                if (!parentGpuId.has_value())
-                {
-                    return parentGpuId.error();
-                }
-
-                auto const isBlackwellOrNewerResult = IsGpuBlackwellOrNewer(*parentGpuId);
-                if (!isBlackwellOrNewerResult.has_value())
-                {
-                    log_warning("Arch detection failed for entity {} {} (err {}); using pre-Blackwell symbol BER floor",
-                                static_cast<int>(entityGroupId),
-                                entityId,
-                                static_cast<int>(isBlackwellOrNewerResult.error()));
-                }
-                bool const isBlackwellOrNewer         = isBlackwellOrNewerResult.value_or(false);
-                uint64_t const symbolBerFloorExponent = isBlackwellOrNewer ? DCGM_SYMBOL_BER_FLOOR_EXP_AGGREGATED
-                                                                           : DCGM_SYMBOL_BER_FLOOR_EXP_NON_AGGREGATED;
-                exceedsThreshold = IsSymbolBerThresholdExceeded(mantissa, exponent, symbolBerFloorExponent);
-            }
-
-            if (exceedsThreshold)
-            {
-                DcgmError d { entityId };
-                auto const errorCode = (field == DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW)
-                                           ? DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD
-                                           : DCGM_FR_NVLINK_SYMBOL_BER_THRESHOLD;
-                DCGM_ERROR_FORMAT_MESSAGE(errorCode, d, ber, entityId);
-                SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
-            }
-        }
-        else
-        {
-            // Handle all other error counters
-            int64_t const nvLinkError = (startValue.val.i64 >= endValue.val.i64)
-                                            ? (startValue.val.i64 - endValue.val.i64)
-                                            : (endValue.val.i64 - startValue.val.i64);
-
-            if (nvLinkError >= DCGM_LIMIT_MAX_NVLINK_ERROR)
-            {
-                DcgmError d { entityId };
-                DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_ERROR_CRITICAL, d, nvLinkError, fieldTag.c_str(), entityId);
-                SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
-            }
+            DcgmError d { entityId };
+            DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_ERROR_CRITICAL, d, nvLinkError, fieldTag.c_str(), entityId);
+            SetResponse(entityGroupId, entityId, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, d, response);
         }
     }
 
@@ -3358,19 +3279,19 @@ void DcgmHealthWatch::BuildXidMappings()
     // always be monitored regardless of which health subsystems are enabled
 
     m_devastatingXids = {
-        { 48, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, "Double Bit ECC Error", DCGM_FR_XID_ERROR } },
-        { 74, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, "NVLink Critical Error", DCGM_FR_XID_ERROR } },
+        { 48, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, "Double Bit ECC Error", DCGM_FR_XID_ERROR } },
+        { 74, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, "NVLink Critical Error", DCGM_FR_XID_ERROR } },
         { 79, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_FR_FALLEN_OFF_BUS } },
         { 94,
-          { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_ALL, DCGM_FR_CONTAINED_ERROR_MSG, DCGM_FR_CONTAINED_ERROR } },
+          { DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, DCGM_FR_CONTAINED_ERROR_MSG, DCGM_FR_CONTAINED_ERROR } },
         { 95,
           { DCGM_HEALTH_RESULT_FAIL,
-            DCGM_HEALTH_WATCH_ALL,
+            DCGM_HEALTH_WATCH_MEM,
             DCGM_FR_UNCONTAINED_ERROR_MSG,
             DCGM_FR_UNCONTAINED_ERROR } },
         { 119, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, "GSP RPC Timeout", DCGM_FR_XID_ERROR } },
         { 120, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, "GSP Error", DCGM_FR_XID_ERROR } },
-        { 140, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, "ECC unrecovered error", DCGM_FR_XID_ERROR } }
+        { 140, { DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, "ECC unrecovered error", DCGM_FR_XID_ERROR } }
     };
 
     // Define subsystem-specific XIDs
@@ -3590,7 +3511,7 @@ void DcgmHealthWatch::MonitorDevastatingXids(dcgm_field_entity_group_t entityGro
                 DCGM_ERROR_FORMAT_MESSAGE(xidInfo.errorCode, d, entityId);
             }
             d.AddDetail(fmt::format(" (triggered by XID {}: {})", xid, xidInfo.errorMessage));
-            SetResponse(entityGroupId, entityId, xidInfo.severity, DCGM_HEALTH_WATCH_ALL, d, response);
+            SetResponse(entityGroupId, entityId, xidInfo.severity, xidInfo.healthSystem, d, response);
         }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 #include <chrono>
 #include <cstdio>
 #include <ctime>
-#include <memory>
 #include <mutex>
 #include <system_error>
 #include <thread>
@@ -39,22 +38,22 @@ namespace DcgmNs
  *
  * @code{.cpp}
  * ```
- *  auto sm = std::make_shared<Semaphore>();
+ *  Semaphore sm;
  *  //thread 1:
- *  sm->Release(2);
+ *  sm.Release(2);
  *  //thread 2 and 3:
- *  sm->Wait(); //This function will return only after the sm is Released or destroyed
+ *  sm.Wait(); //This function will return only after the sm is Released or destroyed
  *  //thread 4:
- *  sm->Destroy(); //This will notify all waiters that the semaphore is going to be destroyed
+ *  sm.Destroy(); //This will notify all waiters that the semaphore is going to be destroyed
  * ```
  * @endcode
  *
  * @note    Destructor of this semaphore will mark the object as Destroyed and will wait until all Waiters are exited.
- *          Any caller of the Wait* functions should not assume the semaphore is alive and can be used once the Wait*
- *          functions return *::Destroyed status. Even if a caller holds a shared_ptr for the semaphore object.
+ *          No operation may begin once destruction starts. Callers must synchronize the semaphore's lifetime and must
+ *          not use it after a Wait* function returns *::Destroyed status.
  * @note    An instance of the Semaphore class is neither copyable to moveable.
  */
-class Semaphore : public std::enable_shared_from_this<Semaphore>
+class Semaphore
 {
 private:
     /**

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@ target_sources(mndiag_tests
         MnDiagCommonTests.cpp
         MpiRunnerTests.cpp
         MnDiagMpiMnubergemmRunnerTests.cpp
+        MnDiagMpiNvloomRunnerTests.cpp
+        MnDiagMpiNvbandwidthRunnerTests.cpp
+        MnDiagTempDirTests.cpp
         MnDiagStateMachineTests.cpp
         MnDiagProcessUtilsTests.cpp
         MnDiagManagerTests.cpp
@@ -34,15 +37,13 @@ target_include_directories(mndiag_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
-# Link essential libraries
 target_link_libraries(mndiag_tests
     PRIVATE
         dcgm
         dcgmmodulemndiag_private_static
         dcgmmodulemndiag_common
         dcgm_common
+        test-utils
         dcgm_logging
         Catch2::Catch2WithMain
         fmt::fmt
@@ -60,7 +61,7 @@ target_link_libraries(mndiag_tests
 )
 
 # Add only necessary system libraries
-target_link_libraries(mndiag_tests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(mndiag_tests PRIVATE Threads::Threads)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(mndiag_tests EXTRA_ARGS --colour-mode ansi)

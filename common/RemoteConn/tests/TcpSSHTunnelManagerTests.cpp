@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,49 +19,19 @@
 #include <DcgmChildProcessManager.hpp>
 #include <DcgmLogging.h>
 #include <SSHTunnelManager.hpp>
+#include <ScopedEnvVars.hpp>
+#include <TempFile.hpp>
 #include <catch2/catch_all.hpp>
 #include <sys/socket.h>
-
-#include <unordered_set>
 
 using namespace DcgmNs::Common::RemoteConn::detail;
 using ChildProcess = DcgmNs::Common::Subprocess::ChildProcess;
 
-namespace
-{
-std::string portRangeMinEnv = "__DCGM_SSH_PORT_RANGE_MIN__";
-std::string portRangeMaxEnv = "__DCGM_SSH_PORT_RANGE_MAX__";
-
-class EnvVars
-{
-public:
-    EnvVars() = default;
-    int SetEnv(std::string const &key, std::string const &value)
-    {
-        m_vars.insert(key);
-        return setenv(key.c_str(), value.c_str(), 1);
-    }
-    int UnsetEnv(std::string const &key)
-    {
-        m_vars.erase(key);
-        return unsetenv(key.c_str());
-    }
-    ~EnvVars()
-    {
-        for (auto const &key : m_vars)
-        {
-            unsetenv(key.c_str());
-        }
-    }
-
-private:
-    std::unordered_set<std::string> m_vars;
-};
-} //namespace
-
 TEST_CASE("OpenSSH ssh session created with singleton uses first available default port")
 {
-    DcgmLoggingInit("test_log.txt", DcgmLoggingSeverityVerbose, DcgmLoggingSeverityVerbose);
+    auto logFile = TempFile::Random("", "dcgm-remoteconn-tcp-log-");
+    auto logPath = logFile.Path().string();
+    DcgmLoggingInit(logPath.c_str(), DcgmLoggingSeverityVerbose, DcgmLoggingSeverityVerbose);
     RouteLogToBaseLogger(SYSLOG_LOGGER);
     log_debug("Test 1");
 
@@ -90,9 +60,8 @@ TEST_CASE("OpenSSH ssh session uses first available default port")
 TEST_CASE("OpenSSH ssh session uses port from environment variable")
 {
     std::vector<unsigned int> portRange = { 52000, 52001 };
-    EnvVars envVars;
-    envVars.SetEnv(MIN_PORT_RANGE_ENV, std::to_string(portRange.front()));
-    envVars.SetEnv(MAX_PORT_RANGE_ENV, std::to_string(portRange.back()));
+    ScopedEnvVars envVars({ { MIN_PORT_RANGE_ENV, std::to_string(portRange.front()) },
+                            { MAX_PORT_RANGE_ENV, std::to_string(portRange.back()) } });
     TcpSSHTunnelManager mgr;
     DcgmChildProcessManager childProcessManager;
     SetChildProcessFuncs(mgr, childProcessManager);
@@ -107,9 +76,8 @@ TEST_CASE("OpenSSH ssh session uses default port when port from environment vari
 {
     log_debug("Test 4");
     std::vector<unsigned int> portRange = { 52001, 52000 };
-    EnvVars envVars;
-    envVars.SetEnv(MIN_PORT_RANGE_ENV, std::to_string(portRange.front()));
-    envVars.SetEnv(MAX_PORT_RANGE_ENV, std::to_string(portRange.back()));
+    ScopedEnvVars envVars({ { MIN_PORT_RANGE_ENV, std::to_string(portRange.front()) },
+                            { MAX_PORT_RANGE_ENV, std::to_string(portRange.back()) } });
     TcpSSHTunnelManager mgr;
     DcgmChildProcessManager childProcessManager;
     SetChildProcessFuncs(mgr, childProcessManager);
@@ -200,10 +168,9 @@ TEST_CASE("OpenSSH ssh session error, no port available")
 {
     std::vector<ChildProcessHandle_t> tcpServers;
     DcgmChildProcessManager childProcessManager;
-    EnvVars envVars;
     std::vector<unsigned int> existingPorts = { 52000, 52001 };
-    envVars.SetEnv(MIN_PORT_RANGE_ENV, std::to_string(existingPorts.front()));
-    envVars.SetEnv(MAX_PORT_RANGE_ENV, std::to_string(existingPorts.back()));
+    ScopedEnvVars envVars({ { MIN_PORT_RANGE_ENV, std::to_string(existingPorts.front()) },
+                            { MAX_PORT_RANGE_ENV, std::to_string(existingPorts.back()) } });
 
     // Set up the tunnel manager with a range of two ports, and start
     // TCP servers on both ports
@@ -227,10 +194,9 @@ TEST_CASE("OpenSSH ssh port rollover, finds next available port")
 {
     std::vector<ChildProcessHandle_t> tcpServers;
     DcgmChildProcessManager childProcessManager;
-    EnvVars envVars;
     std::vector<unsigned int> existingPorts = { 52000, 52001 };
-    envVars.SetEnv(MIN_PORT_RANGE_ENV, std::to_string(existingPorts.front()));
-    envVars.SetEnv(MAX_PORT_RANGE_ENV, std::to_string(existingPorts.back() + 1));
+    ScopedEnvVars envVars({ { MIN_PORT_RANGE_ENV, std::to_string(existingPorts.front()) },
+                            { MAX_PORT_RANGE_ENV, std::to_string(existingPorts.back() + 1) } });
 
     // Set up the tunnel manager with a range of three ports, and start
     // TCP servers on the first two ports

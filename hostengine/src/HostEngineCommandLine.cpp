@@ -140,6 +140,20 @@ std::string const &HostEngineCommandLine::GetHomeDir() const
     return m_pimpl->m_homeDir;
 }
 
+std::string HostEngineCommandLine::ParseBindIp(std::string const &value)
+{
+    if (value == "all" || value == "ALL")
+    {
+        return {};
+    }
+    /* If the value is an IPv6 address, then we need to remove [] from it */
+    if (value.size() >= 3 && value.starts_with('[') && value.ends_with(']'))
+    {
+        return value.substr(1, value.size() - 2);
+    }
+    return value;
+}
+
 namespace
 {
 using namespace std::string_literals;
@@ -155,20 +169,6 @@ std::set<dcgmModuleId_t> ParseDenylist(std::string const &value)
         result.insert(static_cast<dcgmModuleId_t>(moduleId));
     }
     return result;
-}
-
-std::string ParseBindIp(std::string const &value)
-{
-    if (value == "all"s || value == "ALL"s)
-    {
-        return ""s;
-    }
-    /* If the value is an IPv6 address, then we need to remove [] from it */
-    if (value.size() >= 3 && value.starts_with('[') && value.ends_with(']'))
-    {
-        return value.substr(1, value.size() - 2);
-    }
-    return value;
 }
 
 class DenylistModulesConstraint : public TCLAP::Constraint<std::string>
@@ -508,7 +508,7 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
 
         impl->m_hostEngineSockPath        = domainSockArg.getValue();
         impl->m_logLevel                  = logLevelArg.getValue();
-        impl->m_hostEngineBindInterfaceIp = ParseBindIp(bindIpArg.getValue());
+        impl->m_hostEngineBindInterfaceIp = HostEngineCommandLine::ParseBindIp(bindIpArg.getValue());
         impl->m_hostEngineVsockCid        = vsockCidArg.getValue();
         impl->m_logFileName               = logFileArg.getValue();
         impl->m_pidFilePath               = pidFileArg.getValue();
@@ -541,10 +541,3 @@ HostEngineCommandLine ParseCommandLine(int argc, char *argv[])
     result.m_pimpl.reset(impl.release());
     return result;
 }
-
-#ifdef HOSTENGINE_TESTS
-std::string HostEngineCommandLineInterface::ParseBindIp(std::string const &value)
-{
-    return ::ParseBindIp(value);
-}
-#endif

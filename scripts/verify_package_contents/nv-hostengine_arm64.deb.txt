@@ -1,0 +1,13 @@
+./usr/
+./usr/bin/
+./usr/bin/nv-hostengine
+./usr/lib/
+./usr/lib/systemd/
+./usr/lib/systemd/system/
+./usr/lib/systemd/system/nvidia-dcgm.service
+./usr/sbin/
+./usr/sbin/gather-dcgm-logs.sh
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/nv-hostengine/
+./usr/share/doc/nv-hostengine/copyright

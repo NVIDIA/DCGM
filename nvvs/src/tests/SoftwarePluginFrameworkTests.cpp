@@ -22,15 +22,30 @@
 #include "dcgm_structs.h"
 #include <DcgmHandle.h>
 #include <DcgmRecorder.h>
+#include <DcgmSystem.h>
 #include <Gpu.h>
+#include <MockDcgmOps.h>
 #include <NvidiaValidationSuite.h>
 #include <NvvsCommon.h>
 #include <PluginLib.h>
 #include <PluginStrings.h>
 #include <SoftwarePluginFramework.h>
 
-extern DcgmHandle dcgmHandle;
-extern DcgmSystem dcgmSystem;
+namespace
+{
+struct SoftwarePluginFrameworkTestFixture
+{
+    SoftwarePluginFrameworkTestFixture()
+        : dcgmHandle(&dcgmOps)
+        , dcgmSystem(&dcgmOps, 0)
+    {}
+
+    DcgmNs::MockDcgmOps dcgmOps;
+    NvvsCommon nvvsCommon;
+    DcgmHandle dcgmHandle;
+    DcgmSystem dcgmSystem;
+};
+} // namespace
 
 class WrapperSoftwareTestFramework : private SoftwarePluginFramework
 {
@@ -54,9 +69,12 @@ public:
                                                                         "SRAM Threshold Count" };
 
     // methods
-    WrapperSoftwareTestFramework(EntitySet &entitySet);
-    WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList, EntitySet &entitySet);
-    WrapperSoftwareTestFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList, EntitySet &entitySet);
+    WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList,
+                                 EntitySet &entitySet,
+                                 DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                 NvvsCommon *nvvsCommon,
+                                 DcgmHandle *dcgmHandle,
+                                 DcgmSystem *dcgmSystem);
     void WrapperInitTestNameMap();
     void WrapperInitTestParametersMap();
     void WrapperPopulateGpuInfo(std::vector<Gpu *> &gpuList);
@@ -78,19 +96,23 @@ public:
     {
         return getEntityList();
     }
+
+private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
+    DcgmHandle *m_dcgmHandle;
+    DcgmSystem *m_dcgmSystem;
 };
 
-WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(EntitySet &entitySet)
-    : SoftwarePluginFramework(entitySet)
-{}
-
-WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList, EntitySet &entitySet)
-    : SoftwarePluginFramework(std::move(gpuList), entitySet)
-{}
-
-WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList,
-                                                           EntitySet &entitySet)
-    : SoftwarePluginFramework(std::move(entityList), entitySet)
+WrapperSoftwareTestFramework::WrapperSoftwareTestFramework(std::vector<Gpu *> gpuList,
+                                                           EntitySet &entitySet,
+                                                           DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                                           NvvsCommon *nvvsCommon,
+                                                           DcgmHandle *dcgmHandle,
+                                                           DcgmSystem *dcgmSystem)
+    : SoftwarePluginFramework(std::move(gpuList), entitySet, dcgmOps, nvvsCommon, dcgmHandle, dcgmSystem)
+    , m_dcgmOps(dcgmOps)
+    , m_dcgmHandle(dcgmHandle)
+    , m_dcgmSystem(dcgmSystem)
 {}
 
 void WrapperSoftwareTestFramework::WrapperInitTestNameMap()
@@ -112,8 +134,7 @@ void WrapperSoftwareTestFramework::createGpuObject()
 {
     m_gpuIds.clear();
     m_gpuIds.push_back(0);
-    Gpu gpu(0);
-    gpu.Init();
+    Gpu gpu(0, m_dcgmOps, m_dcgmHandle, m_dcgmSystem);
     m_gpuStorage.emplace_back(std::move(gpu));
     m_visibleGpus.push_back(&m_gpuStorage.back());
 }
@@ -135,16 +156,17 @@ void WrapperSoftwareTestFramework::WrapperSetSoftwarePlugin(std::unique_ptr<Soft
 }
 
 // --------------------------------------------------------------------------------------
-TEST_CASE("Test 1 - Software object creation with Output obj")
+TEST_CASE_METHOD(SoftwarePluginFrameworkTestFixture, "Test 1 - Software object creation with Output obj")
 {
     // test class
     EntitySet entitySet;
-    WrapperSoftwareTestFramework softwareObjLocal(entitySet);
+    WrapperSoftwareTestFramework softwareObjLocal({}, entitySet, &dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     softwareObjLocal.createGpuObject();
 
     // ---------------------------------------
     // software class
-    WrapperSoftwareTestFramework softwareObj(softwareObjLocal.m_visibleGpus, entitySet);
+    WrapperSoftwareTestFramework softwareObj(
+        softwareObjLocal.m_visibleGpus, entitySet, &dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
 
     // ---------------
     // check the test map
@@ -166,11 +188,11 @@ TEST_CASE("Test 1 - Software object creation with Output obj")
     softwareObjLocal.destroyAllObjects();
 }
 
-TEST_CASE("Test 2 - Init Test Name Map")
+TEST_CASE_METHOD(SoftwarePluginFrameworkTestFixture, "Test 2 - Init Test Name Map")
 {
     // test class
     EntitySet entitySet;
-    WrapperSoftwareTestFramework softwareObjLocal(entitySet);
+    WrapperSoftwareTestFramework softwareObjLocal({}, entitySet, &dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     softwareObjLocal.WrapperInitTestNameMap();
 
     // ---------------
@@ -186,11 +208,11 @@ TEST_CASE("Test 2 - Init Test Name Map")
     softwareObjLocal.destroyAllObjects();
 }
 
-TEST_CASE("Test 3 - Init Test Parameters Map")
+TEST_CASE_METHOD(SoftwarePluginFrameworkTestFixture, "Test 3 - Init Test Parameters Map")
 {
     // test class
     EntitySet entitySet;
-    WrapperSoftwareTestFramework softwareObjLocal(entitySet);
+    WrapperSoftwareTestFramework softwareObjLocal({}, entitySet, &dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     softwareObjLocal.WrapperInitTestNameMap();
     softwareObjLocal.WrapperInitTestParametersMap();
 
@@ -222,10 +244,10 @@ TEST_CASE("Test 3 - Init Test Parameters Map")
     softwareObjLocal.destroyAllObjects();
 }
 
-TEST_CASE("Test 4 - Populate GPU Information")
+TEST_CASE_METHOD(SoftwarePluginFrameworkTestFixture, "Test 4 - Populate GPU Information")
 {
     EntitySet entitySet;
-    WrapperSoftwareTestFramework softwareObjLocal(std::make_unique<dcgmDiagPluginEntityList_v1>(), entitySet);
+    WrapperSoftwareTestFramework softwareObjLocal({}, entitySet, &dcgmOps, &nvvsCommon, &dcgmHandle, &dcgmSystem);
     softwareObjLocal.createGpuObject();
     softwareObjLocal.WrapperPopulateGpuInfo(softwareObjLocal.m_visibleGpus);
 

@@ -82,8 +82,9 @@ public:
      * @brief Set the process execution timeout
      *
      * @param timeoutInSeconds The timeout for the process execution
+     * @param keepReserved Keep resources reserved for the same duration while no process is detected
      */
-    virtual void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds) = 0;
+    virtual void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds, bool keepReserved = false) = 0;
 
     /**
      * @brief Set the expected binary path

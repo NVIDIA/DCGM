@@ -17,17 +17,19 @@
 
 #include "CommandOutputController.h"
 #include "DcgmiOutput.h"
-#include "dcgm_agent.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs.h"
-#include "dcgm_test_apis.h"
 #include "dcgmi_common.h"
 
 #include <UniquePtrUtil.h>
-#include <array>
+#include <dcgm_agent.h>
+#include <dcgm_fields.h>
 #include <dcgm_nvml.h>
-#include <experimental/scope>
+#include <dcgm_structs.h>
+#include <dcgm_test_apis.h>
+
 #include <fmt/format.h>
+
+#include <array>
+#include <experimental/scope>
 #include <iostream>
 #include <map>
 #include <ranges>
@@ -104,7 +106,7 @@ constexpr auto NVLINK_ERROR_FIELD_IDS_BLACKWELL_OR_NEWER
                                       DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL,
                                       DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL,
                                       DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL,
-                                      DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS,
+                                      DCGM_FI_DEV_NVLINK_TX_DISCARD_TOTAL,
                                       DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL,
                                       DCGM_FI_DEV_NVLINK_SYMBOL_BER_RATIO,
                                       DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO });
@@ -112,11 +114,11 @@ constexpr auto NVLINK_ERROR_FIELD_IDS_BLACKWELL_OR_NEWER
 namespace
 {
 
-dcgmReturn_t ValidGpuId(dcgmHandle_t pDcgmHandle, unsigned int gpuId)
+dcgmReturn_t ValidGpuId(DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t pDcgmHandle, unsigned int gpuId)
 {
     std::array<unsigned int, DCGM_MAX_NUM_DEVICES> supportedGpuIds = { 0 };
     int supportedCount                                             = 0;
-    auto ret = dcgmGetAllSupportedDevices(pDcgmHandle, supportedGpuIds.data(), &supportedCount);
+    auto ret = dcgmOps->dcgmGetAllSupportedDevices(pDcgmHandle, supportedGpuIds.data(), &supportedCount);
     if (ret != DCGM_ST_OK)
     {
         log_error("Failed to get all supported devices, ret: {}", ret);
@@ -134,7 +136,7 @@ dcgmReturn_t ValidGpuId(dcgmHandle_t pDcgmHandle, unsigned int gpuId)
 
     std::array<unsigned int, DCGM_MAX_NUM_DEVICES> allGpuIds = { 0 };
     int allGpusCount                                         = 0;
-    ret = dcgmGetAllDevices(pDcgmHandle, allGpuIds.data(), &allGpusCount);
+    ret = dcgmOps->dcgmGetAllDevices(pDcgmHandle, allGpuIds.data(), &allGpusCount);
     if (ret != DCGM_ST_OK)
     {
         log_error("Failed to get all devices, ret: {}", ret);
@@ -156,7 +158,8 @@ dcgmReturn_t ValidGpuId(dcgmHandle_t pDcgmHandle, unsigned int gpuId)
 
 
 /************************************************************************************/
-Nvlink::Nvlink()
+Nvlink::Nvlink(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
 {}
 
 Nvlink::~Nvlink()
@@ -265,7 +268,7 @@ std::string DcgmNs::Dcgmi::NvlinkDetail::GetErrorCountType(unsigned short fieldI
             return "Effective BER";
         case DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL:
             return "Effective Error";
-        case DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS:
+        case DCGM_FI_DEV_NVLINK_TX_DISCARD_TOTAL:
             return "Tx Discards";
         default:
             return "Unknown";
@@ -274,7 +277,7 @@ std::string DcgmNs::Dcgmi::NvlinkDetail::GetErrorCountType(unsigned short fieldI
 
 dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, unsigned int gpuId, bool json)
 {
-    if (auto ret = ValidGpuId(mNvcmHandle, gpuId); ret != DCGM_ST_OK)
+    if (auto ret = ValidGpuId(m_dcgmOps, mNvcmHandle, gpuId); ret != DCGM_ST_OK)
     {
         std::cout << "GPU ID " << gpuId << " is not valid, return: " << errorString(ret) << std::endl;
         return ret;
@@ -284,7 +287,7 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
 
     // Get chip architecture
     dcgmChipArchitecture_t chipArchitecture;
-    result = dcgmGetGpuChipArchitecture(mNvcmHandle, gpuId, &chipArchitecture);
+    result = m_dcgmOps->dcgmGetGpuChipArchitecture(mNvcmHandle, gpuId, &chipArchitecture);
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to get chip architecture. Return : " << errorString(result) << std::endl;
@@ -298,7 +301,8 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
 
     // Add a field group
     dcgmFieldGrp_t fieldGroupId;
-    result = dcgmFieldGroupCreate(mNvcmHandle, fieldIds.size(), fieldIds.data(), (char *)"dcgmi_nvlink", &fieldGroupId);
+    result
+        = m_dcgmOps->dcgmFieldGroupCreate(mNvcmHandle, fieldIds.size(), fieldIds.data(), "dcgmi_nvlink", &fieldGroupId);
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to add a nvlink field group. Return : " << errorString(result) << std::endl;
@@ -307,22 +311,23 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     }
 
     // RAII wrapper for destroying field group
-    std::experimental::unique_resource raiiFieldGroup(fieldGroupId, [mNvcmHandle, &result](dcgmFieldGrp_t id) {
-        dcgmReturn_t r = dcgmFieldGroupDestroy(mNvcmHandle, id);
-        if (r != DCGM_ST_OK)
-        {
-            std::cout << "Error: Unable to remove a nvlink field group. Return : " << errorString(r) << std::endl;
-            log_error("Error {} from dcgmFieldGroupDestroy", (int)r);
-
-            if (result == DCGM_ST_OK)
+    std::experimental::unique_resource raiiFieldGroup(
+        fieldGroupId, [mNvcmHandle, &result, &dcgmOps = m_dcgmOps](dcgmFieldGrp_t id) {
+            dcgmReturn_t r = dcgmOps->dcgmFieldGroupDestroy(mNvcmHandle, id);
+            if (r != DCGM_ST_OK)
             {
-                result = r;
+                std::cout << "Error: Unable to remove a nvlink field group. Return : " << errorString(r) << std::endl;
+                log_error("Error {} from dcgmFieldGroupDestroy", (int)r);
+
+                if (result == DCGM_ST_OK)
+                {
+                    result = r;
+                }
             }
-        }
-    });
+        });
 
     // Add watch for nvlink error count fields
-    result = dcgmWatchFields(mNvcmHandle, (dcgmGpuGrp_t)DCGM_GROUP_ALL_GPUS, fieldGroupId, 1000000, 300, 0);
+    result = m_dcgmOps->dcgmWatchFields(mNvcmHandle, (dcgmGpuGrp_t)DCGM_GROUP_ALL_GPUS, fieldGroupId, 1000000, 300, 0);
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to add watch for nvlink error field collections. Return : " << errorString(result)
@@ -332,7 +337,7 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     }
 
     // Wait for the fields to be updated
-    result = dcgmUpdateAllFields(mNvcmHandle, 1);
+    result = m_dcgmOps->dcgmUpdateAllFields(mNvcmHandle, 1);
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error Updating the nvlink error count fields. Return: " << errorString(result) << std::endl;
@@ -350,7 +355,7 @@ dcgmReturn_t Nvlink::DisplayNvLinkErrorCountsForGpu(dcgmHandle_t mNvcmHandle, un
     // Get the latest values of the fields for the requested gpu Id
     auto valuesRaw = MakeUniqueZero<dcgmFieldValue_v1>(fieldIds.size());
     std::span<dcgmFieldValue_v1> values(valuesRaw.get(), fieldIds.size());
-    result = dcgmGetLatestValuesForFields(
+    result = m_dcgmOps->dcgmGetLatestValuesForFields(
         mNvcmHandle, gpuId, const_cast<unsigned short *>(fieldIds.data()), fieldIds.size(), values.data());
     if (result != DCGM_ST_OK)
     {
@@ -476,7 +481,7 @@ dcgmReturn_t Nvlink::DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle, bool showE
     memset(&linkStatus, 0, sizeof(linkStatus));
     linkStatus.version = dcgmNvLinkStatus_version5;
 
-    result = dcgmGetNvLinkLinkStatus(dcgmHandle, &linkStatus);
+    result = m_dcgmOps->dcgmGetNvLinkLinkStatus(dcgmHandle, &linkStatus);
 
     if (result != DCGM_ST_OK)
     {
@@ -559,7 +564,12 @@ dcgmReturn_t Nvlink::DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle, bool showE
     return DCGM_ST_OK;
 }
 
-GetGpuNvlinkErrorCounts::GetGpuNvlinkErrorCounts(std::string hostname, unsigned int gpuId, bool json)
+GetGpuNvlinkErrorCounts::GetGpuNvlinkErrorCounts(std::string hostname,
+                                                 unsigned int gpuId,
+                                                 bool json,
+                                                 DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mNvlinkObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
     mGpuId     = gpuId;
@@ -572,8 +582,10 @@ dcgmReturn_t GetGpuNvlinkErrorCounts::DoExecuteConnected()
 }
 
 
-GetNvLinkLinkStatuses::GetNvLinkLinkStatuses(std::string hostname, bool showEntityIds)
-    : mShowEntityIds(showEntityIds)
+GetNvLinkLinkStatuses::GetNvLinkLinkStatuses(std::string hostname, bool showEntityIds, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mNvlinkObj(dcgmOps)
+    , mShowEntityIds(showEntityIds)
 {
     m_hostName = std::move(hostname);
 }
@@ -609,7 +621,8 @@ dcgm_field_eid_t HelperEncodeLinkEntity(dcgm_field_entity_group_t entityType,
 std::string HelperFormatLinkEntityIds(dcgm_field_entity_group_t entityType,
                                       dcgm_field_eid_t entityId,
                                       const dcgmNvLinkLinkState_t *linkStates,
-                                      unsigned int numLinks)
+                                      unsigned int numLinks,
+                                      std::optional<std::uint16_t> termWidthOverride)
 {
     struct LinkInfo
     {
@@ -659,9 +672,20 @@ std::string HelperFormatLinkEntityIds(dcgm_field_entity_group_t entityType,
     using namespace DcgmNs::Terminal;
     constexpr std::uint16_t indent = 19; // "    Link Entities: "
 
-    auto termDims = GetTermDimensions().value_or(TermDimensions {});
-    // Use 80% of terminal width for link entities (dense reference data), min 120 for compatibility
-    std::uint16_t termWidth      = std::max<std::uint16_t>(120, termDims.cols * 80 / 100);
+    // Use 80% of terminal width for link entities (dense reference data); a test override bypasses the
+    // live-terminal query so wrapping is deterministic regardless of where the test runs.
+    std::uint16_t termWidth;
+    if (termWidthOverride.has_value())
+    {
+        termWidth = *termWidthOverride;
+    }
+    else
+    {
+        auto termDims = GetTermDimensions().value_or(TermDimensions {});
+        termWidth     = termDims.cols * 80 / 100;
+    }
+    // Enforce a minimum width for compatibility (and to keep availableWidth from underflowing)
+    termWidth                    = std::max<std::uint16_t>(120, termWidth);
     std::uint16_t availableWidth = termWidth - indent;
     std::uint16_t itemsPerLine   = ComputeItemsPerLine(itemWidth, availableWidth, 2, 20);
 

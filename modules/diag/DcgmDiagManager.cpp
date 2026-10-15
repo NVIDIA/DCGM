@@ -29,6 +29,7 @@
 #include <NvvsCommon.h>
 #include <NvvsExitCode.h>
 #include <UniquePtrUtil.h>
+#include <UserCredentials.hpp>
 #include <dcgm_config_structs.h>
 #include <dcgm_core_structs.h>
 #include <dcgm_structs.h>
@@ -89,6 +90,30 @@ std::string SanitizedString(std::string const &str)
     return sanitized;
 }
 
+bool NeedsMigHierarchy(std::string_view entityIds)
+{
+    for (auto const tokenView : DcgmNs::Split(entityIds, ','))
+    {
+        std::string const token = DcgmNs::Trim(tokenView);
+        if (token.empty())
+        {
+            continue;
+        }
+        if (token.contains('/'))
+        {
+            return true;
+        }
+        for (auto const prefix : DcgmNs::EntityPrefixes::MigPrefixes)
+        {
+            if (token.starts_with(prefix))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::chrono::seconds GetHeartbeatTimeout()
 {
     auto constexpr defaultTimeout = std::chrono::seconds(600);
@@ -115,7 +140,7 @@ std::chrono::seconds GetHeartbeatTimeout()
 } // namespace
 
 /*****************************************************************************/
-DcgmDiagManager::DcgmDiagManager(dcgmCoreCallbacks_t &dcc)
+DcgmDiagManager::DcgmDiagManager(dcgmCoreCallbacks_t &dcc, UserCredentialsOpsAnyValue userCredentialsOps)
     : m_nvvsPath(GetNvvsBinPath())
     , m_mutex(0)
     , m_nvvsPID(-1)
@@ -123,6 +148,7 @@ DcgmDiagManager::DcgmDiagManager(dcgmCoreCallbacks_t &dcc)
     , m_childProcessHandle(0)
     , m_coreProxy(dcc)
     , m_amShuttingDown(false)
+    , m_userCredentialsOps(std::move(userCredentialsOps))
 {}
 
 DcgmDiagManager::~DcgmDiagManager()
@@ -450,7 +476,7 @@ dcgmReturn_t DcgmDiagManager::AddConfigFile(dcgmRunDiag_v10 *drd,
         // Adjust file permissions
         if (auto serviceAccount = GetServiceAccount(m_coreProxy); serviceAccount.has_value())
         {
-            if (auto cred = GetUserCredentials((*serviceAccount).c_str()); cred.has_value())
+            if (auto cred = m_userCredentialsOps.GetUserCredentials((*serviceAccount).c_str()); cred.has_value())
             {
                 if (chown(fileName, (*cred).uid, (*cred).gid) != 0)
                 {
@@ -1218,43 +1244,6 @@ std::vector<std::uint32_t> ParseAndFilterGpuList(std::string_view input)
 }
 
 /**
- * @brief Parses an entity ids string and filters out GPU with valid IDs.
- * @param[in] input A string containing entity ids (e.g. gpu:0,1).
- * @return A vector of valid GPU IDs parsed from the input string.
- */
-std::vector<std::uint32_t> ParseEntityIdsAndFilterGpu(DcgmCoreProxy &coreProxy, std::string_view entityIds)
-{
-    dcgmReturn_t ret;
-
-    std::vector<dcgmcm_gpu_info_cached_t> gpuInfos;
-    ret = coreProxy.GetAllGpuInfo(gpuInfos);
-    if (ret != DCGM_ST_OK)
-    {
-        log_error("failed to get gpu info from core proxy: {}", errorString(ret));
-        return {};
-    }
-    std::vector<std::pair<unsigned, std::string>> gpuIdUuids;
-    for (auto const &gpuInfo : gpuInfos)
-    {
-        // Skip GPUs that are lost to the CM
-        if (gpuInfo.status == DcgmEntityStatusLost)
-        {
-            continue;
-        }
-        gpuIdUuids.emplace_back(gpuInfo.gpuId, gpuInfo.uuid);
-    }
-
-    dcgmMigHierarchy_v2 migHierarchy;
-    ret = coreProxy.GetGpuInstanceHierarchy(migHierarchy);
-    if (ret != DCGM_ST_OK)
-    {
-        log_error("failed to get gpu instance hierachy from core proxy: {}", errorString(ret));
-        return {};
-    }
-    return DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, gpuIdUuids, entityIds);
-}
-
-/**
  * @brief Executes EUD with root permissions if the service account does not have root permissions
  * @param[in] diagManager DiagManager instance
  * @param[in] drd Diagnostic request data
@@ -1395,6 +1384,64 @@ dcgmReturn_t AddEudTestsOriginalLevel(dcgmRunDiag_v10 *drd, dcgmPolicyValidation
 }
 
 } // namespace
+
+/**
+ * Parses an entity ids string and filters out GPU with valid IDs.
+ *
+ * @param[in] entityIds A string containing entity ids (e.g. gpu:0,1).
+ * @return GPU ids on success, or a dcgmReturn_t on parse failure.
+ */
+DcgmResult<std::vector<std::uint32_t>> DcgmDiagManager::ParseEntityIdsAndFilterGpu(std::string_view entityIds)
+{
+    if (entityIds.empty())
+    {
+        return std::vector<std::uint32_t> {};
+    }
+
+    std::vector<dcgmcm_gpu_info_cached_t> gpuInfos;
+    dcgmReturn_t const gpuInfoRet = m_coreProxy.GetAllGpuInfo(gpuInfos);
+    std::vector<std::pair<unsigned, std::string>> gpuIdUuids;
+    if (gpuInfoRet != DCGM_ST_OK)
+    {
+        log_debug("GetAllGpuInfo failed with {}, using empty GPU list for parsing", errorString(gpuInfoRet));
+    }
+    else
+    {
+        for (auto const &gpuInfo : gpuInfos)
+        {
+            // Skip GPUs that are lost to the CM
+            if (gpuInfo.status == DcgmEntityStatusLost)
+            {
+                continue;
+            }
+            gpuIdUuids.emplace_back(gpuInfo.gpuId, gpuInfo.uuid);
+        }
+    }
+
+    dcgmMigHierarchy_v2 migHierarchy {};
+    migHierarchy.version      = dcgmMigHierarchy_version2;
+    migHierarchy.count        = 0;
+    dcgmReturn_t const migRet = m_coreProxy.GetGpuInstanceHierarchy(migHierarchy);
+    if (migRet != DCGM_ST_OK)
+    {
+        if (NeedsMigHierarchy(entityIds))
+        {
+            log_debug("GetGpuInstanceHierarchy failed with {}, failing closed for MIG selector", errorString(migRet));
+            return std::unexpected(migRet);
+        }
+        log_debug("GetGpuInstanceHierarchy failed with {}, using empty hierarchy for parsing", errorString(migRet));
+    }
+
+    // Wildcard / gpu:* resolution needs the GPU inventory. Soft-failing GetAllGpuInfo
+    // would make "*" succeed with an empty list and skip GROUP_IS_EMPTY in RunDiag.
+    bool isGpuWildcard = false;
+    if (gpuInfoRet != DCGM_ST_OK && HasGpuRequest(std::string { entityIds }, isGpuWildcard) && isGpuWildcard)
+    {
+        return std::unexpected(gpuInfoRet);
+    }
+
+    return DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, gpuIdUuids, entityIds);
+}
 
 std::tuple<WasExecuted_t, dcgmReturn_t> DcgmDiagManager::RerunEudDiagAsRoot(
     dcgmRunDiag_v10 *drd,
@@ -1560,7 +1607,13 @@ dcgmReturn_t DcgmDiagManager::RunDiag(dcgmRunDiag_v10 *drd,
     {
         // Check entity ids
         log_debug("Parsing entity ids: {}", drd->entityIds);
-        gpuIds        = ParseEntityIdsAndFilterGpu(m_coreProxy, drd->entityIds);
+        auto gpuIdsResult = ParseEntityIdsAndFilterGpu(drd->entityIds);
+        if (!gpuIdsResult.has_value())
+        {
+            log_error("Failed to parse entity ids {}: {}", drd->entityIds, errorString(gpuIdsResult.error()));
+            return gpuIdsResult.error();
+        }
+        gpuIds        = std::move(*gpuIdsResult);
         areAllSameSku = m_coreProxy.AreAllGpuIdsSameSku(gpuIds);
         entityIds     = drd->entityIds;
     }
@@ -2137,7 +2190,13 @@ dcgmReturn_t DcgmDiagManager::GetDetachedGpus(std::string const &entityIds,
             log_debug("GetGpuInstanceHierarchy failed with {}, using empty hierarchy for parsing", errorString(ret));
         }
 
-        requestedGpuIds = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, allGpuIdUuids, entityIds);
+        auto requestedGpuIdsResult = DcgmNs::ParseEntityIdsAndFilterGpu(migHierarchy, allGpuIdUuids, entityIds);
+        if (!requestedGpuIdsResult.has_value())
+        {
+            log_error("Failed to parse entity ids {}: {}", entityIds, errorString(requestedGpuIdsResult.error()));
+            return requestedGpuIdsResult.error();
+        }
+        requestedGpuIds = std::move(*requestedGpuIdsResult);
     }
 
     // Find intersection: which detached GPUs were actually requested?

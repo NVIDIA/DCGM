@@ -16,6 +16,7 @@ import test_utils
 
 
 def get_injection_values():
+    """Return NVML injection parameters for mndiag tests."""
     return {
         "INJECTION_YAML": "GB200.yaml",
         "INJECTION_SKU": "2941",
@@ -27,11 +28,13 @@ _HE_ENV = {
     "PATH": test_utils.get_updated_env_path_variable(),
     "DCGM_MNDIAG_MPIRUN_PATH": test_utils.get_mpirun_path,
     "DCGM_MNDIAG_MNUBERGEMM_PATH": test_utils.get_mock_mnubergemm_path(),
+    "DCGM_MNDIAG_NVLOOM_PATH": test_utils.get_mock_nvloom_path(),
+    "DCGM_MNDIAG_MNNVBANDWIDTH_PATH": test_utils.get_mock_mnnvbandwidth_path(),
     "DCGM_MNDIAG_SUPPORTED_SKUS": get_injection_values()["INJECTION_SKU"],
     "DCGM_MPIRUN_ALLOW_RUN_AS_ROOT": "1",
 }
 
 
 def HE_Env():
-    # Lazily evaluate to capture any runtime changes, if desired
+    """Return host-engine environment variables, evaluating callables lazily."""
     return {k: (v() if callable(v) else v) for k, v in _HE_ENV.items()}

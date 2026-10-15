@@ -18,6 +18,7 @@
 
 #include <DcgmMutex.h>
 #include <DcgmThread.h>
+#include <dcgm_nvml.h>
 
 #include <cstdint>
 #include <unordered_set>
@@ -25,9 +26,11 @@
 
 struct KmsgXidData
 {
-    char pciBdf[200];     //!< GPU's PCI slot information in Bus:Domain.Function notation. For example, 0000:01:00.0
-    int64_t timestamp {}; //!< Timestamp of XID
-    uint32_t xid {};      //!< XID value
+    char pciBdf[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE]; /*!< GPU PCI slot in Domain:Bus:Device.Function notation. Sized to
+                                                          NVML's max PCI bus ID buffer; kmsg currently uses legacy
+                                                          format.*/
+    int64_t timestamp {};                            //!< Timestamp of XID
+    uint32_t xid {};                                 //!< XID value
 };
 
 /**

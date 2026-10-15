@@ -20,14 +20,23 @@
 #include "PluginStrings.h"
 #include "dcgm_agent.h"
 #include "dcgm_structs.h"
+#include <DcgmOpsAnyPtr.hpp>
 
-ContextCreate::ContextCreate(TestParameters *testParameters, ContextCreatePlugin *plugin, dcgmHandle_t handle)
+ContextCreate::ContextCreate(TestParameters *testParameters,
+                             ContextCreatePlugin *plugin,
+                             dcgmHandle_t handle,
+                             DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                             CudaOpsAnyPtr cudaOps,
+                             CudaCommonAnyPtr cudaCommon)
     : m_plugin(plugin)
     , m_testParameters(testParameters)
     , m_device()
     , m_dcgmRecorder(0)
-    , m_dcgmHandle(handle)
-    , m_dcgmGroup()
+    , m_dcgmHandle(dcgmOps, handle)
+    , m_dcgmGroup(dcgmOps)
+    , m_dcgmOps(dcgmOps)
+    , m_cudaOps(cudaOps)
+    , m_cudaCommon(cudaCommon)
 {}
 
 ContextCreate::~ContextCreate()
@@ -90,7 +99,10 @@ std::string ContextCreate::Init(const dcgmDiagPluginEntityList_v1 &entityList)
                 entityList.entities[i].entity.entityId,
                 entityList.entities[i].auxField.gpu.attributes.identifiers.pciBusId,
                 m_plugin,
-                m_dcgmHandle);
+                m_dcgmHandle,
+                m_dcgmOps,
+                m_cudaOps,
+                m_cudaCommon);
         }
         catch (DcgmError &d)
         {
@@ -126,7 +138,13 @@ void ContextCreate::Cleanup()
 
 int ContextCreate::CanCreateContext()
 {
-    return CanCreateContext(m_device);
+    return CanCreateContext(
+        m_device,
+        [this](CUcontext *ctx, unsigned int flags, CUdevice device) {
+            return m_cudaOps->cuCtxCreate_v2(ctx, flags, device);
+        },
+        [this](CUcontext ctx) { return m_cudaOps->cuCtxDestroy_v2(ctx); },
+        [this](CUresult cuSt, const char **errStr) { return m_cudaOps->cuGetErrorString(cuSt, errStr); });
 }
 
 int ContextCreate::Run(const dcgmDiagPluginEntityList_v1 &entityList)

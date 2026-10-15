@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,26 +13,51 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <ContextCreate.h>
-#include <ContextCreatePlugin.h>
+#include "ContextCreate.h"
+#include "ContextCreatePlugin.h"
+
+#include <DcgmOps.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
+#include <DcgmStringHelpers.h>
+#include <MockCudaCommon.h>
+#include <MockCudaOps.h>
+#include <MockDcgmOps.h>
+#include <NvvsCommon.h>
 #include <PluginStrings.h>
+#include <ScopedAtomic.hpp>
+
 #include <catch2/catch_all.hpp>
 
 #include <memory.h>
 
-#include <DcgmLib.h>
-#include <MockDcgmLib.h>
-
 namespace
 {
 
-dcgmHandle_t GetDcgmHandle(DcgmNs::MockDcgmLib &dcgmMockLib)
+dcgmHandle_t GetDcgmHandle(DcgmNs::MockDcgmOps &mockDcgmOps)
 {
     dcgmHandle_t ret;
-    REQUIRE(dcgmMockLib.dcgmInit() == DCGM_ST_OK);
-    REQUIRE(dcgmMockLib.dcgmConnect_v2("localhost", nullptr, &ret) == DCGM_ST_OK);
+    REQUIRE(mockDcgmOps.dcgmInit() == DCGM_ST_OK);
+    REQUIRE(mockDcgmOps.dcgmConnect_v2("localhost", nullptr, &ret) == DCGM_ST_OK);
     return ret;
 }
+
+struct ContextCreateTestFixture
+{
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique = std::make_unique<DcgmNs::MockDcgmOps>();
+    DcgmNs::MockDcgmOps *mockDcgmOps                       = mockDcgmOpsUnique.get();
+    std::unique_ptr<MockCudaOps> mockCudaOpsUnique         = std::make_unique<MockCudaOps>();
+    MockCudaOps *mockCudaOps                               = mockCudaOpsUnique.get();
+    std::unique_ptr<MockCudaCommon> mockCudaCommonUnique   = std::make_unique<MockCudaCommon>();
+    MockCudaCommon *mockCudaCommon                         = mockCudaCommonUnique.get();
+    CudaCommonAnyPtr cudaCommonPtr { mockCudaCommon };
+    std::unique_ptr<ContextCreatePlugin> plugin;
+
+    void InitializePlugin(dcgmHandle_t handle)
+    {
+        plugin = std::make_unique<ContextCreatePlugin>(
+            handle, std::move(mockDcgmOpsUnique), std::move(mockCudaOpsUnique), std::move(mockCudaCommonUnique));
+    }
+};
 
 } //namespace
 
@@ -60,23 +85,16 @@ auto cuGetErrorStringMock = [](CUresult cuSt [[maybe_unused]], const char **errS
     return CUDA_SUCCESS;
 };
 
-dcgmDiagPluginEntityList_v1 MakeContextCreateEntityList(unsigned int gpuCount)
-{
-    dcgmDiagPluginEntityList_v1 entityList {};
-    entityList.numEntities = gpuCount;
-    for (unsigned int i = 0; i < gpuCount; ++i)
-    {
-        entityList.entities[i].entity.entityGroupId = DCGM_FE_GPU;
-        entityList.entities[i].entity.entityId      = i;
-        entityList.entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
-    }
-    return entityList;
-}
-
 std::unique_ptr<dcgmDiagPluginEntityList_v1> MakeContextCreateEntityListPtr(unsigned int gpuCount)
 {
-    auto entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
-    *entityList     = MakeContextCreateEntityList(gpuCount);
+    auto entityList         = std::make_unique<dcgmDiagPluginEntityList_v1>();
+    entityList->numEntities = gpuCount;
+    for (unsigned int i = 0; i < gpuCount; ++i)
+    {
+        entityList->entities[i].entity.entityGroupId = DCGM_FE_GPU;
+        entityList->entities[i].entity.entityId      = i;
+        entityList->entities[i].auxField.gpu.status  = DcgmEntityStatusOk;
+    }
     return entityList;
 }
 
@@ -89,19 +107,24 @@ dcgmDiagPluginTestParameter_t MakeStringParameter(std::string_view name, std::st
     return param;
 }
 
-TEST_CASE("ContextCreate::CanCreateContext")
+TEST_CASE_METHOD(ContextCreateTestFixture, "ContextCreate::CanCreateContext")
 {
     SECTION("successful context creation returns CTX_CREATED")
     {
-        auto plugin     = std::make_unique<ContextCreatePlugin>((dcgmHandle_t)0);
+        InitializePlugin((dcgmHandle_t)0);
         auto entityList = MakeContextCreateEntityListPtr(2);
         plugin->InitializeForEntityList(plugin->GetCtxCreateTestName(), *entityList);
 
-        ContextCreate testContextCreate(plugin->GetInfoStruct().defaultTestParameters, plugin.get(), (dcgmHandle_t)0);
+        ContextCreate testContextCreate(plugin->GetInfoStruct().defaultTestParameters,
+                                        plugin.get(),
+                                        (dcgmHandle_t)0,
+                                        mockDcgmOps,
+                                        mockCudaOps,
+                                        cudaCommonPtr);
         std::vector<std::unique_ptr<ContextCreateDevice>> theDevices(entityList->numEntities);
         for (size_t i = 0; auto &ptr : theDevices)
         {
-            ptr           = std::make_unique<ContextCreateDevice>();
+            ptr           = std::make_unique<ContextCreateDevice>(mockDcgmOps, mockCudaOps);
             ptr->gpuId    = i;
             ptr->cuDevice = i++;
         }
@@ -114,13 +137,18 @@ TEST_CASE("ContextCreate::CanCreateContext")
 
     SECTION("CUDA unknown marks the context creation as skipped")
     {
-        auto plugin     = std::make_unique<ContextCreatePlugin>((dcgmHandle_t)0);
+        InitializePlugin((dcgmHandle_t)0);
         auto entityList = MakeContextCreateEntityListPtr(1);
         plugin->InitializeForEntityList(plugin->GetCtxCreateTestName(), *entityList);
 
-        ContextCreate testContextCreate(plugin->GetInfoStruct().defaultTestParameters, plugin.get(), (dcgmHandle_t)0);
+        ContextCreate testContextCreate(plugin->GetInfoStruct().defaultTestParameters,
+                                        plugin.get(),
+                                        (dcgmHandle_t)0,
+                                        mockDcgmOps,
+                                        mockCudaOps,
+                                        cudaCommonPtr);
         std::vector<std::unique_ptr<ContextCreateDevice>> theDevices(entityList->numEntities);
-        theDevices[0]        = std::make_unique<ContextCreateDevice>();
+        theDevices[0]        = std::make_unique<ContextCreateDevice>(mockDcgmOps, mockCudaOps);
         theDevices[0]->gpuId = 0;
 
         int result = testContextCreate.CanCreateContext(theDevices, cuCtxCreateSkipMock, cuCtxDestroyMock);
@@ -131,9 +159,8 @@ TEST_CASE("ContextCreate::CanCreateContext")
 
     SECTION("Negative testing of DCGM_FR_CUDA_CONTEXT")
     {
-        std::unique_ptr<DcgmNs::MockDcgmLib> dcgmMockLib = std::make_unique<DcgmNs::MockDcgmLib>();
-        dcgmHandle_t handle                              = GetDcgmHandle(*dcgmMockLib);
-        auto plugin                                      = std::make_unique<ContextCreatePlugin>(handle);
+        dcgmHandle_t handle = GetDcgmHandle(*mockDcgmOps);
+        InitializePlugin(handle);
 
         auto pEntityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
@@ -152,12 +179,17 @@ TEST_CASE("ContextCreate::CanCreateContext")
 
         plugin->InitializeForEntityList(plugin->GetCtxCreateTestName(), entityList);
 
-        ContextCreate testContextCreate(plugin->GetInfoStruct().defaultTestParameters, plugin.get(), handle);
+        ContextCreate testContextCreate(plugin->GetInfoStruct().defaultTestParameters,
+                                        plugin.get(),
+                                        handle,
+                                        mockDcgmOps,
+                                        mockCudaOps,
+                                        cudaCommonPtr);
 
         std::vector<std::unique_ptr<ContextCreateDevice>> theDevices(entityList.numEntities);
         for (size_t i = 0; auto &ptr : theDevices)
         {
-            ptr        = std::make_unique<ContextCreateDevice>();
+            ptr        = std::make_unique<ContextCreateDevice>(mockDcgmOps, mockCudaOps);
             ptr->gpuId = i++;
         }
 
@@ -202,12 +234,17 @@ TEST_CASE("ContextCreate::CanCreateContext")
 }
 
 
-TEST_CASE("ContextCreate initializes and reports safe setup failures")
+TEST_CASE_METHOD(ContextCreateTestFixture, "ContextCreate initializes and reports safe setup failures")
 {
-    auto plugin     = std::make_unique<ContextCreatePlugin>((dcgmHandle_t)0);
+    InitializePlugin((dcgmHandle_t)0);
     auto entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
     plugin->InitializeForEntityList(plugin->GetCtxCreateTestName(), *entityList);
-    ContextCreate testContextCreate(plugin->GetInfoStruct().defaultTestParameters, plugin.get(), (dcgmHandle_t)0);
+    ContextCreate testContextCreate(plugin->GetInfoStruct().defaultTestParameters,
+                                    plugin.get(),
+                                    (dcgmHandle_t)0,
+                                    mockDcgmOps,
+                                    mockCudaOps,
+                                    cudaCommonPtr);
 
     SECTION("Init reports invalid DCGM group handle")
     {
@@ -222,16 +259,21 @@ TEST_CASE("ContextCreate initializes and reports safe setup failures")
 
     SECTION("ContextCreateDevice reports DCGM attribute lookup failures")
     {
-        DcgmHandle handle((dcgmHandle_t)0);
-        CHECK_THROWS_AS(ContextCreateDevice(plugin->GetCtxCreateTestName(), 0, "", plugin.get(), handle), DcgmError);
+        mockDcgmOps->m_deviceAttributesState.returnCode = DCGM_ST_BADPARAM;
+        DcgmHandle handle(mockDcgmOps);
+        handle = static_cast<dcgmHandle_t>(0);
+        CHECK_THROWS_AS(
+            ContextCreateDevice(
+                plugin->GetCtxCreateTestName(), 0, "", plugin.get(), handle, mockDcgmOps, mockCudaOps, cudaCommonPtr),
+            DcgmError);
     }
 }
 
-TEST_CASE("ContextCreatePlugin::Go handles disabled and empty-input cases")
+TEST_CASE_METHOD(ContextCreateTestFixture, "ContextCreatePlugin::Go handles disabled and empty-input cases")
 {
     GIVEN("a context create plugin")
     {
-        auto plugin = std::make_unique<ContextCreatePlugin>((dcgmHandle_t)0);
+        InitializePlugin((dcgmHandle_t)0);
 
         SECTION("unknown test names return without creating results")
         {
@@ -249,7 +291,7 @@ TEST_CASE("ContextCreatePlugin::Go handles disabled and empty-input cases")
             CHECK_THROWS_AS(plugin->GetErrors(plugin->GetCtxCreateTestName()), std::out_of_range);
         }
 
-        SECTION("disabled context create test is skipped without running CUDA setup")
+        SECTION("disabled context create test is skipped without running CUDA setup (DCGM_FR_TEST_DISABLED path)")
         {
             auto entityList                     = MakeContextCreateEntityListPtr(1);
             dcgmDiagPluginTestParameter_t param = MakeStringParameter(CTXCREATE_IS_ALLOWED, "False");
@@ -271,4 +313,33 @@ TEST_CASE("ContextCreatePlugin::Go handles disabled and empty-input cases")
             CHECK(errors[0].GetCode() == DCGM_FR_EMPTY_GPU_LIST);
         }
     }
+}
+
+TEST_CASE_METHOD(ContextCreateTestFixture, "ContextCreatePlugin: negative test for DCGM_FR_ABORTED")
+{
+    auto entityList = MakeContextCreateEntityListPtr(1);
+    InitializePlugin((dcgmHandle_t)0);
+    ScopedAtomic stopGuard(main_should_stop, 1);
+
+    plugin->Go(plugin->GetCtxCreateTestName(), entityList.get(), 0, nullptr);
+
+    CHECK(plugin->GetGpuResults(plugin->GetCtxCreateTestName()).at(0) == NVVS_RESULT_SKIP);
+
+    auto const &errors = plugin->GetErrors(plugin->GetCtxCreateTestName());
+
+    // The abort path may also record incidental setup/cleanup errors from non-injected dependencies,
+    // so we only assert that DCGM_FR_ABORTED is present and correctly attributed.
+    REQUIRE(errors.size() >= 1);
+    DcgmError expectedError { DcgmError::GpuIdTag::Unknown };
+    bool sawAborted = false;
+    for (auto const &error : errors)
+    {
+        if (error.GetCode() == DCGM_FR_ABORTED)
+        {
+            sawAborted = true;
+            CHECK(error.GetEntity().entityGroupId == expectedError.GetEntity().entityGroupId);
+            CHECK(error.GetEntity().entityId == expectedError.GetEntity().entityId);
+        }
+    }
+    CHECK(sawAborted);
 }

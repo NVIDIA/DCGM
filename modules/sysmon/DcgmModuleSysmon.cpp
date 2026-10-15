@@ -28,6 +28,7 @@
 #include <dirent.h>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 #include <stdio.h>
 namespace DcgmNs
 {
@@ -36,6 +37,24 @@ namespace DcgmNs
 #define ASSERT_IS_SYSMON_THREAD assert(std::this_thread::get_id() == m_sysmonThreadId)
 
 using namespace DcgmNs::Cpu;
+
+static SysmonSystemMonitorAnyPtr ValidateSystemMonitor(SysmonSystemMonitorAnyPtr systemMonitor)
+{
+    if (systemMonitor == nullptr)
+    {
+        throw std::invalid_argument("DcgmModuleSysmon requires a non-null system monitor dependency");
+    }
+    return systemMonitor;
+}
+
+static SysmonWatchTableAnyPtr ValidateWatchTable(SysmonWatchTableAnyPtr watchTable)
+{
+    if (watchTable == nullptr)
+    {
+        throw std::invalid_argument("DcgmModuleSysmon requires a non-null watch table dependency");
+    }
+    return watchTable;
+}
 
 static unsigned int GetRemainingCapacity(size_t current, unsigned int limit)
 {
@@ -65,6 +84,51 @@ DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc)
 DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc, TaskRunnerStartMode startMode)
     : DcgmModuleWithCoreProxy(dcc)
     , m_procStat("/proc/stat")
+    , m_defaultWatchTable()
+    , m_watchTable(&m_defaultWatchTable)
+    , m_defaultSysmon()
+    , m_sysmon(&m_defaultSysmon)
+    , m_paused(true)
+    , m_sysmonThreadId(0)
+{
+    Initialize(startMode);
+}
+
+DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc, SysmonSystemMonitorAnyPtr systemMonitor)
+    : DcgmModuleSysmon(dcc, systemMonitor, TaskRunnerStartMode::Start)
+{}
+
+DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc,
+                                   SysmonSystemMonitorAnyPtr systemMonitor,
+                                   TaskRunnerStartMode startMode)
+    : DcgmModuleWithCoreProxy(dcc)
+    , m_procStat("/proc/stat")
+    , m_defaultWatchTable()
+    , m_watchTable(&m_defaultWatchTable)
+    , m_defaultSysmon()
+    , m_sysmon(ValidateSystemMonitor(systemMonitor))
+    , m_paused(true)
+    , m_sysmonThreadId(0)
+{
+    Initialize(startMode);
+}
+
+DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc,
+                                   SysmonSystemMonitorAnyPtr systemMonitor,
+                                   SysmonWatchTableAnyPtr watchTable)
+    : DcgmModuleSysmon(dcc, systemMonitor, watchTable, TaskRunnerStartMode::Start)
+{}
+
+DcgmModuleSysmon::DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc,
+                                   SysmonSystemMonitorAnyPtr systemMonitor,
+                                   SysmonWatchTableAnyPtr watchTable,
+                                   TaskRunnerStartMode startMode)
+    : DcgmModuleWithCoreProxy(dcc)
+    , m_procStat("/proc/stat")
+    , m_defaultWatchTable()
+    , m_watchTable(ValidateWatchTable(watchTable))
+    , m_defaultSysmon()
+    , m_sysmon(ValidateSystemMonitor(systemMonitor))
     , m_paused(true)
     , m_sysmonThreadId(0)
 {
@@ -76,14 +140,14 @@ void DcgmModuleSysmon::Initialize(TaskRunnerStartMode startMode)
     DCGM_LOG_DEBUG << "Constructing Sysmon Module";
 
     PopulateCpusIfNeeded();
-    m_sysmon.Init();
+    m_sysmon->Init();
 
     if (!CpuHelpers::SupportNonNvidiaCpu())
     {
-        if (m_sysmon.AreNvidiaCpusPresent() == false)
+        if (m_sysmon->AreNvidiaCpusPresent() == false)
         {
             log_debug("Not starting sysmon because Nvidia CPUs aren't present. CPU Vendor is {}.",
-                      m_sysmon.GetCpuVendor());
+                      m_sysmon->GetCpuVendor());
             throw std::runtime_error("Incompatible hardware vendor for sysmon.");
         }
     }
@@ -225,7 +289,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessMessageFromTaskRunner(dcgm_module_command_
             }
             case DCGM_SYSMON_SR_WATCH_FIELDS:
             {
-                ProcessWatchFields(moduleCommand);
+                retSt = ProcessWatchFields(moduleCommand);
                 break;
             }
             case DCGM_SYSMON_SR_UNWATCH_FIELDS:
@@ -318,7 +382,7 @@ dcgmReturn_t DcgmModuleSysmon::ProcessWatchFields(WatchFieldsMessage msg)
 
         for (unsigned int fieldIndex = 0; fieldIndex < msg->numFieldIds; fieldIndex++)
         {
-            if (DcgmWatchTable::IsFieldIgnored(msg->fieldIds[fieldIndex], DcgmModuleIdSysmon))
+            if (m_watchTable->IsFieldIgnored(msg->fieldIds[fieldIndex]))
             {
                 log_error("Module sysmon cannot watch field ID {}", msg->fieldIds[fieldIndex]);
                 return DCGM_ST_BADPARAM;
@@ -345,16 +409,16 @@ dcgmReturn_t DcgmModuleSysmon::ProcessWatchFields(WatchFieldsMessage msg)
                           msg->maxKeepSamples,
                           slackMultiplier));
 
-            m_watchTable.AddWatcher(entity.entityGroupId,
-                                    entity.entityId,
-                                    msg->fieldIds[fieldIndex],
-                                    msg->watcher,
-                                    msg->updateIntervalUsec,
-                                    maxKeepAge,
-                                    true);
+            m_watchTable->AddWatcher(entity.entityGroupId,
+                                     entity.entityId,
+                                     msg->fieldIds[fieldIndex],
+                                     msg->watcher,
+                                     msg->updateIntervalUsec,
+                                     maxKeepAge,
+                                     true);
 
             timelib64_t minSampleAgeUsec, maxSampleAgeUsec;
-            m_watchTable.GetMaxAgeUsecAllWatches(minSampleAgeUsec, maxSampleAgeUsec);
+            m_watchTable->GetMaxAgeUsecAllWatches(minSampleAgeUsec, maxSampleAgeUsec);
             m_maxSampleAge = TimePoint(FromLegacyTimestamp<microseconds>(maxSampleAgeUsec));
         }
     }
@@ -387,8 +451,8 @@ dcgmReturn_t DcgmModuleSysmon::ProcessUnwatchFields(UnwatchFieldsMessage msg)
     using namespace DcgmNs::Timelib;
     using std::chrono::microseconds;
 
-    m_watchTable.RemoveWatches(msg->watcher, postWatchInfo);
-    m_watchTable.GetMaxAgeUsecAllWatches(minSampleAgeUsec, maxSampleAgeUsec);
+    m_watchTable->RemoveWatches(msg->watcher, postWatchInfo);
+    m_watchTable->GetMaxAgeUsecAllWatches(minSampleAgeUsec, maxSampleAgeUsec);
     m_maxSampleAge = TimePoint(FromLegacyTimestamp<microseconds>(maxSampleAgeUsec));
     return DCGM_ST_OK;
 }
@@ -620,12 +684,20 @@ dcgmReturn_t DcgmModuleSysmon::PopulateOwnedCoresBitmaskFromRangeString(dcgm_sys
 /*****************************************************************************/
 void DcgmModuleSysmon::PopulateOwnedCoresBitmask(dcgm_sysmon_cpu_t &cpu)
 {
-    std::ifstream file;
-    std::string filename = fmt::format("/sys/devices/system/node/node{}/cpulist", cpu.cpuId);
-    file.open(filename);
+    SysmonFileSystem fs;
+    PopulateOwnedCoresBitmask(cpu, &fs);
+}
 
-    std::string cpuRange;
-    file >> cpuRange;
+/*****************************************************************************/
+void DcgmModuleSysmon::PopulateOwnedCoresBitmask(dcgm_sysmon_cpu_t &cpu, SysmonFileSystemAnyPtr fs)
+{
+    if (fs == nullptr)
+    {
+        throw std::invalid_argument("DcgmModuleSysmon requires a non-null filesystem dependency");
+    }
+
+    std::string filename = fmt::format("/sys/devices/system/node/node{}/cpulist", cpu.cpuId);
+    std::string cpuRange = fs->ReadFirstToken(filename).value_or("");
 
     dcgmReturn_t ret = PopulateOwnedCoresBitmaskFromRangeString(cpu, cpuRange);
     if (ret == DCGM_ST_BADPARAM)
@@ -793,11 +865,11 @@ dcgmReturn_t DcgmModuleSysmon::UpdateField(DcgmNs::Timelib::TimePoint now, const
 
     switch (updateInfo.fieldMeta->fieldId)
     {
-        case DCGM_FI_DEV_CPU_UTIL_TOTAL:
-        case DCGM_FI_DEV_CPU_UTIL_USER:
-        case DCGM_FI_DEV_CPU_UTIL_NICE:
-        case DCGM_FI_DEV_CPU_UTIL_SYS:
-        case DCGM_FI_DEV_CPU_UTIL_IRQ:
+        case DCGM_FI_DEV_CPU_UTIL_RATIO:
+        case DCGM_FI_DEV_CPU_UTIL_USER_RATIO:
+        case DCGM_FI_DEV_CPU_UTIL_NICE_RATIO:
+        case DCGM_FI_DEV_CPU_UTIL_SYS_RATIO:
+        case DCGM_FI_DEV_CPU_UTIL_IRQ_RATIO:
         {
             const SysmonUtilizationSample &currentSample = ReadUtilizationSample(now);
 
@@ -885,9 +957,8 @@ void DcgmModuleSysmon::UpdateFields(timelib64_t &nextUpdateTimeUsec)
     }
 
     std::vector<dcgm_field_update_info_t> toUpdate;
-    TimePoint now = Now();
-    dcgmReturn_t ret
-        = m_watchTable.GetFieldsToUpdate(DcgmModuleIdSysmon, ToLegacyTimestamp(now), toUpdate, nextUpdateTimeUsec);
+    TimePoint now    = Now();
+    dcgmReturn_t ret = m_watchTable->GetFieldsToUpdate(ToLegacyTimestamp(now), toUpdate, nextUpdateTimeUsec);
 
     if (ret != DCGM_ST_OK)
     {
@@ -902,7 +973,7 @@ void DcgmModuleSysmon::UpdateFields(timelib64_t &nextUpdateTimeUsec)
     }
 
     timelib64_t minUpdateIntervalUsec, maxUpdateIntervalUsec;
-    m_watchTable.GetMinAndMaxUpdateInterval(minUpdateIntervalUsec, maxUpdateIntervalUsec);
+    m_watchTable->GetMinAndMaxUpdateInterval(minUpdateIntervalUsec, maxUpdateIntervalUsec);
 
     // Convert us->ms
     milliseconds minUpdateInterval = duration_cast<milliseconds>(microseconds(minUpdateIntervalUsec));
@@ -941,19 +1012,19 @@ double DcgmModuleSysmon::CalculateCoreUtilization(CoreId core,
 
     switch (fieldId)
     {
-        case DCGM_FI_DEV_CPU_UTIL_TOTAL:
+        case DCGM_FI_DEV_CPU_UTIL_RATIO:
             value = currentCore.GetActive() - baselineCore.GetActive();
             break;
-        case DCGM_FI_DEV_CPU_UTIL_USER:
+        case DCGM_FI_DEV_CPU_UTIL_USER_RATIO:
             value = currentCore.m_user - baselineCore.m_user;
             break;
-        case DCGM_FI_DEV_CPU_UTIL_NICE:
+        case DCGM_FI_DEV_CPU_UTIL_NICE_RATIO:
             value = currentCore.m_nice - baselineCore.m_nice;
             break;
-        case DCGM_FI_DEV_CPU_UTIL_SYS:
+        case DCGM_FI_DEV_CPU_UTIL_SYS_RATIO:
             value = currentCore.m_system - baselineCore.m_system;
             break;
-        case DCGM_FI_DEV_CPU_UTIL_IRQ:
+        case DCGM_FI_DEV_CPU_UTIL_IRQ_RATIO:
             value = currentCore.m_irq - baselineCore.m_irq;
             break;
         default:
@@ -1001,11 +1072,11 @@ double DcgmModuleSysmon::CalculateUtilizationForEntity(unsigned int entityGroupI
 {
     switch (fieldId)
     {
-        case DCGM_FI_DEV_CPU_UTIL_TOTAL:
-        case DCGM_FI_DEV_CPU_UTIL_USER:
-        case DCGM_FI_DEV_CPU_UTIL_NICE:
-        case DCGM_FI_DEV_CPU_UTIL_SYS:
-        case DCGM_FI_DEV_CPU_UTIL_IRQ:
+        case DCGM_FI_DEV_CPU_UTIL_RATIO:
+        case DCGM_FI_DEV_CPU_UTIL_USER_RATIO:
+        case DCGM_FI_DEV_CPU_UTIL_NICE_RATIO:
+        case DCGM_FI_DEV_CPU_UTIL_SYS_RATIO:
+        case DCGM_FI_DEV_CPU_UTIL_IRQ_RATIO:
             break;
         default:
             log_error("Invalid field {}", fieldId);
@@ -1299,11 +1370,11 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
         switch (fieldToUpdate.fieldMeta->fieldId)
         {
             // Utilizaiton moved to UpdateFields.
-            case DCGM_FI_DEV_CPU_UTIL_TOTAL:
-            case DCGM_FI_DEV_CPU_UTIL_USER:
-            case DCGM_FI_DEV_CPU_UTIL_NICE:
-            case DCGM_FI_DEV_CPU_UTIL_SYS:
-            case DCGM_FI_DEV_CPU_UTIL_IRQ:
+            case DCGM_FI_DEV_CPU_UTIL_RATIO:
+            case DCGM_FI_DEV_CPU_UTIL_USER_RATIO:
+            case DCGM_FI_DEV_CPU_UTIL_NICE_RATIO:
+            case DCGM_FI_DEV_CPU_UTIL_SYS_RATIO:
+            case DCGM_FI_DEV_CPU_UTIL_IRQ_RATIO:
                 break;
             case DCGM_FI_DEV_CPU_TEMP_CELSIUS:
             case DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS:
@@ -1335,10 +1406,10 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
             }
             case DCGM_FI_DEV_CPU_POWER_WATTS:
             {
-                double usage          = 0.0;
+                double usage          = DCGM_FP64_BLANK;
                 unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
 
-                dcgmReturn_t ret = m_sysmon.GetCurrentCPUPowerUsage(socketId, usage);
+                dcgmReturn_t ret = m_sysmon->GetCurrentCPUPowerUsage(socketId, usage);
                 buf.AddDoubleValue(fieldToUpdate.entityGroupId,
                                    fieldToUpdate.entityId,
                                    fieldToUpdate.fieldMeta->fieldId,
@@ -1347,12 +1418,12 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
                                    ret);
                 break;
             }
-            case DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT:
+            case DCGM_FI_DEV_SYSIO_POWER_WATTS:
             {
-                double usage          = 0.0;
+                double usage          = DCGM_FP64_BLANK;
                 unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
 
-                dcgmReturn_t ret = m_sysmon.GetCurrentSysIOPowerUsage(socketId, usage);
+                dcgmReturn_t ret = m_sysmon->GetCurrentSysIOPowerUsage(socketId, usage);
                 buf.AddDoubleValue(fieldToUpdate.entityGroupId,
                                    fieldToUpdate.entityId,
                                    fieldToUpdate.fieldMeta->fieldId,
@@ -1361,12 +1432,12 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
                                    ret);
                 break;
             }
-            case DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT:
+            case DCGM_FI_DEV_MODULE_POWER_WATTS:
             {
-                double usage          = 0.0;
+                double usage          = DCGM_FP64_BLANK;
                 unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
 
-                dcgmReturn_t ret = m_sysmon.GetCurrentModulePowerUsage(socketId, usage);
+                dcgmReturn_t ret = m_sysmon->GetCurrentModulePowerUsage(socketId, usage);
                 buf.AddDoubleValue(fieldToUpdate.entityGroupId,
                                    fieldToUpdate.entityId,
                                    fieldToUpdate.fieldMeta->fieldId,
@@ -1378,10 +1449,10 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
 
             case DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS:
             {
-                double cap            = 0.0;
+                double cap            = DCGM_FP64_BLANK;
                 unsigned int socketId = GetSocketIdForEntity(fieldToUpdate.entityGroupId, fieldToUpdate.entityId);
 
-                dcgmReturn_t ret = m_sysmon.GetCurrentPowerCap(socketId, cap);
+                dcgmReturn_t ret = m_sysmon->GetCurrentPowerCap(socketId, cap);
                 buf.AddDoubleValue(fieldToUpdate.entityGroupId,
                                    fieldToUpdate.entityId,
                                    fieldToUpdate.fieldMeta->fieldId,
@@ -1406,7 +1477,7 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
 
             case DCGM_FI_DEV_CPU_VENDOR:
             {
-                std::string cpuVendor = m_sysmon.GetCpuVendor();
+                std::string cpuVendor = m_sysmon->GetCpuVendor();
                 buf.AddStringValue(fieldToUpdate.entityGroupId,
                                    fieldToUpdate.entityId,
                                    fieldToUpdate.fieldMeta->fieldId,
@@ -1418,7 +1489,7 @@ void DcgmModuleSysmon::RecordMetrics(timelib64_t now, std::vector<dcgm_field_upd
 
             case DCGM_FI_DEV_CPU_MODEL:
             {
-                std::string cpuModel = m_sysmon.GetCpuModel();
+                std::string cpuModel = m_sysmon->GetCpuModel();
                 buf.AddStringValue(fieldToUpdate.entityGroupId,
                                    fieldToUpdate.entityId,
                                    fieldToUpdate.fieldMeta->fieldId,
@@ -1546,7 +1617,7 @@ dcgmReturn_t DcgmModuleSysmon::GetSubscribed(dcgmGroupEntityPair_t entityPair,
 {
     auto task = Enqueue(make_task("GetSubscribed request in TaskRunner", [this, entityPair, fieldId]() {
         ASSERT_IS_SYSMON_THREAD;
-        return m_watchTable.GetIsSubscribed(entityPair.entityGroupId, entityPair.entityId, fieldId);
+        return m_watchTable->GetIsSubscribed(entityPair.entityGroupId, entityPair.entityId, fieldId);
     }));
 
     if (!task.has_value())

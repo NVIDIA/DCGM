@@ -21,28 +21,29 @@ target_sources(dcgmitests
     PRIVATE
     CommandLineParserTests.cpp
     ConfigTests.cpp
-    ../mock/MockDcgmiGroupInfo.cpp
-    ../mock/MockDcgmiStatus.cpp
     DcgmiCommonTests.cpp
+    DcgmiProfileTests.cpp
     DcgmiSettingsTests.cpp
+    DcgmiTestTests.cpp
+    DeviceMonitorTests.cpp
     DiagTests.cpp
     EnvironmentTests.cpp
     FieldGroupTests.cpp
     GroupTests.cpp
     HealthTests.cpp
-    MigTestsHelper.cpp
+    IntrospectTests.cpp
     MnDiagTests.cpp
     ModuleTests.cpp
+    NvcmTCLAPTests.cpp
     NvlinkTests.cpp
     OutputTests.cpp
     PolicyTests.cpp
+    ProcessStatsTests.cpp
     QueryTests.cpp
     TopoTests.cpp
     VersionTests.cpp
 )
 
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
 target_link_libraries(dcgmitests
     PRIVATE
         dcgmi_objects_without_main
@@ -53,12 +54,15 @@ target_link_libraries(dcgmitests
         sdk_nvml_essentials_objects
         sdk_nvml_interface
         Catch2::Catch2WithMain
+        test-utils
         dcgm
         dcgm_common
         dcgm_logging
         dcgm_mutex
-        ${CMAKE_THREAD_LIBS_INIT}
-        ${JSONCPP_STATIC_LIBS}
+        mock_dcgm_ops
+        mock_common
+        Threads::Threads
+        jsoncpp_static
         fmt::fmt
         rt
         dl
@@ -66,7 +70,6 @@ target_link_libraries(dcgmitests
 if (${LINK_INJECTION_LIB} STREQUAL "true")
     target_link_libraries(dcgmitests PRIVATE nvml_injection)
 endif()
-#target_include_directories(dcgmitests PRIVATE ${JSONCPP_INCLUDE_DIR})
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(dcgmitests EXTRA_ARGS --colour-mode ansi)

@@ -17,9 +17,9 @@
 #include "DcgmMnDiagManager.h"
 #include <DcgmBuildInfo.hpp>
 #include <DcgmLogging.h>
-#include <DcgmModuleApi.h>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -28,6 +28,7 @@
 #include <optional>
 #include <pwd.h>
 #include <ranges>
+#include <span>
 #include <sstream>
 #include <thread>
 #include <unordered_set>
@@ -37,7 +38,6 @@
 #include <ifaddrs.h>
 #include <netinet/in.h>
 
-#include "DcgmApiAdapter.h"
 #include "DcgmCoreProxyAdapter.h"
 #include "DcgmResourceHandleAdapter.h"
 #include "DcgmResourceHandleFactory.h"
@@ -125,11 +125,67 @@ std::optional<std::string> GetUsernameFromUid(uid_t uid)
     return std::nullopt;
 }
 
+/**
+ * Executes a callable on each non-loopback connection in batches of at most @p batchSize concurrent threads.
+ *
+ * @param[in] connections  The hostname-to-ConnectionInfo map.
+ * @param[in] batchSize    Maximum number of concurrent jthreads per batch.
+ * @param[in] func         Callable invoked as func(hostname, connInfo) in each thread.
+ * @param[in] anyFailure   Optional pointer to an atomic flag checked between batches. When non-null
+ *                          and the pointed-to value is true after a batch completes, remaining batches
+ *                          are skipped. Atomic because writers may be on threads outside this function's
+ *                          own batches (e.g. a concurrent headNodeThread).
+ */
+template <std::invocable<std::string const &, ConnectionInfo const &> Func>
+void BatchedFanOut(ConnectionMap const &connections,
+                   std::size_t batchSize,
+                   Func &&func,
+                   std::atomic<bool> const *anyFailure = nullptr)
+{
+    if (batchSize == 0)
+    {
+        log_error("BatchedFanOut called with batchSize=0");
+        return;
+    }
+
+    std::vector<std::pair<std::string, ConnectionInfo>> remoteHosts;
+    for (auto const &[hostname, connInfo] : connections)
+    {
+        if (!connInfo.isLoopback)
+        {
+            remoteHosts.emplace_back(hostname, connInfo);
+        }
+    }
+
+    for (std::size_t i = 0; i < remoteHosts.size(); i += batchSize)
+    {
+        if (anyFailure != nullptr && anyFailure->load(std::memory_order_relaxed))
+        {
+            log_warning("BatchedFanOut: early termination due to failure at batch starting at node {}/{}",
+                        i,
+                        remoteHosts.size());
+            break;
+        }
+
+        std::size_t const end = std::min(i + batchSize, remoteHosts.size());
+        std::vector<std::jthread> threads;
+        threads.reserve(end - i);
+
+        for (std::size_t j = i; j < end; ++j)
+        {
+            threads.emplace_back([&func, hostname = remoteHosts[j].first, connInfo = remoteHosts[j].second]() {
+                func(hostname, connInfo);
+            });
+        }
+    }
+}
+
 } // namespace
 
-DcgmMnDiagManager::DcgmMnDiagManager(dcgmCoreCallbacks_t &dcc)
+DcgmMnDiagManager::DcgmMnDiagManager(dcgmCoreCallbacks_t &dcc, DcgmNs::DcgmOpsAnyPtr dcgmOps)
     : m_status(MnDiagStatus::READY)
     , m_currentNodeId(GenerateCurrentNodeId())
+    , m_dcgmOps(std::move(dcgmOps))
 {
     auto localHostInfo = GetLocalHostInfo();
     if (!localHostInfo.has_value())
@@ -148,7 +204,6 @@ DcgmMnDiagManager::DcgmMnDiagManager(dcgmCoreCallbacks_t &dcc)
 
     m_coreProxy             = std::make_unique<DcgmCoreProxyAdapter>(dcc);
     m_resourceHandleFactory = std::make_unique<DcgmResourceHandleFactory>();
-    m_dcgmApi               = std::make_unique<DcgmApiAdapter>();
     m_mpiRunnerFactory      = std::make_unique<MnDiagMpiRunnerFactory>();
 
     // Create and initialize the state machine with our callback methods
@@ -233,6 +288,14 @@ std::expected<dcgmMultinodeTestType_t, dcgmReturn_t> GetTestTypeFromName(std::st
     {
         return dcgmMultinodeTestType_t::mnubergemm;
     }
+    if (testName == "nvloom")
+    {
+        return dcgmMultinodeTestType_t::nvloom;
+    }
+    if (testName == "mnnvbandwidth")
+    {
+        return dcgmMultinodeTestType_t::mnnvbandwidth;
+    }
     return std::unexpected(DCGM_ST_BADPARAM);
 }
 
@@ -254,11 +317,19 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
         return testTypeResult.error();
     }
     dcgmMultinodeTestType_t const testType = testTypeResult.value();
+    m_currentTestInfo.testType             = testType;
 
     std::vector<std::string> hostList;
-    for (int i = 0; i < DCGM_MAX_NUM_HOSTS && params.hostList[i][0] != '\0'; i++)
+    for (int i = 0; i < DCGM_MNDIAG_MAX_NUM_HOSTS && params.hostList[i][0] != '\0'; i++)
     {
         hostList.emplace_back(params.hostList[i]);
+    }
+
+    if (hostList.size() > DCGM_MN_DIAG_RESPONSE_HOSTS_MAX)
+    {
+        log_error(
+            "Host count {} exceeds the maximum reportable hosts {}", hostList.size(), DCGM_MN_DIAG_RESPONSE_HOSTS_MAX);
+        return DCGM_ST_BADPARAM;
     }
 
     log_debug("Starting multi-node diagnostic on {} hosts", hostList.size());
@@ -323,10 +394,6 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
         .testPrefix     = std::string(mpiRunner->GetTestPrefix()),
     };
 
-    // Generate the MPI command directly from the dcgmRunMnDiag_t struct
-    mpiRunner->ConstructMpiCommand(&params);
-    log_debug("Generated MPI command: {}", mpiRunner->GetLastCommand());
-
     // Get the test run time from the mpi runner
     auto testRunTimeResult = mpiRunner->GetTestRunTime(params);
     if (!testRunTimeResult.has_value())
@@ -342,14 +409,41 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
     if (result != DCGM_ST_OK)
     {
         log_error("Failed to broadcast parameters to remote nodes");
-        DisconnectRemoteNodes();
+        StopHeadNode();
         return result;
     }
 
-    m_stateMachine->SetProcessExecutionTimeout(std::chrono::seconds(timeToRunSeconds));
+    if (testType == dcgmMultinodeTestType_t::mnnvbandwidth && IsGpuPairMode(params))
+    {
+        // Pair mode keeps every node reserved while the runner owns the sequential MPI child lifecycle.
+        // Skip the normal single-process launch and GPU process-detection path below.
+        auto batchResult             = mpiRunner->RunBatch(params, m_nodeInfo, response, *testRunTimeResult);
+        dcgmReturn_t executionResult = DCGM_ST_OK;
+        if (!batchResult.has_value())
+        {
+            executionResult    = batchResult.error();
+            auto const version = response.version;
+            response           = {};
+            response.version   = version;
+        }
+
+        dcgmReturn_t const cleanupResult = StopHeadNode();
+        return executionResult != DCGM_ST_OK ? executionResult : cleanupResult;
+    }
 
     // Redirect MPI output to files
     DcgmNs::Utils::LogPaths logPaths = DcgmNs::Utils::GetLogFilePath(mpiRunner->GetLogFilePrefix());
+
+    // Generate the MPI command directly from the dcgmRunMnDiag_t struct
+    auto commandResult = mpiRunner->ConstructMpiCommand(&params);
+    if (!commandResult.has_value())
+    {
+        log_error("Failed to construct MPI command: {}", errorString(commandResult.error()));
+        StopHeadNode();
+        return commandResult.error();
+    }
+    log_debug("Generated MPI command: {}", mpiRunner->GetLastCommand());
+
     mpiRunner->SetLogFileNames(std::make_pair(logPaths.stdoutFileName.string(), logPaths.stderrFileName.string()));
 
     // Set the output callback without the response struct - we'll pass it directly in ProcessAndGetMpiOutput
@@ -382,16 +476,14 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
     // All nodes are checked in parallel to minimize total detection time
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
-    bool anyFailure = false;
+    std::atomic<bool> anyFailure { false };
 
     // Head node detection result storage
     dcgm_mndiag_msg_resource_t headNodeMsg {};
 
     {
-        std::vector<std::jthread> threads;
-
-        // Launch head node detection in parallel with worker nodes
-        threads.emplace_back([this, &headNodeMsg, &resultMutex, &results, &anyFailure]() {
+        // Head node detection runs in parallel with all batched remote requests
+        std::jthread headNodeThread([this, &headNodeMsg, &resultMutex, &results, &anyFailure]() {
             HandleDetectProcess((dcgm_module_command_header_t *)&headNodeMsg);
 
             bool const success      = (headNodeMsg.resource.response == MnDiagStatus::RUNNING);
@@ -400,7 +492,10 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
             {
                 DcgmLockGuard lg(&resultMutex);
                 results.emplace_back(m_localHostInfo.hostname, code);
-                anyFailure = anyFailure || !success;
+                if (!success)
+                {
+                    anyFailure.store(true, std::memory_order_relaxed);
+                }
             }
 
             if (!success)
@@ -409,16 +504,10 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
             }
         });
 
-        // Launch threads for remote nodes
-        for (auto const &[hostname, connInfo] : m_connections)
-        {
-            if (connInfo.isLoopback)
-            {
-                continue; // Head node is handled by the thread above
-            }
-
-            // Launch a thread for each remote node
-            threads.emplace_back([this, hostname, connInfo, &resultMutex, &results, &anyFailure]() {
+        BatchedFanOut(
+            m_connections,
+            c_maxConcurrentHostRequests,
+            [this, &resultMutex, &results, &anyFailure](std::string const &hostname, ConnectionInfo const &connInfo) {
                 dcgmMultinodeRequest_t request {};
                 request.version                         = dcgmMultinodeRequest_version;
                 request.testType                        = m_currentTestInfo.testType;
@@ -426,14 +515,14 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
                 request.requestData.resource.headNodeId = m_currentNodeId;
                 request.requestData.resource.response   = MnDiagStatus::UNKNOWN;
 
-                dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
+                dcgmReturn_t threadResult = m_dcgmOps->dcgmMultinodeRequest(connInfo.handle, &request);
 
                 {
                     DcgmLockGuard lg(&resultMutex);
                     results.emplace_back(hostname, threadResult);
                     if (threadResult != DCGM_ST_OK || request.requestData.resource.response != MnDiagStatus::RUNNING)
                     {
-                        anyFailure = true;
+                        anyFailure.store(true, std::memory_order_relaxed);
                     }
                 }
                 // Log errors for failed messages
@@ -448,14 +537,14 @@ dcgmReturn_t DcgmMnDiagManager::RunHeadNode(dcgmRunMnDiag_t const &params,
                 {
                     log_error("No MPI process running on remote node {}", hostname);
                 }
-            });
-        }
+            },
+            &anyFailure);
 
-        // threads will automatically join when it goes out of scope at the end of this block
+        // headNodeThread joins when going out of scope
     }
 
     // Check if any failures occurred (head or worker nodes)
-    if (anyFailure)
+    if (anyFailure.load(std::memory_order_relaxed))
     {
         PopulateMpiFailureResponseStruct(mpiRunner.get(), response, *mpiPID, logPaths);
         StopHeadNode();
@@ -622,7 +711,8 @@ dcgmReturn_t DcgmMnDiagManager::ConnectRemoteNodes(std::vector<std::string> cons
             return DCGM_ST_BADPARAM;
         }
     }
-    // Handle connections using pre-parsed parameters
+    // Handle loopback entries first, collect remote params for batched connect
+    std::vector<ConnectionParams> remoteParams;
     for (auto const &params : allConnectionParams)
     {
         if (IsLoopback(params.hostname))
@@ -630,16 +720,55 @@ dcgmReturn_t DcgmMnDiagManager::ConnectRemoteNodes(std::vector<std::string> cons
             m_connections[params.hostname] = ConnectionInfo {
                 .handle = 0, .remotePort = 0, .isLoopback = true, .uid = effectiveUid, .remoteSocketPath = ""
             };
-            continue; // Loopback connection stored
         }
-
-        // Connect to remote node directly (synchronous)
-        dcgmReturn_t result = ConnectSingleNode(params);
-        if (result != DCGM_ST_OK)
+        else
         {
-            log_error("Failed to connect to remote node {}: {}", params.hostname, errorString(result));
+            remoteParams.push_back(params);
+        }
+    }
+
+    // Batch-connect remote nodes with mutex-protected m_connections writes
+    DcgmMutex connMutex(0);
+    std::atomic<bool> anyFailure { false };
+    dcgmReturn_t firstError = DCGM_ST_OK;
+
+    for (std::size_t i = 0; i < remoteParams.size(); i += c_maxConcurrentHostRequests)
+    {
+        std::size_t const end = std::min(i + c_maxConcurrentHostRequests, remoteParams.size());
+
+        {
+            std::vector<std::jthread> threads;
+            threads.reserve(end - i);
+
+            for (std::size_t j = i; j < end; ++j)
+            {
+                threads.emplace_back([this, params = remoteParams[j], &connMutex, &anyFailure, &firstError]() {
+                    auto result = ConnectSingleNode(params);
+
+                    if (result.has_value())
+                    {
+                        DcgmLockGuard lg(&connMutex);
+                        m_connections[params.hostname] = std::move(*result);
+                    }
+                    else
+                    {
+                        log_error(
+                            "Failed to connect to remote node {}: {}", params.hostname, errorString(result.error()));
+                        DcgmLockGuard lg(&connMutex);
+                        if (!anyFailure.load(std::memory_order_relaxed))
+                        {
+                            firstError = result.error();
+                        }
+                        anyFailure.store(true, std::memory_order_relaxed);
+                    }
+                });
+            }
+        } // threads join here before anyFailure is checked
+
+        if (anyFailure.load(std::memory_order_relaxed))
+        {
             CleanupConnections();
-            return result;
+            return firstError;
         }
     }
 
@@ -651,7 +780,7 @@ dcgmReturn_t DcgmMnDiagManager::ReserveRemoteResources(dcgmMultinodeTestType_t t
     // First set all remote nodes to RESERVED status
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
-    bool anyFailure = false;
+    std::atomic<bool> anyFailure { false };
 
     // Handle the head node first
     // Directly call the reserve resources function on the head node
@@ -664,55 +793,44 @@ dcgmReturn_t DcgmMnDiagManager::ReserveRemoteResources(dcgmMultinodeTestType_t t
     }
 
 
-    {
-        std::vector<std::jthread> threads;
+    BatchedFanOut(
+        m_connections,
+        c_maxConcurrentHostRequests,
+        [this, testType, &resultMutex, &results, &anyFailure](std::string const &hostname,
+                                                              ConnectionInfo const &connInfo) {
+            dcgmMultinodeRequest_t request {};
+            request.version                         = dcgmMultinodeRequest_version;
+            request.testType                        = testType;
+            request.requestType                     = MnDiagRequestType::ReserveResources;
+            request.requestData.resource.headNodeId = m_currentNodeId;
+            request.requestData.resource.response   = MnDiagStatus::UNKNOWN;
 
-        // Launch threads for remote nodes
-        for (auto const &[hostname, connInfo] : m_connections)
-        {
-            if (connInfo.isLoopback)
+            dcgmReturn_t threadResult = m_dcgmOps->dcgmMultinodeRequest(connInfo.handle, &request);
             {
-                continue; // Already handled above
+                DcgmLockGuard lg(&resultMutex);
+                results.emplace_back(hostname, threadResult);
+                if (threadResult != DCGM_ST_OK || request.requestData.resource.response != MnDiagStatus::RESERVED)
+                {
+                    anyFailure.store(true, std::memory_order_relaxed);
+                }
             }
-
-            // Launch a thread for each remote node
-            threads.emplace_back([this, hostname, connInfo, testType, &resultMutex, &results, &anyFailure]() {
-                dcgmMultinodeRequest_t request {};
-                request.version                         = dcgmMultinodeRequest_version;
-                request.testType                        = testType;
-                request.requestType                     = MnDiagRequestType::ReserveResources;
-                request.requestData.resource.headNodeId = m_currentNodeId;
-                request.requestData.resource.response   = MnDiagStatus::UNKNOWN;
-
-                dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
-                {
-                    DcgmLockGuard lg(&resultMutex);
-                    results.emplace_back(hostname, threadResult);
-                    if (threadResult != DCGM_ST_OK || request.requestData.resource.response != MnDiagStatus::RESERVED)
-                    {
-                        anyFailure = true;
-                    }
-                }
-                // Log errors for failed messages
-                if (threadResult != DCGM_ST_OK)
-                {
-                    log_error("Failed to send reserve resources message to remote node {}. Return: ({}): {}",
-                              hostname,
-                              std::to_underlying(threadResult),
-                              errorString(threadResult));
-                }
-                else if (request.requestData.resource.response != MnDiagStatus::RESERVED)
-                {
-                    log_error("Failed to set remote node {} status to RESERVED", hostname);
-                }
-            });
-        }
-
-        // threads will automatically join when it goes out of scope at the end of this block
-    }
+            // Log errors for failed messages
+            if (threadResult != DCGM_ST_OK)
+            {
+                log_error("Failed to send reserve resources message to remote node {}. Return: ({}): {}",
+                          hostname,
+                          std::to_underlying(threadResult),
+                          errorString(threadResult));
+            }
+            else if (request.requestData.resource.response != MnDiagStatus::RESERVED)
+            {
+                log_error("Failed to set remote node {} status to RESERVED", hostname);
+            }
+        },
+        &anyFailure);
 
     // Check if any failures occurred
-    if (anyFailure)
+    if (anyFailure.load(std::memory_order_relaxed))
     {
         ReleaseRemoteResources(testType);
         for (auto const &[hostname, result] : results)
@@ -732,80 +850,78 @@ dcgmReturn_t DcgmMnDiagManager::ReleaseRemoteResources(dcgmMultinodeTestType_t t
 {
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
-    bool anyFailure = false;
+    std::atomic<bool> anyFailure { false };
 
-    {
-        std::vector<std::jthread> threads;
+    BatchedFanOut(
+        m_connections,
+        c_maxConcurrentHostRequests,
+        [this, testType, &resultMutex, &results, &anyFailure](std::string const &hostname,
+                                                              ConnectionInfo const &connInfo) {
+            dcgmMultinodeRequest_t request {};
+            request.version                         = dcgmMultinodeRequest_version;
+            request.testType                        = testType;
+            request.requestType                     = MnDiagRequestType::ReleaseResources;
+            request.requestData.resource.headNodeId = m_currentNodeId;
+            request.requestData.resource.response   = MnDiagStatus::UNKNOWN;
 
-        // Launch threads for remote nodes
-        for (auto const &[hostname, connInfo] : m_connections)
-        {
-            if (connInfo.isLoopback)
+            dcgmReturn_t threadResult = m_dcgmOps->dcgmMultinodeRequest(connInfo.handle, &request);
+
             {
-                continue; // handle the head node last
+                DcgmLockGuard lg(&resultMutex);
+                results.emplace_back(hostname, threadResult);
+                if (threadResult != DCGM_ST_OK || request.requestData.resource.response != MnDiagStatus::READY)
+                {
+                    anyFailure.store(true, std::memory_order_relaxed);
+                }
             }
+            // Log errors for failed messages
+            if (threadResult != DCGM_ST_OK)
+            {
+                log_error("Failed to send release resources message to remote node {}. Return: ({}): {}",
+                          hostname,
+                          std::to_underlying(threadResult),
+                          errorString(threadResult));
+            }
+            else if (request.requestData.resource.response != MnDiagStatus::READY)
+            {
+                log_error("Failed to release resources on remote node {}", hostname);
+            }
+        },
+        &anyFailure);
 
-            // Launch a thread for each remote node
-            threads.emplace_back([this, hostname, connInfo, testType, &resultMutex, &results, &anyFailure]() {
-                dcgmMultinodeRequest_t request {};
-                request.version                         = dcgmMultinodeRequest_version;
-                request.testType                        = testType;
-                request.requestType                     = MnDiagRequestType::ReleaseResources;
-                request.requestData.resource.headNodeId = m_currentNodeId;
-                request.requestData.resource.response   = MnDiagStatus::UNKNOWN;
+    dcgmReturn_t finalResult = DCGM_ST_OK;
 
-                dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
-
-                {
-                    DcgmLockGuard lg(&resultMutex);
-                    results.emplace_back(hostname, threadResult);
-                    if (threadResult != DCGM_ST_OK || request.requestData.resource.response != MnDiagStatus::READY)
-                    {
-                        anyFailure = true;
-                    }
-                }
-                // Log errors for failed messages
-                if (threadResult != DCGM_ST_OK)
-                {
-                    log_error("Failed to send release resources message to remote node {}. Return: ({}): {}",
-                              hostname,
-                              std::to_underlying(threadResult),
-                              errorString(threadResult));
-                }
-                else if (request.requestData.resource.response != MnDiagStatus::READY)
-                {
-                    log_error("Failed to release resources on remote node {}", hostname);
-                }
-            });
-        }
-
-        // threads will automatically join when it goes out of scope at the end of this block
-    }
-
-    // Check if any failures occurred
-    if (anyFailure)
+    // Preserve the first remote failure, but continue with head-node cleanup.
+    if (anyFailure.load(std::memory_order_relaxed))
     {
         for (auto const &[hostname, result] : results)
         {
             if (result != DCGM_ST_OK)
             {
-                return result;
+                finalResult = result;
+                break;
             }
         }
-        return DCGM_ST_GENERIC_ERROR; // Default error if specific error code not found
+        if (finalResult == DCGM_ST_OK)
+        {
+            finalResult = DCGM_ST_GENERIC_ERROR;
+        }
     }
 
-    // Handle the head node last
+    // Always handle the head node, even when a remote release failed.
     // Directly call the release resources function on the head node
     dcgm_mndiag_msg_resource_t dummyMsgOnHeadNode {};
-    HandleReleaseResources((dcgm_module_command_header_t *)&dummyMsgOnHeadNode);
+    HandleReleaseResources(reinterpret_cast<dcgm_module_command_header_t *>(&dummyMsgOnHeadNode));
     if (dummyMsgOnHeadNode.resource.response != MnDiagStatus::READY)
     {
         log_error("Failed to release resources on head node");
-        return DCGM_ST_GENERIC_ERROR;
+        if (finalResult == DCGM_ST_OK)
+        {
+            finalResult = DCGM_ST_GENERIC_ERROR;
+        }
     }
 
-    return DCGM_ST_OK;
+    return finalResult;
 }
 
 dcgmReturn_t DcgmMnDiagManager::GetNodeInfo(dcgmMultinodeTestType_t testType)
@@ -813,50 +929,68 @@ dcgmReturn_t DcgmMnDiagManager::GetNodeInfo(dcgmMultinodeTestType_t testType)
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
     results.reserve(m_connections.size());
-    bool anyFailure = false;
+    std::atomic<bool> anyFailure { false };
     // Handle the head node first
     // Directly call the reserve resources function on the head node
     dcgm_mndiag_msg_node_info_t dummyMsgOnHeadNode {};
+    dummyMsgOnHeadNode.header.version = dcgm_mndiag_msg_node_info_version;
     if (auto ret = HandleGetNodeInfo((dcgm_module_command_header_t *)&dummyMsgOnHeadNode); ret != DCGM_ST_OK)
     {
         log_error("Failed to get node info on head node: {}", errorString(ret));
         return ret;
     }
-    std::string localDcgmVersion   = dummyMsgOnHeadNode.nodeInfo.dcgmVersion;
-    std::string localDriverVersion = dummyMsgOnHeadNode.nodeInfo.driverVersion;
+    if (dummyMsgOnHeadNode.nodeInfo.numGpus > std::size(dummyMsgOnHeadNode.nodeInfo.gpus))
     {
-        std::vector<std::jthread> threads;
+        return DCGM_ST_BADPARAM;
+    }
 
-        // Launch threads for remote nodes
-        for (auto const &[hostname, connInfo] : m_connections)
+    nodeInfo_t localNodeInfo;
+    localNodeInfo.dcgmVersion   = dummyMsgOnHeadNode.nodeInfo.dcgmVersion;
+    localNodeInfo.driverVersion = dummyMsgOnHeadNode.nodeInfo.driverVersion;
+    for (auto const &gpu : std::span(dummyMsgOnHeadNode.nodeInfo.gpus, dummyMsgOnHeadNode.nodeInfo.numGpus))
+    {
+        localNodeInfo.gpus.emplace_back(nodeInfo_t::GpuInfo { .gpuId = gpu.gpuId, .uuid = gpu.uuid });
+    }
+    // Handle loopback entries synchronously before launching remote threads
+    for (auto const &[hostname, connInfo] : m_connections)
+    {
+        if (connInfo.isLoopback)
         {
-            if (connInfo.isLoopback)
+            log_debug("Adding version info for host {}: dcgmVersion - {}, driverVersion - {}",
+                      hostname,
+                      localNodeInfo.dcgmVersion,
+                      localNodeInfo.driverVersion);
+            // Open MPI records its head node under gethostname(), even when the user selected it by IP address.
+            // Preserve that canonical node identifier for rankfiles while retaining the requested host as the map key.
+            localNodeInfo.mpiNodeName = m_localHostInfo.hostname;
+            m_nodeInfo[hostname]      = localNodeInfo;
+        }
+    }
+
+    BatchedFanOut(
+        m_connections,
+        c_maxConcurrentHostRequests,
+        [this, testType, &resultMutex, &results, &anyFailure](std::string const &hostname,
+                                                              ConnectionInfo const &connInfo) {
+            dcgmMultinodeRequest_t request {};
+            request.version     = dcgmMultinodeRequest_version;
+            request.testType    = testType;
+            request.requestType = MnDiagRequestType::GetNodeInfo;
+
+            dcgmReturn_t threadResult = m_dcgmOps->dcgmMultinodeRequest(connInfo.handle, &request);
+            // Log errors for failed messages
+            if (threadResult != DCGM_ST_OK)
             {
-                log_debug("Adding version info for host {}: dcgmVersion - {}, driverVersion - {}",
+                log_error("Failed to send get node info message to remote node {}. Return: ({}): {}",
                           hostname,
-                          localDcgmVersion,
-                          localDriverVersion);
-                DcgmLockGuard lg(&resultMutex);
-                m_nodeInfo[hostname].dcgmVersion   = localDcgmVersion;
-                m_nodeInfo[hostname].driverVersion = localDriverVersion;
-                continue; // Already handled above
+                          std::to_underlying(threadResult),
+                          errorString(threadResult));
             }
-
-            // Launch a thread for each remote node
-            threads.emplace_back([this, hostname, connInfo, testType, &resultMutex, &results, &anyFailure]() {
-                dcgmMultinodeRequest_t request {};
-                request.version     = dcgmMultinodeRequest_version;
-                request.testType    = testType;
-                request.requestType = MnDiagRequestType::GetNodeInfo;
-
-                dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
-                // Log errors for failed messages
-                if (threadResult != DCGM_ST_OK)
+            else
+            {
+                if (request.requestData.nodeInfo.numGpus > std::size(request.requestData.nodeInfo.gpus))
                 {
-                    log_error("Failed to send get node info message to remote node {}. Return: ({}): {}",
-                              hostname,
-                              std::to_underlying(threadResult),
-                              errorString(threadResult));
+                    threadResult = DCGM_ST_BADPARAM;
                 }
                 else
                 {
@@ -865,28 +999,34 @@ dcgmReturn_t DcgmMnDiagManager::GetNodeInfo(dcgmMultinodeTestType_t testType)
                               request.requestData.nodeInfo.dcgmVersion,
                               request.requestData.nodeInfo.driverVersion);
                 }
-                auto resultEntry = std::make_pair(hostname, threadResult);
+            }
+            auto resultEntry = std::make_pair(hostname, threadResult);
+            {
+                DcgmLockGuard lg(&resultMutex);
+                results.emplace_back(std::move(resultEntry));
+                if (threadResult != DCGM_ST_OK)
                 {
-                    DcgmLockGuard lg(&resultMutex);
-                    results.emplace_back(std::move(resultEntry));
-                    if (threadResult != DCGM_ST_OK)
+                    anyFailure.store(true, std::memory_order_relaxed);
+                }
+                else
+                {
+                    auto &nodeInfo         = m_nodeInfo[hostname];
+                    nodeInfo.dcgmVersion   = request.requestData.nodeInfo.dcgmVersion;
+                    nodeInfo.driverVersion = request.requestData.nodeInfo.driverVersion;
+                    nodeInfo.mpiNodeName   = hostname;
+                    nodeInfo.gpus.clear();
+                    for (auto const &gpu :
+                         std::span(request.requestData.nodeInfo.gpus, request.requestData.nodeInfo.numGpus))
                     {
-                        anyFailure = true;
-                    }
-                    else
-                    {
-                        m_nodeInfo[hostname].dcgmVersion   = request.requestData.nodeInfo.dcgmVersion;
-                        m_nodeInfo[hostname].driverVersion = request.requestData.nodeInfo.driverVersion;
+                        nodeInfo.gpus.emplace_back(nodeInfo_t::GpuInfo { .gpuId = gpu.gpuId, .uuid = gpu.uuid });
                     }
                 }
-            });
-        }
-
-        // threads will automatically join when it goes out of scope at the end of this block
-    }
+            }
+        },
+        &anyFailure);
 
     // Check if any failures occurred
-    if (anyFailure)
+    if (anyFailure.load(std::memory_order_relaxed))
     {
         for (auto const &[hostname, result] : results)
         {
@@ -906,6 +1046,12 @@ dcgmReturn_t DcgmMnDiagManager::HandleGetNodeInfo(dcgm_module_command_header_t *
     // Cast to our new struct type
     dcgm_mndiag_msg_node_info_t *nodeInfoMsg = std::bit_cast<dcgm_mndiag_msg_node_info_t *>(moduleCommand);
 
+    if (nodeInfoMsg->header.version != dcgm_mndiag_msg_node_info_version2)
+    {
+        log_error("Unsupported node info message version: {}", nodeInfoMsg->header.version);
+        return DCGM_ST_VER_MISMATCH;
+    }
+
     auto dcgmVersion = std::string(DcgmNs::DcgmBuildInfo().GetVersion());
     SafeCopyTo(nodeInfoMsg->nodeInfo.dcgmVersion, dcgmVersion.c_str());
     std::string driverVersion;
@@ -915,6 +1061,39 @@ dcgmReturn_t DcgmMnDiagManager::HandleGetNodeInfo(dcgm_module_command_header_t *
         return ret;
     }
     SafeCopyTo(nodeInfoMsg->nodeInfo.driverVersion, driverVersion.c_str());
+
+    // The head node expands gpuPairs=all from this UUID inventory.
+    std::vector<unsigned int> gpuIds;
+    std::vector<dcgmcm_gpu_info_cached_t> gpuInfos;
+    nodeInfoMsg->nodeInfo.numGpus = 0;
+    if (auto ret = m_coreProxy->GetGpuIds(1, gpuIds); ret != DCGM_ST_OK)
+    {
+        log_warning("Unable to collect active GPU IDs for multinode inventory: {}", errorString(ret));
+        return ret;
+    }
+    if (auto ret = m_coreProxy->GetAllGpuInfo(gpuInfos); ret != DCGM_ST_OK)
+    {
+        log_warning("Unable to collect GPU metadata for multinode inventory: {}", errorString(ret));
+        return ret;
+    }
+    if (gpuIds.size() > std::size(nodeInfoMsg->nodeInfo.gpus))
+    {
+        log_warning("Active GPU count {} exceeds multinode inventory capacity", gpuIds.size());
+        return DCGM_ST_INSUFFICIENT_SIZE;
+    }
+    for (auto const gpuId : gpuIds)
+    {
+        auto const gpu = std::ranges::find(gpuInfos, gpuId, &dcgmcm_gpu_info_cached_t::gpuId);
+        if (gpu == gpuInfos.end())
+        {
+            log_warning("Unable to find metadata for active GPU {}", gpuId);
+            nodeInfoMsg->nodeInfo.numGpus = 0;
+            return DCGM_ST_NO_DATA;
+        }
+        auto &output = nodeInfoMsg->nodeInfo.gpus[nodeInfoMsg->nodeInfo.numGpus++];
+        output.gpuId = gpuId;
+        SafeCopyTo(output.uuid, gpu->uuid);
+    }
     return DCGM_ST_OK;
 }
 
@@ -1041,16 +1220,14 @@ dcgmReturn_t DcgmMnDiagManager::HandleBroadcastRunParameters(dcgm_module_command
 
     // Always set the process execution timeout, defaulting to 3600 seconds if not specified.
     // This ensures the timeout is reset between runs.
-    if (timeToRun.has_value())
+    auto const timeout
+        = timeToRun.has_value() ? std::chrono::seconds(*timeToRun) : MnDiagConstants::DEFAULT_TIME_TO_RUN_SECONDS;
+    if (!timeToRun.has_value())
     {
-        m_stateMachine->SetProcessExecutionTimeout(std::chrono::seconds(*timeToRun));
-    }
-    else
-    {
-        auto timeout = MnDiagConstants::DEFAULT_TIME_TO_RUN_SECONDS;
         log_debug("No time_to_run parameter specified, using default: {} seconds", timeout.count());
-        m_stateMachine->SetProcessExecutionTimeout(timeout);
     }
+    // Pair children are runner-owned, so keep the state machine in RESERVED for the complete batch budget.
+    m_stateMachine->SetProcessExecutionTimeout(timeout, IsGpuPairMode(paramMsg->runParams.runMnDiag));
 
     // Set the expected test binary path in the state machine
     if (paramMsg->runParams.testBinaryPath[0] == '\0')
@@ -1447,7 +1624,7 @@ dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDia
 {
     DcgmMutex resultMutex(0);
     std::vector<std::pair<std::string, dcgmReturn_t>> results;
-    bool anyFailure = false;
+    std::atomic<bool> anyFailure { false };
 
     // Handle the head node first (local processing)
     // Create a dummy message for local processing
@@ -1456,7 +1633,7 @@ dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDia
     dummyMsgOnHeadNode.header.length              = sizeof(dummyMsgOnHeadNode);
     dummyMsgOnHeadNode.runParams.headNodeId       = m_currentNodeId;
     dummyMsgOnHeadNode.runParams.timeToRunSeconds = timeToRunSeconds;
-    memcpy(&dummyMsgOnHeadNode.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v1));
+    memcpy(&dummyMsgOnHeadNode.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v2));
 
     SafeCopyTo(dummyMsgOnHeadNode.runParams.testBinaryPath, m_currentTestInfo.testBinaryPath.c_str());
     SafeCopyTo(dummyMsgOnHeadNode.runParams.testPrefix, m_currentTestInfo.testPrefix.c_str());
@@ -1468,61 +1645,49 @@ dcgmReturn_t DcgmMnDiagManager::BroadcastRunParametersToRemoteNodes(dcgmRunMnDia
         return headResult;
     }
 
-    {
-        std::vector<std::jthread> threads;
+    BatchedFanOut(
+        m_connections,
+        c_maxConcurrentHostRequests,
+        [this, &params, timeToRunSeconds, &resultMutex, &results, &anyFailure](std::string const &hostname,
+                                                                               ConnectionInfo const &connInfo) {
+            dcgmMultinodeRequest_t request {};
+            request.version                                = dcgmMultinodeRequest_version;
+            request.testType                               = m_currentTestInfo.testType;
+            request.requestType                            = MnDiagRequestType::BroadcastRunParameters;
+            request.requestData.runParams.headNodeId       = m_currentNodeId;
+            request.requestData.runParams.timeToRunSeconds = timeToRunSeconds;
+            memcpy(&request.requestData.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v2));
+            SafeCopyTo(request.requestData.runParams.testBinaryPath, m_currentTestInfo.testBinaryPath.c_str());
+            SafeCopyTo(request.requestData.runParams.testPrefix, m_currentTestInfo.testPrefix.c_str());
 
-        // Launch threads for remote nodes
-        for (auto const &[hostname, connInfo] : m_connections)
-        {
-            if (connInfo.isLoopback)
+            dcgmReturn_t threadResult = m_dcgmOps->dcgmMultinodeRequest(connInfo.handle, &request);
+
             {
-                continue; // Already handled above
+                DcgmLockGuard lg(&resultMutex);
+                results.emplace_back(hostname, threadResult);
+                if (threadResult != DCGM_ST_OK)
+                {
+                    anyFailure.store(true, std::memory_order_relaxed);
+                }
             }
 
-            // Launch a thread for each remote node
-            threads.emplace_back(
-                [this, hostname, connInfo, &params, timeToRunSeconds, &resultMutex, &results, &anyFailure]() {
-                    dcgmMultinodeRequest_t request {};
-                    request.version                                = dcgmMultinodeRequest_version;
-                    request.testType                               = m_currentTestInfo.testType;
-                    request.requestType                            = MnDiagRequestType::BroadcastRunParameters;
-                    request.requestData.runParams.headNodeId       = m_currentNodeId;
-                    request.requestData.runParams.timeToRunSeconds = timeToRunSeconds;
-                    memcpy(&request.requestData.runParams.runMnDiag, &params, sizeof(dcgmRunMnDiag_v1));
-                    SafeCopyTo(request.requestData.runParams.testBinaryPath, m_currentTestInfo.testBinaryPath.c_str());
-                    SafeCopyTo(request.requestData.runParams.testPrefix, m_currentTestInfo.testPrefix.c_str());
-
-                    dcgmReturn_t threadResult = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
-
-                    {
-                        DcgmLockGuard lg(&resultMutex);
-                        results.emplace_back(hostname, threadResult);
-                        if (threadResult != DCGM_ST_OK)
-                        {
-                            anyFailure = true;
-                        }
-                    }
-
-                    // Log errors for failed messages
-                    if (threadResult != DCGM_ST_OK)
-                    {
-                        log_error("Failed to broadcast parameters to remote node {}. Return: ({}): {}",
-                                  hostname,
-                                  std::to_underlying(threadResult),
-                                  errorString(threadResult));
-                    }
-                    else
-                    {
-                        log_debug("Successfully broadcast parameters to remote node {}", hostname);
-                    }
-                });
-        }
-
-        // threads will automatically join when it goes out of scope at the end of this block
-    }
+            // Log errors for failed messages
+            if (threadResult != DCGM_ST_OK)
+            {
+                log_error("Failed to broadcast parameters to remote node {}. Return: ({}): {}",
+                          hostname,
+                          std::to_underlying(threadResult),
+                          errorString(threadResult));
+            }
+            else
+            {
+                log_debug("Successfully broadcast parameters to remote node {}", hostname);
+            }
+        },
+        &anyFailure);
 
     // Check if any failures occurred
-    if (anyFailure)
+    if (anyFailure.load(std::memory_order_relaxed))
     {
         for (auto const &[hostname, result] : results)
         {
@@ -1701,7 +1866,7 @@ void DcgmMnDiagManager::InitializeSSHTunnelManagers()
 
 
 void DcgmMnDiagManager::PopulateMpiFailureResponseStruct(MnDiagMpiRunnerBase *mpiRunner,
-                                                         dcgmMnDiagResponse_v1 &response,
+                                                         dcgmMnDiagResponse_v2 &response,
                                                          std::optional<pid_t> mpiPID,
                                                          DcgmNs::Utils::LogPaths const &logPaths)
 {
@@ -1741,29 +1906,53 @@ dcgmReturn_t DcgmMnDiagManager::AuthorizeRemoteConnections(dcgmMultinodeTestType
         return dcgmResult;
     }
 
-    // Now authorize all remote connections (synchronous)
-    for (auto const &[hostname, connInfo] : m_connections)
+    DcgmMutex resultMutex(0);
+    std::vector<std::pair<std::string, dcgmReturn_t>> results;
+    std::atomic<bool> anyFailure { false };
+
+    BatchedFanOut(
+        m_connections,
+        c_maxConcurrentHostRequests,
+        [this, testType, &resultMutex, &results, &anyFailure](std::string const &hostname,
+                                                              ConnectionInfo const &connInfo) {
+            dcgmMultinodeRequest_t request {};
+            request.version                              = dcgmMultinodeRequest_version;
+            request.testType                             = testType;
+            request.requestType                          = MnDiagRequestType::AuthorizeConnection;
+            request.requestData.authorization.headNodeId = m_currentNodeId;
+
+            dcgmReturn_t result = m_dcgmOps->dcgmMultinodeRequest(connInfo.handle, &request);
+
+            {
+                DcgmLockGuard lg(&resultMutex);
+                results.emplace_back(hostname, result);
+                if (result != DCGM_ST_OK)
+                {
+                    anyFailure.store(true, std::memory_order_relaxed);
+                }
+            }
+
+            if (result != DCGM_ST_OK)
+            {
+                log_error("Failed to authorize connection with {}: {}", hostname, errorString(result));
+            }
+            else
+            {
+                log_debug("Successfully authorized connection with {}", hostname);
+            }
+        },
+        &anyFailure);
+
+    if (anyFailure.load(std::memory_order_relaxed))
     {
-        if (connInfo.isLoopback)
+        for (auto const &[hostname, result] : results)
         {
-            continue; // Already handled above
+            if (result != DCGM_ST_OK)
+            {
+                return result;
+            }
         }
-
-        // Send authorization request to remote node
-        dcgmMultinodeRequest_t request {};
-        request.version                              = dcgmMultinodeRequest_version;
-        request.testType                             = testType;
-        request.requestType                          = MnDiagRequestType::AuthorizeConnection;
-        request.requestData.authorization.headNodeId = m_currentNodeId;
-
-        dcgmReturn_t result = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
-        if (result != DCGM_ST_OK)
-        {
-            log_error("Failed to authorize connection with {}: {}", hostname, errorString(result));
-            return result;
-        }
-
-        log_debug("Successfully authorized connection with {}", hostname);
+        return DCGM_ST_GENERIC_ERROR;
     }
 
     log_info("Successfully authorized all remote connections");
@@ -1782,32 +1971,55 @@ dcgmReturn_t DcgmMnDiagManager::RevokeRemoteAuthorizations()
         return dcgmResult;
     }
 
-    // Now revoke all remote authorizations (synchronous)
-    for (auto const &[hostname, connInfo] : m_connections)
+    DcgmMutex resultMutex(0);
+    std::vector<std::pair<std::string, dcgmReturn_t>> results;
+    std::atomic<bool> anyFailure { false };
+
+    BatchedFanOut(
+        m_connections,
+        c_maxConcurrentHostRequests,
+        [this, &resultMutex, &results, &anyFailure](std::string const &hostname, ConnectionInfo const &connInfo) {
+            dcgmMultinodeRequest_t request {};
+            request.version                              = dcgmMultinodeRequest_version;
+            request.testType                             = m_currentTestInfo.testType;
+            request.requestType                          = MnDiagRequestType::RevokeAuthorization;
+            request.requestData.authorization.headNodeId = m_currentNodeId;
+
+            dcgmReturn_t result = m_dcgmOps->dcgmMultinodeRequest(connInfo.handle, &request);
+
+            {
+                DcgmLockGuard lg(&resultMutex);
+                results.emplace_back(hostname, result);
+                if (result != DCGM_ST_OK)
+                {
+                    anyFailure.store(true, std::memory_order_relaxed);
+                }
+            }
+
+            if (result != DCGM_ST_OK)
+            {
+                log_error("Failed to revoke authorization for connection: {}. Return: ({}): {}",
+                          hostname,
+                          std::to_underlying(result),
+                          errorString(result));
+            }
+            else
+            {
+                log_debug("Successfully revoked authorization for connection with {}", hostname);
+            }
+        },
+        &anyFailure);
+
+    if (anyFailure.load(std::memory_order_relaxed))
     {
-        if (connInfo.isLoopback)
+        for (auto const &[hostname, result] : results)
         {
-            continue; // Already handled above
+            if (result != DCGM_ST_OK)
+            {
+                return result;
+            }
         }
-
-        // Send revocation request to remote node
-        dcgmMultinodeRequest_t request {};
-        request.version                              = dcgmMultinodeRequest_version;
-        request.testType                             = m_currentTestInfo.testType;
-        request.requestType                          = MnDiagRequestType::RevokeAuthorization;
-        request.requestData.authorization.headNodeId = m_currentNodeId;
-
-        dcgmReturn_t result = m_dcgmApi->MultinodeRequest(connInfo.handle, &request);
-        if (result != DCGM_ST_OK)
-        {
-            log_error("Failed to revoke authorization for connection: {}. Return: ({}): {}",
-                      hostname,
-                      std::to_underlying(result),
-                      errorString(result));
-            return result;
-        }
-
-        log_debug("Successfully revoked authorization for connection with {}", hostname);
+        return DCGM_ST_GENERIC_ERROR;
     }
 
     log_info("Successfully revoked all remote authorizations");
@@ -1927,7 +2139,7 @@ dcgmReturn_t DcgmMnDiagManager::CreateDcgmConnection(ConnectionParams const &par
         connectionString = fmt::format("tcp://127.0.0.1:{}", std::get<uint16_t>(params.localAddress));
     }
 
-    dcgmReturn_t dcgmResult = m_dcgmApi->Connect_v3(connectionString.c_str(), &connectParams, &handle);
+    dcgmReturn_t dcgmResult = m_dcgmOps->dcgmConnect_v3(connectionString.c_str(), &connectParams, &handle);
 
     if (dcgmResult != DCGM_ST_OK)
     {
@@ -1959,70 +2171,55 @@ ConnectionInfo DcgmMnDiagManager::CreateConnectionInfo(ConnectionParams const &p
     }
 }
 
-dcgmReturn_t DcgmMnDiagManager::ConnectSingleNode(ConnectionParams params)
+std::expected<ConnectionInfo, dcgmReturn_t> DcgmMnDiagManager::ConnectSingleNode(ConnectionParams params)
 {
-    // 1. Start tunnel session
     auto tunnelState = StartTunnelSession(params);
     if (tunnelState != DcgmNs::Common::RemoteConn::detail::TunnelState::Active)
     {
-        return DCGM_ST_REMOTE_SSH_CONNECTION_FAILED;
+        return std::unexpected(DCGM_ST_REMOTE_SSH_CONNECTION_FAILED);
     }
 
-    // 2. Create DCGM connection
     dcgmHandle_t handle;
     auto dcgmResult = CreateDcgmConnection(params, handle);
     if (dcgmResult != DCGM_ST_OK)
     {
         EndTunnelSession(params);
-        return dcgmResult;
+        return std::unexpected(dcgmResult);
     }
 
-    // 3. Store connection info (without authorization)
-    ConnectionInfo connInfo        = CreateConnectionInfo(params, handle);
-    m_connections[params.hostname] = connInfo;
-
-    return DCGM_ST_OK;
+    return CreateConnectionInfo(params, handle);
 }
 
 dcgmReturn_t DcgmMnDiagManager::CleanupConnections()
 {
     log_debug("Cleaning up connections");
 
-    // Clean up remote connections
-    for (auto const &[hostname, connInfo] : m_connections)
-    {
-        if (connInfo.isLoopback)
-        {
-            continue; // Skip loopback connections
-        }
+    BatchedFanOut(m_connections,
+                  c_maxConcurrentHostRequests,
+                  [this](std::string const &hostname, ConnectionInfo const &connInfo) {
+                      if (connInfo.handle != 0)
+                      {
+                          m_dcgmOps->dcgmDisconnect(connInfo.handle);
+                      }
 
-        // Disconnect DCGM connection
-        if (connInfo.handle != 0)
-        {
-            m_dcgmApi->Disconnect(connInfo.handle);
-        }
+                      ConnectionParams params {};
+                      params.hostname     = hostname;
+                      params.effectiveUid = connInfo.uid;
 
-        // Create ConnectionParams for tunnel cleanup
-        ConnectionParams params {};
-        params.hostname     = hostname;
-        params.effectiveUid = connInfo.uid;
+                      if (!connInfo.remoteSocketPath.empty())
+                      {
+                          params.isUnixSocket  = true;
+                          params.remoteAddress = connInfo.remoteSocketPath;
+                      }
+                      else
+                      {
+                          params.isUnixSocket  = false;
+                          params.remoteAddress = connInfo.remotePort;
+                      }
 
-        if (!connInfo.remoteSocketPath.empty())
-        {
-            params.isUnixSocket  = true;
-            params.remoteAddress = connInfo.remoteSocketPath;
-        }
-        else
-        {
-            params.isUnixSocket  = false;
-            params.remoteAddress = connInfo.remotePort;
-        }
+                      EndTunnelSession(params);
+                  });
 
-        // End tunnel session
-        EndTunnelSession(params);
-    }
-
-    // Clear all connections and node info
     m_connections.clear();
     m_nodeInfo.clear();
 

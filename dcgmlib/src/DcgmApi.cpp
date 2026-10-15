@@ -45,8 +45,10 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <iterator>
+#include <memory>
 #include <system_error>
 #include <type_traits>
 #include <unistd.h>
@@ -1326,7 +1328,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                                   DCGM_FI_DEV_VGPU_CREATABLE_IDS,
                                   DCGM_FI_DEV_VGPU_INSTANCE_INFO,
                                   DCGM_FI_DEV_VGPU_UTIL_INFO,
-                                  DCGM_FI_DEV_GPU_UTIL_RATIO,
+                                  DCGM_FI_DEV_GPU_UTIL,
                                   DCGM_FI_DEV_MEM_COPY_UTIL,
                                   DCGM_FI_DEV_ENC_UTIL,
                                   DCGM_FI_DEV_DEC_UTIL };
@@ -1530,7 +1532,7 @@ dcgmReturn_t helperVgpuDeviceGetAttributes(dcgmHandle_t pDcgmHandle,
                 break;
             }
 
-            case DCGM_FI_DEV_GPU_UTIL_RATIO:
+            case DCGM_FI_DEV_GPU_UTIL:
             {
                 pDcgmVgpuDeviceAttr->gpuUtil = fv->value.i64;
                 break;
@@ -2331,6 +2333,335 @@ dcgmReturn_t helperPolicyUnregister(dcgmHandle_t dcgmHandle, dcgmGpuGrp_t groupI
     dcgmReturn = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg.header, sizeof(msg));
 
     return dcgmReturn;
+}
+
+/*****************************************************************************/
+static dcgmReturn_t tsapiEnginePolicyCreate(dcgmHandle_t pDcgmHandle,
+                                            unsigned short fieldId,
+                                            const char *name,
+                                            double threshold,
+                                            dcgmPolicyOperator_t policyOperator,
+                                            const dcgmGroupEntityPair_t *entities,
+                                            unsigned int entityCount,
+                                            unsigned int channelMask,
+                                            unsigned int enabled,
+                                            unsigned int rateLimitSec,
+                                            uint64_t *policyId)
+{
+    if (name == nullptr || policyId == nullptr || (entityCount > 0 && entities == nullptr)
+        || entityCount > DCGM_MAX_NUM_DEVICES || strnlen(name, DCGM_MAX_STR_LENGTH) == DCGM_MAX_STR_LENGTH)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    for (unsigned int i = 0; i < entityCount; ++i)
+    {
+        if (entities[i].entityGroupId != DCGM_FE_GPU)
+        {
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
+    dcgm_policy_msg_create_t msg = {};
+    msg.header.length            = sizeof(msg);
+    msg.header.moduleId          = DcgmModuleIdPolicy;
+    msg.header.subCommand        = DCGM_POLICY_SR_CREATE;
+    msg.header.version           = dcgm_policy_msg_create_version;
+    msg.policy.version           = dcgmPolicySpec_version;
+    msg.policy.fieldId           = fieldId;
+    msg.policy.threshold         = threshold;
+    msg.policy.policyOperator    = policyOperator;
+    msg.policy.entityCount       = entityCount;
+    msg.policy.channelMask       = channelMask;
+    msg.policy.state             = enabled ? DCGM_POLICY_STATE_ENABLED : DCGM_POLICY_STATE_DISABLED;
+    msg.policy.rateLimitSec      = rateLimitSec;
+    SafeCopyTo(msg.policy.name, name);
+    for (unsigned int i = 0; i < entityCount; ++i)
+    {
+        msg.policy.entities[i] = entities[i];
+    }
+
+    auto ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+    if (ret == DCGM_ST_OK)
+    {
+        *policyId = msg.created.policyId;
+    }
+    return ret;
+}
+
+/*****************************************************************************/
+static dcgmReturn_t tsapiEnginePolicyModify(dcgmHandle_t pDcgmHandle, const dcgmPolicyInfo_t *policy)
+{
+    if (policy == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    if (policy->version != dcgmPolicyInfo_version)
+    {
+        return DCGM_ST_VER_MISMATCH;
+    }
+    if (policy->entityCount > DCGM_MAX_NUM_DEVICES)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    if (strnlen(policy->name, sizeof(policy->name)) == sizeof(policy->name))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    for (unsigned int i = 0; i < policy->entityCount; ++i)
+    {
+        if (policy->entities[i].entityGroupId != DCGM_FE_GPU)
+        {
+            return DCGM_ST_BADPARAM;
+        }
+    }
+
+    dcgm_policy_msg_modify_t msg = {};
+    msg.header.length            = sizeof(msg);
+    msg.header.moduleId          = DcgmModuleIdPolicy;
+    msg.header.subCommand        = DCGM_POLICY_SR_MODIFY;
+    msg.header.version           = dcgm_policy_msg_modify_version;
+    msg.policyId                 = policy->policyId;
+    msg.policy.version           = dcgmPolicySpec_version;
+    msg.policy.fieldId           = policy->fieldId;
+    SafeCopyTo(msg.policy.name, policy->name);
+    msg.policy.threshold      = policy->threshold;
+    msg.policy.policyOperator = policy->policyOperator;
+    std::copy_n(policy->entities, policy->entityCount, msg.policy.entities);
+    msg.policy.entityCount  = policy->entityCount;
+    msg.policy.channelMask  = policy->channelMask;
+    msg.policy.state        = policy->state;
+    msg.policy.rateLimitSec = policy->rateLimitSec;
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+}
+
+/*****************************************************************************/
+static dcgmReturn_t tsapiEnginePolicyDelete(dcgmHandle_t pDcgmHandle,
+                                            unsigned short fieldId,
+                                            uint64_t policyId,
+                                            unsigned int deleteAll)
+{
+    dcgm_policy_msg_delete_t msg = {};
+    msg.header.length            = sizeof(msg);
+    msg.header.moduleId          = DcgmModuleIdPolicy;
+    msg.header.subCommand        = DCGM_POLICY_SR_DELETE;
+    msg.header.version           = dcgm_policy_msg_delete_version;
+    msg.fieldId                  = fieldId;
+    msg.policyId                 = policyId;
+    msg.deleteAll                = deleteAll;
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+}
+
+/*****************************************************************************/
+static dcgmReturn_t SendPolicyStateCommand(dcgmHandle_t pDcgmHandle,
+                                           unsigned short fieldId,
+                                           uint64_t policyId,
+                                           unsigned int subCommand)
+{
+    dcgm_policy_msg_set_state_t msg = {};
+    msg.header.length               = sizeof(msg);
+    msg.header.moduleId             = DcgmModuleIdPolicy;
+    msg.header.subCommand           = subCommand;
+    msg.header.version              = dcgm_policy_msg_set_state_version;
+    msg.fieldId                     = fieldId;
+    msg.policyId                    = policyId;
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+}
+
+/*****************************************************************************/
+static dcgmReturn_t tsapiEnginePolicyEnable(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId)
+{
+    return SendPolicyStateCommand(pDcgmHandle, fieldId, policyId, DCGM_POLICY_SR_ENABLE);
+}
+
+/*****************************************************************************/
+static dcgmReturn_t tsapiEnginePolicyDisable(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId)
+{
+    return SendPolicyStateCommand(pDcgmHandle, fieldId, policyId, DCGM_POLICY_SR_DISABLE);
+}
+
+/*****************************************************************************/
+static dcgmReturn_t tsapiEnginePolicyGetOne(dcgmHandle_t pDcgmHandle,
+                                            unsigned short fieldId,
+                                            uint64_t policyId,
+                                            dcgmPolicyInfo_t *policy)
+{
+    if (policy == nullptr || policy->version != dcgmPolicyInfo_version)
+    {
+        return policy == nullptr ? DCGM_ST_BADPARAM : DCGM_ST_VER_MISMATCH;
+    }
+
+    dcgm_policy_msg_get_one_t msg = {};
+    msg.header.length             = sizeof(msg);
+    msg.header.moduleId           = DcgmModuleIdPolicy;
+    msg.header.subCommand         = DCGM_POLICY_SR_GET_ONE;
+    msg.header.version            = dcgm_policy_msg_get_one_version;
+    msg.fieldId                   = fieldId;
+    msg.policyId                  = policyId;
+    msg.policy.version            = policy->version;
+
+    auto ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+    if (ret == DCGM_ST_OK)
+    {
+        *policy = msg.policy;
+    }
+    return ret;
+}
+
+/*****************************************************************************/
+static dcgmReturn_t tsapiEnginePolicyGetAll(dcgmHandle_t pDcgmHandle, dcgmPolicyInfo_t *policies, unsigned int *count)
+{
+    if (count == nullptr || (*count > 0 && policies == nullptr))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    for (unsigned int i = 0; i < *count; ++i)
+    {
+        if (policies[i].version != dcgmPolicyInfo_version)
+        {
+            return DCGM_ST_VER_MISMATCH;
+        }
+    }
+
+    auto const outputCapacity   = *count;
+    unsigned int copied         = 0;
+    unsigned int totalCount     = 0;
+    uint64_t startAfterPolicyId = 0;
+    dcgmReturn_t ret            = DCGM_ST_OK;
+
+    do
+    {
+        auto msg                = std::make_unique<dcgm_policy_msg_get_all_t>();
+        msg->header.length      = sizeof(*msg);
+        msg->header.moduleId    = DcgmModuleIdPolicy;
+        msg->header.subCommand  = DCGM_POLICY_SR_GET_ALL;
+        msg->header.version     = dcgm_policy_msg_get_all_version;
+        msg->startAfterPolicyId = startAfterPolicyId;
+        msg->capacity           = std::min<unsigned int>(outputCapacity - copied, DCGM_POLICY_GET_ALL_PAGE);
+
+        ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg->header, sizeof(*msg));
+        if (ret != DCGM_ST_OK && ret != DCGM_ST_INSUFFICIENT_SIZE)
+        {
+            return ret;
+        }
+
+        totalCount        = msg->totalCount;
+        auto const toCopy = std::min<unsigned int>(outputCapacity - copied, msg->returnedCount);
+        if (policies != nullptr && toCopy > 0)
+        {
+            std::copy_n(msg->policies, toCopy, policies + copied);
+        }
+        copied += toCopy;
+
+        if (msg->returnedCount == 0 || ret == DCGM_ST_OK)
+        {
+            break;
+        }
+        startAfterPolicyId = msg->policies[msg->returnedCount - 1].policyId;
+    } while (copied < outputCapacity);
+
+    *count = totalCount;
+    if (totalCount > outputCapacity)
+    {
+        return DCGM_ST_INSUFFICIENT_SIZE;
+    }
+    return ret;
+}
+
+/*****************************************************************************/
+static dcgmReturn_t tsapiEnginePolicyImport(dcgmHandle_t pDcgmHandle, const char *path)
+{
+    if (path == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgm_policy_msg_import_t msg = {};
+    msg.header.length            = sizeof(msg);
+    msg.header.moduleId          = DcgmModuleIdPolicy;
+    msg.header.subCommand        = DCGM_POLICY_SR_IMPORT;
+    msg.header.version           = dcgm_policy_msg_import_version;
+    auto const pathLength        = strnlen(path, DCGM_POLICY_MAX_PATH + 1);
+    if (pathLength == 0 || pathLength > DCGM_POLICY_MAX_PATH)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+    msg.pathLength = static_cast<unsigned int>(pathLength);
+    std::memcpy(msg.path, path, pathLength);
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+}
+
+static dcgmReturn_t tsapiEnginePolicyGetViolations(dcgmHandle_t pDcgmHandle,
+                                                   int64_t sinceTimestamp,
+                                                   dcgm_policy_violation_t *violations,
+                                                   unsigned int *count)
+{
+    if (count == nullptr || (*count > 0 && violations == nullptr))
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    dcgm_policy_msg_get_violations_t msg = {};
+    msg.header.length                    = sizeof(msg);
+    msg.header.moduleId                  = DcgmModuleIdPolicy;
+    msg.header.subCommand                = DCGM_POLICY_SR_GET_VIOLATIONS;
+    msg.header.version                   = dcgm_policy_msg_get_violations_version;
+    msg.sinceTimestamp                   = sinceTimestamp;
+    msg.count                            = std::min<unsigned int>(*count, DCGM_POLICY_MAX_VIOLATIONS);
+
+    auto ret = dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
+    if (ret == DCGM_ST_OK || ret == DCGM_ST_INSUFFICIENT_SIZE)
+    {
+        auto const capacity = *count;
+        auto const toCopy   = std::min(capacity, std::min<unsigned int>(msg.count, DCGM_POLICY_MAX_VIOLATIONS));
+        *count              = msg.count;
+        if (violations != nullptr)
+        {
+            std::copy_n(msg.violations, toCopy, violations);
+        }
+    }
+    return ret;
+}
+
+static dcgmReturn_t tsapiEnginePolicyRegister_v3(dcgmHandle_t pDcgmHandle,
+                                                 unsigned short fieldId,
+                                                 uint64_t policyId,
+                                                 fpRecvPolicyViolation callback,
+                                                 uint64_t userData)
+{
+    if (callback == nullptr)
+    {
+        return DCGM_ST_BADPARAM;
+    }
+
+    auto policyRequest = std::make_unique<DcgmPolicyViolationRequest>(callback, userData);
+
+    dcgm_policy_msg_register_callback_t msg = {};
+    msg.header.length                       = sizeof(msg);
+    msg.header.moduleId                     = DcgmModuleIdPolicy;
+    msg.header.subCommand                   = DCGM_POLICY_SR_REGISTER_CALLBACK;
+    msg.header.version                      = dcgm_policy_msg_register_callback_version;
+    msg.fieldId                             = fieldId;
+    msg.policyId                            = policyId;
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg), std::move(policyRequest));
+}
+
+static dcgmReturn_t tsapiEnginePolicyUnregister_v3(dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId)
+{
+    dcgm_policy_msg_unregister_callback_t msg = {};
+    msg.header.length                         = sizeof(msg);
+    msg.header.moduleId                       = DcgmModuleIdPolicy;
+    msg.header.subCommand                     = DCGM_POLICY_SR_UNREGISTER_CALLBACK;
+    msg.header.version                        = dcgm_policy_msg_unregister_callback_version;
+    msg.fieldId                               = fieldId;
+    msg.policyId                              = policyId;
+
+    return dcgmModuleSendBlockingFixedRequest(pDcgmHandle, &msg.header, sizeof(msg));
 }
 
 /*****************************************************************************/
@@ -3285,7 +3616,68 @@ uid_t helperGetEffectiveUid()
     return eUid;
 }
 
-dcgmReturn_t helperRunMnDiag(dcgmHandle_t dcgmHandle, dcgmRunMnDiag_v1 const *drmnd, dcgmMnDiagResponse_v1 *response)
+void UpgradeMnDiagParams_v1_to_v2(dcgmRunMnDiag_v2 &dst, dcgmRunMnDiag_v1 const &src)
+{
+    memset(&dst, 0, sizeof(dst));
+    dst.version = dcgmRunMnDiag_version2;
+    for (int i = 0; i < DCGM_MAX_NUM_HOSTS; i++)
+    {
+        memcpy(dst.hostList[i], src.hostList[i], DCGM_MAX_STR_LENGTH);
+    }
+    memcpy(dst.testName, src.testName, DCGM_MAX_STR_LENGTH);
+    memcpy(dst.testParms, src.testParms, sizeof(src.testParms));
+}
+
+void DowngradeMnDiagResponse_v2_to_v1(dcgmMnDiagResponse_v1 &dst, dcgmMnDiagResponse_v2 const &src)
+{
+    memset(&dst, 0, sizeof(dst));
+    dst.version = dcgmMnDiagResponse_version1;
+    dst.numHosts
+        = static_cast<unsigned char>(std::min<unsigned short>(src.numHosts, DCGM_MN_DIAG_RESPONSE_HOSTS_MAX_V1));
+    dst.numTests    = src.numTests;
+    dst.numErrors   = src.numErrors;
+    dst.numInfos    = src.numInfos;
+    dst.numEntities = std::min<unsigned short>(src.numEntities, DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1);
+    dst.numResults  = std::min<unsigned short>(src.numResults, DCGM_MN_DIAG_RESPONSE_RESULTS_MAX_V1);
+
+    for (unsigned i = 0; i < dst.numHosts; i++)
+    {
+        dst.hosts[i] = src.hosts[i];
+    }
+
+    for (unsigned i = 0; i < DCGM_MN_DIAG_RESPONSE_TESTS_MAX; i++)
+    {
+        auto const &s = src.tests[i];
+        auto &d       = dst.tests[i];
+        memcpy(d.name, s.name, sizeof(d.name));
+        memcpy(d.pluginName, s.pluginName, sizeof(d.pluginName));
+        d.result        = s.result;
+        d.numErrors     = s.numErrors;
+        d.numInfo       = s.numInfo;
+        d.categoryIndex = s.categoryIndex;
+        d.numResults    = std::min<unsigned short>(s.numResults, DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1);
+        memcpy(d.errorIndices, s.errorIndices, sizeof(d.errorIndices));
+        memcpy(d.infoIndices, s.infoIndices, sizeof(d.infoIndices));
+        unsigned short numToCopy = std::min<unsigned short>(s.numResults, DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1);
+        memcpy(d.resultIndices, s.resultIndices, numToCopy * sizeof(unsigned short));
+        d.auxData = s.auxData;
+    }
+
+    for (unsigned short i = 0; i < dst.numEntities; i++)
+    {
+        dst.entities[i] = src.entities[i];
+    }
+
+    memcpy(dst.errors, src.errors, sizeof(dst.errors));
+    memcpy(dst.info, src.info, sizeof(dst.info));
+
+    for (unsigned short i = 0; i < dst.numResults; i++)
+    {
+        dst.results[i] = src.results[i];
+    }
+}
+
+dcgmReturn_t helperRunMnDiag(dcgmHandle_t dcgmHandle, dcgmRunMnDiag_v2 const *drmnd, dcgmMnDiagResponse_v2 *response)
 {
     if (!drmnd || !response)
     {
@@ -3293,24 +3685,46 @@ dcgmReturn_t helperRunMnDiag(dcgmHandle_t dcgmHandle, dcgmRunMnDiag_v1 const *dr
         return DCGM_ST_BADPARAM;
     }
 
-    std::unique_ptr<dcgm_mndiag_msg_run_v1> msg = std::make_unique<dcgm_mndiag_msg_run_v1>();
+    unsigned int callerResponseVersion = response->version;
+    unsigned int callerParamsVersion   = drmnd->version;
+
+    // Cross-validate: params and response versions must belong to the same generation.
+    // A v1 caller must pass v1 params with v1 response; a v2 caller must pass v2 with v2.
+    // Mismatched versions would cause buffer overflows (e.g., memcpy of sizeof(v2) from a v1-sized allocation).
+    if ((callerParamsVersion == dcgmRunMnDiag_version2 && callerResponseVersion != dcgmMnDiagResponse_version2)
+        || (callerParamsVersion == dcgmRunMnDiag_version1 && callerResponseVersion != dcgmMnDiagResponse_version1))
+    {
+        log_error("Mismatched mnDiag params version 0x{:X} and response version 0x{:X}",
+                  callerParamsVersion,
+                  callerResponseVersion);
+        return DCGM_ST_VER_MISMATCH;
+    }
+
+    std::unique_ptr<dcgm_mndiag_msg_run_v2> msg = std::make_unique<dcgm_mndiag_msg_run_v2>();
     dcgmReturn_t dcgmReturn { DCGM_ST_OK };
 
     memset(msg.get(), 0, sizeof(*msg));
     msg->header.length     = sizeof(*msg);
-    msg->header.version    = dcgm_mndiag_msg_run_version1;
+    msg->header.version    = dcgm_mndiag_msg_run_version2;
     msg->header.moduleId   = DcgmModuleIdMnDiag;
     msg->header.subCommand = DCGM_MNDIAG_SR_RUN;
 
-    switch (response->version)
+    switch (callerResponseVersion)
     {
-        case dcgmMnDiagResponse_version1:
-            memcpy(&msg->params, drmnd, sizeof(dcgmRunMnDiag_v1));
-            memcpy(&msg->response, response, sizeof(dcgmMnDiagResponse_v1));
+        case dcgmMnDiagResponse_version2:
+            memcpy(&msg->params, drmnd, sizeof(dcgmRunMnDiag_v2));
+            msg->response.version = dcgmMnDiagResponse_version2;
             break;
+        case dcgmMnDiagResponse_version1:
+        {
+            auto const *v1Params = reinterpret_cast<dcgmRunMnDiag_v1 const *>(drmnd);
+            UpgradeMnDiagParams_v1_to_v2(msg->params, *v1Params);
+            msg->response.version = dcgmMnDiagResponse_version2;
+            break;
+        }
         default:
-            log_error("Unexpected response->version 0x{:X}", response->version);
-            return DCGM_ST_GENERIC_ERROR;
+            log_error("Unexpected response->version 0x{:X}", callerResponseVersion);
+            return DCGM_ST_VER_MISMATCH;
     }
 
     // Populate the effective uid of the caller
@@ -3321,14 +3735,20 @@ dcgmReturn_t helperRunMnDiag(dcgmHandle_t dcgmHandle, dcgmRunMnDiag_v1 const *dr
     dcgmReturn
         = dcgmModuleSendBlockingFixedRequest(dcgmHandle, &msg->header, sizeof(*msg), nullptr, TWENTY_FOUR_HOURS_IN_MS);
 
-    switch (response->version)
+    switch (callerResponseVersion)
     {
-        case dcgmMnDiagResponse_version1:
-            memcpy(response, &msg->response, sizeof(dcgmMnDiagResponse_v1));
+        case dcgmMnDiagResponse_version2:
+            memcpy(response, &msg->response, sizeof(dcgmMnDiagResponse_v2));
             break;
+        case dcgmMnDiagResponse_version1:
+        {
+            auto *v1Response = reinterpret_cast<dcgmMnDiagResponse_v1 *>(response);
+            DowngradeMnDiagResponse_v2_to_v1(*v1Response, msg->response);
+            break;
+        }
         default:
-            log_error("Unexpected response->version 0x{:X}", response->version);
-            return DCGM_ST_GENERIC_ERROR;
+            log_error("Unexpected response->version 0x{:X}", callerResponseVersion);
+            return DCGM_ST_VER_MISMATCH;
     }
 
     return dcgmReturn;
@@ -4545,8 +4965,8 @@ static dcgmReturn_t tsapiEngineStopDiagnostic(dcgmHandle_t pDcgmHandle)
 }
 
 static dcgmReturn_t tsapiEngineRunMnDiagnostic(dcgmHandle_t pDcgmHandle,
-                                               dcgmRunMnDiag_v1 const *drmnd,
-                                               dcgmMnDiagResponse_v1 *response)
+                                               dcgmRunMnDiag_v2 const *drmnd,
+                                               dcgmMnDiagResponse_v2 *response)
 {
     return helperRunMnDiag(pDcgmHandle, drmnd, response);
 }
@@ -4559,13 +4979,13 @@ static dcgmReturn_t helperMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultino
     }
 
     // Version incompatibility is not supported between the head node and the remote nodes
-    if (pRequest->version != dcgmMultinodeRequest_version2)
+    if (pRequest->version != dcgmMultinodeRequest_version3)
     {
         return DCGM_ST_VER_MISMATCH;
     }
 
     // At this time, only mnubergemm is supported
-    if (pRequest->testType != mnubergemm)
+    if (pRequest->testType != mnubergemm && pRequest->testType != nvloom && pRequest->testType != mnnvbandwidth)
     {
         log_error("Invalid test type {}", (int)pRequest->testType);
         return DCGM_ST_BADPARAM;
@@ -4575,7 +4995,7 @@ static dcgmReturn_t helperMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultino
     std::unique_ptr<dcgm_mndiag_msg_resource_v1> resourceMsg;
     std::unique_ptr<dcgm_mndiag_msg_authorization_v1> authorizationMsg;
     std::unique_ptr<dcgm_mndiag_msg_run_params_v2> runParamsMsg;
-    std::unique_ptr<dcgm_mndiag_msg_node_info_v1> nodeInfoMsg;
+    std::unique_ptr<dcgm_mndiag_msg_node_info_v2> nodeInfoMsg;
 
     auto initResourceMsg = [&resourceMsg, &pRequest](unsigned int subCommand) {
         resourceMsg = std::make_unique<dcgm_mndiag_msg_resource_v1>();
@@ -4610,10 +5030,10 @@ static dcgmReturn_t helperMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultino
     };
 
     auto initNodeInfoMsg = [&nodeInfoMsg, &pRequest](unsigned int subCommand) {
-        nodeInfoMsg = std::make_unique<dcgm_mndiag_msg_node_info_v1>();
+        nodeInfoMsg = std::make_unique<dcgm_mndiag_msg_node_info_v2>();
         memset(nodeInfoMsg.get(), 0, sizeof(*nodeInfoMsg));
         nodeInfoMsg->header.length     = sizeof(*nodeInfoMsg);
-        nodeInfoMsg->header.version    = dcgm_mndiag_msg_node_info_version1;
+        nodeInfoMsg->header.version    = dcgm_mndiag_msg_node_info_version2;
         nodeInfoMsg->header.moduleId   = DcgmModuleIdMnDiag;
         nodeInfoMsg->header.subCommand = subCommand;
     };

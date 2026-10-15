@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "MigTestsHelper.hpp"
+#include <MigHierarchyUtils.hpp>
 
 #include <DcgmVariantHelper.hpp>
 #include <EntityListHelpers.h>
@@ -280,7 +280,7 @@ TEST_CASE("Topological Sort")
     SECTION("4GPU_4_GI_2_CI")
     {
         memset(&h, 0, sizeof(h));
-        h = Create_4GPU_4_GI_2_CI();
+        h = MigHierarchyUtils::Create_4GPU_4_GI_2_CI();
 
         std::shuffle(&h.entityList[0], &h.entityList[h.count], mt);
 
@@ -374,7 +374,7 @@ static DcgmNs::ParseResult FromHierarchyInfo(dcgmMigHierarchyInfo_v2 const &info
 
 TEST_CASE("EntityMap lookup")
 {
-    auto hierarchy = CreateLifeLikeData();
+    auto hierarchy = MigHierarchyUtils::CreateLifeLikeData();
     DcgmNs::TopologicalSort(hierarchy);
 
     DcgmNs::EntityMap entityList;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 #pragma once
-#include <chrono>
 #include <cstdint>
+#include <fmt/chrono.h> // includes <chrono>
+#include <string>
 
 
 namespace DcgmNs::Timelib
@@ -53,6 +54,21 @@ template <typename TChronoResult>
 [[nodiscard]] inline constexpr std::int64_t ToLegacyTimestamp(std::chrono::system_clock::time_point value)
 {
     return std::chrono::duration_cast<std::chrono::microseconds>(value.time_since_epoch()).count();
+}
+
+/**
+ * Formats a legacy microsecond timestamp as an ISO 8601 UTC string.
+ *
+ * @param[in] timestampUsec Microseconds since epoch.
+ * @return ISO 8601 formatted string (e.g., "2026-03-04T12:00:00.000000Z").
+ */
+[[nodiscard]] inline std::string FormatTimestampIso(std::int64_t timestampUsec)
+{
+    auto const timestamp = std::chrono::microseconds(timestampUsec);
+    auto const seconds   = std::chrono::floor<std::chrono::seconds>(timestamp);
+    auto const fraction  = std::chrono::duration_cast<std::chrono::microseconds>(timestamp - seconds).count();
+
+    return fmt::format("{:%Y-%m-%dT%H:%M:%S}.{:06}Z", std::chrono::sys_time<std::chrono::seconds>(seconds), fraction);
 }
 
 } // namespace DcgmNs::Timelib

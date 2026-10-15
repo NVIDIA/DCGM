@@ -18,19 +18,30 @@
 #include <catch2/matchers/catch_matchers_exception.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <MockDcgmOps.h>
 #include <NvvsDeviceList.h>
 
 #include <DcgmError.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <Plugin.h>
 #include <dcgm_structs.h>
 
 class UnitTestPlugin : public Plugin
 {
+public:
+    explicit UnitTestPlugin(DcgmNs::DcgmOpsAnyUniquePtr dcgmOps)
+        : Plugin(dcgmOps.AsAnyPtr())
+        , m_dcgmOpsUnique(std::move(dcgmOps))
+    {}
+
     void Go(std::string const & /* testName */,
             dcgmDiagPluginEntityList_v1 const * /* entityInfo */,
             unsigned int /* numParameters */,
             dcgmDiagPluginTestParameter_t const * /* testParameters */) override
     {}
+
+private:
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique;
 };
 
 class NvvsDeviceMock : public NvvsDeviceBase
@@ -64,8 +75,8 @@ private:
 class NvvsDeviceListTest : public NvvsDeviceList
 {
 public:
-    explicit NvvsDeviceListTest(Plugin *plugin)
-        : NvvsDeviceList(plugin)
+    NvvsDeviceListTest(Plugin *plugin, DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle)
+        : NvvsDeviceList(plugin, dcgmOps, handle)
     {}
 
     void AddMockedDevice(std::string const &testName, unsigned int gpuId, int restoreResult = 1)
@@ -76,10 +87,25 @@ public:
     }
 };
 
-TEST_CASE("NvvsDeviceList: RestoreState, negative test for DCGM_FR_HAD_TO_RESTORE_STATE")
+struct NvvsDeviceListTestFixture
 {
+    NvvsDeviceListTestFixture()
+        : mockDcgmOpsUnique(std::make_unique<DcgmNs::MockDcgmOps>())
+        , mockDcgmOps(mockDcgmOpsUnique.get())
+        , dcgmOps(mockDcgmOps)
+        , plugin(std::move(mockDcgmOpsUnique))
+    {}
+
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique;
+    DcgmNs::MockDcgmOps *mockDcgmOps;
+    DcgmNs::DcgmOpsAnyPtr dcgmOps;
     UnitTestPlugin plugin;
-    NvvsDeviceListTest ndl(&plugin);
+};
+
+TEST_CASE_METHOD(NvvsDeviceListTestFixture,
+                 "NvvsDeviceList: RestoreState, negative test for DCGM_FR_HAD_TO_RESTORE_STATE")
+{
+    NvvsDeviceListTest ndl(&plugin, dcgmOps, mockDcgmOps->m_handleId);
 
     std::string testName = "NvvsDeviceList_Negative_Test";
 
@@ -139,13 +165,13 @@ TEST_CASE("NvvsDeviceList: RestoreState, negative test for DCGM_FR_HAD_TO_RESTOR
     REQUIRE(count == 1);
 }
 
-TEST_CASE("NvvsDeviceList: RestoreState and reporting edge cases")
+TEST_CASE_METHOD(NvvsDeviceListTestFixture, "NvvsDeviceList: RestoreState and reporting edge cases")
 {
     std::string const testName = "NvvsDeviceList_Edge_Test";
 
     SECTION("RestoreState ignores changed devices when failOnRestore is false")
     {
-        NvvsDeviceListTest ndl(nullptr);
+        NvvsDeviceListTest ndl(nullptr, dcgmOps, mockDcgmOps->m_handleId);
         ndl.AddMockedDevice(testName, 0, 1);
         ndl.AddMockedDevice(testName, 1, 0);
 
@@ -154,7 +180,7 @@ TEST_CASE("NvvsDeviceList: RestoreState and reporting edge cases")
 
     SECTION("RestoreState succeeds when no device changed")
     {
-        NvvsDeviceListTest ndl(nullptr);
+        NvvsDeviceListTest ndl(nullptr, dcgmOps, mockDcgmOps->m_handleId);
         ndl.AddMockedDevice(testName, 0, 0);
 
         REQUIRE(ndl.RestoreState(testName, true) == 0);
@@ -162,7 +188,7 @@ TEST_CASE("NvvsDeviceList: RestoreState and reporting edge cases")
 
     SECTION("Init rejects repeated initialization")
     {
-        NvvsDeviceListTest ndl(nullptr);
+        NvvsDeviceListTest ndl(nullptr, dcgmOps, mockDcgmOps->m_handleId);
         ndl.AddMockedDevice(testName, 0, 0);
 
         REQUIRE(ndl.Init(testName, { 1 }) == -1);
@@ -170,7 +196,7 @@ TEST_CASE("NvvsDeviceList: RestoreState and reporting edge cases")
 
     SECTION("RecordWarning without plugin throws only when requested")
     {
-        NvvsDeviceList ndl(nullptr);
+        NvvsDeviceList ndl(nullptr, dcgmOps, mockDcgmOps->m_handleId);
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "warning");
 
@@ -182,8 +208,7 @@ TEST_CASE("NvvsDeviceList: RestoreState and reporting edge cases")
 
     SECTION("RecordInfo and RecordWarning forward to plugin")
     {
-        UnitTestPlugin plugin;
-        NvvsDeviceList ndl(&plugin);
+        NvvsDeviceList ndl(&plugin, dcgmOps, mockDcgmOps->m_handleId);
 
         auto entityList                = std::make_unique<dcgmDiagPluginEntityList_v1>();
         entityList->numEntities        = 1;
@@ -202,20 +227,20 @@ TEST_CASE("NvvsDeviceList: RestoreState and reporting edge cases")
     }
 }
 
-TEST_CASE("NvvsDevice: constructor defaults and warning behavior")
+TEST_CASE_METHOD(NvvsDeviceListTestFixture, "NvvsDevice: constructor defaults and warning behavior")
 {
     std::string const testName = "NvvsDevice_Edge_Test";
 
     SECTION("constructor starts with invalid GPU id")
     {
-        NvvsDevice device(nullptr);
+        NvvsDevice device(nullptr, dcgmOps, mockDcgmOps->m_handleId);
         REQUIRE(device.GetGpuId() == 0xFFFFFFFF);
         REQUIRE(device.GetPlugin() == nullptr);
     }
 
     SECTION("RecordWarning without plugin throws only when requested")
     {
-        NvvsDevice device(nullptr);
+        NvvsDevice device(nullptr, dcgmOps, mockDcgmOps->m_handleId);
         DcgmError d { DcgmError::GpuIdTag::Unknown };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_INTERNAL, d, "device warning");
 

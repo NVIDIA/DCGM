@@ -61,6 +61,7 @@ RUN --mount=type=bind,source=requirements.txt,target=/tmp/requirements.txt \
         file \
         gettext \
         graphviz \
+        libcurl4-openssl-dev \
         libedit-dev \
         libssl-dev \
         make \
@@ -71,10 +72,7 @@ RUN --mount=type=bind,source=requirements.txt,target=/tmp/requirements.txt \
         pylint \
         python3 \
         python3-dev \
-        python3-distro \
-        python3-pathspec \
         python3-pip \
-        python3-requests \
         qemu-system-arm \
         qemu-user \
         rpm \

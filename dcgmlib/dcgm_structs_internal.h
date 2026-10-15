@@ -468,7 +468,7 @@ typedef dcgmRunDiag_v10 dcgmRunDiag_t;
 /**
  * Latest version for \ref dcgmRunDiag_t
  */
-#define dcgmRunMnDiag_version dcgmRunMnDiag_version1
+#define dcgmRunMnDiag_version dcgmRunMnDiag_version2
 
 /**
  * Version 1 of dcgmCreateGroup_t
@@ -1271,6 +1271,9 @@ DCGM_CASSERT(dcgmMnDiagError_version1 == (long)0x100021C, 1);
 DCGM_CASSERT(dcgmMnDiagInfo_version1 == (long)0x1000210, 1);
 DCGM_CASSERT(dcgmMnDiagEntityResult_version1 == (long)0x1000014, 1);
 DCGM_CASSERT(dcgmMnDiagResponse_version1 == (long)0x1087BE0, 1);
+DCGM_CASSERT(dcgmMnDiagTestRun_version2 == (long)0x20050F0, 1);
+DCGM_CASSERT(dcgmRunMnDiag_version2 == (long)0x203DB2C, 1);
+DCGM_CASSERT(dcgmMnDiagResponse_version2 == (long)0x239D350, 1);
 DCGM_CASSERT(dcgmChildProcessParams_version1 == (long)0x01000040, 1);
 DCGM_CASSERT(dcgmChildProcessStatus_version1 == (long)0x01000014, 1);
 DCGM_CASSERT(dcgmLink_version1 == (long)0x01000004, 1);

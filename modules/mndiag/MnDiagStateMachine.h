@@ -139,12 +139,14 @@ public:
     /**
      * Set the time to run for the diagnostic
      *
-     * @param timeout The timeout for the process execution
+     * @param timeoutInSeconds The timeout for the process execution.
+     * @param keepReserved Keep resources reserved for the same duration while no process is detected.
      */
-    void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds)
+    void SetProcessExecutionTimeout(std::chrono::seconds timeoutInSeconds, bool keepReserved = false)
     {
-        constexpr std::chrono::seconds STARTUP_LATENCY = std::chrono::seconds(60);
-        m_processExecutionTimeout                      = std::chrono::milliseconds(timeoutInSeconds + STARTUP_LATENCY);
+        DcgmLockGuard lg(&m_mutex);
+        m_processExecutionTimeout = std::chrono::milliseconds(timeoutInSeconds + TimeoutValues::STARTUP_LATENCY);
+        m_reservationTimeout      = keepReserved ? m_processExecutionTimeout : m_baselineReservationTimeout;
         log_debug("Set StateMachine's process execution timeout to {} seconds",
                   std::chrono::duration_cast<std::chrono::seconds>(m_processExecutionTimeout).count());
     }
@@ -257,7 +259,8 @@ private:
     std::chrono::steady_clock::time_point m_reservationTime;      // Time the reservation was made
     std::chrono::steady_clock::time_point m_processDetectionTime; // Time the process was detected
 
-    std::chrono::milliseconds m_reservationTimeout { TimeoutValues::RESERVATION_TIMEOUT_MS };
+    std::chrono::milliseconds const m_baselineReservationTimeout;
+    std::chrono::milliseconds m_reservationTimeout;
     std::chrono::milliseconds m_processExecutionTimeout { TimeoutValues::PROCESS_EXECUTION_TIMEOUT_MS };
 
     std::string m_expectedBinaryPath;

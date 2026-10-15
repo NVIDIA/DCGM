@@ -15,6 +15,8 @@
 import os
 
 
+# NO HARDWARE
+
 def test_ptx_version():
     cu_dir = []
     ptx_files = []

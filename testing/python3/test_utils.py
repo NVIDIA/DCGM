@@ -47,6 +47,7 @@ import dcgm_fields
 import dcgm_structs
 import dcgm_structs_internal
 import dcgmvalue
+import fast_run_utils
 import nvidia_smi_utils
 import pydcgm
 import test_compile
@@ -68,99 +69,6 @@ g_dcgmCurrentSkusEnv = None
 DIAG_SMALL_FB_MODE_VAR = '__DCGM_DIAG_SMALL_FB_MODE'
 smallFbModeEnv = {DIAG_SMALL_FB_MODE_VAR: '1'}
 
-# Create a tuple with method reference, and keyword dictionary specific
-# for the method. The method should be called with global keywords
-# passed to tests as well as the method-specific keyword list. We can't
-# combine the two because we can't add unexpected keywords to a keyword
-# argument list for the test.
-#
-#
-# The start method of all registered objects will be called before the first
-# test under a decorator amortized over multiple tests.
-#
-# The reset methods of all registered objects will be called after each test
-# under a decorator amortized over multiple tests.
-#
-
-
-class FastRunAmortizedMethod:
-    def __init__(self, name, item, kwargs):
-        self.item = item
-        self.kwargs = kwargs
-        self.refCount = 1
-
-# This is the base class for classes with start, and/or reset methods, to be
-# called at the start of all tests with a decorator sequence amortized across
-# them (start), and after each test (reset). By default, these methods do
-# nothing here, but are intended to be overridden in the derived class. It is
-# possible that only one actually has to be implemented (typically reset).
-#
-# Such classes serve to manage resources that may be created by tests and
-# left dangling at the end of the test, leaving behind state (for example, in
-# the hostengine process) that would break further tests under the same
-# amortized decorator sequence.
-
-
-class FastRunStateManager:
-    def __init__(self):
-        pass
-
-    # Call before any tests under a sequence of amortized decorators.
-    def start(self, kwargs, itemKwargs):
-        pass
-
-    # Call after each test under a sequence of amortized decorators,
-    def reset(self, kwargs, itemKwargs):
-        pass
-
-
-class FastRunManagerCollection:
-    items = {}
-
-    # Add a state manager.
-    @classmethod
-    def Add(cls, name, item, kwargs):
-        logger.debug(f"Adding {name} to FastRunManagerCollection.")
-        if name in cls.items:
-            cls.items[name].refCount += 1
-        else:
-            cls.items[name] = FastRunAmortizedMethod(name, item, kwargs)
-
-    # Delete a state manager.
-    @classmethod
-    def Del(cls, name):
-        if name in cls.items:
-            logger.debug(f"Removing {name} from FastRunManagerCollection.")
-            cls.items[name].refCount -= 1
-
-            if cls.items[name].refCount == 0:
-                del cls.items[name]
-
-    # Call start methods.
-    @classmethod
-    def Start(cls, kwargs):
-        for name, item in cls.items.items():
-            if item and item.item:
-                logger.debug(f"FastRunManagerCollection starting {name}.")
-                item.item.start(kwargs, item.kwargs)
-
-    # Call reset methods.
-    @classmethod
-    def Reset(cls, kwargs):
-        for name, item in cls.items.items():
-            if item and item.item:
-                logger.debug(f"FastRunManagerCollection resetting {name}.")
-                item.item.reset(kwargs, item.kwargs)
-
-# This should be called if an amortized decorator throws an exception.
-# All decorators should cleanup after themselves in that case.
-    @classmethod
-    def Clear(cls):
-        del cls.items
-        cls.items = {}
-
-
-fast_run_manager_collection = FastRunManagerCollection()
 
 # This class has start and reset methods to capture the state of the hostengine
 # modules that are loaded so they can be restored to the state set by
@@ -168,7 +76,7 @@ fast_run_manager_collection = FastRunManagerCollection()
 #
 
 
-class HostengineModuleManager(FastRunStateManager):
+class HostengineModuleManager(fast_run_utils.StateManager):
     def __init__(self, kwargs):
         self.moduleMask = 0
 
@@ -1134,6 +1042,13 @@ class RunAsRoot(_RunAsUser):
     @classmethod
     def is_supported(cls, skip_if_not_supported=False):
         if utils.is_root():
+            if (option_parser.options.no_hw
+                    and utils.is_root_in_user_namespace()):
+                if skip_if_not_supported:
+                    skip_test(
+                        "Run as root user outside an unprivileged user "
+                        "namespace.")
+                return False
             return True  # if current user is root then running as root is supported
 
         if not utils.is_linux():
@@ -1553,7 +1468,7 @@ class HostengineLogLevelHandler:
             self.hostengineHandle, pydcgm.BASE_LOGGER, logger.logging_level_num)
 
 
-class RunEmbeddedHostEngine(FastRunStateManager):
+class RunEmbeddedHostEngine(fast_run_utils.StateManager):
     """
     This class is used as part of a "with" clause to start and stop an embedded host engine
     """
@@ -1634,14 +1549,14 @@ def run_with_embedded_host_engine(
                 with RunEmbeddedHostEngine(opmode=opmode, startTcpServer=startTcpServer) as hostEngine:
                     handle = hostEngine.Handle()
                     kwds['handle'] = handle
-                    FastRunManagerCollection.Add("hostengine", hostEngine, {})
+                    fast_run_utils.Managers.Add("hostengine", hostEngine, {})
                     moduleManager = HostengineModuleManager(kwds)
-                    FastRunManagerCollection.Add(
+                    fast_run_utils.Managers.Add(
                         "HostengineModuleManager", moduleManager, {})
                     fn(*args, **kwds)
             finally:
-                FastRunManagerCollection.Del("HostengineModuleManager")
-                FastRunManagerCollection.Del("hostengine")
+                fast_run_utils.Managers.Del("HostengineModuleManager")
+                fast_run_utils.Managers.Del("hostengine")
 
                 if heEnv:
                     for key in heEnv:
@@ -1732,7 +1647,7 @@ class RunStandaloneHostEngine:
         return self.nvhost_engine
 
 
-class RunClientInitShutdown(FastRunStateManager):
+class RunClientInitShutdown(fast_run_utils.StateManager):
     """
     This class is used as part of a "with" clause to initialize and shutdown the client API
     """
@@ -1910,10 +1825,10 @@ def run_with_standalone_host_engine(
                                                addressIsUnixSocket=isUnixSocket
                                                ) as connection:
                         kwds['handle'] = connection.Handle()
-                        FastRunManagerCollection.Add(
+                        fast_run_utils.Managers.Add(
                             "connection", connection, {})
                         moduleManager = HostengineModuleManager(kwds)
-                        FastRunManagerCollection.Add(
+                        fast_run_utils.Managers.Add(
                             "HostengineModuleManager", moduleManager, {})
 
                         try:
@@ -1930,9 +1845,9 @@ def run_with_standalone_host_engine(
                             connection.connect(hostengineApp)
                             kwds['handle'] = connection.Handle()
                         finally:
-                            FastRunManagerCollection.Del(
+                            fast_run_utils.Managers.Del(
                                 "HostengineModuleManager")
-                            FastRunManagerCollection.Del("connection")
+                            fast_run_utils.Managers.Del("connection")
                 else:
                     fn(*args, **kwds)
             return
@@ -1942,7 +1857,7 @@ def run_with_standalone_host_engine(
 # State reset for run_with_injection_nvml
 
 
-class RunInjectionNvmlState(FastRunStateManager):
+class RunInjectionNvmlState(fast_run_utils.StateManager):
     def reset(self, kwargs, itemKwargs):
         if 'handle' in kwargs and 'gpuIds' in kwargs:
             handle = kwargs['handle']
@@ -1967,11 +1882,11 @@ def run_with_injection_nvml():
             # This environment variable tells DCGM to load injection NVML
             os.environ[INJECTION_MODE_VAR] = 'True'
             try:
-                FastRunManagerCollection.Add(
+                fast_run_utils.Managers.Add(
                     "injectionNvml", runInjectionNvmlState, {})
                 fn(*args, **kwds)
             finally:
-                FastRunManagerCollection.Del("injectionNvml")
+                fast_run_utils.Managers.Del("injectionNvml")
                 del os.environ[INJECTION_MODE_VAR]
             return
         return wrapper
@@ -2020,12 +1935,12 @@ def run_with_current_system_injection_nvml(skuFileName):
             # This environment variable tells DCGM to load injection NVML
             os.environ[INJECTION_MODE_VAR] = 'True'
             os.environ[NVML_YAML_FILE] = skuFilePath
-            FastRunManagerCollection.Add(
+            fast_run_utils.Managers.Add(
                 "injectionNvml", runInjectionNvmlState, {})
             try:
                 fn(*args, **kwds)
             finally:
-                FastRunManagerCollection.Del("injectionNvml")
+                fast_run_utils.Managers.Del("injectionNvml")
                 del os.environ[NVML_YAML_FILE]
                 del os.environ[INJECTION_MODE_VAR]
             return
@@ -2047,12 +1962,12 @@ def run_with_injection_nvml_using_specific_sku(skuFileName: str):
             os.environ[INJECTION_MODE_VAR] = 'True'
             # This environment variable indicates the target SKU file
             os.environ[NVML_YAML_FILE] = skuFilePath
-            FastRunManagerCollection.Add(
+            fast_run_utils.Managers.Add(
                 "injectionNvml", runInjectionNvmlState, {})
             try:
                 fn(*args, **kwds)
             finally:
-                FastRunManagerCollection.Del("injectionNvml")
+                fast_run_utils.Managers.Del("injectionNvml")
                 del os.environ[NVML_YAML_FILE]
                 del os.environ[INJECTION_MODE_VAR]
             return
@@ -2301,7 +2216,7 @@ def run_clearing_gpus():
 # State reset for run_with_injection_gpus
 
 
-class RunInjectionGpusState(FastRunStateManager):
+class RunInjectionGpusState(fast_run_utils.StateManager):
     """
     This class manages Fake GPUs to be injected before tests, and between
     tests, where they may have been deleted..
@@ -2385,13 +2300,13 @@ def run_with_injection_gpus(gpuCount=1):
 
             runInjectionGpusState = RunInjectionGpusState(
                 handle, gpuIds, gpuCount, kwds)
-            FastRunManagerCollection.Add(
+            fast_run_utils.Managers.Add(
                 "injectionGpu", runInjectionGpusState, {})
 
             try:
                 fn(*args, **kwds)
             finally:
-                FastRunManagerCollection.Del("injectionGpu")
+                fast_run_utils.Managers.Del("injectionGpu")
             return
         return wrapper
 
@@ -2441,12 +2356,12 @@ def run_with_injection_gpu_instances(totalInstances=1, gpuOffset=0):
                 instanceIds.append(updated.entityList[i].entity.entityId)
 
             kwds['instanceIds'] = instanceIds
-            FastRunManagerCollection.Add(
+            fast_run_utils.Managers.Add(
                 "injectionNvml", runInjectionNvmlState, {})
             try:
                 fn(*args, **kwds)
             finally:
-                FastRunManagerCollection.Del("injectionNvml")
+                fast_run_utils.Managers.Del("injectionNvml")
             return
         return wrapper
     return decorator
@@ -2503,12 +2418,12 @@ def run_with_injection_gpu_compute_instances(totalCIs=1, giOffset=0):
                 ciIds.append(updated.entityList[i].entity.entityId)
 
             kwds['ciIds'] = ciIds
-            FastRunManagerCollection.Add(
+            fast_run_utils.Managers.Add(
                 "injectionNvml", runInjectionNvmlState, {})
             try:
                 fn(*args, **kwds)
             finally:
-                FastRunManagerCollection.Del("injectionNvml")
+                fast_run_utils.Managers.Del("injectionNvml")
             return
         return wrapper
     return decorator
@@ -2938,7 +2853,7 @@ def run_subtest(subtestFn, testDataObj=None, *args, **kwargs):
             reRunning = False
 
         if option_parser.options.fast_run:
-            FastRunManagerCollection.Reset(kwargs)
+            fast_run_utils.Managers.Reset(kwargs)
 
     # kwargs['handle'] and others can be changed by Call(kwargs) above.
     return kwargs
@@ -3230,7 +3145,7 @@ def run_only_with_all_supported_gpus():
             if not all_gpus_supported:
                 skip_test("Unsupported GPU(s) detected, skipping test")
             else:
-                if len(gpu_ids) < 1:
+                if len(gpu_ids) < 1 and not option_parser.options.no_hw:
                     skip_test(
                         "Test requires all supported GPUs. None were found, skipping test.")
                 else:
@@ -3628,7 +3543,7 @@ def run_only_on_non_mig_gpus():
     Decorator to filter GPU list to those that are MIG-enabled
 
     Uses DCGM's own GPU instance hierarchy to determine MIG state.
-    Avoids the mig_mode_helper() approach because it keys off NVML minor numbers from nvidia-smi XML, 
+    Avoids the mig_mode_helper() approach because it keys off NVML minor numbers from nvidia-smi XML,
     a different ID space that can diverge from DCGM GPU IDs.
     '''
     def decorator(fn):
@@ -3654,7 +3569,7 @@ def run_only_on_non_mig_gpus():
     return decorator
 
 
-def run_with_non_mig_cuda_visible_devices():
+def run_with_non_mig_cuda_visible_devices(requested=False):
     '''
     Decorator to temporarily set CUDA_VISIBLE_DEVICES environment variable
     for wrapped method based on GPU Ids.
@@ -3687,6 +3602,12 @@ def run_with_non_mig_cuda_visible_devices():
             os.environ['CUDA_VISIBLE_DEVICES'] = cuda_visible_devices[1:]
             logger.info("set CUDA_VISIBLE_DEVICES to %s" %
                         cuda_visible_devices[1:])
+            if requested:
+                old_requested_cuda_visible_devices = os.getenv(
+                    'REQUESTED_CUDA_VISIBLE_DEVICES')
+                os.environ['REQUESTED_CUDA_VISIBLE_DEVICES'] = cuda_visible_devices[1:]
+                logger.info("set REQUESTED_CUDA_VISIBLE_DEVICES to %s" %
+                            cuda_visible_devices[1:])
 
             try:
                 result = fn(*args, **kwds)
@@ -3697,6 +3618,13 @@ def run_with_non_mig_cuda_visible_devices():
                 else:
                     os.environ['CUDA_VISIBLE_DEVICES'] = old_cuda_visible_devices
                     logger.info("restored CUDA_VISIBLE_DEVICES")
+                if requested:
+                    if old_requested_cuda_visible_devices is None:
+                        del os.environ['REQUESTED_CUDA_VISIBLE_DEVICES']
+                        logger.info("deleted REQUESTED_CUDA_VISIBLE_DEVICES")
+                    else:
+                        os.environ['REQUESTED_CUDA_VISIBLE_DEVICES'] = old_requested_cuda_visible_devices
+                        logger.info("restored REQUESTED_CUDA_VISIBLE_DEVICES")
 
         return wrapper
     return decorator
@@ -3704,10 +3632,8 @@ def run_with_non_mig_cuda_visible_devices():
 
 def is_mig_incompatible_failure(failure_msg):
     mig_incompatible_str = "MIG configuration is incompatible with the diagnostic because it prevents access to the entire GPU."
-    pos = failure_msg.find(mig_incompatible_str)
-    # Return true if this is the end of the error string
-    return pos != -1 and pos + \
-        len(mig_incompatible_str) == len(failure_msg) - 1
+    # This message is only emitted when the diagnostic aborts because MIG prevents whole-GPU access
+    return mig_incompatible_str in failure_msg
 
 
 def diag_verify_json(jsonOutput):
@@ -3774,7 +3700,7 @@ def action_validate_wrapper(
 def run_mndiagnostic_wrapper(
         handle,
         runMnDiagInfo,
-        runMnDiagVersion=dcgm_structs.dcgmRunMnDiag_version1):
+        runMnDiagVersion=dcgm_structs.dcgmRunMnDiag_version2):
     try:
         response = dcgm_agent.dcgmRunMnDiagnostic(
             handle, runMnDiagInfo, runMnDiagVersion)
@@ -4151,7 +4077,7 @@ def with_amortized_decorators(
         do_unwrap,
         *args,
         **kwargs):
-    FastRunManagerCollection.Start(kwargs)
+    fast_run_utils.Managers.Start(kwargs)
 
     for function in functions:
         file = function[0]
@@ -4173,7 +4099,7 @@ def with_amortized_decorators(
         kwargs = run_subtest(called_function, test_data_obj, *args, **kwargs)
 
         if do_unwrap:
-            FastRunManagerCollection.Reset(kwargs)
+            fast_run_utils.Managers.Reset(kwargs)
 
 # with_amortized_exception_decorators
 #
@@ -4198,7 +4124,7 @@ def with_amortized_exception_decorators(
         do_unwrap,
         *args,
         **kwargs):
-    FastRunManagerCollection.Clear()
+    fast_run_utils.Managers.Clear()
 
     for function in functions:
         file = function[0]
@@ -4326,6 +4252,22 @@ def get_mock_mnubergemm_path():
     Returns the path to the mock mnubergemm command.
     """
     mock_path = "/tmp/mock_mnubergemm"
+    return mock_path
+
+
+def get_mock_nvloom_path():
+    """
+    Returns the path to the mock nvloom_cli command.
+    """
+    mock_path = "/tmp/mock_nvloom_cli"
+    return mock_path
+
+
+def get_mock_mnnvbandwidth_path():
+    """
+    Returns the path to the mock mnnvbandwidth command.
+    """
+    mock_path = "/tmp/mock_mnnvbandwidth"
     return mock_path
 
 
@@ -4617,6 +4559,12 @@ def run_dcgmi_command(args, timeout_seconds=250, validate=False):
     retValue = dcgmi.wait()
     if validate:
         dcgmi.validate()
+
+    # Acknowledge and skip when MIG configuration makes the diagnostic unrunnable
+    if is_mig_incompatible_failure("\n".join(dcgmi.stdout_lines)):
+        dcgmi.validate()
+        skip_test(
+            "Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
     return retValue, dcgmi.stdout_lines, dcgmi.stderr_lines
 
 

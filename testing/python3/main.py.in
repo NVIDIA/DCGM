@@ -80,19 +80,26 @@ def _summarize_tests():
     test_root = test_utils.SubTest.get_all_subtests()[0]
     tests_ok_count = test_root.stats[test_utils.SubTest.SUCCESS]
     tests_fail_count = test_root.stats[test_utils.SubTest.FAILED]
+    tests_failure_logged_count = test_root.stats[
+        test_utils.SubTest.FAILURE_LOGGED]
+    tests_failed_total = tests_fail_count + tests_failure_logged_count
     tests_waived_count = test_root.stats[test_utils.SubTest.SKIPPED]
-    tests_count = tests_ok_count + tests_fail_count
+    tests_count = tests_ok_count + tests_failed_total
 
     logger.info("\n========== TEST SUMMARY ==========\n")
     logger.info("Passed: {}".format(tests_ok_count))
     logger.info("Failed: {}".format(tests_fail_count))
+    if tests_failure_logged_count > 0:
+        logger.info("Failure logged: {}".format(tests_failure_logged_count))
     logger.info("Waived: {}".format(tests_waived_count))
     logger.info("Total:  {}".format(tests_count))
 
     tests_completed_ratio = 0.0
     if tests_count > 0.0:
-        tests_completed_ratio = float(
-            tests_ok_count) / (float(tests_count) - (float(tests_fail_count / 2)))
+        # Legacy score discounts failed tests at half weight; preserve that
+        # behavior while including failures recorded as FAILURE_LOGGED.
+        denominator = float(tests_count) - float(tests_failed_total / 2)
+        tests_completed_ratio = float(tests_ok_count) / denominator
     logger.info("Score:  %.2f" % (100.0 * tests_completed_ratio))
     logger.info("==================================\n\n")
 
@@ -101,13 +108,15 @@ def _summarize_tests():
         logger.warning("Framework encountered %d warning%s" %
                        (warnings_count, utils.plural_s(warnings_count)))
 
-    if tests_ok_count < tests_count:
+    if tests_failed_total > 0:
         logger.info()
         logger.info("Bug filing instructions:")
         logger.info(" * In bug description please include first and last error")
         logger.info(
             " * Also attach %s file (it already contains nvml trace logs, nvidia-bug report and stdout)" %
             (logger.log_archive_filename))
+
+    return tests_failed_total
 
 
 def _run_burn_in_tests():
@@ -141,6 +150,8 @@ def _run_burn_in_tests():
 
 def do_root_check_possibly_exit():
     if not option_parser.options.no_root_check:
+        if option_parser.options.no_hw:
+            return
         if not utils.is_root():
             print("The test framework must be run as root to function properly. Switch to root by running 'sudo su'.")
             sys.exit(1)
@@ -294,11 +305,18 @@ def main():
         else:
             logger.run_with_coverage(run_tests())
 
-        _summarize_tests()
+        tests_failed_total = _summarize_tests()
 
         # Runs a single iteration of burn_in_stress test
         if option_parser.options.burn:
             _run_burn_in_tests()
+
+        if (option_parser.options.fail_on_test_failure
+                and tests_failed_total > 0):
+            logger.error("Exiting with failure because %d test%s failed." %
+                         (tests_failed_total,
+                          utils.plural_s(tests_failed_total)))
+            sys.exit(1)
 
 
 if __name__ == '__main__':

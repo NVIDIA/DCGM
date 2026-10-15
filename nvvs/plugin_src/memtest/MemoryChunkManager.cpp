@@ -16,6 +16,10 @@
 #include "MemoryChunkManager.h"
 #include <algorithm>
 
+MemoryChunkManager::MemoryChunkManager(CudaOpsAnyPtr cudaOps)
+    : m_cudaOps(cudaOps)
+{}
+
 cudaError_t MemoryChunkManager::Initialize(size_t tot_num_blocks, size_t desired_chunks, bool useMappedMemory)
 {
     cudaError_t st = cudaSuccess;
@@ -63,35 +67,35 @@ cudaError_t MemoryChunkManager::Initialize(size_t tot_num_blocks, size_t desired
         if (m_useMappedMemory)
         {
             // Allocate mapped memory
-            if (st = cudaHostAlloc(&hostPtr, chunkSize, cudaHostAllocMapped); st != cudaSuccess)
+            if (st = m_cudaOps->cudaHostAlloc(&hostPtr, chunkSize, cudaHostAllocMapped); st != cudaSuccess)
             {
-                log_error("cudaHostAlloc failed: {}", cudaGetErrorString(st));
+                log_error("cudaHostAlloc failed: {}", m_cudaOps->cudaGetErrorString(st));
                 Clear();
                 return st;
             }
 
             // Get device pointer
-            if (st = cudaHostGetDevicePointer((void **)&devicePtr, hostPtr, 0); st != cudaSuccess)
+            if (st = m_cudaOps->cudaHostGetDevicePointer((void **)&devicePtr, hostPtr, 0); st != cudaSuccess)
             {
-                log_error("cudaHostGetDevicePointer failed: {}", cudaGetErrorString(st));
-                cudaFreeHost(hostPtr);
+                log_error("cudaHostGetDevicePointer failed: {}", m_cudaOps->cudaGetErrorString(st));
+                m_cudaOps->cudaFreeHost(hostPtr);
                 Clear();
                 return st;
             }
         }
         else
         {
-            if (st = cudaMalloc((void **)&devicePtr, chunkSize); st != cudaSuccess)
+            if (st = m_cudaOps->cudaMalloc((void **)&devicePtr, chunkSize); st != cudaSuccess)
             {
                 // Allocation failed - clean up and return error
-                log_error("cudaMalloc({} bytes) failed: {}", chunkSize, cudaGetErrorString(st));
+                log_error("cudaMalloc({} bytes) failed: {}", chunkSize, m_cudaOps->cudaGetErrorString(st));
                 Clear();
                 return st;
             }
         }
 
         // Create unique_ptr with custom deleter
-        CudaMemoryDeleter deleter(m_useMappedMemory, hostPtr);
+        CudaMemoryDeleter deleter(m_useMappedMemory, hostPtr, m_cudaOps);
         m_chunks.emplace_back(devicePtr, deleter);
     }
 

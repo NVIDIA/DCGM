@@ -27,6 +27,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         openmpi-bin \
         openssh-server \
         python3 \
+        python3-distro \
         python3-pip \
         python3-setuptools \
         file \
@@ -48,7 +49,7 @@ exit 0
 EOF
 
 # Setup required for SSH server
-RUN mkdir /var/run/sshd && \
+RUN mkdir -p /var/run/sshd && \
     ssh-keygen -A && \
     mkdir -p -m 700 /root/.ssh && \
     echo "/opt/dcgm/lib/" > /etc/ld.so.conf.d/dcgm.conf

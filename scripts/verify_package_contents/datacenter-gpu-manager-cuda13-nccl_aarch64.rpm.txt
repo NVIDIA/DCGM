@@ -1,0 +1,8 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libnccl.so
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libnccl.so.2
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/cuda13/lib/libnccl.so.2.30.7
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda13-nccl-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-cuda13-nccl-<BASEPACKAGEVERSION>/LICENSE

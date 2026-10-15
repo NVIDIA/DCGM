@@ -16,7 +16,10 @@
 
 #include <catch2/catch_all.hpp>
 
-#include <DcgmHostEngineHandler.h>
+#include <optional>
+
+#include "DcgmHostEngineHandlerMockHelp.h"
+#include <ScopedEnvVars.hpp>
 #include <UnitTestHelpers.h>
 
 namespace
@@ -36,13 +39,6 @@ uint32_t GetNvmlFuncCallCount(std::string_view funcName)
 }
 } // namespace
 
-class TestDcgmHostEngineHandler : public DcgmHostEngineHandler
-{
-public:
-    TestDcgmHostEngineHandler()
-        : DcgmHostEngineHandler()
-    {} // minimal DcgmHostEngineHandler to pass to DcgmNvmlSystemEventThread constructor
-};
 
 TEST_CASE("DcgmNvmlSystemEventThread: nvmlInitWithFlags logic")
 {
@@ -63,16 +59,15 @@ TEST_CASE("DcgmNvmlSystemEventThread: nvmlInitWithFlags logic")
         SKIP("YAML file " << yamlFile << " not found");
     }
 
-    unsetenv("DCGM_NVML_INIT_FLAG_NO_ATTACH");
+    ScopedEnvVars envVars("DCGM_NVML_INIT_FLAG_NO_ATTACH", std::nullopt);
     auto ret = nvmlInit_v2();
     REQUIRE(ret == NVML_SUCCESS);
     DcgmNs::Defer nvmlDefer([] { nvmlShutdown(); });
 
     if (setEnvVar)
     {
-        setenv("DCGM_NVML_INIT_FLAG_NO_ATTACH", "1", 1);
+        envVars.Add("DCGM_NVML_INIT_FLAG_NO_ATTACH", "1");
     }
-    DcgmNs::Defer envCleanup([] { unsetenv("DCGM_NVML_INIT_FLAG_NO_ATTACH"); });
 
     REQUIRE(nvmlResetFuncCallCount() == NVML_SUCCESS);
     TestDcgmHostEngineHandler handler;

@@ -16,9 +16,6 @@ if (NOT BUILD_TESTING)
     return()
 endif()
 
-add_library(common_tests_includes INTERFACE)
-target_include_directories(common_tests_includes INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
-
 add_executable(commontests)
 target_sources(commontests
     PRIVATE
@@ -32,7 +29,6 @@ target_sources(commontests
         TimeLibTests.cpp
         DcgmLogging.cpp
         EntityListHelpersTests.cpp
-        MigTestsHelper.cpp
         WildcardTests.cpp
         MigTests.cpp
         CpuHelpersTests.cpp
@@ -44,7 +40,6 @@ target_sources(commontests
         MockFileSystemOperatorTests.cpp
         DcgmChildProcessManagerTests.cpp
         UriParserTests.cpp
-        DcgmLibTests.cpp
         PermissionCheckTests.cpp
         DcgmMutexTests.cpp
         DcgmStatusTests.cpp
@@ -53,12 +48,15 @@ target_sources(commontests
         FileSystemOperatorTests.cpp
         DcgmIpcTests.cpp
         DcgmPolicyRequestTests.cpp
+        DcgmThreadTests.cpp
+        NvBandwidthOutputParserTests.cpp
+        NVBandwidthResultTests.cpp
 )
 
 target_link_libraries(commontests
     PRIVATE
         Catch2::Catch2WithMain
-        common_tests_includes
+        test-utils
         common_interface
         transport_objects
         childprocess
@@ -69,12 +67,20 @@ target_link_libraries(commontests
         sdk_nvml_essentials_objects
         sdk_nvml_interface
         sdk_nvml_loader
+        mock_dcgm_ops
         mock_common
         mock_childprocess
-        ${CMAKE_THREAD_LIBS_INIT}
+        mock_file_handle
+        nvbandwidth_common
+        serialize
+        user_credentials
+        Threads::Threads
         fmt::fmt
         rt
 )
+
+set_property(DIRECTORY APPEND PROPERTY
+    ADDITIONAL_CLEAN_FILES "${CMAKE_CURRENT_BINARY_DIR}/test_log.txt")
 
 add_executable(hangdetectworkflow_tests)
 target_sources(hangdetectworkflow_tests
@@ -91,7 +97,7 @@ target_link_libraries(hangdetectworkflow_tests
         dcgm_mutex
         dcgm_logging
         fmt::fmt
-        ${CMAKE_THREAD_LIBS_INIT}
+        Threads::Threads
         rt
         task_context_manager
 )

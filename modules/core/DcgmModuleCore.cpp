@@ -25,13 +25,23 @@
 #include <DcgmTopology.hpp>
 #include <DcgmUtilities.h>
 #include <DcgmVersion.hpp>
+#include <dcgm_fields_internal.hpp>
 #include <fmt/format.h>
+#include <utility>
 
 #include <algorithm>
 
 #ifdef INJECTION_LIBRARY_AVAILABLE
 #include <nvml_injection.h>
 #endif
+
+namespace
+{
+bool CacheManagerIsInitialized(std::optional<DcgmCacheManagerAnyPtr> const &cacheManager)
+{
+    return cacheManager.has_value() && *cacheManager != nullptr;
+}
+} // namespace
 
 template <typename MsgT>
 dcgmReturn_t DcgmModuleCore::ProcessEntitiesGetLatestValuesImpl(MsgT &msg, unsigned int versionMagic)
@@ -160,8 +170,7 @@ extern "C" dcgmReturn_t dcgm_core_process_message(DcgmModule *module, dcgm_modul
 }
 
 DcgmModuleCore::DcgmModuleCore()
-    : m_cacheManager()
-    , m_groupManager()
+    : m_groupManager()
     , m_processMsgCB(dcgm_core_process_message)
 {}
 
@@ -449,9 +458,9 @@ dcgmReturn_t DcgmModuleCore::ProcessMessage(dcgm_module_command_header_t *module
     return dcgmReturn;
 }
 
-void DcgmModuleCore::Initialize(DcgmCacheManager *cm)
+void DcgmModuleCore::Initialize(DcgmCacheManagerAnyPtr cm)
 {
-    m_cacheManager = cm;
+    m_cacheManager = std::move(cm);
 }
 
 void DcgmModuleCore::SetGroupManager(DcgmGroupManager *gm)
@@ -1523,7 +1532,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGetCacheManagerFieldInfo(dcgm_core_msg_get_c
 
 dcgmReturn_t DcgmModuleCore::ProcessEmptyCache(dcgm_core_msg_empty_cache_t &msg)
 {
-    if (m_cacheManager == nullptr)
+    if (!CacheManagerIsInitialized(m_cacheManager))
     {
         DCGM_LOG_ERROR << "m_cacheManager not initialized.";
         return DCGM_ST_UNINITIALIZED;
@@ -1621,7 +1630,7 @@ dcgmReturn_t DcgmModuleCore::ProcessUnwatchFields(dcgm_core_msg_watch_fields_t &
 
 dcgmReturn_t DcgmModuleCore::ProcessGetGpuStatus(dcgm_core_msg_get_gpu_status_t &msg)
 {
-    if (m_cacheManager == nullptr)
+    if (!CacheManagerIsInitialized(m_cacheManager))
     {
         DCGM_LOG_ERROR << "m_cacheManager not initialized.";
         return DCGM_ST_UNINITIALIZED;
@@ -1840,7 +1849,7 @@ dcgmReturn_t DcgmModuleCore::ProcessGetDeviceWorkloadPowerProfilesInfo(
 }
 
 template <typename MsgType>
-dcgmReturn_t ProcessGetNvLinkStatusImpl(DcgmCacheManager *cacheManager,
+dcgmReturn_t ProcessGetNvLinkStatusImpl(DcgmCacheManagerAnyPtr &cacheManager,
                                         MsgType &msg,
                                         unsigned int messageVersion,
                                         unsigned int linkStatusVersion)
@@ -1860,7 +1869,7 @@ dcgmReturn_t ProcessGetNvLinkStatusImpl(DcgmCacheManager *cacheManager,
         return DCGM_ST_OK;
     }
 
-    ret = cacheManager->PopulateNvLinkLinkStatus(msg.info.ls);
+    ret = cacheManager.PopulateNvLinkLinkStatus(msg.info.ls);
     if (ret != DCGM_ST_OK)
     {
         msg.info.cmdRet = ret;
@@ -1894,14 +1903,26 @@ dcgmReturn_t ProcessGetNvLinkStatusImpl(DcgmCacheManager *cacheManager,
 
 dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_v3 &msg)
 {
+    if (!CacheManagerIsInitialized(m_cacheManager))
+    {
+        log_error("m_cacheManager not initialized");
+        return DCGM_ST_UNINITIALIZED;
+    }
+
     return ProcessGetNvLinkStatusImpl(
-        m_cacheManager, msg, dcgm_core_msg_get_nvlink_status_version3, dcgmNvLinkStatus_version4);
+        *m_cacheManager, msg, dcgm_core_msg_get_nvlink_status_version3, dcgmNvLinkStatus_version4);
 }
 
 dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkStatus(dcgm_core_msg_get_nvlink_status_v4 &msg)
 {
+    if (!CacheManagerIsInitialized(m_cacheManager))
+    {
+        log_error("m_cacheManager not initialized");
+        return DCGM_ST_UNINITIALIZED;
+    }
+
     return ProcessGetNvLinkStatusImpl(
-        m_cacheManager, msg, dcgm_core_msg_get_nvlink_status_version4, dcgmNvLinkStatus_version5);
+        *m_cacheManager, msg, dcgm_core_msg_get_nvlink_status_version4, dcgmNvLinkStatus_version5);
 }
 
 dcgmReturn_t DcgmModuleCore::ProcessGetNvLinkP2PStatus(dcgm_core_msg_get_nvlink_p2p_status_t &msg)
@@ -2263,7 +2284,7 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
     mg->minorId     = 0;
     mg->numFieldIds = 0;
 
-    using SecondGroupRange = DcgmStaticRange<DCGM_FI_PROF_NVLINK_L0_TX_BYTES,
+    using SecondGroupRange = DcgmStaticRange<DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST,
                                              DCGM_FI_PROF_PEERMEM_CACHE_MISS,
                                              DCGM_PROF_MAX_FIELD_IDS_PER_GROUP_V2>;
     for (unsigned int fieldId = SecondGroupRange::start; fieldId <= SecondGroupRange::end; fieldId++)
@@ -2274,8 +2295,8 @@ dcgmReturn_t DcgmModuleCore::ProcessProfGetMetricGroups(dcgm_core_msg_get_metric
 
     /* Per-link NVLink throughput keyed by dcgm_link_t. These share the NVLink GPM metric group but
        are not contiguous with the legacy L0-L17 range above, so advertise them explicitly. */
-    mg->fieldIds[mg->numFieldIds++] = DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK;
-    mg->fieldIds[mg->numFieldIds++] = DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK;
+    mg->fieldIds[mg->numFieldIds++] = DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK_ID;
+    mg->fieldIds[mg->numFieldIds++] = DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK_ID;
 
     mg              = &msg.metricGroups.metricGroups[2]; /* Shortcut pointer */
     mg->majorId     = 2;
@@ -2682,7 +2703,7 @@ dcgmReturn_t DcgmModuleCore::ProcessSetLoggingSeverity(dcgm_core_msg_set_severit
 /*************************************************************************/
 dcgmReturn_t DcgmModuleCore::ProcessCreateMigEntity(dcgm_core_msg_create_mig_entity_t &msg)
 {
-    if (m_cacheManager == nullptr)
+    if (!CacheManagerIsInitialized(m_cacheManager))
     {
         DCGM_LOG_ERROR << "m_cacheManager not initialized";
         return DCGM_ST_UNINITIALIZED;
@@ -2701,7 +2722,7 @@ dcgmReturn_t DcgmModuleCore::ProcessCreateMigEntity(dcgm_core_msg_create_mig_ent
 /*************************************************************************/
 dcgmReturn_t DcgmModuleCore::ProcessDeleteMigEntity(dcgm_core_msg_delete_mig_entity_t &msg)
 {
-    if (m_cacheManager == nullptr)
+    if (!CacheManagerIsInitialized(m_cacheManager))
     {
         DCGM_LOG_ERROR << "m_cacheManager not initialized";
         return DCGM_ST_UNINITIALIZED;
@@ -2724,7 +2745,7 @@ dcgmModuleProcessMessage_f DcgmModuleCore::GetMessageProcessingCallback() const
 
 dcgmReturn_t DcgmModuleCore::ProcessPauseResume(dcgm_core_msg_pause_resume_v1 &msg)
 {
-    if (m_cacheManager == nullptr)
+    if (!CacheManagerIsInitialized(m_cacheManager))
     {
         log_error("m_cacheManager not initialized");
         return DCGM_ST_UNINITIALIZED;

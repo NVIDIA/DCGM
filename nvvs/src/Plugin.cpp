@@ -18,15 +18,17 @@
 #include "IgnoreErrorCodesHelper.h"
 #include "dcgm_fields.h"
 #include "dcgm_structs.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <HangDetectMonitor.h>
 
 #include <fstream>
 #include <sys/wait.h>
+#include <utility>
 
-/*************************************************************************/
-Plugin::Plugin()
+Plugin::Plugin(DcgmNs::DcgmOpsAnyPtr dcgmOps)
     : m_pluginAttr {}
     , m_infoStruct {}
+    , m_dcgmOps(dcgmOps)
     , m_dataMutex(0)
     , m_mutex(0)
 {}

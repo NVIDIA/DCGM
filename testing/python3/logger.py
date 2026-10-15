@@ -261,6 +261,11 @@ def capture_dmesg():
     if not utils.is_root():
         warning("Skipping capture of dmesg output because not running as root")
         return
+    if utils.is_root_in_user_namespace():
+        warning(
+            "Skipping capture of dmesg output because root is running in an "
+            "unprivileged user namespace")
+        return
     # setup_environment() that sets the dmesg_log_filename should have been called before
     # this function is called
     if not dmesg_log_filename:

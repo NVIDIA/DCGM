@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,6 +28,11 @@ if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
     exit 1
 fi
 eval set -- "${PARSED}"
+
+if [[ ${DCGM_BUILD_INSIDE_DOCKER:-0} -eq 1 ]]; then
+    echo "This script is not meant to be run inside the DCGM build container. Aborting."
+    exit 1
+fi
 
 function usage() {
 cat <<EOF

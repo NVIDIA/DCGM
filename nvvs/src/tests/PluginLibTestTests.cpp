@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 
 #include <PluginLibTest.h>
 #include <UniquePtrUtil.h>
+#include <dcgm_errors.h>
 #include <fmt/format.h>
 
 TEST_CASE("PluginLibTest::Constructor")
@@ -60,7 +61,7 @@ TEST_CASE("PluginLibTest::PopulateEntityResults")
     SafeCopyTo(entityResults.errors[0].msg, msg);
     entityResults.errors[0].testId = 867; // ignored
 
-    entityResults.errors[1].entity   = { .entityGroupId = DCGM_FE_GPU, .entityId = 1 };
+    entityResults.errors[1].entity   = { .entityGroupId = DCGM_FE_CPU, .entityId = 1 };
     entityResults.errors[1].code     = DCGM_FR_UNRECOGNIZED;
     entityResults.errors[1].category = DCGM_FR_EC_PERF_VIOLATION;
     entityResults.errors[1].severity = DCGM_ERROR_UNKNOWN;
@@ -91,6 +92,20 @@ TEST_CASE("PluginLibTest::PopulateEntityResults")
     entityResults.auxData.size = aux.size();
 
     pluginLibTest.PopulateEntityResults(entityResults);
+
+    auto const &errors = pluginLibTest.GetErrors();
+    REQUIRE(errors.size() == entityResults.numErrors);
+    for (std::size_t i = 0; i < errors.size(); ++i)
+    {
+        auto const expectedGpuId = entityResults.errors[i].entity.entityGroupId == DCGM_FE_GPU
+                                       ? static_cast<int>(entityResults.errors[i].entity.entityId)
+                                       : -1;
+        CHECK(errors[i].gpuId == expectedGpuId);
+        CHECK(errors[i].code == entityResults.errors[i].code);
+        CHECK(errors[i].category == entityResults.errors[i].category);
+        CHECK(errors[i].severity == entityResults.errors[i].severity);
+        CHECK(std::string_view(errors[i].msg) == std::string_view(entityResults.errors[i].msg));
+    }
 
     auto const &ret = pluginLibTest.GetEntityResults<dcgmDiagEntityResults_v2>();
     REQUIRE(ret.numErrors == entityResults.numErrors);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #include "Gpu.h"
 
 #include "DcgmHandle.h"
+#include "DcgmOpsAnyPtr.hpp"
 #include "DcgmSystem.h"
 #include "NvvsCommon.h"
 
@@ -27,11 +28,8 @@
 #include <sstream>
 #include <stdexcept>
 
-extern DcgmSystem dcgmSystem;
-extern DcgmHandle dcgmHandle;
-
 /*****************************************************************************/
-Gpu::Gpu(unsigned int gpuId)
+Gpu::Gpu(unsigned int gpuId, DcgmNs::DcgmOpsAnyPtr dcgmOps, DcgmHandle *dcgmHandle, DcgmSystemBase *dcgmSystem)
     : m_index(gpuId)
     , m_isSupported(false)
     , m_pciDeviceId()
@@ -40,6 +38,9 @@ Gpu::Gpu(unsigned int gpuId)
     , m_maxMemoryClock(0)
     , m_maxGpuOpTemp(0)
     , m_status()
+    , m_dcgmOps(dcgmOps)
+    , m_dcgmHandle(dcgmHandle)
+    , m_dcgmSystem(dcgmSystem)
 {
     memset(&m_attributes, 0, sizeof(m_attributes));
     m_attributes.version = dcgmDeviceAttributes_version3;
@@ -48,39 +49,39 @@ Gpu::Gpu(unsigned int gpuId)
 /*****************************************************************************/
 dcgmReturn_t Gpu::Init()
 {
-    dcgmReturn_t ret = dcgmSystem.GetDeviceAttributes(m_index, m_attributes);
+    dcgmReturn_t ret = m_dcgmSystem->GetDeviceAttributes(m_index, m_attributes);
 
     if (ret != DCGM_ST_OK)
     {
-        log_error("Unable to get GPU {}'s information: {}", m_index, dcgmHandle.RetToString(ret));
+        log_error("Unable to get GPU {}'s information: {}", m_index, m_dcgmHandle->RetToString(ret));
         return ret;
     }
 
     dcgmFieldValue_v2 value = {};
-    ret = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, DCGM_FV_FLAG_LIVE_DATA, value);
+    ret = m_dcgmSystem->GetGpuLatestValue(m_index, DCGM_FI_CUDA_GPU_COMPUTE_CAPABILITY, DCGM_FV_FLAG_LIVE_DATA, value);
     if (ret != DCGM_ST_OK)
     {
-        log_error("Unable to get GPU {}'s compute capability: {}", m_index, dcgmHandle.RetToString(ret));
+        log_error("Unable to get GPU {}'s compute capability: {}", m_index, m_dcgmHandle->RetToString(ret));
         return ret;
     }
 
     m_gpuArch = value.value.i64;
 
     value = {};
-    ret   = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_GPU_MAX_OP_TEMP_CELSIUS, DCGM_FV_FLAG_LIVE_DATA, value);
+    ret = m_dcgmSystem->GetGpuLatestValue(m_index, DCGM_FI_DEV_GPU_MAX_OP_TEMP_CELSIUS, DCGM_FV_FLAG_LIVE_DATA, value);
     if (ret != DCGM_ST_OK)
     {
-        log_error("Unable to get GPU {}'s max operating temperature: {}", m_index, dcgmHandle.RetToString(ret));
+        log_error("Unable to get GPU {}'s max operating temperature: {}", m_index, m_dcgmHandle->RetToString(ret));
         return ret;
     }
 
     m_maxGpuOpTemp = value.value.i64;
 
     value = {};
-    ret   = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_BOARD_SERIAL, DCGM_FV_FLAG_LIVE_DATA, value);
+    ret   = m_dcgmSystem->GetGpuLatestValue(m_index, DCGM_FI_DEV_BOARD_SERIAL, DCGM_FV_FLAG_LIVE_DATA, value);
     if (ret != DCGM_ST_OK)
     {
-        log_error("Unable to get GPU {}'s serial: {}", m_index, dcgmHandle.RetToString(ret));
+        log_error("Unable to get GPU {}'s serial: {}", m_index, m_dcgmHandle->RetToString(ret));
         return ret;
     }
 
@@ -122,7 +123,7 @@ void Gpu::PopulateMaxMemoryClock(void)
     dcgmReturn_t ret;
     dcgmFieldValue_v2 fv = {};
 
-    ret = dcgmSystem.GetGpuLatestValue(m_index, DCGM_FI_DEV_MAX_MEM_CLOCK, DCGM_FV_FLAG_LIVE_DATA, fv);
+    ret = m_dcgmSystem->GetGpuLatestValue(m_index, DCGM_FI_DEV_MAX_MEM_CLOCK, DCGM_FV_FLAG_LIVE_DATA, fv);
     if (ret != DCGM_ST_OK || fv.status != DCGM_ST_OK)
     {
         log_debug("Got error {} or status {} from GetGpuLatestValue for gpuId {}", ret, fv.status, m_index);
@@ -148,13 +149,14 @@ dcgmReturn_t Gpu::GetMigMode(bool &enabled) const
     dcgmFieldValue_v2 migModeValue {};
     dcgmGroupEntityPair_t entity {};
 
-    dcgmHandle_t handle    = dcgmHandle.GetHandle();
+    dcgmHandle_t handle    = m_dcgmHandle->GetHandle();
     entity.entityId        = m_index;
     entity.entityGroupId   = DCGM_FE_GPU;
     unsigned int flags     = DCGM_FV_FLAG_LIVE_DATA;
     unsigned short fieldId = DCGM_FI_DEV_MIG_MODE;
+    auto dcgmOps           = m_dcgmOps;
 
-    dcgmReturn_t ret = dcgmEntitiesGetLatestValues(handle, &entity, 1, &fieldId, 1, flags, &migModeValue);
+    dcgmReturn_t ret = dcgmOps->dcgmEntitiesGetLatestValues(handle, &entity, 1, &fieldId, 1, flags, &migModeValue);
 
     if (ret == DCGM_ST_OK)
     {
@@ -166,10 +168,11 @@ dcgmReturn_t Gpu::GetMigMode(bool &enabled) const
 
 dcgmMigValidity_t Gpu::IsMigModeDiagCompatible() const
 {
-    dcgmHandle_t handle = dcgmHandle.GetHandle();
+    dcgmHandle_t handle = m_dcgmHandle->GetHandle();
     dcgmMigHierarchy_v2 hierarchy {};
     hierarchy.version    = dcgmMigHierarchy_version2;
-    dcgmReturn_t ret     = dcgmGetGpuInstanceHierarchy(handle, &hierarchy);
+    auto dcgmOps         = m_dcgmOps;
+    dcgmReturn_t ret     = dcgmOps->dcgmGetGpuInstanceHierarchy(handle, &hierarchy);
     dcgmMigValidity_t mv = {};
     std::set<unsigned int> relevantGpuInstanceIds;
 
@@ -210,7 +213,7 @@ dcgmMigValidity_t Gpu::IsMigModeDiagCompatible() const
      *
      * So in case of nvvs core tests we fall back to hardcoded DCGM_MAX_INSTANCES_PER_GPU.
      */
-    ret = dcgmEntitiesGetLatestValues(handle, &entity, 1, &fieldId, 1, flags, &maxSliceValue);
+    ret = dcgmOps->dcgmEntitiesGetLatestValues(handle, &entity, 1, &fieldId, 1, flags, &maxSliceValue);
     if (ret != DCGM_ST_OK)
     {
         DCGM_LOG_WARNING << "Unable to get information about maximum number of supported slices";

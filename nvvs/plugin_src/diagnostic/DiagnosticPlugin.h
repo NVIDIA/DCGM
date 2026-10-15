@@ -16,6 +16,8 @@
 #define DIAGNOSTICPLUGIN_H
 
 #include "CudaCommon.h"
+#include "CudaCommonAnyPtr.hpp"
+#include "CudaCommonAnyUniquePtr.hpp"
 #include "DcgmError.h"
 #include "DcgmRecorder.h"
 #include "DcgmThread/DcgmThread.h"
@@ -23,13 +25,16 @@
 #include "PluginCommon.h"
 #include "PluginDevice.h"
 #include "PluginStrings.h"
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <PluginInterface.h>
 
 #include <dcgm_fields_internal.hpp>
 
-#include <cublas_proxy.hpp>
+#include <CublasOpsAnyUniquePtr.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
 #include <cuda.h>
 #include <fmt/format.h>
+#include <memory>
 #include <numeric>
 
 #define PERF_STAT_NAME "perf_gflops"
@@ -49,27 +54,39 @@ class GpuBurnDevice : public PluginDevice
 {
 public:
     CUcontext cuContext {};
+    CublasOpsAnyPtr cublasOps;
+    GpuBurnDevice(DcgmNs::DcgmOpsAnyPtr dcgmOps, CudaOpsAnyPtr cudaOps, CublasOpsAnyPtr cublasOps)
+        : PluginDevice(dcgmOps, cudaOps)
+        , cublasOps(cublasOps)
+    {}
 
-    GpuBurnDevice() = default;
-
-    GpuBurnDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
-        : PluginDevice(testName, ndi, pciBusId, p)
+    GpuBurnDevice(std::string const &testName,
+                  unsigned int ndi,
+                  const char *pciBusId,
+                  Plugin *p,
+                  DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                  dcgmHandle_t handle,
+                  CudaOpsAnyPtr cudaOps,
+                  CublasOpsAnyPtr cublasOps,
+                  CudaCommonAnyPtr cudaCommon)
+        : PluginDevice(testName, ndi, pciBusId, p, dcgmOps, handle, cudaOps)
+        , cublasOps(cublasOps)
     {
         char buf[256]           = { 0 };
         const char *errorString = NULL;
 
-        CUresult cuSt = cuInit(0);
+        CUresult cuSt = cudaOps->cuInit(0);
         if (cuSt)
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuInit");
-            cuGetErrorString(cuSt, &errorString);
+            cudaOps->cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
             {
                 d.AddDetail(fmt::format(": '{}' ({}){}. {}",
                                         errorString,
                                         static_cast<int>(cuSt),
-                                        GetAdditionalCuInitDetail(cuSt),
+                                        cudaCommon->GetAdditionalCuInitDetail(cuSt),
                                         RUN_CUDA_KERNEL_REC));
             }
             else
@@ -81,16 +98,16 @@ public:
 
         /* Initialize the runtime implicitly so we can grab its context */
         log_debug("Attaching to cuda device index {}", cudaDeviceIdx);
-        cudaSetDevice(cudaDeviceIdx);
-        cudaFree(0);
+        cudaOps->cudaSetDevice(cudaDeviceIdx);
+        cudaOps->cudaFree(0);
 
         /* Grab the runtime's context */
-        cuSt = cuCtxGetCurrent(&cuContext);
+        cuSt = cudaOps->cuCtxGetCurrent(&cuContext);
         if (cuSt)
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuCtxGetCurrent");
-            cuGetErrorString(cuSt, &errorString);
+            cudaOps->cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
             {
                 snprintf(buf, sizeof(buf), ": '%s' (%d) for GPU %u", errorString, static_cast<int>(cuSt), gpuId);
@@ -101,12 +118,12 @@ public:
         else if (cuContext == NULL)
         {
             // Clean up resources before context creation
-            cudaError_t cudaResult = cudaDeviceReset();
+            cudaError_t cudaResult = cudaOps->cudaDeviceReset();
             if (cudaResult != cudaSuccess)
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaDeviceReset");
-                errorString = cudaGetErrorString(cudaResult);
+                errorString = cudaOps->cudaGetErrorString(cudaResult);
                 if (errorString != NULL)
                 {
                     snprintf(
@@ -117,14 +134,14 @@ public:
             }
 
             // cuCtxGetCurrent doesn't return an error if there's no context, so check and attempt to create one
-            cuSt = cuCtxCreate_v2(&cuContext, 0, cudaDeviceIdx);
+            cuSt = cudaOps->cuCtxCreate_v2(&cuContext, 0, cudaDeviceIdx);
 
             if (cuSt != CUDA_SUCCESS)
             {
                 DcgmError d { gpuId };
                 DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuCtxCreate_v2");
 
-                cuGetErrorString(cuSt, &errorString);
+                cudaOps->cuGetErrorString(cuSt, &errorString);
                 if (errorString != NULL)
                 {
                     snprintf(buf,
@@ -155,13 +172,16 @@ public:
 };
 
 /*****************************************************************************/
-class GpuBurnPluginTester; // forward
-/*****************************************************************************/
 /* GpuBurn plugin */
 class GpuBurnPlugin : public Plugin
 {
 public:
-    GpuBurnPlugin(dcgmHandle_t handle);
+    GpuBurnPlugin(dcgmHandle_t handle,
+                  DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                  CudaOpsAnyUniquePtr cudaOps,
+                  CublasOpsAnyUniquePtr cublasOps,
+                  CudaCommonAnyUniquePtr cudaCommon,
+                  NvvsCommon *nvvsCommon);
     ~GpuBurnPlugin();
 
     /*************************************************************************/
@@ -178,7 +198,7 @@ public:
     /*
      * Initializes the value for m_precision from the test parameters string for precision
      *
-     * @param supportsDoubles - if no string is set, then whether or not cublasDgemm() is supported
+     * @param supportsDoubles - if no string is set, then whether or not cublasDgemm_v2() is supported
      */
     int32_t SetPrecisionFromString(bool supportsDoubles);
 
@@ -189,7 +209,7 @@ public:
         return m_useTensorAlways;
     }
 
-private:
+protected:
     /*************************************************************************/
     /*
      * Initialize this plugin.
@@ -421,8 +441,12 @@ private:
     void Cleanup();
 
     /*************************************************************************/
-    TestParameters *m_testParameters;      /* Parameters for this test, passed in from the framework.
-                                                                Set when the go() method is called. DO NOT FREE */
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique; /* Owned DCGM API interface */
+    TestParameters *m_testParameters;            /* Parameters for this test, passed in from the framework.
+                                                                      Set when the go() method is called. DO NOT FREE */
+    CudaOpsAnyUniquePtr m_cudaOps;               //!< CUDA API interface.
+    CublasOpsAnyUniquePtr m_cublasOps;           //!< cuBLAS API interface.
+    CudaCommonAnyUniquePtr m_cudaCommon;
     std::vector<GpuBurnDevice *> m_device; /* Per-device data */
     DcgmRecorder m_dcgmRecorder;
     dcgmHandle_t m_handle;
@@ -438,62 +462,20 @@ private:
     int32_t m_precision;          /* bitmap for what precision we should use (half, single, double) */
     unsigned int m_matrixDim;     /* The dimension size of the matrix */
     bool m_useTensorAlways;       /* true if we should always use tensor when possible */
-
-    friend GpuBurnPluginTester;
 };
 
-/*****************************************************************************/
-/* GpuBurnPluginTester - attorney class to facilitate testing */
-class GpuBurnPluginTester
-{
-public:
-    static double GetMinThreshold(const GpuBurnPlugin &gbp, auto const &values, double tolerancePcnt)
-    {
-        return gbp.GetMinThreshold(values, tolerancePcnt);
-    }
-
-    static std::vector<size_t> GetIndicesBelowMinThreshold(const GpuBurnPlugin &gbp,
-                                                           auto const &values,
-                                                           double minThresh)
-    {
-        return gbp.GetIndicesBelowMinThreshold(values, minThresh);
-    }
-
-    /*
-     * Provides access to the device list for testing
-     *
-     * @param[in] gbp         The GpuBurnPlugin instance
-     * @return Reference to the internal device list
-     */
-    static std::vector<GpuBurnDevice *> &GetDeviceList(GpuBurnPlugin &gbp)
-    {
-        return gbp.m_device;
-    }
-
-    /*
-     * Invokes CheckPassFail for testing without full initialization
-     *
-     * @param[in] gbp         The GpuBurnPlugin instance
-     * @param[in] errorCount  Vector of error counts per GPU
-     * @param[in] nanCount    Vector of NaN counts per GPU
-     * @return true if all GPUs passed, false otherwise
-     */
-    static bool CheckPassFail(GpuBurnPlugin &gbp,
-                              std::vector<long long> const &errorCount,
-                              std::vector<long long> const &nanCount)
-    {
-        return gbp.CheckPassFail(errorCount, nanCount);
-    }
-};
 
 /*************************************************************************/
 struct CUdeviceptrDeleter
 {
+    CudaOpsAnyPtr cudaOps;
+
     void operator()(CUdeviceptr_v2 *ptr) const noexcept
     {
         if (ptr && *ptr != 0)
         {
-            CUresult result = cuMemFree_v2(*ptr);
+            auto cudaOpsPtr = cudaOps;
+            CUresult result = cudaOpsPtr->cuMemFree_v2(*ptr);
             if (result != CUDA_SUCCESS)
             {
                 log_error("cuMemFree_v2 failed: {}", result);
@@ -519,6 +501,7 @@ public:
                   double testDuration,
                   unsigned int matrixDim,
                   DcgmRecorder &dcgmRecorder,
+                  CudaCommonAnyPtr cudaCommon,
                   bool failEarly,
                   unsigned long failCheckInterval);
 
@@ -649,6 +632,9 @@ private:
 
     GpuBurnDevice *m_device {};
     GpuBurnPlugin &m_plugin;
+    CudaOpsAnyPtr m_cudaOps;
+    CublasOpsAnyPtr m_cublasOps;
+    CudaCommonAnyPtr m_cudaCommon;
     int32_t m_precision {};
     std::vector<int32_t> m_precisions;
     double m_testDuration {};
@@ -681,9 +667,9 @@ private:
     std::vector<CUdeviceptr_v2> m_CdataVecHalf;          // Raw device pointers for half precision
     std::vector<CUdeviceptr_v2> *m_CdataVec { nullptr }; // Current active vector (points to one of the above)
 
-    CUdeviceptrWrapper m_devicePtrArrayDouble {};
-    CUdeviceptrWrapper m_devicePtrArraySingle {};
-    CUdeviceptrWrapper m_devicePtrArrayHalf {};
+    CUdeviceptrWrapper m_devicePtrArrayDouble;
+    CUdeviceptrWrapper m_devicePtrArraySingle;
+    CUdeviceptrWrapper m_devicePtrArrayHalf;
     CUdeviceptrWrapper *m_devicePtrArray { nullptr }; // Current active device pointer array
     CUdeviceptr_v2 m_AdataFP64 {};
     CUdeviceptr_v2 m_BdataFP64 {};

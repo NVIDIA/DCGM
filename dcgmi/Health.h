@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +26,13 @@
 #include "Command.h"
 #include "DcgmiOutput.h"
 
+#include <DcgmOpsAnyPtr.hpp>
+
+
 class Health : public Command
 {
 public:
-    Health() = default;
+    explicit Health(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     dcgmReturn_t GetWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, bool json);
     dcgmReturn_t SetWatches(dcgmHandle_t mDcgmHandle,
                             dcgmGpuGrp_t groupId,
@@ -128,7 +131,7 @@ private:
 class GetHealth : public Command
 {
 public:
-    GetHealth(std::string hostname, unsigned int groupId, bool json);
+    GetHealth(std::string hostname, unsigned int groupId, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -148,7 +151,8 @@ public:
               unsigned int groupId,
               unsigned int system,
               double updateInterval,
-              double maxKeepAge);
+              double maxKeepAge,
+              DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -167,7 +171,7 @@ private:
 class CheckHealth : public Command
 {
 public:
-    CheckHealth(std::string hostname, unsigned int groupId, bool json);
+    CheckHealth(std::string hostname, unsigned int groupId, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

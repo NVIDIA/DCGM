@@ -16,21 +16,45 @@
 
 set -ex
 
-mkdir --parents libevent/{build,src}
-tar xf /tmp/downloads/libevent.tar.gz -C libevent/src --strip-components=1
+mkdir --parents libevent
+tar xf /tmp/downloads/libevent.tar.gz -C libevent --strip-components=1
 
-pushd libevent/src
-./autogen.sh
+# Libevent's CMake doesn't obey conventions, patch it
+pushd libevent
+cat <<EOF | patch CMakeLists.txt
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 142d913..85fdba9 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -19,7 +19,7 @@
+ #       start libevent.sln
+ #
+
+-cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
++cmake_minimum_required(VERSION 4.0 FATAL_ERROR)
+
+ if (POLICY CMP0054)
+     cmake_policy(SET CMP0054 NEW)
+@@ -1453,7 +1453,7 @@ endif()
+ #
+
+ set(EVENT_INSTALL_CMAKE_DIR
+-    "\${CMAKE_INSTALL_PREFIX}/lib/cmake/libevent")
++    "lib/cmake/libevent")
+
+ export(PACKAGE libevent)
+
+
+EOF
 popd
 
-pushd libevent/build
-CFLAGS="${CFLAGS:-} -Wno-cast-function-type -Wno-implicit-fallthrough -fPIC" \
-CXXFLAGS="${CXXFLAGS:-} -Wno-cast-function-type -Wno-implicit-fallthrough -fPIC" \
-../src/configure --disable-openssl \
-                 --prefix=$CMAKE_STAGING_PREFIX \
-                 --host=$TARGET
-make
-make install
-popd
+cmake \
+    -S libevent \
+    -B build \
+    -D CMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -D CMAKE_STAGING_PREFIX=$CMAKE_STAGING_PREFIX \
+    -D EVENT__LIBRARY_TYPE=STATIC \
+    -D EVENT__DISABLE_OPENSSL=ON
+cmake --build build --target install
 
 rm -rf libevent

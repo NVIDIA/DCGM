@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,8 +117,7 @@ nvvsDeviceList = 0;
 void Test::getOut(std::string error)
 {
     // Create error message for the exception
-    std::string errMsg        = "\"" + m_name + "\" test: " + error;
-    nvvsCommon.mainReturnCode = NVVS_ST_SUCCESS; /* Return error code to console */
+    std::string errMsg = "\"" + m_name + "\" test: " + error;
     throw std::runtime_error(errMsg);
 }
 

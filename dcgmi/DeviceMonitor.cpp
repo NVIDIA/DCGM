@@ -15,15 +15,17 @@
  */
 
 #include "DeviceMonitor.h"
+
 #include "Query.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs_internal.h"
-#include "dcgm_test_apis.h"
 
 #include <DcgmLogging.h>
+#include <DcgmOps.h>
 #include <DcgmStringHelpers.h>
 #include <DcgmUtilities.h>
 #include <EntityListHelpers.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs_internal.h>
+#include <dcgm_test_apis.h>
 
 #include <cerrno>
 #include <cstring>
@@ -66,8 +68,10 @@ DeviceMonitor::DeviceMonitor(std::string hostname,
                              int fieldGroupId,
                              std::chrono::milliseconds updateDelay,
                              int numOfIterations,
-                             bool listOptionMentioned)
-    : m_requestedEntityIds(std::move(requestedEntityIds))
+                             bool listOptionMentioned,
+                             DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , m_requestedEntityIds(std::move(requestedEntityIds))
     , m_groupIdStr(std::move(grpIdStr))
     , m_fieldIdsStr(std::move(fldIds))
     , m_fieldGrpId_int(fieldGroupId)
@@ -509,7 +513,7 @@ dcgmReturn_t DeviceMonitor::GetSortedEntities(dcgmGroupInfo_t &dcgmGroupInfo)
 
     dcgmGroupInfo.version = dcgmGroupInfo_version;
 
-    if (auto const ret = dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, &dcgmGroupInfo); ret != DCGM_ST_OK)
+    if (auto const ret = m_dcgmOps->dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, &dcgmGroupInfo); ret != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << fmt::format(
             "Unable to retrieve information about group. Error: {}: {}",
@@ -525,7 +529,7 @@ dcgmReturn_t DeviceMonitor::GetSortedEntities(dcgmGroupInfo_t &dcgmGroupInfo)
     if (HasGpuEntity(dcgmGroupInfo))
     {
         hierarchyV2.version = dcgmMigHierarchy_version2;
-        auto ret            = dcgmGetGpuInstanceHierarchy(m_dcgmHandle, &hierarchyV2);
+        auto ret            = m_dcgmOps->dcgmGetGpuInstanceHierarchy(m_dcgmHandle, &hierarchyV2);
         if (ret != DCGM_ST_OK)
         {
             SHOW_AND_LOG_ERROR << fmt::format(
@@ -568,12 +572,13 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
     }
 
     // set the watch on field group id for Group of gpus.
-    dcgmReturn_t result = dcgmWatchFields(m_dcgmHandle,
-                                          m_myGroupId,
-                                          m_fieldGroupId,
-                                          std::chrono::duration_cast<std::chrono::microseconds>(m_delay).count(),
-                                          MAX_KEEP_AGE,
-                                          MAX_KEEP_SAMPLES);
+    dcgmReturn_t result
+        = m_dcgmOps->dcgmWatchFields(m_dcgmHandle,
+                                     m_myGroupId,
+                                     m_fieldGroupId,
+                                     std::chrono::duration_cast<std::chrono::microseconds>(m_delay).count(),
+                                     MAX_KEEP_AGE,
+                                     MAX_KEEP_SAMPLES);
 
     // Check result to see if DCGM operation was successful.
     if (result != DCGM_ST_OK)
@@ -598,7 +603,7 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
         return result;
     }
 
-    dcgmUpdateAllFields(m_dcgmHandle, 1);
+    m_dcgmOps->dcgmUpdateAllFields(m_dcgmHandle, 1);
 
     // Set the loop to running forever and set decrement check to false as there will be
     // no decrement in m_count when no m_count value is mentioned. Loop runs forever in default
@@ -624,7 +629,8 @@ dcgmReturn_t DeviceMonitor::LockWatchAndUpdate()
         // Otherwise, reallocation may happen in the libdcgm context using wrong memory allocator.
         entityStats.reserve(dcgmGroupInfo->count ? dcgmGroupInfo->count : DCGM_MAX_NUM_DEVICES);
 
-        result = dcgmGetLatestValues_v2(m_dcgmHandle, m_myGroupId, m_fieldGroupId, &ListFieldValues, &entityStats);
+        result = m_dcgmOps->dcgmGetLatestValues_v2(
+            m_dcgmHandle, m_myGroupId, m_fieldGroupId, &ListFieldValues, &entityStats);
 
         // Check the result to see if our DCGM operation was successful.
         if (result != DCGM_ST_OK)
@@ -771,7 +777,7 @@ dcgmReturn_t DeviceMonitor::CreateEntityGroupFromEntityList()
 
     if (m_requestedEntityIds != "-1")
     {
-        auto err = DcgmNs::EntityListWithMigAndUuidParser(m_dcgmHandle, m_requestedEntityIds, entityList);
+        auto err = DcgmNs::EntityListWithMigAndUuidParser(m_dcgmHandle, m_requestedEntityIds, entityList, m_dcgmOps);
         if (!err.empty())
         {
             SHOW_AND_LOG_ERROR << err;
@@ -780,7 +786,7 @@ dcgmReturn_t DeviceMonitor::CreateEntityGroupFromEntityList()
     }
 
     /* Create a group based on this list of entities */
-    return dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_EMPTY, &m_myGroupId, entityList);
+    return dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_EMPTY, &m_myGroupId, entityList, m_dcgmOps);
 }
 
 dcgmReturn_t DeviceMonitor::ValidateOrCreateEntityGroup()
@@ -799,7 +805,7 @@ dcgmReturn_t DeviceMonitor::ValidateOrCreateEntityGroup()
     if (m_groupIdStr == "-1")
     {
         std::vector<dcgmGroupEntityPair_t> entityList; /* Empty List */
-        return dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_DEFAULT, &m_myGroupId, entityList);
+        return dcgmi_create_entity_group(m_dcgmHandle, DCGM_GROUP_DEFAULT, &m_myGroupId, entityList, m_dcgmOps);
     }
 
     bool const groupIdIsSpecial = dcgmi_entity_group_id_is_special(m_groupIdStr, &groupType, &m_myGroupId);
@@ -826,7 +832,7 @@ dcgmReturn_t DeviceMonitor::ValidateOrCreateEntityGroup()
     std::unique_ptr<dcgmGroupInfo_t> dcgmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
     dcgmGroupInfo->version                         = dcgmGroupInfo_version;
 
-    if (auto const ret = dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, dcgmGroupInfo.get()); ret != DCGM_ST_OK)
+    if (auto const ret = m_dcgmOps->dcgmGroupGetInfo(m_dcgmHandle, m_myGroupId, dcgmGroupInfo.get()); ret != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << fmt::format(
             "Enable to retrieve information about group. Error: {}: {}",
@@ -850,7 +856,8 @@ dcgmReturn_t DeviceMonitor::ValidateOrCreateFieldGroup()
             return ret;
         }
 
-        if (auto const ret = dcgmi_create_field_group(m_dcgmHandle, &m_fieldGroupId, m_fieldIds); ret != DCGM_ST_OK)
+        if (auto const ret = dcgmi_create_field_group(m_dcgmHandle, &m_fieldGroupId, m_fieldIds, m_dcgmOps);
+            ret != DCGM_ST_OK)
         {
             return ret;
         }
@@ -870,7 +877,7 @@ dcgmReturn_t DeviceMonitor::ValidateOrCreateFieldGroup()
 
     fieldGroupInfo.fieldGroupId = static_cast<dcgmFieldGrp_t>(m_fieldGrpId_int);
 
-    if (auto const ret = dcgmFieldGroupGetInfo(m_dcgmHandle, &fieldGroupInfo); ret != DCGM_ST_OK)
+    if (auto const ret = m_dcgmOps->dcgmFieldGroupGetInfo(m_dcgmHandle, &fieldGroupInfo); ret != DCGM_ST_OK)
     {
         SHOW_AND_LOG_ERROR << fmt::format(
             "Unable to retrieve information about field group {}. Error: {}: {}",

@@ -16,11 +16,10 @@ add_executable(testdcgmunittests)
 
 target_link_libraries(testdcgmunittests
     PRIVATE
-        ${CMAKE_THREAD_LIBS_INIT}
-        ${JSONCPP_STATIC_LIBS}
+        Threads::Threads
+        jsoncpp_static
         dcgm_common
         dcgm_logging
-        dcgm_mutex
         dcgm_static_private
         dcgmmodulediag_private_static
         diag_interface
@@ -45,8 +44,6 @@ target_sources(testdcgmunittests
         TestCacheManager.h
         TestDcgmConnections.cpp
         TestDcgmConnections.h
-        TestDcgmMutex.cpp
-        TestDcgmMutex.h
         TestDiagManager.cpp
         TestDiagManager.h
         TestFieldGroups.cpp
@@ -67,10 +64,11 @@ target_sources(testdcgmunittests
         TestVersioning.cpp
         TestVersioning.h)
 
-target_compile_definitions(testdcgmunittests PRIVATE -DTEST_DCGMCACHEMANAGER)
-
 target_link_options(testdcgmunittests PRIVATE
     "-Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/unittests.linux_def")
+
+set_target_properties(testdcgmunittests PROPERTIES
+    INSTALL_RPATH "$ORIGIN")
 
 add_subdirectory(stub)
 
@@ -157,7 +155,7 @@ endif()
 install(
     TARGETS testdcgmunittests
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH}"
         COMPONENT Tests)
 
 install(
@@ -199,7 +197,7 @@ install(
         python3/dcgm_telegraf.py
         python3/denylist_recommendations.py
     DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/bindings/python3"
-    COMPONENT Core)
+    COMPONENT python3-dcgm)
 
 install(
     FILES
@@ -207,7 +205,7 @@ install(
         python3/common/dcgm_client_cli_parser.py
         python3/common/dcgm_client_main.py
     DESTINATION "${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/bindings/python3/common"
-    COMPONENT Core)
+    COMPONENT python3-dcgm)
 
 set(COLLECTD_TYPES_DB_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/python3/dcgm_fields_collectd.py")
 
@@ -227,9 +225,9 @@ add_custom_target(
 install(
     FILES "${CMAKE_CURRENT_BINARY_DIR}/types.db"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/${PROJECT_NAME}/collectd"
-    COMPONENT Core)
+    COMPONENT python3-dcgm)
 
 install(
     FILES python3/dcgm-collectd-example.conf
     DESTINATION "${CMAKE_INSTALL_DOCDIR}/examples/"
-    COMPONENT Core)
+    COMPONENT python3-dcgm)

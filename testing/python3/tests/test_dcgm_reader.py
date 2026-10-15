@@ -457,7 +457,7 @@ def test_dcgm_reader_wildcard_gi(handle, gpuIds, instanceIds, ciIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(1)
@@ -475,7 +475,7 @@ def test_dcgm_reader_latest_mig_ci_fields_by_id(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(1)
@@ -493,7 +493,7 @@ def test_dcgm_reader_all_mig_ci_fields_by_id(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(1)
@@ -511,7 +511,7 @@ def test_dcgm_reader_latest_mig_ci_fields_by_tag(
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(1)

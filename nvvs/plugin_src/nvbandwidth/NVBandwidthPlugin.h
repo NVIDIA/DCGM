@@ -15,8 +15,12 @@
  */
 #pragma once
 
+#include <NVBandwidthResult.h>
+
 #include <DcgmError.h>
 #include <DcgmMutex.h>
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <DcgmRecorder.h>
 #include <DcgmUtilities.h>
 #include <Plugin.h>
@@ -24,17 +28,15 @@
 #include <PluginDevice.h>
 #include <PluginInterface.h>
 #include <PluginStrings.h>
+#include <memory>
 #include <optional>
 
 namespace DcgmNs::Nvvs::Plugins::NVBandwidth
 {
-// Forward declaration
-struct NVBandwidthResult;
-
 class NVBandwidthPlugin : public Plugin
 {
 public:
-    NVBandwidthPlugin(dcgmHandle_t handle);
+    NVBandwidthPlugin(dcgmHandle_t handle, DcgmNs::DcgmOpsAnyUniquePtr dcgmOps, NvvsCommon *nvvsCommon);
     ~NVBandwidthPlugin();
 
     /*************************************************************************/
@@ -49,18 +51,18 @@ public:
 
     dcgmReturn_t GetResults(std::string const &testName, dcgmDiagEntityResults_v2 *entityResults) override;
 
-    /*************************************************************************/
-    /*
-     * Attempt to read the exit code from the nvbandwidth plugin
+    /**
+     * Attempt to parse nvbandwidth output and detect testcase-level errors.
      *
-     * @return true if an error is found, false otherwise
+     * @param[in] output Raw nvbandwidth process output.
+     * @return Pair where the first value indicates whether an error was found, and the second value contains the
+     *         parsed nvbandwidth result when deserialization succeeds.
      */
-    std::pair<bool, std::optional<NVBandwidthResult>> AttemptToReadOutput(std::string_view output);
+    std::pair<bool, std::optional<DcgmNs::NvBandwidth::NVBandwidthResult>> AttemptToReadOutput(std::string_view output);
 
     dcgmReturn_t Shutdown();
-#ifndef DCGM_NVBANDWIDTH_TEST_TEST
-private:
-#endif
+
+protected:
     /*************************************************************************/
     /*
      * Clean up any resources allocated by this object, including memory and
@@ -107,8 +109,9 @@ private:
                                             int64_t maxUtilizationPercentage);
 
     /*************************************************************************/
-    TestParameters m_testParameters; /* Parameters for this test, passed in from the framework.
-                                                           Set when the go() method is called. DO NOT FREE */
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique; /* Owned DCGM API interface */
+    TestParameters m_testParameters;             /* Parameters for this test, passed in from the framework.
+                                                                       Set when the go() method is called. DO NOT FREE */
     DcgmRecorder m_dcgmRecorder;
     dcgmHandle_t m_handle { 0 };
     bool m_dcgmRecorderInitialized { true };                   /* Has DcgmRecorder been initialized? */

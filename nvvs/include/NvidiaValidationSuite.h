@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 
 #include "Allowlist.h"
 #include "ConfigFileParser_v2.h"
+#include "DcgmHandle.h"
+#include "DcgmSystem.h"
 #include "Gpu.h"
 #include "NvvsCommon.h"
 #include "ParameterValidator.h"
@@ -32,8 +34,11 @@
 #include "TestFramework.h"
 #include "TestParameters.h"
 
+#include <DcgmOpsAnyPtr.hpp>
 #include <HangDetect.h>
 #include <HangDetectMonitor.h>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -46,7 +51,7 @@ class NvidiaValidationSuite
 {
 public:
     // ctor/dtor
-    NvidiaValidationSuite();
+    NvidiaValidationSuite(NvvsCommon *nvvsCommon, DcgmHandle dcgmHandle, DcgmSystem dcgmSystem);
     ~NvidiaValidationSuite();
 
     /*
@@ -94,6 +99,16 @@ public:
         std::vector<unsigned int> const &gpuIndices,
         std::vector<Gpu *> const &gpuVect,
         std::function<std::string(Gpu *)> uuidGetter = [](Gpu *g) { return g->getDeviceGpuUuid(); });
+
+    /**
+     * Decide whether level-based diagnostic runs should include RIST.
+     *
+     * @param[in] configuredPath Value of \c DCGM_RIST_BIN_PATH, when present.
+     *
+     * @return true when a non-empty RIST binary path was configured.
+     */
+    static bool ShouldIncludeRistInLevelRun(std::optional<std::string> const &configuredPath);
+
     // not private so they can be called in tests
 protected:
     // methods
@@ -108,8 +123,6 @@ protected:
     std::vector<Test *>::iterator FindTestName(std::string testName);
     bool FillTestVectors(suiteNames_enum suite, Test::testClasses_enum testClass, EntitySet *set);
     void overrideParameters(TestParameters *tp, const std::string &lowerCaseTestName);
-    void startTimer();
-    void stopTimer();
     bool HasGenericSupport(const std::string &gpuBrand, uint64_t gpuArch);
     void InitializeAndCheckGpuObjs(GpuSet *set);
     void InitializeParameters(const std::string &parms, const ParameterValidator &pv);
@@ -125,6 +138,10 @@ protected:
 
     // vars
     bool logInit;
+    NvvsCommon *m_nvvsCommon;  //!< NVVS common state
+    DcgmNs::DcgmOps m_dcgmOps; //!< DCGM API interface.
+    DcgmHandle m_dcgmHandle;   //!< DCGM connection handle.
+    DcgmSystem m_dcgmSystem;   //!< DCGM system interface.
     std::vector<Gpu *> m_gpuVect;
     std::vector<Test *> testVect;
     std::vector<TestParameters *> tpVect;
@@ -145,9 +162,6 @@ protected:
 
     bool listTests;
     bool listGpus;
-    timer_t initTimer;
-    struct sigaction restoreSigAction;
-    unsigned int initWaitTime;
     ParameterValidator m_pv;
 
     static unsigned int constexpr DEFAULT_HANG_DETECT_CHECK_INTERVAL { 60 };

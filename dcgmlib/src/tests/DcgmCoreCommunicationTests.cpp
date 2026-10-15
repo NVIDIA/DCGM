@@ -19,7 +19,7 @@
 #include <DcgmCoreCommunication.h>
 #include <DcgmGroupManager.h>
 #include <DcgmProtocol.h>
-#include <Defer.hpp>
+#include <ScopedDcgmFields.hpp>
 #include <dcgm_fields.h>
 
 #include <array>
@@ -189,8 +189,7 @@ TEST_CASE("DcgmCoreCommunication rejects known requests with version mismatches"
 
 TEST_CASE("DcgmCoreCommunication processes fake GPU cache-manager requests")
 {
-    DcgmFieldsInit();
-    DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     DcgmCacheManager cacheManager;
     unsigned int const gpuId = cacheManager.AddFakeGpu();

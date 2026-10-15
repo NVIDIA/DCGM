@@ -143,10 +143,7 @@ public:
                                         std::string const &serialNum,
                                         bool isFail);
 
-#ifndef __DIAG_UNIT_TESTING__
-private:
-#endif
-
+protected:
     /* Deprecated methods. Use SetVersion() instead. */
     dcgmReturn_t SetVersion12(dcgmDiagResponse_v12 *response);
     dcgmReturn_t SetVersion11(dcgmDiagResponse_v11 *response);

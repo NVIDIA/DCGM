@@ -19,8 +19,19 @@
 #include "PluginStrings.h"
 #include "dcgm_fields.h"
 
-ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle)
-    : m_handle(handle)
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
+#include <utility>
+
+ContextCreatePlugin::ContextCreatePlugin(dcgmHandle_t handle,
+                                         DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                                         CudaOpsAnyUniquePtr cudaOps,
+                                         CudaCommonAnyUniquePtr cudaCommon)
+    : Plugin(dcgmOps.AsAnyPtr())
+    , m_dcgmOpsUnique(std::move(dcgmOps))
+    , m_cudaOps(std::move(cudaOps))
+    , m_cudaCommon(std::move(cudaCommon))
+    , m_handle(handle)
     , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
     m_infoStruct.testIndex        = DCGM_CONTEXT_CREATE_INDEX;
@@ -78,7 +89,7 @@ void ContextCreatePlugin::Go(std::string const &testName,
     {
         ParseIgnoreErrorCodesParam(testName, testParameters.GetString(PS_IGNORE_ERROR_CODES));
 
-        ContextCreate cc(&testParameters, this, GetHandle());
+        ContextCreate cc(&testParameters, this, m_handle, m_dcgmOps, m_cudaOps.AsAnyPtr(), m_cudaCommon.AsAnyPtr());
 
         int st = cc.Run(*entityInfo);
         if (!st)
@@ -108,11 +119,6 @@ void ContextCreatePlugin::Go(std::string const &testName,
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_EMPTY_GPU_LIST, d);
         AddError(GetCtxCreateTestName(), d);
     }
-}
-
-dcgmHandle_t ContextCreatePlugin::GetHandle()
-{
-    return m_handle;
 }
 
 std::string ContextCreatePlugin::GetCtxCreateTestName() const

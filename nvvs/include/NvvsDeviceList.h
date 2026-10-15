@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #define NVVSDEVICELIST_H
 
 #include "Plugin.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <vector>
 
 /*****************************************************************************/
@@ -49,7 +50,7 @@ public:
 class NvvsDevice : public NvvsDeviceBase
 {
 public:
-    NvvsDevice(Plugin *plugin);
+    NvvsDevice(Plugin *plugin, DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle);
     ~NvvsDevice();
 
     /*************************************************************************/
@@ -141,7 +142,9 @@ private:
     unsigned int m_gpuId; /* GPU id */
     // int m_cudaIndex;          /* Cuda index of the GPU */
 
-    Plugin *m_plugin; /* Plugin object to log to */
+    Plugin *m_plugin;                /* Plugin object to log to */
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; // DCGM API interface.
+    dcgmHandle_t m_handle;           // DCGM connection handle.
     // struct cudaDeviceProp m_cudaDeviceProp;
 
     nvvs_device_state_t m_savedState; /* Saved state of the GPU when we first
@@ -159,7 +162,7 @@ public:
      * plugin: Plugin object to log to. NULL=not inside plugin
      *
      */
-    explicit NvvsDeviceList(Plugin *plugin);
+    NvvsDeviceList(Plugin *plugin, DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle);
 
     // Avoid auto-generating the copy constructor/copy assignment as we use std::vector<std::unique_ptr<NvvsDeviceBase>>
     NvvsDeviceList(NvvsDeviceList const &)            = delete;
@@ -229,7 +232,9 @@ public:
     /*************************************************************************/
 
 private:
-    Plugin *m_plugin; /* Plugin object to log to. Can be null */
+    Plugin *m_plugin;                /* Plugin object to log to. Can be null */
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; // DCGM API interface.
+    dcgmHandle_t m_handle;           // DCGM connection handle.
     std::vector<std::unique_ptr<NvvsDeviceBase>> m_devices;
     friend class NvvsDeviceListTest;
 };

@@ -18,6 +18,7 @@
 
 #include "Command.h"
 #include "CommandOutputController.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmThread.h>
 #include <dcgm_structs.h>
 #include <json/json.h>
@@ -28,36 +29,37 @@
 class MnDiag
 {
 public:
-    MnDiag(std::string_view hostname);
+    MnDiag(std::string_view hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps);
     ~MnDiag() = default;
 
     dcgmReturn_t RunStartMnDiag(dcgmHandle_t handle);
-    void SetDcgmRunMnDiag(dcgmRunMnDiag_v1 const &drmnd);
+    void SetDcgmRunMnDiag(dcgmRunMnDiag_v2 const &drmnd);
     void SetJsonOutput(bool jsonOutput);
 
 private:
     // Friend declaration for testing
     friend class MnDiagTester;
 
-    dcgmReturn_t ExecuteMnDiagOnServer(dcgmHandle_t handle, dcgmMnDiagResponse_v1 &response);
+    dcgmReturn_t ExecuteMnDiagOnServer(dcgmHandle_t handle, dcgmMnDiagResponse_v2 &response);
     void HelperDisplayFailureMessage(std::string_view errMsg,
                                      dcgmReturn_t result,
-                                     dcgmMnDiagResponse_v1 const &response);
-    dcgmReturn_t HelperDisplayAsCli(dcgmMnDiagResponse_v1 const &response, bool mndiagFailed);
-    dcgmReturn_t HelperDisplayAsJson(dcgmMnDiagResponse_v1 const &response);
-    dcgmReturn_t HelperDisplayErrorSummary(dcgmMnDiagResponse_v1 const &response, CommandOutputController &cmdView);
+                                     dcgmMnDiagResponse_v2 const &response);
+    dcgmReturn_t HelperDisplayAsCli(dcgmMnDiagResponse_v2 const &response, bool mndiagFailed);
+    dcgmReturn_t HelperDisplayAsJson(dcgmMnDiagResponse_v2 const &response);
+    dcgmReturn_t HelperDisplayErrorSummary(dcgmMnDiagResponse_v2 const &response, CommandOutputController &cmdView);
 
     // JSON helper methods
-    void HelperJsonBuildOutput(Json::Value &output, dcgmMnDiagResponse_v1 const &response, bool mndiagFailed);
-    void HelperJsonAddMetadata(Json::Value &output, dcgmMnDiagResponse_v1 const &response);
-    void HelperJsonAddHosts(Json::Value &output, dcgmMnDiagResponse_v1 const &response);
-    void HelperJsonAddTest(Json::Value &output, dcgmMnDiagResponse_v1 const &response);
+    void HelperJsonBuildOutput(Json::Value &output, dcgmMnDiagResponse_v2 const &response, bool mndiagFailed);
+    void HelperJsonAddMetadata(Json::Value &output, dcgmMnDiagResponse_v2 const &response);
+    void HelperJsonAddHosts(Json::Value &output, dcgmMnDiagResponse_v2 const &response);
+    void HelperJsonAddTest(Json::Value &output, dcgmMnDiagResponse_v2 const &response);
     void HelperJsonAddResults(Json::Value &testEntry,
-                              dcgmMnDiagResponse_v1 const &response,
-                              dcgmMnDiagTestRun_v1 const &test);
-    void HelperJsonAddErrors(Json::Value &output, dcgmMnDiagResponse_v1 const &response);
+                              dcgmMnDiagResponse_v2 const &response,
+                              dcgmMnDiagTestRun_v2 const &test);
+    void HelperJsonAddErrors(Json::Value &output, dcgmMnDiagResponse_v2 const &response);
 
-    dcgmRunMnDiag_v1 m_drmnd {};
+    dcgmRunMnDiag_v2 m_drmnd {};
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< DCGM API interface.
     std::string m_hostName;
     bool m_jsonOutput { false };
     Json::Value m_jsonTmpValue;
@@ -81,15 +83,16 @@ private:
 class RemoteMnDiagExecutor : public DcgmThread
 {
 public:
-    RemoteMnDiagExecutor(dcgmHandle_t handle, dcgmRunMnDiag_v1 const &drmnd);
+    RemoteMnDiagExecutor(dcgmHandle_t handle, dcgmRunMnDiag_v2 const &drmnd, DcgmNs::DcgmOpsAnyPtr dcgmOps);
     void run() override;
     dcgmReturn_t GetResult() const;
-    dcgmMnDiagResponse_v1 const &GetResponse() const;
+    dcgmMnDiagResponse_v2 const &GetResponse() const;
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< DCGM API interface.
     dcgmHandle_t m_handle;
-    dcgmRunMnDiag_v1 m_drmnd {};
-    std::unique_ptr<dcgmMnDiagResponse_v1> m_response;
+    dcgmRunMnDiag_v2 m_drmnd {};
+    std::unique_ptr<dcgmMnDiagResponse_v2> m_response;
     dcgmReturn_t m_result;
 };
 
@@ -100,9 +103,9 @@ class StartMnDiag : public Command
 {
 public:
     StartMnDiag(std::string_view hostname,
-                bool const hostAddressWasOverridden,
-                dcgmRunMnDiag_v1 const &drmnd,
-                bool jsonOutput);
+                dcgmRunMnDiag_v2 const &drmnd,
+                bool jsonOutput,
+                DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -118,7 +121,7 @@ private:
 class AbortMnDiag : public Command
 {
 public:
-    AbortMnDiag(std::string hostname);
+    AbortMnDiag(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

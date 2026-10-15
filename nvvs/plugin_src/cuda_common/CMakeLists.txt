@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,19 +14,12 @@
 
 declare_nvvs_plugin(cudaCommon .)
 
-target_include_directories(cuda_common_interface INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
-
 macro(cuda_common_plugin CUDA_VER)
     nvvs_plugin_srcs(pluginCudaCommon_${CUDA_VER})
 
-    target_include_directories(pluginCudaCommon_${CUDA_VER}
-        PUBLIC
-            "${CUDA${CUDA_VER}_INCLUDE_DIR}")
-
     target_link_libraries(pluginCudaCommon_${CUDA_VER}
         PRIVATE
-            ${CUDA${CUDA_VER}_STATIC_LIBS}
-            ${CUDA${CUDA_VER}_LIBS}
+            cuda_ops${CUDA_VER}
         PUBLIC
             fmt::fmt)
 endmacro()
@@ -35,4 +28,5 @@ foreach(CUDA_VER IN LISTS SUPPORTED_CUDA_VERSIONS)
     add_subdirectory(Cuda${CUDA_VER})
 endforeach()
 
+add_subdirectory(mock)
 add_subdirectory(tests)

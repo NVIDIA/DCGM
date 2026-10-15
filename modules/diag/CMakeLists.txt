@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -49,7 +49,9 @@ target_link_libraries(dcgmmodulediag_private_static
         childprocess
         dcgm_common
         serialize
+        user_credentials
         fmt::fmt
+        dcgm_mutex
 )
 target_sources(dcgmmodulediag_private_static
     PRIVATE
@@ -69,7 +71,8 @@ target_link_libraries(dcgmmodulediag
         dcgm_logging
         dcgm_mutex
         serialize
-        ${JSONCPP_STATIC_LIBS}
+        user_credentials
+        jsoncpp_static
         fmt::fmt
 )
 target_sources(dcgmmodulediag

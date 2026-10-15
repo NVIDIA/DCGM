@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@
 #ifndef __PLUGINDEVICE_H__
 #define __PLUGINDEVICE_H__
 
+#include <CudaOpsAnyPtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
+
 #include "DcgmError.h"
 #include "NvvsDeviceList.h"
 #include "cuda.h"
@@ -32,14 +35,27 @@ public:
     std::string warning;
     std::string m_pciBusId;
     std::string m_testName;
+    DcgmNs::DcgmOpsAnyPtr dcgmOps;
+    CudaOpsAnyPtr cudaOps;
 
-    PluginDevice() = default;
+    PluginDevice(DcgmNs::DcgmOpsAnyPtr dcgmOpsPtr, CudaOpsAnyPtr cudaOpsPtr)
+        : dcgmOps(dcgmOpsPtr)
+        , cudaOps(cudaOpsPtr)
+    {}
 
-    PluginDevice(std::string const &testName, unsigned int ndi, const char *pciBusId, Plugin *p)
+    PluginDevice(std::string const &testName,
+                 unsigned int ndi,
+                 const char *pciBusId,
+                 Plugin *p,
+                 DcgmNs::DcgmOpsAnyPtr dcgmOpsPtr,
+                 dcgmHandle_t handle,
+                 CudaOpsAnyPtr cudaOpsPtr)
         : cudaDeviceIdx(0)
         , gpuId(ndi)
         , warning()
         , m_testName(testName)
+        , dcgmOps(dcgmOpsPtr)
+        , cudaOps(cudaOpsPtr)
     {
         int st;
         char buf[256] = { 0 };
@@ -47,7 +63,7 @@ public:
 
         memset(&this->cudaDevProp, 0, sizeof(this->cudaDevProp));
 
-        this->nvvsDevice = std::make_unique<NvvsDevice>(p);
+        this->nvvsDevice = std::make_unique<NvvsDevice>(p, dcgmOps, handle);
         st               = this->nvvsDevice->Init(testName, this->gpuId);
         if (st)
         {
@@ -65,13 +81,17 @@ public:
         }
 
         m_pciBusId = pciBusId;
-        cuSt       = cudaDeviceGetByPCIBusId(&this->cudaDeviceIdx, pciBusId);
+        cuSt       = cudaOps->cudaDeviceGetByPCIBusId(&this->cudaDeviceIdx, pciBusId);
         if (cuSt != cudaSuccess)
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cudaDeviceGetByPCIBusId");
-            snprintf(
-                buf, sizeof(buf) - 1, "'%s' for GPU %u, bus ID = %s", cudaGetErrorString(cuSt), this->gpuId, pciBusId);
+            snprintf(buf,
+                     sizeof(buf) - 1,
+                     "'%s' for GPU %u, bus ID = %s",
+                     cudaOps->cudaGetErrorString(cuSt),
+                     this->gpuId,
+                     pciBusId);
             d.AddDetail(buf);
             warning = d.GetMessage();
             throw(d);

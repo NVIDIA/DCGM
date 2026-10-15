@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,13 @@
 #include <HangDetect.h>
 #include <HangDetectMonitor.h>
 #include <MockFileHandle.h>
+#include <TempFile.hpp>
 
 #include <catch2/catch_all.hpp>
 #include <fmt/format.h>
 #include <random>
 
-static ChildProcessFactory MockChildProcessFactory = []() {
+static ChildProcessFactory ChildProcessManagerMockChildProcessFactory = []() {
     return std::make_unique<MockChildProcess>();
 };
 
@@ -89,7 +90,7 @@ static bool ValidateParams(dcgmChildProcessParams_t const &params, MockChildProc
 TEST_CASE("ChildProcessManager")
 {
     // Create manager with our mock factory
-    DcgmChildProcessManager manager(MockChildProcessFactory);
+    DcgmChildProcessManager manager(ChildProcessManagerMockChildProcessFactory);
 
     dcgmChildProcessParams_t params;
     params.version       = dcgmChildProcessParams_version1;
@@ -103,7 +104,9 @@ TEST_CASE("ChildProcessManager")
     params.userName      = nullptr;
     MockChildProcess::Reset();
 
-    DcgmLoggingInit("test_log.txt", DcgmLoggingSeverityVerbose, DcgmLoggingSeverityVerbose);
+    auto logFile = TempFile::Random("", "dcgm-child-process-log-");
+    auto logPath = logFile.Path().string();
+    DcgmLoggingInit(logPath.c_str(), DcgmLoggingSeverityVerbose, DcgmLoggingSeverityVerbose);
     RouteLogToBaseLogger(SYSLOG_LOGGER);
 
     SECTION("Invalid handle")
@@ -415,6 +418,13 @@ TEST_CASE("ChildProcessManager")
             REQUIRE(DCGM_ST_OK == (manager.*pipeTestParams.getHandleFunc)(handle, pipeFd));
             CHECK(pipeFd >= 0);
 
+            // The manager retains its own descriptor, so closing a client copy does not prevent another client from
+            // retrieving a usable descriptor for the same pipe.
+            close(pipeFd);
+            pipeFd = -1;
+            REQUIRE(DCGM_ST_OK == (manager.*pipeTestParams.getHandleFunc)(handle, pipeFd));
+            CHECK(pipeFd >= 0);
+
             // Generate a buffer with 1kb of random data
             std::minstd_rand gen(std::random_device {}());
             std::uniform_int_distribution<char> dist(-128, 127);
@@ -538,7 +548,7 @@ TEST_CASE("WriteToFd")
 TEST_CASE("DcgmChildProcessManager Reset")
 {
     // Create manager with our mock factory
-    DcgmChildProcessManager manager(MockChildProcessFactory);
+    DcgmChildProcessManager manager(ChildProcessManagerMockChildProcessFactory);
 
     dcgmChildProcessParams_t params;
     params.version       = dcgmChildProcessParams_version1;
@@ -551,7 +561,9 @@ TEST_CASE("DcgmChildProcessManager Reset")
     params.dataChannelFd = -1;
     params.userName      = nullptr;
 
-    DcgmLoggingInit("test_log.txt", DcgmLoggingSeverityVerbose, DcgmLoggingSeverityVerbose);
+    auto logFile = TempFile::Random("", "dcgm-child-process-reset-log-");
+    auto logPath = logFile.Path().string();
+    DcgmLoggingInit(logPath.c_str(), DcgmLoggingSeverityVerbose, DcgmLoggingSeverityVerbose);
     RouteLogToBaseLogger(SYSLOG_LOGGER);
 
     SECTION("Reset with no processes")
@@ -687,6 +699,7 @@ TEST_CASE("DcgmChildProcessManager Reset")
         int dataFd = -1;
         REQUIRE(DCGM_ST_OK == manager.GetDataChannelHandle(handle, dataFd));
         CHECK(dataFd >= 0);
+        close(dataFd);
 
         // Reset should succeed
         REQUIRE(DCGM_ST_OK == manager.Reset());
@@ -727,10 +740,10 @@ TEST_CASE("DcgmChildProcessManager Reset")
 /**
  * Friend class to access private members of HangDetect for testing.
  */
-class HangDetectTest : public HangDetect
+class ChildProcessManagerHangDetectTest : public HangDetect
 {
 public:
-    explicit HangDetectTest(std::unique_ptr<FileSystemOperator> fsop)
+    explicit ChildProcessManagerHangDetectTest(std::unique_ptr<FileSystemOperator> fsop)
         : HangDetect(std::move(fsop))
     {}
 
@@ -756,9 +769,9 @@ public:
     Fixture()
         : m_mfsop(std::make_unique<MockFileSystemOperator>())
         , m_mfsopRef(*m_mfsop)
-        , m_detector(std::make_unique<HangDetectTest>(std::move(m_mfsop)))
+        , m_detector(std::make_unique<ChildProcessManagerHangDetectTest>(std::move(m_mfsop)))
         , m_monitor(std::make_unique<HangDetectMonitor>(*m_detector))
-        , m_manager(MockChildProcessFactory)
+        , m_manager(ChildProcessManagerMockChildProcessFactory)
     {
         m_manager.SetHangDetectMonitor(m_monitor.get());
 
@@ -780,7 +793,7 @@ public:
     {
         return m_mfsopRef;
     }
-    HangDetectTest &GetDetector()
+    ChildProcessManagerHangDetectTest &GetDetector()
     {
         return *m_detector;
     }
@@ -796,7 +809,7 @@ public:
 private:
     std::unique_ptr<MockFileSystemOperator> m_mfsop;
     MockFileSystemOperator &m_mfsopRef;
-    std::unique_ptr<HangDetectTest> m_detector;
+    std::unique_ptr<ChildProcessManagerHangDetectTest> m_detector;
     std::unique_ptr<HangDetectMonitor> m_monitor;
     DcgmChildProcessManager m_manager;
     dcgmChildProcessParams_t m_params;

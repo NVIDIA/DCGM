@@ -14,18 +14,42 @@
  * limitations under the License.
  */
 
+#include <DcgmOpsAnyUniquePtr.hpp>
+#include <MockDcgmOps.h>
 #include <NcclTestsPlugin.h>
+#include <NvvsCommon.h>
 #include <PluginInterface.h>
 #include <ResultHelpers.h>
+#include <ScopedEnvVars.hpp>
+#include <ScopedFilePermissions.hpp>
+#include <TempDir.hpp>
+#include <TempExecutable.hpp>
 #include <UniquePtrUtil.h>
 
 #include <catch2/catch_all.hpp>
 #include <filesystem>
 #include <fstream>
+#include <optional>
+#include <utility>
+
+
+namespace
+{
+struct NcclTestsPluginTestFixture
+{
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique;
+    DcgmNs::MockDcgmOps *mockDcgmOps;
+    NvvsCommon nvvsCommon;
+
+    NcclTestsPluginTestFixture()
+        : mockDcgmOpsUnique(std::make_unique<DcgmNs::MockDcgmOps>())
+        , mockDcgmOps(mockDcgmOpsUnique.get())
+    {}
+};
+} // namespace
 
 namespace DcgmNs::Nvvs::Plugins::NcclTests
 {
-
 /*************************************************************************/
 /**
  * Friend class to access private/protected members for testing.
@@ -33,8 +57,8 @@ namespace DcgmNs::Nvvs::Plugins::NcclTests
 class TestNcclTestsPlugin : public NcclTestsPlugin
 {
 public:
-    TestNcclTestsPlugin(dcgmHandle_t handle)
-        : NcclTestsPlugin(handle)
+    TestNcclTestsPlugin(dcgmHandle_t handle, DcgmNs::DcgmOpsAnyUniquePtr dcgmOps, NvvsCommon *nvvsCommon)
+        : NcclTestsPlugin(handle, std::move(dcgmOps), nvvsCommon)
     {}
 
     using NcclTestsPlugin::GetNcclTestsTestName;
@@ -71,58 +95,17 @@ class MockNcclTestsExecutableEnv
 {
 public:
     MockNcclTestsExecutableEnv()
-    {
-        // Create a parent temporary directory for the mock executable
-        auto timestamp = std::chrono::system_clock::now().time_since_epoch().count();
-        auto execDir   = std::filesystem::temp_directory_path() / fmt::format("nccl_test_plugin_tests_{}", timestamp);
-        std::error_code ec;
-        if (!std::filesystem::create_directories(execDir, ec) || ec)
-        {
-            FAIL("Failed to create temporary directory: " << execDir << " - Error: " << ec.message());
-        }
-
-        m_execDir  = execDir;
-        m_execPath = execDir / NCCL_TESTS_EXECUTABLE;
-        std::ofstream execFile { m_execPath };
-        if (!execFile.is_open())
-        {
-            FAIL("Failed to create mock executable file: " << m_execPath);
-        }
-
-        // Simple shell script that mimics the expected nccl-tests output and exits successfully
-        execFile << "#!/bin/sh\n";
-        execFile << "echo \"# Out of bounds values : PASSED\"\n";
-        execFile << "echo \"# Avg bus bandwidth : PASSED\"\n";
-        execFile.close();
-        std::filesystem::permissions(m_execPath,
-                                     std::filesystem::perms::owner_all | std::filesystem::perms::group_read
-                                         | std::filesystem::perms::group_exec | std::filesystem::perms::others_read
-                                         | std::filesystem::perms::others_exec,
-                                     std::filesystem::perm_options::replace,
-                                     ec);
-        if (ec)
-        {
-            FAIL("Failed to set permissions for mock executable: " << m_execPath << " - Error: " << ec.message());
-        }
-
-        // Set the environment variable to the directory containing the mock executable as required by the plugin
-        if (setenv(DCGM_NCCL_TESTS_BIN_PATH_ENV, m_execDir.string().c_str(), 1) != 0)
-        {
-            FAIL("Failed to set environment variable: " << DCGM_NCCL_TESTS_BIN_PATH_ENV
-                                                        << " - Error: " << strerror(errno));
-        }
-    }
-
-    ~MockNcclTestsExecutableEnv()
-    {
-        unsetenv(DCGM_NCCL_TESTS_BIN_PATH_ENV);
-        std::error_code ec;
-        std::filesystem::remove_all(m_execPath.parent_path(), ec);
-        if (ec)
-        {
-            WARN("Failed to remove exec path directory: " << m_execPath.parent_path() << " - Error: " << ec.message());
-        }
-    }
+        : m_execDir(TempDir::Random("nccl-test-plugin-tests-"))
+        , m_execPath(TempExecutable::Fixed(m_execDir.Path() / NCCL_TESTS_EXECUTABLE,
+                                           "#!/bin/sh\n"
+                                           "echo \"# Out of bounds values : PASSED\"\n"
+                                           "echo \"# Avg bus bandwidth : PASSED\"\n",
+                                           std::filesystem::perms::owner_all | std::filesystem::perms::group_read
+                                               | std::filesystem::perms::group_exec
+                                               | std::filesystem::perms::others_read
+                                               | std::filesystem::perms::others_exec))
+        , m_envVars(DCGM_NCCL_TESTS_BIN_PATH_ENV, m_execDir.Path().string())
+    {}
 
     // Delete copy and move to ensure single ownership
     MockNcclTestsExecutableEnv(MockNcclTestsExecutableEnv const &)            = delete;
@@ -132,24 +115,25 @@ public:
 
     std::filesystem::path GetExecPath() const
     {
-        return m_execPath;
+        return m_execPath.Path();
     }
 
     std::filesystem::path GetExecDir() const
     {
-        return m_execDir;
+        return m_execDir.Path();
     }
 
 private:
-    std::filesystem::path m_execDir;  // Directory containing the mock executable
-    std::filesystem::path m_execPath; // Full path to the mock executable
+    TempDir m_execDir;
+    TempExecutable m_execPath;
+    ScopedEnvVars m_envVars;
 };
 
 using namespace DcgmNs::Nvvs::Plugins::NcclTests;
 
-TEST_CASE("NcclTestsPlugin: Constructor and Initialization")
+TEST_CASE_METHOD(NcclTestsPluginTestFixture, "NcclTestsPlugin: Constructor and Initialization")
 {
-    TestNcclTestsPlugin plugin((dcgmHandle_t)1);
+    TestNcclTestsPlugin plugin((dcgmHandle_t)1, std::move(mockDcgmOpsUnique), &nvvsCommon);
 
     // Verify default parameters
     auto &params = plugin.m_testParameters;
@@ -165,15 +149,15 @@ TEST_CASE("NcclTestsPlugin: Constructor and Initialization")
     REQUIRE(infoStruct.logFileTag == NCCL_TESTS_PLUGIN_NAME);
 }
 
-TEST_CASE("NcclTestsPlugin: GetNcclTestsTestName")
+TEST_CASE_METHOD(NcclTestsPluginTestFixture, "NcclTestsPlugin: GetNcclTestsTestName")
 {
-    TestNcclTestsPlugin plugin((dcgmHandle_t)1);
+    TestNcclTestsPlugin plugin((dcgmHandle_t)1, std::move(mockDcgmOpsUnique), &nvvsCommon);
     REQUIRE(NCCL_TESTS_PLUGIN_NAME == plugin.GetNcclTestsTestName());
 }
 
-TEST_CASE("NcclTestsPlugin: Go() Execution")
+TEST_CASE_METHOD(NcclTestsPluginTestFixture, "NcclTestsPlugin: Go() Execution")
 {
-    TestNcclTestsPlugin plugin((dcgmHandle_t)1);
+    TestNcclTestsPlugin plugin((dcgmHandle_t)1, std::move(mockDcgmOpsUnique), &nvvsCommon);
     auto entityList                      = createEntityList(1);
     static const unsigned int paramCount = 1;
     dcgmDiagPluginTestParameter_t param[paramCount];
@@ -195,7 +179,7 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
         REQUIRE(GetOverallDiagResult(entityResults) == DCGM_DIAG_RESULT_NOT_RUN);
     }
 
-    SECTION("is_allowed is False")
+    SECTION("is_allowed is False (DCGM_FR_TEST_DISABLED path)")
     {
         snprintf(param[0].parameterValue, sizeof(param[0].parameterValue), "%s", "False");
         plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
@@ -227,7 +211,7 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
 
     SECTION("Plugin is skipped if environment variable not set")
     {
-        unsetenv(DCGM_NCCL_TESTS_BIN_PATH_ENV);
+        ScopedEnvVars envVars(DCGM_NCCL_TESTS_BIN_PATH_ENV, std::nullopt);
         plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
 
         // Verify plugin and overall diag result is SKIP
@@ -239,9 +223,9 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
     SECTION("Plugin is failed if the executable name does not match the expected name")
     {
         plugin.m_ncclTestsExecutable = "does_not_match";
-        setenv(DCGM_NCCL_TESTS_BIN_PATH_ENV, fmt::format("/binary/path/{}", plugin.m_ncclTestsExecutable).c_str(), 1);
+        ScopedEnvVars envVars(DCGM_NCCL_TESTS_BIN_PATH_ENV,
+                              fmt::format("/binary/path/{}", plugin.m_ncclTestsExecutable));
         plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
-        unsetenv(DCGM_NCCL_TESTS_BIN_PATH_ENV);
 
         // Verify plugin and overall diag result is SKIP
         plugin.GetResults(NCCL_TESTS_PLUGIN_NAME, &entityResults);
@@ -252,9 +236,9 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
     SECTION("Plugin is skipped if the binary path specified in the environment variable does not exist")
     {
         plugin.m_ncclTestsExecutable = "does_not_exist";
-        setenv(DCGM_NCCL_TESTS_BIN_PATH_ENV, fmt::format("/binary/path/{}", plugin.m_ncclTestsExecutable).c_str(), 1);
+        ScopedEnvVars envVars(DCGM_NCCL_TESTS_BIN_PATH_ENV,
+                              fmt::format("/binary/path/{}", plugin.m_ncclTestsExecutable));
         plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
-        unsetenv(DCGM_NCCL_TESTS_BIN_PATH_ENV);
 
         // Verify plugin and overall diag result is SKIP
         plugin.GetResults(NCCL_TESTS_PLUGIN_NAME, &entityResults);
@@ -269,10 +253,9 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
 
         // Set the environment variable to the executable directory (so it's not a regular file) and plugin's expected
         // executable name to match.
-        setenv(DCGM_NCCL_TESTS_BIN_PATH_ENV, execDir.string().c_str(), 1);
+        ScopedEnvVars envVars(DCGM_NCCL_TESTS_BIN_PATH_ENV, execDir.string());
         plugin.m_ncclTestsExecutable = execDir.filename().string();
         plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
-        unsetenv(DCGM_NCCL_TESTS_BIN_PATH_ENV);
 
         // Verify plugin and overall diag result is SKIP
         plugin.GetResults(NCCL_TESTS_PLUGIN_NAME, &entityResults);
@@ -315,12 +298,8 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
         SECTION("Symlink to binary should resolve to canonical path")
         {
             // Create a separate directory containing a symlink to the executable
-            auto symlinkDir = execDir / "symlink_dir";
-            if (!std::filesystem::create_directory(symlinkDir, ec) || ec)
-            {
-                FAIL("Failed to create symlink directory: " << symlinkDir << " - Error: " << ec.message());
-            }
-            auto symlinkPath = symlinkDir / execPath.filename();
+            auto symlinkDir  = TempDir::Random("nccl-symlink-dir-");
+            auto symlinkPath = symlinkDir.Path() / execPath.filename();
             std::filesystem::create_symlink(execPath, symlinkPath, ec);
             if (ec)
             {
@@ -328,15 +307,9 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
             }
 
             // Point env var to the directory containing the symlink
-            setenv(DCGM_NCCL_TESTS_BIN_PATH_ENV, symlinkDir.string().c_str(), 1);
+            ScopedEnvVars envVars(DCGM_NCCL_TESTS_BIN_PATH_ENV, symlinkDir.Path().string());
             plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
             REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_PASS);
-
-            if (!std::filesystem::remove_all(symlinkDir, ec) || ec)
-            {
-                WARN("Failed to remove symlink dir: " << symlinkDir << " - Error: " << ec.message()
-                                                      << ". Continuing...");
-            }
         }
 
         SECTION("Binary with non-root uid should fail")
@@ -361,36 +334,24 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
 
         SECTION("Binary with group-writable (S_IWGRP) should fail")
         {
-            std::filesystem::permissions(
-                execPath, std::filesystem::perms::group_write, std::filesystem::perm_options::add, ec);
-            if (ec)
-            {
-                FAIL("Failed to set permissions: " << execPath << " - Error: " << ec.message());
-            }
+            ScopedFilePermissions permissions(
+                execPath, std::filesystem::perms::group_write, std::filesystem::perm_options::add);
             plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
             REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_FAIL);
         }
 
         SECTION("Binary with world-writable (S_IWOTH) should fail")
         {
-            std::filesystem::permissions(
-                execPath, std::filesystem::perms::others_write, std::filesystem::perm_options::add, ec);
-            if (ec)
-            {
-                FAIL("Failed to set permissions: " << execPath << " - Error: " << ec.message());
-            }
+            ScopedFilePermissions permissions(
+                execPath, std::filesystem::perms::others_write, std::filesystem::perm_options::add);
             plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
             REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_FAIL);
         }
 
         SECTION("Binary without execute permission (S_IXUSR) should fail")
         {
-            std::filesystem::permissions(
-                execPath, std::filesystem::perms::owner_exec, std::filesystem::perm_options::remove, ec);
-            if (ec)
-            {
-                FAIL("Failed to set permissions: " << execPath << " - Error: " << ec.message());
-            }
+            ScopedFilePermissions permissions(
+                execPath, std::filesystem::perms::owner_exec, std::filesystem::perm_options::remove);
             plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
             REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_FAIL);
         }
@@ -399,38 +360,26 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
         {
             SECTION("Permission 155 (--xr-xr-x) should pass")
             {
-                std::filesystem::permissions(execPath,
-                                             std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-                                             std::filesystem::perm_options::remove,
-                                             ec);
-                if (ec)
-                {
-                    FAIL("Failed to set permissions: " << execPath << " - Error: " << ec.message());
-                }
+                ScopedFilePermissions permissions(execPath,
+                                                  std::filesystem::perms::owner_read
+                                                      | std::filesystem::perms::owner_write,
+                                                  std::filesystem::perm_options::remove);
                 plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
                 REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_PASS);
             }
 
             SECTION("Permission 355 (-wxr-xr-x) should pass")
             {
-                std::filesystem::permissions(
-                    execPath, std::filesystem::perms::owner_read, std::filesystem::perm_options::remove, ec);
-                if (ec)
-                {
-                    FAIL("Failed to set permissions: " << execPath << " - Error: " << ec.message());
-                }
+                ScopedFilePermissions permissions(
+                    execPath, std::filesystem::perms::owner_read, std::filesystem::perm_options::remove);
                 plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
                 REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_PASS);
             }
 
             SECTION("Permission 555 (r-xr-xr-x) should pass")
             {
-                std::filesystem::permissions(
-                    execPath, std::filesystem::perms::owner_write, std::filesystem::perm_options::remove, ec);
-                if (ec)
-                {
-                    FAIL("Failed to set permissions: " << execPath << " - Error: " << ec.message());
-                }
+                ScopedFilePermissions permissions(
+                    execPath, std::filesystem::perms::owner_write, std::filesystem::perm_options::remove);
                 plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), paramCount, &param[0]);
                 REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_PASS);
             }
@@ -438,9 +387,9 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
     }
 }
 
-TEST_CASE("NcclTestsPlugin: Shutdown()")
+TEST_CASE_METHOD(NcclTestsPluginTestFixture, "NcclTestsPlugin: Shutdown()")
 {
-    TestNcclTestsPlugin plugin((dcgmHandle_t)1);
+    TestNcclTestsPlugin plugin((dcgmHandle_t)1, std::move(mockDcgmOpsUnique), &nvvsCommon);
 
     // Verify recorder is initialized after construction
     REQUIRE(plugin.m_dcgmRecorderInitialized == true);

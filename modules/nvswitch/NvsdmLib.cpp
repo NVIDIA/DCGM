@@ -1060,6 +1060,11 @@ void NvsdmMock::InjectDevice(NvsdmMockDevice const &dev)
     m_devices.push_back(dev);
 }
 
+void NvsdmMock::SetDeviceTelemetryReturn(uint16_t devID, nvsdmRet_t ret)
+{
+    m_deviceTelemetryReturns[devID] = ret;
+}
+
 nvsdmRet_t NvsdmMock::nvsdmPortGetTelemetryValues(nvsdmPort_t const port, nvsdmTelemParam_t *param)
 {
     if (!m_init)
@@ -1116,6 +1121,10 @@ nvsdmRet_t NvsdmMock::nvsdmDeviceGetTelemetryValues(nvsdmDevice_t const device, 
     if (!mockDev)
     {
         return NVSDM_ERROR_INVALID_ARG;
+    }
+    if (auto const it = m_deviceTelemetryReturns.find(mockDev->GetDevID()); it != m_deviceTelemetryReturns.end())
+    {
+        return it->second;
     }
     param->telemValsArray[0]
         = mockDev->GetFieldValue(static_cast<nvsdmConnectXTelemCounter_t>(param->telemValsArray[0].telemCtr));

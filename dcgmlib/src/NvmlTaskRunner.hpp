@@ -89,8 +89,9 @@ struct SafeVgpuTypeId
 bool operator==(const SafeVgpuTypeId &a, const SafeVgpuTypeId &b);
 
 /*
- * @note Before enqueuing a task, the methods in this class will take a shared_lock internally, Unless
- * necessary, methods in this class should not be called while other locks are held.
+ * @note Before enqueuing a task, the methods in this class will take a
+ * shared_lock internally, Unless necessary, methods in this class should not be
+ * called while other locks are held.
  */
 class NvmlTaskRunner : public DcgmTaskRunner
 {
@@ -99,7 +100,8 @@ public:
     ~NvmlTaskRunner() override = default;
 
     /*
-     * Block new tasks from being executed. This function will also wait for the task queue to be empty.
+     * Block new tasks from being executed. This function will also wait for the
+     * task queue to be empty.
      */
     void BlockNewTasks();
 
@@ -121,18 +123,21 @@ public:
     /*
      * Get the safe NVML handles for all GPUs within the task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @return A vector of pairs of safe NVML handles and their status.
      */
     DcgmResult<std::vector<std::pair<SafeNvmlHandle, DcgmEntityStatus_t>>> GetSafeNvmlHandles();
 
     /*
-     * Get the safe NVML handle for a given GPU and MIG index within the task runner.
+     * Get the safe NVML handle for a given GPU and MIG index within the task
+     * runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] nvmlDevice The safe NVML handle for the GPU.
      * @param[in] index The MIG index.
@@ -143,8 +148,22 @@ public:
     /*
      * Wait for an event to be set.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally.
+     * Unless necessary, this method should not be called
+     * while other locks are held.
+     *
+     * @param[in] set The event set.
+     * @param[in,out] params The wait parameters and returned event data.
+     * @return The result of the operation.
+     */
+    nvmlReturn_t NvmlEventSetWait_v3(nvmlEventSet_t set, nvmlEventSetWait_v3_t *params);
+
+    /*
+     * Wait for an event to be set.
+     *
+     * @note This method will take a shared_lock internally.
+     * Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] set The event set.
      * @param[out] data The event data.
@@ -156,8 +175,9 @@ public:
     /*
      * Wait for an event to be set.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally.
+     * Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] set The event set.
      * @param[out] data The event data.
@@ -169,8 +189,9 @@ public:
     /*
      * Get the P2P status for a given GPU and GPU within the task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] device1 The first GPU.
      * @param[in] device2 The second GPU.
@@ -186,8 +207,9 @@ public:
     /*
      * Get the number of GPUs within the task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[out] deviceCount The number of GPUs.
      * @return The result of the operation.
@@ -197,8 +219,9 @@ public:
     /*
      * Get the common ancestor for two GPUs within the task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] device1 The first GPU.
      * @param[in] device2 The second GPU.
@@ -209,12 +232,12 @@ public:
                                                      SafeNvmlHandle device2,
                                                      nvmlGpuTopologyLevel_t *pathInfo);
 
-
     /*
      * Get the GPU instances for a given device and profile id within task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] device The GPU.
      * @param[in] profileId The profile id.
@@ -228,10 +251,12 @@ public:
                                            unsigned int &count);
 
     /*
-     * Get the compute instances for a given GPU instance and profile id within task runner.
+     * Get the compute instances for a given GPU instance and profile id within
+     * task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] gpuInstance The GPU instance.
      * @param[in] profileId The profile id.
@@ -247,30 +272,31 @@ public:
     /*
      * Get the active vGPU instances for a given device within task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] device The device.
      * @param[out] vgpuCount The number of active vGPU instances.
-     * @param[out] vgpuInstances The active vGPU instances. Can be nullptr, in this case, only the number of active vGPU
-     * instances will be returned.
+     * @param[out] vgpuInstances The active vGPU instances. Can be nullptr, in
+     * this case, only the number of active vGPU instances will be returned.
      * @return The result of the operation.
      */
     nvmlReturn_t NvmlDeviceGetActiveVgpus(SafeNvmlHandle device,
                                           unsigned int *vgpuCount,
                                           SafeVgpuInstance *vgpuInstances);
 
-
     /*
      * Get the supported vGPU type IDs for a given device within task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] device The device.
      * @param[out] vgpuTypeIdCount The number of supported vGPU type IDs.
-     * @param[out] vgpuTypeIds The supported vGPU type IDs. Can be nullptr, in this case, only the number of supported
-     * vGPU type IDs will be returned.
+     * @param[out] vgpuTypeIds The supported vGPU type IDs. Can be nullptr, in
+     * this case, only the number of supported vGPU type IDs will be returned.
      * @return The result of the operation.
      */
     nvmlReturn_t NvmlDeviceGetSupportedVgpus(SafeNvmlHandle device,
@@ -278,10 +304,12 @@ public:
                                              SafeVgpuTypeId *vgpuTypeIds);
 
     /*
-     * Get the maximum number of vGPU instances for a given vGPU type ID within task runner.
+     * Get the maximum number of vGPU instances for a given vGPU type ID within
+     * task runner.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] device The device.
      * @param[in] vgpuTypeId The vGPU type ID.
@@ -301,12 +329,14 @@ public:
     const char *NvmlErrorString(nvmlReturn_t result) const;
 
     /*
-     * Dispatch a task to the task runner. This is useful when a series of NVML calls need to be made and ensure
-     * that they are executed in the correct order and with correct input values without the detachment happen in
-     * the middle of the task.
+     * Dispatch a task to the task runner. This is useful when a series of NVML
+     * calls need to be made and ensure that they are executed in the correct
+     * order and with correct input values without the detachment happen in the
+     * middle of the task.
      *
-     * @note This method will take a shared_lock internally and will block until the task is completed. Unless
-     * necessary, this method should not be called while other locks are held.
+     * @note This method will take a shared_lock internally and will block until
+     * the task is completed. Unless necessary, this method should not be called
+     * while other locks are held.
      *
      * @param[in] taskFunc The task to dispatch.
      * @return The result of the task.
@@ -315,16 +345,15 @@ public:
 
 #include "NvmlTaskRunnerGeneratedPublic.h"
 
-#ifndef DCGM_NVML_TASK_RUNNER_TEST
-private:
-#endif
+protected:
 #include "NvmlTaskRunnerGeneratedPrivate.h"
 
     /*
      * Wait for all ongoing tasks to complete.
      *
-     * @note This method will wait until the number of ongoing tasks is 0. It's possible to block indefinitely.
-     * We'll (plan to) depend on hang detection to report if we don't return from the operation.
+     * @note This method will wait until the number of ongoing tasks is 0. It's
+     * possible to block indefinitely. We'll (plan to) depend on hang detection to
+     * report if we don't return from the operation.
      */
     void WaitOngoingTasksToComplete();
 
@@ -371,6 +400,33 @@ private:
     template <typename... Args>
     constexpr nvmlReturn_t InvokeNvmlFunctionImpl(nvmlReturn_t (*nvmlFunc)(Args...), Args... args)
     {
+        return nvmlFunc(args...);
+    }
+
+    /*
+     * Wait for an NVML event without enqueuing the blocking call.
+     *
+     * @param[in] nvmlFunc The versioned NVML event wait function to invoke.
+     * @param[in] args The arguments to the NVML event wait function.
+     * @return The result of the operation.
+     */
+    template <typename... Args>
+    nvmlReturn_t NvmlEventSetWaitImpl(nvmlReturn_t (*nvmlFunc)(Args...), Args... args)
+    {
+        std::shared_lock<std::shared_mutex> guard(m_sharedMutex);
+        if (m_blockNewTasks)
+        {
+            return NVML_ERROR_UNINITIALIZED;
+        }
+        m_ongoingTasks.fetch_add(1, std::memory_order_release);
+        guard.unlock();
+        DcgmNs::Defer defer([this]() {
+            auto numTask = m_ongoingTasks.fetch_sub(1, std::memory_order_acq_rel);
+            if (numTask == 1)
+            {
+                m_ongoingTasksCv.notify_one();
+            }
+        });
         return nvmlFunc(args...);
     }
 
@@ -449,8 +505,8 @@ private:
      *
      * @param[in] device The device.
      * @param[out] vgpuCount The number of active vGPU instances.
-     * @param[out] vgpuInstances The active vGPU instances. Can be nullptr, in this case, only the number of active vGPU
-     * instances will be returned.
+     * @param[out] vgpuInstances The active vGPU instances. Can be nullptr, in
+     * this case, only the number of active vGPU instances will be returned.
      * @return The result of the operation.
      */
     nvmlReturn_t NvmlDeviceGetActiveVgpusImpl(SafeNvmlHandle device,
@@ -462,8 +518,8 @@ private:
      *
      * @param[in] device The device.
      * @param[out] vgpuTypeIdCount The number of supported vGPU type IDs.
-     * @param[out] vgpuTypeIds The supported vGPU type IDs. Can be nullptr, in this case, only the number of supported
-     * vGPU type IDs will be returned.
+     * @param[out] vgpuTypeIds The supported vGPU type IDs. Can be nullptr, in
+     * this case, only the number of supported vGPU type IDs will be returned.
      * @return The result of the operation.
      */
     nvmlReturn_t NvmlDeviceGetSupportedVgpusImpl(SafeNvmlHandle device,
@@ -490,8 +546,10 @@ private:
     bool m_blockNewTasks                     = false; //!< Whether new tasks are blocked.
     NvmlGeneration m_generation              = 1;     //!< The current generation.
     std::atomic<unsigned int> m_ongoingTasks = 0;     //!< The number of ongoing tasks.
-    std::shared_mutex m_sharedMutex; //!< Mutex for this class, mainly used for ensuring the enqeue process and the
-                                     //!< block new tasks process are correctly synchronized.
-    std::condition_variable_any m_ongoingTasksCv; //!< Condition variable for the ongoing tasks, used for blocking the
-                                                  //!< thread when waiting for the ongoing tasks to complete.
+    std::shared_mutex m_sharedMutex;                  //!< Mutex for this class, mainly used for ensuring the
+                                                      //!< enqeue process and the block new tasks process are
+                                                      //!< correctly synchronized.
+    std::condition_variable_any m_ongoingTasksCv;     //!< Condition variable for the ongoing tasks, used for
+                                                      //!< blocking the thread when waiting for the ongoing
+                                                      //!< tasks to complete.
 };

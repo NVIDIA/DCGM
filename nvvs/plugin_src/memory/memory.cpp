@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <memory>
 #include <string.h>
 #include <utility>
 
@@ -44,10 +45,6 @@ __asm__(".symver memcpy,memcpy@GLIBC_2.2.5");
 // convert bytes / ms into MB/s
 //#define inMBperSecond(bytes, ms)
 //    ( ((bytes) * 1000.0f) / ((ms) * 1024.0f * 1024.0f) )
-
-/*****************************************************************************/
-/* For now, use a heap struct */
-mem_globals_t g_memGlobals;
 
 /*****************************************************************************/
 // defs pulled from healthmon
@@ -74,6 +71,24 @@ typedef enum testResult
     TEST_RESULT_SKIPPED,
     TEST_RESULT_COUNT,
 } testResult_t;
+
+mem_globals_t::mem_globals_t(Memory &memory,
+                             TestParameters *testParameters,
+                             dcgmHandle_t handle,
+                             DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                             unsigned int dcgmGpuIndex,
+                             CudaOpsAnyPtr cudaOps,
+                             CudaCommonAnyPtr cudaCommon,
+                             NvvsCommon *nvvsCommon)
+    : testParameters(testParameters)
+    , memory(&memory)
+    , handle(handle)
+    , dcgmOps(dcgmOps)
+    , cudaOps(cudaOps)
+    , cudaCommon(cudaCommon)
+    , nvvsCommon(nvvsCommon)
+    , dcgmGpuIndex(dcgmGpuIndex)
+{}
 
 nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
 {
@@ -104,23 +119,23 @@ nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
         minAllocationFraction = DEFAULT_MIN_ALLOCATION_PERCENTAGE / 100.0;
     }
 
-    cuRes = cuModuleLoadData(&mod, memtest_kernel_ptx_string);
+    cuRes = memGlobals->cudaOps->cuModuleLoadData(&mod, memtest_kernel_ptx_string);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuModuleGetGlobal_v2(&errors, NULL, mod, "errors");
+    cuRes = memGlobals->cudaOps->cuModuleGetGlobal_v2(&errors, NULL, mod, "errors");
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuModuleGetFunction(&memsetval, mod, memsetval_func_name);
+    cuRes = memGlobals->cudaOps->cuModuleGetFunction(&memsetval, mod, memsetval_func_name);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuModuleGetFunction(&memcheckval, mod, memcheckval_func_name);
+    cuRes = memGlobals->cudaOps->cuModuleGetFunction(&memcheckval, mod, memcheckval_func_name);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
-    cuRes = cuMemGetInfo_v2(&freeMem, &totalMem);
+    cuRes = memGlobals->cudaOps->cuMemGetInfo_v2(&freeMem, &totalMem);
     if (CUDA_SUCCESS != cuRes)
         goto error_no_cleanup;
 
@@ -180,7 +195,7 @@ nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
             log_error(d.GetMessage());
             return NVVS_RESULT_FAIL;
         }
-        cuRes = cuMemAlloc_v2(&alloc, size);
+        cuRes = memGlobals->cudaOps->cuMemAlloc_v2(&alloc, size);
     } while (CUDA_ERROR_OUT_OF_MEMORY == cuRes);
 
 
@@ -221,12 +236,12 @@ nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
             params[1] = &size;
             params[2] = &testVals[j];
 
-            cuRes = cuLaunchKernel(
+            cuRes = memGlobals->cudaOps->cuLaunchKernel(
                 memsetval, gridDim.x, gridDim.y, gridDim.z, blockDim.x, blockDim.y, blockDim.z, 0, 0, params, 0);
             if (CUDA_SUCCESS != cuRes)
                 goto cleanup;
 
-            cuRes = cuCtxSynchronize();
+            cuRes = memGlobals->cudaOps->cuCtxSynchronize();
             if (CUDA_SUCCESS != cuRes)
                 goto cleanup;
 
@@ -236,16 +251,16 @@ nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
             params[1] = &size;
             params[2] = &testVals[j];
 
-            cuRes = cuLaunchKernel(
+            cuRes = memGlobals->cudaOps->cuLaunchKernel(
                 memcheckval, gridDim.x, gridDim.y, gridDim.z, blockDim.x, blockDim.y, blockDim.z, 0, 0, params, 0);
             if (CUDA_SUCCESS != cuRes)
                 goto cleanup;
 
-            cuRes = cuCtxSynchronize();
+            cuRes = memGlobals->cudaOps->cuCtxSynchronize();
             if (CUDA_SUCCESS != cuRes)
                 goto cleanup;
 
-            cuRes = cuMemcpyDtoH_v2(&error_h, errors, sizeof(unsigned int));
+            cuRes = memGlobals->cudaOps->cuMemcpyDtoH_v2(&error_h, errors, sizeof(unsigned int));
             if (CUDA_SUCCESS != cuRes)
                 goto cleanup;
 
@@ -266,7 +281,7 @@ nvvsPluginResult_t runTestDeviceMemory(mem_globals_p memGlobals)
 
 cleanup:
     // Release resources
-    if (CUDA_ERROR_ECC_UNCORRECTABLE == cuMemFree_v2(alloc))
+    if (CUDA_ERROR_ECC_UNCORRECTABLE == memGlobals->cudaOps->cuMemFree_v2(alloc))
     {
         //
         // Ignore other errors, outside the scope of the memory test
@@ -332,7 +347,8 @@ nvvsPluginResult_t combine_results(nvvsPluginResult_t mainResult, nvvsPluginResu
 
 testResult_t testUtilGetCuDevice(const dcgmDiagPluginEntityInfo_v1 &entityInfo,
                                  CUdevice *cuDevice,
-                                 std::stringstream &error)
+                                 std::stringstream &error,
+                                 CudaOpsAnyPtr cudaOps)
 {
     CUresult cuRes;
 
@@ -342,7 +358,7 @@ testResult_t testUtilGetCuDevice(const dcgmDiagPluginEntityInfo_v1 &entityInfo,
         return TEST_RESULT_SKIPPED;
     }
 
-    cuRes = cuDeviceGetByPCIBusId(cuDevice, entityInfo.auxField.gpu.attributes.identifiers.pciBusId);
+    cuRes = cudaOps->cuDeviceGetByPCIBusId(cuDevice, entityInfo.auxField.gpu.attributes.identifiers.pciBusId);
     if (CUDA_SUCCESS != cuRes)
     {
         //
@@ -351,7 +367,7 @@ testResult_t testUtilGetCuDevice(const dcgmDiagPluginEntityInfo_v1 &entityInfo,
         //
         //        PRINT_DEBUG_TRACE("cuDeviceGetByPCIBusId -> %d", cuRes);
         const char *errorStr;
-        cuGetErrorString(cuRes, &errorStr);
+        cudaOps->cuGetErrorString(cuRes, &errorStr);
         if (errorStr != NULL)
         {
             error << "cuDeviceGetByPCIBusId failed: '" << errorStr << "'.";
@@ -384,18 +400,18 @@ void mem_cleanup(mem_globals_p memGlobals)
 
     if (memGlobals->m_dcgmRecorder)
     {
-        delete (memGlobals->m_dcgmRecorder);
-        memGlobals->m_dcgmRecorder = 0;
+        memGlobals->m_dcgmRecorder.reset();
     }
 
     if (memGlobals->cuCtxCreated)
     {
-        cuRes = cuCtxDestroy(memGlobals->cuCtx);
+        cuRes = memGlobals->cudaOps->cuCtxDestroy_v2(memGlobals->cuCtx);
         if (CUDA_SUCCESS != cuRes)
         {
-            LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
+            LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->cudaCommon,
+                                      memGlobals->memory,
                                       memGlobals->memory->GetMemoryTestName(),
-                                      "cuCtxDestroy",
+                                      "cuCtxDestroy_v2",
                                       cuRes,
                                       memGlobals->dcgmGpuIndex);
         }
@@ -405,8 +421,7 @@ void mem_cleanup(mem_globals_p memGlobals)
     if (memGlobals->nvvsDevice)
     {
         memGlobals->nvvsDevice->RestoreState(memGlobals->memory->GetMemoryTestName());
-        delete (memGlobals->nvvsDevice);
-        memGlobals->nvvsDevice = 0;
+        memGlobals->nvvsDevice.reset();
     }
 }
 
@@ -423,19 +438,20 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
 
     memGlobals->dcgmGpuIndex = entityInfo.entity.entityId;
 
-    cuRes = cuInit(0);
+    cuRes = memGlobals->cudaOps->cuInit(0);
     if (CUDA_SUCCESS != cuRes)
     {
         DcgmError d { memGlobals->dcgmGpuIndex };
         DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuInit");
-        std::string error = AppendCudaDriverError("Unable to initialize CUDA library", cuRes);
-        d.AddDetail(fmt::format("{} {}. {}", error, GetAdditionalCuInitDetail(cuRes), RUN_CUDA_KERNEL_REC));
+        std::string error = memGlobals->cudaCommon->AppendCudaDriverError("Unable to initialize CUDA library", cuRes);
+        d.AddDetail(fmt::format(
+            "{} {}. {}", error, memGlobals->cudaCommon->GetAdditionalCuInitDetail(cuRes), RUN_CUDA_KERNEL_REC));
         memGlobals->memory->AddError(memGlobals->memory->GetMemoryTestName(), d);
         return 1;
     }
     memGlobals->cudaInitialized = 1;
 
-    memGlobals->nvvsDevice = new NvvsDevice(memGlobals->memory);
+    memGlobals->nvvsDevice = std::make_unique<NvvsDevice>(memGlobals->memory, memGlobals->dcgmOps, memGlobals->handle);
     st = memGlobals->nvvsDevice->Init(memGlobals->memory->GetMemoryTestName(), memGlobals->dcgmGpuIndex);
     if (st)
     {
@@ -444,7 +460,7 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
 
     std::stringstream error;
 
-    if (TEST_RESULT_SUCCESS != testUtilGetCuDevice(entityInfo, &memGlobals->cuDevice, error))
+    if (TEST_RESULT_SUCCESS != testUtilGetCuDevice(entityInfo, &memGlobals->cuDevice, error, memGlobals->cudaOps))
     {
         std::stringstream ss;
 
@@ -468,10 +484,11 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
     int cudaDeviceOrdinal = static_cast<int>(memGlobals->cuDevice);
 
     // Clean up resources before context creation
-    cudaError_t cudaResult = cudaSetDevice(cudaDeviceOrdinal);
+    cudaError_t cudaResult = memGlobals->cudaOps->cudaSetDevice(cudaDeviceOrdinal);
     if (cudaResult != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
+        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->cudaCommon,
+                                  memGlobals->memory,
                                   memGlobals->memory->GetMemoryTestName(),
                                   "cudaSetDevice",
                                   cudaResult,
@@ -479,10 +496,11 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
         return 1;
     }
 
-    cudaResult = cudaDeviceReset();
+    cudaResult = memGlobals->cudaOps->cudaDeviceReset();
     if (cudaResult != cudaSuccess)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
+        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->cudaCommon,
+                                  memGlobals->memory,
                                   memGlobals->memory->GetMemoryTestName(),
                                   "cudaDeviceReset",
                                   cudaResult,
@@ -490,10 +508,11 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
         return 1;
     }
 
-    cuRes = cuCtxCreate_v2(&memGlobals->cuCtx, 0, memGlobals->cuDevice);
+    cuRes = memGlobals->cudaOps->cuCtxCreate_v2(&memGlobals->cuCtx, 0, memGlobals->cuDevice);
     if (CUDA_SUCCESS != cuRes)
     {
-        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->memory,
+        LOG_CUDA_ERROR_FOR_PLUGIN(memGlobals->cudaCommon,
+                                  memGlobals->memory,
                                   memGlobals->memory->GetMemoryTestName(),
                                   "cuCtxCreate_v2",
                                   cuRes,
@@ -506,7 +525,14 @@ int mem_init(mem_globals_p memGlobals, const dcgmDiagPluginEntityInfo_v1 &entity
 }
 
 /*****************************************************************************/
-int main_entry(const dcgmDiagPluginEntityInfo_v1 &entityInfo, Memory *memory, TestParameters *tp)
+int main_entry(const dcgmDiagPluginEntityInfo_v1 &entityInfo,
+               Memory *memory,
+               TestParameters *tp,
+               dcgmHandle_t handle,
+               DcgmNs::DcgmOpsAnyPtr dcgmOps,
+               CudaOpsAnyPtr cudaOps,
+               CudaCommonAnyPtr cudaCommon,
+               NvvsCommon *nvvsCommon)
 {
     nvvsPluginResult_t result;
     int st;
@@ -516,15 +542,13 @@ int main_entry(const dcgmDiagPluginEntityInfo_v1 &entityInfo, Memory *memory, Te
         return 0;
     }
 
-    unsigned int gpuId       = entityInfo.entity.entityId;
-    mem_globals_p memGlobals = &g_memGlobals;
+    unsigned int gpuId = entityInfo.entity.entityId;
+    mem_globals_t memGlobalsStorage(
+        *memory, tp, handle, dcgmOps, entityInfo.entity.entityId, cudaOps, cudaCommon, nvvsCommon);
+    mem_globals_p memGlobals = &memGlobalsStorage;
 
-    memset(memGlobals, 0, sizeof(*memGlobals));
-    memGlobals->memory         = memory;
-    memGlobals->testParameters = tp;
-    memGlobals->dcgmGpuIndex   = entityInfo.entity.entityId;
-
-    memGlobals->m_dcgmRecorder = new DcgmRecorder(memory->GetHandle());
+    memGlobals->m_dcgmRecorder
+        = std::make_unique<DcgmRecorder>(memGlobals->handle, memGlobals->dcgmOps, memGlobals->nvvsCommon);
     memGlobals->m_dcgmRecorder->SetIgnoreErrorCodes(
         memGlobals->memory->GetIgnoreErrorCodes(memGlobals->memory->GetMemoryTestName()));
 

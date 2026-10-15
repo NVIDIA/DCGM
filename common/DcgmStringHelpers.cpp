@@ -18,7 +18,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
+#include <cstdint>
 #include <cstring>
+#include <limits>
 #include <ranges>
 #include <set>
 #include <string>
@@ -69,6 +72,13 @@ std::string dcgmStrToLower(std::string s)
     return s;
 }
 
+bool DcgmNs::EqualsAsciiCaseInsensitive(std::string_view lhs, std::string_view rhs)
+{
+    return lhs.size() == rhs.size() && std::ranges::equal(lhs, rhs, [](char left, char right) {
+               return std::tolower(static_cast<unsigned char>(left)) == std::tolower(static_cast<unsigned char>(right));
+           });
+}
+
 namespace DcgmNs
 {
 std::vector<std::string_view> Split(std::string_view value, char const separator)
@@ -88,7 +98,36 @@ std::vector<std::string_view> Split(std::string_view value, char const separator
 }
 
 /*****************************************************************************/
-dcgmReturn_t ParseRangeString(std::string const &rangeStr, std::vector<unsigned int> &indices)
+namespace
+{
+    [[nodiscard]] bool ParseUint32Token(std::string_view token, unsigned int &out)
+    {
+        if (token.empty())
+        {
+            return false;
+        }
+
+        std::uint64_t value  = 0;
+        auto const *begin    = token.data();
+        auto const *end      = token.data() + token.size();
+        auto const [ptr, ec] = std::from_chars(begin, end, value);
+        if (ec != std::errc {} || ptr != end || value > std::numeric_limits<unsigned int>::max())
+        {
+            return false;
+        }
+
+        out = static_cast<unsigned int>(value);
+        return true;
+    }
+
+    [[nodiscard]] bool WouldExceedMaxCount(std::size_t currentSize, std::uint64_t addCount, std::size_t maxCount)
+    {
+        return static_cast<std::uint64_t>(currentSize) + addCount > static_cast<std::uint64_t>(maxCount);
+    }
+} // namespace
+
+/*****************************************************************************/
+dcgmReturn_t ParseRangeString(std::string const &rangeStr, std::vector<unsigned int> &indices, std::size_t maxCount)
 {
     if (rangeStr.empty())
     {
@@ -105,32 +144,8 @@ dcgmReturn_t ParseRangeString(std::string const &rangeStr, std::vector<unsigned 
         {
             unsigned int start = 0;
             unsigned int end   = 0;
-
-            if (rangeTokens[0].empty() || rangeTokens[1].empty())
+            if (!ParseUint32Token(rangeTokens[0], start) || !ParseUint32Token(rangeTokens[1], end))
             {
-                return DCGM_ST_BADPARAM;
-            }
-
-            // Validate both tokens contain only digits
-            if (!std::all_of(rangeTokens[0].begin(), rangeTokens[0].end(), ::isdigit)
-                || !std::all_of(rangeTokens[1].begin(), rangeTokens[1].end(), ::isdigit))
-            {
-                return DCGM_ST_BADPARAM;
-            }
-
-            try
-            {
-                start = std::stoul(std::string(rangeTokens[0]));
-                end   = std::stoul(std::string(rangeTokens[1]));
-            }
-            catch (std::invalid_argument const &e)
-            {
-                // Handle invalid number format
-                return DCGM_ST_BADPARAM;
-            }
-            catch (std::out_of_range const &e)
-            {
-                // Handle number too large
                 return DCGM_ST_BADPARAM;
             }
 
@@ -139,40 +154,32 @@ dcgmReturn_t ParseRangeString(std::string const &rangeStr, std::vector<unsigned 
                 return DCGM_ST_BADPARAM;
             }
 
-            for (unsigned int i = start; i <= end; i++)
+            std::uint64_t const count = static_cast<std::uint64_t>(end) - static_cast<std::uint64_t>(start) + 1ULL;
+            if (WouldExceedMaxCount(indices.size(), count, maxCount))
             {
-                indices.push_back(i);
+                return DCGM_ST_MAX_LIMIT;
+            }
+
+            indices.reserve(indices.size() + static_cast<std::size_t>(count));
+            for (std::uint64_t value = start; value <= end; ++value)
+            {
+                indices.push_back(static_cast<unsigned int>(value));
             }
         }
         else if (rangeTokens.size() == 1)
         {
-            if (rangeTokens[0].empty())
+            unsigned int value = 0;
+            if (!ParseUint32Token(rangeTokens[0], value))
             {
                 return DCGM_ST_BADPARAM;
             }
 
-            // Validate token contains only digits
-            if (!std::all_of(rangeTokens[0].begin(), rangeTokens[0].end(), ::isdigit))
+            if (WouldExceedMaxCount(indices.size(), 1ULL, maxCount))
             {
-                return DCGM_ST_BADPARAM;
+                return DCGM_ST_MAX_LIMIT;
             }
 
-            try
-            {
-                unsigned int value = std::stoul(std::string(rangeTokens[0]));
-
-                indices.push_back(value);
-            }
-            catch (std::invalid_argument const &e)
-            {
-                // Handle invalid number format
-                return DCGM_ST_BADPARAM;
-            }
-            catch (std::out_of_range const &e)
-            {
-                // Handle number too large
-                return DCGM_ST_BADPARAM;
-            }
+            indices.push_back(value);
         }
         else
         {

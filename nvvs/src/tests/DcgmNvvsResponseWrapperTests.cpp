@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,13 @@
 
 #include <CpuSet.h>
 #include <DcgmBuildInfo.hpp>
+#include <DcgmHandle.h>
 #include <DcgmStringHelpers.h>
+#include <DcgmSystem.h>
 #include <Defer.hpp>
 #include <DiagResponseUtils.h>
 #include <GpuSet.h>
+#include <MockDcgmOps.h>
 #include <NvvsCommon.h>
 #include <PluginStrings.h>
 #include <UniquePtrUtil.h>
@@ -73,68 +76,82 @@ TEST_CASE("DcgmNvvsResponseWrapper::IsVersionSet")
 
 namespace
 {
-std::vector<std::unique_ptr<EntitySet>> CreateFakeEntitySets(std::string const &driverVersion,
-                                                             unsigned int const gpuCount,
-                                                             unsigned int const cpuCount)
+template <class T>
+struct DcgmNvvsResponseWrapperTestFixture
 {
-    std::vector<std::unique_ptr<EntitySet>> entitySets;
-    std::vector<Gpu *> gpuObjs;
+    DcgmNvvsResponseWrapperTestFixture()
+        : dcgmHandle(&dcgmOps)
+        , dcgmSystem(&dcgmOps, 0)
+    {}
 
-    auto gpuSet = std::make_unique<GpuSet>();
-    for (unsigned int gpuId = 0; gpuId < gpuCount; ++gpuId)
+    std::vector<std::unique_ptr<EntitySet>> CreateFakeEntitySets(std::string const &driverVersion,
+                                                                 unsigned int const gpuCount,
+                                                                 unsigned int const cpuCount)
     {
-        gpuSet->AddEntityId(gpuId);
-        gpuObjs.emplace_back(new Gpu(gpuId));
+        std::vector<std::unique_ptr<EntitySet>> entitySets;
+        std::vector<Gpu *> gpuObjs;
 
-        dcgmDeviceAttributes_v3 attr {};
-        attr.identifiers.pciDeviceId = 1234;
-        SafeCopyTo(attr.identifiers.uuid, fmt::format("GPU-12345678-0000-0000-0000-00000000000{}", gpuId).c_str());
-        SafeCopyTo(attr.identifiers.serial, fmt::format("GPU-Serial-{}", gpuId).c_str());
-        SafeCopyTo(attr.identifiers.driverVersion, driverVersion.c_str());
-        gpuObjs.back()->SetAttributes(attr);
-    }
-    gpuSet->SetGpuObjs(std::move(gpuObjs));
-    entitySets.emplace_back(std::move(gpuSet));
-
-    auto cpuSet = std::make_unique<CpuSet>();
-    for (unsigned int cpuId = 0; cpuId < cpuCount; ++cpuId)
-    {
-        cpuSet->AddEntityId(cpuId);
-    }
-    entitySets.emplace_back(std::move(cpuSet));
-    return entitySets;
-}
-
-void ReleaseEntitySets(std::vector<std::unique_ptr<EntitySet>> &entitySets)
-{
-    for (auto &entitySet : entitySets)
-    {
-        if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
+        auto gpuSet = std::make_unique<GpuSet>();
+        for (unsigned int gpuId = 0; gpuId < gpuCount; ++gpuId)
         {
-            continue;
-        }
+            gpuSet->AddEntityId(gpuId);
+            gpuObjs.emplace_back(new Gpu(gpuId, &dcgmOps, &dcgmHandle, &dcgmSystem));
 
-        auto *gpuSet  = ToGpuSet(entitySet.get());
-        auto &gpuObjs = gpuSet->GetGpuObjs();
-        for (auto &gpu : gpuObjs)
+            dcgmDeviceAttributes_v3 attr {};
+            attr.identifiers.pciDeviceId = 1234;
+            SafeCopyTo(attr.identifiers.uuid, fmt::format("GPU-12345678-0000-0000-0000-00000000000{}", gpuId).c_str());
+            SafeCopyTo(attr.identifiers.serial, fmt::format("GPU-Serial-{}", gpuId).c_str());
+            SafeCopyTo(attr.identifiers.driverVersion, driverVersion.c_str());
+            gpuObjs.back()->SetAttributes(attr);
+        }
+        gpuSet->SetGpuObjs(std::move(gpuObjs));
+        entitySets.emplace_back(std::move(gpuSet));
+
+        auto cpuSet = std::make_unique<CpuSet>();
+        for (unsigned int cpuId = 0; cpuId < cpuCount; ++cpuId)
         {
-            delete gpu;
+            cpuSet->AddEntityId(cpuId);
+        }
+        entitySets.emplace_back(std::move(cpuSet));
+        return entitySets;
+    }
+
+    void ReleaseEntitySets(std::vector<std::unique_ptr<EntitySet>> &entitySets)
+    {
+        for (auto &entitySet : entitySets)
+        {
+            if (entitySet->GetEntityGroup() != DCGM_FE_GPU)
+            {
+                continue;
+            }
+
+            auto *gpuSet  = ToGpuSet(entitySet.get());
+            auto &gpuObjs = gpuSet->GetGpuObjs();
+            for (auto &gpu : gpuObjs)
+            {
+                delete gpu;
+            }
         }
     }
-}
+
+    DcgmNs::MockDcgmOps dcgmOps;
+    DcgmHandle dcgmHandle;
+    DcgmSystem dcgmSystem;
+};
 } // namespace
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::PopulateDefault for newer versions",
-                   "",
-                   dcgmDiagResponse_v12,
-                   dcgmDiagResponse_v11)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::PopulateDefault for newer versions",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -202,23 +219,24 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::PopulateDefault for newer versions"
             CHECK(result.result == DCGM_DIAG_RESULT_PASS);
         }
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::PopulateDefault::Deprecated Versions",
-                   "",
-                   dcgmDiagResponse_v10,
-                   dcgmDiagResponse_v9,
-                   dcgmDiagResponse_v8,
-                   dcgmDiagResponse_v7)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::PopulateDefault::Deprecated Versions",
+                          "",
+                          dcgmDiagResponse_v10,
+                          dcgmDiagResponse_v9,
+                          dcgmDiagResponse_v8,
+                          dcgmDiagResponse_v7)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 1);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 1);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -303,7 +321,7 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::PopulateDefault::Deprecated Version
             }
         }
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
@@ -379,14 +397,18 @@ std::unique_ptr<dcgmDiagEntityResults_v2> CreateFakeEntityResults(unsigned int c
 }
 } // namespace
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetSoftwareTestResult", "", dcgmDiagResponse_v12, dcgmDiagResponse_v11)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::SetSoftwareTestResult",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -450,23 +472,24 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetSoftwareTestResult", "", dcgmDia
         REQUIRE(rawResponse.results[1].result == DCGM_DIAG_RESULT_PASS);
 
         REQUIRE(std::string_view(rawResponse.tests[1].name).empty());
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetSoftwareTestResult::Deprecated Versions",
-                   "",
-                   dcgmDiagResponse_v10,
-                   dcgmDiagResponse_v9,
-                   dcgmDiagResponse_v8,
-                   dcgmDiagResponse_v7)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::SetSoftwareTestResult::Deprecated Versions",
+                          "",
+                          dcgmDiagResponse_v10,
+                          dcgmDiagResponse_v9,
+                          dcgmDiagResponse_v8,
+                          dcgmDiagResponse_v7)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 1);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 1);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -502,15 +525,16 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetSoftwareTestResult::Deprecated V
             REQUIRE(std::string_view(rawResponse.levelOneResults[i].info) == "info_0, info_1");
         }
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEST_CASE("DcgmNvvsResponseWrapper::SetSoftwareTestResult::v12::Edge Cases")
+TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture<dcgmDiagResponse_v12>,
+                 "DcgmNvvsResponseWrapper::SetSoftwareTestResult::v12::Edge Cases")
 {
     SECTION("Overwrite SW test result of entities")
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(dcgmDiagResponse_version12);
@@ -580,13 +604,13 @@ TEST_CASE("DcgmNvvsResponseWrapper::SetSoftwareTestResult::v12::Edge Cases")
         REQUIRE(rawResponse.results[0].result == DCGM_DIAG_RESULT_FAIL);
         REQUIRE(rawResponse.results[1].result == DCGM_DIAG_RESULT_WARN);
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 
     SECTION("Overwrite whole SW test result")
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
-        DcgmNs::Defer defer([&entitySets]() { ReleaseEntitySets(entitySets); });
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
+        DcgmNs::Defer defer([this, &entitySets]() { ReleaseEntitySets(entitySets); });
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(dcgmDiagResponse_version12);
@@ -665,14 +689,15 @@ TEST_CASE("DcgmNvvsResponseWrapper::SetSoftwareTestResult::v12::Edge Cases")
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::IncreaseNumTests",
-                   "",
-                   dcgmDiagResponse_v12,
-                   dcgmDiagResponse_v11,
-                   dcgmDiagResponse_v10,
-                   dcgmDiagResponse_v9,
-                   dcgmDiagResponse_v8,
-                   dcgmDiagResponse_v7)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::IncreaseNumTests",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11,
+                          dcgmDiagResponse_v10,
+                          dcgmDiagResponse_v9,
+                          dcgmDiagResponse_v8,
+                          dcgmDiagResponse_v7)
 {
     using ResponseType = TestType;
     // Get the version directly from the trait
@@ -699,7 +724,11 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::IncreaseNumTests",
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetTestResult", "", dcgmDiagResponse_v12, dcgmDiagResponse_v11)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::SetTestResult",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
@@ -708,7 +737,7 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetTestResult", "", dcgmDiagRespons
     {
         SECTION("Basic Test Results")
         {
-            auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+            auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
             DcgmNvvsResponseWrapper wrapper;
             wrapper.SetVersion(version);
@@ -803,12 +832,12 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetTestResult", "", dcgmDiagRespons
 
             REQUIRE(std::string_view(rawResponse.tests[2].name).empty());
 
-            ReleaseEntitySets(entitySets);
+            this->ReleaseEntitySets(entitySets);
         }
 
         SECTION("Overall Result")
         {
-            auto entitySets = CreateFakeEntitySets("545.29.06", 5, 1);
+            auto entitySets = this->CreateFakeEntitySets("545.29.06", 5, 1);
 
             DcgmNvvsResponseWrapper wrapper;
             wrapper.SetVersion(version);
@@ -846,24 +875,25 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetTestResult", "", dcgmDiagRespons
                     == DCGM_ST_OK);
             REQUIRE(rawResponse.tests[4].result == DCGM_DIAG_RESULT_FAIL);
 
-            ReleaseEntitySets(entitySets);
+            this->ReleaseEntitySets(entitySets);
         }
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetTestResult::OlderVersions",
-                   "",
-                   dcgmDiagResponse_v10,
-                   dcgmDiagResponse_v9,
-                   dcgmDiagResponse_v8,
-                   dcgmDiagResponse_v7)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::SetTestResult::OlderVersions",
+                          "",
+                          dcgmDiagResponse_v10,
+                          dcgmDiagResponse_v9,
+                          dcgmDiagResponse_v8,
+                          dcgmDiagResponse_v7)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 1);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 1);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -945,25 +975,26 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetTestResult::OlderVersions",
             REQUIRE(rawResponse.perGpuResponses[1].results[test2Idx].error.code == 0);
         }
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetTestSkipped",
-                   "",
-                   dcgmDiagResponse_v12,
-                   dcgmDiagResponse_v11,
-                   dcgmDiagResponse_v10,
-                   dcgmDiagResponse_v9,
-                   dcgmDiagResponse_v8,
-                   dcgmDiagResponse_v7)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::SetTestSkipped",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11,
+                          dcgmDiagResponse_v10,
+                          dcgmDiagResponse_v9,
+                          dcgmDiagResponse_v8,
+                          dcgmDiagResponse_v7)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -998,25 +1029,26 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetTestSkipped",
             REQUIRE(rawResponse.perGpuResponses[1].results[pcieIdx].status == DCGM_DIAG_RESULT_SKIP);
         }
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetSystemError",
-                   "",
-                   dcgmDiagResponse_v12,
-                   dcgmDiagResponse_v11,
-                   dcgmDiagResponse_v10,
-                   dcgmDiagResponse_v9,
-                   dcgmDiagResponse_v8,
-                   dcgmDiagResponse_v7)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::SetSystemError",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11,
+                          dcgmDiagResponse_v10,
+                          dcgmDiagResponse_v9,
+                          dcgmDiagResponse_v8,
+                          dcgmDiagResponse_v7)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -1043,25 +1075,26 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::SetSystemError",
             REQUIRE(std::string_view(rawResponse.systemError.msg) == "Capoo");
         }
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::TestSlotsFull",
-                   "",
-                   dcgmDiagResponse_v12,
-                   dcgmDiagResponse_v11,
-                   dcgmDiagResponse_v10,
-                   dcgmDiagResponse_v9,
-                   dcgmDiagResponse_v8,
-                   dcgmDiagResponse_v7)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::TestSlotsFull",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11,
+                          dcgmDiagResponse_v10,
+                          dcgmDiagResponse_v9,
+                          dcgmDiagResponse_v8,
+                          dcgmDiagResponse_v7)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -1083,18 +1116,22 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::TestSlotsFull",
             REQUIRE_NOTHROW(wrapper.TestSlotsFull());
         }
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::AddTestCategory::Basic", "", dcgmDiagResponse_v12, dcgmDiagResponse_v11)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::AddTestCategory::Basic",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -1121,18 +1158,22 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::AddTestCategory::Basic", "", dcgmDi
         REQUIRE(std::string_view(rawResponse.categories[1]) == "hardware");
         REQUIRE(rawResponse.tests[2].categoryIndex == 1);
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::AddTestCategory::Full", "", dcgmDiagResponse_v12, dcgmDiagResponse_v11)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::AddTestCategory::Full",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -1148,21 +1189,22 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::AddTestCategory::Full", "", dcgmDia
         }
         REQUIRE(wrapper.AddTestCategory("eud", "Capoo") == DCGM_ST_INSUFFICIENT_RESOURCES);
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::AddTestCategory::UnknownName",
-                   "",
-                   dcgmDiagResponse_v12,
-                   dcgmDiagResponse_v11)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::AddTestCategory::UnknownName",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -1170,23 +1212,24 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::AddTestCategory::UnknownName",
 
         REQUIRE(wrapper.AddTestCategory("name", "category") == DCGM_ST_GENERIC_ERROR);
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("AddTestCategory::Deprecated Versions",
-                   "",
-                   dcgmDiagResponse_v10,
-                   dcgmDiagResponse_v9,
-                   dcgmDiagResponse_v8,
-                   dcgmDiagResponse_v7)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "AddTestCategory::Deprecated Versions",
+                          "",
+                          dcgmDiagResponse_v10,
+                          dcgmDiagResponse_v9,
+                          dcgmDiagResponse_v8,
+                          dcgmDiagResponse_v7)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -1194,18 +1237,22 @@ TEMPLATE_TEST_CASE("AddTestCategory::Deprecated Versions",
 
         REQUIRE(wrapper.AddTestCategory("name", "category") == DCGM_ST_VER_MISMATCH);
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }
 
-TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::MaxInfoMessages", "", dcgmDiagResponse_v12, dcgmDiagResponse_v11)
+TEMPLATE_TEST_CASE_METHOD(DcgmNvvsResponseWrapperTestFixture,
+                          "DcgmNvvsResponseWrapper::MaxInfoMessages",
+                          "",
+                          dcgmDiagResponse_v12,
+                          dcgmDiagResponse_v11)
 {
     using ResponseType             = TestType;
     constexpr unsigned int version = DcgmNs::ResponseVersionTrait<ResponseType>::version;
 
     DYNAMIC_SECTION("Testing version " << version)
     {
-        auto entitySets = CreateFakeEntitySets("545.29.06", 2, 2);
+        auto entitySets = this->CreateFakeEntitySets("545.29.06", 2, 2);
 
         DcgmNvvsResponseWrapper wrapper;
         wrapper.SetVersion(version);
@@ -1247,6 +1294,6 @@ TEMPLATE_TEST_CASE("DcgmNvvsResponseWrapper::MaxInfoMessages", "", dcgmDiagRespo
             REQUIRE(rawResponse.info[i].testId == 0);
         }
 
-        ReleaseEntitySets(entitySets);
+        this->ReleaseEntitySets(entitySets);
     }
 }

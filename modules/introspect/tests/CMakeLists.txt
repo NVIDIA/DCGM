@@ -20,6 +20,7 @@ add_executable(introspectModuleTests)
 target_sources(introspectModuleTests
     PRIVATE
         DcgmModuleIntrospectTests.cpp
+        DcgmMetadataMgrTests.cpp
         ../DcgmModuleIntrospect.cpp
         ../DcgmMetadataMgr.cpp
 )
@@ -35,7 +36,7 @@ target_link_libraries(introspectModuleTests
         dcgm_logging
         dcgm_mutex
         Catch2::Catch2WithMain
-        ${CMAKE_THREAD_LIBS_INIT}
+        Threads::Threads
         fmt::fmt
         rt
         dl

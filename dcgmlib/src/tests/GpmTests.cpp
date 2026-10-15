@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #include <catch2/catch_all.hpp>
 
-#define DCGM_GPM_TESTS
 #include <DcgmGpmManager.hpp>
 #include <TimeLib.hpp>
 #include <dcgm_fields.h>
@@ -55,17 +54,34 @@ struct WatchSpec
 };
 
 /**
+ * Test adapter that exposes protected GPM entity sample state.
+ */
+class TestDcgmGpmManagerEntity : public DcgmGpmManagerEntity
+{
+public:
+    using DcgmGpmManagerEntity::DcgmGpmManagerEntity;
+    using DcgmGpmManagerEntity::m_derivedMaxSampleAge;
+    using DcgmGpmManagerEntity::m_gpmSamples;
+    using DcgmGpmManagerEntity::m_maxUpdateInterval;
+    using DcgmGpmManagerEntity::m_minUpdateInterval;
+    using DcgmGpmManagerEntity::m_watchMaxSampleAge;
+    using DcgmGpmManagerEntity::m_watchTable;
+    using DcgmGpmManagerEntity::PruneOldSamples;
+    using DcgmGpmManagerEntity::reuseOrAllocateSample;
+};
+
+/**
  * Create a GPU-scoped GPM entity for test scenarios.
  */
-DcgmGpmManagerEntity MakeEntity()
+TestDcgmGpmManagerEntity MakeEntity()
 {
-    return DcgmGpmManagerEntity(dcgmGroupEntityPair_t { DCGM_FE_GPU, 0 });
+    return TestDcgmGpmManagerEntity(dcgmGroupEntityPair_t { DCGM_FE_GPU, 0 });
 }
 
 /**
  * Add a single watch described by @p watch to @p gpmEntity.
  */
-void AddWatch(DcgmGpmManagerEntity &gpmEntity, WatchSpec const &watch)
+void AddWatch(TestDcgmGpmManagerEntity &gpmEntity, WatchSpec const &watch)
 {
     gpmEntity.AddWatcher(
         watch.fieldId, watch.watcher, watch.updateIntervalUsec, watch.maxAgeUsec, watch.maxKeepSamples);
@@ -74,7 +90,7 @@ void AddWatch(DcgmGpmManagerEntity &gpmEntity, WatchSpec const &watch)
 /**
  * Add each watch in @p watches to @p gpmEntity.
  */
-void AddWatches(DcgmGpmManagerEntity &gpmEntity, std::vector<WatchSpec> const &watches)
+void AddWatches(TestDcgmGpmManagerEntity &gpmEntity, std::vector<WatchSpec> const &watches)
 {
     for (auto const &watch : watches)
     {
@@ -85,7 +101,7 @@ void AddWatches(DcgmGpmManagerEntity &gpmEntity, std::vector<WatchSpec> const &w
 /**
  * Verify the watch-table min/max age range cached by @p gpmEntity.
  */
-void CheckMaxAges(DcgmGpmManagerEntity &gpmEntity, timelib64_t expectedMinAge, timelib64_t expectedMaxAge)
+void CheckMaxAges(TestDcgmGpmManagerEntity &gpmEntity, timelib64_t expectedMinAge, timelib64_t expectedMaxAge)
 {
     timelib64_t minAge = 0;
     timelib64_t maxAge = 0;
@@ -100,7 +116,7 @@ void CheckMaxAges(DcgmGpmManagerEntity &gpmEntity, timelib64_t expectedMinAge, t
 /**
  * Insert a synthetic sample at @p timestamp into @p gpmEntity.
  */
-void AddSampleAt(DcgmGpmManagerEntity &gpmEntity, timelib64_t timestamp)
+void AddSampleAt(TestDcgmGpmManagerEntity &gpmEntity, timelib64_t timestamp)
 {
     gpmEntity.m_gpmSamples.emplace(timestamp, gpmEntity.reuseOrAllocateSample());
 }
@@ -108,7 +124,7 @@ void AddSampleAt(DcgmGpmManagerEntity &gpmEntity, timelib64_t timestamp)
 /**
  * Insert synthetic samples for each timestamp in @p timestamps.
  */
-void AddSamplesAt(DcgmGpmManagerEntity &gpmEntity, std::vector<timelib64_t> const &timestamps)
+void AddSamplesAt(TestDcgmGpmManagerEntity &gpmEntity, std::vector<timelib64_t> const &timestamps)
 {
     for (auto timestamp : timestamps)
     {
@@ -172,7 +188,7 @@ struct RetentionScenario
 /**
  * Verify the retention state derived from a retention scenario.
  */
-void CheckRetentionState(DcgmGpmManagerEntity const &gpmEntity, RetentionScenario const &scenario)
+void CheckRetentionState(TestDcgmGpmManagerEntity const &gpmEntity, RetentionScenario const &scenario)
 {
     CHECK(gpmEntity.m_minUpdateInterval == scenario.expectedMinUpdateInterval);
     CHECK(gpmEntity.m_maxUpdateInterval == scenario.expectedMaxUpdateInterval);
@@ -228,7 +244,9 @@ namespace
 /**
  * Report whether @p gpmEntity retains a baseline sample for @p updateInterval.
  */
-bool HasBaselineSample(DcgmGpmManagerEntity const &gpmEntity, timelib64_t latestTimestamp, timelib64_t updateInterval)
+bool HasBaselineSample(TestDcgmGpmManagerEntity const &gpmEntity,
+                       timelib64_t latestTimestamp,
+                       timelib64_t updateInterval)
 {
     auto baselineSampleIt = gpmEntity.m_gpmSamples.upper_bound(latestTimestamp - updateInterval);
     return baselineSampleIt != gpmEntity.m_gpmSamples.begin();

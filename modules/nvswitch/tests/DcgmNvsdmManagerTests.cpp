@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 #include "nvsdm.h"
+#include <ScopedDcgmFields.hpp>
+#include <ScopedEnvVars.hpp>
 #include <catch2/catch_all.hpp>
-#include <cstdlib>
 #include <fmt/core.h>
 #include <string>
+#include <utility>
 
-#define DCGM_NVSWITCH_TEST
 #include <DcgmNvSwitchManagerBase.h>
 #include <DcgmNvsdmManager.h>
 #include <dcgm_fields.h>
@@ -40,6 +41,103 @@ inline dcgm_field_eid_t NvsdmTestLinkEid(unsigned int switchId, unsigned int por
     link.parsed.index    = static_cast<uint16_t>(portIndex);
     return link.raw;
 }
+
+/**
+ * Test adapter that exposes protected NVSDM manager helpers and state.
+ */
+class TestDcgmNvsdmManager : public DcgmNvsdmManager
+{
+public:
+    using DcgmNvsdmManager::AttachNvsdmDevices;
+    using DcgmNvsdmManager::CheckConnectionStatus;
+    using DcgmNvsdmManager::DcgmNvsdmManager;
+    using DcgmNvsdmManager::FindPortVectorIndex;
+    using DcgmNvsdmManager::GetEntityStatus;
+    using DcgmNvsdmManager::GetIbCxList;
+    using DcgmNvsdmManager::IsValidNvSwitchId;
+    using DcgmNvsdmManager::m_ibCxDevices;
+    using DcgmNvsdmManager::m_numNvSwitchPorts;
+    using DcgmNvsdmManager::m_nvsdm;
+    using DcgmNvsdmManager::m_nvSwitchDevices;
+    using DcgmNvsdmManager::m_nvSwitchPorts;
+    using DcgmNvSwitchManagerBase::ConnectionStatus;
+    using DcgmNvSwitchManagerBase::m_numNvSwitches;
+};
+
+inline dcgm_field_update_info_t NvsdmTestEntity(dcgm_field_entity_group_t entityGroupId,
+                                                dcgm_field_eid_t entityId,
+                                                unsigned short fieldId)
+{
+    dcgm_field_update_info_t entity {};
+    entity.entityGroupId = entityGroupId;
+    entity.entityId      = entityId;
+    entity.fieldMeta     = DcgmFieldGetById(fieldId);
+    return entity;
+}
+
+inline dcgmBufferedFv_t *NvsdmTestFirstBufferedValue(DcgmFvBuffer &buf)
+{
+    dcgmBufferedFvCursor_t cursor = 0;
+    return buf.GetNextFv(&cursor);
+}
+
+inline std::vector<dcgmFieldValue_v2> NvsdmTestBufferedValues(DcgmFvBuffer &buf)
+{
+    std::vector<dcgmFieldValue_v2> values;
+    dcgmBufferedFvCursor_t cursor = 0;
+    for (dcgmBufferedFv_t *fv = buf.GetNextFv(&cursor); fv; fv = buf.GetNextFv(&cursor))
+    {
+        dcgmFieldValue_v2 fv2 {};
+        buf.ConvertBufferedFvToFv2(fv, &fv2);
+        values.push_back(fv2);
+    }
+    return values;
+}
+
+inline nvsdmTelem_v1_t NvsdmTestTelemetryU64(uint64_t value)
+{
+    nvsdmTelem_v1_t telem {};
+    telem.valType    = NVSDM_VAL_TYPE_UINT64;
+    telem.val.u64Val = value;
+    telem.status     = NVSDM_SUCCESS;
+    return telem;
+}
+
+inline nvsdmTelem_v1_t NvsdmTestTelemetryS32(int32_t value)
+{
+    nvsdmTelem_v1_t telem {};
+    telem.valType    = NVSDM_VAL_TYPE_INT32;
+    telem.val.s32Val = value;
+    telem.status     = NVSDM_SUCCESS;
+    return telem;
+}
+
+inline nvsdmTelem_v1_t NvsdmTestTelemetryS64(int64_t value)
+{
+    nvsdmTelem_v1_t telem {};
+    telem.valType    = NVSDM_VAL_TYPE_INT64;
+    telem.val.s64Val = value;
+    telem.status     = NVSDM_SUCCESS;
+    return telem;
+}
+
+inline nvsdmTelem_v1_t NvsdmTestTelemetryFloat(float value)
+{
+    nvsdmTelem_v1_t telem {};
+    telem.valType  = NVSDM_VAL_TYPE_FLOAT;
+    telem.val.fVal = value;
+    telem.status   = NVSDM_SUCCESS;
+    return telem;
+}
+
+inline nvsdmTelem_v1_t NvsdmTestTelemetryDouble(double value)
+{
+    nvsdmTelem_v1_t telem {};
+    telem.valType  = NVSDM_VAL_TYPE_DOUBLE;
+    telem.val.dVal = value;
+    telem.status   = NVSDM_SUCCESS;
+    return telem;
+}
 } // namespace
 
 SCENARIO("Validating entity Id")
@@ -52,7 +150,7 @@ SCENARIO("Validating entity Id")
     std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
     mockNvsdm->InjectDevice(dev);
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
 
     GIVEN("Switch manager isn't initialized") // Init() isn't called
     {
@@ -98,7 +196,7 @@ SCENARIO("Validating entity Id for ports")
         std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
         mockNvsdm->InjectDevice(dev);
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         nsm.Init();
 
         THEN("any link lookup fails when no ports were discovered")
@@ -119,7 +217,7 @@ SCENARIO("Validating entity Id for ports")
         std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
         mockNvsdm->InjectDevice(dev);
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         nsm.Init();
 
         THEN("a link id for a port that was never discovered is rejected")
@@ -144,14 +242,14 @@ SCENARIO("Validating connection status")
 {
     dcgmCoreCallbacks_t dcc              = {};
     std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     GIVEN("Switch manager is initialized")
     {
         THEN("Connection status should be Ok")
         {
-            REQUIRE(nsm.CheckConnectionStatus() == DcgmNvSwitchManagerBase::ConnectionStatus::Ok);
+            REQUIRE(nsm.CheckConnectionStatus() == TestDcgmNvsdmManager::ConnectionStatus::Ok);
         }
     }
 
@@ -160,7 +258,7 @@ SCENARIO("Validating connection status")
     {
         THEN("Connection status should be Paused")
         {
-            REQUIRE(nsm.CheckConnectionStatus() == DcgmNvSwitchManagerBase::ConnectionStatus::Paused);
+            REQUIRE(nsm.CheckConnectionStatus() == TestDcgmNvsdmManager::ConnectionStatus::Paused);
         }
     }
 
@@ -169,7 +267,7 @@ SCENARIO("Validating connection status")
     {
         THEN("Connection status should be Ok")
         {
-            REQUIRE(nsm.CheckConnectionStatus() == DcgmNvSwitchManagerBase::ConnectionStatus::Ok);
+            REQUIRE(nsm.CheckConnectionStatus() == TestDcgmNvsdmManager::ConnectionStatus::Ok);
         }
     }
 
@@ -178,7 +276,7 @@ SCENARIO("Validating connection status")
         nsm.DetachFromNvsdm();
         THEN("Connection status should be Disconnected")
         {
-            REQUIRE(nsm.CheckConnectionStatus() == DcgmNvSwitchManagerBase::ConnectionStatus::Disconnected);
+            REQUIRE(nsm.CheckConnectionStatus() == TestDcgmNvsdmManager::ConnectionStatus::Disconnected);
         }
     }
 }
@@ -193,7 +291,7 @@ SCENARIO("Validating devID, VendorID and guid of NvSwitch from stub Nvsdm lib")
     mockNvsdm->InjectDevice(dev1);
 
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     GIVEN("Switch manager is initialized")
@@ -242,7 +340,7 @@ SCENARIO("Validating num, LID, gid and guid of NvLink from stub Nvsdm lib")
     mockNvsdm->InjectDevice(dev);
 
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     GIVEN("Switch manager is initialized")
@@ -299,7 +397,7 @@ SCENARIO("Validating num, LID, gid and guid of NvLink from stub Nvsdm lib")
 TEST_CASE("Getting Nvsdm NvSwitch Ids")
 {
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc);
+    TestDcgmNvsdmManager nsm(&dcc);
     unsigned int fakeCount = 4;
     unsigned int fakeSwitchIds[4];
     dcgmReturn_t ret = nsm.CreateFakeSwitches(fakeCount, fakeSwitchIds);
@@ -353,7 +451,7 @@ TEST_CASE("DcgmNvsdmManager::GetEntityStatus")
         mockNvsdm->InjectDevice(dev1);
 
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         REQUIRE(nsm.Init() == DCGM_ST_OK);
 
         dcgm_nvswitch_msg_get_entity_status_t msg;
@@ -380,7 +478,7 @@ TEST_CASE("DcgmNvsdmManager::GetEntityStatus")
         mockNvsdm->InjectDevice(dev);
 
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         REQUIRE(nsm.Init() == DCGM_ST_OK);
 
         dcgm_nvswitch_msg_get_entity_status_t msg;
@@ -403,7 +501,7 @@ TEST_CASE("DcgmNvsdmManager::GetEntityStatus")
         mockNvsdm->InjectDevice(dev1);
 
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         REQUIRE(nsm.Init() == DCGM_ST_OK);
 
         dcgm_nvswitch_msg_get_entity_status_t msg;
@@ -421,7 +519,7 @@ TEST_CASE("DcgmNvsdmManager::GetEntityStatus")
         std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
 
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         REQUIRE(nsm.Init() == DCGM_ST_OK);
 
         dcgm_nvswitch_msg_get_entity_status_t msg;
@@ -436,7 +534,7 @@ SCENARIO("Setting and unsetting watches for Nvsdm")
     GIVEN("Valid inputs")
     {
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc);
+        TestDcgmNvsdmManager nsm(&dcc);
         unsigned short fieldIds[16];
         dcgmReturn_t retSt;
         DcgmWatcher watcher;
@@ -500,7 +598,7 @@ SCENARIO("Setting and unsetting watches for Nvsdm")
     GIVEN("Invalid inputs")
     {
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc);
+        TestDcgmNvsdmManager nsm(&dcc);
         unsigned short fieldIds[16];
         dcgmReturn_t retSt;
         DcgmWatcher watcher;
@@ -554,7 +652,7 @@ SCENARIO("List IB ConnectX Devices")
     mockNvsdm->InjectDevice(dev1);
 
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     GIVEN("Valid inputs")
@@ -595,7 +693,7 @@ TEST_CASE("DcgmNvsdmManager::GetEntityList")
     mockNvsdm->InjectDevice(ibCx0);
 
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     SECTION("DCGM_FE_SWITCH")
@@ -656,9 +754,9 @@ TEST_CASE("DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary")
     mockNvsdm->InjectDevice(ibCx0);
 
     // So that DcgmFieldGetById can function correctly
-    DcgmFieldsInit();
+    ScopedDcgmFields dcgmFields;
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     SECTION("DCGM_FE_CONNECTX")
@@ -669,9 +767,9 @@ TEST_CASE("DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary")
         dcgm_field_update_info_t entity;
         entity.entityGroupId = DCGM_FE_CONNECTX;
         entity.entityId      = 0;
-        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE);
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
         entities.push_back(entity);
-        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE, buf, entities, now)
+        REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS, buf, entities, now)
                 == DCGM_ST_OK);
         unsigned int count            = 0;
         dcgmBufferedFvCursor_t cursor = 0;
@@ -684,10 +782,114 @@ TEST_CASE("DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary")
         REQUIRE(count == 1);
         REQUIRE(fv2.entityGroupId == DCGM_FE_CONNECTX);
         REQUIRE(fv2.entityId == 0);
-        REQUIRE(fv2.fieldId == DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE);
+        REQUIRE(fv2.fieldId == DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
         REQUIRE(fv2.fieldType == DCGM_FT_DOUBLE);
         REQUIRE(fv2.value.dbl == 128);
     }
+}
+
+TEST_CASE("DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary preserves collected values when one CX counter is "
+          "unsupported")
+{
+    constexpr uint32_t nvsdmVendorID       = 0xc8763;
+    constexpr uint16_t nvsdmPortLID        = 1234;
+    constexpr unsigned int switchID        = 0;
+    constexpr unsigned int supportedCxID   = 0;
+    constexpr unsigned int unsupportedCxID = 1;
+    constexpr int64_t switchTemp           = 42;
+    constexpr double cxTemp                = 128.0;
+
+    NvsdmMockDevice switch0(NVSDM_DEV_TYPE_SWITCH, switchID, nvsdmVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+    NvsdmMockPort port0(0, nvsdmPortLID);
+    port0.SetFieldValue(NVSDM_PLATFORM_TELEM_CTR_TEMPERATURE, NvsdmTestTelemetryS64(switchTemp));
+    switch0.AddPort(port0);
+
+    NvsdmMockDevice ibCx0(NVSDM_DEV_TYPE_CA, 0, nvsdmVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+    ibCx0.SetFieldValue(NVSDM_CONNECTX_TELEM_CTR_DEVICE_TEMPERATURE, NvsdmTestTelemetryDouble(cxTemp));
+    NvsdmMockDevice ibCx1(NVSDM_DEV_TYPE_CA, 1, nvsdmVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    mockNvsdm->InjectDevice(switch0);
+    mockNvsdm->InjectDevice(ibCx0);
+    mockNvsdm->InjectDevice(ibCx1);
+
+    ScopedDcgmFields dcgmFields;
+    dcgmCoreCallbacks_t dcc = {};
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+    DcgmFvBuffer buf;
+    timelib64_t now          = timelib_usecSince1970();
+    auto switchEntity        = NvsdmTestEntity(DCGM_FE_SWITCH, switchID, DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS);
+    auto supportedCxEntity   = NvsdmTestEntity(DCGM_FE_CONNECTX, supportedCxID, DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
+    auto unsupportedCxEntity = NvsdmTestEntity(DCGM_FE_CONNECTX, unsupportedCxID, DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
+
+    REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS, buf, { switchEntity }, now)
+            == DCGM_ST_OK);
+    REQUIRE(nsm.UpdateFieldsFromNvswitchLibrary(
+                DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS, buf, { supportedCxEntity, unsupportedCxEntity }, now)
+            == DCGM_ST_OK);
+
+    auto values = NvsdmTestBufferedValues(buf);
+    REQUIRE(values.size() == 3);
+
+    CHECK(values[0].entityGroupId == DCGM_FE_SWITCH);
+    CHECK(values[0].entityId == switchID);
+    CHECK(values[0].fieldId == DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS);
+    CHECK(values[0].status == DCGM_ST_OK);
+    CHECK(values[0].value.i64 == switchTemp);
+
+    CHECK(values[1].entityGroupId == DCGM_FE_CONNECTX);
+    CHECK(values[1].entityId == supportedCxID);
+    CHECK(values[1].fieldId == DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
+    CHECK(values[1].status == DCGM_ST_OK);
+    CHECK(values[1].value.dbl == cxTemp);
+
+    CHECK(values[2].entityGroupId == DCGM_FE_CONNECTX);
+    CHECK(values[2].entityId == unsupportedCxID);
+    CHECK(values[2].fieldId == DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
+    CHECK(values[2].status == DCGM_ST_NOT_SUPPORTED);
+    CHECK(DCGM_FP64_IS_BLANK(values[2].value.dbl));
+}
+
+TEST_CASE("DcgmNvsdmManager::UpdateFieldsFromNvswitchLibrary does not reuse unsupported status for hard CX failures")
+{
+    constexpr uint32_t nvsdmVendorID       = 0xc8763;
+    constexpr unsigned int unsupportedCxID = 0;
+    constexpr unsigned int hardFailureCxID = 1;
+    constexpr uint16_t unsupportedCxDevID  = 0;
+    constexpr uint16_t hardFailureCxDevID  = 1;
+
+    NvsdmMockDevice ibCx0(NVSDM_DEV_TYPE_CA, unsupportedCxDevID, nvsdmVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+    NvsdmMockDevice ibCx1(NVSDM_DEV_TYPE_CA, hardFailureCxDevID, nvsdmVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    mockNvsdm->InjectDevice(ibCx0);
+    mockNvsdm->InjectDevice(ibCx1);
+    mockNvsdm->SetDeviceTelemetryReturn(hardFailureCxDevID, NVSDM_ERROR_TELEMETRY_READ);
+
+    ScopedDcgmFields dcgmFields;
+    dcgmCoreCallbacks_t dcc = {};
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+    DcgmFvBuffer buf;
+    auto unsupportedCxEntity = NvsdmTestEntity(DCGM_FE_CONNECTX, unsupportedCxID, DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
+    auto hardFailureCxEntity = NvsdmTestEntity(DCGM_FE_CONNECTX, hardFailureCxID, DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
+
+    CHECK(nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS,
+                                              buf,
+                                              { unsupportedCxEntity, hardFailureCxEntity },
+                                              timelib_usecSince1970())
+          == DCGM_ST_NVML_ERROR);
+
+    auto values = NvsdmTestBufferedValues(buf);
+    REQUIRE(values.size() == 1);
+    CHECK(values[0].entityGroupId == DCGM_FE_CONNECTX);
+    CHECK(values[0].entityId == unsupportedCxID);
+    CHECK(values[0].fieldId == DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS);
+    CHECK(values[0].status == DCGM_ST_NOT_SUPPORTED);
+    CHECK(DCGM_FP64_IS_BLANK(values[0].value.dbl));
 }
 
 TEST_CASE("Pause & Resume")
@@ -705,7 +907,7 @@ TEST_CASE("Pause & Resume")
     mockNvsdm->InjectDevice(ibCx0);
 
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     REQUIRE(nsm.Pause() == DCGM_ST_OK);
@@ -757,11 +959,11 @@ SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable ha
     mockNvsdm->InjectDevice(switch0);
     mockNvsdm->InjectDevice(ibCx0);
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
 
     SECTION("Manager is not initialized")
     {
-        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_0", 1);
+        ScopedEnvVars envVars("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_0");
         REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_NVML_ERROR);
     }
 
@@ -770,7 +972,7 @@ SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable ha
 
     SECTION("Valid environment variable value: mlx5_0")
     {
-        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_0", 1);
+        ScopedEnvVars envVars("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_0");
         REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_OK);
         REQUIRE(nsm.m_nvSwitchDevices.size() == 2);
         REQUIRE(nsm.m_nvSwitchDevices[0].id == 0);
@@ -782,7 +984,7 @@ SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable ha
 
     SECTION("Valid environment variable value: mlx5_1")
     {
-        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_1", 1);
+        ScopedEnvVars envVars("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "mlx5_1");
         REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_OK);
         REQUIRE(nsm.m_nvSwitchDevices.size() == 2);
         REQUIRE(nsm.m_nvSwitchDevices[0].id == 0);
@@ -795,7 +997,7 @@ SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable ha
     SECTION("Invalid environment variable value: invalid_value")
     {
         // Invalid values will be ignored and the default value will be used
-        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "invalid_value", 1);
+        ScopedEnvVars envVars("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "invalid_value");
         REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_OK);
         REQUIRE(nsm.m_nvSwitchDevices.size() == 2);
         REQUIRE(nsm.m_nvSwitchDevices[0].id == 0);
@@ -807,7 +1009,7 @@ SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable ha
 
     SECTION("Invalid environment variable value: ca_mlx5_1")
     {
-        setenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "ca_mlx5_1", 1);
+        ScopedEnvVars envVars("DCGM_NVSWITCH_NVSDM_SOURCE_CA", "ca_mlx5_1");
         REQUIRE(nsm.AttachNvsdmDevices() == DCGM_ST_OK);
         REQUIRE(nsm.m_nvSwitchDevices.size() == 2);
         REQUIRE(nsm.m_nvSwitchDevices[0].id == 0);
@@ -816,9 +1018,6 @@ SCENARIO("Testing DcgmNvsdmManager::AttachNvsdmDevices() environment variable ha
         REQUIRE(nsm.m_ibCxDevices[0].nvsdmDevice.id == 0);
         REQUIRE(nsm.m_ibCxDevices[1].nvsdmDevice.id == 1);
     }
-
-    // Clean up environment variable
-    unsetenv("DCGM_NVSWITCH_NVSDM_SOURCE_CA");
 }
 
 SCENARIO("nvsdmDeviceToString", "[DcgmNvsdmManager]")
@@ -828,7 +1027,7 @@ SCENARIO("nvsdmDeviceToString", "[DcgmNvsdmManager]")
     mockNvsdm->InjectDevice(switch0);
 
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
     REQUIRE(nsm.m_nvSwitchDevices.size() > 0);
 
@@ -857,8 +1056,7 @@ SCENARIO("nvsdmDeviceToString", "[DcgmNvsdmManager]")
 TEST_CASE("UpdateFields returns blank values when paused")
 {
     // Initialize fields for access to fields metadata
-    auto ret = DcgmFieldsInit();
-    REQUIRE(ret == DCGM_ST_OK);
+    ScopedDcgmFields dcgmFields;
 
     // CustomPost callback helps to verify that the fields are blank when paused
     std::set<unsigned short> fieldIdsFromCustomPost;
@@ -867,13 +1065,13 @@ TEST_CASE("UpdateFields returns blank values when paused")
                                              .poster     = &fieldIdsFromCustomPost,
                                              .loggerfunc = [](void const *) { /* do nothing */ } };
     std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     // Create a fake switch to watch
     unsigned int fakeCount = 1;
     unsigned int fakeSwitchIds[1];
-    ret = nsm.CreateFakeSwitches(fakeCount, fakeSwitchIds);
+    auto ret = nsm.CreateFakeSwitches(fakeCount, fakeSwitchIds);
     REQUIRE(ret == DCGM_ST_OK);
 
     // Set up watch parameters on NvSwitch fields
@@ -908,7 +1106,7 @@ TEST_CASE("UpdateFields returns blank values when paused")
 
 TEST_CASE("DcgmNvsdmManager::HandleCompositeFieldId")
 {
-    DcgmFieldsInit();
+    ScopedDcgmFields dcgmFields;
 
     SECTION("Aggregates only UP links and supports 64-bit values for throughput fields")
     {
@@ -944,7 +1142,7 @@ TEST_CASE("DcgmNvsdmManager::HandleCompositeFieldId")
         mockNvsdm->InjectDevice(dev);
 
         dcgmCoreCallbacks_t dcc = {};
-        DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
         REQUIRE(nsm.Init() == DCGM_ST_OK);
 
         // Get composite field (DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX) value
@@ -972,6 +1170,202 @@ TEST_CASE("DcgmNvsdmManager::HandleCompositeFieldId")
     }
 }
 
+
+SCENARIO("DcgmNvsdmManager: handles deterministic telemetry edge cases")
+{
+    ScopedDcgmFields dcgmFields;
+
+    GIVEN("a switch with two active ports exposing composite throughput telemetry")
+    {
+        constexpr uint32_t nvsdmSwitchVendorID = 0xc8763;
+        constexpr uint16_t nvsdmPortLID        = 5566;
+        constexpr unsigned int switchID        = 0;
+
+        dcgmCoreCallbacks_t dcc = {};
+        auto makeManager        = [&](nvsdmTelem_v1_t firstPortValue, nvsdmTelem_v1_t secondPortValue) {
+            NvsdmMockDevice dev(NVSDM_DEV_TYPE_SWITCH, switchID, nvsdmSwitchVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+
+            NvsdmMockPort port0(0, nvsdmPortLID);
+            port0.SetPortState(NVSDM_PORT_STATE_ACTIVE);
+            port0.SetFieldValue(NVSDM_PORT_TELEM_CTR_EXT_XMIT_DATA, firstPortValue);
+            dev.AddPort(port0);
+
+            NvsdmMockPort port1(1, nvsdmPortLID);
+            port1.SetPortState(NVSDM_PORT_STATE_ACTIVE);
+            port1.SetFieldValue(NVSDM_PORT_TELEM_CTR_EXT_XMIT_DATA, secondPortValue);
+            dev.AddPort(port1);
+
+            std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+            mockNvsdm->InjectDevice(dev);
+
+            auto nsm = std::make_unique<DcgmNvsdmManager>(&dcc, std::move(mockNvsdm));
+            REQUIRE(nsm->Init() == DCGM_ST_OK);
+            return nsm;
+        };
+
+        WHEN("NVSDM returns negative signed counter values")
+        {
+            auto val = NvsdmTestTelemetryS32(-7);
+
+            auto nsm = makeManager(val, val);
+            DcgmFvBuffer buf;
+            auto entity = NvsdmTestEntity(DCGM_FE_SWITCH, switchID, DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
+
+            THEN("the composite value is clamped to zero and published successfully")
+            {
+                REQUIRE(nsm->UpdateFieldsFromNvswitchLibrary(
+                            DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX, buf, { entity }, timelib_usecSince1970())
+                        == DCGM_ST_OK);
+                auto *fv = NvsdmTestFirstBufferedValue(buf);
+                REQUIRE(fv != nullptr);
+                CHECK(fv->fieldId == DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
+                CHECK(fv->value.i64 == 0);
+                CHECK(fv->status == DCGM_ST_OK);
+            }
+        }
+
+        WHEN("NVSDM returns positive signed and floating counter values")
+        {
+            auto nsm = makeManager(NvsdmTestTelemetryS64(11), NvsdmTestTelemetryFloat(9.75F));
+            DcgmFvBuffer buf;
+            auto entity = NvsdmTestEntity(DCGM_FE_SWITCH, switchID, DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
+
+            THEN("the composite converter truncates the float and sums both active links")
+            {
+                REQUIRE(nsm->UpdateFieldsFromNvswitchLibrary(
+                            DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX, buf, { entity }, timelib_usecSince1970())
+                        == DCGM_ST_OK);
+                auto *fv = NvsdmTestFirstBufferedValue(buf);
+                REQUIRE(fv != nullptr);
+                CHECK(fv->fieldId == DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
+                CHECK(fv->value.i64 == 20);
+                CHECK(fv->status == DCGM_ST_OK);
+            }
+        }
+
+        WHEN("the aggregate would overflow uint64")
+        {
+            auto maxVal = NvsdmTestTelemetryU64(UINT64_MAX);
+            auto oneVal = NvsdmTestTelemetryU64(1);
+
+            auto nsm = makeManager(maxVal, oneVal);
+            DcgmFvBuffer buf;
+            auto entity = NvsdmTestEntity(DCGM_FE_SWITCH, switchID, DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
+
+            THEN("the update fails with the max-limit error and publishes no sample")
+            {
+                CHECK(nsm->UpdateFieldsFromNvswitchLibrary(
+                          DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX, buf, { entity }, timelib_usecSince1970())
+                      == DCGM_ST_MAX_LIMIT);
+                CHECK(NvsdmTestFirstBufferedValue(buf) == nullptr);
+            }
+        }
+
+        WHEN("NVSDM returns a floating value too large for uint64 aggregation")
+        {
+            auto val = NvsdmTestTelemetryDouble(static_cast<double>(UINT64_MAX));
+
+            auto nsm = makeManager(val, val);
+            DcgmFvBuffer buf;
+            auto entity = NvsdmTestEntity(DCGM_FE_SWITCH, switchID, DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX);
+
+            THEN("the update reports a max-limit failure before publishing a sample")
+            {
+                CHECK(nsm->UpdateFieldsFromNvswitchLibrary(
+                          DCGM_FI_DEV_NVSWITCH_THROUGHPUT_TX, buf, { entity }, timelib_usecSince1970())
+                      == DCGM_ST_MAX_LIMIT);
+                CHECK(NvsdmTestFirstBufferedValue(buf) == nullptr);
+            }
+        }
+    }
+}
+
+SCENARIO("DcgmNvsdmManager: rejects unsupported or invalid public field update inputs")
+{
+    ScopedDcgmFields dcgmFields;
+
+    GIVEN("an initialized mock switch with one discovered link")
+    {
+        constexpr uint32_t nvsdmSwitchVendorID = 0xc8763;
+        constexpr uint16_t nvsdmPortLID        = 5566;
+        constexpr unsigned int switchID        = 0;
+
+        NvsdmMockDevice dev(NVSDM_DEV_TYPE_SWITCH, switchID, nvsdmSwitchVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+        NvsdmMockPort port(0, nvsdmPortLID);
+        dev.AddPort(port);
+
+        std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+        mockNvsdm->InjectDevice(dev);
+
+        dcgmCoreCallbacks_t dcc = {};
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+        WHEN("a valid entity requests a field that has no NVSDM mapping")
+        {
+            DcgmFvBuffer buf;
+            auto entity
+                = NvsdmTestEntity(DCGM_FE_LINK, NvsdmTestLinkEid(switchID, 0), DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS);
+
+            THEN("the manager blanks that entity and returns not-supported")
+            {
+                CHECK(nsm.UpdateFieldsFromNvswitchLibrary(
+                          DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS, buf, { entity }, timelib_usecSince1970())
+                      == DCGM_ST_NOT_SUPPORTED);
+                auto *fv = NvsdmTestFirstBufferedValue(buf);
+                REQUIRE(fv != nullptr);
+                CHECK(fv->entityGroupId == DCGM_FE_LINK);
+                CHECK(fv->entityId == NvsdmTestLinkEid(switchID, 0));
+                CHECK(fv->fieldId == DCGM_FI_DEV_NVSWITCH_LINK_FATAL_ERRORS);
+                CHECK(fv->status == DCGM_ST_OK);
+            }
+        }
+
+        WHEN("a link telemetry request names a packed link id that was not discovered")
+        {
+            DcgmFvBuffer buf;
+            auto entity
+                = NvsdmTestEntity(DCGM_FE_LINK, NvsdmTestLinkEid(switchID, 7), DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX);
+
+            THEN("the public update reports bad parameter and leaves the buffer unchanged")
+            {
+                CHECK(nsm.UpdateFieldsFromNvswitchLibrary(
+                          DCGM_FI_DEV_NVSWITCH_LINK_THROUGHPUT_RX, buf, { entity }, timelib_usecSince1970())
+                      == DCGM_ST_BADPARAM);
+                CHECK(NvsdmTestFirstBufferedValue(buf) == nullptr);
+            }
+        }
+    }
+
+    GIVEN("an initialized mock switch with no ports")
+    {
+        constexpr uint32_t nvsdmSwitchVendorID = 0xc8763;
+        constexpr unsigned int switchID        = 0;
+
+        NvsdmMockDevice dev(NVSDM_DEV_TYPE_SWITCH, switchID, nvsdmSwitchVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+        std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+        mockNvsdm->InjectDevice(dev);
+
+        dcgmCoreCallbacks_t dcc = {};
+        TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+        REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+        WHEN("a switch-level platform telemetry field is requested")
+        {
+            DcgmFvBuffer buf;
+            auto entity = NvsdmTestEntity(DCGM_FE_SWITCH, switchID, DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS);
+
+            THEN("the manager rejects the request without publishing a sample")
+            {
+                CHECK(nsm.UpdateFieldsFromNvswitchLibrary(
+                          DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS, buf, { entity }, timelib_usecSince1970())
+                      == DCGM_ST_BADPARAM);
+                CHECK(NvsdmTestFirstBufferedValue(buf) == nullptr);
+            }
+        }
+    }
+}
+
 TEST_CASE("DcgmNvsdmManager::HandleInfoField")
 {
     constexpr uint16_t nvsdmPortLID        = 1234;
@@ -992,9 +1386,9 @@ TEST_CASE("DcgmNvsdmManager::HandleInfoField")
     std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
     mockNvsdm->InjectDevice(dev);
 
-    DcgmFieldsInit();
+    ScopedDcgmFields dcgmFields;
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     SECTION("Switch-level PCI info fields")
@@ -1106,9 +1500,9 @@ TEST_CASE("DcgmNvsdmManager::HandleInfoField - Missing info returns NOT_SUPPORTE
     std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
     mockNvsdm->InjectDevice(dev);
 
-    DcgmFieldsInit();
+    ScopedDcgmFields dcgmFields;
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     SECTION("Switch PCI fields return NOT_SUPPORTED when hasPciInfo is false")
@@ -1211,9 +1605,9 @@ TEST_CASE("DcgmNvsdmManager::HandleInfoField - LINK_REMOTE_LINK_SID returned as 
     mockNvsdm->InjectDevice(localDevice);
     mockNvsdm->InjectDevice(remoteDevice);
 
-    DcgmFieldsInit();
+    ScopedDcgmFields dcgmFields;
     dcgmCoreCallbacks_t dcc = {};
-    DcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
     REQUIRE(nsm.Init() == DCGM_ST_OK);
 
     DcgmFvBuffer buf;
@@ -1235,4 +1629,107 @@ TEST_CASE("DcgmNvsdmManager::HandleInfoField - LINK_REMOTE_LINK_SID returned as 
     REQUIRE(guidStr.length() == 18);
     REQUIRE(guidStr.substr(0, 2) == "0x");
     CHECK(guidStr[2] >= '8');
+}
+
+
+SCENARIO("DcgmNvsdmManager: public list, status, watch, and update error paths")
+{
+    constexpr uint32_t nvsdmSwitchVendorID = 0xc8763;
+    constexpr uint16_t nvsdmPortLID        = 5566;
+    NvsdmMockDevice dev(NVSDM_DEV_TYPE_SWITCH, 0, nvsdmSwitchVendorID, NVSDM_DEVICE_STATE_HEALTHY);
+    dev.AddPort(NvsdmMockPort(0, nvsdmPortLID));
+    dev.AddPort(NvsdmMockPort(1, nvsdmPortLID));
+    std::unique_ptr<NvsdmMock> mockNvsdm = std::make_unique<NvsdmMock>();
+    mockNvsdm->InjectDevice(dev);
+
+    dcgmCoreCallbacks_t dcc = {};
+    TestDcgmNvsdmManager nsm(&dcc, std::move(mockNvsdm));
+    REQUIRE(nsm.Init() == DCGM_ST_OK);
+
+    GIVEN("a link list request with too little output capacity")
+    {
+        unsigned int count = 1;
+        unsigned int ids[1] { 0xCAFE };
+
+        WHEN("the list is requested through the generic entity API")
+        {
+            auto const ret = nsm.GetEntityList(count, ids, DCGM_FE_LINK, 0);
+
+            THEN("the required count is returned with an insufficient-size status")
+            {
+                CHECK(ret == DCGM_ST_INSUFFICIENT_SIZE);
+                CHECK(count == 2);
+                CHECK(ids[0] == NvsdmTestLinkEid(0, 0));
+            }
+        }
+    }
+
+    GIVEN("a status request for an unknown link port")
+    {
+        dcgm_nvswitch_msg_get_entity_status_t msg {};
+        msg.entityGroupId = DCGM_FE_LINK;
+        msg.entityId      = NvsdmTestLinkEid(0, 99);
+
+        THEN("the bad link entity is rejected")
+        {
+            CHECK(nsm.GetEntityStatus(&msg) == DCGM_ST_BADPARAM);
+        }
+    }
+
+    GIVEN("a status request for a non-switch packed link id")
+    {
+        dcgm_link_t link {};
+        link.parsed.type     = DCGM_FE_GPU;
+        link.parsed.switchId = 0;
+        link.parsed.index    = 0;
+
+        dcgm_nvswitch_msg_get_entity_status_t msg {};
+        msg.entityGroupId = DCGM_FE_LINK;
+        msg.entityId      = link.raw;
+
+        THEN("the malformed link entity is rejected before port lookup")
+        {
+            CHECK(nsm.GetEntityStatus(&msg) == DCGM_ST_BADPARAM);
+        }
+    }
+
+    GIVEN("a watch request with a null field id list")
+    {
+        DcgmWatcher watcher;
+
+        THEN("the input is rejected before watch-table mutation")
+        {
+            CHECK(nsm.WatchField(DCGM_FE_SWITCH, 0, 1, nullptr, 1000, watcher.watcherType, watcher.connectionId, true)
+                  == DCGM_ST_BADPARAM);
+        }
+    }
+
+    GIVEN("an unsupported field update request")
+    {
+        ScopedDcgmFields dcgmFields;
+        DcgmFvBuffer buf;
+        std::vector<dcgm_field_update_info_t> entities;
+        dcgm_field_update_info_t entity {};
+        entity.entityGroupId = DCGM_FE_GPU;
+        entity.entityId      = 7;
+        entity.fieldMeta     = DcgmFieldGetById(DCGM_FI_DEV_BOARD_POWER_WATTS);
+        REQUIRE(entity.fieldMeta != nullptr);
+        entities.push_back(entity);
+
+        WHEN("the field is updated through the NVSDM backend")
+        {
+            auto const ret = nsm.UpdateFieldsFromNvswitchLibrary(DCGM_FI_DEV_BOARD_POWER_WATTS, buf, entities, 1234);
+
+            THEN("a blank field value is buffered and the unsupported return is reported")
+            {
+                CHECK(ret == DCGM_ST_NOT_SUPPORTED);
+                auto *fv = NvsdmTestFirstBufferedValue(buf);
+                REQUIRE(fv != nullptr);
+                CHECK(fv->entityGroupId == DCGM_FE_GPU);
+                CHECK(fv->entityId == 7);
+                CHECK(fv->fieldId == DCGM_FI_DEV_BOARD_POWER_WATTS);
+                CHECK(fv->status == DCGM_ST_OK);
+            }
+        }
+    }
 }

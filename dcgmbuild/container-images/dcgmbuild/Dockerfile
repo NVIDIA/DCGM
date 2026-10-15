@@ -66,8 +66,8 @@ RUN set -ex; \
 ENV CC=/opt/cross/bin/$TARGET-gcc
 ENV CPP=/opt/cross/bin/$TARGET-cpp
 ENV CXX=/opt/cross/bin/$TARGET-g++
-ENV LD=/opt/cross/bin/$TARGET-ld
 ENV AS=/opt/cross/bin/$TARGET-as
+ENV LD=/opt/cross/$TARGET/bin/mold
 
 ENV CMAKE_STAGING_PREFIX=/tmp/$TARGET/usr/local
 ENV CMAKE_INSTALL_PREFIX=/usr/local

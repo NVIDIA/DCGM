@@ -1,0 +1,5 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulenvswitch.so.<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulenvswitch.so.<SOFTWAREVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-module-nvswitch-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-module-nvswitch-<BASEPACKAGEVERSION>/LICENSE

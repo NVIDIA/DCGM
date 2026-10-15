@@ -284,6 +284,11 @@ nvmlReturn_t NvmlUnitGetTemperatureImpl(nvmlUnit_t unit, unsigned int type, unsi
 nvmlReturn_t NvmlUnitGetUnitInfoImpl(nvmlUnit_t unit, nvmlUnitInfo_t *info);
 nvmlReturn_t NvmlSystemGetHicVersionImpl(unsigned int *hwbcCount, nvmlHwbcEntry_t *hwbcEntries);
 nvmlReturn_t NvmlEventSetCreateImpl(nvmlEventSet_t * set);
+nvmlReturn_t NvmlEventSetRegisterGpuOperationalEvents_v1Impl(nvmlEventSet_t eventSet, const nvmlGpuOperationalEventConfig_v1_t *config);
+nvmlReturn_t NvmlEventSetGetContextCount_v1Impl(nvmlEventSet_t set, nvmlEventSetGetContextCount_v1_t *params);
+nvmlReturn_t NvmlEventSetGetContextInfo_v1Impl(nvmlEventSet_t set, nvmlEventSetGetContextInfo_v1_t *params);
+nvmlReturn_t NvmlEventSetGetContextData_v1Impl(nvmlEventSet_t set, nvmlEventSetGetContextData_v1_t *params);
+nvmlReturn_t NvmlEventSetGetGpuOperationalEventContextLegacyXid_v1Impl(nvmlEventSet_t set, nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *params);
 nvmlReturn_t NvmlEventSetFreeImpl(nvmlEventSet_t set);
 nvmlReturn_t NvmlSystemGetProcessNameImpl(unsigned int pid, char *name, unsigned int length);
 nvmlReturn_t NvmlGetVgpuCompatibilityImpl(nvmlVgpuMetadata_t * vgpuMetadata, nvmlVgpuPgpuMetadata_t *pgpuMetadata, nvmlVgpuPgpuCompatibility_t *compatibilityInfo);

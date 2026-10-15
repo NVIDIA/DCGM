@@ -17,22 +17,21 @@
 #include "MnDiagMpiRunner.h"
 #include "MnDiagCommon.h"
 #include "MnDiagProcessUtils.h"
+#include "MnDiagTempDir.h"
 #include <DcgmBuildInfo.hpp>
 #include <DcgmLogging.h>
 #include <DcgmStringHelpers.h>
-#include <Defer.hpp>
-#include <arpa/inet.h>
 #include <chrono>
 #include <cstdlib>
 #include <dcgm_errors.h>
 #include <filesystem>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
-#include <netdb.h>
 #include <numeric>
 #include <regex>
 #include <set>
 #include <span>
+#include <sstream>
 #include <stdexcept>
 #include <stdio.h>
 #include <string>
@@ -48,9 +47,12 @@ namespace
  * @brief Convert a parameters map to command-line arguments
  *
  * @param paramsMap Map of parameter name to value
+ * @param isMultiTokenParameter Predicate identifying values that must be split into separate arguments
  * @return std::vector<std::string> Vector of command-line arguments
  */
-std::vector<std::string> ConvertParamsMapToArgs(std::unordered_map<std::string, std::string> const &paramsMap)
+template <typename Predicate>
+std::vector<std::string> ConvertParamsMapToArgs(std::unordered_map<std::string, std::string> const &paramsMap,
+                                                Predicate const &isMultiTokenParameter)
 {
     std::vector<std::string> args;
 
@@ -63,7 +65,18 @@ std::vector<std::string> ConvertParamsMapToArgs(std::unordered_map<std::string, 
         args.push_back("--" + key);
         if (!value.empty())
         {
-            args.push_back(value);
+            if (isMultiTokenParameter(key))
+            {
+                std::istringstream valueStream(value);
+                for (std::string token; valueStream >> token;)
+                {
+                    args.push_back(std::move(token));
+                }
+            }
+            else
+            {
+                args.push_back(value);
+            }
         }
     }
 
@@ -76,23 +89,30 @@ std::vector<std::string> ConvertParamsMapToArgs(std::unordered_map<std::string, 
  * @param paramsMap Map to update
  * @param paramString Parameter string in format "<prefix>param=value" or "<prefix>flag"
  * @param prefix The test-specific prefix to match (e.g. "mnubergemm.")
- * @return bool True if the parameter was valid and added to the map
+ * @return `DCGM_ST_OK` when the parameter was accepted.
+ * @return `DCGM_ST_BADPARAM` when the parameter prefix does not match this test.
  */
-bool UpdateParamsMapWithParameter(std::unordered_map<std::string, std::string> &paramsMap,
-                                  std::string_view paramString,
-                                  std::string_view prefix)
+std::expected<void, dcgmReturn_t> UpdateParamsMapWithParameter(std::unordered_map<std::string, std::string> &paramsMap,
+                                                               std::string_view paramString,
+                                                               std::string_view prefix)
 {
     if (prefix.empty())
     {
-        return false;
+        return std::unexpected(DCGM_ST_BADPARAM);
     }
 
     std::string param(paramString);
 
     if (param.compare(0, prefix.length(), prefix) != 0)
     {
-        // Not a parameter for this test type, skip it
-        return false;
+        // openmpi.* parameters configure MPI launch behavior and are consumed separately.
+        if (paramString.starts_with("openmpi."))
+        {
+            return {};
+        }
+
+        log_error("Parameter '{}' does not match the expected '{}' prefix", paramString, prefix);
+        return std::unexpected(DCGM_ST_BADPARAM);
     }
 
     size_t equalsPos = param.find('=');
@@ -116,7 +136,7 @@ bool UpdateParamsMapWithParameter(std::unordered_map<std::string, std::string> &
         paramsMap[key] = "";
     }
 
-    return true;
+    return {};
 }
 
 } // namespace
@@ -181,61 +201,10 @@ std::string ParseRoutingInterface(std::string const &ipRouteOutput)
     return iface;
 }
 
-/**
- * @brief Resolve a hostname to an IPv4 address string via getaddrinfo.
- *
- * If the host is already a numeric IP address it is returned unchanged.
- * If DNS resolution fails the original host string is returned so that the
- * caller can still attempt `ip route get` (which will likely fail, but the
- * error is handled gracefully downstream).
- *
- * @note This function only resolves to IPv4 addresses (AF_INET). IPv6
- *       addresses are not supported. While the input sanitization in
- *       GetRoutingInterfacesForHosts allows colons (to accept IPv6-style
- *       input), any such address will fail the AF_INET resolution here
- *       and be returned as-is for downstream handling.
- *
- * @param host  The hostname or numeric IP address to resolve.
- * @return The resolved IPv4 address as a dotted-decimal string. If the host
- *         is already a numeric IP it is returned unchanged. If DNS resolution
- *         fails, the original @p host string is returned unmodified.
- */
+/** Forward to the shared ResolveHostnameToIp in MnDiagCommon. */
 std::string ResolveHostnameToIp(std::string const &host)
 {
-    struct addrinfo hints = {};
-    hints.ai_family       = AF_INET;
-    hints.ai_socktype     = SOCK_STREAM;
-    hints.ai_flags        = AI_NUMERICHOST;
-
-    struct addrinfo *res = nullptr;
-
-    // Fast path: if the host is already a valid IP address, return it unchanged
-    if (getaddrinfo(host.c_str(), nullptr, &hints, &res) == 0)
-    {
-        freeaddrinfo(res);
-        log_debug("Resolved hostname '{}' to IP '{}'", host, host);
-        return host;
-    }
-
-    hints.ai_flags = 0;
-    if (getaddrinfo(host.c_str(), nullptr, &hints, &res) != 0 || res == nullptr)
-    {
-        log_warning("Could not resolve hostname '{}' to an IP address; ip route get may fail", host);
-        return host;
-    }
-
-    char ipStr[INET_ADDRSTRLEN] = {};
-    auto *addr                  = reinterpret_cast<struct sockaddr_in *>(res->ai_addr);
-    DcgmNs::Defer freeRes([res] { freeaddrinfo(res); });
-
-    if (inet_ntop(AF_INET, &addr->sin_addr, ipStr, sizeof(ipStr)) == nullptr)
-    {
-        log_warning("inet_ntop failed for host '{}'; using original hostname", host);
-        return host;
-    }
-
-    log_debug("Resolved hostname '{}' to IP '{}'", host, ipStr);
-    return std::string(ipStr);
+    return ::ResolveHostnameToIp(host);
 }
 
 /**
@@ -332,7 +301,7 @@ std::string GetRoutingInterfacesForHosts(std::vector<std::string> const &hostLis
  * @param drmnd  The diagnostic run parameters struct.
  * @return true if auto-detection should run, false if the user disabled it.
  */
-bool IsInterfaceDetectionEnabled(dcgmRunMnDiag_v1 const &drmnd)
+bool IsInterfaceDetectionEnabled(dcgmRunMnDiag_v2 const &drmnd)
 {
     int testParmsSize = std::min(static_cast<size_t>(DCGM_MAX_TEST_PARMS), std::size(drmnd.testParms));
 
@@ -409,7 +378,7 @@ void LogMpiInterfaceEnvVars()
  * @return Vector of -mca arguments to insert at the front of the mpirun command.
  *         Empty when no interface restriction should be applied.
  */
-std::vector<std::string> ResolveMpiInterfaceArgs(dcgmRunMnDiag_v1 const &drmnd,
+std::vector<std::string> ResolveMpiInterfaceArgs(dcgmRunMnDiag_v2 const &drmnd,
                                                  std::vector<std::string> const &hostList,
                                                  MnDiagMpiRunner::RoutingInterfaceResolver const &interfaceResolver)
 {
@@ -439,36 +408,53 @@ std::vector<std::string> ResolveMpiInterfaceArgs(dcgmRunMnDiag_v1 const &drmnd,
 
 } // namespace MnDiagMpiRunnerInternal
 
-void MnDiagMpiRunner::ConstructMpiCommand(void const *params)
+MnDiagMpiRunner::~MnDiagMpiRunner()
+{
+    if (!m_mpiHostfilePath.empty())
+    {
+        std::error_code ec;
+        std::filesystem::remove(m_mpiHostfilePath, ec);
+        if (ec)
+        {
+            log_warning("Failed to remove temporary hostfile {}: {}", m_mpiHostfilePath.string(), ec.message());
+        }
+    }
+}
+
+std::expected<void, dcgmReturn_t> MnDiagMpiRunner::ConstructMpiCommand(void const *params)
 {
     if (!params)
     {
         log_error("Null parameters passed to ConstructMpiCommand");
         m_lastCommand.clear();
-        return;
+        return std::unexpected(DCGM_ST_BADPARAM);
     }
 
     // Interpret the params as a dcgmRunMnDiag_t struct
     auto *drmnd = static_cast<dcgmRunMnDiag_t const *>(params); // safer than reinterpret_cast
 
     // Verify this is a valid struct by checking version field
-    if (drmnd->version == dcgmRunMnDiag_version1)
+    if (drmnd->version == dcgmRunMnDiag_version2)
     {
         log_debug("Constructing MPI command from dcgmRunMnDiag_t");
-        auto *drmndV1 = static_cast<dcgmRunMnDiag_v1 const *>(drmnd); // safer than reinterpret_cast
-        ParseDcgmMnDiagToMpiCommand_v1(*drmndV1);
-        return;
+        ParseDcgmMnDiagToMpiCommand(*drmnd);
+        if (m_lastCommand.empty())
+        {
+            return std::unexpected(DCGM_ST_BADPARAM);
+        }
+        return {};
     }
 
     log_error("Unsupported parameter type or version passed to ConstructMpiCommand");
     m_lastCommand.clear();
+    return std::unexpected(DCGM_ST_BADPARAM);
 }
 
-void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drmnd)
+void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand(dcgmRunMnDiag_v2 const &drmnd)
 {
     // Extract host list from drmnd
     std::vector<std::string> hostList;
-    int hostListSize = std::min(static_cast<size_t>(DCGM_MAX_NUM_HOSTS), std::size(drmnd.hostList));
+    int hostListSize = std::min(static_cast<size_t>(DCGM_MNDIAG_MAX_NUM_HOSTS), std::size(drmnd.hostList));
     for (int i = 0; i < hostListSize && drmnd.hostList[i][0] != '\0'; i++)
     {
         std::string fullHostEntry = drmnd.hostList[i]; // e.g. "host1:5555"
@@ -487,6 +473,13 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
         }
     }
 
+    if (hostList.empty())
+    {
+        log_error("Host list is empty; cannot construct mpirun command");
+        m_lastCommand.clear();
+        return;
+    }
+
     // --map-by ppr:1:node
     unsigned int deviceCount = m_coreProxy.GetGpuCount(GpuTypes::ActiveOnly);
     m_totalProcessCount      = hostList.size() * deviceCount;
@@ -500,6 +493,36 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
         return;
     }
 
+    // Write hosts to a temporary hostfile for mpirun --hostfile.
+    // This avoids command-line length limits with large host lists.
+    // Remove any previously created hostfile from a prior invocation.
+    if (!m_mpiHostfilePath.empty())
+    {
+        std::error_code ec;
+        std::filesystem::remove(m_mpiHostfilePath, ec);
+        m_mpiHostfilePath.clear();
+    }
+    {
+        std::optional<uid_t> sessionUid = m_userInfo.has_value() ? std::optional(m_userInfo->second) : std::nullopt;
+        auto tmpDir                     = MnDiagDetail::ResolveMnDiagTempDir(sessionUid);
+        if (tmpDir.empty())
+        {
+            m_lastCommand.clear();
+            return;
+        }
+        m_mpiHostfilePath = MnDiagDetail::CreateMnDiagHostfile(tmpDir, hostList, sessionUid);
+        if (m_mpiHostfilePath.empty())
+        {
+            m_lastCommand.clear();
+            return;
+        }
+    }
+
+    log_debug("MPI hostfile {} with {} host(s): [{}]",
+              m_mpiHostfilePath.string(),
+              hostList.size(),
+              fmt::join(hostList, ", "));
+
     // Create the command arguments as a vector
     m_lastCommand = { "--timestamp-output",
                       "--oversubscribe",
@@ -508,8 +531,8 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
                       "0",
                       "-np",
                       std::to_string(m_totalProcessCount),
-                      "--host",
-                      fmt::format("{}", fmt::join(hostList, ",")),
+                      "--hostfile",
+                      m_mpiHostfilePath.string(),
                       "--map-by",
                       fmt::format("ppr:{}:node", deviceCount),
                       testBinaryPath };
@@ -526,25 +549,37 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
         m_lastCommand.insert(m_lastCommand.begin(), "--allow-run-as-root");
     }
 
-    // Start with default parameters via virtual dispatch
-    std::unordered_map<std::string, std::string> paramsMap = GetDefaultParametersMap();
+    // Process user-supplied parameters before merging defaults. This lets derived
+    // runners distinguish conflicting user parameters from values they supply by default.
+    std::unordered_map<std::string, std::string> paramsMap;
 
     // Process any parameters provided by the user; filter by this test's prefix
     std::string_view testPrefix = GetTestPrefix();
     int testParmsSize           = std::min(static_cast<size_t>(DCGM_MAX_TEST_PARMS), std::size(drmnd.testParms));
     for (int i = 0; i < testParmsSize && drmnd.testParms[i][0] != '\0'; i++)
     {
-        UpdateParamsMapWithParameter(paramsMap, drmnd.testParms[i], testPrefix);
+        auto updateResult = UpdateParamsMapFromRunParameter(paramsMap, drmnd.testParms[i]);
+        if (!updateResult.has_value())
+        {
+            log_error("Invalid parameter '{}' for test prefix '{}': {}",
+                      drmnd.testParms[i],
+                      testPrefix,
+                      errorString(updateResult.error()));
+            m_lastCommand.clear();
+            return;
+        }
     }
 
-    if (m_totalProcessCount % 2 != 0)
+    for (auto const &[key, value] : GetDefaultParametersMap())
     {
-        // Odd number of processes, use snake link order
-        paramsMap["NET_link_order"] = "snake";
+        paramsMap.try_emplace(key, value);
     }
+
+    AdjustParamsMap(paramsMap, m_totalProcessCount);
 
     // Convert parameters to command-line arguments
-    std::vector<std::string> paramArgs = ConvertParamsMapToArgs(paramsMap);
+    std::vector<std::string> paramArgs
+        = ConvertParamsMapToArgs(paramsMap, [this](std::string_view key) { return IsMultiTokenParameter(key); });
 
     // Add all parameter arguments
     m_lastCommand.insert(m_lastCommand.end(), paramArgs.begin(), paramArgs.end());
@@ -552,6 +587,13 @@ void MnDiagMpiRunner::ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drm
     log_debug("MnDiagMpiRunner generated command with {} arguments from dcgmRunMnDiag_t: [{}]",
               m_lastCommand.size(),
               fmt::join(m_lastCommand, " "));
+}
+
+std::expected<void, dcgmReturn_t> MnDiagMpiRunner::UpdateParamsMapFromRunParameter(
+    std::unordered_map<std::string, std::string> &paramsMap,
+    std::string_view paramString) const
+{
+    return UpdateParamsMapWithParameter(paramsMap, paramString, GetTestPrefix());
 }
 
 std::string MnDiagMpiRunner::GetMpiBinPath() const
@@ -572,6 +614,10 @@ std::string MnDiagMpiRunner::GetMpiBinPath() const
     return std::string(MnDiagConstants::DEFAULT_MPIRUN_PATH);
 }
 
+
+void MnDiagMpiRunner::AdjustParamsMap(std::unordered_map<std::string, std::string> & /*paramsMap*/,
+                                      unsigned int /*processCount*/) const
+{}
 
 std::expected<std::chrono::milliseconds, dcgmReturn_t> MnDiagMpiRunner::GetTestRunTime(
     dcgmRunMnDiag_t const &params) const
@@ -597,18 +643,14 @@ dcgmReturn_t MnDiagMpiRunner::MnDiagOutputCallback(int fd, void *responseStruct,
         return DCGM_ST_BADPARAM;
     }
 
-    dcgmMnDiagResponse_t *response = static_cast<dcgmMnDiagResponse_t *>(responseStruct);
-    int version                    = response->version;
-
-    switch (version)
+    auto *response = static_cast<dcgmMnDiagResponse_t *>(responseStruct);
+    if (response->version != dcgmMnDiagResponse_version2)
     {
-        case dcgmMnDiagResponse_version1:
-            ParseTestOutput(fd, responseStruct, nodeInfo);
-            break;
-        default:
-            log_error("Unsupported response struct version: {}", version);
-            return DCGM_ST_BADPARAM;
+        log_error("Unsupported response struct version: {}", response->version);
+        return DCGM_ST_BADPARAM;
     }
+
+    ParseTestOutput(fd, responseStruct, nodeInfo);
     return DCGM_ST_OK;
 }
 

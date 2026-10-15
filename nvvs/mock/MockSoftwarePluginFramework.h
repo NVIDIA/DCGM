@@ -15,16 +15,19 @@
  */
 #pragma once
 
+#include <DcgmHandle.h>
 #include <DcgmNvvsResponseWrapper.h>
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmSystem.h>
 #include <dcgm_structs.h>
 
 #include <EntitySet.h>
+#include <Gpu.h>
+#include <NvvsCommon.h>
 
 #include <map>
 #include <optional>
 #include <vector>
-
-class Gpu;
 
 /**
  * Stand-in for SoftwarePluginFramework in unit tests.
@@ -32,7 +35,12 @@ class Gpu;
 class MockSoftwarePluginFramework
 {
 public:
-    explicit MockSoftwarePluginFramework(std::vector<Gpu *> const &gpuList, EntitySet &entitySet);
+    explicit MockSoftwarePluginFramework(std::vector<Gpu *> const &gpuList,
+                                         EntitySet &entitySet,
+                                         DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                         NvvsCommon *,
+                                         DcgmHandle *dcgmHandle,
+                                         DcgmSystemBase *dcgmSystem);
 
     void SetInjectedErrors(std::vector<dcgmDiagError_v1> const &errors);
 
@@ -52,10 +60,18 @@ private:
     std::vector<dcgmDiagError_v1> m_errors;
 };
 
-inline MockSoftwarePluginFramework::MockSoftwarePluginFramework(std::vector<Gpu *> const &gpuList, EntitySet &entitySet)
+inline MockSoftwarePluginFramework::MockSoftwarePluginFramework(std::vector<Gpu *> const &gpuList,
+                                                                EntitySet &entitySet,
+                                                                DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                                                                NvvsCommon *,
+                                                                DcgmHandle *dcgmHandle,
+                                                                DcgmSystemBase *dcgmSystem)
 {
     (void)gpuList;
     (void)entitySet;
+    (void)dcgmOps;
+    (void)dcgmHandle;
+    (void)dcgmSystem;
 }
 
 inline void MockSoftwarePluginFramework::SetInjectedErrors(std::vector<dcgmDiagError_v1> const &errors)

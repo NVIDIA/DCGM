@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 4.0.0)
 
-project(datacenter-gpu-manager-4 VERSION 4.6.1)
+project(datacenter-gpu-manager-4 VERSION 4.7.0)
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF CACHE BOOL
     "Specify whether to link the target in the build tree with the INSTALL_RPATH")
@@ -29,18 +29,17 @@ information. Otherwise, CTest must "scrape" the build output log for
 diagnostics.
 ]])
 
-find_package(Boost REQUIRED COMPONENTS filesystem stacktrace_basic system)
+find_package(Boost REQUIRED COMPONENTS filesystem regex stacktrace_basic system)
 find_package(Catch2 REQUIRED)
-find_package(Cuda REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Git REQUIRED)
-find_package(Jsoncpp REQUIRED)
+find_package(jsoncpp REQUIRED)
 find_package(Libevent REQUIRED)
 find_package(plog REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 find_package(Threads REQUIRED)
 find_package(TCLAP REQUIRED)
-find_package(Yaml REQUIRED)
+find_package(yaml-cpp REQUIRED CONFIG)
 
 include(Catch)
 include(CheckCCompilerFlag)
@@ -49,6 +48,9 @@ include(CheckIPOSupported)
 include(CMakePackageConfigHelpers)
 include(CTest)
 include(GNUInstallDirs)
+
+include(Coverity OPTIONAL)
+include(Cuda)
 
 check_pie_supported(OUTPUT_VARIABLE PIE_SUPPORT_OUTPUT)
 
@@ -121,6 +123,7 @@ endif ()
 
 if (DCGM_BUILD_COVERAGE)
     set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} --coverage")
+    add_compile_definitions(NDEBUG)
 endif ()
 
 set(DCGM_CXX_FLAGS "${DCGM_CXX_FLAGS} -fmax-errors=1 -Werror -fno-omit-frame-pointer")
@@ -184,10 +187,6 @@ endif ()
 
 add_link_options(-Wl,--exclude-libs,libstdc++)
 
-set(DCGM_RPATH "\$ORIGIN:\$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
-set(CMAKE_INSTALL_RPATH ${DCGM_RPATH})
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
-
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     set(DCGM_TESTS_ARCH "amd64")
 elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
@@ -201,39 +200,24 @@ message(DEBUG "DCGM_TESTS_ARCH=${DCGM_TESTS_ARCH}")
 
 set(DCGM_NVVS_PLUGINS_INSTALL_DIR "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins")
 set(DCGM_TESTS_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/dcgm_tests")
-set(DCGM_TESTS_APP_DIR "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}")
+set(DCGM_TESTS_APP_DIR "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps")
 
-# Let CMake rebuild cache every time git commit is changed
-set_property(GLOBAL APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/.git/index")
+set(DCGM_BIN_RPATH
+    "$ORIGIN:$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+file(RELATIVE_PATH DCGM_LIB_TO_LIBEXEC_DIR
+    "/${CMAKE_INSTALL_LIBDIR}"
+    "/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}")
+set(DCGM_MODULE_RPATH
+    "$ORIGIN:$ORIGIN/../../${CMAKE_INSTALL_LIBDIR}")
+set(DCGM_NVVS_CUDA_PLUGIN_RPATH
+    "$ORIGIN/../cudaless:$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}:$ORIGIN/../../../${DCGM_TESTS_ARCH}")
+set(DCGM_NVVS_CUDALESS_PLUGIN_RPATH
+    "$ORIGIN:$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}:$ORIGIN/../../../${DCGM_TESTS_ARCH}")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE)
 
-# Git Commit -> ${COMMIT_ID}
-execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    OUTPUT_VARIABLE COMMIT_ID
-    RESULT_VARIABLE GIT_EXIT_CODE
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-if (GIT_EXIT_CODE EQUAL 0)
-    # Git branch -> ${BUILD_BRANCH}
-    # Jenkins does some weird checkouts so it ends up in a detached HEAD state.
-    # The command below will
-    # - grab all refs that are related to the current commit
-    # - filter out detached HEAD
-    # - use rel_dcgm_* if found
-    # - use main or master if found (RELINGO_IGNORE until DCGM-1855 is done)
-    # - use the first branch we find otherwise
-    execute_process(COMMAND "./scripts/get_build_branch.py" ${COMMIT_ID}
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        OUTPUT_VARIABLE BUILD_BRANCH)
-    # Git has uncommitted changes -> ${HAS_UNCOMMITTED_CHANGES}
-    execute_process(COMMAND "${GIT_EXECUTABLE}" diff-index --quiet HEAD --
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        RESULT_VARIABLE HAS_UNCOMMITTED_CHANGES)
-else ()
-    message(STATUS "The working directory is not a Git repository")
-    set(BUILD_BRANCH "non-branched")
-    set(HAS_UNCOMMITED_CHANGES 1)
-endif ()
+# Git information
+set(GIT_COMMIT_SHA "unknown" CACHE STRING "Current git commit SHA")
+set(GIT_COMMIT_REF "unknown" CACHE STRING "Current git commit branch or tag")
 
 # Build Platform -> ${BUILDPLATFORM}
 execute_process(COMMAND uname -srvm
@@ -245,27 +229,14 @@ execute_process(COMMAND date -u -Idate
     OUTPUT_VARIABLE BUILD_DATE
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-if (NOT HAS_UNCOMMITTED_CHANGES EQUAL 0)
-    string(APPEND COMMIT_ID "(dirty)")
-
-    if ("$ENV{PRINT_UNCOMMITTED_CHANGES}" STREQUAL "1")
-        execute_process(COMMAND "${GIT_EXECUTABLE}" diff-index -p HEAD --
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-            OUTPUT_VARIABLE INDEX_DIFF
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-        message("Git index diff:\n${INDEX_DIFF}")
-    endif ()
-endif ()
-
 set(DCGM_BUILD_INFO
     "version:${CMAKE_PROJECT_VERSION}"
     "arch:${CMAKE_SYSTEM_PROCESSOR}"
     "buildtype:${CMAKE_BUILD_TYPE}"
     "buildid:${BUILD_NUMBER}"
     "builddate:${BUILD_DATE}"
-    "commit:${COMMIT_ID}"
-    "branch:${BUILD_BRANCH}"
+    "commit:${GIT_COMMIT_SHA}"
+    "branch:${GIT_COMMIT_REF}"
     "buildplatform:${BUILDPLATFORM}"
     "$ENV{DCGM_BUILD_INFO}")
 
@@ -275,7 +246,7 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 list(APPEND DCGM_BUILD_INFO "crc:${BUILD_INFO_CRC}")
-message("${DCGM_BUILD_INFO}")
+message(STATUS "${DCGM_BUILD_INFO}")
 
 add_compile_definitions(INJECTION_LIBRARY_AVAILABLE)
 
@@ -284,12 +255,6 @@ add_library(nvmli_interface INTERFACE)
 add_library(nvmli_public OBJECT)
 
 set(LINK_INJECTION_LIB "true")
-
-if (BUILD_TESTING)
-    add_library(testing_cuda_stubs STATIC)
-    add_library(testing_cuda_stubs_interface INTERFACE)
-    add_library(testing_dcgm_cublas_stubs STATIC)
-endif()
 
 add_executable(BwChecker_11)
 add_executable(BwChecker_12)
@@ -316,7 +281,6 @@ add_library(sysmon_interface INTERFACE)
 
 add_library(childprocess_interface INTERFACE)
 add_library(common_interface INTERFACE)
-add_library(cuda_common_interface INTERFACE)
 add_library(dcgm_interface INTERFACE)
 add_library(dcgm_thread_interface INTERFACE)
 add_library(dcgmi_interface INTERFACE)
@@ -348,7 +312,6 @@ add_library(transport_interface INTERFACE)
 add_library(buildinfo_objects STATIC)
 add_library(childprocess STATIC)
 add_library(common_watch_objects STATIC)
-add_library(cuda_lib_base STATIC)
 add_library(dcgm_common STATIC)
 add_library(dcgm_cuda_worker11 STATIC)
 add_library(dcgm_cuda_worker12 STATIC)
@@ -359,7 +322,11 @@ add_library(dcgm_mutex STATIC)
 add_library(dcgm_static_private STATIC)
 add_library(dcgm_stub STATIC)
 add_library(dcgm_thread STATIC)
+add_library(dcgmproftester_lib11 STATIC)
+add_library(dcgmproftester_lib12 STATIC)
+add_library(dcgmproftester_lib13 STATIC)
 add_library(dcgmi_objects_without_main STATIC)
+add_library(file_handle STATIC)
 add_library(nvvs_without_main_objects OBJECT)
 add_library(nvvs_main_objects OBJECT)
 add_library(nvvs_plugins_common_objects OBJECT)
@@ -371,11 +338,13 @@ add_library(sdk_nvml_essentials_objects STATIC)
 add_library(sdk_nvml_loader STATIC)
 add_library(serialize STATIC)
 add_library(transport_objects STATIC)
+add_library(user_credentials STATIC)
 
 add_library(dcgmmodulediag_common STATIC)
 add_library(dcgmmodulediag_private_static STATIC)
 add_library(dcgmmodulemndiag_common STATIC)
 add_library(dcgmmodulemndiag_private_static STATIC)
+add_library(dcgmmodulepolicy_common STATIC)
 add_library(module_common_objects STATIC)
 add_library(modules_objects STATIC)
 add_library(nvswitch_objects STATIC)
@@ -417,9 +386,18 @@ add_library(TargetedStress_12 SHARED)
 add_library(TargetedStress_13 SHARED)
 
 add_library(dcgm SHARED)
-add_library(dcgm_cublas_proxy11 SHARED)
-add_library(dcgm_cublas_proxy12 SHARED)
-add_library(dcgm_cublas_proxy13 SHARED)
+add_library(cublas_ops11 STATIC)
+add_library(cublas_ops12 STATIC)
+add_library(cublas_ops13 STATIC)
+add_library(cublas_ops_interface11 INTERFACE)
+add_library(cublas_ops_interface12 INTERFACE)
+add_library(cublas_ops_interface13 INTERFACE)
+add_library(cuda_ops11 STATIC)
+add_library(cuda_ops12 STATIC)
+add_library(cuda_ops13 STATIC)
+add_library(cuda_ops_interface11 INTERFACE)
+add_library(cuda_ops_interface12 INTERFACE)
+add_library(cuda_ops_interface13 INTERFACE)
 add_library(pluginCommon SHARED)
 
 add_library(sdk_nscq_loader)
@@ -462,9 +440,6 @@ set_target_properties(
     dcgmmodulenvswitch
     dcgmmodulepolicy
     dcgmmodulesysmon
-    dcgm_cublas_proxy11
-    dcgm_cublas_proxy12
-    dcgm_cublas_proxy13
     pluginCommon
     PROPERTIES
         SOVERSION ${PROJECT_VERSION_MAJOR}
@@ -472,16 +447,115 @@ set_target_properties(
 
 set_target_properties(nvml_injection PROPERTIES SOVERSION 1 VERSION 1.0.0)
 
-set_target_properties(nvvs PROPERTIES
-    INSTALL_RPATH "${DCGM_RPATH}:$ORIGIN/../../lib:$ORIGIN/../${DCGM_TESTS_ARCH}"
-    RUNTIME_OUTPUT_DIRECTORY nvvs)
+set_target_properties(dcgmi PROPERTIES
+    INSTALL_RPATH "${DCGM_BIN_RPATH}")
+
+set_target_properties(nv-hostengine PROPERTIES
+    INSTALL_RPATH "${DCGM_BIN_RPATH}")
+
+set_target_properties(dcgm PROPERTIES
+    INSTALL_RPATH "$ORIGIN:$ORIGIN/${DCGM_LIB_TO_LIBEXEC_DIR}")
 
 set_target_properties(
-    BwChecker_11
-    BwChecker_12
-    BwChecker_13
+    dcgmmoduleconfig
+    dcgmmodulediag
+    dcgmmodulehealth
+    dcgmmoduleintrospect
+    dcgmmodulemndiag
+    dcgmmodulenvswitch
+    dcgmmodulepolicy
+    dcgmmodulesysmon
     PROPERTIES
-        INSTALL_RPATH "${DCGM_RPATH}:$ORIGIN/../../../${DCGM_TESTS_ARCH}")
+        INSTALL_RPATH "${DCGM_MODULE_RPATH}")
+
+set_target_properties(nvvs PROPERTIES
+    INSTALL_RPATH "$ORIGIN/../../${CMAKE_INSTALL_LIBDIR}:$ORIGIN/../${DCGM_TESTS_ARCH}"
+    RUNTIME_OUTPUT_DIRECTORY nvvs)
+
+# These targets are installed in both the production and test layouts.
+set_target_properties(
+    ContextCreate_11
+    ContextCreate_12
+    ContextCreate_13
+    Memory_11
+    Memory_12
+    Memory_13
+    Memtest_11
+    Memtest_12
+    Memtest_13
+    NVBandwidth_12
+    NVBandwidth_13
+    NcclTests_12
+    NcclTests_13
+    PROPERTIES
+        INSTALL_RPATH "${DCGM_NVVS_CUDA_PLUGIN_RPATH}")
+
+set_property(TARGET
+    Diagnostic_11
+    Pcie_11
+    TargetedPower_11
+    TargetedStress_11
+    PROPERTY INSTALL_RPATH
+        "$ORIGIN/../cudaless"
+        "$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}"
+        "$ORIGIN/../../../${DCGM_TESTS_ARCH}"
+        "$ORIGIN/../../cuda11/lib")
+
+set_property(TARGET BwChecker_11 PROPERTY INSTALL_RPATH
+    "$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}"
+    "$ORIGIN/../../../${DCGM_TESTS_ARCH}"
+    "$ORIGIN/../../cuda11/lib")
+
+set_property(TARGET
+    Diagnostic_12
+    Pcie_12
+    TargetedPower_12
+    TargetedStress_12
+    PROPERTY INSTALL_RPATH
+        "$ORIGIN/../cudaless"
+        "$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}"
+        "$ORIGIN/../../../${DCGM_TESTS_ARCH}"
+        "$ORIGIN/../../cuda12/lib")
+
+set_property(TARGET BwChecker_12 PROPERTY INSTALL_RPATH
+    "$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}"
+    "$ORIGIN/../../../${DCGM_TESTS_ARCH}"
+    "$ORIGIN/../../cuda12/lib")
+
+set_property(TARGET
+    Diagnostic_13
+    Pcie_13
+    TargetedPower_13
+    TargetedStress_13
+    PROPERTY INSTALL_RPATH
+        "$ORIGIN/../cudaless"
+        "$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}"
+        "$ORIGIN/../../../${DCGM_TESTS_ARCH}"
+        "$ORIGIN/../../cuda13/lib")
+
+set_property(TARGET BwChecker_13 PROPERTY INSTALL_RPATH
+    "$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}"
+    "$ORIGIN/../../../${DCGM_TESTS_ARCH}"
+    "$ORIGIN/../../cuda13/lib")
+
+set_property(TARGET pluginCommon PROPERTY INSTALL_RPATH
+    "$ORIGIN/../../../../${CMAKE_INSTALL_LIBDIR}"
+    "$ORIGIN/../../../${DCGM_TESTS_ARCH}")
+
+set_property(TARGET dcgmproftester11 PROPERTY INSTALL_RPATH
+    "$ORIGIN"
+    "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+    "$ORIGIN/../${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda11/lib")
+
+set_property(TARGET dcgmproftester12 PROPERTY INSTALL_RPATH
+    "$ORIGIN"
+    "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+    "$ORIGIN/../${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda12/lib")
+
+set_property(TARGET dcgmproftester13 PROPERTY INSTALL_RPATH
+    "$ORIGIN"
+    "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+    "$ORIGIN/../${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda13/lib")
 
 set_target_properties(dcgmi PROPERTIES RUNTIME_OUTPUT_DIRECTORY dcgmi)
 
@@ -526,7 +600,7 @@ set_target_properties(
 
 add_subdirectory(common)
 add_subdirectory(config-files)
-add_subdirectory(cublas_proxy)
+add_subdirectory(data)
 add_subdirectory(dcgm_stub)
 add_subdirectory(dcgmi)
 add_subdirectory(dcgmlib)
@@ -539,6 +613,7 @@ add_subdirectory(nvvs)
 add_subdirectory(scripts)
 add_subdirectory(sdk)
 add_subdirectory(sdk_samples)
+add_subdirectory(rust/module_log_test)
 add_subdirectory(testing)
 
 include(sanitizers)
@@ -562,15 +637,16 @@ install(
 install(
     FILES LICENSE
     DESTINATION "${CMAKE_INSTALL_DOCDIR}"
-    COMPONENT Core)
+    COMPONENT libdcgm)
 
 #[[
-This install call serves to establish an empty install component. This empty
-component is used in the context of packages for dependency management
+These install calls serve to establish empty install components. These empty
+components are used in the context of packages for dependency management
 systems, such as rpm or apt, to provide a "metapackage", i.e. a package that
 expresses a dependency on two or more other packages, but which provide no
 content themselves.
 #]]
+install(FILES DESTINATION . COMPONENT Core)
 install(FILES DESTINATION . COMPONENT Cuda_All)
 
 install(
@@ -583,11 +659,11 @@ install(
         COMPONENT Development
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        COMPONENT Core
+        COMPONENT libdcgm
         NAMELINK_COMPONENT Development
     RUNTIME
         DESTINATION "${CMAKE_INSTALL_BINDIR}"
-        COMPONENT Core)
+        COMPONENT libdcgm)
 
 install(
     TARGETS
@@ -606,39 +682,123 @@ install(
 install(
     TARGETS
         dcgmi
-        dcgmmoduleconfig
-        dcgmmodulediag
-        dcgmmodulehealth
-        dcgmmoduleintrospect
-        dcgmmodulenvswitch
-        dcgmmodulepolicy
-        dcgmmodulesysmon
-        nv-hostengine
-    LIBRARY
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-        COMPONENT Core
-        NAMELINK_SKIP
     RUNTIME
         DESTINATION "${CMAKE_INSTALL_BINDIR}"
-        COMPONENT Core)
+        COMPONENT dcgmi)
+
+install(
+    TARGETS
+        nv-hostengine
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        COMPONENT nv-hostengine)
+
+install(
+    TARGETS
+        dcgmmoduleconfig
+    LIBRARY
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmoduleconfig
+        NAMELINK_SKIP
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmoduleconfig)
+
+install(
+    TARGETS
+        dcgmmodulediag
+        nvvs
+    LIBRARY
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulediag
+        NAMELINK_SKIP
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulediag)
+
+install(
+    TARGETS pluginCommon
+    LIBRARY
+        DESTINATION "${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cudaless"
+        COMPONENT libdcgmmodulediag
+        NAMELINK_SKIP)
+
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    install(CODE "
+        file(INSTALL
+            DESTINATION \"$<INSTALL_PREFIX>/${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cudaless\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES \"$<TARGET_PROPERTY:cpu_sdc-shared,RUST_SONAME_LINK>\")
+    "
+    COMPONENT libdcgmmodulediag)
+endif()
+
+install(
+    TARGETS
+        dcgmmodulehealth
+    LIBRARY
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulehealth
+        NAMELINK_SKIP
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulehealth)
+
+install(
+    TARGETS
+        dcgmmoduleintrospect
+    LIBRARY
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmoduleintrospect
+        NAMELINK_SKIP
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmoduleintrospect)
+
+install(
+    TARGETS
+        dcgmmodulenvswitch
+    LIBRARY
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulenvswitch
+        NAMELINK_SKIP
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulenvswitch)
+
+install(
+    TARGETS
+        dcgmmodulepolicy
+    LIBRARY
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulepolicy
+        NAMELINK_SKIP
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulepolicy)
+
+install(
+    TARGETS
+        dcgmmodulesysmon
+    LIBRARY
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulesysmon
+        NAMELINK_SKIP
+    RUNTIME
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+        COMPONENT libdcgmmodulesysmon)
 
 install(
     TARGETS
         dcgmmodulemndiag
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
         COMPONENT Multinode
         NAMELINK_SKIP)
 
 install(
-    TARGETS nvvs
-    RUNTIME
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
-        COMPONENT Core)
-
-install(
     TARGETS
-        dcgm_cublas_proxy11
         dcgmproftester11
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -647,16 +807,6 @@ install(
     RUNTIME
         DESTINATION "${CMAKE_INSTALL_BINDIR}"
         COMPONENT Cuda11)
-
-install(
-    TARGETS pluginCommon
-    LIBRARY
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cudaless"
-        COMPONENT Core
-        NAMELINK_SKIP
-    LIBRARY
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cudaless"
-        COMPONENT Core)
 
 install(
     TARGETS
@@ -669,16 +819,15 @@ install(
         TargetedPower_11
         TargetedStress_11
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda11"
+        DESTINATION "${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda11"
         COMPONENT Cuda11
         NAMELINK_SKIP
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda11"
+        DESTINATION "${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda11"
         COMPONENT Cuda11)
 
 install(
     TARGETS
-        dcgm_cublas_proxy12
         dcgmproftester12
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -690,7 +839,6 @@ install(
 
 install(
     TARGETS
-        dcgm_cublas_proxy13
         dcgmproftester13
     LIBRARY
         DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -713,11 +861,11 @@ install(
         TargetedPower_12
         TargetedStress_12
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda12"
+        DESTINATION "${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda12"
         COMPONENT Cuda12
         NAMELINK_SKIP
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda12"
+        DESTINATION "${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda12"
         COMPONENT Cuda12)
 
  install(
@@ -733,26 +881,78 @@ install(
         TargetedPower_13
         TargetedStress_13
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda13"
+        DESTINATION "${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda13"
         COMPONENT Cuda13
         NAMELINK_SKIP
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/plugins/cuda13"
+        DESTINATION "${DCGM_NVVS_PLUGINS_INSTALL_DIR}/cuda13"
         COMPONENT Cuda13)
+
+# Start with the SONAME links so FOLLOW_SYMLINK_CHAIN excludes the unversioned linker links.
+install(CODE "
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda11/lib\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas11>/$<TARGET_PROPERTY:Cuda::cublas11,IMPORTED_SONAME>\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt11>/$<TARGET_PROPERTY:Cuda::cublasLt11,IMPORTED_SONAME>\")
+
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda11/lib\"
+        TYPE SHARED_LIBRARY
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas11>/libcublas.so\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt11>/libcublasLt.so\")
+    "
+    COMPONENT CUDA11_CUBLAS)
+
+install(CODE "
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda12/lib\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas12>/$<TARGET_PROPERTY:Cuda::cublas12,IMPORTED_SONAME>\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt12>/$<TARGET_PROPERTY:Cuda::cublasLt12,IMPORTED_SONAME>\")
+
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda12/lib\"
+        TYPE SHARED_LIBRARY
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas12>/libcublas.so\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt12>/libcublasLt.so\")
+    "
+    COMPONENT CUDA12_CUBLAS)
+
+install(CODE "
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda13/lib\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas13>/$<TARGET_PROPERTY:Cuda::cublas13,IMPORTED_SONAME>\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt13>/$<TARGET_PROPERTY:Cuda::cublasLt13,IMPORTED_SONAME>\")
+
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}/cuda13/lib\"
+        TYPE SHARED_LIBRARY
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas13>/libcublas.so\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt13>/libcublasLt.so\")
+    "
+    COMPONENT CUDA13_CUBLAS)
 
 # Tests component
 install(
     TARGETS nvvs
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/"
         COMPONENT Tests)
 
 install(
     TARGETS
         dcgm
-        dcgm_cublas_proxy11
-        dcgm_cublas_proxy12
-        dcgm_cublas_proxy13
         dcgmi
         dcgmmoduleconfig
         dcgmmodulediag
@@ -768,22 +968,31 @@ install(
         nv-hostengine
         nvml_injection
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH}"
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/${DCGM_TESTS_ARCH}"
         COMPONENT Tests)
 
 install(
     TARGETS pluginCommon
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cudaless"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/plugins/cudaless"
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cudaless"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/plugins/cudaless"
         COMPONENT Tests)
+
+install(CODE "
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${DCGM_TESTS_APP_DIR}/nvvs/plugins/cudaless\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES \"$<TARGET_PROPERTY:cpu_sdc-shared,RUST_SONAME_LINK>\")
+    "
+    COMPONENT Tests)
 
 install(
     TARGETS
@@ -796,11 +1005,11 @@ install(
         TargetedPower_11
         TargetedStress_11
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda11"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda11"
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda11"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda11"
         COMPONENT Tests)
 
 install(
@@ -816,11 +1025,11 @@ install(
         TargetedPower_12
         TargetedStress_12
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda12"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda12"
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda12"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda12"
         COMPONENT Tests)
 
 install(
@@ -836,12 +1045,77 @@ install(
         TargetedPower_13
         TargetedStress_13
     LIBRARY
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda13"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda13"
         COMPONENT Tests
         NAMELINK_SKIP
     RUNTIME
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/nvvs/plugins/cuda13"
+        DESTINATION "${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda13"
         COMPONENT Tests)
+
+# Keep the Tests component standalone. Preserve its shared runtime directory and place the
+# CUDA-specific chains in their plugin directories so the unversioned linker links do not collide.
+install(CODE "
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas11>/$<TARGET_PROPERTY:Cuda::cublas11,IMPORTED_SONAME>\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt11>/$<TARGET_PROPERTY:Cuda::cublasLt11,IMPORTED_SONAME>\")
+    "
+    COMPONENT Tests)
+
+install(CODE "
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas12>/$<TARGET_PROPERTY:Cuda::cublas12,IMPORTED_SONAME>\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt12>/$<TARGET_PROPERTY:Cuda::cublasLt12,IMPORTED_SONAME>\")
+
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda12\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas12>/$<TARGET_PROPERTY:Cuda::cublas12,IMPORTED_SONAME>\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt12>/$<TARGET_PROPERTY:Cuda::cublasLt12,IMPORTED_SONAME>\")
+
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda12\"
+        TYPE SHARED_LIBRARY
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas12>/libcublas.so\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt12>/libcublasLt.so\")
+    "
+    COMPONENT Tests)
+
+install(CODE "
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${DCGM_TESTS_ARCH}\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas13>/$<TARGET_PROPERTY:Cuda::cublas13,IMPORTED_SONAME>\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt13>/$<TARGET_PROPERTY:Cuda::cublasLt13,IMPORTED_SONAME>\")
+
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda13\"
+        TYPE SHARED_LIBRARY
+        FOLLOW_SYMLINK_CHAIN
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas13>/$<TARGET_PROPERTY:Cuda::cublas13,IMPORTED_SONAME>\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt13>/$<TARGET_PROPERTY:Cuda::cublasLt13,IMPORTED_SONAME>\")
+
+    file(INSTALL
+        DESTINATION \"$<INSTALL_PREFIX>/${DCGM_TESTS_APP_DIR}/nvvs/plugins/cuda13\"
+        TYPE SHARED_LIBRARY
+        FILES
+            \"$<TARGET_FILE_DIR:Cuda::cublas13>/libcublas.so\"
+            \"$<TARGET_FILE_DIR:Cuda::cublasLt13>/libcublasLt.so\")
+    "
+    COMPONENT Tests)
 
 if (DCGM_BUILD_COVERAGE)
     if (CMAKE_INSTALL_PREFIX)
@@ -854,7 +1128,7 @@ if (DCGM_BUILD_COVERAGE)
 
     install(
         DIRECTORY "${CMAKE_BINARY_DIR}/"
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/coverage/gcov"
+        DESTINATION "${DCGM_TESTS_INSTALL_DIR}/coverage/gcov"
         COMPONENT Tests
         FILES_MATCHING
             PATTERN "*.gcno"

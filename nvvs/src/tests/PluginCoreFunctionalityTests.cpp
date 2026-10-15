@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,31 @@
  * limitations under the License.
  */
 #include <catch2/catch_all.hpp>
+#include <memory>
 #include <vector>
 
+#include <MockDcgmOps.h>
+#include <NvvsCommon.h>
 #include <PluginCoreFunctionality.h>
+
+
+namespace
+{
+struct PluginCoreFunctionalityTestFixture
+{
+    DcgmNs::MockDcgmOps mockDcgmOps;
+    NvvsCommon nvvsCommon;
+};
+} // namespace
 
 extern errorType_t standardErrorFields[];
 extern unsigned short standardInfoFields[];
 
-TEST_CASE("PluginCoreFunctionalityTests: build field list")
+TEST_CASE_METHOD(PluginCoreFunctionalityTestFixture, "PluginCoreFunctionalityTests: build field list")
 {
     std::vector<unsigned short> fieldIds;
     std::vector<unsigned short> additionalFields;
-    PluginCoreFunctionality core;
+    PluginCoreFunctionality core(&mockDcgmOps, &nvvsCommon);
     core.PopulateFieldIds(additionalFields, fieldIds);
 
     for (unsigned int i = 0; standardErrorFields[i].fieldId != 0; i++)

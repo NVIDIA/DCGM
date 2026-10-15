@@ -232,40 +232,17 @@ dcgmReturn_t NvmlTaskRunner::DispatchTask(std::function<dcgmReturn_t()> taskFunc
 
 nvmlReturn_t NvmlTaskRunner::NvmlEventSetWait_v2(nvmlEventSet_t set, nvmlEventData_t *data, unsigned int timeoutms)
 {
-    std::shared_lock<std::shared_mutex> guard(m_sharedMutex);
-    if (m_blockNewTasks)
-    {
-        return NVML_ERROR_UNINITIALIZED;
-    }
-    m_ongoingTasks.fetch_add(1, std::memory_order_release);
-    guard.unlock();
-    DcgmNs::Defer defer([this]() {
-        auto numTask = m_ongoingTasks.fetch_sub(1, std::memory_order_acq_rel);
-        if (numTask == 1)
-        {
-            m_ongoingTasksCv.notify_one();
-        }
-    });
-    return ::nvmlEventSetWait_v2(set, data, timeoutms);
+    return NvmlEventSetWaitImpl(::nvmlEventSetWait_v2, set, data, timeoutms);
+}
+
+nvmlReturn_t NvmlTaskRunner::NvmlEventSetWait_v3(nvmlEventSet_t set, nvmlEventSetWait_v3_t *params)
+{
+    return NvmlEventSetWaitImpl(::nvmlEventSetWait_v3, set, params);
 }
 
 nvmlReturn_t NvmlTaskRunner::NvmlEventSetWait(nvmlEventSet_t set, nvmlEventData_t *data, unsigned int timeoutms)
 {
-    std::shared_lock<std::shared_mutex> guard(m_sharedMutex);
-    if (m_blockNewTasks)
-    {
-        return NVML_ERROR_UNINITIALIZED;
-    }
-    m_ongoingTasks.fetch_add(1, std::memory_order_release);
-    guard.unlock();
-    DcgmNs::Defer defer([this]() {
-        auto numTask = m_ongoingTasks.fetch_sub(1, std::memory_order_acq_rel);
-        if (numTask == 1)
-        {
-            m_ongoingTasksCv.notify_one();
-        }
-    });
-    return ::nvmlEventSetWait(set, data, timeoutms);
+    return NvmlEventSetWaitImpl(::nvmlEventSetWait, set, data, timeoutms);
 }
 
 nvmlReturn_t NvmlTaskRunner::NvmlDeviceGetP2PStatus(SafeNvmlHandle device1,

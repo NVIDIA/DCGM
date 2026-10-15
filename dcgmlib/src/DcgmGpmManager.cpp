@@ -157,6 +157,7 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(NvmlTaskRunner &nvmlDrive
         if (!pGpuInstance)
         {
             log_error("Received null pGpuInstance");
+            m_gpmSamples.erase(latestSampleIt);
             return DCGM_ST_BADPARAM;
         }
 
@@ -169,6 +170,7 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(NvmlTaskRunner &nvmlDrive
             log_warning("Requested samples for GPU-I {} (NVML id: {}) which has no child GPU-CIs. No data available",
                         entityId,
                         giIndex.id);
+            m_gpmSamples.erase(latestSampleIt);
             return DCGM_ST_NO_DATA;
         }
         nvmlReturn = nvmlDriver.NvmlGpmMigSampleGet(nvmlDevice, giIndex.id, latestSampleIt->second.m_sample);
@@ -179,6 +181,7 @@ dcgmReturn_t DcgmGpmManagerEntity::MaybeFetchNewSample(NvmlTaskRunner &nvmlDrive
         if (!nvmlDevice.nvmlDevice)
         {
             DCGM_LOG_ERROR << "Received null nvmlDevice ";
+            m_gpmSamples.erase(latestSampleIt);
             return DCGM_ST_NO_DATA;
         }
         nvmlReturn = nvmlDriver.NvmlGpmSampleGet(nvmlDevice, latestSampleIt->second.m_sample);
@@ -220,13 +223,21 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(NvmlTaskRunner &nvmlDriver,
             // All GPM metrics supported at the GPU level
             break;
         case DCGM_FE_LINK:
-            // Per-link GPM fields keyed by a dcgm_link_t entity. The GPM sample is taken on the
-            // underlying GPU; the link index (resolved below) selects the per-link metric id.
-            if (fieldMeta->entityLevel != DCGM_FE_LINK)
+        {
+            // Canonical NVLink byte fields overload their GPU metadata contract for LINK entities.
+            if (fieldMeta->entityLevel != DCGM_FE_LINK && fieldId != DCGM_FI_PROF_NVLINK_TX_BYTES
+                && fieldId != DCGM_FI_PROF_NVLINK_RX_BYTES)
+            {
+                return DCGM_ST_NO_DATA;
+            }
+
+            dcgm_link_t const link { .raw = m_entityPair.entityId };
+            if (link.parsed.type != DCGM_FE_GPU || link.parsed.index >= DCGM_NVLINK_MAX_LINKS_PER_GPU)
             {
                 return DCGM_ST_NO_DATA;
             }
             break;
+        }
         case DCGM_FE_GPU_I:
             if (fieldMeta->entityLevel != DCGM_FE_GPU_I && fieldMeta->entityLevel != DCGM_FE_GPU_CI)
             {
@@ -291,7 +302,8 @@ dcgmReturn_t DcgmGpmManagerEntity::GetLatestSample(NvmlTaskRunner &nvmlDriver,
     }
 
     bool isPercentageField = false;
-    unsigned int metricId  = DcgmFieldIdToNvmlGpmMetricId(fieldId, isPercentageField, linkIndex);
+    unsigned int metricId
+        = DcgmFieldIdToNvmlGpmMetricId(fieldId, m_entityPair.entityGroupId, isPercentageField, linkIndex);
     if (!metricId)
     {
         /* Already logged by DcgmFieldIdToNvmlGpmMetricId() */

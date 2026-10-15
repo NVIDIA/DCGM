@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,81 @@ public:
     {
         return WaitForState(machine, MnDiagStateMachine::State::CLEANUP, timeout);
     }
+
+    static void HandleStartedState(MnDiagStateMachine &machine)
+    {
+        machine.HandleStartedState();
+    }
+
+    static void HandleCleanupState(MnDiagStateMachine &machine)
+    {
+        machine.HandleCleanupState();
+    }
+
+    static void HandleFinishingState(MnDiagStateMachine &machine)
+    {
+        machine.HandleFinishingState();
+    }
+
+    static void ExpireExecutionTimeout(MnDiagStateMachine &machine)
+    {
+        DcgmLockGuard lg(&machine.m_mutex);
+        machine.m_processDetectionTime = std::chrono::steady_clock::now() - machine.m_processExecutionTimeout;
+    }
+
+    static std::chrono::milliseconds GetReservationTimeout(MnDiagStateMachine &machine)
+    {
+        DcgmLockGuard lg(&machine.m_mutex);
+        return machine.m_reservationTimeout;
+    }
 };
+
+SCENARIO("MnDiagStateMachine preserves its configured reservation timeout", "[mndiag][statemachine]")
+{
+    constexpr auto baselineTimeout = std::chrono::seconds(17);
+    MnDiagStateMachine stateMachine([](pid_t) { return false; },
+                                    [](pid_t) { return DCGM_ST_OK; },
+                                    [] { return DCGM_ST_OK; },
+                                    [] { return DCGM_ST_OK; },
+                                    [](MnDiagStatus) {},
+                                    [] { return std::vector<std::pair<pid_t, std::string>> {}; },
+                                    baselineTimeout);
+
+    GIVEN("a state machine constructed with a custom reservation timeout")
+    {
+        WHEN("a normal-run execution timeout is configured")
+        {
+            stateMachine.SetProcessExecutionTimeout(std::chrono::seconds(30));
+
+            THEN("the custom reservation timeout is preserved")
+            {
+                CHECK(MnDiagStateMachineTests::GetReservationTimeout(stateMachine) == baselineTimeout);
+            }
+        }
+
+        WHEN("pair mode temporarily extends the reservation timeout")
+        {
+            constexpr auto pairRunTimeout = std::chrono::seconds(120);
+            stateMachine.SetProcessExecutionTimeout(pairRunTimeout, true);
+
+            THEN("the reservation covers execution and startup latency")
+            {
+                CHECK(MnDiagStateMachineTests::GetReservationTimeout(stateMachine)
+                      == pairRunTimeout + MnDiagStateMachine::TimeoutValues::STARTUP_LATENCY);
+            }
+
+            AND_WHEN("a normal-run execution timeout is configured afterward")
+            {
+                stateMachine.SetProcessExecutionTimeout(std::chrono::seconds(30));
+
+                THEN("the custom reservation timeout is restored")
+                {
+                    CHECK(MnDiagStateMachineTests::GetReservationTimeout(stateMachine) == baselineTimeout);
+                }
+            }
+        }
+    }
+}
 
 SCENARIO("MnDiagStateMachine can transition through states correctly", "[mndiag][statemachine]")
 {

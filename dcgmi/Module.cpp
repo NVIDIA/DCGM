@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 #include "Module.h"
+
 #include "DcgmiOutput.h"
-#include "dcgm_agent.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs.h"
+
+#include <dcgm_agent.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs.h>
 
 #include <tclap/ArgException.h>
 
-#include "algorithm"
-#include "cctype"
-#include "iomanip"
-#include "iostream"
-#include "sstream"
+#include <algorithm>
+#include <cctype>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <utility>
 
 
 // Module names
@@ -162,7 +165,8 @@ dcgmReturn_t Module::statusToStr(dcgmModuleStatus_t status, std::string &str)
     return DCGM_ST_BADPARAM;
 }
 
-Module::Module()
+Module::Module(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
 {}
 
 
@@ -182,7 +186,7 @@ dcgmReturn_t Module::RunDenylistModule(dcgmHandle_t dcgmHandle, dcgmModuleId_t m
         return st;
     }
 
-    st = dcgmModuleDenylist(dcgmHandle, moduleId);
+    st = m_dcgmOps->dcgmModuleDenylist(dcgmHandle, moduleId);
     if (st)
     {
         out.addHeader(STATUS ": " FAILURE);
@@ -206,7 +210,7 @@ dcgmReturn_t Module::RunListModule(dcgmHandle_t dcgmHandle, DcgmiOutput &out)
 
     memset(&statuses, 0, sizeof(statuses));
     statuses.version = dcgmModuleGetStatuses_version;
-    st               = dcgmModuleGetStatuses(dcgmHandle, &statuses);
+    st               = m_dcgmOps->dcgmModuleGetStatuses(dcgmHandle, &statuses);
 
     if (st)
     {
@@ -237,8 +241,13 @@ dcgmReturn_t Module::RunListModule(dcgmHandle_t dcgmHandle, DcgmiOutput &out)
 }
 
 /*****************************************************************************/
-DenylistModule::DenylistModule(const std::string &hostname, const std::string &moduleName, bool json)
-    : mModuleName(moduleName)
+DenylistModule::DenylistModule(const std::string &hostname,
+                               const std::string &moduleName,
+                               bool json,
+                               DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mModuleObj(dcgmOps)
+    , mModuleName(moduleName)
 {
     m_hostName = hostname;
     m_json     = json;
@@ -339,7 +348,9 @@ dcgmReturn_t DenylistModule::DoExecuteConnectionFailure(dcgmReturn_t connectionS
 }
 
 /*****************************************************************************/
-ListModule::ListModule(const std::string &hostname, bool json)
+ListModule::ListModule(const std::string &hostname, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mModuleObj(dcgmOps)
 {
     m_hostName = hostname;
     m_json     = json;

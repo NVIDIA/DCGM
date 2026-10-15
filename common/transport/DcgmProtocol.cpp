@@ -65,5 +65,5 @@ void DcgmMessage::SetRequestId(dcgm_request_id_t requestId)
 
 bool DcgmMessage::IsAsyncNotification(void)
 {
-    return m_messageHdr.msgType == DCGM_MSG_POLICY_NOTIFY;
+    return m_messageHdr.msgType == DCGM_MSG_POLICY_NOTIFY || m_messageHdr.msgType == DCGM_MSG_POLICY_VIOLATION;
 }

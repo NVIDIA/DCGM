@@ -25,43 +25,52 @@
 #else
 #error "Could not find DcgmVgpuOps header"
 #endif
+
 #include <cassert>
+#include <cstddef>
+#include <new>
+#include <utility>
 
 // clang-format off
+
+// GCOVR_EXCL_START
 
 class FbcSessionOpsAnyPtr
 {
 public:
+    static constexpr std::size_t StorageSize  = sizeof(void *);
+    static constexpr std::size_t StorageAlign = alignof(void *);
+
     // Constructor/Destructor
     template <class T>
     FbcSessionOpsAnyPtr(T *pT)
     {
-        m_pVoid = pT;
+        new (m_storage) void *(pT);
 
         static constexpr VTable vTable = {
             // Forward arguments to type's functions
             [](void  *pStorage, NvmlTaskRunner & nvmlDriver, SafeNvmlHandle safeNvmlDevice, unsigned int * sessionCount, nvmlFBCSessionInfo_t * sessionInfo) -> nvmlReturn_t {
-                auto *pT = *reinterpret_cast<T  **>(pStorage);
+                auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->NvmlDeviceGetFBCSessions(std::forward<decltype(nvmlDriver)>(nvmlDriver), std::forward<decltype(safeNvmlDevice)>(safeNvmlDevice), std::forward<decltype(sessionCount)>(sessionCount), std::forward<decltype(sessionInfo)>(sessionInfo));
             },
             [](void  *pStorage, NvmlTaskRunner & nvmlDriver, SafeVgpuInstance vgpuId, unsigned int * sessionCount, nvmlFBCSessionInfo_t * sessionInfo) -> nvmlReturn_t {
-                auto *pT = *reinterpret_cast<T  **>(pStorage);
+                auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->NvmlVgpuInstanceGetFBCSessions(std::forward<decltype(nvmlDriver)>(nvmlDriver), std::forward<decltype(vgpuId)>(vgpuId), std::forward<decltype(sessionCount)>(sessionCount), std::forward<decltype(sessionInfo)>(sessionInfo));
             },
             [](void  *pStorage, std::size_t size) -> void * {
-                auto *pT = *reinterpret_cast<T  **>(pStorage);
+                auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->Malloc(std::forward<decltype(size)>(size));
             },
             [](void  *pStorage, void * ptr) -> void {
-                auto *pT = *reinterpret_cast<T  **>(pStorage);
+                auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->Free(std::forward<decltype(ptr)>(ptr));
             },
             [](void  *pStorage, DcgmCacheManager & cm, dcgmcm_update_thread_t & threadCtx, void * value, int valueSize, timelib64_t timestamp, timelib64_t oldestKeepTimestamp) -> dcgmReturn_t {
-                auto *pT = *reinterpret_cast<T  **>(pStorage);
+                auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->AppendEntityBlob(std::forward<decltype(cm)>(cm), std::forward<decltype(threadCtx)>(threadCtx), std::forward<decltype(value)>(value), std::forward<decltype(valueSize)>(valueSize), std::forward<decltype(timestamp)>(timestamp), std::forward<decltype(oldestKeepTimestamp)>(oldestKeepTimestamp));
             },
             [](void  *pStorage, nvmlReturn_t nvmlReturn) -> dcgmReturn_t {
-                auto *pT = *reinterpret_cast<T  **>(pStorage);
+                auto *pT = static_cast<T  *>(*std::launder(reinterpret_cast<void **>(pStorage)));
                 return pT->NvmlReturnToDcgmReturn(std::forward<decltype(nvmlReturn)>(nvmlReturn));
             },
             };
@@ -74,34 +83,49 @@ public:
     // Copy/Move operations
     FbcSessionOpsAnyPtr(FbcSessionOpsAnyPtr const &other)
         : m_pVTable(other.m_pVTable)
-        , m_pVoid(other.m_pVoid)
     {
+        auto *pTOther = *std::launder(reinterpret_cast<void *const *>(other.m_storage));
+        new (m_storage) void *(pTOther);
     }
     FbcSessionOpsAnyPtr &operator=(FbcSessionOpsAnyPtr const &other)
     {
         // Stored types must match
         assert(m_pVTable == other.m_pVTable);
-        m_pVoid = other.m_pVoid;
+        auto *&pT     = *std::launder(reinterpret_cast<void **>(m_storage));
+        auto *pTOther = *std::launder(reinterpret_cast<void *const *>(other.m_storage));
+        pT = pTOther;
         return *this;
     }
     FbcSessionOpsAnyPtr(FbcSessionOpsAnyPtr &&other) noexcept
         : m_pVTable(other.m_pVTable)
-        , m_pVoid(other.m_pVoid)
     {
+        auto *pTOther = *std::launder(reinterpret_cast<void *const *>(other.m_storage));
+        new (m_storage) void *(pTOther);
     }
     FbcSessionOpsAnyPtr &operator=(FbcSessionOpsAnyPtr &&other) noexcept
     {
         // Stored types must match
         assert(m_pVTable == other.m_pVTable);
-        m_pVoid = other.m_pVoid;
+        auto *&pT     = *std::launder(reinterpret_cast<void **>(m_storage));
+        auto *pTOther = *std::launder(reinterpret_cast<void *const *>(other.m_storage));
+        pT = pTOther;
         return *this;
+    }
+
+    // Set pointer to null
+    void Reset()
+    {
+        auto *&pT = *std::launder(reinterpret_cast<void **>(m_storage));
+        pT = nullptr;
     }
 
     // Comparison operations
     bool operator==(FbcSessionOpsAnyPtr const &other) const
     {
         assert(m_pVTable == other.m_pVTable);
-        return m_pVoid == other.m_pVoid;
+        auto *pT      = *std::launder(reinterpret_cast<void *const *>(m_storage));
+        auto *pTOther = *std::launder(reinterpret_cast<void *const *>(other.m_storage));
+        return pT == pTOther;
     }
     bool operator!=(FbcSessionOpsAnyPtr const &other) const
     {
@@ -109,7 +133,8 @@ public:
     }
     bool operator==(std::nullptr_t other) const
     {
-        return m_pVoid == other;
+        auto *pT = *std::launder(reinterpret_cast<void *const *>(m_storage));
+        return pT == other;
     }
     bool operator!=(std::nullptr_t other) const
     {
@@ -127,49 +152,31 @@ public:
     }
 
     // Declare type's functions
-    nvmlReturn_t NvmlDeviceGetFBCSessions(NvmlTaskRunner & nvmlDriver, SafeNvmlHandle safeNvmlDevice, unsigned int * sessionCount, nvmlFBCSessionInfo_t * sessionInfo)  
+    nvmlReturn_t NvmlDeviceGetFBCSessions(NvmlTaskRunner & nvmlDriver, SafeNvmlHandle safeNvmlDevice, unsigned int * sessionCount, nvmlFBCSessionInfo_t * sessionInfo)
     {
-        // Regardless of the type stored, we always pass in the pointer to our
-        // buffer. The VTable encodes instructions on how to interpret that
-        // pointer
-        return m_pVTable->NvmlDeviceGetFBCSessions0(&m_pVoid, std::forward<decltype(nvmlDriver)>(nvmlDriver), std::forward<decltype(safeNvmlDevice)>(safeNvmlDevice), std::forward<decltype(sessionCount)>(sessionCount), std::forward<decltype(sessionInfo)>(sessionInfo));
+        return m_pVTable->NvmlDeviceGetFBCSessions0(m_storage, std::forward<decltype(nvmlDriver)>(nvmlDriver), std::forward<decltype(safeNvmlDevice)>(safeNvmlDevice), std::forward<decltype(sessionCount)>(sessionCount), std::forward<decltype(sessionInfo)>(sessionInfo));
     }
-    nvmlReturn_t NvmlVgpuInstanceGetFBCSessions(NvmlTaskRunner & nvmlDriver, SafeVgpuInstance vgpuId, unsigned int * sessionCount, nvmlFBCSessionInfo_t * sessionInfo)  
+    nvmlReturn_t NvmlVgpuInstanceGetFBCSessions(NvmlTaskRunner & nvmlDriver, SafeVgpuInstance vgpuId, unsigned int * sessionCount, nvmlFBCSessionInfo_t * sessionInfo)
     {
-        // Regardless of the type stored, we always pass in the pointer to our
-        // buffer. The VTable encodes instructions on how to interpret that
-        // pointer
-        return m_pVTable->NvmlVgpuInstanceGetFBCSessions0(&m_pVoid, std::forward<decltype(nvmlDriver)>(nvmlDriver), std::forward<decltype(vgpuId)>(vgpuId), std::forward<decltype(sessionCount)>(sessionCount), std::forward<decltype(sessionInfo)>(sessionInfo));
+        return m_pVTable->NvmlVgpuInstanceGetFBCSessions0(m_storage, std::forward<decltype(nvmlDriver)>(nvmlDriver), std::forward<decltype(vgpuId)>(vgpuId), std::forward<decltype(sessionCount)>(sessionCount), std::forward<decltype(sessionInfo)>(sessionInfo));
     }
-    void * Malloc(std::size_t size)  
+    void * Malloc(std::size_t size)
     {
-        // Regardless of the type stored, we always pass in the pointer to our
-        // buffer. The VTable encodes instructions on how to interpret that
-        // pointer
-        return m_pVTable->Malloc0(&m_pVoid, std::forward<decltype(size)>(size));
+        return m_pVTable->Malloc0(m_storage, std::forward<decltype(size)>(size));
     }
-    void Free(void * ptr)  
+    void Free(void * ptr)
     {
-        // Regardless of the type stored, we always pass in the pointer to our
-        // buffer. The VTable encodes instructions on how to interpret that
-        // pointer
-        return m_pVTable->Free0(&m_pVoid, std::forward<decltype(ptr)>(ptr));
+        return m_pVTable->Free0(m_storage, std::forward<decltype(ptr)>(ptr));
     }
-    dcgmReturn_t AppendEntityBlob(DcgmCacheManager & cm, dcgmcm_update_thread_t & threadCtx, void * value, int valueSize, timelib64_t timestamp, timelib64_t oldestKeepTimestamp)  
+    dcgmReturn_t AppendEntityBlob(DcgmCacheManager & cm, dcgmcm_update_thread_t & threadCtx, void * value, int valueSize, timelib64_t timestamp, timelib64_t oldestKeepTimestamp)
     {
-        // Regardless of the type stored, we always pass in the pointer to our
-        // buffer. The VTable encodes instructions on how to interpret that
-        // pointer
-        return m_pVTable->AppendEntityBlob0(&m_pVoid, std::forward<decltype(cm)>(cm), std::forward<decltype(threadCtx)>(threadCtx), std::forward<decltype(value)>(value), std::forward<decltype(valueSize)>(valueSize), std::forward<decltype(timestamp)>(timestamp), std::forward<decltype(oldestKeepTimestamp)>(oldestKeepTimestamp));
+        return m_pVTable->AppendEntityBlob0(m_storage, std::forward<decltype(cm)>(cm), std::forward<decltype(threadCtx)>(threadCtx), std::forward<decltype(value)>(value), std::forward<decltype(valueSize)>(valueSize), std::forward<decltype(timestamp)>(timestamp), std::forward<decltype(oldestKeepTimestamp)>(oldestKeepTimestamp));
     }
-    dcgmReturn_t NvmlReturnToDcgmReturn(nvmlReturn_t nvmlReturn)  
+    dcgmReturn_t NvmlReturnToDcgmReturn(nvmlReturn_t nvmlReturn)
     {
-        // Regardless of the type stored, we always pass in the pointer to our
-        // buffer. The VTable encodes instructions on how to interpret that
-        // pointer
-        return m_pVTable->NvmlReturnToDcgmReturn0(&m_pVoid, std::forward<decltype(nvmlReturn)>(nvmlReturn));
+        return m_pVTable->NvmlReturnToDcgmReturn0(m_storage, std::forward<decltype(nvmlReturn)>(nvmlReturn));
     }
-    
+
 private:
     struct VTable
     {
@@ -180,12 +187,14 @@ private:
         void (*Free0)(void  *, void *);
         dcgmReturn_t (*AppendEntityBlob0)(void  *, DcgmCacheManager &, dcgmcm_update_thread_t &, void *, int, timelib64_t, timelib64_t);
         dcgmReturn_t (*NvmlReturnToDcgmReturn0)(void  *, nvmlReturn_t);
-        
+
     };
 
     VTable const *m_pVTable;
-    void *m_pVoid;
+    alignas(StorageAlign) std::byte m_storage[StorageSize];
 };
+
+// GCOVR_EXCL_STOP
 
 // clang-format on
 

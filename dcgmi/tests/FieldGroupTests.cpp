@@ -16,55 +16,24 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "TestHelpers.hpp"
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
 
 #include <DcgmStringHelpers.h>
 #include <FieldGroup.h>
+#include <MockDcgmOps.h>
 #include <dcgm_agent.h>
+
+#include <catch2/catch_all.hpp>
 
 #include <algorithm>
 #include <cstring>
-#include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace
 {
-struct FieldGroupApiState
-{
-    dcgmReturn_t createReturn  = DCGM_ST_OK;
-    dcgmReturn_t destroyReturn = DCGM_ST_OK;
-    dcgmReturn_t getInfoReturn = DCGM_ST_OK;
-    dcgmReturn_t getAllReturn  = DCGM_ST_OK;
-
-    dcgmFieldGrp_t createdFieldGroupId = 12;
-    int createCallCount                = 0;
-    int destroyCallCount               = 0;
-    int getInfoCallCount               = 0;
-    int getAllCallCount                = 0;
-
-    dcgmHandle_t lastHandle = 0;
-    std::vector<unsigned short> lastCreatedFieldIds;
-    std::string lastCreatedName;
-    dcgmFieldGrp_t lastDestroyedFieldGroupId = 0;
-    dcgmFieldGrp_t lastRequestedInfoId       = 0;
-
-    dcgmAllFieldGroup_t allFieldGroups {};
-    std::map<dcgmFieldGrp_t, dcgmFieldGroupInfo_t> fieldGroupInfo;
-};
-
-FieldGroupApiState g_apiState;
-
-void ResetApiState()
-{
-    g_apiState                     = {};
-    g_apiState.createReturn        = DCGM_ST_OK;
-    g_apiState.destroyReturn       = DCGM_ST_OK;
-    g_apiState.getInfoReturn       = DCGM_ST_OK;
-    g_apiState.getAllReturn        = DCGM_ST_OK;
-    g_apiState.createdFieldGroupId = 12;
-}
-
 dcgmFieldGroupInfo_t MakeFieldGroupInfo(dcgmFieldGrp_t id,
                                         char const *name,
                                         std::vector<unsigned short> const &fieldIds)
@@ -82,78 +51,25 @@ dcgmFieldGroupInfo_t MakeFieldGroupInfo(dcgmFieldGrp_t id,
     return info;
 }
 
+struct FieldGroupTestFixture
+{
+    FieldGroupTestFixture()
+        : dcgmOps(&mockDcgmOps)
+    {
+        mockDcgmOps.m_fieldGroupState.nextFieldGroupId = 12;
+    }
+
+    DcgmNs::MockDcgmOps mockDcgmOps;
+    DcgmNs::DcgmOpsAnyPtr dcgmOps;
+};
+
 } //namespace
 
-extern "C" dcgmReturn_t dcgmFieldGroupCreate(dcgmHandle_t dcgmHandle,
-                                             int numFieldIds,
-                                             const unsigned short *fieldIds,
-                                             const char *fieldGroupName,
-                                             dcgmFieldGrp_t *dcgmFieldGroupId)
-{
-    g_apiState.createCallCount++;
-    g_apiState.lastHandle = dcgmHandle;
-    if (fieldIds != nullptr && numFieldIds > 0)
-    {
-        g_apiState.lastCreatedFieldIds.assign(fieldIds, fieldIds + numFieldIds);
-    }
-    g_apiState.lastCreatedName = fieldGroupName == nullptr ? "" : fieldGroupName;
-
-    if (dcgmFieldGroupId != nullptr)
-    {
-        *dcgmFieldGroupId = g_apiState.createdFieldGroupId;
-    }
-
-    return g_apiState.createReturn;
-}
-
-extern "C" dcgmReturn_t dcgmFieldGroupDestroy(dcgmHandle_t dcgmHandle, dcgmFieldGrp_t dcgmFieldGroupId)
-{
-    g_apiState.destroyCallCount++;
-    g_apiState.lastHandle                = dcgmHandle;
-    g_apiState.lastDestroyedFieldGroupId = dcgmFieldGroupId;
-    return g_apiState.destroyReturn;
-}
-
-extern "C" dcgmReturn_t dcgmFieldGroupGetInfo(dcgmHandle_t dcgmHandle, dcgmFieldGroupInfo_t *fieldGroupInfo)
-{
-    g_apiState.getInfoCallCount++;
-    g_apiState.lastHandle          = dcgmHandle;
-    g_apiState.lastRequestedInfoId = fieldGroupInfo == nullptr ? 0 : fieldGroupInfo->fieldGroupId;
-
-    if (g_apiState.getInfoReturn != DCGM_ST_OK || fieldGroupInfo == nullptr)
-    {
-        return g_apiState.getInfoReturn;
-    }
-
-    auto const iter = g_apiState.fieldGroupInfo.find(fieldGroupInfo->fieldGroupId);
-    if (iter == g_apiState.fieldGroupInfo.end())
-    {
-        return DCGM_ST_NOT_CONFIGURED;
-    }
-
-    *fieldGroupInfo = iter->second;
-    return DCGM_ST_OK;
-}
-
-extern "C" dcgmReturn_t dcgmFieldGroupGetAll(dcgmHandle_t dcgmHandle, dcgmAllFieldGroup_t *allGroupInfo)
-{
-    g_apiState.getAllCallCount++;
-    g_apiState.lastHandle = dcgmHandle;
-
-    if (g_apiState.getAllReturn != DCGM_ST_OK || allGroupInfo == nullptr)
-    {
-        return g_apiState.getAllReturn;
-    }
-
-    *allGroupInfo = g_apiState.allFieldGroups;
-    return DCGM_ST_OK;
-}
-
-TEST_CASE("FieldGroup getters and setters")
+TEST_CASE_METHOD(FieldGroupTestFixture, "FieldGroup getters and setters")
 {
     GIVEN("a field group object")
     {
-        FieldGroup fieldGroup;
+        FieldGroup fieldGroup(dcgmOps);
 
         WHEN("properties are assigned")
         {
@@ -167,10 +83,9 @@ TEST_CASE("FieldGroup getters and setters")
     }
 }
 
-TEST_CASE("FieldGroup::RunGroupCreate")
+TEST_CASE_METHOD(FieldGroupTestFixture, "FieldGroup::RunGroupCreate")
 {
-    ResetApiState();
-    FieldGroup fieldGroup;
+    FieldGroup fieldGroup(dcgmOps);
     auto handle = static_cast<dcgmHandle_t>(0x1);
 
     GIVEN("invalid field id input")
@@ -184,7 +99,7 @@ TEST_CASE("FieldGroup::RunGroupCreate")
             WHEN("the field group is created")
             {
                 CHECK(fieldGroup.RunGroupCreate(handle) == DCGM_ST_BADPARAM);
-                CHECK(g_apiState.createCallCount == 0);
+                CHECK(mockDcgmOps.m_fieldGroupState.createCallCount == 0);
                 CHECK(capture.str().find("Invalid first character") != std::string::npos);
             }
         }
@@ -198,7 +113,7 @@ TEST_CASE("FieldGroup::RunGroupCreate")
             WHEN("the field group is created")
             {
                 CHECK(fieldGroup.RunGroupCreate(handle) == DCGM_ST_BADPARAM);
-                CHECK(g_apiState.createCallCount == 0);
+                CHECK(mockDcgmOps.m_fieldGroupState.createCallCount == 0);
                 CHECK(capture.str().find("Invalid character") != std::string::npos);
             }
         }
@@ -212,15 +127,16 @@ TEST_CASE("FieldGroup::RunGroupCreate")
         SECTION("DCGM creates the group")
         {
             CoutCapture capture;
-            g_apiState.createdFieldGroupId = 42;
+            mockDcgmOps.m_fieldGroupState.nextFieldGroupId = 42;
 
             WHEN("the field group is created")
             {
                 CHECK(fieldGroup.RunGroupCreate(handle) == DCGM_ST_OK);
-                CHECK(g_apiState.createCallCount == 1);
-                CHECK(g_apiState.lastHandle == handle);
-                CHECK(g_apiState.lastCreatedName == "interesting_fields");
-                CHECK(g_apiState.lastCreatedFieldIds == std::vector<unsigned short> { 100, 101, 102 });
+                CHECK(mockDcgmOps.m_fieldGroupState.createCallCount == 1);
+                CHECK(mockDcgmOps.m_fieldGroupState.lastHandle == handle);
+                CHECK(mockDcgmOps.m_fieldGroupState.lastCreatedName == "interesting_fields");
+                CHECK(mockDcgmOps.m_fieldGroupState.lastCreatedFieldIds
+                      == std::vector<unsigned short> { 100, 101, 102 });
                 CHECK(capture.str().find("Successfully created field group") != std::string::npos);
                 CHECK(capture.str().find("42") != std::string::npos);
             }
@@ -229,22 +145,21 @@ TEST_CASE("FieldGroup::RunGroupCreate")
         SECTION("DCGM rejects the create request")
         {
             CoutCapture capture;
-            g_apiState.createReturn = DCGM_ST_BADPARAM;
+            mockDcgmOps.m_fieldGroupState.createReturn = DCGM_ST_BADPARAM;
 
             WHEN("the field group is created")
             {
                 CHECK(fieldGroup.RunGroupCreate(handle) == DCGM_ST_BADPARAM);
-                CHECK(g_apiState.createCallCount == 1);
+                CHECK(mockDcgmOps.m_fieldGroupState.createCallCount == 1);
                 CHECK(capture.str().find("Cannot create field group interesting_fields") != std::string::npos);
             }
         }
     }
 }
 
-TEST_CASE("FieldGroup::RunGroupDestroy")
+TEST_CASE_METHOD(FieldGroupTestFixture, "FieldGroup::RunGroupDestroy")
 {
-    ResetApiState();
-    FieldGroup fieldGroup;
+    FieldGroup fieldGroup(dcgmOps);
     fieldGroup.SetFieldGroupId(11);
     auto handle = static_cast<dcgmHandle_t>(0x2);
 
@@ -253,38 +168,37 @@ TEST_CASE("FieldGroup::RunGroupDestroy")
         CoutCapture capture;
 
         CHECK(fieldGroup.RunGroupDestroy(handle) == DCGM_ST_OK);
-        CHECK(g_apiState.destroyCallCount == 1);
-        CHECK(g_apiState.lastHandle == handle);
-        CHECK(g_apiState.lastDestroyedFieldGroupId == 11);
+        CHECK(mockDcgmOps.m_fieldGroupState.destroyCallCount == 1);
+        CHECK(mockDcgmOps.m_fieldGroupState.lastHandle == handle);
+        CHECK(mockDcgmOps.m_fieldGroupState.lastDestroyedFieldGroupId == 11);
         CHECK(capture.str().find("Successfully removed field group 11") != std::string::npos);
     }
 
     SECTION("DCGM reports the group is not configured")
     {
         CoutCapture capture;
-        g_apiState.destroyReturn = DCGM_ST_NOT_CONFIGURED;
+        mockDcgmOps.m_fieldGroupState.destroyReturn = DCGM_ST_NOT_CONFIGURED;
 
         CHECK(fieldGroup.RunGroupDestroy(handle) == DCGM_ST_NOT_CONFIGURED);
-        CHECK(g_apiState.destroyCallCount == 1);
+        CHECK(mockDcgmOps.m_fieldGroupState.destroyCallCount == 1);
         CHECK(capture.str().find("The Group is not found") != std::string::npos);
     }
 }
 
-TEST_CASE("FieldGroup::RunGroupInfo")
+TEST_CASE_METHOD(FieldGroupTestFixture, "FieldGroup::RunGroupInfo")
 {
-    ResetApiState();
-    FieldGroup fieldGroup;
+    FieldGroup fieldGroup(dcgmOps);
     fieldGroup.SetFieldGroupId(9);
     auto handle = static_cast<dcgmHandle_t>(0x3);
 
     SECTION("Text output shows group metadata and no field ids")
     {
         CoutCapture capture;
-        g_apiState.fieldGroupInfo[9] = MakeFieldGroupInfo(9, "empty_fields", {});
+        mockDcgmOps.m_fieldGroupState.fieldGroupInfo[9] = MakeFieldGroupInfo(9, "empty_fields", {});
 
         CHECK(fieldGroup.RunGroupInfo(handle, false) == DCGM_ST_OK);
-        CHECK(g_apiState.getInfoCallCount == 1);
-        CHECK(g_apiState.lastRequestedInfoId == 9);
+        CHECK(mockDcgmOps.m_fieldGroupState.getInfoCallCount == 1);
+        CHECK(mockDcgmOps.m_fieldGroupState.lastRequestedInfoId == 9);
         CHECK(capture.str().find("FIELD GROUPS") != std::string::npos);
         CHECK(capture.str().find("empty_fields") != std::string::npos);
         CHECK(capture.str().find("None") != std::string::npos);
@@ -293,7 +207,8 @@ TEST_CASE("FieldGroup::RunGroupInfo")
     SECTION("Text output wraps long field id lists")
     {
         CoutCapture capture;
-        g_apiState.fieldGroupInfo[9] = MakeFieldGroupInfo(9, "many_fields", { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
+        mockDcgmOps.m_fieldGroupState.fieldGroupInfo[9]
+            = MakeFieldGroupInfo(9, "many_fields", { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
 
         CHECK(fieldGroup.RunGroupInfo(handle, false) == DCGM_ST_OK);
         CHECK(capture.str().find("many_fields") != std::string::npos);
@@ -304,7 +219,7 @@ TEST_CASE("FieldGroup::RunGroupInfo")
     SECTION("JSON output uses the same group data")
     {
         CoutCapture capture;
-        g_apiState.fieldGroupInfo[9] = MakeFieldGroupInfo(9, "json_fields", { 100, 101 });
+        mockDcgmOps.m_fieldGroupState.fieldGroupInfo[9] = MakeFieldGroupInfo(9, "json_fields", { 100, 101 });
 
         CHECK(fieldGroup.RunGroupInfo(handle, true) == DCGM_ST_OK);
         CHECK(capture.str().find("FIELD GROUPS") != std::string::npos);
@@ -315,44 +230,47 @@ TEST_CASE("FieldGroup::RunGroupInfo")
     SECTION("DCGM reports the group is not configured")
     {
         CoutCapture capture;
-        g_apiState.getInfoReturn = DCGM_ST_NOT_CONFIGURED;
+        mockDcgmOps.m_fieldGroupState.getInfoReturn = DCGM_ST_NOT_CONFIGURED;
 
         CHECK(fieldGroup.RunGroupInfo(handle, false) == DCGM_ST_NOT_CONFIGURED);
         CHECK(capture.str().find("The Field Group is not found") != std::string::npos);
     }
 }
 
-TEST_CASE("FieldGroup::RunGroupListAll")
+TEST_CASE_METHOD(FieldGroupTestFixture, "FieldGroup::RunGroupListAll")
 {
-    ResetApiState();
-    FieldGroup fieldGroup;
+    FieldGroup fieldGroup(dcgmOps);
     auto handle = static_cast<dcgmHandle_t>(0x4);
 
     SECTION("DCGM reports no field groups")
     {
         CoutCapture capture;
-        g_apiState.allFieldGroups.version        = dcgmAllFieldGroup_version;
-        g_apiState.allFieldGroups.numFieldGroups = 0;
+        dcgmAllFieldGroup_t allFieldGroups {};
+        allFieldGroups.version                       = dcgmAllFieldGroup_version;
+        allFieldGroups.numFieldGroups                = 0;
+        mockDcgmOps.m_fieldGroupState.allFieldGroups = allFieldGroups;
 
         CHECK(fieldGroup.RunGroupListAll(handle, false) == DCGM_ST_OK);
-        CHECK(g_apiState.getAllCallCount == 1);
-        CHECK(g_apiState.getInfoCallCount == 0);
+        CHECK(mockDcgmOps.m_fieldGroupState.getAllCallCount == 1);
+        CHECK(mockDcgmOps.m_fieldGroupState.getInfoCallCount == 0);
         CHECK(capture.str().find("No field groups found") != std::string::npos);
     }
 
     SECTION("DCGM reports multiple field groups")
     {
         CoutCapture capture;
-        g_apiState.allFieldGroups.version                     = dcgmAllFieldGroup_version;
-        g_apiState.allFieldGroups.numFieldGroups              = 2;
-        g_apiState.allFieldGroups.fieldGroups[0].fieldGroupId = 21;
-        g_apiState.allFieldGroups.fieldGroups[1].fieldGroupId = 22;
-        g_apiState.fieldGroupInfo[21]                         = MakeFieldGroupInfo(21, "first_fields", { 1 });
-        g_apiState.fieldGroupInfo[22]                         = MakeFieldGroupInfo(22, "second_fields", { 2, 3 });
+        dcgmAllFieldGroup_t allFieldGroups {};
+        allFieldGroups.version                           = dcgmAllFieldGroup_version;
+        allFieldGroups.numFieldGroups                    = 2;
+        allFieldGroups.fieldGroups[0].fieldGroupId       = 21;
+        allFieldGroups.fieldGroups[1].fieldGroupId       = 22;
+        mockDcgmOps.m_fieldGroupState.allFieldGroups     = allFieldGroups;
+        mockDcgmOps.m_fieldGroupState.fieldGroupInfo[21] = MakeFieldGroupInfo(21, "first_fields", { 1 });
+        mockDcgmOps.m_fieldGroupState.fieldGroupInfo[22] = MakeFieldGroupInfo(22, "second_fields", { 2, 3 });
 
         CHECK(fieldGroup.RunGroupListAll(handle, false) == DCGM_ST_OK);
-        CHECK(g_apiState.getAllCallCount == 1);
-        CHECK(g_apiState.getInfoCallCount == 2);
+        CHECK(mockDcgmOps.m_fieldGroupState.getAllCallCount == 1);
+        CHECK(mockDcgmOps.m_fieldGroupState.getInfoCallCount == 2);
         CHECK(capture.str().find("2 field groups found") != std::string::npos);
         CHECK(capture.str().find("first_fields") != std::string::npos);
         CHECK(capture.str().find("second_fields") != std::string::npos);
@@ -361,11 +279,11 @@ TEST_CASE("FieldGroup::RunGroupListAll")
     SECTION("DCGM rejects the list request")
     {
         CoutCapture capture;
-        g_apiState.getAllReturn = DCGM_ST_BADPARAM;
+        mockDcgmOps.m_fieldGroupState.getAllReturn = DCGM_ST_BADPARAM;
 
         CHECK(fieldGroup.RunGroupListAll(handle, false) == DCGM_ST_BADPARAM);
-        CHECK(g_apiState.getAllCallCount == 1);
-        CHECK(g_apiState.getInfoCallCount == 0);
+        CHECK(mockDcgmOps.m_fieldGroupState.getAllCallCount == 1);
+        CHECK(mockDcgmOps.m_fieldGroupState.getInfoCallCount == 0);
         CHECK(capture.str().find("Cannot retrieve field group list") != std::string::npos);
     }
 }

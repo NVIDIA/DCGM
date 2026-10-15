@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #pragma once
 #include "GpuSet.h"
+#include "NvvsCommon.h"
 #include "TestParameters.h"
 #include <fstream>
 #include <memory>
@@ -125,7 +126,7 @@ public:
      * It is assumed that a higher layer is responsible for the memory
      * management of the FrameworkConfig object
      */
-    ConfigFileParser_v2(const std::string &configFile, const FrameworkConfig &fwcfg);
+    ConfigFileParser_v2(NvvsCommon *nvvsCommon, const std::string &configFile, const FrameworkConfig &fwcfg);
 
     /***************************************************************/
     /* Open the stringstream for the config file and initialize
@@ -157,6 +158,8 @@ public:
     }
 
 private:
+    //! NVVS common state
+    NvvsCommon *m_nvvsCommon;
     std::unique_ptr<EntitySet> PrepareGpuSet(std::vector<dcgmGroupEntityPair_t> const &entityGroups);
     std::unique_ptr<EntitySet> PrepareCpuSet(std::vector<dcgmGroupEntityPair_t> const &entityGroups);
     /* Returns reference to m_skus[id]. Adds the GPU if it does not exist */

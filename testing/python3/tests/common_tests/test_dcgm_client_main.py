@@ -18,12 +18,16 @@ from _test_helpers import KeywordizeLastArgument
 from common import dcgm_client_main as m
 
 
+# NO HARDWARE
+
 @maybemock.patch('builtins.exit')
 @KeywordizeLastArgument("mock_exit")
 def test_exit_handler(**kwargs):
     m.exit_handler(None, None)
     kwargs["mock_exit"].assert_called()
 
+
+# NO HARDWARE
 
 @maybemock.patch('signal.signal')
 @KeywordizeLastArgument("mock_signal")

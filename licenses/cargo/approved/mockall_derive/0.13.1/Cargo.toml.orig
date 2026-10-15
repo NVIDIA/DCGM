@@ -1,0 +1,36 @@
+[package]
+name = "mockall_derive"
+version = "0.13.1"
+authors = ["Alan Somers <asomers@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/asomers/mockall"
+categories = ["development-tools::testing"]
+keywords = ["mock", "mocking", "testing"]
+documentation = "https://docs.rs/mockall_derive"
+edition = "2021"
+description = """
+Procedural macros for Mockall
+"""
+
+# Skip tagging and pushing.  Those will be done by the mockall crate
+[package.metadata.release]
+tag = false
+push = false
+
+[lib]
+proc-macro = true
+
+[features]
+# Extra features for the nightly compiler only
+# Must have a different name than the corresponding feature in mockall in order
+# to catch hygiene violations.
+nightly_derive = ["proc-macro2/nightly"]
+
+[dependencies]
+cfg-if = "1.0"
+proc-macro2 = "1.0.60"
+quote = "1.0"
+syn = { version = "2.0.9", features = ["extra-traits", "full"] }
+
+[dev-dependencies]
+pretty_assertions = "1.3"

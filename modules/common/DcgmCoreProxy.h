@@ -477,7 +477,7 @@ public:
     /**
      * Get the stderr file descriptor for a child process
      * @param handle Process handle
-     * @param fd Output file descriptor
+     * @param fd Duplicated output file descriptor. Caller owns the descriptor and must close it.
      * @return DCGM_ST_OK on success
      */
     dcgmReturn_t ChildProcessGetStdErrHandle(ChildProcessHandle_t handle, int &fd);
@@ -485,7 +485,7 @@ public:
     /**
      * Get the stdout file descriptor for a child process
      * @param handle Process handle
-     * @param fd Output file descriptor
+     * @param fd Duplicated output file descriptor. Caller owns the descriptor and must close it.
      * @return DCGM_ST_OK on success
      */
     dcgmReturn_t ChildProcessGetStdOutHandle(ChildProcessHandle_t handle, int &fd);
@@ -493,7 +493,7 @@ public:
     /**
      * Get the data channel file descriptor for a child process
      * @param handle Process handle
-     * @param fd Output file descriptor
+     * @param fd Duplicated output file descriptor. Caller owns the descriptor and must close it.
      * @return DCGM_ST_OK on success
      */
     dcgmReturn_t ChildProcessGetDataChannelHandle(ChildProcessHandle_t handle, int &fd);

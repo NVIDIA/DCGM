@@ -1,0 +1,61 @@
+[package]
+name = "mockall"
+version = "0.13.1"
+authors = ["Alan Somers <asomers@gmail.com>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/asomers/mockall"
+categories = ["development-tools::testing"]
+keywords = ["mock", "mocking", "testing"]
+documentation = "https://docs.rs/mockall"
+edition = "2021"
+rust-version = "1.71"
+description = """
+A powerful mock object library for Rust.
+"""
+exclude = [
+  "examples/*",
+  "tests/*",
+  "tools/*"
+]
+
+[package.metadata.docs.rs]
+features = ["nightly"]
+
+[package.metadata.release]
+tag-prefix = ""
+pre-release-replacements = [
+    { file="../README.md", search="mockall = \"[a-z0-9\\.-]+\"", replace="mockall = \"{{version}}\""} ,
+    { file="../CHANGELOG.md", search="Unreleased", replace="{{version}}" },
+    { file="../CHANGELOG.md", search="ReleaseDate", replace="{{date}}" }
+]
+
+[features]
+# Extra features for the nightly compiler only
+nightly = [
+	"mockall_derive/nightly_derive",
+	"downcast/nightly"
+]
+
+[dependencies]
+cfg-if = "1.0"
+downcast = "0.11"
+fragile = "2.0"
+predicates = { version = "3.0.0", default-features = false }
+predicates-tree = "1.0"
+mockall_derive = { version = "=0.13.1", path = "../mockall_derive" }
+
+[dev-dependencies]
+async-trait = "0.1.38"
+auto_enums = "0.8.5"
+futures = "0.3.7"
+mockall_double = { version = "^0.3.1", path = "../mockall_double" }
+serde = "1.0.113"
+serde_derive = "1.0.113"
+serde_json = "1.0"
+tracing = "0.1.35"
+
+[[example]]
+name = "serde"
+path = "examples/serde.rs"
+crate-type = ["lib"]

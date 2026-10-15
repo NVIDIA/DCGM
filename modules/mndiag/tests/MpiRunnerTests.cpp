@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,37 +31,37 @@
 
 // Use the current user's UID so the child process can change to it without EPERM.
 // Hardcoding 0 (root) causes ChangeUser("root") to fail with EPERM in non-root test environments.
-static const uid_t EFFECTIVE_UID = geteuid();
+static const uid_t MPI_RUNNER_EFFECTIVE_UID = geteuid();
 
 // Configuration for the sleep process
 struct SleepConfig
 {
-    std::chrono::seconds sleepSeconds;
+    std::chrono::milliseconds sleepDuration;
 };
 
 class TestMpiRunner : public MpiRunner
 {
 public:
     TestMpiRunner(DcgmCoreProxyBase &coreProxy)
-        : MpiRunner(coreProxy, EFFECTIVE_UID)
+        : MpiRunner(coreProxy, MPI_RUNNER_EFFECTIVE_UID)
     {}
 
-    void ConstructMpiCommand(void const *params) override
+    std::expected<void, dcgmReturn_t> ConstructMpiCommand(void const *params) override
     {
         // Implement the pure virtual method
         if (params)
         {
             auto const *config = static_cast<SleepConfig const *>(params);
             m_lastCommand.clear();
-            std::string cmd = fmt::format("sleep {}; echo \"Output from sleep process: return code 0\"",
-                                          config->sleepSeconds.count());
+            std::string cmd = fmt::format("sleep {:.3f}; echo \"Output from sleep process: return code 0\"",
+                                          config->sleepDuration.count() / 1000.0);
             m_lastCommand.push_back("-c");
             m_lastCommand.push_back(std::move(cmd));
+            return {};
         }
-        else
-        {
-            m_lastCommand.clear();
-        }
+
+        m_lastCommand.clear();
+        return std::unexpected(DCGM_ST_BADPARAM);
     }
 
     std::string GetMpiBinPath() const override
@@ -138,7 +138,7 @@ TEST_CASE("MpiRunner process lifecycle with Wait")
     {
         // Create runner and configuration
         MpiRunnerTests runner;
-        SleepConfig config { std::chrono::seconds(1) }; // Sleep for 1 second to match the assertion
+        SleepConfig config { std::chrono::milliseconds(200) };
 
         // Configure the command
         runner.ConstructMpiCommand(&config);
@@ -147,7 +147,7 @@ TEST_CASE("MpiRunner process lifecycle with Wait")
         REQUIRE(runner.GetMpiBinPath() == "/bin/bash");
         std::string fullCommand = runner.GetLastCommand();
         REQUIRE(fullCommand.find("/bin/bash -c") != std::string::npos);
-        REQUIRE(fullCommand.find("sleep 1") != std::string::npos);
+        REQUIRE(fullCommand.find("sleep 0.200") != std::string::npos);
         REQUIRE(fullCommand.find("Output from sleep process") != std::string::npos);
 
         // Launch the process
@@ -172,8 +172,8 @@ TEST_CASE("MpiRunner process lifecycle with Wait")
         auto endTime    = std::chrono::steady_clock::now();
         auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
-        // We expect the wait to block for at least 900ms (close to 1s sleep)
-        REQUIRE(durationMs >= 900);
+        // We expect the wait to block for at least close to the configured sleep duration.
+        REQUIRE(durationMs >= 80);
 
         // Verify process has exited
         killResult = kill(*processId, 0);
@@ -196,7 +196,7 @@ TEST_CASE("MpiRunner process lifecycle with Wait")
 
         // Create runner and configuration
         MpiRunnerTests runner;
-        SleepConfig config { std::chrono::seconds(1) };
+        SleepConfig config { std::chrono::milliseconds(200) };
 
         // Set a custom output callback that extracts the return code from output
         runner.SetOutputCallback([](int fd, void *responseStruct, nodeInfoMap_t const &) {

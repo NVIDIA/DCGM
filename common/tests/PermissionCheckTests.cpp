@@ -18,6 +18,29 @@
 
 #include <PermissionCheck.hpp>
 
+#include <fstream>
+#include <utility>
+
+namespace
+{
+class PathCleanup
+{
+public:
+    explicit PathCleanup(boost::filesystem::path path)
+        : m_path(std::move(path))
+    {}
+
+    ~PathCleanup()
+    {
+        boost::system::error_code ignored;
+        boost::filesystem::remove_all(m_path, ignored);
+    }
+
+private:
+    boost::filesystem::path m_path;
+};
+} // namespace
+
 
 TEST_CASE("PermissionCheck: Valid executable")
 {
@@ -71,4 +94,115 @@ TEST_CASE("PermissionCheck: formatting")
     REQUIRE("OwnershipErrorCode::NotOwnedByRoot" == fmt::format("{}", OwnershipErrorCode::NotOwnedByRoot));
     REQUIRE("OwnershipErrorCode::WritableByNonRoot" == fmt::format("{}", OwnershipErrorCode::WritableByNonRoot));
     REQUIRE("OwnershipErrorCode::SystemError" == fmt::format("{}", OwnershipErrorCode::SystemError));
+}
+
+
+SCENARIO("PermissionCheck bypass mode validates only file existence and type")
+{
+    GIVEN("a regular temporary file without executable permissions")
+    {
+        using namespace DcgmNs::Utils;
+        auto const filePath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+        PathCleanup cleanup(filePath);
+        {
+            std::ofstream file(filePath.string());
+            REQUIRE(file.good());
+            file << "content";
+        }
+        boost::filesystem::permissions(filePath, boost::filesystem::owner_read | boost::filesystem::owner_write);
+
+        WHEN("ownership and executable permission checks are bypassed")
+        {
+            auto result = CheckExecutableAndOwnership(filePath, true);
+
+            THEN("the regular file is accepted and canonicalized")
+            {
+                REQUIRE(std::holds_alternative<OwnershipResultSuccess>(result));
+                CHECK(std::get<OwnershipResultSuccess>(result).filePath == boost::filesystem::canonical(filePath));
+            }
+        }
+    }
+
+    GIVEN("a directory path")
+    {
+        using namespace DcgmNs::Utils;
+        auto const directoryPath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+        REQUIRE(boost::filesystem::create_directory(directoryPath));
+        PathCleanup cleanup(directoryPath);
+
+        WHEN("the path is checked")
+        {
+            auto result = CheckExecutableAndOwnership(directoryPath, true);
+
+            THEN("the path is rejected as not being a regular file")
+            {
+                REQUIRE(std::holds_alternative<OwnershipResultError>(result));
+                CHECK(std::get<OwnershipResultError>(result).errorCode == OwnershipErrorCode::NotRegularFile);
+            }
+        }
+    }
+}
+
+SCENARIO("PermissionCheck converts ownership failures to DCGM errors")
+{
+    GIVEN("each ownership error code")
+    {
+        using namespace DcgmNs::Utils;
+        auto errorCode = GENERATE(OwnershipErrorCode::FileNotFound,
+                                  OwnershipErrorCode::NotRegularFile,
+                                  OwnershipErrorCode::NotExecutable,
+                                  OwnershipErrorCode::NotOwnedByRoot,
+                                  OwnershipErrorCode::WritableByNonRoot,
+                                  OwnershipErrorCode::SystemError);
+        CAPTURE(errorCode);
+        OwnershipResultError ownershipError { errorCode,
+                                              std::system_error(std::make_error_code(std::errc::permission_denied)) };
+
+        WHEN("the error is converted")
+        {
+            auto dcgmError = OwnershipErrorToDcgmError(ownershipError, "diag", "DIAG_PATH");
+
+            THEN("the result uses the binary permission error code and provides actionable text")
+            {
+                CHECK(dcgmError.GetCode() == DCGM_FR_BINARY_PERMISSIONS);
+                CHECK_FALSE(dcgmError.GetMessage().empty());
+                auto const nextSteps      = std::string(dcgmError.GetNextSteps());
+                bool const mentionsBinary = nextSteps.find("diag") != std::string::npos;
+                bool const mentionsEnvVar = nextSteps.find("DIAG_PATH") != std::string::npos;
+                CHECK((mentionsBinary || mentionsEnvVar));
+            }
+        }
+    }
+}
+
+
+SCENARIO("PermissionCheck canonicalizes symlinked executables")
+{
+    GIVEN("a symlink that points at a regular file")
+    {
+        using namespace DcgmNs::Utils;
+        auto const directoryPath = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+        REQUIRE(boost::filesystem::create_directory(directoryPath));
+        PathCleanup cleanup(directoryPath);
+
+        auto const targetPath  = directoryPath / "target-file";
+        auto const symlinkPath = directoryPath / "symlink-file";
+        {
+            std::ofstream file(targetPath.string());
+            REQUIRE(file.good());
+            file << "content";
+        }
+        boost::filesystem::create_symlink(targetPath, symlinkPath);
+
+        WHEN("the symlink is checked with binary permission checks bypassed")
+        {
+            auto result = CheckExecutableAndOwnership(symlinkPath, true);
+
+            THEN("the target file is accepted and returned in canonical form")
+            {
+                REQUIRE(std::holds_alternative<OwnershipResultSuccess>(result));
+                CHECK(std::get<OwnershipResultSuccess>(result).filePath == boost::filesystem::canonical(targetPath));
+            }
+        }
+    }
 }

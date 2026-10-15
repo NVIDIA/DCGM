@@ -17,14 +17,19 @@
 #include "DcgmModuleMnDiag.h"
 
 #include <DcgmLogging.h>
+#include <DcgmProtocol.h>
 #include <dcgm_api_export.h>
 #include <unordered_map>
 
+static_assert(sizeof(dcgm_mndiag_msg_run_v1) <= DCGM_PROTO_MAX_MESSAGE_SIZE,
+              "dcgm_mndiag_msg_run_v1 exceeds DCGM_PROTO_MAX_MESSAGE_SIZE");
+static_assert(sizeof(dcgm_mndiag_msg_run_v2) <= DCGM_PROTO_MAX_MESSAGE_SIZE,
+              "dcgm_mndiag_msg_run_v2 exceeds DCGM_PROTO_MAX_MESSAGE_SIZE");
 
 DcgmModuleMnDiag::DcgmModuleMnDiag(dcgmCoreCallbacks_t &dcc)
     : DcgmModuleWithCoreProxy(dcc)
 {
-    m_mnDiagManager = std::make_unique<DcgmMnDiagManager>(dcc);
+    m_mnDiagManager = std::make_unique<DcgmMnDiagManager>(dcc, m_dcgmOps.AsAnyPtr());
 }
 
 DcgmModuleMnDiag::~DcgmModuleMnDiag() = default;
@@ -48,25 +53,25 @@ dcgmReturn_t DcgmModuleMnDiag::ProcessHeadNodeMsg(dcgm_module_command_header_t *
                 return DCGM_ST_PAUSED;
             }
 
-            if (moduleCommand->length < sizeof(dcgm_mndiag_msg_run_v1))
+            if (moduleCommand->length < sizeof(dcgm_mndiag_msg_run_v2))
             {
                 log_error("ProcessHeadNodeMsg: message too small ({} < {})",
                           moduleCommand->length,
-                          sizeof(dcgm_mndiag_msg_run_v1));
+                          sizeof(dcgm_mndiag_msg_run_v2));
                 return DCGM_ST_BADPARAM;
             }
-            auto *msg = (dcgm_mndiag_msg_run_v1 *)moduleCommand;
-            result    = CheckVersion(&msg->header, dcgm_mndiag_msg_run_version1);
+            auto *msg = reinterpret_cast<dcgm_mndiag_msg_run_v2 *>(moduleCommand);
+            result    = CheckVersion(&msg->header, dcgm_mndiag_msg_run_version2);
             if (result != DCGM_ST_OK)
                 return result;
 
             // Verify version of the multi-node diagnostic parameters
-            if (msg->params.version != dcgmRunMnDiag_version1)
+            if (msg->params.version != dcgmRunMnDiag_version2)
             {
                 log_error("Invalid version for multi-node diagnostic parameters: {}", msg->params.version);
                 return DCGM_ST_VER_MISMATCH;
             }
-            if (msg->response.version != dcgmMnDiagResponse_version1)
+            if (msg->response.version != dcgmMnDiagResponse_version2)
             {
                 log_error("Invalid version for multi-node diagnostic response: {}", msg->response.version);
                 return DCGM_ST_VER_MISMATCH;

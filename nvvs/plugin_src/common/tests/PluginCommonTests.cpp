@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,27 +15,64 @@
  */
 #include <PluginCommon.h>
 
+#include <CudaCompatibility.h>
 #include <DcgmBuildInfo.hpp>
-#include <EnvVarGuard.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
+#include <MockDcgmOps.h>
+#include <NvvsCommon.h>
+#include <ScopedEnvVars.hpp>
+#include <ScopedWorkingDirectory.hpp>
+#include <TempDir.hpp>
+#include <TempExecutable.hpp>
 
 #include <catch2/catch_all.hpp>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
+#include <optional>
 
+
+namespace
+{
 class PluginCommonTestPlugin : public Plugin
 {
 public:
+    explicit PluginCommonTestPlugin(DcgmNs::DcgmOpsAnyUniquePtr dcgmOps)
+        : Plugin(dcgmOps.AsAnyPtr())
+        , m_dcgmOpsUnique(std::move(dcgmOps))
+    {}
+
     void Go(std::string const & /* testName */,
             dcgmDiagPluginEntityList_v1 const * /* entityInfo */,
             unsigned int /* numParameters */,
             const dcgmDiagPluginTestParameter_t * /* testParameters */) override
     {}
+
+private:
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique;
 };
+
+struct PluginCommonTestFixture
+{
+    PluginCommonTestFixture()
+        : mockDcgmOpsUnique(std::make_unique<DcgmNs::MockDcgmOps>())
+        , mockDcgmOps(mockDcgmOpsUnique.get())
+        , plugin(std::move(mockDcgmOpsUnique))
+    {}
+
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique;
+    DcgmNs::MockDcgmOps *mockDcgmOps;
+    NvvsCommon nvvsCommon;
+    PluginCommonTestPlugin plugin;
+};
+} // namespace
 
 class MockDcgmRecorder : public DcgmRecorder
 {
 public:
+    MockDcgmRecorder(DcgmNs::MockDcgmOps &dcgmOps, NvvsCommon *nvvsCommon)
+        : DcgmRecorder(dcgmOps.m_handleId, &dcgmOps, nvvsCommon)
+    {}
+
     dcgmReturn_t mockReturnValue = DCGM_ST_OK;
     int64_t mockDriverVersion    = 12000; // 12.0
 
@@ -65,9 +102,9 @@ dcgmDiagPluginEntityList_v1 MakeGpuEntityList(unsigned int count)
     return entityList;
 }
 
-TEST_CASE("SetCudaDriverMajorVersion", "[PluginCommon]")
+TEST_CASE_METHOD(PluginCommonTestFixture, "SetCudaDriverMajorVersion", "[PluginCommon]")
 {
-    MockDcgmRecorder recorder;
+    MockDcgmRecorder recorder(*mockDcgmOps, &nvvsCommon);
     unsigned int defaultVersion = 11;
 
     struct TestCase
@@ -99,7 +136,7 @@ TEST_CASE("SetCudaDriverMajorVersion", "[PluginCommon]")
     }
 }
 
-TEST_CASE("CheckAndSetResult updates per-GPU results and errors", "[PluginCommon]")
+TEST_CASE_METHOD(PluginCommonTestFixture, "CheckAndSetResult updates per-GPU results and errors", "[PluginCommon]")
 {
     std::string const testName             = "plugin_common";
     dcgmDiagPluginEntityList_v1 entityList = MakeGpuEntityList(3);
@@ -107,7 +144,6 @@ TEST_CASE("CheckAndSetResult updates per-GPU results and errors", "[PluginCommon
 
     GIVEN("an initialized plugin")
     {
-        PluginCommonTestPlugin plugin;
         plugin.InitializeForEntityList(testName, entityList);
 
         SECTION("a passing GPU remains passing without changing allPassed")
@@ -153,38 +189,38 @@ TEST_CASE("CheckAndSetResult updates per-GPU results and errors", "[PluginCommon
     }
 }
 
-TEST_CASE("IsSmallFrameBufferModeSet reads the diagnostic environment flag", "[PluginCommon]")
+TEST_CASE_METHOD(PluginCommonTestFixture,
+                 "IsSmallFrameBufferModeSet reads the diagnostic environment flag",
+                 "[PluginCommon]")
 {
-    DcgmNs::Tests::EnvVarGuard guard("__DCGM_DIAG_SMALL_FB_MODE");
-
     GIVEN("the small framebuffer mode environment variable")
     {
         SECTION("unset is disabled")
         {
-            unsetenv("__DCGM_DIAG_SMALL_FB_MODE");
+            ScopedEnvVars unsetGuard("__DCGM_DIAG_SMALL_FB_MODE", std::nullopt);
 
             CHECK_FALSE(IsSmallFrameBufferModeSet());
         }
 
         SECTION("set to 1 is enabled")
         {
-            setenv("__DCGM_DIAG_SMALL_FB_MODE", "1", 1);
+            ScopedEnvVars envVars("__DCGM_DIAG_SMALL_FB_MODE", "1");
 
             CHECK(IsSmallFrameBufferModeSet());
         }
 
         SECTION("set to another value is disabled")
         {
-            setenv("__DCGM_DIAG_SMALL_FB_MODE", "0", 1);
+            ScopedEnvVars envVars("__DCGM_DIAG_SMALL_FB_MODE", "0");
 
             CHECK_FALSE(IsSmallFrameBufferModeSet());
         }
     }
 }
 
-TEST_CASE("GetCudaDriverVersions", "[PluginCommon]")
+TEST_CASE_METHOD(PluginCommonTestFixture, "GetCudaDriverVersions", "[PluginCommon]")
 {
-    MockDcgmRecorder recorder;
+    MockDcgmRecorder recorder(*mockDcgmOps, &nvvsCommon);
 
     struct TestCase
     {
@@ -229,9 +265,9 @@ TEST_CASE("GetCudaDriverVersions", "[PluginCommon]")
     }
 }
 
-TEST_CASE("SetCudaDriverVersions", "[PluginCommon]")
+TEST_CASE_METHOD(PluginCommonTestFixture, "SetCudaDriverVersions", "[PluginCommon]")
 {
-    MockDcgmRecorder recorder;
+    MockDcgmRecorder recorder(*mockDcgmOps, &nvvsCommon);
     unsigned int defaultMajorVersion = 11;
     unsigned int defaultMinorVersion = 50;
 
@@ -287,9 +323,9 @@ TEST_CASE("SetCudaDriverVersions", "[PluginCommon]")
     }
 }
 
-TEST_CASE("SetCudaDriverVersions parameter validation", "[PluginCommon]")
+TEST_CASE_METHOD(PluginCommonTestFixture, "SetCudaDriverVersions parameter validation", "[PluginCommon]")
 {
-    MockDcgmRecorder recorder;
+    MockDcgmRecorder recorder(*mockDcgmOps, &nvvsCommon);
     recorder.mockReturnValue   = DCGM_ST_OK;
     recorder.mockDriverVersion = 12030; // 12.3
 
@@ -314,7 +350,52 @@ TEST_CASE("SetCudaDriverVersions parameter validation", "[PluginCommon]")
     }
 }
 
-TEST_CASE("GetDefaultSearchPaths", "[PluginCommon]")
+TEST_CASE_METHOD(PluginCommonTestFixture, "GetCompatibleCudaMajorVersionForGpu", "[CudaCompatibility]")
+{
+    struct TestCase
+    {
+        std::string name;
+        dcgmChipArchitecture_t chipArchitecture;
+        unsigned int cudaMajor;
+        unsigned int cudaMinor;
+        unsigned int expectedCudaMajor;
+    };
+
+    std::vector<TestCase> const testCases = {
+        { "Maxwell falls back from CUDA 13.0 to CUDA 12", DCGM_CHIP_ARCH_MAXWELL, 13, 0, 12 },
+        { "Pascal falls back from CUDA 13.0 to CUDA 12", DCGM_CHIP_ARCH_PASCAL, 13, 0, 12 },
+        { "Volta falls back from CUDA 13.0 to CUDA 12", DCGM_CHIP_ARCH_VOLTA, 13, 0, 12 },
+        { "Volta keeps CUDA 13.1", DCGM_CHIP_ARCH_VOLTA, 13, 1, 13 },
+        { "Ampere keeps CUDA 13.0", DCGM_CHIP_ARCH_AMPERE, 13, 0, 13 },
+        { "Pascal keeps CUDA 12.9", DCGM_CHIP_ARCH_PASCAL, 12, 9, 12 },
+    };
+
+    for (auto const &tc : testCases)
+    {
+        INFO(tc.name);
+        CHECK(GetCompatibleCudaMajorVersionForGpu(0, tc.chipArchitecture, tc.cudaMajor, tc.cudaMinor)
+              == tc.expectedCudaMajor);
+    }
+}
+
+TEST_CASE_METHOD(PluginCommonTestFixture, "CUDA compatibility reads architecture", "[CudaCompatibility]")
+{
+    unsigned int constexpr gpuId = 7;
+
+    mockDcgmOps->m_discoveryState.chipArchitectureCallCount = 0;
+    CHECK(GetCompatibleCudaMajorVersionForGpu(mockDcgmOps, mockDcgmOps->m_handleId, gpuId, 0, 0) == 0);
+    CHECK(mockDcgmOps->m_discoveryState.chipArchitectureCallCount == 0);
+
+    mockDcgmOps->m_discoveryState.chipArchitecture = DCGM_CHIP_ARCH_PASCAL;
+    CHECK(GetCompatibleCudaMajorVersionForGpu(mockDcgmOps, mockDcgmOps->m_handleId, gpuId, 13, 0) == 12);
+    CHECK(mockDcgmOps->m_discoveryState.lastGpuId == gpuId);
+    CHECK(mockDcgmOps->m_discoveryState.lastHandle == mockDcgmOps->m_handleId);
+
+    mockDcgmOps->m_discoveryState.chipArchitectureReturn = DCGM_ST_NOT_SUPPORTED;
+    CHECK(GetCompatibleCudaMajorVersionForGpu(mockDcgmOps, mockDcgmOps->m_handleId, gpuId, 13, 0) == 13);
+}
+
+TEST_CASE_METHOD(PluginCommonTestFixture, "GetDefaultSearchPaths", "[PluginCommon]")
 {
     SECTION("Returns expected number of paths")
     {
@@ -359,18 +440,11 @@ TEST_CASE("GetDefaultSearchPaths", "[PluginCommon]")
     }
 }
 
-std::filesystem::path MakeExecutable(std::filesystem::path const &path, std::string const &execName)
+TEST_CASE_METHOD(PluginCommonTestFixture, "FindExecutableComplex", "[PluginCommon]")
 {
-    std::filesystem::path testExecutable = path / execName;
-    std::ofstream { testExecutable }.close();
-    std::filesystem::permissions(
-        testExecutable, std::filesystem::perms::owner_exec, std::filesystem::perm_options::add);
-    return testExecutable;
-}
+    auto root = TempDir::Random("dcgm-plugin-common-");
+    ScopedWorkingDirectory workingDirectory(root.Path());
 
-TEST_CASE("FindExecutableComplex", "[PluginCommon]")
-{
-    // Create temporary directories and executable for testing
     std::filesystem::path tmpDirs[] = { std::filesystem::current_path() / "apps",
                                         std::filesystem::current_path() / "apps/nvvs",
                                         std::filesystem::current_path() / "apps/nvvs/plugins",
@@ -390,11 +464,11 @@ TEST_CASE("FindExecutableComplex", "[PluginCommon]")
 
     SECTION("Find in MAX CUDA DIR")
     {
-        std::filesystem::path cuda13ExecPath = MakeExecutable(tmpDirs[cuda13Index], execName);
+        auto cuda13Executable = TempExecutable::Fixed(tmpDirs[cuda13Index] / execName);
         std::string executableDir;
         auto result = FindExecutable(execName, 14, false, executableDir);
         REQUIRE(result.has_value());
-        REQUIRE(cuda13ExecPath.string().ends_with(result.value()));
+        REQUIRE(cuda13Executable.Path().string().ends_with(result.value()));
         REQUIRE(tmpDirs[cuda13Index].string().ends_with(executableDir));
     }
 
@@ -408,14 +482,11 @@ TEST_CASE("FindExecutableComplex", "[PluginCommon]")
 
     SECTION("Find in CUDA 12")
     {
-        std::filesystem::path cuda12ExecPath = MakeExecutable(tmpDirs[cuda12Index], execName);
+        auto cuda12Executable = TempExecutable::Fixed(tmpDirs[cuda12Index] / execName);
         std::string executableDir;
         auto result = FindExecutable(execName, 12, false, executableDir);
         REQUIRE(result.has_value());
-        REQUIRE(cuda12ExecPath.string().ends_with(result.value()));
+        REQUIRE(cuda12Executable.Path().string().ends_with(result.value()));
         REQUIRE(tmpDirs[cuda12Index].string().ends_with(executableDir));
     }
-
-    // Cleanup
-    std::filesystem::remove_all(tmpDirs[0]);
 }

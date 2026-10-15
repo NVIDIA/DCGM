@@ -39,7 +39,6 @@ NvvsCommon::NvvsCommon()
     , configless(false)
     , statsOnlyOnFail(false)
     , errorMask(0)
-    , mainReturnCode(NVVS_ST_SUCCESS)
     , pluginPath()
     , desiredTest()
     , isEudOnly(false)
@@ -61,122 +60,6 @@ NvvsCommon::NvvsCommon()
     , hangDetectExpirySec(DEFAULT_HANG_DETECT_EXPIRY_SEC)
     , genericMode(false)
 {}
-
-NvvsCommon::NvvsCommon(const NvvsCommon &other)
-    : logFile(other.logFile)
-    , m_statsPath(other.m_statsPath)
-    , logFileType(other.logFileType)
-    , parse(other.parse)
-    , quietMode(other.quietMode)
-    , serialize(other.serialize)
-    , overrideMinMax(other.overrideMinMax)
-    , verbose(other.verbose)
-    , requirePersistenceMode(other.requirePersistenceMode)
-    , configless(other.configless)
-    , statsOnlyOnFail(other.statsOnlyOnFail)
-    , errorMask(other.errorMask)
-    , mainReturnCode(other.mainReturnCode)
-    , pluginPath(other.pluginPath)
-    , desiredTest(other.desiredTest)
-    , isEudOnly(other.isEudOnly)
-    , indexString(other.indexString)
-    , fakegpusString(other.fakegpusString)
-    , parmsString(other.parmsString)
-    , parms(other.parms)
-    , dcgmHostname(other.dcgmHostname)
-    , clocksEventIgnoreMask(other.clocksEventIgnoreMask)
-    , failEarly(other.failEarly)
-    , failCheckInterval(other.failCheckInterval)
-    , currentIteration(other.currentIteration)
-    , totalIterations(other.totalIterations)
-    , channelFd(other.channelFd)
-    , diagResponseVersion(other.diagResponseVersion)
-    , rerunAsRoot(other.rerunAsRoot)
-    , watchFrequency(other.watchFrequency)
-    , ignoreErrorCodesString(other.ignoreErrorCodesString)
-    , parsedIgnoreErrorCodes(other.parsedIgnoreErrorCodes)
-    , hangDetectDisable(other.hangDetectDisable)
-    , hangDetectExpirySec(other.hangDetectExpirySec)
-    , genericMode(other.genericMode)
-{}
-
-NvvsCommon &NvvsCommon::operator=(const NvvsCommon &other)
-{
-    logFile                = other.logFile;
-    m_statsPath            = other.m_statsPath;
-    logFileType            = other.logFileType;
-    parse                  = other.parse;
-    quietMode              = other.quietMode;
-    serialize              = other.serialize;
-    overrideMinMax         = other.overrideMinMax;
-    verbose                = other.verbose;
-    requirePersistenceMode = other.requirePersistenceMode;
-    configless             = other.configless;
-    statsOnlyOnFail        = other.statsOnlyOnFail;
-    errorMask              = other.errorMask;
-    mainReturnCode         = other.mainReturnCode;
-    pluginPath             = other.pluginPath;
-    desiredTest            = other.desiredTest;
-    isEudOnly              = other.isEudOnly;
-    indexString            = other.indexString;
-    fakegpusString         = other.fakegpusString;
-    parmsString            = other.parmsString;
-    parms                  = other.parms;
-    dcgmHostname           = other.dcgmHostname;
-    clocksEventIgnoreMask  = other.clocksEventIgnoreMask;
-    failEarly              = other.failEarly;
-    failCheckInterval      = other.failCheckInterval;
-    currentIteration       = other.currentIteration;
-    totalIterations        = other.totalIterations;
-    channelFd              = other.channelFd;
-    diagResponseVersion    = other.diagResponseVersion;
-    rerunAsRoot            = other.rerunAsRoot;
-    watchFrequency         = other.watchFrequency;
-    ignoreErrorCodesString = other.ignoreErrorCodesString;
-    parsedIgnoreErrorCodes = other.parsedIgnoreErrorCodes;
-    hangDetectDisable      = other.hangDetectDisable;
-    hangDetectExpirySec    = other.hangDetectExpirySec;
-    genericMode            = other.genericMode;
-
-    return *this;
-}
-
-void NvvsCommon::Init()
-{
-    logFile                = "";
-    m_statsPath            = "./";
-    logFileType            = NVVS_LOGFILE_TYPE_JSON;
-    parse                  = false;
-    quietMode              = false;
-    serialize              = false;
-    overrideMinMax         = false;
-    verbose                = false;
-    requirePersistenceMode = true;
-    configless             = false;
-    statsOnlyOnFail        = false;
-    errorMask              = 0;
-    mainReturnCode         = NVVS_ST_SUCCESS;
-    pluginPath             = "";
-    desiredTest.clear();
-    isEudOnly      = false;
-    indexString    = "";
-    fakegpusString = "";
-    parmsString    = "";
-    parms.clear();
-    dcgmHostname           = "";
-    clocksEventIgnoreMask  = DCGM_INT64_BLANK;
-    failEarly              = false;
-    failCheckInterval      = 5;
-    currentIteration       = 0;
-    totalIterations        = 1;
-    channelFd              = -1;
-    watchFrequency         = DEFAULT_WATCH_FREQUENCY_IN_MICROSECONDS;
-    ignoreErrorCodesString = "";
-    parsedIgnoreErrorCodes.clear();
-    hangDetectDisable   = false;
-    hangDetectExpirySec = DEFAULT_HANG_DETECT_EXPIRY_SEC;
-    genericMode         = false;
-}
 
 void NvvsCommon::SetStatsPath(const std::string &statsPath)
 {
@@ -347,5 +230,23 @@ nvvsPluginResult_t DcgmResultToNvvsResult(dcgmDiagResult_t const result)
         case DCGM_DIAG_RESULT_NOT_RUN:
         default:
             return NVVS_RESULT_SKIP;
+    }
+}
+
+std::string_view NvvsPluginResultToString(nvvsPluginResult_t result)
+{
+    switch (result)
+    {
+        case NVVS_RESULT_PASS:
+            return "PASS";
+        case NVVS_RESULT_WARN:
+            return "WARN";
+        case NVVS_RESULT_FAIL:
+            return "FAIL";
+        case NVVS_RESULT_SKIP:
+            return "SKIP";
+        default:
+            log_error("Unknown NVVS result {}", static_cast<int>(result));
+            return "UNKNOWN";
     }
 }

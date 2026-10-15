@@ -17,55 +17,24 @@
 #include <FileSystemOperator.h>
 
 #include <Defer.hpp>
+#include <TempDir.hpp>
+#include <TempFile.hpp>
 
 #include <catch2/catch_all.hpp>
 
 #include <filesystem>
-#include <fstream>
 #include <string>
-
-namespace
-{
-class TempDir
-{
-public:
-    TempDir()
-    {
-        std::string pattern = "/tmp/dcgm-fs-test-XXXXXX";
-        char *path          = mkdtemp(pattern.data());
-        REQUIRE(path != nullptr);
-        m_path = path;
-    }
-
-    ~TempDir()
-    {
-        std::error_code ec;
-        std::filesystem::remove_all(m_path, ec);
-    }
-
-    std::filesystem::path Path() const
-    {
-        return m_path;
-    }
-
-private:
-    std::filesystem::path m_path;
-};
-} // namespace
 
 TEST_CASE("FileSystemOperator reads, globs, and removes files")
 {
     FileSystemOperator fs;
-    TempDir tempDir;
+    auto tempDir        = TempDir::Random("dcgm-fs-test-");
     auto const filePath = tempDir.Path() / "sample.txt";
     auto const linkPath = tempDir.Path() / "sample.link";
 
     GIVEN("a temporary file")
     {
-        {
-            std::ofstream file(filePath);
-            file << "hello dcgm\n";
-        }
+        [[maybe_unused]] auto tempFile = TempFile::Fixed(filePath, "hello dcgm\n");
 
         THEN("Read returns the file contents")
         {
@@ -111,11 +80,11 @@ TEST_CASE("FileSystemOperator reads, globs, and removes files")
 TEST_CASE("FileSystemOperator handles directories and process cwd")
 {
     FileSystemOperator fs;
-    TempDir tempDir;
+    auto tempDir = TempDir::Random("dcgm-fs-test-");
 
     GIVEN("a temporary directory")
     {
-        std::ofstream(tempDir.Path() / "entry.txt") << "entry";
+        [[maybe_unused]] auto tempFile = TempFile::Fixed(tempDir.Path() / "entry.txt", "entry");
 
         THEN("ListDirectoryEntries includes created files")
         {
@@ -143,7 +112,7 @@ TEST_CASE("FileSystemOperator handles directories and process cwd")
 TEST_CASE("FileSystemOperator returns failures for missing paths")
 {
     FileSystemOperator fs;
-    TempDir tempDir;
+    auto tempDir       = TempDir::Random("dcgm-fs-test-");
     auto const missing = tempDir.Path() / "missing";
 
     CHECK_FALSE(fs.Read(missing.string()).has_value());

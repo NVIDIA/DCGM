@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 #include <mutex>
 #include <thread>
+#include <utility>
 
 #include <DcgmStringHelpers.h>
 #include <dcgm_module_structs.h>
@@ -39,15 +40,15 @@ dcgmReturn_t PostRequestToCore(dcgm_module_command_header_t *header, void *poste
     return communicator->ProcessRequestInCore(header);
 }
 
-void DcgmCoreCommunication::Init(DcgmCacheManager *cm, DcgmGroupManager *gm)
+void DcgmCoreCommunication::Init(DcgmCacheManagerAnyPtr cm, DcgmGroupManager *gm)
 {
-    m_cacheManagerPtr = cm;
+    m_cacheManagerPtr = std::move(cm);
     m_groupManagerPtr = gm;
 }
 
 bool DcgmCoreCommunication::IsInitialized() const
 {
-    return m_cacheManagerPtr != nullptr && m_groupManagerPtr != nullptr;
+    return m_cacheManagerPtr.has_value() && m_groupManagerPtr != nullptr;
 }
 
 dcgmReturn_t DcgmCoreCommunication::ProcessGetGpuIds(dcgm_module_command_header_t *header)
@@ -1164,8 +1165,7 @@ dcgmReturn_t DcgmCoreCommunication::ProcessGetServiceAccount(dcgm_module_command
 
     auto const &serviceAccount = DcgmHostEngineHandler::Instance()->GetServiceAccount();
 
-    std::strncpy(query.response.serviceAccount, serviceAccount.c_str(), sizeof(query.response.serviceAccount));
-    query.response.serviceAccount[sizeof(query.response.serviceAccount) - 1] = '\0';
+    SafeCopyTo(query.response.serviceAccount, serviceAccount.c_str());
 
     memcpy(header, &query, sizeof(query));
 

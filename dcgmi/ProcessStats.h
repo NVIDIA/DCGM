@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,17 @@
 
 #include "Command.h"
 
+#include <DcgmOpsAnyPtr.hpp>
+
+#include <cstddef>
+
 class ProcessStats
 {
 public:
-    ProcessStats();
+    // DCGM job APIs take char jobId[64], which includes space for the '\0' terminator.
+    static constexpr std::size_t c_dcgmJobIdBufferLength = 64;
+
+    explicit ProcessStats(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~ProcessStats();
 
     /*****************************************************************************
@@ -79,6 +86,8 @@ public:
     dcgmReturn_t RemoveAllJobs(dcgmHandle_t mNvcmHandle);
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
+
     /*****************************************************************************
      * Function to display all execution stats from given pidInfo
      *****************************************************************************/
@@ -197,7 +206,11 @@ private:
 class EnableWatches : public Command
 {
 public:
-    EnableWatches(std::string hostname, unsigned int groupId, int updateIntervalMs, int maxKeepAgeSec);
+    EnableWatches(std::string hostname,
+                  unsigned int groupId,
+                  int updateIntervalMs,
+                  int maxKeepAgeSec,
+                  DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -215,7 +228,7 @@ private:
 class DisableWatches : public Command
 {
 public:
-    DisableWatches(std::string hostname, unsigned int groupId);
+    DisableWatches(std::string hostname, unsigned int groupId, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -231,7 +244,11 @@ private:
 class ViewProcessStats : public Command
 {
 public:
-    ViewProcessStats(std::string hostname, unsigned int mGroupId, unsigned int pid, bool verbose);
+    ViewProcessStats(std::string hostname,
+                     unsigned int mGroupId,
+                     unsigned int pid,
+                     bool verbose,
+                     DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -249,7 +266,7 @@ private:
 class StartJob : public Command
 {
 public:
-    StartJob(std::string hostname, unsigned int groupId, std::string jobId);
+    StartJob(std::string hostname, unsigned int groupId, std::string jobId, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -266,7 +283,7 @@ private:
 class StopJob : public Command
 {
 public:
-    StopJob(std::string hostname, std::string jobId);
+    StopJob(std::string hostname, std::string jobId, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -282,7 +299,7 @@ private:
 class RemoveJob : public Command
 {
 public:
-    RemoveJob(std::string hostname, std::string jobId);
+    RemoveJob(std::string hostname, std::string jobId, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -298,7 +315,7 @@ private:
 class RemoveAllJobs : public Command
 {
 public:
-    RemoveAllJobs(std::string hostname);
+    RemoveAllJobs(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -314,7 +331,7 @@ private:
 class ViewJobStats : public Command
 {
 public:
-    ViewJobStats(std::string hostname, std::string jobId, bool verbose);
+    ViewJobStats(std::string hostname, std::string jobId, bool verbose, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -358,4 +358,63 @@ TEST_CASE("DcgmValuesSinceHolder: negative test for DCGM_FR_FIELD_THRESHOLD_TS_D
     CHECK(errorListGpu0[0].GetCode() == DCGM_FR_FIELD_THRESHOLD_TS_DBL);
     CHECK(errorListGpu0[0].GetGpuId() == static_cast<int>(gpuId0));
     CHECK(errorListGpu1.size() == 0);
+}
+
+TEST_CASE("DcgmValuesSinceHolder: negative test for DCGM_FR_FIELD_THRESHOLD_TS")
+{
+    unsigned short fieldId = 1;
+    unsigned int gpuId0    = 0;
+    unsigned int gpuId1    = 1;
+    unsigned int gpuId2    = 2;
+    timelib64_t startTime  = 1000000;
+
+    dcgmFieldValue_v1 thresholdFv = {};
+    thresholdFv.fieldId           = fieldId;
+    thresholdFv.fieldType         = DCGM_FT_INT64;
+    thresholdFv.value.i64         = 2;
+
+    DcgmValuesSinceHolder dvsh;
+    dcgmFieldValue_v1 fv = {};
+    fv.fieldId           = fieldId;
+    fv.fieldType         = DCGM_FT_INT64;
+
+    // GPU 0: exceeds threshold (delta 3 >= 2)
+    fv.value.i64 = 0;
+    fv.ts        = startTime;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId0, fieldId, fv);
+    fv.value.i64 = 3;
+    fv.ts        = startTime + 1000000;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId0, fieldId, fv);
+
+    // GPU 1: does not exceed threshold (delta 1 < 2)
+    fv.value.i64 = 0;
+    fv.ts        = startTime;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId1, fieldId, fv);
+    fv.value.i64 = 1;
+    fv.ts        = startTime + 1000000;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId1, fieldId, fv);
+
+    // GPU 2: meets threshold (delta 2 == 2)
+    fv.value.i64 = 0;
+    fv.ts        = startTime;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId2, fieldId, fv);
+    fv.value.i64 = 2;
+    fv.ts        = startTime + 1000000;
+    dvsh.AddValue(DCGM_FE_GPU, gpuId2, fieldId, fv);
+
+    std::vector<DcgmError> errorListGpu0;
+    std::vector<DcgmError> errorListGpu1;
+    std::vector<DcgmError> errorListGpu2;
+
+    CHECK(dvsh.DoesValuePassPerSecondThreshold(fieldId, thresholdFv, gpuId0, "field name", errorListGpu0, startTime));
+    CHECK(!dvsh.DoesValuePassPerSecondThreshold(fieldId, thresholdFv, gpuId1, "field name", errorListGpu1, startTime));
+    CHECK(dvsh.DoesValuePassPerSecondThreshold(fieldId, thresholdFv, gpuId2, "field name", errorListGpu2, startTime));
+
+    REQUIRE(errorListGpu0.size() == 1);
+    CHECK(errorListGpu0[0].GetCode() == DCGM_FR_FIELD_THRESHOLD_TS);
+    CHECK(errorListGpu0[0].GetGpuId() == static_cast<int>(gpuId0));
+    CHECK(errorListGpu1.size() == 0);
+    REQUIRE(errorListGpu2.size() == 1);
+    CHECK(errorListGpu2[0].GetCode() == DCGM_FR_FIELD_THRESHOLD_TS);
+    CHECK(errorListGpu2[0].GetGpuId() == static_cast<int>(gpuId2));
 }

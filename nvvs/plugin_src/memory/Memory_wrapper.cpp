@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,22 @@
 #include "PluginStrings.h"
 #include "memory_plugin.h"
 
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
+#include <utility>
+
 /*****************************************************************************/
-Memory::Memory(dcgmHandle_t handle)
-    : m_handle(handle)
+Memory::Memory(dcgmHandle_t handle,
+               DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+               CudaOpsAnyUniquePtr cudaOps,
+               CudaCommonAnyUniquePtr cudaCommon,
+               NvvsCommon *nvvsCommon)
+    : Plugin(dcgmOps.AsAnyPtr())
+    , m_dcgmOpsUnique(std::move(dcgmOps))
+    , m_cudaOps(std::move(cudaOps))
+    , m_cudaCommon(std::move(cudaCommon))
+    , m_nvvsCommon(nvvsCommon)
+    , m_handle(handle)
     , m_entityInfo(std::make_unique<dcgmDiagPluginEntityList_v1>())
 {
     m_infoStruct.testIndex        = DCGM_MEMORY_INDEX;
@@ -106,16 +119,18 @@ void Memory::Go(std::string const &testName,
         {
             continue;
         }
-        main_entry(entityInfo->entities[i], this, &testParameters);
+        main_entry(entityInfo->entities[i],
+                   this,
+                   &testParameters,
+                   m_handle,
+                   m_dcgmOps,
+                   m_cudaOps.AsAnyPtr(),
+                   m_cudaCommon.AsAnyPtr(),
+                   m_nvvsCommon);
     }
 }
 
 /*****************************************************************************/
-dcgmHandle_t Memory::GetHandle()
-{
-    return m_handle;
-}
-
 std::string Memory::GetMemoryTestName() const
 {
     return MEMORY_PLUGIN_NAME;

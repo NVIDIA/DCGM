@@ -172,33 +172,18 @@ dcgmReturn_t MpiRunner::DefaultOutputCallback(int fd, void * /* responseStruct *
 }
 
 /**
- * Gets the PID of the running MPI process
+ * Gets the PID returned by the most recent successful MPI process launch.
  *
- * @return pid_t The process ID if process is running, or std::nullopt if not started or already exited
+ * @return The process ID until runner cleanup, or `std::nullopt` if no process is owned by this runner.
  */
 [[nodiscard]] std::optional<pid_t> MpiRunner::GetMpiProcessPid() const
 {
     if (m_childProcessHandle == INVALID_CHILD_PROCESS_HANDLE || m_pid == -1)
     {
-        // No process running
+        // No process has been launched or the most recent process has already been cleaned up.
         return std::nullopt;
     }
-
-    dcgmChildProcessStatus_v1 status {};
-    status.version      = dcgmChildProcessStatus_version1;
-    dcgmReturn_t result = m_coreProxy.ChildProcessGetStatus(m_childProcessHandle, status);
-    if (result != DCGM_ST_OK)
-    {
-        log_error("Failed to get MPI process status: {}", result);
-        return std::nullopt;
-    }
-
-    if (status.running == 1)
-    {
-        return m_pid;
-    }
-
-    return std::nullopt;
+    return m_pid;
 }
 
 dcgmReturn_t MpiRunner::StopMpiProcess()
@@ -218,7 +203,8 @@ dcgmReturn_t MpiRunner::StopMpiProcess()
     }
 
     // Process was stopped, clean up our state, process handle is invalidated by destroy
-    m_pid = -1;
+    m_pid                = -1;
+    m_childProcessHandle = INVALID_CHILD_PROCESS_HANDLE;
 
     return result;
 }

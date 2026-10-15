@@ -1,0 +1,27 @@
+[dependencies]
+
+[lib]
+path = "src/lib.rs"
+
+[lints.rust.unexpected_cfgs]
+check-cfg = ["cfg(disable_clang_cl_tests)"]
+level = "allow"
+priority = 0
+
+[package]
+autobenches = false
+autobins = false
+autoexamples = false
+autolib = false
+autotests = false
+categories = ["development-tools::build-utils"]
+description = "Find windows-specific tools, read MSVC versions from the registry and from COM interfaces"
+documentation = "https://docs.rs/find-msvc-tools"
+edition = "2018"
+keywords = ["build-dependencies"]
+license = "MIT OR Apache-2.0"
+name = "find-msvc-tools"
+readme = "README.md"
+repository = "https://github.com/rust-lang/cc-rs"
+rust-version = "1.63"
+version = "0.1.9"

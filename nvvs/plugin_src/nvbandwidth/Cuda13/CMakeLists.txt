@@ -21,4 +21,4 @@ install(
 install(
     PROGRAMS "bin/${CMAKE_SYSTEM_PROCESSOR}/nvbandwidth"
     DESTINATION ${DCGM_TESTS_INSTALL_DIR}/apps/nvvs/plugins/cuda13
-    COMPONENT Tests) 
+    COMPONENT Tests)

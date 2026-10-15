@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,5 +49,38 @@ dcgmReturn_t dcgm_diag_common_populate_run_diag(dcgmRunDiag_v10 &drd,
 
 /*****************************************************************************/
 void dcgm_diag_common_set_config_file_contents(const std::string &configFileContents, dcgmRunDiag_v10 &drd);
+
+/*****************************************************************************/
+/**
+ * Convert a dcgmRunDiag_v7 request to the latest dcgmRunDiag_v10 shape.
+ *
+ * @param[in] legacyDrd Legacy diagnostic run request. Its gpuList takes
+ * precedence over groupId when entity selection is converted.
+ * @return Converted dcgmRunDiag_v10 request. This conversion does not report
+ * runtime errors.
+ */
+dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v7 const &legacyDrd);
+
+/*****************************************************************************/
+/**
+ * Convert a dcgmRunDiag_v8 request to the latest dcgmRunDiag_v10 shape.
+ *
+ * @param[in] legacyDrd Legacy diagnostic run request. Its gpuList takes
+ * precedence over groupId and expectedNumEntities is preserved.
+ * @return Converted dcgmRunDiag_v10 request. This conversion does not report
+ * runtime errors.
+ */
+dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v8 const &legacyDrd);
+
+/*****************************************************************************/
+/**
+ * Convert a dcgmRunDiag_v9 request to the latest dcgmRunDiag_v10 shape.
+ *
+ * @param[in] legacyDrd Legacy diagnostic run request. Its entityIds,
+ * expectedNumEntities, and watchFrequency fields are preserved.
+ * @return Converted dcgmRunDiag_v10 request. This conversion does not report
+ * runtime errors.
+ */
+dcgmRunDiag_v10 dcgm_diag_common_convert_to_latest_run_diag(dcgmRunDiag_v9 const &legacyDrd);
 
 /*****************************************************************************/

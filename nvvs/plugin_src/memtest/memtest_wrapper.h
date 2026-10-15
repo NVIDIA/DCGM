@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,11 @@
 
 #include "Plugin.h"
 
+#include <CudaCommonAnyUniquePtr.hpp>
+#include <CudaOpsAnyPtr.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <NvvsStructs.h>
 #include <PluginInterface.h>
 #include <dcgm_structs.h>
@@ -28,17 +33,25 @@
 class MemtestPlugin : public Plugin
 {
 public:
-    MemtestPlugin(dcgmHandle_t handle);
+    MemtestPlugin(dcgmHandle_t handle,
+                  DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                  CudaOpsAnyUniquePtr cudaOps,
+                  CudaCommonAnyUniquePtr cudaCommon,
+                  NvvsCommon *nvvsCommon);
 
     void Go(std::string const &testName,
             dcgmDiagPluginEntityList_v1 const *entityInfo,
             unsigned int numParameters,
             dcgmDiagPluginTestParameter_t const *testParameters) override;
 
-    dcgmHandle_t GetHandle() const;
     std::string GetMmeTestTestName() const;
 
 private:
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique; //!< Owned DCGM API interface.
+    CudaOpsAnyUniquePtr m_cudaOpsUnique;         //!< Owned CUDA API interface.
+    CudaCommonAnyUniquePtr m_cudaCommonUnique;   //!< Owned CUDA error/reporting helper.
+                                                 //! NVVS common state
+    NvvsCommon *m_nvvsCommon;
     dcgmHandle_t m_handle;
     std::unique_ptr<TestParameters> m_defaultTestParameters;
 };

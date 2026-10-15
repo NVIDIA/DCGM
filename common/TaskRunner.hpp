@@ -55,13 +55,14 @@ using UnwrapFutureNestedType_t = typename UnwrapFutureNestedType<T>::type;
  *
  * @note    It's technically possible to make multiple threads running the `Run()` function. But there are no quarantees
  *          that workload will be evenly distributed between such threads.
+ * @note    Callers must call `Stop()` and join every thread running `Run()` before destroying the TaskRunner.
  */
 class TaskRunner
 {
 public:
     TaskRunner()
         : m_runInterval(std::chrono::minutes(1))
-        , m_runnerSemaphore(std::make_shared<Semaphore>())
+        , m_runnerSemaphore()
         , m_stop(false)
         , m_debugLogging(false)
     {
@@ -109,7 +110,7 @@ public:
         {
             log_info("Debug logging is enabled for the TaskRunner at {}", (void *)this);
         }
-        m_runnerSemaphore->SetDebugLogging(enabled);
+        m_runnerSemaphore.SetDebugLogging(enabled);
     }
 
     void SetQueueCapacity(size_t newCapacity)
@@ -143,13 +144,13 @@ public:
         if (!isContinuation)
         {
             auto queueHandleRo = m_queue.LockRO();
-            if (queueHandleRo.GetSize() > m_queueCapacity.load(std::memory_order_relaxed))
+            if (queueHandleRo.GetSize() >= m_queueCapacity.load(std::memory_order_relaxed))
             {
                 DCGM_LOG_ERROR << fmt::format(
                     "Unable to add task {} to the TaskRunner {:#x} queue as the queue is full",
                     task->GetName(),
                     (size_t)this);
-                [[maybe_unused]] auto releaseResult = m_runnerSemaphore->Release();
+                [[maybe_unused]] auto releaseResult = m_runnerSemaphore.Release();
                 if (releaseResult != Semaphore::ReleaseResult::Ok)
                 {
                     auto const msg = fmt::format(
@@ -168,12 +169,12 @@ public:
         task->SetPromise(std::move(prom)); /* after this prom is invalid */
 
         auto queueHandle = m_queue.LockRW();
-        if (!isContinuation && queueHandle.GetSize() > m_queueCapacity.load(std::memory_order::relaxed))
+        if (!isContinuation && queueHandle.GetSize() >= m_queueCapacity.load(std::memory_order::relaxed))
         {
             DCGM_LOG_ERROR << fmt::format("Unable to add task {} to the TaskRunner {:#x} queue as the queue is full",
                                           task->GetName(),
                                           (size_t)this);
-            [[maybe_unused]] auto releaseResult = m_runnerSemaphore->Release();
+            [[maybe_unused]] auto releaseResult = m_runnerSemaphore.Release();
             if (releaseResult != Semaphore::ReleaseResult::Ok)
             {
                 auto const msg = fmt::format(
@@ -184,7 +185,7 @@ public:
             return std::nullopt;
         }
         queueHandle.Enqueue(std::move(task));
-        [[maybe_unused]] auto _ = m_runnerSemaphore->Release();
+        [[maybe_unused]] auto _ = m_runnerSemaphore.Release();
 
         return result;
     }
@@ -242,13 +243,13 @@ public:
         }
         {
             auto queueHandleRo = m_queue.LockRO();
-            if (queueHandleRo.GetSize() > m_queueCapacity.load(std::memory_order::relaxed))
+            if (queueHandleRo.GetSize() >= m_queueCapacity.load(std::memory_order::relaxed))
             {
                 DCGM_LOG_ERROR << fmt::format(
                     "Unable to add task {} to the TaskRunner {:#x} queue as the queue is full",
                     task->GetName(),
                     (size_t)this);
-                [[maybe_unused]] auto releaseResult = m_runnerSemaphore->Release();
+                [[maybe_unused]] auto releaseResult = m_runnerSemaphore.Release();
                 if (releaseResult != Semaphore::ReleaseResult::Ok)
                 {
                     auto const msg = fmt::format(
@@ -269,11 +270,11 @@ public:
 
         {
             auto queueHandle = m_queue.LockRW();
-            if (queueHandle.GetSize() > m_queueCapacity.load(std::memory_order_relaxed))
+            if (queueHandle.GetSize() >= m_queueCapacity.load(std::memory_order_relaxed))
             {
                 DCGM_LOG_ERROR << "Unable to add task " << task->GetName() << " to the TaskRunner " << (size_t)this
                                << " queue as the queue is full";
-                [[maybe_unused]] auto releaseResult = m_runnerSemaphore->Release();
+                [[maybe_unused]] auto releaseResult = m_runnerSemaphore.Release();
                 if (releaseResult != Semaphore::ReleaseResult::Ok)
                 {
                     auto const msg = fmt::format(
@@ -285,7 +286,7 @@ public:
                 return std::nullopt;
             }
             queueHandle.Enqueue(std::move(task));
-            [[maybe_unused]] auto _ = m_runnerSemaphore->Release();
+            [[maybe_unused]] auto _ = m_runnerSemaphore.Release();
         }
 
         auto continuation = [contFuture = std::move(contFuture)]() mutable -> std::optional<T> {
@@ -364,7 +365,7 @@ public:
         {
             tasks.clear();
             deferredTasks.clear();
-            waitResult = m_runnerSemaphore->WaitUntil(wakeUpTime);
+            waitResult = m_runnerSemaphore.WaitUntil(wakeUpTime);
             if (waitResult == Semaphore::TimedWaitResult::Destroyed)
             {
                 if (m_debugLogging.load(std::memory_order_relaxed))
@@ -454,7 +455,7 @@ public:
                 {
                     queueHandle.Enqueue(std::move(task));
                 }
-                [[maybe_unused]] auto _ = m_runnerSemaphore->Release();
+                [[maybe_unused]] auto _ = m_runnerSemaphore.Release();
             }
 
             if (oneIteration)
@@ -477,7 +478,7 @@ public:
             DCGM_LOG_DEBUG << fmt::format("The TaskRunner {:#x} is going to stop", (std::size_t)this);
         }
         m_stop.store(true, std::memory_order_relaxed);
-        m_runnerSemaphore->Destroy(); // Semaphore.Destroy will wake up all waiters (runner threads)
+        m_runnerSemaphore.Destroy(); // Semaphore.Destroy will wake up all waiters (runner threads)
     }
 
 protected:
@@ -493,7 +494,7 @@ protected:
 private:
     ThreadSafeQueue<std::unique_ptr<ITask>> m_queue;      //!< A queue of scheduled tasks. Thread Safe.
     std::atomic<std::chrono::milliseconds> m_runInterval; //!< How long a worker will wait for a new task signal.
-    std::shared_ptr<Semaphore> m_runnerSemaphore;         //!< Signals if there is new task in the queue.
+    Semaphore m_runnerSemaphore;                          //!< Signals if there is new task in the queue.
     std::atomic_bool m_stop;                              //!< Signals that the task runner should stop its work.
 
     std::atomic_bool m_debugLogging; //!< If the task runner methods need to write debug logs.

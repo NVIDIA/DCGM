@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,13 @@
  */
 
 #include "Health.h"
+
 #include "CommandOutputController.h"
 #include "DcgmiOutput.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
+
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
 #include <algorithm>
 #include <ctype.h>
 #include <iostream>
@@ -55,6 +58,7 @@
 #define NVSWITCH_NONFATAL_SYSTEMS_TAG "NvSwitch NF"
 #define NVSWITCH_FATAL_SYSTEMS_TAG    "NvSwitch F"
 #define CONNECTX_SYSTEMS_TAG          "ConnectX"
+#define IMEX_SYSTEMS_TAG              "IMEX"
 #define OVERALL_HEALTH_TAG            "Overall Health"
 
 #define MAX_SIZE_OF_HEALTH_INFO 54 /* Used for overflow (full length of health information tag) */
@@ -70,6 +74,11 @@ std::string to_string(const T &t)
 }
 
 /*****************************************************************************/
+Health::Health(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+{}
+
+/*****************************************************************************/
 dcgmReturn_t Health::GetWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, bool json)
 {
     dcgmReturn_t result = DCGM_ST_OK;
@@ -80,7 +89,7 @@ dcgmReturn_t Health::GetWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, 
     std::string on   = "On";
     std::string off  = "Off";
 
-    result = dcgmHealthGet(mDcgmHandle, groupId, &systems);
+    result = m_dcgmOps->dcgmHealthGet(mDcgmHandle, groupId, &systems);
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -92,7 +101,7 @@ dcgmReturn_t Health::GetWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, 
     }
 
     std::cout << "Health monitor systems report" << std::endl;
-    for (unsigned int index = 0; index < DCGM_HEALTH_WATCH_COUNT_V3; index++)
+    for (unsigned int index = 0; index < DCGM_HEALTH_WATCH_COUNT_V4; index++)
     {
         unsigned int bit = 1 << index;
         switch (bit)
@@ -138,6 +147,9 @@ dcgmReturn_t Health::GetWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId, 
             case DCGM_HEALTH_WATCH_CONNECTX:
                 out[CONNECTX_SYSTEMS_TAG] = (systems & bit) ? on : off;
                 break;
+            case DCGM_HEALTH_WATCH_IMEX:
+                out[IMEX_SYSTEMS_TAG] = (systems & bit) ? on : off;
+                break;
             default:
                 std::cout << "Error: DCGM_HEALTH_WATCH_COUNT appears to be incorrect." << std::endl;
                 return result;
@@ -165,7 +177,7 @@ dcgmReturn_t Health::SetWatches(dcgmHandle_t mDcgmHandle,
     params.updateInterval = (long long)(updateInterval * 1000000.0);
     params.maxKeepAge     = maxKeepAge;
 
-    result = dcgmHealthSet_v2(mDcgmHandle, &params);
+    result = m_dcgmOps->dcgmHealthSet_v2(mDcgmHandle, &params);
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -359,7 +371,7 @@ dcgmReturn_t Health::CheckWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId
 
     response->version = dcgmHealthResponse_version;
 
-    result = dcgmHealthCheck(mDcgmHandle, groupId, response.get());
+    result = m_dcgmOps->dcgmHealthCheck(mDcgmHandle, groupId, response.get());
 
     if (DCGM_ST_OK != result)
     {
@@ -373,7 +385,7 @@ dcgmReturn_t Health::CheckWatches(dcgmHandle_t mDcgmHandle, dcgmGpuGrp_t groupId
 
 
     // Check if watches are enabled
-    result = dcgmHealthGet(mDcgmHandle, groupId, &systems);
+    result = m_dcgmOps->dcgmHealthGet(mDcgmHandle, groupId, &systems);
     if (DCGM_ST_OK != result)
     {
         std::cout << "Error: Unable to check health watches. Return: " << errorString(result) << std::endl;
@@ -431,6 +443,8 @@ std::string Health::HelperSystemToString(dcgmHealthSystems_t system)
             return "Driver";
         case DCGM_HEALTH_WATCH_CONNECTX:
             return "ConnectX system";
+        case DCGM_HEALTH_WATCH_IMEX:
+            return "IMEX system";
         default:
             return "Internal error";
     }
@@ -448,8 +462,9 @@ dcgmReturn_t Health::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-GetHealth::GetHealth(std::string hostname, unsigned int groupId, bool json)
-    : Command()
+GetHealth::GetHealth(std::string hostname, unsigned int groupId, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , healthObj(dcgmOps)
     , groupId(groupId)
 {
     m_hostName = std::move(hostname);
@@ -476,8 +491,10 @@ SetHealth::SetHealth(std::string hostname,
                      unsigned int groupId,
                      unsigned int system,
                      double updateInterval,
-                     double maxKeepAge)
-    : Command()
+                     double maxKeepAge,
+                     DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , healthObj(dcgmOps)
     , mGroupId(groupId)
     , mSystems((dcgmHealthSystems_t)system)
     , mUpdateInterval(updateInterval)
@@ -502,8 +519,9 @@ dcgmReturn_t SetHealth::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-CheckHealth::CheckHealth(std::string hostname, unsigned int groupId, bool json)
-    : Command()
+CheckHealth::CheckHealth(std::string hostname, unsigned int groupId, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , healthObj(dcgmOps)
     , groupId(groupId)
 {
     m_hostName = std::move(hostname);

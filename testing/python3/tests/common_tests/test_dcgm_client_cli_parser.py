@@ -81,6 +81,8 @@ def helper_check_mutually_exclusive_group_added():
 # autospec tells mock to return objects that have the same interface
 
 
+# NO HARDWARE
+
 @maybemock.patch('argparse.ArgumentParser', autospec=True)
 @KeywordizeLastArgument("MockArgumentParser")
 def test_create_parser(MockArgumentParser):
@@ -100,6 +102,8 @@ def test_create_parser(MockArgumentParser):
     # TODO mutually-exclusive group tests
 
 
+# NO HARDWARE
+
 @maybemock.patch('argparse.ArgumentParser', autospec=True)
 @KeywordizeLastArgument("MockArgumentParser")
 def test_add_target_host_argument(MockArgumentParser):
@@ -111,6 +115,8 @@ def test_add_target_host_argument(MockArgumentParser):
                                        dest='publish_hostname', type=str)
 
 
+# NO HARDWARE
+
 @skip_test_if_no_mock()
 def test_run_parser():
     parser = maybemock.Mock()
@@ -118,10 +124,14 @@ def test_run_parser():
     parser.parse_args.assert_called()
 
 
+# NO HARDWARE
+
 def test_get_field_ids():
     assert cli.get_field_ids(Struct(field_ids="1,2,3")) == [1, 2, 3]
     assert cli.get_field_ids(Struct(field_ids=[1, 2, 3])) == [1, 2, 3]
 
+
+# NO HARDWARE
 
 @maybemock.patch('sys.exit')
 @KeywordizeLastArgument("mock_exit")
@@ -147,6 +157,8 @@ def test_get_log_level(mock_exit):
     mock_exit.assert_called()
     mock_help.assert_called()
 
+
+# NO HARDWARE
 
 def test_parse_command_line():
     # TODO maybe add a test here. This function will be a pain to test

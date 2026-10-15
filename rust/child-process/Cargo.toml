@@ -1,0 +1,40 @@
+# Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[package]
+name = "child_process"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+mock = ["dep:mockall"]
+# When not set, ensure_child_subreaper() is a no-op.
+# Enables PR_SET_CHILD_SUBREAPER on every spawn.
+subreaper = []
+
+[dependencies]
+dcgm-logging = { workspace = true }
+dcgm_utils = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+libc = { workspace = true }
+mockall = { workspace = true, optional = true }
+nix = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+[lints]
+workspace = true

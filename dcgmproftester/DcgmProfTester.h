@@ -16,7 +16,11 @@
 #pragma once
 
 #include "Arguments.h"
-#include "DistributedCudaContext.h"
+#include "DistributedCudaContextRuntimeFactoryAnyUniquePtr.hpp"
+#include <CudaOpsAnyPtr.hpp>
+#include <CudaWorkerThreadFactoryAnyUniquePtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <cuda.h>
 #include <dcgm_structs.h>
 #include <expected>
@@ -32,16 +36,28 @@
 namespace DcgmNs::ProfTester
 {
 class PhysicalGpu;
+class PhysicalGpuAnyPtr;
 class DistributedCudaContext;
 } // namespace DcgmNs::ProfTester
 
 /*****************************************************************************/
-class DcgmProfTester : public std::enable_shared_from_this<DcgmProfTester>
+class DcgmProfTester
 {
 public:
     /*************************************************************************/
     /* ctor/dtor */
-    DcgmProfTester();
+    /**
+     * Construct a profiler tester with explicitly owned collaborators.
+     *
+     * @param[in] runtimeFactory Factory used to create one runtime per physical GPU.
+     * @param[in] cudaWorkerFactory Factory used to create CUDA workers.
+     * @param[in] dcgmOps DCGM operations implementation owned by the tester.
+     * @param[in] cudaOps Borrowed CUDA operations implementation.
+     */
+    explicit DcgmProfTester(DcgmNs::ProfTester::DistributedCudaContextRuntimeFactoryAnyUniquePtr runtimeFactory,
+                            CudaWorkerThreadFactoryAnyUniquePtr cudaWorkerFactory,
+                            DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                            CudaOpsAnyPtr cudaOps);
     ~DcgmProfTester();
 
     /*************************************************************************/
@@ -50,20 +66,22 @@ public:
      */
     void InitializeLogging(std::string logFile, DcgmLoggingSeverity_t logLevel);
 
-    /*************************************************************************/
-    /*
-     * Process Argument sets.
+    /**
+     * Process each parsed argument snapshot.
+     *
+     * @param[in] processArgument Callback invoked for each argument snapshot.
+     * @return DCGM_ST_OK on success, or the first error returned by the callback.
      */
-    dcgmReturn_t Process(std::function<dcgmReturn_t(std::shared_ptr<DcgmNs::ProfTester::Arguments_t> arguments)>);
+    dcgmReturn_t Process(std::function<dcgmReturn_t(DcgmNs::ProfTester::Arguments_t const &arguments)> processArgument);
 
-    /*************************************************************************/
-    /*
-     * Process the command line and initialize cuda to be able to run
+    /**
+     * Process the command line and initialize CUDA.
      *
-     *
-     * Returns 0 on success. !0 on failure.
+     * @param[in] argc Number of command-line arguments.
+     * @param[in] argv Command-line argument array.
+     * @return DCGM_ST_OK on success, or an error status on failure.
      */
-    dcgmReturn_t Init(int argc, char *argv[]);
+    dcgmReturn_t Init(int argc, char **argv);
 
     /*************************************************************************/
     /*
@@ -82,27 +100,25 @@ public:
                           unsigned int testFieldId,
                           unsigned int maxGpusInParallel);
 
-    /*************************************************************************/
-    /*
+    /**
      * Reports that a worker has started. This is generally used so we can ask
      * the started worker what it's read file descriptor is so we can select
      * on it, and read data from it.
      *
-     * Returns nothing.
+     * @param[in] worker Worker that entered the started state.
      */
-    void ReportWorkerStarted(std::shared_ptr<DcgmNs::ProfTester::DistributedCudaContext> worker);
+    void ReportWorkerStarted(DcgmNs::ProfTester::DistributedCudaContext &worker);
 
-    /*************************************************************************/
-    /*
+    /**
      * Reports that a worker has failed (validation error). This is generally
      * used so we can remove the worker file descriptor from a select fdset
      * and still process other workers, though generally if one worker on a
      * physical GPU slice fails, ALL workers on that physical GPY will be
      * terminated and the physical GPU will be marked invalid.
      *
-     * Returns nothing.
+     * @param[in] worker Worker that entered the failed state.
      */
-    void ReportWorkerFailed(std::shared_ptr<DcgmNs::ProfTester::DistributedCudaContext> worker);
+    void ReportWorkerFailed(DcgmNs::ProfTester::DistributedCudaContext &worker);
 
     /* Child reporting control. */
 
@@ -150,12 +166,12 @@ private:
     /* Start/Restart child processes. */
     dcgmReturn_t StartTests(unsigned int maxGpusInParallel,
                             unsigned int &runningGpus,
-                            std::vector<std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>> &readyGpus);
+                            std::vector<DcgmNs::ProfTester::PhysicalGpuAnyPtr> &readyGpus);
 
     /* Process worker process test responses. */
     dcgmReturn_t ProcessResponses(unsigned int maxGpusInParallel,
                                   unsigned int &runningGpus,
-                                  std::vector<std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>> &readyGpus,
+                                  std::vector<DcgmNs::ProfTester::PhysicalGpuAnyPtr> &readyGpus,
                                   double duration);
 
     void AbortOtherChildren(unsigned int gpuId); /* Abort other GPU tests before test start. */
@@ -194,7 +210,14 @@ private:
 
     bool m_dvsOutput; /* Should we generate DVS stdout text? */
 
-    std::map<const unsigned int, std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>> m_gpus; /* Physical GPUs to test */
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOps; /* Owned DCGM API interface */
+    CudaOpsAnyPtr m_cudaOps;               //!< Borrowed CUDA API interface.
+    DcgmNs::ProfTester::DistributedCudaContextRuntimeFactoryAnyUniquePtr
+        m_runtimeFactory; //!< Factory used to create distributed CUDA context runtimes.
+    CudaWorkerThreadFactoryAnyUniquePtr m_cudaWorkerFactory; //!< Factory used to create CUDA worker threads.
+
+    std::map<const unsigned int, std::unique_ptr<DcgmNs::ProfTester::PhysicalGpu>>
+        m_gpus; //!< Physical GPUs owned by the tester, indexed by GPU ID.
 
     struct entity_id_t
     {
@@ -220,7 +243,8 @@ private:
     std::vector<dcgmGroupEntityPair_t> m_entities;
 
     /* Workers */
-    std::map<int, std::shared_ptr<DcgmNs::ProfTester::DistributedCudaContext>> m_dcgmCudaContexts;
+    std::map<int, DcgmNs::ProfTester::DistributedCudaContext *>
+        m_dcgmCudaContexts; //!< Borrowed active contexts indexed by response file descriptor.
 
     fd_set m_parentReadFds {}; /* parent Read Fd set for workers */
     int m_maxFd { 0 };         /* maximum worker read file descriptor */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,9 +63,17 @@ public:
     /**
      * @brief Construct an MPI command from input parameters
      *
-     * @param params Pointer to dcgmRunMnDiag_t or other parameters
+     * @param[in] params Pointer to dcgmRunMnDiag_t or other parameters.
+     * @return Empty on success.
+     * @return `DCGM_ST_BADPARAM` when the input cannot form a valid MPI command.
      */
-    virtual void ConstructMpiCommand(void const *params) = 0;
+    virtual std::expected<void, dcgmReturn_t> ConstructMpiCommand(void const *params) = 0;
+
+    /** Execute a manager-coordinated batch. */
+    virtual std::expected<void, dcgmReturn_t> RunBatch(dcgmRunMnDiag_t const &params,
+                                                       nodeInfoMap_t const &nodeInfo,
+                                                       dcgmMnDiagResponse_t &response,
+                                                       std::chrono::milliseconds timeout) = 0;
 
     /**
      * @brief Launch the MPI process

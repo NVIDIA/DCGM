@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ public:
         int setOutputCallbackCount { 0 };
         int getLastCommandCount { 0 };
         int constructMpiCommandCount { 0 };
+        int runBatchCount { 0 };
         int launchMpiProcessCount { 0 };
         int waitCount { 0 };
         int getMpiProcessPidCount { 0 };
@@ -140,6 +141,7 @@ public:
 
     // Mock return values
     std::string m_mockLastCommand { "mpirun -n 2 test" };
+    dcgmReturn_t m_mockConstructResult { DCGM_ST_OK };
     dcgmReturn_t m_mockLaunchResult { DCGM_ST_OK };
     dcgmReturn_t m_mockWaitResult { DCGM_ST_OK };
     dcgmReturn_t m_mockStopResult { DCGM_ST_OK };
@@ -148,6 +150,7 @@ public:
     std::string m_mockOutput { "Test MPI Output" };
     std::optional<std::pair<std::string, std::string>> m_mockLogFileNames;
     dcgmReturn_t m_mockPopulateResponseResult { DCGM_ST_OK };
+    std::expected<void, dcgmReturn_t> m_mockBatchResult {};
     // Mock behavior
     bool m_shouldExecuteMnDiagCallback { true };
 
@@ -177,11 +180,26 @@ public:
         m_mockLogFileNames = logFileNames;
     }
 
-    void ConstructMpiCommand(void const *params) override
+    std::expected<void, dcgmReturn_t> ConstructMpiCommand(void const *params) override
     {
         MockMnDiagMpiRunnerRegistry::IncrementCounter(
             m_runnerId, &MockMnDiagMpiRunnerRegistry::RunnerStats::constructMpiCommandCount);
         m_lastParamsReceived = const_cast<void *>(params);
+        if (m_mockConstructResult != DCGM_ST_OK)
+        {
+            return std::unexpected(m_mockConstructResult);
+        }
+        return {};
+    }
+
+    std::expected<void, dcgmReturn_t> RunBatch(dcgmRunMnDiag_t const & /*params*/,
+                                               nodeInfoMap_t const & /*nodeInfo*/,
+                                               dcgmMnDiagResponse_t & /*response*/,
+                                               std::chrono::milliseconds /*timeout*/) override
+    {
+        MockMnDiagMpiRunnerRegistry::IncrementCounter(m_runnerId,
+                                                      &MockMnDiagMpiRunnerRegistry::RunnerStats::runBatchCount);
+        return m_mockBatchResult;
     }
 
     dcgmReturn_t LaunchMpiProcess() override
@@ -349,6 +367,7 @@ public:
         // Reset the runner's stats which are tracked in a singleton registry
         runner->Reset();
         runner->SetMockTestBinaryPath(m_mockTestBinaryPath);
+        runner->m_mockBatchResult = m_mockBatchResult;
 
         m_lastRunnerId = static_cast<MockMnDiagMpiRunner *>(runner.get())->GetRunnerId();
         return runner;
@@ -362,6 +381,11 @@ public:
     void SetMockTestBinaryPath(std::string path)
     {
         m_mockTestBinaryPath = std::move(path);
+    }
+
+    void SetMockBatchResult(std::expected<void, dcgmReturn_t> batchResult)
+    {
+        m_mockBatchResult = batchResult;
     }
 
     /**
@@ -381,9 +405,11 @@ public:
         m_lastRunnerId         = 0;
         m_returnNullNext       = false;
         m_mockTestBinaryPath   = "";
+        m_mockBatchResult      = {};
     }
 
 private:
     bool m_returnNullNext { false };
     std::string m_mockTestBinaryPath;
+    std::expected<void, dcgmReturn_t> m_mockBatchResult {};
 };

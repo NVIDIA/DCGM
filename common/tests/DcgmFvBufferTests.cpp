@@ -15,7 +15,7 @@
  */
 
 #include <DcgmFvBuffer.h>
-#include <Defer.hpp>
+#include <ScopedDcgmFields.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -65,7 +65,7 @@ TEST_CASE("DcgmFvBuffer handles size and input validation")
             buffer.Clear();
 
             CHECK(EntryCount(buffer) == 0);
-            CHECK(buffer.AddDoubleValue(DCGM_FE_GPU, 3, DCGM_FI_DEV_GPU_UTIL_RATIO, 7.5, 789, DCGM_ST_OK) != nullptr);
+            CHECK(buffer.AddInt64Value(DCGM_FE_GPU, 3, DCGM_FI_DEV_GPU_UTIL, 75, 789, DCGM_ST_OK) != nullptr);
             CHECK(EntryCount(buffer) == 1);
         }
     }
@@ -80,7 +80,7 @@ TEST_CASE("DcgmFvBuffer stores and converts field values")
         auto *intFv = buffer.AddInt64Value(DCGM_FE_GPU, 7, DCGM_FI_DEV_BOARD_POWER_WATTS, 42000, 1000, DCGM_ST_OK);
         REQUIRE(intFv != nullptr);
 
-        auto *doubleFv = buffer.AddDoubleValue(DCGM_FE_GPU, 7, DCGM_FI_DEV_GPU_UTIL_RATIO, 87.5, 1001, DCGM_ST_OK);
+        auto *doubleFv = buffer.AddDoubleValue(DCGM_FE_GPU, 7, DCGM_FI_DEV_GPU_UTIL_RATIO, 0.875, 1001, DCGM_ST_OK);
         REQUIRE(doubleFv != nullptr);
 
         auto *stringFv = buffer.AddStringValue(DCGM_FE_GPU, 7, DCGM_FI_DEV_GPU_NAME, "unit-test-gpu", 1002, DCGM_ST_OK);
@@ -103,7 +103,7 @@ TEST_CASE("DcgmFvBuffer stores and converts field values")
             auto *second = buffer.GetNextFv(&cursor);
             REQUIRE(second != nullptr);
             CHECK(second->fieldType == DCGM_FT_DOUBLE);
-            CHECK(second->value.dbl == 87.5);
+            CHECK(second->value.dbl == 0.875);
 
             auto *third = buffer.GetNextFv(&cursor);
             REQUIRE(third != nullptr);
@@ -124,7 +124,7 @@ TEST_CASE("DcgmFvBuffer stores and converts field values")
             DcgmFvBuffer::ConvertBufferedFvToFv1(doubleFv, &fv1);
             CHECK(fv1.version == dcgmFieldValue_version1);
             CHECK(fv1.fieldId == DCGM_FI_DEV_GPU_UTIL_RATIO);
-            CHECK(fv1.value.dbl == 87.5);
+            CHECK(fv1.value.dbl == 0.875);
 
             dcgmFieldValue_v2 fv2 {};
             DcgmFvBuffer::ConvertBufferedFvToFv2(intFv, &fv2);
@@ -143,7 +143,7 @@ TEST_CASE("DcgmFvBuffer stores and converts field values")
 
             CHECK(stored == values.size());
             CHECK(values[0].value.i64 == 42000);
-            CHECK(values[1].value.dbl == 87.5);
+            CHECK(values[1].value.dbl == 0.875);
             CHECK(std::string(values[2].value.str) == "unit-test-gpu");
         }
 
@@ -235,11 +235,10 @@ TEST_CASE("DcgmFvBuffer rejects malformed values")
 
         SECTION("blank values use field metadata")
         {
-            REQUIRE(DcgmFieldsInit() == 0);
-            DcgmNs::Defer defer([] { DcgmFieldsTerm(); });
+            ScopedDcgmFields fields;
 
             CHECK(buffer.AddBlankValue(DCGM_FE_GPU, 1, DCGM_FI_DEV_BOARD_POWER_WATTS, DCGM_ST_OK) != nullptr);
-            CHECK(buffer.AddBlankValue(DCGM_FE_GPU, 1, DCGM_FI_DEV_GPU_UTIL_RATIO, DCGM_ST_OK) != nullptr);
+            CHECK(buffer.AddBlankValue(DCGM_FE_GPU, 1, DCGM_FI_DEV_GPU_UTIL, DCGM_ST_OK) != nullptr);
             CHECK(buffer.AddBlankValue(DCGM_FE_GPU, 1, DCGM_FI_DEV_GPU_NAME, DCGM_ST_OK) != nullptr);
             CHECK(buffer.AddBlankValue(DCGM_FE_GPU, 1, DCGM_FI_SYSTEM_FIELD_UNKNOWN, DCGM_ST_OK) == nullptr);
         }

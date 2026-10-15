@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,11 @@
 #include <dcgm_structs.h>
 
 #include <fmt/format.h>
+
 #include <iostream>
 #include <optional>
 #include <unordered_set>
+#include <utility>
 
 /**************************************************************************************/
 
@@ -60,8 +62,9 @@ static char const *const SEPARATOR_LINE      = "================================
 
 } //namespace
 
-EnvironmentInfo::EnvironmentInfo(std::string hostname, std::string envVarName)
-    : m_envVarName(std::move(envVarName))
+EnvironmentInfo::EnvironmentInfo(std::string hostname, std::string envVarName, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , m_envVarName(std::move(envVarName))
 {
     m_hostName = std::move(hostname);
 
@@ -98,7 +101,7 @@ dcgmReturn_t EnvironmentInfo::DoExecuteConnected()
     envVarInfo.version = dcgmEnvVarInfo_version;
     SafeCopyTo(envVarInfo.envVarName, m_envVarName.c_str());
 
-    dcgmReturn_t ret = dcgmHostengineEnvironmentVariableInfo(m_dcgmHandle, &envVarInfo);
+    dcgmReturn_t ret = m_dcgmOps->dcgmHostengineEnvironmentVariableInfo(m_dcgmHandle, &envVarInfo);
     log_debug("hostengine environment variable info ret: {}, envVarInfo.ret: {}", ret, envVarInfo.ret);
 
     if (ret != DCGM_ST_OK)

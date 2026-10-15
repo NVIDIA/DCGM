@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 
 #include "Command.h"
 
+#include <DcgmOpsAnyPtr.hpp>
+
 
 /**
  * Receiver Class
@@ -29,7 +31,7 @@
 class Config
 {
 public:
-    Config()                          = default;
+    explicit Config(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     Config(const Config &orig)        = default;
     Config(Config &&)                 = default;
     Config &operator=(Config const &) = default;
@@ -101,6 +103,7 @@ private:
     bool HelperCheckIfAllTheSameWorkloadPowerProfile(dcgmConfig_t const *configs, unsigned int numGpus);
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
     dcgmGpuGrp_t mGroupId;
     dcgmConfig_t mConfigVal;
     dcgmWorkloadPowerProfile_t mWorkloadPowerProfile;
@@ -116,7 +119,7 @@ private:
 class SetConfig : public Command
 {
 public:
-    SetConfig(std::string hostname, Config obj);
+    SetConfig(std::string hostname, Config obj, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     /*****************************************************************************
@@ -134,7 +137,7 @@ private:
 class GetConfig : public Command
 {
 public:
-    GetConfig(std::string hostname, Config obj, bool verbose, bool json);
+    GetConfig(std::string hostname, Config obj, bool verbose, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     /*****************************************************************************
@@ -154,7 +157,7 @@ private:
 class EnforceConfig : public Command
 {
 public:
-    EnforceConfig(std::string hostname, Config obj);
+    EnforceConfig(std::string hostname, Config obj, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     /*****************************************************************************
@@ -172,7 +175,7 @@ private:
 class SetConfigWorkloadPowerProfile : public Command
 {
 public:
-    SetConfigWorkloadPowerProfile(std::string hostname, Config obj);
+    SetConfigWorkloadPowerProfile(std::string hostname, Config obj, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     /*****************************************************************************

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1037,7 +1037,7 @@ DcgmNscqManager::ConnectionStatus DcgmNscqManager::CheckConnectionStatus() const
     return ConnectionStatus::Disconnected;
 }
 
-static char const *c_backendName = "NSCQ";
+static char const *c_nscqBackendName = "NSCQ";
 
 dcgmReturn_t DcgmNscqManager::GetBackend(dcgm_nvswitch_msg_get_backend_t *msg)
 {
@@ -1047,7 +1047,7 @@ dcgmReturn_t DcgmNscqManager::GetBackend(dcgm_nvswitch_msg_get_backend_t *msg)
     }
 
     msg->active = CheckConnectionStatus() == ConnectionStatus::Ok ? true : false;
-    SafeCopyTo(msg->backendName, c_backendName);
+    SafeCopyTo(msg->backendName, c_nscqBackendName);
 
     return DCGM_ST_OK;
 }

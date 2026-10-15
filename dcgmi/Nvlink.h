@@ -18,11 +18,16 @@
 
 #include "Command.h"
 
+#include <DcgmOpsAnyPtr.hpp>
+
+#include <cstdint>
+#include <optional>
+
 
 class Nvlink
 {
 public:
-    Nvlink();
+    explicit Nvlink(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~Nvlink();
 
     /***********************************************************************************
@@ -34,6 +39,9 @@ public:
      * This method is used to display the link statuses for the GPUs and NvSwitches in the system
      ***********************************************************************************/
     dcgmReturn_t DisplayNvLinkLinkStatus(dcgmHandle_t dcgmHandle, bool showEntityIds = false);
+
+private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;
 };
 
 /*****************************************************************************
@@ -46,7 +54,7 @@ public:
 class GetGpuNvlinkErrorCounts : public Command
 {
 public:
-    GetGpuNvlinkErrorCounts(std::string hostname, unsigned int gpuId, bool json);
+    GetGpuNvlinkErrorCounts(std::string hostname, unsigned int gpuId, bool json, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -66,7 +74,7 @@ private:
 class GetNvLinkLinkStatuses : public Command
 {
 public:
-    GetNvLinkLinkStatuses(std::string hostname, bool showEntityIds = false);
+    GetNvLinkLinkStatuses(std::string hostname, bool showEntityIds, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -94,14 +102,19 @@ dcgm_field_eid_t HelperEncodeLinkEntity(dcgm_field_entity_group_t entityType,
  *
  * @param[in] entityType   The type of entity (DCGM_FE_GPU or DCGM_FE_SWITCH)
  * @param[in] entityId     The ID of the parent entity (GPU ID or Switch ID)
- * @param[in] linkStates   Array of link states for each port
- * @param[in] numLinks     Number of links in the array
+ * @param[in] linkStates        Array of link states for each port
+ * @param[in] numLinks          Number of links in the array
+ * @param[in] termWidthOverride Optional effective display width to use instead of the live terminal
+ *                              (the live path derives this as 80% of the terminal's columns).
+ *                              Intended for deterministic tests; the minimum-width floor still
+ *                              applies. When std::nullopt, the live terminal size is used.
  * @return Formatted string containing entity IDs for supported links
  *****************************************************************************/
 std::string HelperFormatLinkEntityIds(dcgm_field_entity_group_t entityType,
                                       dcgm_field_eid_t entityId,
                                       const dcgmNvLinkLinkState_t *linkStates,
-                                      unsigned int numLinks);
+                                      unsigned int numLinks,
+                                      std::optional<std::uint16_t> termWidthOverride = std::nullopt);
 
 namespace DcgmNs::Dcgmi::NvlinkDetail
 {

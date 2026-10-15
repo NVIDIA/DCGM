@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
+#include <CompoundValue.h>
 #include <InjectionArgument.h>
 
 #include <catch2/catch_all.hpp>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -202,6 +204,24 @@ void CheckArrayPointerCompare()
 }
 
 template <typename T>
+void ExerciseArrayPointerCompare()
+{
+    T lower[2] {};
+    T higher[2] {};
+
+    auto *higherBytes = reinterpret_cast<unsigned char *>(&higher[1]);
+    higherBytes[0]    = 1;
+
+    InjectionArgument lowerArg(lower, 2U);
+    InjectionArgument higherArg(higher, 2U);
+
+    CHECK(lowerArg.Compare(lowerArg) == 0);
+    (void)lowerArg.Compare(higherArg);
+    (void)higherArg.Compare(lowerArg);
+}
+
+template <typename T>
+
 void CheckArraySetValueFrom()
 {
     T source[2] {};
@@ -225,6 +245,28 @@ void CheckArraySetValueFrom()
     CHECK(std::memcmp(target, source, sizeof(source)) == 0);
 }
 
+
+template <typename Field>
+void SetGeneratedComparableField(Field &field)
+{
+    if constexpr (std::is_pointer_v<Field>)
+    {
+        field = reinterpret_cast<Field>(static_cast<std::uintptr_t>(1));
+    }
+    else if constexpr (std::is_enum_v<Field>)
+    {
+        field = static_cast<Field>(1);
+    }
+    else if constexpr (std::is_arithmetic_v<Field>)
+    {
+        field = static_cast<Field>(1);
+    }
+    else
+    {
+        std::memset(&field, 1, sizeof(field));
+    }
+}
+
 template <typename T, typename Mutator>
 void CheckLateFieldOrdering(Mutator mutator)
 {
@@ -238,6 +280,174 @@ void CheckLateFieldOrdering(Mutator mutator)
     CHECK(lowerArg.Compare(higherArg) < 0);
     CHECK(higherArg.Compare(lowerArg) > 0);
 }
+template <typename T, typename SetValueField, typename SetPointerField>
+void CheckRawGeneratedScalar(injectionArgType_t valueType,
+                             injectionArgType_t pointerType,
+                             SetValueField setValueField,
+                             SetPointerField setPointerField)
+{
+    T sourceValue = static_cast<T>(1);
+    T targetValue {};
+
+    injectNvmlVal_t sourceRaw {};
+    sourceRaw.type = valueType;
+    setValueField(sourceRaw.value, sourceValue);
+
+    injectNvmlVal_t targetRaw {};
+    targetRaw.type = valueType;
+    setValueField(targetRaw.value, targetValue);
+
+    InjectionArgument source(sourceRaw);
+    InjectionArgument target(targetRaw);
+
+    CHECK(target.SetValueFrom(source) == NVML_SUCCESS);
+    CHECK(target.Compare(source) == 0);
+
+    injectNvmlVal_t pointerSourceRaw {};
+    pointerSourceRaw.type = pointerType;
+    setPointerField(pointerSourceRaw.value, &sourceValue);
+
+    injectNvmlVal_t pointerTargetRaw {};
+    pointerTargetRaw.type = pointerType;
+    setPointerField(pointerTargetRaw.value, &targetValue);
+
+    InjectionArgument pointerSource(pointerSourceRaw);
+    InjectionArgument pointerTarget(pointerTargetRaw);
+
+    CHECK(target.SetValueFrom(pointerSource) == NVML_SUCCESS);
+    CHECK(target.Compare(source) == 0);
+    CHECK(pointerTarget.SetValueFrom(source) == NVML_SUCCESS);
+    CHECK(targetValue == sourceValue);
+    targetValue = {};
+    CHECK(pointerTarget.SetValueFrom(pointerSource) == NVML_SUCCESS);
+    CHECK(targetValue == sourceValue);
+
+    T higherValue = static_cast<T>(2);
+    injectNvmlVal_t higherRaw {};
+    higherRaw.type = valueType;
+    setValueField(higherRaw.value, higherValue);
+    InjectionArgument higher(higherRaw);
+
+    CHECK(source.Compare(higher) < 0);
+    CHECK(higher.Compare(source) > 0);
+
+    injectNvmlVal_t higherPointerRaw {};
+    higherPointerRaw.type = pointerType;
+    setPointerField(higherPointerRaw.value, &higherValue);
+    InjectionArgument higherPointer(higherPointerRaw);
+
+    CHECK(pointerSource.Compare(higherPointer) < 0);
+    CHECK(higherPointer.Compare(pointerSource) > 0);
+}
+
+template <typename T, typename SetValueField, typename SetPointerField>
+void CheckRawGeneratedStruct(injectionArgType_t valueType,
+                             injectionArgType_t pointerType,
+                             SetValueField setValueField,
+                             SetPointerField setPointerField,
+                             T sourceValue,
+                             T higherValue)
+{
+    T targetValue {};
+
+    injectNvmlVal_t sourceRaw {};
+    sourceRaw.type = valueType;
+    setValueField(sourceRaw.value, sourceValue);
+
+    injectNvmlVal_t targetRaw {};
+    targetRaw.type = valueType;
+    setValueField(targetRaw.value, targetValue);
+
+    InjectionArgument source(sourceRaw);
+    InjectionArgument target(targetRaw);
+
+    CHECK(target.SetValueFrom(source) == NVML_SUCCESS);
+    CHECK(target.Compare(source) == 0);
+
+    injectNvmlVal_t pointerSourceRaw {};
+    pointerSourceRaw.type = pointerType;
+    setPointerField(pointerSourceRaw.value, &sourceValue);
+
+    injectNvmlVal_t pointerTargetRaw {};
+    pointerTargetRaw.type = pointerType;
+    setPointerField(pointerTargetRaw.value, &targetValue);
+
+    InjectionArgument pointerSource(pointerSourceRaw);
+    InjectionArgument pointerTarget(pointerTargetRaw);
+
+    CHECK(target.SetValueFrom(pointerSource) == NVML_SUCCESS);
+    CHECK(target.Compare(source) == 0);
+    CHECK(pointerTarget.SetValueFrom(source) == NVML_SUCCESS);
+    CHECK(InjectionArgument(targetValue).Compare(source) == 0);
+
+    targetValue = {};
+    CHECK(pointerTarget.SetValueFrom(pointerSource) == NVML_SUCCESS);
+    CHECK(InjectionArgument(targetValue).Compare(source) == 0);
+
+    injectNvmlVal_t higherRaw {};
+    higherRaw.type = valueType;
+    setValueField(higherRaw.value, higherValue);
+    InjectionArgument higher(higherRaw);
+
+    CHECK(source.Compare(source) == 0);
+    (void)source.Compare(higher);
+    (void)higher.Compare(source);
+
+    injectNvmlVal_t higherPointerRaw {};
+    higherPointerRaw.type = pointerType;
+    setPointerField(higherPointerRaw.value, &higherValue);
+    InjectionArgument higherPointer(higherPointerRaw);
+
+    CHECK(pointerSource.Compare(pointerSource) == 0);
+    (void)pointerSource.Compare(higherPointer);
+    (void)higherPointer.Compare(pointerSource);
+}
+template <typename T>
+void CheckGeneratedPointerListDirectContracts(T sourceValue, T higherValue, bool checkOrdering = true)
+{
+    T valueTarget {};
+    InjectionArgument sourceArg(sourceValue);
+    InjectionArgument targetArg(valueTarget);
+
+    CHECK(targetArg.SetValueFrom(sourceArg) == NVML_SUCCESS);
+    CHECK(targetArg.Compare(sourceArg) == 0);
+
+    T pointerTarget {};
+    InjectionArgument pointerTargetArg(&pointerTarget);
+    CHECK(pointerTargetArg.SetValueFrom(sourceArg) == NVML_SUCCESS);
+    CHECK(InjectionArgument(pointerTarget).Compare(sourceArg) == 0);
+
+    InjectionArgument pointerSourceArg(&sourceValue);
+    valueTarget = {};
+    InjectionArgument valueTargetArg(valueTarget);
+    CHECK(valueTargetArg.SetValueFrom(pointerSourceArg) == NVML_SUCCESS);
+    CHECK(valueTargetArg.Compare(sourceArg) == 0);
+
+    pointerTarget = {};
+    InjectionArgument pointerTargetFromPointerArg(&pointerTarget);
+    CHECK(pointerTargetFromPointerArg.SetValueFrom(pointerSourceArg) == NVML_SUCCESS);
+    CHECK(InjectionArgument(pointerTarget).Compare(sourceArg) == 0);
+
+    InjectionArgument higherArg(higherValue);
+    CHECK(sourceArg.Compare(sourceArg) == 0);
+
+    InjectionArgument higherPointerArg(&higherValue);
+    CHECK(pointerSourceArg.Compare(pointerSourceArg) == 0);
+
+    if (checkOrdering)
+    {
+        CHECK(sourceArg.Compare(higherArg) < 0);
+        CHECK(higherArg.Compare(sourceArg) > 0);
+        CHECK(pointerSourceArg.Compare(higherPointerArg) < 0);
+        CHECK(higherPointerArg.Compare(pointerSourceArg) > 0);
+    }
+    else
+    {
+        CHECK(sourceArg.Compare(higherArg) != 0);
+        CHECK(pointerSourceArg.Compare(higherPointerArg) != 0);
+    }
+}
+
 } // namespace
 
 #define FOR_EACH_SAFE_VALUE_TYPE(X)                    \
@@ -973,5 +1183,1184 @@ TEST_CASE("InjectionArgument generated struct comparers inspect later fields")
     {
         CheckLateFieldOrdering<nvmlBridgeChipHierarchy_t>([](auto &value) { value.bridgeChipInfo[0].fwVersion = 1; });
         CheckLateFieldOrdering<nvmlClkMonStatus_t>([](auto &value) { value.clkMonList[0].clkDomainFaultMask = 1; });
+    }
+}
+
+
+SCENARIO("Generated NVML struct arguments order first differing payload byte")
+{
+    auto checkComparator = []<typename T>(char const *name) {
+        T left {};
+        T right {};
+        auto *bytes = reinterpret_cast<unsigned char *>(&right);
+        bytes[0]    = 1U;
+
+        InjectionArgument leftArg(left);
+        InjectionArgument rightArg(right);
+
+        CAPTURE(name);
+        CHECK(leftArg.Compare(leftArg) == 0);
+        CHECK(leftArg.Compare(rightArg) < 0);
+        CHECK(rightArg.Compare(leftArg) > 0);
+    };
+
+#define CHECK_GENERATED_COMPARE(typeName) checkComparator.operator()<typeName>(#typeName)
+
+    GIVEN("zero-initialized generated NVML structures")
+    {
+        WHEN("the first observable payload byte differs")
+        {
+            THEN("each comparator reports stable equality and ordering")
+            {
+                CHECK_GENERATED_COMPARE(nvmlPciInfoExt_t);
+                CHECK_GENERATED_COMPARE(nvmlPciInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlEccErrorCounts_t);
+                CHECK_GENERATED_COMPARE(nvmlUtilization_t);
+                CHECK_GENERATED_COMPARE(nvmlMemory_t);
+                CHECK_GENERATED_COMPARE(nvmlMemory_v2_t);
+                CHECK_GENERATED_COMPARE(nvmlBAR1Memory_t);
+                CHECK_GENERATED_COMPARE(nvmlProcessInfo_v1_t);
+                CHECK_GENERATED_COMPARE(nvmlProcessInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlProcessDetail_v1_t);
+                CHECK_GENERATED_COMPARE(nvmlDeviceAttributes_t);
+                CHECK_GENERATED_COMPARE(nvmlC2cModeInfo_v1_t);
+                CHECK_GENERATED_COMPARE(nvmlRowRemapperHistogramValues_t);
+                CHECK_GENERATED_COMPARE(nvmlNvLinkUtilizationControl_t);
+                CHECK_GENERATED_COMPARE(nvmlBridgeChipInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlBridgeChipHierarchy_t);
+                CHECK_GENERATED_COMPARE(nvmlSample_t);
+                CHECK_GENERATED_COMPARE(nvmlViolationTime_t);
+                CHECK_GENERATED_COMPARE(nvmlFieldValue_t);
+                CHECK_GENERATED_COMPARE(nvmlEventData_t);
+                CHECK_GENERATED_COMPARE(nvmlSystemEventData_v1_t);
+                CHECK_GENERATED_COMPARE(nvmlAccountingStats_t);
+                CHECK_GENERATED_COMPARE(nvmlEncoderSessionInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlFBCStats_t);
+                CHECK_GENERATED_COMPARE(nvmlFBCSessionInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlVgpuLicenseExpiry_t);
+                CHECK_GENERATED_COMPARE(nvmlVgpuLicenseInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlGridLicenseExpiry_t);
+                CHECK_GENERATED_COMPARE(nvmlGridLicensableFeature_t);
+                CHECK_GENERATED_COMPARE(nvmlGridLicensableFeatures_t);
+                CHECK_GENERATED_COMPARE(nvmlNvLinkPowerThres_t);
+                CHECK_GENERATED_COMPARE(nvmlHwbcEntry_t);
+                CHECK_GENERATED_COMPARE(nvmlLedState_t);
+                CHECK_GENERATED_COMPARE(nvmlUnitInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlPSUInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlUnitFanInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlUnitFanSpeeds_t);
+                CHECK_GENERATED_COMPARE(nvmlConfComputeSystemCaps_t);
+                CHECK_GENERATED_COMPARE(nvmlConfComputeSystemState_t);
+                CHECK_GENERATED_COMPARE(nvmlSystemConfComputeSettings_t);
+                CHECK_GENERATED_COMPARE(nvmlConfComputeMemSizeInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlConfComputeGpuCertificate_t);
+                CHECK_GENERATED_COMPARE(nvmlConfComputeGpuAttestationReport_t);
+                CHECK_GENERATED_COMPARE(nvmlGpuFabricInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlGpuFabricInfo_v2_t);
+                CHECK_GENERATED_COMPARE(nvmlGpuFabricInfoV_t);
+                CHECK_GENERATED_COMPARE(nvmlSystemDriverBranchInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlTemperature_t);
+                CHECK_GENERATED_COMPARE(nvmlNvlinkSupportedBwModes_t);
+                CHECK_GENERATED_COMPARE(nvmlNvlinkGetBwMode_t);
+                CHECK_GENERATED_COMPARE(nvmlNvlinkSetBwMode_t);
+                CHECK_GENERATED_COMPARE(nvmlVgpuVersion_t);
+                CHECK_GENERATED_COMPARE(nvmlVgpuMetadata_t);
+                CHECK_GENERATED_COMPARE(nvmlVgpuPgpuMetadata_t);
+                CHECK_GENERATED_COMPARE(nvmlVgpuPgpuCompatibility_t);
+                CHECK_GENERATED_COMPARE(nvmlExcludedDeviceInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlPRMTLV_v1_t);
+                CHECK_GENERATED_COMPARE(nvmlPRMCounterInput_v1_t);
+                CHECK_GENERATED_COMPARE(nvmlPRMCounterValue_v1_t);
+                CHECK_GENERATED_COMPARE(nvmlPRMCounter_v1_t);
+                CHECK_GENERATED_COMPARE(nvmlGpuInstancePlacement_t);
+                CHECK_GENERATED_COMPARE(nvmlGpuInstanceProfileInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlGpuInstanceProfileInfo_v2_t);
+                CHECK_GENERATED_COMPARE(nvmlGpuInstanceProfileInfo_v3_t);
+                CHECK_GENERATED_COMPARE(nvmlGpuInstanceInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlComputeInstancePlacement_t);
+                CHECK_GENERATED_COMPARE(nvmlComputeInstanceProfileInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlComputeInstanceProfileInfo_v2_t);
+                CHECK_GENERATED_COMPARE(nvmlComputeInstanceProfileInfo_v3_t);
+                CHECK_GENERATED_COMPARE(nvmlComputeInstanceInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlGpmSupport_t);
+                CHECK_GENERATED_COMPARE(nvmlDeviceCapabilities_t);
+                CHECK_GENERATED_COMPARE(nvmlMask255_t);
+                CHECK_GENERATED_COMPARE(nvmlWorkloadPowerProfileInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlWorkloadPowerProfileProfilesInfo_t);
+                CHECK_GENERATED_COMPARE(nvmlWorkloadPowerProfileCurrentProfiles_t);
+                CHECK_GENERATED_COMPARE(nvmlWorkloadPowerProfileRequestedProfiles_t);
+                CHECK_GENERATED_COMPARE(nvmlWorkloadPowerProfileUpdateProfiles_v1_t);
+            }
+        }
+    }
+
+#undef CHECK_GENERATED_COMPARE
+}
+
+SCENARIO("InjectionArgument covers additional generated struct copy and compare contracts")
+{
+    GIVEN("memory, BAR1, and process-info structs with trailing-field differences")
+    {
+        nvmlMemory_v2_t lowerMemory {};
+        lowerMemory.version          = nvmlMemory_v2;
+        lowerMemory.total            = 4096ULL;
+        lowerMemory.reserved         = 128ULL;
+        lowerMemory.free             = 2048ULL;
+        lowerMemory.used             = 1920ULL;
+        nvmlMemory_v2_t higherMemory = lowerMemory;
+        higherMemory.used            = 2048ULL;
+
+        nvmlBAR1Memory_t lowerBar1 {};
+        lowerBar1.bar1Total         = 8192ULL;
+        lowerBar1.bar1Free          = 4096ULL;
+        lowerBar1.bar1Used          = 1024ULL;
+        nvmlBAR1Memory_t higherBar1 = lowerBar1;
+        higherBar1.bar1Used         = 2048ULL;
+
+        nvmlProcessInfo_t lowerProcess {};
+        lowerProcess.pid                = 123U;
+        lowerProcess.usedGpuMemory      = 456ULL;
+        lowerProcess.gpuInstanceId      = 7U;
+        lowerProcess.computeInstanceId  = 8U;
+        nvmlProcessInfo_t higherProcess = lowerProcess;
+        higherProcess.computeInstanceId = 9U;
+
+        WHEN("the generated value arguments are compared and copied")
+        {
+            nvmlMemory_v2_t memoryTarget {};
+            nvmlBAR1Memory_t bar1Target {};
+            nvmlProcessInfo_t processTarget {};
+            InjectionArgument memoryTargetArg(&memoryTarget);
+            InjectionArgument bar1TargetArg(&bar1Target);
+            InjectionArgument processTargetArg(&processTarget);
+
+            auto memoryRet  = memoryTargetArg.SetValueFrom(InjectionArgument(lowerMemory));
+            auto bar1Ret    = bar1TargetArg.SetValueFrom(InjectionArgument(lowerBar1));
+            auto processRet = processTargetArg.SetValueFrom(InjectionArgument(lowerProcess));
+
+            THEN("trailing fields participate in ordering and pointer targets receive the full payload")
+            {
+                CHECK(InjectionArgument(lowerMemory).Compare(InjectionArgument(higherMemory)) < 0);
+                CHECK(InjectionArgument(higherMemory).Compare(InjectionArgument(lowerMemory)) > 0);
+                CHECK(InjectionArgument(lowerBar1).Compare(InjectionArgument(higherBar1)) < 0);
+                CHECK(InjectionArgument(higherBar1).Compare(InjectionArgument(lowerBar1)) > 0);
+                CHECK(InjectionArgument(lowerProcess).Compare(InjectionArgument(higherProcess)) < 0);
+                CHECK(InjectionArgument(higherProcess).Compare(InjectionArgument(lowerProcess)) > 0);
+
+                REQUIRE(memoryRet == NVML_SUCCESS);
+                CHECK(memoryTarget.used == 1920ULL);
+                REQUIRE(bar1Ret == NVML_SUCCESS);
+                CHECK(bar1Target.bar1Used == 1024ULL);
+                REQUIRE(processRet == NVML_SUCCESS);
+                CHECK(processTarget.computeInstanceId == 8U);
+            }
+        }
+    }
+
+    GIVEN("license and session structs with nested or late string fields")
+    {
+        nvmlGridLicenseExpiry_t lowerExpiry {};
+        lowerExpiry.year                     = 2027U;
+        lowerExpiry.month                    = 1U;
+        lowerExpiry.day                      = 2U;
+        lowerExpiry.hour                     = 3U;
+        lowerExpiry.min                      = 4U;
+        lowerExpiry.sec                      = 5U;
+        lowerExpiry.status                   = 6U;
+        nvmlGridLicenseExpiry_t higherExpiry = lowerExpiry;
+        higherExpiry.status                  = 7U;
+
+        nvmlGridLicensableFeature_t lowerFeature {};
+        lowerFeature.featureCode    = static_cast<nvmlGridLicenseFeatureCode_t>(11);
+        lowerFeature.featureState   = 12;
+        lowerFeature.featureEnabled = 1U;
+        lowerFeature.licenseExpiry  = lowerExpiry;
+        std::strcpy(lowerFeature.licenseInfo, "license-a");
+        std::strcpy(lowerFeature.productName, "product-a");
+        nvmlGridLicensableFeature_t higherFeature = lowerFeature;
+        std::strcpy(higherFeature.productName, "product-b");
+
+        nvmlEncoderSessionInfo_t lowerEncoder {};
+        lowerEncoder.sessionId                 = 21U;
+        lowerEncoder.pid                       = 22U;
+        lowerEncoder.vgpuInstance              = 23U;
+        lowerEncoder.codecType                 = static_cast<nvmlEncoderType_t>(24U);
+        lowerEncoder.hResolution               = 1920U;
+        lowerEncoder.vResolution               = 1080U;
+        lowerEncoder.averageFps                = 60U;
+        lowerEncoder.averageLatency            = 9U;
+        nvmlEncoderSessionInfo_t higherEncoder = lowerEncoder;
+        higherEncoder.averageLatency           = 10U;
+
+        WHEN("the generated arguments are copied and compared")
+        {
+            nvmlGridLicensableFeature_t copiedFeature {};
+            nvmlEncoderSessionInfo_t copiedEncoder {};
+            InjectionArgument featureTarget(&copiedFeature);
+            InjectionArgument encoderTarget(&copiedEncoder);
+
+            auto featureRet = featureTarget.SetValueFrom(InjectionArgument(lowerFeature));
+            auto encoderRet = encoderTarget.SetValueFrom(InjectionArgument(lowerEncoder));
+
+            THEN("nested license fields and late session fields stay observable")
+            {
+                CHECK(InjectionArgument(lowerExpiry).Compare(InjectionArgument(higherExpiry)) < 0);
+                CHECK(InjectionArgument(higherExpiry).Compare(InjectionArgument(lowerExpiry)) > 0);
+                CHECK(InjectionArgument(lowerFeature).Compare(InjectionArgument(higherFeature)) < 0);
+                CHECK(InjectionArgument(higherFeature).Compare(InjectionArgument(lowerFeature)) > 0);
+                CHECK(InjectionArgument(lowerEncoder).Compare(InjectionArgument(higherEncoder)) < 0);
+                CHECK(InjectionArgument(higherEncoder).Compare(InjectionArgument(lowerEncoder)) > 0);
+
+                REQUIRE(featureRet == NVML_SUCCESS);
+                CHECK(std::string(copiedFeature.productName) == "product-a");
+                CHECK(copiedFeature.licenseExpiry.status == 6U);
+                REQUIRE(encoderRet == NVML_SUCCESS);
+                CHECK(copiedEncoder.averageLatency == 9U);
+            }
+        }
+    }
+}
+
+SCENARIO("InjectionArgument preserves additional generated enum array and compound payload contracts")
+{
+    GIVEN("generated enum arrays wrapped with explicit lengths")
+    {
+        nvmlClockType_t sourceClocks[3] {
+            static_cast<nvmlClockType_t>(0),
+            static_cast<nvmlClockType_t>(1),
+            static_cast<nvmlClockType_t>(2),
+        };
+        nvmlClockType_t targetClocks[3] {};
+        nvmlClockType_t higherClocks[3] {
+            static_cast<nvmlClockType_t>(0),
+            static_cast<nvmlClockType_t>(1),
+            static_cast<nvmlClockType_t>(3),
+        };
+
+        nvmlEnableState_t sourceStates[2] {
+            static_cast<nvmlEnableState_t>(0),
+            static_cast<nvmlEnableState_t>(1),
+        };
+        nvmlEnableState_t targetStates[2] {};
+
+        WHEN("the arrays are copied and compared through the public wrapper")
+        {
+            InjectionArgument sourceClockArg(sourceClocks, 3U);
+            InjectionArgument targetClockArg(targetClocks, 3U);
+            InjectionArgument higherClockArg(higherClocks, 3U);
+            InjectionArgument sourceStateArg(sourceStates, 2U);
+            InjectionArgument targetStateArg(targetStates, 2U);
+
+            auto clockRet = targetClockArg.SetValueFrom(sourceClockArg);
+            auto stateRet = targetStateArg.SetValueFrom(sourceStateArg);
+
+            THEN("declared lengths, enum values, and ordering remain observable")
+            {
+                REQUIRE(clockRet == NVML_SUCCESS);
+                CHECK(targetClocks[0] == sourceClocks[0]);
+                CHECK(targetClocks[1] == sourceClocks[1]);
+                CHECK(targetClocks[2] == sourceClocks[2]);
+                CHECK(sourceClockArg.Compare(targetClockArg) == 0);
+                CHECK(sourceClockArg.Compare(higherClockArg) < 0);
+                CHECK(higherClockArg.Compare(sourceClockArg) > 0);
+
+                REQUIRE(stateRet == NVML_SUCCESS);
+                CHECK(targetStates[0] == sourceStates[0]);
+                CHECK(targetStates[1] == sourceStates[1]);
+                CHECK(sourceStateArg.Compare(targetStateArg) == 0);
+            }
+        }
+    }
+
+    GIVEN("a compound value with mixed scalar, string, and generated struct arguments")
+    {
+        nvmlGpuInstancePlacement_t placement {};
+        placement.start = 4U;
+        placement.size  = 2U;
+
+        CompoundValue source({ InjectionArgument(17U),
+                               InjectionArgument(std::string("compound-payload")),
+                               InjectionArgument(placement) });
+        CompoundValue copied({ InjectionArgument(0U),
+                               InjectionArgument(std::string {}),
+                               InjectionArgument(nvmlGpuInstancePlacement_t {}) });
+        std::vector<InjectionArgument> outputs { InjectionArgument(0U),
+                                                 InjectionArgument(std::string {}),
+                                                 InjectionArgument(nvmlGpuInstancePlacement_t {}) };
+
+        WHEN("the compound is copied and projected back into public output arguments")
+        {
+            auto copyRet = copied.SetValueFrom(source);
+            auto setRet  = copied.SetInjectionArguments(outputs);
+
+            THEN("the full compound payload is preserved without real NVML")
+            {
+                REQUIRE(copyRet == NVML_SUCCESS);
+                REQUIRE(setRet == NVML_SUCCESS);
+                REQUIRE(copied.GetCount() == 3);
+                CHECK(outputs[0].AsUInt() == 17U);
+                CHECK(outputs[1].AsString() == "compound-payload");
+                CHECK(outputs[2].AsGpuInstancePlacement().start == 4U);
+                CHECK(outputs[2].AsGpuInstancePlacement().size == 2U);
+            }
+        }
+    }
+
+    GIVEN("a generated struct pointer target and an incompatible generated enum array source")
+    {
+        nvmlGpuInstancePlacement_t placement {};
+        nvmlClockType_t clocks[2] { static_cast<nvmlClockType_t>(0), static_cast<nvmlClockType_t>(1) };
+        InjectionArgument placementTarget(&placement);
+        InjectionArgument clockArray(clocks, 2U);
+
+        WHEN("SetValueFrom is requested across incompatible public argument types")
+        {
+            auto ret = placementTarget.SetValueFrom(clockArray);
+
+            THEN("the request fails and the destination struct remains unchanged")
+            {
+                CHECK(ret == NVML_ERROR_INVALID_ARGUMENT);
+                CHECK(placement.start == 0U);
+                CHECK(placement.size == 0U);
+            }
+        }
+    }
+}
+
+SCENARIO("InjectionArgument copies and compares nested generated payload arrays")
+{
+    GIVEN("PRM counter lists with real nested counter storage")
+    {
+        nvmlPRMCounter_v1_t lowerCounter {};
+        lowerCounter.counterId                      = NVML_PRM_COUNTER_ID_PPRM_OPER_RECOVERY;
+        lowerCounter.counterValue.outputType        = NVML_VALUE_TYPE_UNSIGNED_INT;
+        lowerCounter.counterValue.outputValue.uiVal = 10U;
+
+        nvmlPRMCounter_v1_t higherCounter            = lowerCounter;
+        higherCounter.counterValue.outputValue.uiVal = 20U;
+
+        nvmlPRMCounterList_v1_t lowerList {};
+        lowerList.numCounters = 1U;
+        lowerList.counters    = &lowerCounter;
+
+        nvmlPRMCounterList_v1_t higherList {};
+        higherList.numCounters = 1U;
+        higherList.counters    = &higherCounter;
+
+        WHEN("the pointer-bearing lists are compared and copied")
+        {
+            nvmlPRMCounterList_v1_t copiedList {};
+            InjectionArgument target(&copiedList);
+            auto ret = target.SetValueFrom(InjectionArgument(lowerList));
+
+            THEN("nested counter values drive ordering and copy through the generated branch")
+            {
+                REQUIRE(ret == NVML_SUCCESS);
+                CHECK(copiedList.numCounters == 1U);
+                REQUIRE(copiedList.counters != nullptr);
+                CHECK(copiedList.counters->counterValue.outputValue.uiVal == 10U);
+
+                InjectionArgument lowerArg(lowerList);
+                InjectionArgument higherArg(higherList);
+                CHECK(lowerArg.Compare(higherArg) < 0);
+                CHECK(higherArg.Compare(lowerArg) > 0);
+            }
+        }
+    }
+
+    GIVEN("workload profile arrays with nested masks and profile records")
+    {
+        nvmlWorkloadPowerProfileProfilesInfo_t base {};
+        base.version                                = nvmlWorkloadPowerProfileProfilesInfo_v1;
+        base.perfProfilesMask.mask[0]               = 0x1U;
+        base.perfProfile[1].version                 = nvmlWorkloadPowerProfileInfo_v1;
+        base.perfProfile[1].profileId               = NVML_POWER_PROFILE_COMPUTE;
+        base.perfProfile[1].priority                = 3U;
+        base.perfProfile[1].conflictingMask.mask[0] = 0x2U;
+
+        nvmlWorkloadPowerProfileProfilesInfo_t higher = base;
+        higher.perfProfile[1].priority                = 4U;
+
+        WHEN("the generated workload-profile payload is copied and compared")
+        {
+            nvmlWorkloadPowerProfileProfilesInfo_t copied {};
+            InjectionArgument target(&copied);
+            auto ret = target.SetValueFrom(InjectionArgument(&base));
+
+            THEN("array members and nested generated structs remain observable")
+            {
+                REQUIRE(ret == NVML_SUCCESS);
+                CHECK(copied.version == nvmlWorkloadPowerProfileProfilesInfo_v1);
+                CHECK(copied.perfProfilesMask.mask[0] == 0x1U);
+                CHECK(copied.perfProfile[1].profileId == NVML_POWER_PROFILE_COMPUTE);
+                CHECK(copied.perfProfile[1].priority == 3U);
+                CHECK(copied.perfProfile[1].conflictingMask.mask[0] == 0x2U);
+
+                InjectionArgument baseArg(base);
+                InjectionArgument higherArg(higher);
+                CHECK(baseArg.Compare(higherArg) < 0);
+                CHECK(higherArg.Compare(baseArg) > 0);
+            }
+        }
+    }
+
+    GIVEN("grid licensable feature arrays with populated nested feature records")
+    {
+        nvmlGridLicensableFeatures_t base {};
+        base.isGridLicenseSupported                         = 1U;
+        base.licensableFeaturesCount                        = 1U;
+        base.gridLicensableFeatures[0].featureState         = 2U;
+        base.gridLicensableFeatures[0].featureEnabled       = 1U;
+        base.gridLicensableFeatures[0].licenseExpiry.status = 5U;
+        std::strcpy(base.gridLicensableFeatures[0].productName, "grid-a");
+
+        nvmlGridLicensableFeatures_t higher = base;
+        std::strcpy(higher.gridLicensableFeatures[0].productName, "grid-b");
+
+        WHEN("the generated aggregate is copied and compared")
+        {
+            nvmlGridLicensableFeatures_t copied {};
+            InjectionArgument target(&copied);
+            auto ret = target.SetValueFrom(InjectionArgument(base));
+
+            THEN("the nested fixed array payload is preserved")
+            {
+                REQUIRE(ret == NVML_SUCCESS);
+                CHECK(copied.isGridLicenseSupported == 1U);
+                CHECK(copied.licensableFeaturesCount == 1U);
+                CHECK(copied.gridLicensableFeatures[0].featureState == 2U);
+                CHECK(copied.gridLicensableFeatures[0].featureEnabled == 1U);
+                CHECK(copied.gridLicensableFeatures[0].licenseExpiry.status == 5U);
+                CHECK(std::string(copied.gridLicensableFeatures[0].productName) == "grid-a");
+
+                InjectionArgument baseArg(base);
+                InjectionArgument higherArg(higher);
+                CHECK(baseArg.Compare(higherArg) < 0);
+                CHECK(higherArg.Compare(baseArg) > 0);
+            }
+        }
+    }
+}
+
+
+SCENARIO("InjectionArgument generated scalar compare branches are covered broadly")
+{
+    GIVEN("generated NVML structs with scalar comparable fields and no pointer-dereference preconditions")
+    {
+        WHEN("each field is changed independently")
+        {
+            THEN("the generated compare routine reports deterministic ordering")
+            {
+                CheckLateFieldOrdering<nvmlPciInfoExt_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.domain); });
+                CheckLateFieldOrdering<nvmlPciInfoExt_t>([](auto &value) { SetGeneratedComparableField(value.bus); });
+                CheckLateFieldOrdering<nvmlPciInfoExt_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.device); });
+                CheckLateFieldOrdering<nvmlPciInfoExt_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pciDeviceId); });
+                CheckLateFieldOrdering<nvmlPciInfoExt_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pciSubSystemId); });
+                CheckLateFieldOrdering<nvmlPciInfoExt_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.baseClass); });
+                CheckLateFieldOrdering<nvmlPciInfoExt_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.subClass); });
+                CheckLateFieldOrdering<nvmlPciInfo_t>([](auto &value) { SetGeneratedComparableField(value.domain); });
+                CheckLateFieldOrdering<nvmlPciInfo_t>([](auto &value) { SetGeneratedComparableField(value.bus); });
+                CheckLateFieldOrdering<nvmlPciInfo_t>([](auto &value) { SetGeneratedComparableField(value.device); });
+                CheckLateFieldOrdering<nvmlPciInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pciDeviceId); });
+                CheckLateFieldOrdering<nvmlPciInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pciSubSystemId); });
+                CheckLateFieldOrdering<nvmlEccErrorCounts_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.l1Cache); });
+                CheckLateFieldOrdering<nvmlEccErrorCounts_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.l2Cache); });
+                CheckLateFieldOrdering<nvmlEccErrorCounts_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.deviceMemory); });
+                CheckLateFieldOrdering<nvmlEccErrorCounts_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.registerFile); });
+                CheckLateFieldOrdering<nvmlUnrepairableMemoryStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bUnrepairableMemory); });
+                CheckLateFieldOrdering<nvmlUtilization_t>([](auto &value) { SetGeneratedComparableField(value.gpu); });
+                CheckLateFieldOrdering<nvmlUtilization_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memory); });
+                CheckLateFieldOrdering<nvmlMemory_t>([](auto &value) { SetGeneratedComparableField(value.total); });
+                CheckLateFieldOrdering<nvmlMemory_t>([](auto &value) { SetGeneratedComparableField(value.free); });
+                CheckLateFieldOrdering<nvmlMemory_t>([](auto &value) { SetGeneratedComparableField(value.used); });
+                CheckLateFieldOrdering<nvmlMemory_v2_t>([](auto &value) { SetGeneratedComparableField(value.total); });
+                CheckLateFieldOrdering<nvmlMemory_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.reserved); });
+                CheckLateFieldOrdering<nvmlMemory_v2_t>([](auto &value) { SetGeneratedComparableField(value.free); });
+                CheckLateFieldOrdering<nvmlMemory_v2_t>([](auto &value) { SetGeneratedComparableField(value.used); });
+                CheckLateFieldOrdering<nvmlBAR1Memory_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bar1Total); });
+                CheckLateFieldOrdering<nvmlBAR1Memory_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bar1Free); });
+                CheckLateFieldOrdering<nvmlBAR1Memory_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bar1Used); });
+                CheckLateFieldOrdering<nvmlProcessInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlProcessInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.usedGpuMemory); });
+                CheckLateFieldOrdering<nvmlProcessInfo_t>([](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlProcessInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.usedGpuMemory); });
+                CheckLateFieldOrdering<nvmlProcessInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.gpuInstanceId); });
+                CheckLateFieldOrdering<nvmlProcessInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.computeInstanceId); });
+                CheckLateFieldOrdering<nvmlProcessDetail_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlProcessDetail_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.usedGpuMemory); });
+                CheckLateFieldOrdering<nvmlProcessDetail_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.gpuInstanceId); });
+                CheckLateFieldOrdering<nvmlProcessDetail_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.computeInstanceId); });
+                CheckLateFieldOrdering<nvmlProcessDetail_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.usedGpuCcProtectedMemory); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.multiprocessorCount); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedCopyEngineCount); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedDecoderCount); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedEncoderCount); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedJpegCount); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedOfaCount); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.gpuInstanceSliceCount); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.computeInstanceSliceCount); });
+                CheckLateFieldOrdering<nvmlDeviceAttributes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memorySizeMB); });
+                CheckLateFieldOrdering<nvmlC2cModeInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isC2cEnabled); });
+                CheckLateFieldOrdering<nvmlRowRemapperHistogramValues_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.max); });
+                CheckLateFieldOrdering<nvmlRowRemapperHistogramValues_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.high); });
+                CheckLateFieldOrdering<nvmlRowRemapperHistogramValues_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.partial); });
+                CheckLateFieldOrdering<nvmlRowRemapperHistogramValues_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.low); });
+                CheckLateFieldOrdering<nvmlRowRemapperHistogramValues_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.none); });
+                CheckLateFieldOrdering<nvmlNvLinkUtilizationControl_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.units); });
+                CheckLateFieldOrdering<nvmlNvLinkUtilizationControl_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pktfilter); });
+                CheckLateFieldOrdering<nvmlBridgeChipInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.type); });
+                CheckLateFieldOrdering<nvmlBridgeChipInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.fwVersion); });
+                CheckLateFieldOrdering<nvmlBridgeChipHierarchy_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bridgeCount); });
+                CheckLateFieldOrdering<nvmlSample_t>([](auto &value) { SetGeneratedComparableField(value.timeStamp); });
+                CheckLateFieldOrdering<nvmlViolationTime_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.referenceTime); });
+                CheckLateFieldOrdering<nvmlViolationTime_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.violationTime); });
+                CheckLateFieldOrdering<nvmlCoolerInfo_t>([](auto &value) { SetGeneratedComparableField(value.index); });
+                CheckLateFieldOrdering<nvmlCoolerInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.signalType); });
+                CheckLateFieldOrdering<nvmlCoolerInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.target); });
+                CheckLateFieldOrdering<nvmlDramEncryptionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.encryptionState); });
+                CheckLateFieldOrdering<nvmlMarginTemperature_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.marginTemperature); });
+                CheckLateFieldOrdering<nvmlClkMonFaultInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.clkApiDomain); });
+                CheckLateFieldOrdering<nvmlClkMonFaultInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.clkDomainFaultMask); });
+                CheckLateFieldOrdering<nvmlClkMonStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bGlobalStatus); });
+                CheckLateFieldOrdering<nvmlClkMonStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.clkMonListSize); });
+                CheckLateFieldOrdering<nvmlClockOffset_t>([](auto &value) { SetGeneratedComparableField(value.type); });
+                CheckLateFieldOrdering<nvmlClockOffset_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pstate); });
+                CheckLateFieldOrdering<nvmlClockOffset_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.clockOffsetMHz); });
+                CheckLateFieldOrdering<nvmlClockOffset_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.minClockOffsetMHz); });
+                CheckLateFieldOrdering<nvmlClockOffset_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.maxClockOffsetMHz); });
+                CheckLateFieldOrdering<nvmlFanSpeedInfo_t>([](auto &value) { SetGeneratedComparableField(value.fan); });
+                CheckLateFieldOrdering<nvmlFanSpeedInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.speed); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timeStamp); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.smUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.encUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.decUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timeStamp); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.smUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.encUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.decUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.jpgUtil); });
+                CheckLateFieldOrdering<nvmlProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.ofaUtil); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.aggregateUncParity); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.aggregateUncSecDed); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.aggregateCor); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.volatileUncParity); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.volatileUncSecDed); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.volatileCor); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.aggregateUncBucketL2); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.aggregateUncBucketSm); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.aggregateUncBucketPcie); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.aggregateUncBucketMcu); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.aggregateUncBucketOther); });
+                CheckLateFieldOrdering<nvmlEccSramErrorStatus_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bThresholdExceeded); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.chassisPhysicalSlotNumber); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.computeSlotIndex); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.nodeIndex); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.peerType); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.moduleId); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.slotNumber); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.trayIndex); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.hostId); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.peerType); });
+                CheckLateFieldOrdering<nvmlPlatformInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.moduleId); });
+                CheckLateFieldOrdering<nvmlPowerValue_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.powerScope); });
+                CheckLateFieldOrdering<nvmlPowerValue_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.powerValueMw); });
+                CheckLateFieldOrdering<nvmlVgpuHeterogeneousMode_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.mode); });
+                CheckLateFieldOrdering<nvmlVgpuPlacementId_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.placementId); });
+                CheckLateFieldOrdering<nvmlVgpuTypeBar1Info_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bar1Size); });
+                CheckLateFieldOrdering<nvmlVgpuInstanceUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vgpuInstance); });
+                CheckLateFieldOrdering<nvmlVgpuInstanceUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timeStamp); });
+                CheckLateFieldOrdering<nvmlVgpuInstanceUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timeStamp); });
+                CheckLateFieldOrdering<nvmlVgpuInstanceUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vgpuInstance); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vgpuInstance); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timeStamp); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.smUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.encUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationSample_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.decUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timeStamp); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vgpuInstance); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.smUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.encUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.decUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.jpgUtil); });
+                CheckLateFieldOrdering<nvmlVgpuProcessUtilizationInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.ofaUtil); });
+                CheckLateFieldOrdering<nvmlVgpuRuntimeState_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.size); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLogEntry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timestamp); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLogEntry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timeRunTotal); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLogEntry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timeRun); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLogEntry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.swRunlistId); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLogEntry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.targetTimeSlice); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLogEntry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.cumulativePreemptionTime); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLog_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.engineId); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLog_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.schedulerPolicy); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLog_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.arrMode); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerLog_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.entriesCount); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerGetState_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.schedulerPolicy); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerGetState_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.arrMode); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerSetState_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.schedulerPolicy); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerSetState_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.enableARRMode); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerCapabilities_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.maxTimeslice); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerCapabilities_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.minTimeslice); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerCapabilities_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isArrModeSupported); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerCapabilities_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.maxFrequencyForARR); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerCapabilities_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.minFrequencyForARR); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerCapabilities_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.maxAvgFactorForARR); });
+                CheckLateFieldOrdering<nvmlVgpuSchedulerCapabilities_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.minAvgFactorForARR); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.year); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.month); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.day); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.hour); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.min); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sec); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.status); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isLicensed); });
+                CheckLateFieldOrdering<nvmlVgpuLicenseInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.currentState); });
+                CheckLateFieldOrdering<nvmlGridLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.year); });
+                CheckLateFieldOrdering<nvmlGridLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.month); });
+                CheckLateFieldOrdering<nvmlGridLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.day); });
+                CheckLateFieldOrdering<nvmlGridLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.hour); });
+                CheckLateFieldOrdering<nvmlGridLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.min); });
+                CheckLateFieldOrdering<nvmlGridLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sec); });
+                CheckLateFieldOrdering<nvmlGridLicenseExpiry_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.status); });
+                CheckLateFieldOrdering<nvmlGridLicensableFeature_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.featureCode); });
+                CheckLateFieldOrdering<nvmlGridLicensableFeature_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.featureState); });
+                CheckLateFieldOrdering<nvmlGridLicensableFeature_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.featureEnabled); });
+                CheckLateFieldOrdering<nvmlGridLicensableFeatures_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isGridLicenseSupported); });
+                CheckLateFieldOrdering<nvmlGridLicensableFeatures_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.licensableFeaturesCount); });
+                CheckLateFieldOrdering<nvmlNvLinkPowerThres_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.lowPwrThreshold); });
+                CheckLateFieldOrdering<nvmlFieldValue_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.fieldId); });
+                CheckLateFieldOrdering<nvmlFieldValue_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.scopeId); });
+                CheckLateFieldOrdering<nvmlFieldValue_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.timestamp); });
+                CheckLateFieldOrdering<nvmlFieldValue_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.latencyUsec); });
+                CheckLateFieldOrdering<nvmlFieldValue_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.valueType); });
+                CheckLateFieldOrdering<nvmlFieldValue_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.nvmlReturn); });
+                CheckLateFieldOrdering<nvmlHwbcEntry_t>([](auto &value) { SetGeneratedComparableField(value.hwbcId); });
+                CheckLateFieldOrdering<nvmlLedState_t>([](auto &value) { SetGeneratedComparableField(value.color); });
+                CheckLateFieldOrdering<nvmlPSUInfo_t>([](auto &value) { SetGeneratedComparableField(value.current); });
+                CheckLateFieldOrdering<nvmlPSUInfo_t>([](auto &value) { SetGeneratedComparableField(value.voltage); });
+                CheckLateFieldOrdering<nvmlPSUInfo_t>([](auto &value) { SetGeneratedComparableField(value.power); });
+                CheckLateFieldOrdering<nvmlUnitFanInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.speed); });
+                CheckLateFieldOrdering<nvmlUnitFanInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.state); });
+                CheckLateFieldOrdering<nvmlUnitFanSpeeds_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.count); });
+                CheckLateFieldOrdering<nvmlEventData_t>([](auto &value) { SetGeneratedComparableField(value.device); });
+                CheckLateFieldOrdering<nvmlEventData_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.eventType); });
+                CheckLateFieldOrdering<nvmlEventData_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.eventData); });
+                CheckLateFieldOrdering<nvmlEventData_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.gpuInstanceId); });
+                CheckLateFieldOrdering<nvmlEventData_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.computeInstanceId); });
+                CheckLateFieldOrdering<nvmlSystemEventData_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.eventType); });
+                CheckLateFieldOrdering<nvmlSystemEventData_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.gpuId); });
+                CheckLateFieldOrdering<nvmlAccountingStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.gpuUtilization); });
+                CheckLateFieldOrdering<nvmlAccountingStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memoryUtilization); });
+                CheckLateFieldOrdering<nvmlAccountingStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.maxMemoryUsage); });
+                CheckLateFieldOrdering<nvmlAccountingStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.time); });
+                CheckLateFieldOrdering<nvmlAccountingStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.startTime); });
+                CheckLateFieldOrdering<nvmlAccountingStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isRunning); });
+                CheckLateFieldOrdering<nvmlEncoderSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sessionId); });
+                CheckLateFieldOrdering<nvmlEncoderSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlEncoderSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vgpuInstance); });
+                CheckLateFieldOrdering<nvmlEncoderSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.codecType); });
+                CheckLateFieldOrdering<nvmlEncoderSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.hResolution); });
+                CheckLateFieldOrdering<nvmlEncoderSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vResolution); });
+                CheckLateFieldOrdering<nvmlEncoderSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.averageFps); });
+                CheckLateFieldOrdering<nvmlEncoderSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.averageLatency); });
+                CheckLateFieldOrdering<nvmlFBCStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sessionsCount); });
+                CheckLateFieldOrdering<nvmlFBCStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.averageFPS); });
+                CheckLateFieldOrdering<nvmlFBCStats_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.averageLatency); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sessionId); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pid); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vgpuInstance); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.displayOrdinal); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sessionType); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sessionFlags); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.hMaxResolution); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vMaxResolution); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.hResolution); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vResolution); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.averageFPS); });
+                CheckLateFieldOrdering<nvmlFBCSessionInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.averageLatency); });
+                CheckLateFieldOrdering<nvmlConfComputeSystemCaps_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.cpuCaps); });
+                CheckLateFieldOrdering<nvmlConfComputeSystemCaps_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.gpusCaps); });
+                CheckLateFieldOrdering<nvmlConfComputeSystemState_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.environment); });
+                CheckLateFieldOrdering<nvmlConfComputeSystemState_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.ccFeature); });
+                CheckLateFieldOrdering<nvmlConfComputeSystemState_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.devToolsMode); });
+                CheckLateFieldOrdering<nvmlSystemConfComputeSettings_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.environment); });
+                CheckLateFieldOrdering<nvmlSystemConfComputeSettings_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.ccFeature); });
+                CheckLateFieldOrdering<nvmlSystemConfComputeSettings_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.devToolsMode); });
+                CheckLateFieldOrdering<nvmlSystemConfComputeSettings_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.multiGpuMode); });
+                CheckLateFieldOrdering<nvmlConfComputeMemSizeInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.protectedMemSizeKib); });
+                CheckLateFieldOrdering<nvmlConfComputeMemSizeInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.unprotectedMemSizeKib); });
+                CheckLateFieldOrdering<nvmlConfComputeGpuCertificate_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.certChainSize); });
+                CheckLateFieldOrdering<nvmlConfComputeGpuCertificate_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.attestationCertChainSize); });
+                CheckLateFieldOrdering<nvmlConfComputeGpuAttestationReport_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isCecAttestationReportPresent); });
+                CheckLateFieldOrdering<nvmlConfComputeGpuAttestationReport_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.attestationReportSize); });
+                CheckLateFieldOrdering<nvmlConfComputeGpuAttestationReport_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.cecAttestationReportSize); });
+                CheckLateFieldOrdering<nvmlConfComputeSetKeyRotationThresholdInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.maxAttackerAdvantage); });
+                CheckLateFieldOrdering<nvmlConfComputeGetKeyRotationThresholdInfo_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.attackerAdvantage); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.status); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.cliqueId); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.state); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.status); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.cliqueId); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.state); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.healthMask); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfoV_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.status); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfoV_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.cliqueId); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfoV_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.state); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfoV_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.healthMask); });
+                CheckLateFieldOrdering<nvmlGpuFabricInfoV_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.healthSummary); });
+                CheckLateFieldOrdering<nvmlTemperature_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sensorType); });
+                CheckLateFieldOrdering<nvmlTemperature_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.temperature); });
+                CheckLateFieldOrdering<nvmlNvlinkSupportedBwModes_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.totalBwModes); });
+                CheckLateFieldOrdering<nvmlNvlinkGetBwMode_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bIsBest); });
+                CheckLateFieldOrdering<nvmlNvlinkGetBwMode_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bwMode); });
+                CheckLateFieldOrdering<nvmlNvlinkSetBwMode_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bSetBest); });
+                CheckLateFieldOrdering<nvmlNvlinkSetBwMode_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.bwMode); });
+                CheckLateFieldOrdering<nvmlVgpuVersion_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.minVersion); });
+                CheckLateFieldOrdering<nvmlVgpuVersion_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.maxVersion); });
+                CheckLateFieldOrdering<nvmlVgpuMetadata_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.revision); });
+                CheckLateFieldOrdering<nvmlVgpuMetadata_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.guestInfoState); });
+                CheckLateFieldOrdering<nvmlVgpuMetadata_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vgpuVirtualizationCaps); });
+                CheckLateFieldOrdering<nvmlVgpuMetadata_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.guestVgpuVersion); });
+                CheckLateFieldOrdering<nvmlVgpuMetadata_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.opaqueDataSize); });
+                CheckLateFieldOrdering<nvmlVgpuPgpuMetadata_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.revision); });
+                CheckLateFieldOrdering<nvmlVgpuPgpuMetadata_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.pgpuVirtualizationCaps); });
+                CheckLateFieldOrdering<nvmlVgpuPgpuMetadata_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.opaqueDataSize); });
+                CheckLateFieldOrdering<nvmlVgpuPgpuCompatibility_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.vgpuVmCompatibility); });
+                CheckLateFieldOrdering<nvmlVgpuPgpuCompatibility_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.compatibilityLimitCode); });
+                CheckLateFieldOrdering<nvmlPRMTLV_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.dataSize); });
+                CheckLateFieldOrdering<nvmlPRMTLV_v1_t>([](auto &value) { SetGeneratedComparableField(value.status); });
+                CheckLateFieldOrdering<nvmlPRMCounterInput_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.localPort); });
+                CheckLateFieldOrdering<nvmlPRMCounterValue_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.status); });
+                CheckLateFieldOrdering<nvmlPRMCounterValue_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.outputType); });
+                CheckLateFieldOrdering<nvmlPRMCounter_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.counterId); });
+                CheckLateFieldOrdering<nvmlGpuInstancePlacement_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.start); });
+                CheckLateFieldOrdering<nvmlGpuInstancePlacement_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.size); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.id); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isP2pSupported); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sliceCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.instanceCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.multiprocessorCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.copyEngineCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.decoderCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.encoderCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.jpegCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.ofaCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memorySizeMB); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.id); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isP2pSupported); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sliceCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.instanceCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.multiprocessorCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.copyEngineCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.decoderCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.encoderCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.jpegCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.ofaCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memorySizeMB); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.id); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sliceCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.instanceCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.multiprocessorCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.copyEngineCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.decoderCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.encoderCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.jpegCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.ofaCount); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.memorySizeMB); });
+                CheckLateFieldOrdering<nvmlGpuInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.capabilities); });
+                CheckLateFieldOrdering<nvmlGpuInstanceInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.device); });
+                CheckLateFieldOrdering<nvmlGpuInstanceInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.id); });
+                CheckLateFieldOrdering<nvmlGpuInstanceInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.profileId); });
+                CheckLateFieldOrdering<nvmlComputeInstancePlacement_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.start); });
+                CheckLateFieldOrdering<nvmlComputeInstancePlacement_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.size); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.id); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sliceCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.instanceCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.multiprocessorCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedCopyEngineCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedDecoderCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedEncoderCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedJpegCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedOfaCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.id); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sliceCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.instanceCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.multiprocessorCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedCopyEngineCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedDecoderCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedEncoderCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedJpegCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v2_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedOfaCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.id); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sliceCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.instanceCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.multiprocessorCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedCopyEngineCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedDecoderCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedEncoderCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedJpegCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.sharedOfaCount); });
+                CheckLateFieldOrdering<nvmlComputeInstanceProfileInfo_v3_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.capabilities); });
+                CheckLateFieldOrdering<nvmlComputeInstanceInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.device); });
+                CheckLateFieldOrdering<nvmlComputeInstanceInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.gpuInstance); });
+                CheckLateFieldOrdering<nvmlComputeInstanceInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.id); });
+                CheckLateFieldOrdering<nvmlComputeInstanceInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.profileId); });
+                CheckLateFieldOrdering<nvmlGpmSupport_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.isSupportedDevice); });
+                CheckLateFieldOrdering<nvmlDeviceCapabilities_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.capMask); });
+                CheckLateFieldOrdering<nvmlWorkloadPowerProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.profileId); });
+                CheckLateFieldOrdering<nvmlWorkloadPowerProfileInfo_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.priority); });
+                CheckLateFieldOrdering<nvmlWorkloadPowerProfileUpdateProfiles_v1_t>(
+                    [](auto &value) { SetGeneratedComparableField(value.operation); });
+            }
+        }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 #include "DcgmChildProcessManager.hpp"
 #include "DcgmStringHelpers.h"
 #include "HangDetectMonitor.h"
+
+#include <unistd.h>
 
 using namespace DcgmNs::Common::Subprocess;
 
@@ -104,12 +106,14 @@ dcgmReturn_t DcgmChildProcessManager::CreateChannelPipe(auto &channelSource, aut
         return DCGM_ST_FILE_IO_ERROR;
     }
     log_verbose("Created pipe with fds {} and {}", pipeFds[0], pipeFds[1]);
-    std::jthread channelThread([writeFd = pipeFds[1], &channelSource, writeFunction](std::stop_token stop_token) {
-        writeFunction(channelSource, writeFd, stop_token);
-        close(writeFd);
-    });
+    DcgmNs::Utils::FileHandle readFd(pipeFds[0]);
+    DcgmNs::Utils::FileHandle writeFd(pipeFds[1]);
+    std::jthread channelThread(
+        [writeFd = std::move(writeFd), &channelSource, writeFunction](std::stop_token stop_token) {
+            writeFunction(channelSource, writeFd.Get(), stop_token);
+        });
 
-    outPipe = PipeInfo { pipeFds[0], pipeFds[1], std::move(channelThread) };
+    outPipe = PipeInfo { std::move(readFd), std::move(channelThread) };
     return DCGM_ST_OK;
 }
 
@@ -409,8 +413,12 @@ dcgmReturn_t DcgmChildProcessManager::GetStdErrHandle(ChildProcessHandle_t handl
         log_error("Invalid handle provided: {}", handle);
         return DCGM_ST_BADPARAM;
     }
-    auto &processInfo = (*processInfoRef).get();
-    fd                = processInfo.stdErrPipe.readFd;
+    fd = dup(processInfoRef->get().stdErrPipe.readFd.Get());
+    if (fd < 0)
+    {
+        log_error("Failed to duplicate stderr file descriptor: {}", strerror(errno));
+        return DCGM_ST_FILE_IO_ERROR;
+    }
     return DCGM_ST_OK;
 }
 
@@ -423,8 +431,12 @@ dcgmReturn_t DcgmChildProcessManager::GetStdOutHandle(ChildProcessHandle_t handl
         log_error("Invalid handle provided: {}", handle);
         return DCGM_ST_BADPARAM;
     }
-    auto &processInfo = (*processInfoRef).get();
-    fd                = processInfo.stdOutPipe.readFd;
+    fd = dup(processInfoRef->get().stdOutPipe.readFd.Get());
+    if (fd < 0)
+    {
+        log_error("Failed to duplicate stdout file descriptor: {}", strerror(errno));
+        return DCGM_ST_FILE_IO_ERROR;
+    }
     return DCGM_ST_OK;
 }
 
@@ -438,16 +450,20 @@ dcgmReturn_t DcgmChildProcessManager::GetDataChannelHandle(ChildProcessHandle_t 
         return DCGM_ST_BADPARAM;
     }
 
-    auto &processInfo = (*processInfoRef).get();
-
     // Check if the process has a data channel
-    auto dataChannel = processInfo.process->GetFdChannel();
+    auto &processInfo = processInfoRef->get();
+    auto dataChannel  = processInfo.process->GetFdChannel();
     if (!dataChannel.has_value())
     {
         log_error("Child process does not have a data channel");
         return DCGM_ST_BADPARAM;
     }
-    fd = processInfo.dataChannelPipe.readFd;
+    fd = dup(processInfo.dataChannelPipe.readFd.Get());
+    if (fd < 0)
+    {
+        log_error("Failed to duplicate data channel file descriptor: {}", strerror(errno));
+        return DCGM_ST_FILE_IO_ERROR;
+    }
     return DCGM_ST_OK;
 }
 

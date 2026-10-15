@@ -25,7 +25,9 @@ extern "C" {
 
 typedef enum dcgmMultinodeTestType_enum
 {
-    mnubergemm
+    mnubergemm    = 0,
+    nvloom        = 1,
+    mnnvbandwidth = 2,
 } dcgmMultinodeTestType_t;
 
 typedef enum dcgmMultinodeRequestType_enum
@@ -57,6 +59,20 @@ typedef struct
 
 typedef struct
 {
+    unsigned int gpuId; //!< DCGM GPU ID on this host.
+    char uuid[128];     //!< GPU UUID.
+} dcgmMultinodeGpuInfo_v1;
+
+typedef struct
+{
+    char driverVersion[DCGM_MAX_STR_LENGTH];            //!< NVIDIA driver version.
+    char dcgmVersion[DCGM_MAX_STR_LENGTH];              //!< DCGM version.
+    unsigned int numGpus;                               //!< Number of valid entries in @ref gpus.
+    dcgmMultinodeGpuInfo_v1 gpus[DCGM_MAX_NUM_DEVICES]; //!< Active GPU inventory.
+} dcgmMultinodeNodeInfo_v2;
+
+typedef struct
+{
     unsigned int headNodeId;
     dcgmMultinodeStatus_t response;
 } dcgmMultinodeResource_v1;
@@ -77,7 +93,7 @@ typedef struct
 typedef struct
 {
     unsigned int headNodeId;
-    dcgmRunMnDiag_v1 runMnDiag;
+    dcgmRunMnDiag_v2 runMnDiag;
     char testBinaryPath[DCGM_MAX_STR_LENGTH];
     unsigned int timeToRunSeconds;
     char testPrefix[DCGM_MAX_TEST_PREFIX_LEN];
@@ -111,10 +127,25 @@ typedef struct
     } requestData;
 } dcgmMultinodeRequest_v2;
 
-typedef dcgmMultinodeRequest_v2 dcgmMultinodeRequest_t;
+typedef struct
+{
+    unsigned int version;
+    dcgmMultinodeTestType_t testType;
+    dcgmMultinodeRequestType_t requestType;
+    union
+    {
+        dcgmMultinodeResource_v1 resource;
+        dcgmMultinodeAuthorization_v1 authorization;
+        dcgmMultinodeRunParams_v2 runParams;
+        dcgmMultinodeNodeInfo_v2 nodeInfo;
+    } requestData;
+} dcgmMultinodeRequest_v3;
+
+typedef dcgmMultinodeRequest_v3 dcgmMultinodeRequest_t;
 #define dcgmMultinodeRequest_version1 MAKE_DCGM_VERSION(dcgmMultinodeRequest_v1, 1)
 #define dcgmMultinodeRequest_version2 MAKE_DCGM_VERSION(dcgmMultinodeRequest_v2, 2)
-#define dcgmMultinodeRequest_version  dcgmMultinodeRequest_version2
+#define dcgmMultinodeRequest_version3 MAKE_DCGM_VERSION(dcgmMultinodeRequest_v3, 3)
+#define dcgmMultinodeRequest_version  dcgmMultinodeRequest_version3
 
 dcgmReturn_t DCGM_PUBLIC_API dcgmMultinodeRequest(dcgmHandle_t pDcgmHandle, dcgmMultinodeRequest_t *pRequest);
 

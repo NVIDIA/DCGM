@@ -16,34 +16,19 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "TestHelpers.hpp"
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
 
 #include <Environment.h>
+#include <MockDcgmOps.h>
 #include <dcgm_agent.h>
 
 #include <cstdlib>
-#include <cstring>
+#include <memory>
 #include <string>
 
 namespace
 {
-struct EnvironmentApiState
-{
-    dcgmReturn_t apiReturn = DCGM_ST_OK;
-    dcgmReturn_t envReturn = DCGM_ST_OK;
-    std::string envValue;
-    std::string lastName;
-    dcgmHandle_t lastHandle {};
-    int callCount = 0;
-};
-
-EnvironmentApiState g_envApi;
-
-void ResetEnvironmentApi()
-{
-    g_envApi = {};
-}
-
 class TestEnvironmentInfo : public EnvironmentInfo
 {
 public:
@@ -57,38 +42,17 @@ public:
 };
 } //namespace
 
-extern "C" dcgmReturn_t dcgmHostengineEnvironmentVariableInfo(dcgmHandle_t handle, dcgmEnvVarInfo_t *envVarInfo)
-{
-    g_envApi.callCount++;
-    g_envApi.lastHandle = handle;
-    g_envApi.lastName   = envVarInfo->envVarName;
-
-    if (g_envApi.apiReturn != DCGM_ST_OK)
-    {
-        return g_envApi.apiReturn;
-    }
-
-    envVarInfo->ret = g_envApi.envReturn;
-    if (g_envApi.envReturn == DCGM_ST_OK)
-    {
-        std::strncpy(envVarInfo->envVarValue, g_envApi.envValue.c_str(), sizeof(envVarInfo->envVarValue) - 1);
-        envVarInfo->envVarValue[sizeof(envVarInfo->envVarValue) - 1] = '\0';
-    }
-
-    return DCGM_ST_OK;
-}
-
 TEST_CASE("EnvironmentInfo")
 {
-    ResetEnvironmentApi();
+    DcgmNs::MockDcgmOps mockDcgmOps;
     auto handle = static_cast<dcgmHandle_t>(0xe0);
 
     SECTION("DoExecuteConnected")
     {
         GIVEN("hostengine returns an allowed environment variable")
         {
-            g_envApi.envValue = "GPU-0";
-            TestEnvironmentInfo envInfo("localhost", "CUDA_VISIBLE_DEVICES");
+            mockDcgmOps.m_hostEngineState.environmentValue = "GPU-0";
+            TestEnvironmentInfo envInfo("localhost", "CUDA_VISIBLE_DEVICES", &mockDcgmOps);
 
             WHEN("the command runs with an existing handle")
             {
@@ -97,9 +61,9 @@ TEST_CASE("EnvironmentInfo")
                 THEN("the hostengine value is stored")
                 {
                     CHECK(result == DCGM_ST_OK);
-                    CHECK(g_envApi.callCount == 1);
-                    CHECK(g_envApi.lastHandle == handle);
-                    CHECK(g_envApi.lastName == "CUDA_VISIBLE_DEVICES");
+                    CHECK(mockDcgmOps.m_hostEngineState.environmentCallCount == 1);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastEnvironmentHandle == handle);
+                    CHECK(mockDcgmOps.m_hostEngineState.lastEnvironmentName == "CUDA_VISIBLE_DEVICES");
                     CHECK(envInfo.GetEnvVarValue() == "GPU-0");
                 }
             }
@@ -107,8 +71,8 @@ TEST_CASE("EnvironmentInfo")
 
         GIVEN("the hostengine API call fails")
         {
-            g_envApi.apiReturn = DCGM_ST_CONNECTION_NOT_VALID;
-            TestEnvironmentInfo envInfo("localhost", "CUDA_VISIBLE_DEVICES");
+            mockDcgmOps.m_hostEngineState.environmentReturn = DCGM_ST_CONNECTION_NOT_VALID;
+            TestEnvironmentInfo envInfo("localhost", "CUDA_VISIBLE_DEVICES", &mockDcgmOps);
 
             WHEN("the command runs")
             {
@@ -117,7 +81,7 @@ TEST_CASE("EnvironmentInfo")
                 THEN("the API error is returned without storing a value")
                 {
                     CHECK(result == DCGM_ST_CONNECTION_NOT_VALID);
-                    CHECK(g_envApi.callCount == 1);
+                    CHECK(mockDcgmOps.m_hostEngineState.environmentCallCount == 1);
                     CHECK(envInfo.GetEnvVarValue().empty());
                 }
             }
@@ -125,8 +89,8 @@ TEST_CASE("EnvironmentInfo")
 
         GIVEN("hostengine rejects an unallowed environment variable")
         {
-            g_envApi.envReturn = DCGM_ST_BADPARAM;
-            TestEnvironmentInfo envInfo("localhost", "LD_PRELOAD");
+            mockDcgmOps.m_hostEngineState.environmentResult = DCGM_ST_BADPARAM;
+            TestEnvironmentInfo envInfo("localhost", "LD_PRELOAD", &mockDcgmOps);
 
             WHEN("the command runs")
             {
@@ -135,7 +99,7 @@ TEST_CASE("EnvironmentInfo")
                 THEN("the hostengine return code is propagated")
                 {
                     CHECK(result == DCGM_ST_BADPARAM);
-                    CHECK(g_envApi.callCount == 1);
+                    CHECK(mockDcgmOps.m_hostEngineState.environmentCallCount == 1);
                     CHECK(envInfo.GetEnvVarValue().empty());
                 }
             }
@@ -146,7 +110,7 @@ TEST_CASE("EnvironmentInfo")
     {
         GIVEN("a message to display")
         {
-            EnvironmentInfo envInfo("localhost", "CUDA_VISIBLE_DEVICES");
+            EnvironmentInfo envInfo("localhost", "CUDA_VISIBLE_DEVICES", &mockDcgmOps);
 
             WHEN("the message is emitted")
             {

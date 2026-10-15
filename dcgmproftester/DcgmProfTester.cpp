@@ -13,12 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <DcgmLogging.h>
-#include <cuda.h>
-
-#include "Arguments.h"
 #include "DcgmProfTester.h"
-#include "DcgmSettings.h"
+#include "Arguments.h"
 #include "DistributedCudaContext.h"
 #include "Entity.h"
 #include "PhysicalGpu.h"
@@ -28,7 +24,7 @@
 #include "dcgm_structs.h"
 #include "timelib.h"
 #include "vector_types.h"
-#include <cublas_proxy.hpp>
+#include <DcgmLogging.h>
 #include <dcgm_agent.h>
 
 #include <tclap/Arg.h>
@@ -41,9 +37,7 @@
 #include <DcgmStringHelpers.h>
 #include <chrono>
 #include <cmath>
-#include <csignal>
 #include <cstdint>
-#include <fmt/ranges.h>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -55,18 +49,24 @@
 #include <utility>
 #include <vector>
 
+
 using namespace DcgmNs::ProfTester;
 
 namespace DcgmNs::ProfTester
 {
 std::atomic_bool g_signalCaught = false;
 }
-
-
 /*****************************************************************************/
 /* ctor/dtor */
-DcgmProfTester::DcgmProfTester()
+DcgmProfTester::DcgmProfTester(DistributedCudaContextRuntimeFactoryAnyUniquePtr runtimeFactory,
+                               CudaWorkerThreadFactoryAnyUniquePtr cudaWorkerFactory,
+                               DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                               CudaOpsAnyPtr cudaOps)
     : m_argumentSet("dcgmproftester", DCGMPROFTESTER_VERSION)
+    , m_dcgmOps(std::move(dcgmOps))
+    , m_cudaOps(cudaOps)
+    , m_runtimeFactory(std::move(runtimeFactory))
+    , m_cudaWorkerFactory(std::move(cudaWorkerFactory))
 {
     m_duration          = 30.0; // Total for all equally long parts, in seconds.
     m_reportingInterval = 1.0;  // Report this frequently, in seconds.
@@ -83,12 +83,14 @@ DcgmProfTester::DcgmProfTester()
     FD_ZERO(&m_parentReadFds);
 }
 
-/*****************************************************************************/
 DcgmProfTester::~DcgmProfTester()
 {
+    m_dcgmCudaContexts.clear();
+    m_gpus.clear();
+
     if (m_dcgmIsInitialized)
     {
-        dcgmShutdown();
+        m_dcgmOps->dcgmShutdown();
     }
 }
 
@@ -123,7 +125,7 @@ dcgmReturn_t DcgmProfTester::CreateDcgmGroups(short unsigned int fieldId)
     char groupName[32] = { 0 };
     snprintf(groupName, sizeof(groupName), "dpt_%d", getpid());
 
-    dcgmReturn = dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_EMPTY, groupName, &m_groupId);
+    dcgmReturn = m_dcgmOps->dcgmGroupCreate(m_dcgmHandle, DCGM_GROUP_EMPTY, groupName, &m_groupId);
 
     if (dcgmReturn != DCGM_ST_OK)
     {
@@ -134,7 +136,7 @@ dcgmReturn_t DcgmProfTester::CreateDcgmGroups(short unsigned int fieldId)
 
     for (auto &[entityGroupId, entityId] : m_entities)
     {
-        dcgmReturn = dcgmGroupAddEntity(m_dcgmHandle, m_groupId, entityGroupId, entityId);
+        dcgmReturn = m_dcgmOps->dcgmGroupAddEntity(m_dcgmHandle, m_groupId, entityGroupId, entityId);
 
         if (dcgmReturn != DCGM_ST_OK)
         {
@@ -145,7 +147,7 @@ dcgmReturn_t DcgmProfTester::CreateDcgmGroups(short unsigned int fieldId)
     }
 
     /* Note: using groupName again on purpose since field groups and GPU groups are keyed separately */
-    dcgmReturn = dcgmFieldGroupCreate(m_dcgmHandle, 1, &fieldId, groupName, &m_fieldGroupId);
+    dcgmReturn = m_dcgmOps->dcgmFieldGroupCreate(m_dcgmHandle, 1, &fieldId, groupName, &m_fieldGroupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "dcgmFieldGroupCreate() returned " << dcgmReturn << ".";
@@ -164,7 +166,7 @@ dcgmReturn_t DcgmProfTester::DestroyDcgmGroups(void)
         return DCGM_ST_OK;
     }
 
-    dcgmReturn = dcgmGroupDestroy(m_dcgmHandle, m_groupId);
+    dcgmReturn = m_dcgmOps->dcgmGroupDestroy(m_dcgmHandle, m_groupId);
 
     if (dcgmReturn != DCGM_ST_OK)
     {
@@ -173,7 +175,7 @@ dcgmReturn_t DcgmProfTester::DestroyDcgmGroups(void)
         return dcgmReturn;
     }
 
-    dcgmReturn = dcgmFieldGroupDestroy(m_dcgmHandle, m_fieldGroupId);
+    dcgmReturn = m_dcgmOps->dcgmFieldGroupDestroy(m_dcgmHandle, m_fieldGroupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "dcgmFieldGroupDestroy() returned " << dcgmReturn << ".";
@@ -196,8 +198,8 @@ dcgmReturn_t DcgmProfTester::WatchFields(long long updateIntervalUsec, double ma
         return DCGM_ST_OK;
     }
 
-    dcgmReturn
-        = dcgmWatchFields(m_dcgmHandle, m_groupId, m_fieldGroupId, updateIntervalUsec, maxKeepAge, maxKeepSamples);
+    dcgmReturn = m_dcgmOps->dcgmWatchFields(
+        m_dcgmHandle, m_groupId, m_fieldGroupId, updateIntervalUsec, maxKeepAge, maxKeepSamples);
     if (dcgmReturn == DCGM_ST_REQUIRES_ROOT)
     {
         DCGM_LOG_ERROR << "Profiling requires running as root.";
@@ -247,7 +249,7 @@ dcgmReturn_t DcgmProfTester::UnwatchFields(void)
         return DCGM_ST_OK;
     }
 
-    dcgmReturn = dcgmUnwatchFields(m_dcgmHandle, m_groupId, m_fieldGroupId);
+    dcgmReturn = m_dcgmOps->dcgmUnwatchFields(m_dcgmHandle, m_groupId, m_fieldGroupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "dcgmUnwatchFields() returned " << dcgmReturn << ".";
@@ -260,7 +262,7 @@ dcgmReturn_t DcgmProfTester::UnwatchFields(void)
 /*****************************************************************************/
 dcgmReturn_t DcgmProfTester::DcgmInit(void)
 {
-    dcgmReturn_t dcgmReturn = dcgmInit();
+    dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmInit();
     if (dcgmReturn != DCGM_ST_OK)
     {
         std::cerr << "dcgmInit() returned " << std::to_underlying(dcgmReturn) << "." << std::endl;
@@ -268,7 +270,7 @@ dcgmReturn_t DcgmProfTester::DcgmInit(void)
         return dcgmReturn;
     }
 
-    dcgmReturn = dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &m_dcgmHandle);
+    dcgmReturn = m_dcgmOps->dcgmStartEmbedded(DCGM_OPERATION_MODE_AUTO, &m_dcgmHandle);
     if (dcgmReturn != DCGM_ST_OK)
     {
         std::cerr << "dcgmStartEmbedded() returned " << std::to_underlying(dcgmReturn) << "." << std::endl;
@@ -304,7 +306,7 @@ dcgmReturn_t DcgmProfTester::InitializeGpus(const Arguments_t &arguments)
 
     int count = 0;
     unsigned int gpuIdList[DCGM_MAX_NUM_DEVICES];
-    dcgmReturn_t dcgmReturn = dcgmGetAllDevices(m_dcgmHandle, gpuIdList, &count);
+    dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmGetAllDevices(m_dcgmHandle, gpuIdList, &count);
 
     if (dcgmReturn != DCGM_ST_OK)
     {
@@ -344,7 +346,13 @@ dcgmReturn_t DcgmProfTester::InitializeGpus(const Arguments_t &arguments)
              */
             if (it->second == nullptr) // Initialized for the first time.
             {
-                it->second = std::make_shared<PhysicalGpu>(shared_from_this(), gpuIdList[i], arguments.m_parameters);
+                it->second = std::make_unique<PhysicalGpu>(this,
+                                                           gpuIdList[i],
+                                                           arguments.m_parameters,
+                                                           m_dcgmOps.AsAnyPtr(),
+                                                           m_cudaOps,
+                                                           m_cudaWorkerFactory.AsAnyPtr(),
+                                                           m_runtimeFactory->Create());
 
                 dcgmReturn_t retVal = it->second->Init(m_dcgmHandle);
 
@@ -407,6 +415,7 @@ dcgmReturn_t DcgmProfTester::InitializeGpus(const Arguments_t &arguments)
             if (deletedGpu)
             {
                 it = m_gpus.erase(it);
+                continue;
             }
         }
 
@@ -432,6 +441,10 @@ dcgmReturn_t DcgmProfTester::InitializeGpus(const Arguments_t &arguments)
  */
 dcgmReturn_t DcgmProfTester::ShutdownGpus(void)
 {
+    // Stop and release worker contexts before dropping GPU ownership.
+    NukeChildren(true);
+    m_gpus.clear();
+
     dcgmReturn_t dcgmReturn;
 
     dcgmReturn = ShutdownGpuInstances();
@@ -544,11 +557,11 @@ void DcgmProfTester::SetNextPart(unsigned int value)
 
 
 /*****************************************************************************/
-void DcgmProfTester::ReportWorkerStarted(std::shared_ptr<DistributedCudaContext> worker)
+void DcgmProfTester::ReportWorkerStarted(DistributedCudaContext &worker)
 {
-    int fd = worker->GetReadFD();
+    int fd = worker.GetReadFD();
 
-    m_dcgmCudaContexts[fd] = std::move(worker);
+    m_dcgmCudaContexts[fd] = &worker;
 
     FD_SET(fd, &m_parentReadFds);
 
@@ -560,15 +573,23 @@ void DcgmProfTester::ReportWorkerStarted(std::shared_ptr<DistributedCudaContext>
 
 
 /*****************************************************************************/
-void DcgmProfTester::ReportWorkerFailed(std::shared_ptr<DistributedCudaContext> worker)
+void DcgmProfTester::ReportWorkerFailed(DistributedCudaContext &worker)
 {
-    int fd = worker->GetReadFD();
+    int fd = worker.GetReadFD();
+    if (fd < 0)
+    {
+        return;
+    }
 
     FD_CLR(fd, &m_parentReadFds);
+    m_dcgmCudaContexts.erase(fd);
 
-    if (fd > m_maxFd)
+    if (fd == m_maxFd)
     {
-        m_maxFd = fd;
+        while ((m_maxFd > 0) && !FD_ISSET(m_maxFd, &m_parentReadFds))
+        {
+            --m_maxFd;
+        }
     }
 }
 
@@ -578,14 +599,14 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
 {
     for (auto &gpuInstance : m_gpuInstances)
     {
-        std::shared_ptr<DistributedCudaContext> worker { nullptr };
+        DistributedCudaContext *worker { nullptr };
         std::string cudaVisibleDevices { "" };
 
-        auto entities = std::make_shared<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>>();
+        std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> entities;
 
         dcgmGroupEntityPair_t entity;
 
-        (*entities)[DCGM_FE_GPU] = gpuInstance.m_gpuId;
+        entities[DCGM_FE_GPU] = gpuInstance.m_gpuId;
 
         /**
          * We always save a prospective value for CUDA_VISIBLE_DEVICES in the
@@ -599,8 +620,8 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
         {
             if ((testFieldId != DCGM_FI_PROF_PCIE_TX_BYTES) && (testFieldId != DCGM_FI_PROF_PCIE_RX_BYTES))
             {
-                (*entities)[DCGM_FE_GPU_I]  = gpuInstance.m_gi;
-                (*entities)[DCGM_FE_GPU_CI] = gpuInstance.m_ci;
+                entities[DCGM_FE_GPU_I]  = gpuInstance.m_gi;
+                entities[DCGM_FE_GPU_CI] = gpuInstance.m_ci;
             }
 
             entity.entityGroupId = DCGM_FE_GPU_CI;
@@ -637,7 +658,7 @@ dcgmReturn_t DcgmProfTester::CreateWorkers(unsigned int testFieldId)
 /*****************************************************************************/
 dcgmReturn_t DcgmProfTester::StartTests(unsigned int maxGpusInParallel,
                                         unsigned int &runningGpus,
-                                        std::vector<std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>> &readyGpus)
+                                        std::vector<DcgmNs::ProfTester::PhysicalGpuAnyPtr> &readyGpus)
 {
     dcgmReturn_t rtSt { DCGM_ST_OK };
 
@@ -673,7 +694,7 @@ dcgmReturn_t DcgmProfTester::StartTests(unsigned int maxGpusInParallel,
             }
             else
             {
-                readyGpus.push_back(gpu);
+                readyGpus.emplace_back(gpu.get());
             }
         }
 
@@ -692,7 +713,7 @@ dcgmReturn_t DcgmProfTester::StartTests(unsigned int maxGpusInParallel,
 /*****************************************************************************/
 dcgmReturn_t DcgmProfTester::ProcessResponses(unsigned int maxGpusInParallel,
                                               unsigned int &runningGpus,
-                                              std::vector<std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>> &readyGpus,
+                                              std::vector<DcgmNs::ProfTester::PhysicalGpuAnyPtr> &readyGpus,
                                               double duration
 
 )
@@ -766,12 +787,12 @@ dcgmReturn_t DcgmProfTester::ProcessResponses(unsigned int maxGpusInParallel,
             auto allreadyStarted = physicalGpu->AllStarted();
             auto alreadyReported = physicalGpu->AllReported();
 
-            rtSt = physicalGpu->ProcessResponse(std::move(worker));
+            rtSt = physicalGpu->ProcessResponse(worker);
 
             if (physicalGpu->WorkerReported())
             {
                 FD_CLR(fd, &m_parentReadFds);
-                m_dcgmCudaContexts[fd] = nullptr;
+                m_dcgmCudaContexts.erase(fd);
 
                 // We only check this when it makes a difference.
                 if (fd == static_cast<unsigned int>(m_maxFd))
@@ -878,7 +899,7 @@ dcgmReturn_t DcgmProfTester::RunTests(double reportingInterval,
 
     unsigned int runningGpus { 0 };
 
-    std::vector<std::shared_ptr<DcgmNs::ProfTester::PhysicalGpu>> readyGpus; /* Physical GPUs ready to run tests. */
+    std::vector<DcgmNs::ProfTester::PhysicalGpuAnyPtr> readyGpus; /* Physical GPUs ready to run tests. */
 
     /**
      * PCIE and NvLINK tests have to be serialized as various GPUs may conflict
@@ -982,7 +1003,7 @@ dcgmReturn_t DcgmProfTester::InitializeGpuInstances(void)
 
     hierarchy.version = dcgmMigHierarchy_version2;
 
-    dcgmReturn_t ret = dcgmGetGpuInstanceHierarchy(m_dcgmHandle, &hierarchy);
+    dcgmReturn_t ret = m_dcgmOps->dcgmGetGpuInstanceHierarchy(m_dcgmHandle, &hierarchy);
     if (ret != DCGM_ST_OK)
     {
         DCGM_LOG_ERROR << "Failed to enumerate GPU instances: " << errorString(ret);
@@ -1060,7 +1081,7 @@ std::expected<std::vector<dcgm_field_eid_t>, std::string> DcgmProfTester::GetMax
     {
         int count = 0;
         unsigned int gpuIdList[DCGM_MAX_NUM_DEVICES];
-        dcgmReturn_t dcgmReturn = dcgmGetAllDevices(m_dcgmHandle, gpuIdList, &count);
+        dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmGetAllDevices(m_dcgmHandle, gpuIdList, &count);
 
         if (dcgmReturn != DCGM_ST_OK)
         {
@@ -1103,7 +1124,7 @@ std::expected<std::vector<dcgm_field_eid_t>, std::string> DcgmProfTester::GetMax
     for (auto const entityId : gpuIds)
     {
         dcgmChipArchitecture_t chipArchitecture;
-        dcgmReturn_t ret = dcgmGetGpuChipArchitecture(m_dcgmHandle, entityId, &chipArchitecture);
+        dcgmReturn_t ret = m_dcgmOps->dcgmGetGpuChipArchitecture(m_dcgmHandle, entityId, &chipArchitecture);
         if (ret != DCGM_ST_OK)
         {
             std::string errorString
@@ -1121,12 +1142,12 @@ std::expected<std::vector<dcgm_field_eid_t>, std::string> DcgmProfTester::GetMax
 }
 
 /*****************************************************************************/
-dcgmReturn_t DcgmProfTester::Process(std::function<dcgmReturn_t(std::shared_ptr<Arguments_t> arguments)> processFn)
+dcgmReturn_t DcgmProfTester::Process(std::function<dcgmReturn_t(Arguments_t const &arguments)> processArgument)
 {
-    return m_argumentSet.Process([this, processFn](std::shared_ptr<Arguments_t> arguments) {
-        m_startDcgm = !arguments->m_parameters.m_noDcgmValidation;
+    return m_argumentSet.Process([this, processArgument](Arguments_t const &arguments) {
+        m_startDcgm = !arguments.m_parameters.m_noDcgmValidation;
 
-        return processFn(std::move(arguments));
+        return processArgument(arguments);
     });
 }
 
@@ -1146,160 +1167,4 @@ void DcgmProfTester::InitializeLogging(std::string logFile, DcgmLoggingSeverity_
     {
         SetLoggerSeverity(BASE_LOGGER, logLevel);
     }
-}
-
-
-/*****************************************************************************/
-static void signalHandler(int signal)
-{
-    std::cout << "Received signal " << signal << std::endl;
-    g_signalCaught = true;
-}
-
-/*****************************************************************************/
-int main(int argc, char **argv)
-{
-    try
-    {
-        std::shared_ptr<DcgmProfTester> dpt { std::make_shared<DcgmProfTester>() };
-
-        dcgmReturn_t dcgmReturn;
-
-        // Ensure clean termination for code coverage tests.
-        signal(SIGPIPE, signalHandler);
-        signal(SIGTERM, signalHandler);
-        signal(SIGHUP, signalHandler);
-
-        // We do this to avoid zombies. We don't care about worker exit codes.
-        struct sigaction sa;
-        sa.sa_handler = SIG_IGN; // handle signal by ignoring
-        sigemptyset(&sa.sa_mask);
-        sa.sa_flags = 0;
-        if (sigaction(SIGCHLD, &sa, 0) == -1)
-        {
-            std::cerr << "Could not ignore SIGCHLD from worker threads." << std::endl;
-
-            return DCGM_ST_GENERIC_ERROR;
-        }
-
-        dcgmReturn = dpt->Init(argc, argv);
-        if (dcgmReturn)
-        {
-            std::cerr << "Error " << std::to_underlying(dcgmReturn) << " from Init(). Exiting." << std::endl;
-
-            return dcgmReturn;
-        }
-
-        auto maxwellPascalVoltaGpus = dpt->GetMaxwellPascalVoltaArchGpus();
-        if (!maxwellPascalVoltaGpus.has_value())
-        {
-            std::cerr << "Error [" << maxwellPascalVoltaGpus.error()
-                      << "] from taking GPUs with Maxwell, Pascal, or Volta architecture. Exiting." << std::endl;
-            return DCGM_ST_GENERIC_ERROR;
-        }
-
-        int cudaLoaded = 0;
-        auto cuResult  = cuDriverGetVersion(&cudaLoaded);
-        if (cuResult != CUDA_SUCCESS)
-        {
-            std::cerr << "Unable to validate Cuda version. cuDriverGetVersion returned " << std::to_underlying(cuResult)
-                      << "." << std::endl;
-            return DCGM_ST_GENERIC_ERROR;
-        }
-
-        // CUDA_VERSION_USED is defined in CMakeLists.txt file
-        int majorCudaVersionLoaded = cudaLoaded / 1000;
-        int minorCudaVersionLoaded = (cudaLoaded - majorCudaVersionLoaded * 1000) / 10;
-        if (maxwellPascalVoltaGpus->size() > 0 && majorCudaVersionLoaded == 13 && minorCudaVersionLoaded == 0)
-        {
-            if (CUDA_VERSION_USED != 12)
-            {
-                std::string const gpus = fmt::format("{}", fmt::join(maxwellPascalVoltaGpus.value(), ", "));
-                std::string const msg  = fmt::format(
-                    "CUDA 13.0 drops support for everything that is < 7.5 SM Cuda Compatibility. These older SKUs need to run a 12.9-linked application. "
-                    "The following GPUs are affected: {}",
-                    gpus);
-                std::cerr << msg << std::endl;
-                std::cerr << "Please use dcgmproftester12 instead." << std::endl;
-                return DCGM_ST_VER_MISMATCH;
-            }
-        }
-        else if (majorCudaVersionLoaded > MAX_CUDA_MAJOR_VERSION && CUDA_VERSION_USED == MAX_CUDA_MAJOR_VERSION)
-        {
-            std::cout << "Running version " << CUDA_VERSION_USED << " binary with CUDA driver version "
-                      << majorCudaVersionLoaded << "." << std::endl;
-        }
-        else
-        {
-            if (majorCudaVersionLoaded != CUDA_VERSION_USED)
-            {
-                std::cerr << "Wrong version of dcgmproftester is used. Expected Cuda version is " << CUDA_VERSION_USED
-                          << ". Installed Cuda version is " << majorCudaVersionLoaded << "." << std::endl;
-                return DCGM_ST_VER_MISMATCH;
-            }
-        }
-
-        dcgmReturn = dpt->Process([dpt](std::shared_ptr<DcgmNs::ProfTester::Arguments_t> arguments) -> dcgmReturn_t {
-            /**
-             * This is the normal logging initialization.
-             */
-            dpt->InitializeLogging(arguments->m_parameters.m_logFile.c_str(), arguments->m_parameters.m_logLevel);
-
-            dcgmReturn_t dcgmReturn = dpt->InitializeGpus(*arguments);
-
-            if (dcgmReturn)
-            {
-                DCGM_LOG_ERROR << "Error " << dcgmReturn << " from InitializeGpus(). Exiting.";
-
-                return dcgmReturn;
-            }
-
-            dcgmReturn_t st = dpt->RunTests(arguments->m_parameters.m_reportInterval,
-                                            arguments->m_parameters.m_duration,
-                                            arguments->m_parameters.m_fieldId,
-                                            arguments->m_parameters.m_maxGpusInParallel);
-
-            if (st != DCGM_ST_OK)
-            {
-                DCGM_LOG_ERROR << "Error " << st << " from RunTests(). Exiting.";
-            }
-
-            dcgmReturn = dpt->ShutdownGpus();
-
-            if (dcgmReturn)
-            {
-                DCGM_LOG_ERROR << "Error " << dcgmReturn << " from ShutdownGpus(). Exiting.";
-
-                return dcgmReturn;
-            }
-
-            if (st == DCGM_ST_NOT_SUPPORTED)
-            {
-                st = DCGM_ST_OK;
-            }
-
-            return st;
-        });
-
-        if (dcgmReturn == DCGM_ST_OK)
-        {
-            std::cout << "All Tests Passed." << std::endl;
-        }
-
-        return dcgmReturn;
-    }
-    catch (std::runtime_error const &ex)
-    {
-        DCGM_LOG_ERROR << "Uncaught runtime exception occured: " << ex.what();
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-    catch (...)
-    {
-        DCGM_LOG_ERROR << "Uncaught unexpected exception occured.";
-
-        return DCGM_ST_GENERIC_ERROR;
-    }
-
-    return 0;
 }

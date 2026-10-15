@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "dcgm_structs.h"
 #include <DcgmCoreProxy.h>
 #include <DcgmFvBuffer.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <stdexcept>
 #include <string>
 
@@ -77,13 +78,14 @@ class DcgmModuleWithCoreProxy : public DcgmModule
 {
 public:
     DcgmModuleWithCoreProxy(const dcgmCoreCallbacks_t &dcc)
-        : m_coreCallbacks(dcc)
+        : m_dcgmOps(std::make_unique<DcgmNs::DcgmOps>())
+        , m_coreCallbacks(dcc)
         , m_coreProxy(dcc)
     {
         InitLogToHostengine(m_coreProxy.GetLoggerSeverity(BASE_LOGGER));
         LoggingSetHostEngineCallback((hostEngineAppenderCallbackFp_t)m_coreCallbacks.loggerfunc);
         char const *moduleName;
-        if (DCGM_ST_OK == dcgmModuleIdToName(static_cast<dcgmModuleId_t>(moduleId), &moduleName))
+        if (DCGM_ST_OK == m_dcgmOps->dcgmModuleIdToName(static_cast<dcgmModuleId_t>(moduleId), &moduleName))
         {
             LoggingSetHostEngineComponentName(moduleName);
         }
@@ -114,6 +116,7 @@ public:
     }
 
 protected:
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOps; //!< Owned DCGM API interface.
     dcgmCoreCallbacks_t m_coreCallbacks;
     DcgmCoreProxy m_coreProxy;
 };

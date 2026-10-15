@@ -31,11 +31,13 @@
 #include <vector>
 
 #include "DcgmRecorder.h"
+#include "DcgmSystem.h"
 #include "DynamicLibraryLoader.h"
 #include "FileSystemOperator.h"
 #include "GoldenValueCalculator.h"
 #include "GpuSet.h"
 #include "HangDetectMonitor.h"
+#include "NvvsCommon.h"
 #include "NvvsStructs.h"
 #include "PluginLib.h"
 #include "SoftwarePluginFramework.h"
@@ -61,8 +63,11 @@ template <typename PluginLibT,
 class TestFramework
 {
 public:
-    TestFramework();
-    TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySet);
+    TestFramework(std::vector<std::unique_ptr<EntitySet>> &entitySets,
+                  DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                  NvvsCommon *nvvsCommon,
+                  DcgmHandle *dcgmHandle,
+                  DcgmSystemBase *dcgmSystem);
     ~TestFramework();
 
     // methods
@@ -118,22 +123,6 @@ public:
     std::map<std::string, std::vector<dcgmDiagPluginParameterInfo_t>> GetSubtestParameters();
 
     dcgmReturn_t SetDiagResponseVersion(unsigned int version);
-
-    /********************************************************************/
-    /**
-     * Determines the appropriate CUDA major version to use based on GPU architecture compatibility
-     *
-     * CUDA 13.0 drops support for Maxwell, Pascal, and Volta GPUs (compute capability < 7.5).
-     * This static method checks the GPU architecture and returns CUDA 12 for older GPUs when CUDA 13.0 is detected.
-     *
-     * @param gpuId GPU ID to check architecture for
-     * @param cudaDriverMajorVersion Current CUDA driver major version
-     * @param cudaDriverMinorVersion Current CUDA driver minor version
-     * @return unsigned int The CUDA major version to use (12 for older GPUs with CUDA 13.0, otherwise original version)
-     */
-    static unsigned int GetCompatibleCudaMajorVersion(unsigned int gpuId,
-                                                      unsigned int cudaDriverMajorVersion,
-                                                      unsigned int cudaDriverMinorVersion);
 
 protected:
     /** @brief Put methods and members that are not part of the public interface in protected section so that the test
@@ -202,6 +191,11 @@ private:
     // Arch, etc.
     std::optional<dcgm_field_eid_t> m_validGpuId;
 
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; // DCGM API interface.
+    NvvsCommon *m_nvvsCommon;        // NVVS common state
+    DcgmHandle *m_dcgmHandle;        // DCGM connection handle.
+    DcgmSystemBase *m_dcgmSystem;    // DCGM system interface.
+
     // new plugin loading
     std::vector<std::unique_ptr<PluginLibT>> m_plugins;
     std::vector<dcgmDiagPluginEntityInfo_v1> m_entityInfo;
@@ -249,7 +243,7 @@ private:
     /**
      * @brief Returns the CUDA-version subdirectory name for driver-dependent plugins (for example @c "/cuda12/").
      *
-     * Uses @c GetCompatibleCudaMajorVersion when a valid GPU id is known. Returns nullopt if the CUDA version cannot
+     * Applies GPU architecture compatibility when a valid GPU id is known. Returns nullopt if the CUDA version cannot
      * be determined or is not mapped to a plugin tree.
      *
      * @return Subdirectory name including leading and trailing slashes, or @c std::nullopt on failure.

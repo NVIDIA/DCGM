@@ -25,6 +25,7 @@ from . import nvsdm_helpers
 
 # NO HARDWARE
 
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
 @test_utils.run_with_standalone_host_engine()
 def test_nvsdm_list_switches(handle):
@@ -47,7 +48,7 @@ def test_nvsdm_list_ib_cx(handle):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_nvsdm_mock_config("one_switch.yaml")
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_nvml()

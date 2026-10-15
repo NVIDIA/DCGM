@@ -1,0 +1,4 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/DcgmProfTesterKernels.ptx
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-dcgmproftesterkernels-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-dcgmproftesterkernels-<BASEPACKAGEVERSION>/LICENSE

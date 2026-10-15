@@ -1,0 +1,13 @@
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulediag.so.<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulediag.so.<SOFTWAREVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/nvvs
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/libcpu_sdc.so.<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins/cudaless/libcpu_sdc.so.<SOFTWAREVERSION>
+/usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>
+/usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>/examples
+/usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>/examples/nvvs.conf
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-module-diag-<BASEPACKAGEVERSION>
+/usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-module-diag-<BASEPACKAGEVERSION>/LICENSE

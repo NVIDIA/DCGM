@@ -16,9 +16,10 @@
 
 #include "DcgmKmsgReader.h"
 #include <DcgmLogging.h>
-#include <DcgmMutex.h>
 #include <DcgmThread.h>
 #include <DcgmUtilities.h>
+#include <ScopedEnvVars.hpp>
+#include <TempDir.hpp>
 
 #include <catch2/catch_all.hpp>
 #include <fmt/format.h>
@@ -32,21 +33,8 @@
 
 namespace
 {
-DcgmMutex envMutex(0);
 std::string XidEnvKey          = "__DCGM_XID_KMSG__";
 std::string KmsgFilenameEnvKey = "__DCGM_TEST_KMSG_FILENAME__";
-
-int SetEnv(const std::string &key, const std::string &value)
-{
-    DcgmLockGuard lock(&envMutex);
-    return setenv(key.c_str(), value.c_str(), 0);
-}
-
-int UnsetEnv(const std::string &key)
-{
-    DcgmLockGuard lock(&envMutex);
-    return unsetenv(key.c_str());
-}
 } //namespace
 
 TEST_CASE("ParseKmsgLineForXid")
@@ -134,59 +122,55 @@ TEST_CASE("ReadEnvXidAndUpdate")
     SECTION("Add new XID to set")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
-        SetEnv(XidEnvKey, "3");
+        ScopedEnvVars envVars(XidEnvKey, "3");
         ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 3);
         std::unordered_set<unsigned int> expectedXids = { 3, 79, 119 };
         CHECK(testXids == expectedXids);
-        UnsetEnv(XidEnvKey);
     }
     SECTION("Remove existing XID from set")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
-        SetEnv(XidEnvKey, "-79");
+        ScopedEnvVars envVars(XidEnvKey, "-79");
         ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 1);
         std::unordered_set<unsigned int> expectedXids = { 119 };
         CHECK(testXids == expectedXids);
-        UnsetEnv(XidEnvKey);
     }
 
     SECTION("Remove non-existent XID from set")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
-        SetEnv(XidEnvKey, "-3");
+        ScopedEnvVars envVars(XidEnvKey, "-3");
         ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
         CHECK(testXids == defaultXids);
-        UnsetEnv(XidEnvKey);
     }
 
     SECTION("Remove existing XID and add new XID to set")
     {
         std::unordered_set<unsigned int> testXids = defaultXids;
-        SetEnv(XidEnvKey, "-79,3");
+        ScopedEnvVars envVars(XidEnvKey, "-79,3");
         ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
         std::unordered_set<unsigned int> expectedXids = { 3, 119 };
         CHECK(testXids == expectedXids);
-        UnsetEnv(XidEnvKey);
     }
     SECTION("Set invalid format env value")
     {
         std::unordered_set<unsigned int> testXids = std::move(defaultXids);
-        SetEnv(XidEnvKey, "-79, 3");
+        ScopedEnvVars envVars;
+        envVars.Add(XidEnvKey, "-79, 3");
         ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
 
-        SetEnv(XidEnvKey, " 3");
+        envVars.Add(XidEnvKey, " 3");
         ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
 
-        SetEnv(XidEnvKey, "rubbish");
+        envVars.Add(XidEnvKey, "rubbish");
         ReadEnvXidAndUpdate(XidEnvKey, testXids);
         CHECK(testXids.size() == 2);
-        UnsetEnv(XidEnvKey);
     }
 }
 
@@ -284,7 +268,8 @@ void PipeKmsgThread::run()
 
 TEST_CASE("Test kmsg pipe")
 {
-    std::string filename                      = "/tmp/kmsg";
+    auto tempDir                              = TempDir::Random("dcgm-kmsg-");
+    std::string filename                      = (tempDir.Path() / "kmsg").string();
     std::list<std::string> xidMessagesToWrite = {
         "filler sfdsfdslkfjdslgjflkdsjf",
         "filler sfdsfdslkfjdslgjflkdsjf",
@@ -320,15 +305,13 @@ TEST_CASE("Test kmsg pipe")
         "filler sfdsfdslkfjdslgjflkdsjf",
     };
 
-    SetEnv(KmsgFilenameEnvKey, filename);
+    ScopedEnvVars envVars(KmsgFilenameEnvKey, filename);
 
     // Generous backstop for joins/stops — ~12x section 1's expected ~800ms.
     int constexpr kHangBackstopMs
         = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::seconds(10)).count();
 
     // The test owns FIFO creation so neither thread races on its existence.
-    // Defensive unlink handles a stale FIFO left by a previously crashed run.
-    unlink(filename.c_str());
     REQUIRE(mkfifo(filename.c_str(), 0755) == 0);
 
     SECTION("Verifies reader reads and parses all available XIDs with a much slower writer")
@@ -419,12 +402,11 @@ TEST_CASE("Test kmsg pipe")
         REQUIRE(writerThread.StopAndWait(kHangBackstopMs) == 0);
         REQUIRE(readerThread.StopAndWait(kHangBackstopMs) == 0);
     }
-    UnsetEnv(KmsgFilenameEnvKey);
 }
 
 TEST_CASE("Nonexistent test kmsg filename")
 {
-    SetEnv(KmsgFilenameEnvKey, "");
+    ScopedEnvVars envVars(KmsgFilenameEnvKey, "nonexistent");
     SECTION("Reader thread exits early")
     {
         DcgmKmsgReaderThread readerThread {};

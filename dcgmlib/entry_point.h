@@ -448,6 +448,120 @@ DCGM_ENTRY_POINT(
     policy,
     statusHandle)
 
+DCGM_ENTRY_POINT(dcgmPolicyCreate,
+                 tsapiEnginePolicyCreate,
+                 (dcgmHandle_t pDcgmHandle,
+                  unsigned short fieldId,
+                  const char *name,
+                  double threshold,
+                  dcgmPolicyOperator_t policyOperator,
+                  const dcgmGroupEntityPair_t *entities,
+                  unsigned int entityCount,
+                  unsigned int channelMask,
+                  unsigned int enabled,
+                  unsigned int rateLimitSec,
+                  uint64_t *policyId),
+                 "({} {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+                 pDcgmHandle,
+                 fieldId,
+                 name,
+                 threshold,
+                 policyOperator,
+                 entities,
+                 entityCount,
+                 channelMask,
+                 enabled,
+                 rateLimitSec,
+                 policyId)
+
+DCGM_ENTRY_POINT(dcgmPolicyModify,
+                 tsapiEnginePolicyModify,
+                 (dcgmHandle_t pDcgmHandle, const dcgmPolicyInfo_t *policy),
+                 "({} {})",
+                 pDcgmHandle,
+                 policy)
+
+DCGM_ENTRY_POINT(dcgmPolicyDelete,
+                 tsapiEnginePolicyDelete,
+                 (dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId, unsigned int deleteAll),
+                 "({} {}, {}, {})",
+                 pDcgmHandle,
+                 fieldId,
+                 policyId,
+                 deleteAll)
+
+DCGM_ENTRY_POINT(dcgmPolicyEnable,
+                 tsapiEnginePolicyEnable,
+                 (dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId),
+                 "({} {}, {})",
+                 pDcgmHandle,
+                 fieldId,
+                 policyId)
+
+DCGM_ENTRY_POINT(dcgmPolicyDisable,
+                 tsapiEnginePolicyDisable,
+                 (dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId),
+                 "({} {}, {})",
+                 pDcgmHandle,
+                 fieldId,
+                 policyId)
+
+DCGM_ENTRY_POINT(dcgmPolicyGetOne,
+                 tsapiEnginePolicyGetOne,
+                 (dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId, dcgmPolicyInfo_t *policy),
+                 "({} {}, {}, {})",
+                 pDcgmHandle,
+                 fieldId,
+                 policyId,
+                 policy)
+
+DCGM_ENTRY_POINT(dcgmPolicyGetAll,
+                 tsapiEnginePolicyGetAll,
+                 (dcgmHandle_t pDcgmHandle, dcgmPolicyInfo_t *policies, unsigned int *count),
+                 "({} {}, {})",
+                 pDcgmHandle,
+                 policies,
+                 count)
+
+DCGM_ENTRY_POINT(dcgmPolicyImport,
+                 tsapiEnginePolicyImport,
+                 (dcgmHandle_t pDcgmHandle, const char *path),
+                 "({} {})",
+                 pDcgmHandle,
+                 path)
+
+DCGM_ENTRY_POINT(
+    dcgmPolicyGetViolations,
+    tsapiEnginePolicyGetViolations,
+    (dcgmHandle_t pDcgmHandle, int64_t sinceTimestamp, dcgm_policy_violation_t *violations, unsigned int *count),
+    "({} {}, {}, {})",
+    pDcgmHandle,
+    sinceTimestamp,
+    violations,
+    count)
+
+DCGM_ENTRY_POINT(dcgmPolicyRegister_v3,
+                 tsapiEnginePolicyRegister_v3,
+                 (dcgmHandle_t pDcgmHandle,
+                  unsigned short fieldId,
+                  uint64_t policyId,
+                  fpRecvPolicyViolation callback,
+                  uint64_t userData),
+                 "({} {}, {}, {}, {})",
+                 pDcgmHandle,
+                 fieldId,
+                 policyId,
+                 callback,
+                 userData)
+
+DCGM_ENTRY_POINT(dcgmPolicyUnregister_v3,
+                 tsapiEnginePolicyUnregister_v3,
+                 (dcgmHandle_t pDcgmHandle, unsigned short fieldId, uint64_t policyId),
+                 "({} {}, {})",
+                 pDcgmHandle,
+                 fieldId,
+                 policyId)
+
 DCGM_ENTRY_POINT(dcgmPolicyTrigger, tsapiEnginePolicyTrigger, (dcgmHandle_t pDcgmHandle), "{}", pDcgmHandle)
 
 DCGM_ENTRY_POINT(dcgmPolicyRegister_v2,
@@ -698,7 +812,7 @@ DCGM_ENTRY_POINT(dcgmStopDiagnostic, tsapiEngineStopDiagnostic, (dcgmHandle_t pD
 
 DCGM_ENTRY_POINT(dcgmRunMnDiagnostic,
                  tsapiEngineRunMnDiagnostic,
-                 (dcgmHandle_t pDcgmHandle, dcgmRunMnDiag_v1 const *drmnd, dcgmMnDiagResponse_v1 *response),
+                 (dcgmHandle_t pDcgmHandle, dcgmRunMnDiag_v2 const *drmnd, dcgmMnDiagResponse_v2 *response),
                  "({}, {}, {})",
                  pDcgmHandle,
                  drmnd,

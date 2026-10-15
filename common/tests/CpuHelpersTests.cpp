@@ -56,6 +56,33 @@ TEST_CASE("CPU Vendor & Model")
         REQUIRE(cpuHelpers.GetModel() == cpuHelpers.GetGraceModelName());
     }
 
+    SECTION("Nvidia Vera CPU")
+    {
+        auto mockFileOp = std::make_unique<MockFileSystemOperator>();
+
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:0410\n");
+
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
+
+        REQUIRE(cpuHelpers.GetVendor() == cpuHelpers.GetNvidiaVendorName());
+        REQUIRE(cpuHelpers.GetModel() == cpuHelpers.GetVeraModelName());
+    }
+
+    SECTION("Unrecognized Nvidia chip ID")
+    {
+        auto mockFileOp = std::make_unique<MockFileSystemOperator>();
+
+        mockFileOp->MockGlob(CPU_VENDOR_MODEL_GLOB_PATH, { "/sys/devices/soc0/soc_id" });
+        mockFileOp->MockFileContent("/sys/devices/soc0/soc_id", "jep106:036b:9999\n");
+
+        CpuHelpers cpuHelpers(std::move(mockFileOp), std::make_unique<LsHw>());
+
+        REQUIRE(cpuHelpers.GetVendor() == cpuHelpers.GetNvidiaVendorName());
+        REQUIRE(cpuHelpers.GetModel() != cpuHelpers.GetGraceModelName());
+        REQUIRE(cpuHelpers.GetModel() != cpuHelpers.GetVeraModelName());
+    }
+
     SECTION("Non Nvidia Grace CPU")
     {
         auto mockFileOp = std::make_unique<MockFileSystemOperator>();

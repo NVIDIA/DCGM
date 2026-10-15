@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include <dcgm_fields.h>
+
 #include <vector>
 
 /********************************************************************************/
@@ -26,14 +28,19 @@
  * Get the NVML_GPM_METRIC_? ID for a given DCGM_FI_PROF_ fieldId.
  *
  * @param[in] fieldId           : Dcgm field ID to convert to NVML ID
+ * @param[in] entityGroupId     : Entity group used to interpret overloaded field IDs
  * @param[in] isPercentageField : Is the returned NVML field ID a percentage? Yes=true. No=false.
  *                                DCGM tracks these as 0.0-1.0 so we need to divide percentages
  *                                by 100.0.
+ * @param[in] linkIndex         : Link index for fields queried on a DCGM_FE_LINK entity
  *
  * @return Nonzero Nvml metric ID on success.
  *         0 on failure
  */
-unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId, bool &isPercentageField, unsigned int linkIndex = 0);
+unsigned int DcgmFieldIdToNvmlGpmMetricId(unsigned int fieldId,
+                                          dcgm_field_entity_group_t entityGroupId,
+                                          bool &isPercentageField,
+                                          unsigned int linkIndex = 0);
 
 /********************************************************************************/
 /*
@@ -79,14 +86,24 @@ int DcgmFieldGetAllFieldIds(std::vector<unsigned short> &fieldIds);
 #define DCGM_FI_PROF_FIRST_ID DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO
 #define DCGM_FI_PROF_LAST_ID  DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL
 
+/*
+ * Private compatibility IDs for NVLink profiling fields deprecated in DCGM 4.7.
+ * Keep internal runtime support independent of the public DCGM_DEPRECATED symbols.
+ */
+#define DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST 1040
+#define DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_LAST  1075
+#define DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK_ID    1532
+#define DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK_ID    1533
+
 /* Sysmon field IDs */
-#define DCGM_FI_SYSMON_FIRST_ID DCGM_FI_DEV_CPU_UTIL_TOTAL
+#define DCGM_FI_SYSMON_FIRST_ID DCGM_FI_DEV_CPU_UTIL_RATIO
 #define DCGM_FI_SYSMON_LAST_ID  DCGM_FI_DEV_CPU_MODEL
 
 /* Macro to get whether a given fieldId is a profiling field or not */
 #define DCGM_FIELD_ID_IS_PROF_FIELD(fieldId)                                   \
     (((fieldId) >= DCGM_FI_PROF_FIRST_ID && (fieldId) <= DCGM_FI_PROF_LAST_ID) \
-     || ((fieldId) >= DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK && (fieldId) <= DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK))
+     || ((fieldId) >= DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK_ID                 \
+         && (fieldId) <= DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK_ID))
 
 /* PCIe throughput field range (returns MiB/s from NVML GPM). */
 #define DCGM_FI_PROF_PCIE_THROUGHPUT_FIRST DCGM_FI_PROF_PCIE_TX_BYTES
@@ -96,13 +113,9 @@ int DcgmFieldGetAllFieldIds(std::vector<unsigned short> &fieldIds);
 #define DCGM_FI_PROF_NVLINK_AGG_THROUGHPUT_FIRST DCGM_FI_PROF_NVLINK_TX_BYTES
 #define DCGM_FI_PROF_NVLINK_AGG_THROUGHPUT_LAST  DCGM_FI_PROF_NVLINK_RX_BYTES
 
-/* Legacy per-link NVLink throughput field range L0-L17 (returns MiB/s from NVML GPM). */
-#define DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_FIRST DCGM_FI_PROF_NVLINK_L0_TX_BYTES
-#define DCGM_FI_PROF_NVLINK_THROUGHPUT_LEGACY_LAST  DCGM_FI_PROF_NVLINK_L17_RX_BYTES
-
 /* Per-link NVLink throughput fields keyed by dcgm_link_t (returns MiB/s from NVML GPM). */
-#define DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_FIRST DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK
-#define DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_LAST  DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK
+#define DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_FIRST DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK_ID
+#define DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_LAST  DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK_ID
 
 /* C2C throughput field range (returns MiB/s from NVML GPM). */
 #define DCGM_FI_PROF_C2C_THROUGHPUT_FIRST DCGM_FI_PROF_C2C_TX_ALL_BYTES

@@ -125,7 +125,7 @@ DIAG_CLOCKS_EVENT_WARNING = "Clocks are being optimized for"
 DIAG_INFOROM_WARNING = "Error calling NVML API nvmlDeviceValidateInforom"
 DIAG_THERMAL_WARNING = "Thermal violations totaling "
 DIAG_MIG_INCOMPATIBLE_WARNING = "is incompatible with the diagnostic because it prevents access to the entire GPU."
-DIAG_MIG_MULTIPLE_GPU_WARNING = "Cannot run diagnostic: CUDA does not support enumerating GPUs with MIG mode enabled"
+DIAG_MIG_MULTIPLE_GPU_WARNING = "Cannot run diagnostic: CUDA before 12.8 does not support enumerating GPUs with MIG mode enabled"
 
 DIAG_CLOCKS_EVENT_SUGGEST = "A GPU's clocks are being optimized due to a cooling issue. Please make sure your GPUs are properly cooled."
 DIAG_INFOROM_SUGGEST = "A GPU's inforom is corrupt. You should re-flash it with iromflsh or replace the GPU. Run nvidia-smi without arguments to see which GPU."
@@ -238,8 +238,15 @@ class TestRunner():
             # Get the number of actual errors in the output
             failCount, exclusionCount = self.checkForErrors()
 
+            hadSystemFailure = any(
+                f.GetTestname() == 'System_Failure'
+                for f in self.failing_tests.get(runIndex, [])
+            )
+
             if failCount > fail_total:
                 print_parseable_status("FAILED", runIndex)
+            elif hadSystemFailure:
+                print_parseable_status("SKIPPED", runIndex)
             else:
                 print_parseable_status("PASSED", runIndex)
 

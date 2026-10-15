@@ -24,10 +24,7 @@ if [ "$DCGM_BUILD_INSIDE_DOCKER" != 1 ]; then
 fi
 
 function format_cxx() {
-    find "${TOP_LEVEL_DIR}" -type f \
-        "(" -name "*.[ch]" -o -name "*.[ch]pp" -o -name "*.inl" ")" \
-        -print0 \
-        | xargs -0 -n 1 -P 0 clang-format -i
+    ./scripts/run-clang-format
 }
 
 function format_python() {

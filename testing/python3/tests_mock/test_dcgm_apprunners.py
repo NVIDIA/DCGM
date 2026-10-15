@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2023-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ def test_dcgmi_app():
     trampoline()
 
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_only_on_linux()
 @test_utils.run_only_with_nvml()
 def test_dcgm_unittests_app(*args, **kwargs):

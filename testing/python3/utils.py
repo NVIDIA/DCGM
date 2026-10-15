@@ -144,6 +144,33 @@ def is_real_user_root():
         return ctypes.windll.shell32.IsUserAnAdmin()
 
 
+@cache()
+def is_root_in_user_namespace():
+    """
+    Return True when effective root is mapped to a non-root host uid.
+
+    Rootless Docker runs processes as uid 0 inside the container, but that uid
+    is mapped to an unprivileged host uid. Those processes should not satisfy
+    tests that require a host-privileged root environment.
+    """
+    if not is_linux() or not is_root():
+        return False
+
+    try:
+        with open("/proc/self/uid_map", "r") as uid_map:
+            for line in uid_map:
+                fields = line.split()
+                if len(fields) != 3:
+                    continue
+                container_uid, host_uid, uid_count = map(int, fields)
+                if container_uid <= 0 < container_uid + uid_count:
+                    return host_uid != 0
+    except (IOError, OSError, ValueError):
+        return False
+
+    return False
+
+
 _UserInfo = namedtuple("UserInfo", "uid, gid, name")
 
 
@@ -802,6 +829,8 @@ def checkMemoryPressure():
 
 
 def verifyEcosystem():
+    if option_parser.options.no_hw:
+        return
     if option_parser.options.filter_tests:
         logger.warning(
             "filter_tests has been selected, skipping preflight checks.")

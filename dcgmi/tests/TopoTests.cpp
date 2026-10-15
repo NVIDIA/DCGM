@@ -13,33 +13,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <catch2/catch_all.hpp>
+#include <catch2/catch_test_macros.hpp>
 
-#include "TestHelpers.hpp"
-#include "mock/MockDcgmiGroupInfo.hpp"
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
 
+#include <MockDcgmOps.h>
 #include <Topo.h>
 
-#include <cstring>
+#include <array>
+#include <string>
 
 namespace
 {
-struct TopoApiState
+dcgmDeviceTopology_t MakeDeviceTopology()
 {
-    dcgmReturn_t deviceReturn = DCGM_ST_OK;
-    dcgmReturn_t groupReturn  = DCGM_ST_OK;
-
-    int deviceCallCount = 0;
-    int groupCallCount  = 0;
-
-    dcgmHandle_t lastHandle  = 0;
-    unsigned int lastGpuId   = 0;
-    dcgmGpuGrp_t lastGroupId = 0;
     dcgmDeviceTopology_t deviceTopology {};
-    dcgmGroupTopology_t groupTopology {};
-};
+    deviceTopology.version            = dcgmDeviceTopology_version;
+    deviceTopology.cpuAffinityMask[0] = 0xfull;
+    deviceTopology.numGpus            = 1;
+    deviceTopology.gpuPaths[0].gpuId  = 1;
+    deviceTopology.gpuPaths[0].path   = static_cast<dcgmGpuTopologyLevel_t>(DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK2);
+    deviceTopology.gpuPaths[0].localNvLinkIds = 0x3;
+    return deviceTopology;
+}
 
-TopoApiState g_topoApi;
+dcgmGroupTopology_t MakeGroupTopology()
+{
+    dcgmGroupTopology_t groupTopology {};
+    groupTopology.version                 = dcgmGroupTopology_version;
+    groupTopology.groupCpuAffinityMask[0] = 0x3ull;
+    groupTopology.numaOptimalFlag         = 1;
+    groupTopology.slowestPath             = DCGM_TOPOLOGY_SINGLE;
+    return groupTopology;
+}
 
 class TestGetGPUTopo : public GetGPUTopo
 {
@@ -65,91 +72,33 @@ public:
     }
 };
 
-void ResetTopoApi()
+class TopoTestFixture
 {
-    g_topoApi                                   = {};
-    g_topoApi.deviceReturn                      = DCGM_ST_OK;
-    g_topoApi.groupReturn                       = DCGM_ST_OK;
-    g_topoApi.deviceTopology.version            = dcgmDeviceTopology_version;
-    g_topoApi.deviceTopology.cpuAffinityMask[0] = 0xfull;
-    g_topoApi.deviceTopology.numGpus            = 1;
-    g_topoApi.deviceTopology.gpuPaths[0].gpuId  = 1;
-    g_topoApi.deviceTopology.gpuPaths[0].path
-        = static_cast<dcgmGpuTopologyLevel_t>(DCGM_TOPOLOGY_CPU | DCGM_TOPOLOGY_NVLINK2);
-    g_topoApi.deviceTopology.gpuPaths[0].localNvLinkIds = 0x3;
+public:
+    TopoTestFixture()
+        : topo(&mockDcgmOps)
+    {
+        mockDcgmOps.m_topologyState.deviceTopology = MakeDeviceTopology();
+        mockDcgmOps.m_topologyState.groupTopology  = MakeGroupTopology();
+        mockDcgmOps.m_groupInfoState.overrideInfo  = DcgmNs::MockDcgmOps::MakeGroupInfo("topo-group");
+    }
 
-    g_topoApi.groupTopology.version                 = dcgmGroupTopology_version;
-    g_topoApi.groupTopology.groupCpuAffinityMask[0] = 0x3ull;
-    g_topoApi.groupTopology.numaOptimalFlag         = 1;
-    g_topoApi.groupTopology.slowestPath             = DCGM_TOPOLOGY_SINGLE;
-
-    ResetMockDcgmiGroupInfo();
-    std::strncpy(g_mockDcgmiGroupInfoData.m_groupInfo.groupName,
-                 "topo-group",
-                 sizeof(g_mockDcgmiGroupInfoData.m_groupInfo.groupName) - 1);
-}
+    DcgmNs::MockDcgmOps mockDcgmOps;
+    Topo topo;
+    dcgmHandle_t handle = static_cast<dcgmHandle_t>(0x98);
+};
 } //namespace
 
-/**
- * @brief Test-only mock for dcgmGetDeviceTopology backed by g_topoApi.
- *
- * Increments g_topoApi.deviceCallCount, records g_topoApi.lastHandle and g_topoApi.lastGpuId, returns
- * DCGM_ST_BADPARAM for nullptr topology, returns g_topoApi.deviceReturn for configured failures, and copies
- * g_topoApi.deviceTopology on success.
- */
-extern "C" dcgmReturn_t dcgmGetDeviceTopology(dcgmHandle_t handle, unsigned int gpuId, dcgmDeviceTopology_t *topology)
+SCENARIO("Topo: formats CPU affinity helper output")
 {
-    g_topoApi.deviceCallCount++;
-    g_topoApi.lastHandle = handle;
-    g_topoApi.lastGpuId  = gpuId;
-    if (topology == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (g_topoApi.deviceReturn != DCGM_ST_OK)
-    {
-        return g_topoApi.deviceReturn;
-    }
-    *topology = g_topoApi.deviceTopology;
-    return DCGM_ST_OK;
-}
-
-/**
- * @brief Test-only mock for dcgmGetGroupTopology backed by g_topoApi.
- *
- * Increments g_topoApi.groupCallCount, records g_topoApi.lastHandle and g_topoApi.lastGroupId, returns
- * DCGM_ST_BADPARAM for nullptr topology, returns g_topoApi.groupReturn for configured failures, and copies
- * g_topoApi.groupTopology on success.
- */
-extern "C" dcgmReturn_t dcgmGetGroupTopology(dcgmHandle_t handle, dcgmGpuGrp_t groupId, dcgmGroupTopology_t *topology)
-{
-    g_topoApi.groupCallCount++;
-    g_topoApi.lastHandle  = handle;
-    g_topoApi.lastGroupId = groupId;
-    if (topology == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (g_topoApi.groupReturn != DCGM_ST_OK)
-    {
-        return g_topoApi.groupReturn;
-    }
-    *topology = g_topoApi.groupTopology;
-    return DCGM_ST_OK;
-}
-
-TEST_CASE("Dcgmi Topo: CPU Affinity Helper")
-{
-    unsigned long cpuAffinity[DCGM_AFFINITY_BITMASK_ARRAY_SIZE] = {};
+    std::array<unsigned long, DCGM_AFFINITY_BITMASK_ARRAY_SIZE> cpuAffinity {};
 
     SECTION("Single 64bit mask")
     {
         // expected output: //0 - 19, 40 - 59
         cpuAffinity[0] = 1152920405096267775UL;
 
-        auto result = Topo::HelperGetAffinity(cpuAffinity);
+        auto result = Topo::HelperGetAffinity(cpuAffinity.data());
         REQUIRE(result == "0 - 19, 40 - 59");
     }
 
@@ -159,15 +108,13 @@ TEST_CASE("Dcgmi Topo: CPU Affinity Helper")
         cpuAffinity[0] = 17293823668613283840UL;
         cpuAffinity[1] = 65535;
 
-        auto result = Topo::HelperGetAffinity(cpuAffinity);
+        auto result = Topo::HelperGetAffinity(cpuAffinity.data());
         REQUIRE(result == "20 - 39, 60 - 79");
     }
 }
 
-TEST_CASE("Topo helper path formatting")
+SCENARIO_METHOD(TopoTestFixture, "Topo: formats helper paths")
 {
-    Topo topo;
-
     SECTION("PCI paths map to user-facing strings")
     {
         dcgmGpuTopologyLevel_t path = DCGM_TOPOLOGY_BOARD;
@@ -199,21 +146,110 @@ TEST_CASE("Topo helper path formatting")
     }
 }
 
-TEST_CASE("Topo display APIs")
+SCENARIO("Topo: handles empty and singleton affinity masks")
+{
+    std::array<unsigned long, DCGM_AFFINITY_BITMASK_ARRAY_SIZE> cpuAffinity {};
+
+    SECTION("No CPU affinity bits are reported as N/A")
+    {
+        CHECK(Topo::HelperGetAffinity(cpuAffinity.data()) == "N/A");
+    }
+
+    SECTION("A single CPU affinity bit is reported without a range")
+    {
+        cpuAffinity[0] = 1UL << 7;
+
+        CHECK(Topo::HelperGetAffinity(cpuAffinity.data()) == "7");
+    }
+}
+
+SCENARIO_METHOD(TopoTestFixture, "Topo: formats PCI and high-count NvLink paths")
+{
+    SECTION("PCI path levels map to stable user-facing descriptions")
+    {
+        struct TestCase
+        {
+            dcgmGpuTopologyLevel_t path;
+            std::string expected;
+        };
+
+        std::array<TestCase, 4> cases { {
+            { DCGM_TOPOLOGY_SINGLE, "single PCIe switch" },
+            { DCGM_TOPOLOGY_MULTIPLE, "multiple PCIe switches" },
+            { DCGM_TOPOLOGY_CPU, "CPU-level link" },
+            { DCGM_TOPOLOGY_SYSTEM, "CPU-level link" },
+        } };
+
+        for (auto const &tc : cases)
+        {
+            CAPTURE(tc.path);
+            CHECK(topo.HelperGetPciPath(tc.path).find(tc.expected) != std::string::npos);
+        }
+    }
+
+    SECTION("Every NvLink path level maps to the expected link-count phrase")
+    {
+        struct TestCase
+        {
+            dcgmGpuTopologyLevel_t path;
+            unsigned int linkCount;
+            std::string expected;
+        };
+
+        std::array<TestCase, 18> cases { {
+            { DCGM_TOPOLOGY_NVLINK1, 1, "one NVLINK" },
+            { DCGM_TOPOLOGY_NVLINK2, 2, "two NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK3, 3, "three NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK4, 4, "four NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK5, 5, "five NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK6, 6, "six NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK7, 7, "seven NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK8, 8, "eight NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK9, 9, "nine NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK10, 10, "ten NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK11, 11, "eleven NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK12, 12, "twelve NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK13, 13, "thirteen NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK14, 14, "fourteen NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK15, 15, "fifteen NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK16, 16, "sixteen NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK17, 17, "seventeen NVLINKs" },
+            { DCGM_TOPOLOGY_NVLINK18, 18, "eighteen NVLINKs" },
+        } };
+
+        for (auto const &tc : cases)
+        {
+            CAPTURE(tc.expected);
+            auto path      = tc.path;
+            auto linkMask  = (1ULL << tc.linkCount) - 1;
+            auto label     = topo.HelperGetNvLinkPath(path, linkMask);
+            auto finalLink = std::to_string(tc.linkCount - 1);
+
+            CHECK(label.find(tc.expected) != std::string::npos);
+            CHECK(label.find("0") != std::string::npos);
+            CHECK(label.find(finalLink) != std::string::npos);
+        }
+    }
+
+    SECTION("Unknown NvLink path levels produce an unknown label")
+    {
+        auto path = static_cast<dcgmGpuTopologyLevel_t>(0);
+
+        CHECK(topo.HelperGetNvLinkPath(path, 0x1) == "Unknown");
+    }
+}
+
+SCENARIO_METHOD(TopoTestFixture, "Topo: displays topology API results")
 {
     GIVEN("mocked topology APIs")
     {
-        ResetTopoApi();
-        Topo topo;
-        auto handle = static_cast<dcgmHandle_t>(0x98);
-
         SECTION("DisplayGPUTopology renders affinity and GPU paths")
         {
             CoutCapture capture;
 
             CHECK(topo.DisplayGPUTopology(handle, 0, false) == DCGM_ST_OK);
-            CHECK(g_topoApi.deviceCallCount == 1);
-            CHECK(g_topoApi.lastGpuId == 0);
+            CHECK(mockDcgmOps.m_topologyState.deviceCallCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.lastGpuId == 0);
             CHECK(capture.str().find("GPU ID: 0") != std::string::npos);
             CHECK(capture.str().find("CPU Core Affinity") != std::string::npos);
             CHECK(capture.str().find("To GPU 1") != std::string::npos);
@@ -222,7 +258,7 @@ TEST_CASE("Topo display APIs")
 
         SECTION("DisplayGPUTopology returns unsupported")
         {
-            g_topoApi.deviceReturn = DCGM_ST_NOT_SUPPORTED;
+            mockDcgmOps.m_topologyState.deviceReturn = DCGM_ST_NOT_SUPPORTED;
             CoutCapture capture;
 
             CHECK(topo.DisplayGPUTopology(handle, 0, true) == DCGM_ST_NOT_SUPPORTED);
@@ -234,9 +270,9 @@ TEST_CASE("Topo display APIs")
             CoutCapture capture;
 
             CHECK(topo.DisplayGroupTopology(handle, 6, false) == DCGM_ST_OK);
-            CHECK(g_mockDcgmiGroupInfoData.m_groupInfoCallCount == 1);
-            CHECK(g_topoApi.groupCallCount == 1);
-            CHECK(g_topoApi.lastGroupId == 6);
+            CHECK(mockDcgmOps.m_groupInfoState.callCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.groupCallCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.lastGroupId == 6);
             CHECK(capture.str().find("topo-group") != std::string::npos);
             CHECK(capture.str().find("NUMA Optimal") != std::string::npos);
             CHECK(capture.str().find("single PCIe switch") != std::string::npos);
@@ -244,41 +280,40 @@ TEST_CASE("Topo display APIs")
 
         SECTION("DisplayGroupTopology returns generic error when group info fails")
         {
-            g_mockDcgmiGroupInfoData.m_groupInfoReturn = DCGM_ST_NOT_CONFIGURED;
+            mockDcgmOps.m_groupInfoState.returnCode = DCGM_ST_NOT_CONFIGURED;
             CoutCapture capture;
 
             CHECK(topo.DisplayGroupTopology(handle, 6, false) == DCGM_ST_GENERIC_ERROR);
-            CHECK(g_topoApi.groupCallCount == 0);
+            CHECK(mockDcgmOps.m_topologyState.groupCallCount == 0);
             CHECK(capture.str().find("The Group is not found") != std::string::npos);
         }
     }
 }
 
-TEST_CASE("Topo command wrappers")
+SCENARIO_METHOD(TopoTestFixture, "Topo: forwards command wrappers")
 {
     GIVEN("topology commands with a connected handle")
     {
-        ResetTopoApi();
-        auto handle = static_cast<dcgmHandle_t>(0x99);
+        handle = static_cast<dcgmHandle_t>(0x99);
 
         SECTION("GetGPUTopo forwards to DisplayGPUTopology")
         {
             CoutCapture capture;
-            TestGetGPUTopo command("localhost", 2, false);
+            TestGetGPUTopo command("localhost", 2, false, &mockDcgmOps);
 
             CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
-            CHECK(g_topoApi.deviceCallCount == 1);
-            CHECK(g_topoApi.lastGpuId == 2);
+            CHECK(mockDcgmOps.m_topologyState.deviceCallCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.lastGpuId == 2);
         }
 
         SECTION("GetGroupTopo forwards to DisplayGroupTopology")
         {
             CoutCapture capture;
-            TestGetGroupTopo command("localhost", 8, false);
+            TestGetGroupTopo command("localhost", 8, false, &mockDcgmOps);
 
             CHECK(command.RunWithHandle(handle) == DCGM_ST_OK);
-            CHECK(g_topoApi.groupCallCount == 1);
-            CHECK(g_topoApi.lastGroupId == 8);
+            CHECK(mockDcgmOps.m_topologyState.groupCallCount == 1);
+            CHECK(mockDcgmOps.m_topologyState.lastGroupId == 8);
         }
     }
 }

@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 #pragma once
-#include <cublas_proxy.hpp>
+#include <CublasOpsAnyPtr.hpp>
 
 
 namespace DcgmNs
 {
-cublasStatus_t DcgmDgemm(cublasLtHandle_t ltHandle,
+cublasStatus_t DcgmDgemm(CublasOpsAnyPtr cublasOps,
+                         cublasLtHandle_t ltHandle,
                          cublasOperation_t transa,
                          cublasOperation_t transb,
                          int m,

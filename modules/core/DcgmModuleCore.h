@@ -20,7 +20,9 @@
 #include "DcgmModule.h"
 #include "dcgm_core_structs.h"
 #include <DcgmCacheManager.h>
+#include <DcgmCacheManagerAnyPtr.hpp>
 #include <DcgmGroupManager.h>
+#include <optional>
 #include <vector>
 
 class DcgmModuleCore : public DcgmModule
@@ -29,7 +31,7 @@ public:
     DcgmModuleCore();
     ~DcgmModuleCore();
 
-    void Initialize(DcgmCacheManager *cm);
+    void Initialize(DcgmCacheManagerAnyPtr cm);
 
     void SetGroupManager(DcgmGroupManager *gm);
 
@@ -135,7 +137,7 @@ private:
     template <typename MsgT>
     dcgmReturn_t ProcessEntitiesGetLatestValuesImpl(MsgT &msg, unsigned int versionMagic);
 
-    DcgmCacheManager *m_cacheManager;
+    std::optional<DcgmCacheManagerAnyPtr> m_cacheManager;
     DcgmGroupManager *m_groupManager;
     dcgmModuleProcessMessage_f m_processMsgCB;
 };

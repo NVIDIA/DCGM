@@ -1,0 +1,7 @@
+./usr/
+./usr/bin/
+./usr/bin/dcgmi
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/dcgmi/
+./usr/share/doc/dcgmi/copyright

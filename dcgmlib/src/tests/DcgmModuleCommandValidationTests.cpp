@@ -19,7 +19,9 @@
 #include <DcgmModuleCommandValidation.h>
 #include <DcgmProtocol.h>
 #include <dcgm_core_structs.h>
+#include <dcgm_policy_structs.h>
 
+#include <array>
 #include <cstddef>
 #include <limits>
 #include <vector>
@@ -119,6 +121,52 @@ TEST_CASE("DcgmModuleCommandValidation: unknown subcommand is rejected")
     REQUIRE(validation.shouldRespond);
     REQUIRE(validation.dispatchBufferLength == sizeof(dcgm_module_command_header_t));
     REQUIRE(buffer.size() == sizeof(dcgm_module_command_header_t));
+}
+
+TEST_CASE("DcgmModuleCommandValidation: field-policy commands dispatch")
+{
+    struct FieldPolicyCommand
+    {
+        unsigned int subCommand;
+        unsigned int version;
+        std::size_t size;
+    };
+
+    constexpr std::array fieldPolicyCommands {
+        FieldPolicyCommand { DCGM_POLICY_SR_CREATE, dcgm_policy_msg_create_version, sizeof(dcgm_policy_msg_create_t) },
+        FieldPolicyCommand { DCGM_POLICY_SR_MODIFY, dcgm_policy_msg_modify_version, sizeof(dcgm_policy_msg_modify_t) },
+        FieldPolicyCommand { DCGM_POLICY_SR_DELETE, dcgm_policy_msg_delete_version, sizeof(dcgm_policy_msg_delete_t) },
+        FieldPolicyCommand {
+            DCGM_POLICY_SR_ENABLE, dcgm_policy_msg_set_state_version, sizeof(dcgm_policy_msg_set_state_t) },
+        FieldPolicyCommand {
+            DCGM_POLICY_SR_DISABLE, dcgm_policy_msg_set_state_version, sizeof(dcgm_policy_msg_set_state_t) },
+        FieldPolicyCommand {
+            DCGM_POLICY_SR_GET_ONE, dcgm_policy_msg_get_one_version, sizeof(dcgm_policy_msg_get_one_t) },
+        FieldPolicyCommand {
+            DCGM_POLICY_SR_GET_ALL, dcgm_policy_msg_get_all_version, sizeof(dcgm_policy_msg_get_all_t) },
+        FieldPolicyCommand { DCGM_POLICY_SR_IMPORT, dcgm_policy_msg_import_version, sizeof(dcgm_policy_msg_import_t) },
+        FieldPolicyCommand { DCGM_POLICY_SR_GET_VIOLATIONS,
+                             dcgm_policy_msg_get_violations_version,
+                             sizeof(dcgm_policy_msg_get_violations_t) },
+        FieldPolicyCommand { DCGM_POLICY_SR_REGISTER_CALLBACK,
+                             dcgm_policy_msg_register_callback_version,
+                             sizeof(dcgm_policy_msg_register_callback_t) },
+        FieldPolicyCommand { DCGM_POLICY_SR_UNREGISTER_CALLBACK,
+                             dcgm_policy_msg_unregister_callback_version,
+                             sizeof(dcgm_policy_msg_unregister_callback_t) },
+    };
+
+    for (auto const &command : fieldPolicyCommands)
+    {
+        auto buffer = MakeModuleCommand(DcgmModuleIdPolicy, command.subCommand, command.version, command.size);
+        auto const validation = PrepareModuleCommandForDispatch(buffer, DCGM_PROTO_MAX_MESSAGE_SIZE);
+
+        INFO("subcommand " << command.subCommand);
+        REQUIRE(validation.status == DCGM_ST_OK);
+        REQUIRE(validation.shouldDispatch);
+        REQUIRE_FALSE(validation.shouldRespond);
+        REQUIRE(validation.dispatchBufferLength == command.size);
+    }
 }
 
 TEST_CASE("DcgmModuleCommandValidation: variable-response command accepts request prefix and resizes")

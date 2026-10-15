@@ -44,6 +44,8 @@ def helper_nvsdm_pause_resume(handle):
         handle, dcgm_fields.DCGM_FE_LINK, flags)
 
     def assertIdListIsTheSame(old, new, name):
+        old = sorted(old)
+        new = sorted(new)
         assert len(old) == len(new), (
             f"The length of {name} does not match: "
             f"old length is [{len(old)}], "

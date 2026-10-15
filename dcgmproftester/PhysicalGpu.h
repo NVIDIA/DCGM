@@ -16,21 +16,27 @@
 #pragma once
 
 #include "Arguments.h"
-#include "DcgmProfTester.h"
-#include "DistributedCudaContext.h"
+#include "DcgmProfTesterAnyPtr.hpp"
+#include "DistributedCudaContextRuntimeAnyUniquePtr.hpp"
 #include "Entity.h"
+#include <CudaWorkerThreadAnyUniquePtr.hpp>
+#include <CudaWorkerThreadFactoryAnyPtr.hpp>
 
+#include <CudaOpsAnyPtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
 #include <cuda.h>
 #include <dcgm_structs.h>
-#include <functional>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
 namespace DcgmNs::ProfTester
 {
+class DistributedCudaContext;
+
 /*****************************************************************************/
-class PhysicalGpu : public std::enable_shared_from_this<PhysicalGpu>
+class PhysicalGpu
 {
 public:
     enum class ValueType
@@ -62,7 +68,24 @@ public:
 
     /*************************************************************************/
     /* ctor/dtor */
-    PhysicalGpu(std::shared_ptr<DcgmProfTester> tester, unsigned int gpuId, const Arguments_t::Parameters &parameters);
+    /**
+     * Construct a physical-GPU test controller.
+     *
+     * @param[in] tester Borrowed controlling profiler tester.
+     * @param[in] gpuId DCGM GPU identifier controlled by this instance.
+     * @param[in] parameters Initial test parameters.
+     * @param[in] dcgmOps Borrowed DCGM API interface.
+     * @param[in] cudaOps Borrowed CUDA API interface.
+     * @param[in] cudaWorkerFactory Borrowed factory used to create CUDA worker threads.
+     * @param[in] runtime Runtime owned by this controller and shared with its contexts.
+     */
+    PhysicalGpu(DcgmProfTesterAnyPtr tester,
+                unsigned int gpuId,
+                const Arguments_t::Parameters &parameters,
+                DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                CudaOpsAnyPtr cudaOps,
+                CudaWorkerThreadFactoryAnyPtr cudaWorkerFactory,
+                DistributedCudaContextRuntimeAnyUniquePtr runtime);
 
     ~PhysicalGpu();
 
@@ -98,13 +121,12 @@ public:
      * @param entities - map of field values to be captured for this device
      * @param deviceId - CUDA context environment variable to select this device
      *
-     * @returns - a shared_ptr to a DistributedCudaContext
+     * @return - a borrowed pointer to a DistributedCudaContext
      *
      */
-    std::shared_ptr<DistributedCudaContext> AddSlice(
-        std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities,
-        dcgmGroupEntityPair_t &entity,
-        const std::string &deviceId);
+    DistributedCudaContext *AddSlice(std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> entities,
+                                     dcgmGroupEntityPair_t &entity,
+                                     const std::string &deviceId);
 
     /*************************************************************************/
     /* These functions manage the starting and Running of tests and processing
@@ -118,14 +140,14 @@ public:
      *
      * Process a response from a GPU CI on this physical GPU.
      *
-     * @param worker - worker CUDA context smart pointer.
+     * @param worker - borrowed worker CUDA context pointer.
      *
-     * @returns dcgmReturn_t indicating result.
+     * @return dcgmReturn_t indicating result.
      */
-    dcgmReturn_t ProcessResponse(std::shared_ptr<DistributedCudaContext> worker);
+    dcgmReturn_t ProcessResponse(DistributedCudaContext *worker);
 
-    void AbortChildren(unsigned int workers = 0); // Call before test start.
-    void NukeChildren(bool force = false);        // Call after test start.
+    void AbortChildren();                  // Call before test start.
+    void NukeChildren(bool force = false); // Call after test start.
 
     bool IsMIG(void) const;                     // Are we MIG mode (call Init first)
     bool UseCublas(void) const;                 // Use Cublas for FP tests?
@@ -163,6 +185,13 @@ public:
     bool Advance(DistributedCudaContext &ignoreWorker, unsigned int activity); // Advance
 
 private:
+    /**
+     * Release this GPU's active CUDA contexts.
+     *
+     * @param[in] resetActiveWorkers Whether active contexts should be reset before being released.
+     */
+    void ReleaseCudaContexts(bool resetActiveWorkers);
+
     // Tick handler type.
     using TickHandlerType = std::function<dcgmReturn_t(size_t index,
                                                        bool valid,
@@ -195,7 +224,7 @@ private:
      * @param divisor       - amount field value is to be scaled down by
      * @param value         - location to store value
      *
-     * @returns             - true if field value found, false otherwise
+     * @return              - true if field value found, false otherwise
      */
     bool ValueGet(std::map<Entity, dcgmFieldValue_v1> &values,
                   std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> &entities,
@@ -238,7 +267,7 @@ private:
      * Method to check if the current GPU's virtualization mode is supported.
      *
      * @param none
-     * @returns DCGM_ST_OK if the virtualization mode is supported or
+     * @return DCGM_ST_OK if the virtualization mode is supported or
      *  DCGM_ST_PROFILING_NOT_SUPPORTED if the virtualization mode is not
      *  supported.
      */
@@ -250,7 +279,7 @@ private:
      * unoptimized. This is generally a compute capability issue.
      *
      * @param field Id.
-     * @returns true if unoptimized, false otherwise.
+     * @return true if unoptimized, false otherwise.
      */
     bool IsComputeUnoptimized(unsigned int fieldId);
 
@@ -260,7 +289,7 @@ private:
      * not determinable.
      *
      * @param field Id.
-     * @returns true if limited, false otherwise.
+     * @return true if limited, false otherwise.
      */
     bool IsHardwareNonDeterministic(unsigned int fieldId);
 
@@ -285,11 +314,11 @@ private:
      * Process a response from a GPU CI on this physical GPU. Advances to
      * the running state if all workers have started or failed to do so.
      *
-     * @param worker - worker CUDA context smart pointer.
+     * @param worker - borrowed worker CUDA context pointer.
      *
-     * @returns dcgmReturn_t indicating result.
+     * @return dcgmReturn_t indicating result.
      */
-    dcgmReturn_t ProcessStartingResponse(std::shared_ptr<DistributedCudaContext> worker);
+    dcgmReturn_t ProcessStartingResponse(DistributedCudaContext *worker);
 
     /*
      * Process Running Response
@@ -297,26 +326,30 @@ private:
      * Process a response from a GPU CI on this physical GPU. Advances to
      * the finished state if all workers have started or failed to do so.
      *
-     * @param worker - worker CUDA context smart pointer.
+     * @param worker - borrowed worker CUDA context pointer.
      *
-     * @returns dcgmReturn_t indicating result.
+     * @return dcgmReturn_t indicating result.
      */
-    dcgmReturn_t ProcessRunningResponse(std::shared_ptr<DistributedCudaContext> worker);
+    dcgmReturn_t ProcessRunningResponse(DistributedCudaContext *worker);
 
     /*
      * Process FinishedResponse
      *
      * Process a response from a GPU CI on this physical GPU.
      *
-     * @param worker - worker CUDA context smart pointer.
+     * @param worker - borrowed worker CUDA context pointer.
      *
-     * @returns dcgmReturn_t indicating result.
+     * @return dcgmReturn_t indicating result.
      */
-    dcgmReturn_t ProcessFinishedResponse(std::shared_ptr<DistributedCudaContext> worker);
+    dcgmReturn_t ProcessFinishedResponse(DistributedCudaContext *worker);
 
     /*************************************************************************/
 
-    std::shared_ptr<DcgmProfTester> m_tester; /* Our controlling tester */
+    DcgmProfTesterAnyPtr m_tester;                       /* Borrowed controlling tester. */
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;                     /* DCGM API interface */
+    CudaOpsAnyPtr m_cudaOps;                             //!< Borrowed CUDA API interface.
+    CudaWorkerThreadFactoryAnyPtr m_cudaWorkerFactory;   //!< Factory used to create CUDA worker threads.
+    DistributedCudaContextRuntimeAnyUniquePtr m_runtime; //!< Runtime owned for use by this GPU's contexts.
 
     /* Test parameters */
 
@@ -325,13 +358,14 @@ private:
     Arguments_t::Parameters m_parameters; /* Operational test parameters */
 
     /* CUDA contexts (one per MIG slice or one per whole GPU) */
-    std::vector<std::shared_ptr<DistributedCudaContext>> m_dcgmCudaContexts;
+    std::vector<std::unique_ptr<DistributedCudaContext>> m_ownedCudaContexts; //!< Contexts owned by this GPU.
+    std::vector<DistributedCudaContext *> m_activeCudaContexts; //!< Borrowed active views into m_ownedCudaContexts.
 
     /**
-     * CUDA contexts not used since we have a CI under the same GI and are
-     * not testing multiple CIs per GI.
+     * Borrowed inactive views into m_ownedCudaContexts. These contexts are not
+     * used when another CI under the same GI is already selected.
      */
-    std::map<entity_id_t, std::shared_ptr<DistributedCudaContext>> m_inactiveCudaContexts = {};
+    std::map<entity_id_t, DistributedCudaContext *> m_inactiveCudaContexts = {};
 
     unsigned int m_workers { 0 }; /* Active worker Slices added */
 
@@ -361,7 +395,7 @@ private:
 
     /* Worker tracking */
 
-    dcgmReturn_t (PhysicalGpu::*m_responseFn)(std::shared_ptr<DistributedCudaContext>);
+    dcgmReturn_t (PhysicalGpu::*m_responseFn)(DistributedCudaContext *); //!< Current response-state handler.
 
     bool m_workerStarted { false };  /* Operation made worker start */
     bool m_workerRunning { false };  /* Operation made worker run */
@@ -376,8 +410,7 @@ private:
 
     bool m_sawLastWorker { false }; /* last worker started current part */
 
-    /* last worker to start current part */
-    std::shared_ptr<DistributedCudaContext> m_lastWorker { nullptr };
+    DistributedCudaContext *m_lastWorker { nullptr }; //!< Borrowed last worker to start the current part.
 
     TickHandlerType m_tickHandler {}; /* Tick handler. */
 

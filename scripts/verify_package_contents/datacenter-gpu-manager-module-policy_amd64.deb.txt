@@ -1,0 +1,9 @@
+./usr/
+./usr/libexec/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulepolicy.so.<MAJORVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulepolicy.so.<SOFTWAREVERSION>
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-module-policy/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-module-policy/copyright

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ public:
      *         <0 on error. See DCGM_ST_? enums
      *
      */
-    dcgmReturn_t GetHostEngineBytesUsed(long long &pTotalBytesUsed, bool waitIfNoData = true);
+    virtual dcgmReturn_t GetHostEngineBytesUsed(long long &pTotalBytesUsed, bool waitIfNoData = true);
 
     /*************************************************************************/
     /**
@@ -68,7 +68,7 @@ public:
      * Returns: 0 on success
      *         <0 on error. See DCGM_ST_? enums
      */
-    dcgmReturn_t GetCpuUtilization(CpuUtil &cpuUtil, bool waitIfNoData = true);
+    virtual dcgmReturn_t GetCpuUtilization(CpuUtil &cpuUtil, bool waitIfNoData = true);
 
 private:
     /* Previously-read values for total CPU ticks done by the system and our process */

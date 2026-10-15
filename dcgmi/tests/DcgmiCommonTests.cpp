@@ -16,7 +16,7 @@
 
 #include <catch2/catch_all.hpp>
 
-#include <Defer.hpp>
+#include <ScopedDcgmFields.hpp>
 
 #include <dcgmi_common.h>
 
@@ -133,8 +133,7 @@ TEST_CASE("dcgmi common helper parsing")
 
         GIVEN("a valid field list with validation enabled")
         {
-            REQUIRE(DcgmFieldsInit() == 0);
-            DcgmNs::Defer cleanup([] { DcgmFieldsTerm(); });
+            ScopedDcgmFields fields;
             std::vector<unsigned short> fieldIds;
 
             WHEN("the list is parsed")
@@ -171,8 +170,7 @@ TEST_CASE("dcgmi common helper parsing")
 
         GIVEN("an invalid DCGM field id with validation enabled")
         {
-            REQUIRE(DcgmFieldsInit() == 0);
-            DcgmNs::Defer cleanup([] { DcgmFieldsTerm(); });
+            ScopedDcgmFields fields;
             std::vector<unsigned short> fieldIds;
 
             WHEN("the list is parsed")

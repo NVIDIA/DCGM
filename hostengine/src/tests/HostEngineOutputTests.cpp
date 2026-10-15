@@ -16,6 +16,9 @@
 
 #include "HostEngineOutput.h"
 
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
+
 #include <catch2/catch_all.hpp>
 
 #include <tclap/ArgException.h>
@@ -23,36 +26,12 @@
 #include <tclap/SwitchArg.h>
 #include <tclap/ValueArg.h>
 
-#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace
 {
-class StreamCapture
-{
-public:
-    explicit StreamCapture(std::ostream &stream)
-        : m_stream(stream)
-        , m_old(stream.rdbuf(m_buffer.rdbuf()))
-    {}
-
-    ~StreamCapture()
-    {
-        m_stream.rdbuf(m_old);
-    }
-
-    std::string str() const
-    {
-        return m_buffer.str();
-    }
-
-private:
-    std::ostream &m_stream;
-    std::ostringstream m_buffer;
-    std::streambuf *m_old;
-};
 
 struct TestCommandLine
 {
@@ -84,7 +63,7 @@ TEST_CASE("HostEngineOutput::usage")
 
         WHEN("usage is printed")
         {
-            StreamCapture capture(std::cout);
+            CoutCapture capture;
             output.usage(commandLine.cmd);
 
             THEN("the output includes wrapped usage and long option details")
@@ -111,7 +90,7 @@ TEST_CASE("HostEngineOutput::version")
 
         WHEN("version is printed")
         {
-            StreamCapture capture(std::cout);
+            CoutCapture capture;
             output.version(commandLine.cmd);
 
             THEN("the configured version string is emitted")
@@ -132,7 +111,7 @@ TEST_CASE("HostEngineOutput::failure")
 
         WHEN("failure output is requested")
         {
-            StreamCapture capture(std::cerr);
+            CerrCapture capture;
 
             THEN("the formatter prints a parse error and throws TCLAP exit")
             {

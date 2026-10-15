@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # limitations under the License.
 
 target_include_directories(serialize_interface INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(serialize_interface INTERFACE JsonCpp::JsonCpp)
+target_link_libraries(serialize_interface INTERFACE jsoncpp_static)
 
 target_sources(serialize PRIVATE DcgmJsonSerialize.cpp DcgmJsonSerialize.hpp)
 target_link_libraries(serialize PUBLIC serialize_interface dcgm_logging)

@@ -1,5 +1,6 @@
 /usr/lib/systemd/system-generators/nvidia-dcgm-multinode-diagnostics-generator.sh
-/usr/lib64/libdcgmmodulemndiag.so.<MAJORVERSION>
-/usr/lib64/libdcgmmodulemndiag.so.<SOFTWAREVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulemndiag.so.<MAJORVERSION>
+/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulemndiag.so.<SOFTWAREVERSION>
 /usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-multinode-<BASEPACKAGEVERSION>
 /usr/share/licenses/datacenter-gpu-manager-<MAJORVERSION>-multinode-<BASEPACKAGEVERSION>/LICENSE

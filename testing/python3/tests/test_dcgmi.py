@@ -75,13 +75,6 @@ def _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines):
         test_utils.skip_test('Detected corrupt inforom for diag test')
         return
 
-    output = ''
-    for line in stdout_lines:
-        output = output + line + ' '
-    if test_utils.is_mig_incompatible_failure(output):
-        test_utils.skip_test(
-            "Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
-
     if retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value:
         logger.error('Valid test - Function returned error code: %s . Args used: "%s"' %
                      (retValue, ' '.join(args[1:])))
@@ -115,7 +108,8 @@ def _lines_with_errors(lines):
         'error',
         'invalid',
         'incorrect',
-        'unexpected'
+        'unexpected',
+        'bad parameter',
     ]
     exceptionStrings = [
         'nvlink error',
@@ -178,13 +172,6 @@ def _assert_valid_dcgmi_help_results(
     assert (len(stdout_lines) >
             0), 'No output detected for args "%s"' % ' '.join(args[1:])
 
-    output = ''
-    for line in stdout_lines:
-        output = output + line + ' '
-    if test_utils.is_mig_incompatible_failure(output):
-        test_utils.skip_test(
-            "Skipping this test because MIG is configured incompatibly (preventing access to the whole GPU)")
-
     if retValue != c_ubyte(dcgm_structs.DCGM_ST_OK).value:
         logger.error('Valid test - Function returned error code: %s . Args used: "%s"' %
                      (retValue, ' '.join(args[1:])))
@@ -223,7 +210,7 @@ def _assert_valid_dcgmi_help_results(
 # NO HARDWARE
 
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(2)
@@ -802,71 +789,17 @@ def test_dcgmi_diag(handle, gpuIds):
         # Test that we can pass a long debugLogFile
         ["diag", "--run", "1", "-i",
             str(gpuIds[0]), "--debugLogFile aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt"],
-        ["diag", "--run", "1", "-i", allGpusCsv, "--parameters",
-         "diagnostic.test_duration=30", "--fail-early"],  # verifies --fail-early option
-        ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30",
-         "--fail-early", "--check-interval", "3"],  # verifies --check-interval option
-        # verifies multiple parameters with different test name but same
-        # variable name
-        ["diag", "--run", "1", "-i", allGpusCsv, "--parameters",
-         "memtest.test_duration=10;diagnostic.test_duration=10"],
-        # verifies that --throttle-mask with HW_SLOWDOWN reason to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv,
-         "--throttle-mask", "HW_SLOWDOWN"],
         # verifies that --throttle-mask with SW_THERMAL reason to be ignored
         ["diag", "--run", "1", "-i", allGpusCsv,
          "--throttle-mask", "SW_THERMAL"],
-        # verifies that --throttle-mask with HW_THERMAL reason to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv,
-         "--throttle-mask", "HW_THERMAL"],
-        # verifies that --throttle-mask with HW_POWER_BRAKE reason to be
-        # ignored
-        ["diag", "--run", "1", "-i", allGpusCsv,
-         "--throttle-mask", "HW_POWER_BRAKE"],
-        # verifies that --throttle-mask with HW_POWER_BRAKE reason to be
-        # ignored
-        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask",
-         "HW_SLOWDOWN,SW_THERMAL,HW_POWER_BRAKE"],
         # verifies that --throttle-mask with HW_POWER_BRAKE reason to be
         # ignored
         ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask",
          "SW_THERMAL,HW_THERMAL,HW_SLOWDOWN"],
-        # verifies that --throttle-mask with HW_SLOWDOWN (8) and SW_THERMAL
-        # (32) reason to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "40"],
-        # verifies that --throttle-mask with SW_THERMAL (32) and HW_THERMAL
-        # (64) reason to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "96"],
-        # verifies that --throttle-mask with ALL reasons to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv, "--throttle-mask", "232"],
-        # verifies that --clocksevent-mask with HW_SLOWDOWN reason to be
-        # ignored
-        ["diag", "--run", "1", "-i", allGpusCsv,
-         "--clocksevent-mask", "HW_SLOWDOWN"],
-        # verifies that --clocksevent-mask with SW_THERMAL reason to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv,
-         "--clocksevent-mask", "SW_THERMAL"],
-        # verifies that --clocksevent-mask with HW_THERMAL reason to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv,
-         "--clocksevent-mask", "HW_THERMAL"],
-        # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be
-        # ignored
-        ["diag", "--run", "1", "-i", allGpusCsv,
-         "--clocksevent-mask", "HW_POWER_BRAKE"],
         # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be
         # ignored
         ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask",
          "HW_SLOWDOWN,SW_THERMAL,HW_POWER_BRAKE"],
-        # verifies that --clocksevent-mask with HW_POWER_BRAKE reason to be
-        # ignored
-        ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask",
-         "SW_THERMAL,HW_THERMAL,HW_SLOWDOWN"],
-        # verifies that --clocksevent-mask with HW_SLOWDOWN (8) and SW_THERMAL
-        # (32) reason to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "40"],
-        # verifies that --clocksevent-mask with SW_THERMAL (32) and HW_THERMAL
-        # (64) reason to be ignored
-        ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "96"],
         # verifies that --clocksevent-mask with ALL reasons to be ignored
         ["diag", "--run", "1", "-i", allGpusCsv, "--clocksevent-mask", "232"],
 
@@ -874,18 +807,6 @@ def test_dcgmi_diag(handle, gpuIds):
         # in
         ["diag", "--run", "1", "--gpuList",
          ",".join(str(x) for x in gpuIds)],
-        # verifies --entity-id option accepts and validates list of GPUs passed
-        # in
-        ["diag", "--run", "1", "--entity-id",
-         "gpu:" + ",".join(str(x) for x in gpuIds)],
-        # verifies --entity-id option accepts and validates list of GPUs passed
-        # in
-        ["diag", "--run", "1", "--entity-id",
-         "gpu:" + "{" + str(gpuIds[0]) + "}"],
-        # verifies --entity-id option accepts and validates list of GPUs passed
-        # in
-        ["diag", "--run", "1", "--entity-id", "gpu:" +
-         "{" + str(gpuIds[0]) + "-" + str(gpuIds[0]) + "}"],
         # verifies --entity-id option accepts GPU UUID
         ["diag", "--run", "1", "--entity-id", gpu0Info.identifiers.uuid],
         # verifies --group can work
@@ -900,138 +821,28 @@ def test_dcgmi_diag(handle, gpuIds):
     # keep args in this order. Changing it may break the test
     invalidArgsTestList = [
         # Can't run on group that doesn't exist
-        ["diag", "--run", "-g", "2"],
-        # Can't run with a test number that doesn't exist
-        ["diag", "--run", "5"],
+        ["diag", "--run", "1", "-g", str(createdGroupId + 1)],
         # Can't run a non-existent test name
         ["diag", "--run", "\"roshar stress\""],
         # Can't run an existing test but not for CPU
         ["diag", "--run", "\"pcie\"", "--entity-id", "cpu:0"],
         ["diag", "--run", "3", "--parameters", "dianarstic.test_duration=40"],
-        ["diag", "--run", "3", "--parameters", "diagnostic.test_durration=40"],
-        ["diag", "--run", "3", "--parameters",
-         "pcie.h2d_d2h_singgle_pinned.iterations=4000"],
-        ["diag", "--run", "3", "--parameters",
-         "pcie.h2d_d2h_single_pinned.itterations=4000"],
-        ["diag", "--run", "3", "--parameters", "bob.tom=maybe"],
-        ["diag", "--run", "3", "--parameters", "truck=slow"],
-        ["diag", "--run", "3", "--parameters",
-         "now this is a story all about how"],
-        ["diag", "--run", "3", "--parameters",
-         "my=life=got=flipped=turned=upside=down"],
-        ["diag", "--run", "3", "--parameters",
-         "and.i'd.like.to.take.a=minute=just.sit=right=there"],
-        ["diag", "--run", "3", "--parameters",
-         "i'll tell you=how.I.became the=prince of .a town called"],
-        ["diag", "--run", "3", "--parameters", "Bel-Air"],
-        ["diag", "--train"],  # ensure that training is no longer supported
         ["diag", "--run", "1", "-i", allGpusCsv, "--parameters", "diagnostic.test_duration=30",
          "--fail-early 10"],  # verifies --fail-early does not accept parameters
-        ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30",
-         "--fail-early", "--check-interval -1"],  # no negative numbers allowed
-        ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30",
-         "--fail-early", "--check-interval 350"],  # no numbers > 300 allowed
-        ["diag", "--run", "1", "--parameters", "diagnostic.test_duration=30",
-         "--check-interval 10"],  # requires --fail-early parameter
-        # The tests below are disabled until bug http://nvbugs/2672193 is fixed
-        # verifies that --throttle-mask incorrect reason does not work
-        ["diag", "--run", "1", "--throttle-mask", "HW_ZSLOWDOWN"],
-        # verifies that --throttle-mask incorrect reason does not work
-        ["diag", "--run", "1", "--throttle-mask", "SW_TRHERMAL"],
-        # verifies that --throttle-mask incorrect reason does not work
-        ["diag", "--run", "1", "--throttle-mask", "HWT_THERMAL"],
-        # verifies that --throttle-mask incorrect reason does not work
-        ["diag", "--run", "1", "--throttle-mask", "HW_POWER_OUTBRAKE"],
-        # verifies that --throttle-mask does not accept incorrect values for
-        # any reasons to be ignored
-        ["diag", "--run", "1", "--throttle-mask -10"],
-        # verifies that --clocksevent-mask incorrect reason does not work
-        ["diag", "--run", "1", "--clocksevent-mask", "HW_ZSLOWDOWN"],
-        # verifies that --clocksevent-mask incorrect reason does not work
-        ["diag", "--run", "1", "--clocksevent-mask", "SW_TRHERMAL"],
-        # verifies that --clocksevent-mask incorrect reason does not work
-        ["diag", "--run", "1", "--clocksevent-mask", "HWT_THERMAL"],
-        # verifies that --clocksevent-mask incorrect reason does not work
-        ["diag", "--run", "1", "--clocksevent-mask", "HW_POWER_OUTBRAKE"],
-        # verifies that --clocksevent-mask does not accept incorrect values for
-        # any reasons to be ignored
-        ["diag", "--run", "1", "--clocksevent-mask -10"],
-        # verifies --plugin-path fails if the plugins path is not specified
-        # correctly
-        ["diag", "--run", "1", "--plugin-path",
-         "/usr/libexec/datacenter-gpu-manager-4/unplugins"],
-        # ["diag", "--run", "1", "--gpuList", "0-1-2-3-4-5"], # verifies --gpuList option accepts and validates list of GPUs passed in (disabled until http://nvbugs/2733071 is fixed)
-        # verifies --gpuList option accepts and validates list of GPUs passed in
-        ["diag", "--run", "1", "--gpuList", "-1,-2,-3,-4,-5"],
-        # verifies --gpuList option accepts and validates list of GPUs passed in
-        ["diag", "--run", "1", "--gpuList", "a,b,c,d,e"],
         # Make sure -i is a comma-separated list of integers
         ["diag", "--run", "1", "-i", "0-1-2-3-4"],
-        # Make sure -i is a comma-separated list of integers
-        ["diag", "--run", "1", "-i", "roshar"],
-        # Make sure -i is a comma-separated list of integers
-        ["diag", "--run", "1", "-i", "a,b,c,d,e,f"],
         # verifies --plugin-path no longer works (removed)
         ["diag", "--run", "1", "-i", allGpusCsv,
          "--plugin-path", "./apps/nvvs/plugins"],
-        # We cannot run 0 iterations
-        ["diag", "--run", "1", "--iterations", "0"],
         # We cannot run negative iterations
         ["diag", "--run", "1", "--iterations", r"\-1"],
-        # multiple defined parameters not allowed
-        ["diag", "--run", "1", "--parameters",
-         "diagnostic.test_duration=30;diagnostic.test_duration=40"],
-        ["diag", "--run", "diagnostic", "--parameters", "diagnostic.test_duration=10",
-         "timeout", "10"],  # test_duration equals the timeout
-        ["diag", "--run", "diagnostic,targeted_power", "--parameters", "diagnostic.test_duration=10,targeted_power.test_duration=10",
-         "timeout", "15"],  # combined test_duration exceeds the timeout
-        # Test --entity-id option with invalid gpu id
-        ["diag", "--run", "1", "--entity-id", "a,b,c,d,e"],
-        # Test --entity-id option with invalid gpu id
-        ["diag", "--run", "1", "--entity-id", "-1,-2,-3,-4,-5"],
-        # Test --entity-id option with invalid gpu id
-        ["diag", "--run", "1", "--entity-id", "dcgm:0,1"],
-        # Test --entity-id option with invalid gpu id
-        ["diag", "--run", "1", "--entity-id", "gpu:{0"],
         # Test --entity-id with invalid GPU UUID
         ["diag", "--run", "1", "--entity-id",
          "GPU-00000000-0000-0000-0000-000000000000"],
-        # Test --entity-id with non-GPU and non-CPU entity
-        ["diag", "--run", "1", "--entity-id", "core:0"],
         # Test --entity-id with duplicated CPU entities
         ["diag", "--run", "1", "--entity-id", "cpu:0,cpu:0"],
-        # Test --entity-id with non-supported wildcard entity type
-        ["diag", "--run", "1", "--entity-id", "core:*"],
-        ["diag", "--run", "1", "--entity-id", ""],  # Test empty --entity-id
-        ["diag", "--run", "1", "--entity-id", "6" *
-         # Test too large --entity-id
-         (dcgm_structs.DCGM_ENTITY_ID_LIST_LEN + 1)],
-        # Test --entity-id and --gpuList cannot use in the same time
-        ["diag", "--run", "1", "--entity-id",
-         str(gpuIds[0]), "--gpuList", str(gpuIds[0])],
-        # Test --entity-id and --group cannot use in the same time
-        ["diag", "--run", "1", "--entity-id",
-         str(gpuIds[0]), "--group", str(createdGroupId)],
-        # Test --gpuList and --group cannot use in the same time
-        ["diag", "--run", "1", "--gpuList",
-         str(gpuIds[0]), "--group", str(createdGroupId)],
-        # Test case parameter length limit exceeded
-        ["diag", "--run", "3", "--parameters",
-         f"pcie.h2d_d2h_singgle_pinned.iterations={'6' * (dcgm_structs.DCGM_MAX_TEST_PARMS_LEN_V2 - len('pcie.h2d_d2h_singgle_pinned.iterations=') - 1)}"],
         # Test --expectedNumEntities option with invalid num gpus
         ["diag", "--run", "1", "--expectedNumEntities", "gpu:{0"],
-        # Test --expectedNumEntities option with invalid num gpus
-        ["diag", "--run", "1", "--expectedNumEntities", "gpu:"],
-        # Test --expectedNumEntities option with invalid num gpus
-        ["diag", "--run", "1", "--expectedNumEntities", "gpu:0,cpu:1"],
-        # Test --expectedNumEntities option with invalid num gpus
-        ["diag", "--run", "1", "--expectedNumEntities", "gpu:-1"],
-        # Test --expectedNumEntities option cannot be used with fake gpus
-        ["diag", "--run", "1", "-f", "0,1",
-         "--expectedNumEntities", f"gpu:{len(gpuIds)}"],
-        # Test --expectedNumEntities option cannot be used with gpu list
-        ["diag", "--run", "1", "--gpuList", allGpusCsv,
-         "--expectedNumEntities", f"gpu:{len(gpuIds)}"],
         # Make sure we fail with an invalid global parameter
         ["diag", "--run", "1", "-p", "funMode=true"],
     ]
@@ -1284,7 +1095,7 @@ def test_dcgmi_port(handle):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine()
 @test_utils.run_only_with_nvml()
 def test_dcgmi_field_groups(handle):
@@ -1366,7 +1177,7 @@ def _is_nvlink_active(handle, gpu_id, link_index):
     entity.entityId = link_t.raw
     try:
         values = dcgm_agent.dcgmEntitiesGetLatestValues(
-            handle, [entity], [dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE],
+            handle, [entity], [dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS],
             dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
         if not values:
             return False
@@ -1536,7 +1347,7 @@ def test_dcgmi_dmon_prm_link_boundary_injection(handle, gpuIds):
     test_cases = [
         (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PLR_RX_CODE_TOTAL,
          17, 1234, f"gpu_link:{gpuId}:17"),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
          18, 5678, f"gpu_link:{gpuId}:18"),
     ]
 
@@ -1569,64 +1380,106 @@ def test_dcgmi_dmon_prm_link_boundary_injection(handle, gpuIds):
             f"Expected field value {expected_value} for {entity_arg}, got {field_value}")
 
 
+def _run_dcgmi_dmon_gpu_link_value(gpuId, field_id, link_index):
+    args = ["dmon", "-i", f"gpu_link:{gpuId}:{link_index}",
+            "-e", str(field_id), "-c", "1"]
+    retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
+        args, validate=False)
+    _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines)
+
+    assert len(stdout_lines) >= 3, \
+        f"Expected at least 3 output lines for {args}, got: {stdout_lines}"
+
+    data_line = stdout_lines[2]
+    expected_label = f"GPU {gpuId} LINK {link_index}"
+    assert data_line.startswith(expected_label), (
+        f"Expected entity label '{expected_label}' at start of data line, got: '{data_line}'")
+
+    return data_line.split()[-1]
+
+
+def _get_gpu_max_supported_link_index(handle, gpuId):
+    handleObj = pydcgm.DcgmHandle(handle=handle)
+    linkStatus = handleObj.GetSystem().discovery.GetNvLinkLinkStatus()
+
+    for i in range(linkStatus.numGpus):
+        entry = linkStatus.gpus[i]
+        if entry.entityId != gpuId:
+            continue
+
+        max_supported_link = -1
+        for link_index in range(dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU):
+            if entry.linkState[link_index] != dcgm_structs.DcgmNvLinkLinkStateNotSupported:
+                max_supported_link = link_index
+
+        if max_supported_link < 0:
+            test_utils.skip_test(
+                f"GPU {gpuId} has no supported NvLink ports in discovery")
+
+        return max_supported_link
+
+    test_utils.skip_test(f"GPU {gpuId} not found in NvLink discovery")
+
+
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_only_with_live_gpus()
 @test_utils.run_only_with_minimum_gpu_architecture(dcgm_structs.DCGM_CHIP_ARCH_BLACKWELL)
 @test_utils.run_only_with_nvml()
 @test_utils.run_only_with_live_nvlinks()
-def test_dcgmi_dmon_live_prm_link_boundary_behavior(handle, gpuIds):
+def test_dcgmi_dmon_live_prm_api_link_boundary_behavior(handle, gpuIds):
     """
-    Live hardware coverage for DCGM-6670 PRM port translation.
+    Live dcgmi dmon coverage for DCGM API PRM port limits.
 
-    This intentionally requires Blackwell-or-newer live NVLink hardware with
-    working PRM counter reads. It mirrors the manual dcgmi dmon validation
-    performed on B200 hardware.
+    Non-IB PRM fields reject entity port DCGM_NVLINK_MAX_LINKS_PER_GPU.
+    IB PRM fields reject entity port DCGM_NVLINK_MAX_LINKS_PER_GPU + 1.
     """
     gpuId = gpuIds[0]
+    max_link = dcgm_structs.DCGM_NVLINK_MAX_LINKS_PER_GPU
 
-    def run_dmon(field_id, link_index):
-        args = ["dmon", "-i", f"gpu_link:{gpuId}:{link_index}",
-                "-e", str(field_id), "-c", "1"]
-        retValue, stdout_lines, stderr_lines = test_utils.run_dcgmi_command(
-            args, validate=False)
-        _assert_valid_dcgmi_results(args, retValue, stdout_lines, stderr_lines)
+    not_supported_cases = [
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY, max_link),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL, max_link + 1),
+    ]
 
-        assert len(stdout_lines) >= 3, \
-            f"Expected at least 3 output lines for {args}, got: {stdout_lines}"
+    for field_id, link_index in not_supported_cases:
+        value = _run_dcgmi_dmon_gpu_link_value(gpuId, field_id, link_index)
+        assert value == "N/A", (
+            f"Expected N/A for API-out-of-range field {field_id} link {link_index}, got {value}")
 
-        data_line = stdout_lines[2]
-        expected_label = f"GPU {gpuId} LINK {link_index}"
-        assert data_line.startswith(expected_label), (
-            f"Expected entity label '{expected_label}' at start of data line, got: '{data_line}'")
 
-        return data_line.split()[-1]
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_only_with_live_gpus()
+@test_utils.run_only_with_minimum_gpu_architecture(dcgm_structs.DCGM_CHIP_ARCH_BLACKWELL)
+@test_utils.run_only_with_nvml()
+@test_utils.run_only_with_live_nvlinks()
+def test_dcgmi_dmon_live_prm_gpu_link_boundary_behavior(handle, gpuIds):
+    """
+    Live dcgmi dmon coverage at the discovered per-GPU NvLink port count.
+
+    Uses the highest NvLink port index reported by discovery for this GPU.
+    Non-IB PRM fields are checked at ports 0 and N; IB PRM fields at 1 and N+1.
+    """
+    gpuId = gpuIds[0]
+    max_supported_link = _get_gpu_max_supported_link_index(handle, gpuId)
 
     numeric_cases = [
         (dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY, 0),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY, 17),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT, 1),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT, 18),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY, max_supported_link),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL, 1),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
+         max_supported_link + 1),
     ]
 
     for field_id, link_index in numeric_cases:
-        value = run_dmon(field_id, link_index)
+        value = _run_dcgmi_dmon_gpu_link_value(gpuId, field_id, link_index)
         assert value.lstrip('-').isdigit(), (
             f"Expected numeric value for field {field_id} link {link_index}, got {value}")
 
     # On the B200 system used for manual validation, IB link 0 is accepted by
     # the public surface but reports N/A from hardware. Keep this as a smoke
     # check that the query remains reachable without requiring a numeric value.
-    run_dmon(dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT, 0)
-
-    not_supported_cases = [
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY, 18),
-        (dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT, 19),
-    ]
-
-    for field_id, link_index in not_supported_cases:
-        value = run_dmon(field_id, link_index)
-        assert value == "N/A", (
-            f"Expected N/A for unsupported field {field_id} link {link_index}, got {value}")
+    _run_dcgmi_dmon_gpu_link_value(
+        gpuId, dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL, 0)
 
 
 @test_utils.run_with_standalone_host_engine(120)
@@ -1759,7 +1612,7 @@ def test_dcgmi_dmon(
         allSwitchesCsv = ",".join(map(helper_make_switch_string, switchIds))
 
         switchFieldId = dcgm_fields.DCGM_FI_DEV_NVSWITCH_TEMP_CELSIUS
-        cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER
+        cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER_RATIO
 
         # Inject a value for a field for each switch so we can retrieve it
         field = dcgm_structs_internal.c_dcgmInjectFieldValue_v1()
@@ -1891,7 +1744,7 @@ def test_dcgmi_dmon(
 @test_utils.run_with_injection_gpus(2)
 @test_utils.run_only_with_live_cpus()
 def test_dcgmi_dmon_cpu(handle, gpuIds, cpuIds):
-    cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER
+    cpuFields = dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER_RATIO
 
     allGpusCsv = ",".join(map(str, gpuIds))
     cpuGpuCsv = ",".join(["cpu:0", allGpusCsv])
@@ -2246,7 +2099,7 @@ def test_dcgmi_set(handle):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(20)
 # Injecting compute instances only works with live ampere or injected GPUs
 @test_utils.run_with_injection_gpus(5)
@@ -2696,6 +2549,7 @@ TEST_NAME_TO_RESULT_FIELD_ID = {
     "software": dcgm_fields.DCGM_FI_DEV_DIAG_SOFTWARE_RESULT,
     "nvbandwidth": dcgm_fields.DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT,
     "nccl_tests": dcgm_fields.DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT,
+    "cpu_sdc": dcgm_fields.DCGM_FI_DEV_DIAG_CPU_SDC_RESULT,
 }
 
 

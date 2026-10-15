@@ -24,6 +24,7 @@
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -127,13 +128,10 @@ dcgmReturn_t GetDeviceFBCSessionsInfo(DcgmCacheManager &cm,
     }
 
     devFbcSessions->version      = dcgmDeviceFbcSessions_version;
-    devFbcSessions->sessionCount = sessionCount;
+    devFbcSessions->sessionCount = std::min(sessionCount, static_cast<unsigned int>(DCGM_MAX_FBC_SESSIONS));
 
-    for (unsigned int i = 0; i < sessionCount; i++)
+    for (unsigned int i = 0; i < devFbcSessions->sessionCount; i++)
     {
-        if (devFbcSessions->sessionCount >= DCGM_MAX_FBC_SESSIONS)
-            break;
-
         devFbcSessions->sessionInfo[i].version        = dcgmDeviceFbcSessionInfo_version;
         devFbcSessions->sessionInfo[i].vgpuId         = sessionInfo[i].vgpuInstance;
         devFbcSessions->sessionInfo[i].sessionId      = sessionInfo[i].sessionId;
@@ -215,13 +213,10 @@ dcgmReturn_t GetVgpuInstanceFBCSessionsInfo(DcgmCacheManager &cm,
     }
 
     vgpuFbcSessions->version      = dcgmDeviceFbcSessions_version;
-    vgpuFbcSessions->sessionCount = sessionCount;
+    vgpuFbcSessions->sessionCount = std::min(sessionCount, static_cast<unsigned int>(DCGM_MAX_FBC_SESSIONS));
 
-    for (unsigned int i = 0; i < sessionCount; i++)
+    for (unsigned int i = 0; i < vgpuFbcSessions->sessionCount; i++)
     {
-        if (vgpuFbcSessions->sessionCount >= DCGM_MAX_FBC_SESSIONS)
-            break;
-
         vgpuFbcSessions->sessionInfo[i].version        = dcgmDeviceFbcSessionInfo_version;
         vgpuFbcSessions->sessionInfo[i].vgpuId         = sessionInfo[i].vgpuInstance;
         vgpuFbcSessions->sessionInfo[i].sessionId      = sessionInfo[i].sessionId;
@@ -415,6 +410,7 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
         }
 
         case DCGM_FI_DEV_VGPU_MEMORY_USAGE:
+        case DCGM_FI_DEV_VGPU_FB_USED_BYTES:
         {
             unsigned long long fbUsage;
 
@@ -429,7 +425,10 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
                 deps.AppendEntityInt64(cm, threadCtx, deps.NvmlErrorToInt64Value(nvmlReturn), 0, now, expireTime);
                 return deps.NvmlReturnToDcgmReturn(nvmlReturn);
             }
-            fbUsage = fbUsage / (1024 * 1024);
+            if (fieldMeta->fieldId == DCGM_FI_DEV_VGPU_MEMORY_USAGE)
+            {
+                fbUsage = fbUsage / (1024 * 1024);
+            }
             deps.AppendEntityInt64(cm, threadCtx, fbUsage, 0, now, expireTime);
             break;
         }
@@ -560,8 +559,9 @@ dcgmReturn_t BufferOrCacheLatestVgpuValue(DcgmCacheManager &cm,
 
         case DCGM_FI_DEV_VGPU_PCI_ID:
         {
-            char vgpuPciId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE];
-            unsigned int length = NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE;
+            /* Sentinel when the guest driver is not loaded; matches nvmlVgpuInstanceGetGpuPciId docs. */
+            char vgpuPciId[NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE] = "00000000:00:00.0";
+            unsigned int length                                = NVML_DEVICE_PCI_BUS_ID_BUFFER_SIZE;
 
             nvmlReturn = deps.NvmlVgpuInstanceGetGpuPciId(nvmlDriver, vgpuId, vgpuPciId, &length);
             if (watchInfo != nullptr)

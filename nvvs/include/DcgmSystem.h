@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 #include "dcgm_test_apis.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmUtilities.h>
 
 class DcgmSystemBase
@@ -30,7 +31,6 @@ class DcgmSystemBase
 public:
     virtual ~DcgmSystemBase() = default;
 
-    virtual void Init(dcgmHandle_t handle);
     virtual dcgmReturn_t GetDeviceAttributes(unsigned int gpuId, dcgmDeviceAttributes_t &deviceAttr);
     virtual dcgmReturn_t GetGpuStatus(unsigned int gpuId, DcgmEntityStatus_t *gpuStatus);
     virtual dcgmReturn_t GetAllSupportedDevices(std::vector<unsigned int> &gpuIdList);
@@ -53,13 +53,8 @@ public:
 class DcgmSystem final : public DcgmSystemBase
 {
 public:
-    DcgmSystem();
+    DcgmSystem(DcgmNs::DcgmOpsAnyPtr dcgmOps, dcgmHandle_t handle);
     ~DcgmSystem();
-
-    /*
-     * Saves a copy of the handle this system object should use
-     */
-    void Init(dcgmHandle_t handle) override;
 
     /*
      * Populates deviceAttr with the attributes retrieved from DCGM
@@ -124,7 +119,7 @@ public:
      * @return:
      *
      * DCGM_ST_OK       : success
-     * DCGM_ST_BADPARAM : if the handle hasn't been initialized
+     * DCGM_ST_BADPARAM : if the handle hasn't been initialized or checker is null
      * DCGM_ST_*        : if returned from calls to DCGM
      */
     dcgmReturn_t GetLatestValuesForGpus(const std::vector<unsigned int> &gpuIds,
@@ -164,7 +159,8 @@ public:
     DcgmResult<dcgmChipArchitecture_t> GetGpuChipArchitecture(unsigned int gpuId) override;
 
 private:
-    dcgmHandle_t m_handle; // We use this handle but we do not own it.
+    dcgmHandle_t m_handle;           // DCGM connection handle.
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; // DCGM API interface.
     unsigned int m_cudaMajorVersion;
     unsigned int m_cudaMinorVersion;
 };

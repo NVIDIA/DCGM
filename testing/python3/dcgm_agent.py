@@ -24,6 +24,15 @@ import functools
 g_latestDiagResponseVer = dcgm_structs.dcgmDiagResponse_version12
 g_latestRunDiagVer = dcgm_structs.dcgmRunDiag_version10
 
+# Keep ctypes callbacks and user-data wrappers alive while native policy callbacks are registered.
+_policyViolationCallbackUserData = {}
+
+
+def _policy_violation_callback_key(dcgm_handle, fieldId, policyId):
+    handleValue = dcgm_handle.value if hasattr(
+        dcgm_handle, "value") else dcgm_handle
+    return (handleValue, fieldId, policyId)
+
 
 def ensure_byte_strings():
     """
@@ -529,11 +538,10 @@ def dcgmUpdateAllFields(dcgm_handle, waitForUpdate):
     dcgm_structs._dcgmCheckReturn(ret)
     return ret
 
-# This method is used to get the policy information
-
 
 @ensure_byte_strings()
 def dcgmPolicyGet(dcgm_handle, group_id, count, status_handle):
+    """Deprecated. Use dcgmPolicyGetOne() or dcgmPolicyGetAll() for field policies."""
     fn = dcgmFP("dcgmPolicyGet")
     policy_array = count * dcgm_structs.c_dcgmPolicy_v1
 
@@ -546,13 +554,158 @@ def dcgmPolicyGet(dcgm_handle, group_id, count, status_handle):
     dcgm_structs._dcgmCheckReturn(ret)
     return c_policy_values[0:count]
 
-# This method is used to set the policy information
-
 
 @ensure_byte_strings()
 def dcgmPolicySet(dcgm_handle, group_id, policy, status_handle):
+    """Deprecated. Use dcgmPolicyCreate() for field-policy threshold monitoring."""
     fn = dcgmFP("dcgmPolicySet")
     ret = fn(dcgm_handle, group_id, byref(policy), status_handle)
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+@ensure_byte_strings()
+def dcgmPolicyCreate(dcgm_handle,
+                     fieldId,
+                     name,
+                     threshold,
+                     policyOperator,
+                     entities=None,
+                     channelMask=dcgm_structs.DCGM_POLICY_CHANNEL_CALLBACK,
+                     enabled=1,
+                     rateLimitSec=0):
+    fn = dcgmFP("dcgmPolicyCreate")
+    if rateLimitSec < 0:
+        raise ValueError("rateLimitSec must be non-negative")
+    if rateLimitSec > 0xFFFFFFFF:
+        raise ValueError("rateLimitSec must fit in an unsigned 32-bit integer")
+
+    entities = [] if entities is None else list(entities)
+    entityArray = None
+    if len(entities) > 0:
+        entityArrayType = dcgm_structs.c_dcgmGroupEntityPair_t * len(entities)
+        entityArray = entityArrayType()
+        for index, entity in enumerate(entities):
+            if isinstance(entity, int):
+                entityArray[index].entityGroupId = dcgm_fields.DCGM_FE_GPU
+                entityArray[index].entityId = entity
+            else:
+                if entity.entityGroupId != dcgm_fields.DCGM_FE_GPU:
+                    raise ValueError(
+                        "Field policies currently support only GPU entities")
+                entityArray[index].entityGroupId = entity.entityGroupId
+                entityArray[index].entityId = entity.entityId
+    policyId = c_uint64()
+    ret = fn(dcgm_handle,
+             c_ushort(fieldId),
+             name,
+             c_double(threshold),
+             c_int(policyOperator),
+             entityArray,
+             c_uint(len(entities)),
+             c_uint(channelMask),
+             c_uint(enabled),
+             c_uint(rateLimitSec),
+             byref(policyId))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return policyId.value
+
+
+@ensure_byte_strings()
+def dcgmPolicyModify(dcgm_handle, policy):
+    fn = dcgmFP("dcgmPolicyModify")
+    ret = fn(dcgm_handle, byref(policy))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+@ensure_byte_strings()
+def dcgmPolicyDelete(dcgm_handle, fieldId=0, policyId=0, deleteAll=False):
+    fn = dcgmFP("dcgmPolicyDelete")
+    ret = fn(dcgm_handle, c_ushort(fieldId), c_uint64(
+        policyId), c_uint(1 if deleteAll else 0))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+@ensure_byte_strings()
+def dcgmPolicyEnable(dcgm_handle, fieldId, policyId):
+    fn = dcgmFP("dcgmPolicyEnable")
+    ret = fn(dcgm_handle, c_ushort(fieldId), c_uint64(policyId))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+@ensure_byte_strings()
+def dcgmPolicyDisable(dcgm_handle, fieldId, policyId):
+    fn = dcgmFP("dcgmPolicyDisable")
+    ret = fn(dcgm_handle, c_ushort(fieldId), c_uint64(policyId))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+@ensure_byte_strings()
+def dcgmPolicyGetOne(dcgm_handle, fieldId, policyId):
+    fn = dcgmFP("dcgmPolicyGetOne")
+    policy = dcgm_structs.c_dcgmPolicyInfo_v1()
+    policy.version = dcgm_structs.dcgmPolicyInfo_version
+    ret = fn(dcgm_handle, c_ushort(fieldId), c_uint64(policyId), byref(policy))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return policy
+
+
+@ensure_byte_strings()
+def dcgmPolicyGetAll(dcgm_handle, maxPolicies=dcgm_structs.DCGM_POLICY_MAX_POLICIES):
+    fn = dcgmFP("dcgmPolicyGetAll")
+    policyArrayType = dcgm_structs.c_dcgmPolicyInfo_v1 * maxPolicies
+    policies = policyArrayType()
+    for policy in policies:
+        policy.version = dcgm_structs.dcgmPolicyInfo_version
+    count = c_uint(maxPolicies)
+    ret = fn(dcgm_handle, policies, byref(count))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return policies[0:count.value]
+
+
+@ensure_byte_strings()
+def dcgmPolicyImport(dcgm_handle, path):
+    fn = dcgmFP("dcgmPolicyImport")
+    ret = fn(dcgm_handle, path)
+    dcgm_structs._dcgmCheckReturn(ret)
+    return ret
+
+
+@ensure_byte_strings()
+def dcgmPolicyGetViolations(dcgm_handle, sinceTimestamp=0, maxViolations=dcgm_structs.DCGM_POLICY_MAX_VIOLATIONS):
+    fn = dcgmFP("dcgmPolicyGetViolations")
+    violationArrayType = dcgm_structs.c_dcgm_policy_violation_t * maxViolations
+    violations = violationArrayType()
+    count = c_uint(maxViolations)
+    ret = fn(dcgm_handle, c_int64(sinceTimestamp), violations, byref(count))
+    dcgm_structs._dcgmCheckReturn(ret)
+    return violations[0:count.value]
+
+
+@ensure_byte_strings()
+def dcgmPolicyRegister_v3(dcgm_handle, fieldId, policyId, callback, userData):
+    fn = dcgmFP("dcgmPolicyRegister_v3")
+    userDataRef = py_object(userData)
+    ret = fn(dcgm_handle, c_ushort(fieldId), c_uint64(
+        policyId), callback, userDataRef)
+    dcgm_structs._dcgmCheckReturn(ret)
+    _policyViolationCallbackUserData[
+        _policy_violation_callback_key(dcgm_handle, fieldId, policyId)] = (callback, userDataRef)
+    return ret
+
+
+@ensure_byte_strings()
+def dcgmPolicyUnregister_v3(dcgm_handle, fieldId=0, policyId=0):
+    fn = dcgmFP("dcgmPolicyUnregister_v3")
+    ret = fn(dcgm_handle, c_ushort(fieldId), c_uint64(policyId))
+    if ret in (dcgm_structs.DCGM_ST_OK, dcgm_structs.DCGM_ST_NO_DATA):
+        _policyViolationCallbackUserData.pop(
+            _policy_violation_callback_key(dcgm_handle, fieldId, policyId), None)
+        return ret
     dcgm_structs._dcgmCheckReturn(ret)
     return ret
 
@@ -696,6 +849,7 @@ def dcgmHealthCheck(
 
 @ensure_byte_strings()
 def dcgmPolicyRegister_v2(dcgm_handle, groupId, condition, callback, userData):
+    """Deprecated group-policy callback API. Use dcgmPolicyCreate() + dcgmPolicyRegister_v3() for field-policy violations."""
     fn = dcgmFP("dcgmPolicyRegister_v2")
     ret = fn(dcgm_handle, groupId, condition, callback, py_object(userData))
     dcgm_structs._dcgmCheckReturn(ret)
@@ -704,6 +858,7 @@ def dcgmPolicyRegister_v2(dcgm_handle, groupId, condition, callback, userData):
 
 @ensure_byte_strings()
 def dcgmPolicyUnregister(dcgm_handle, groupId, condition):
+    """Deprecated group-policy callback API. Use dcgmPolicyUnregister_v3() to unregister a field-policy callback."""
     fn = dcgmFP("dcgmPolicyUnregister")
     ret = fn(dcgm_handle, groupId, condition)
     dcgm_structs._dcgmCheckReturn(ret)
@@ -712,6 +867,7 @@ def dcgmPolicyUnregister(dcgm_handle, groupId, condition):
 
 @ensure_byte_strings()
 def dcgmPolicyTrigger(dcgm_handle):
+    """Deprecated. Field-policy callbacks evaluate Cache Manager updates automatically."""
     fn = dcgmFP("dcgmPolicyTrigger")
     ret = fn(dcgm_handle)
     dcgm_structs._dcgmCheckReturn(ret)
@@ -844,9 +1000,13 @@ def dcgmRunDiagnostic(dcgm_handle, group_id, diagLevel):
 def dcgmRunMnDiagnostic(
         dcgm_handle,
         runMnDiagInfo,
-        runMnDiagVersion=dcgm_structs.dcgmRunMnDiag_version1):
-    response = dcgm_structs.c_dcgmMnDiagResponse_v1()
-    response.version = dcgm_structs.dcgmMnDiagResponse_version1
+        runMnDiagVersion=dcgm_structs.dcgmRunMnDiag_version2):
+    if runMnDiagVersion == dcgm_structs.dcgmRunMnDiag_version1:
+        response = dcgm_structs.c_dcgmMnDiagResponse_v1()
+        response.version = dcgm_structs.dcgmMnDiagResponse_version1
+    else:
+        response = dcgm_structs.c_dcgmMnDiagResponse_v2()
+        response.version = dcgm_structs.dcgmMnDiagResponse_version2
 
     runMnDiagInfo.version = runMnDiagVersion
     fn = dcgmFP("dcgmRunMnDiagnostic")

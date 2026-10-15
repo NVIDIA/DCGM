@@ -16,6 +16,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 #include <dcgm_structs.h>
 #include <dcgm_structs_internal.h>
 #include <fmt/format.h>
@@ -77,6 +78,15 @@ std::string dcgmStrToLower(std::string s);
 
 namespace DcgmNs
 {
+/**
+ * Compare two strings case-insensitively using ASCII case folding.
+ *
+ * @param[in] lhs First string to compare.
+ * @param[in] rhs Second string to compare.
+ * @return True if the strings have equal length and equal ASCII case-insensitive contents.
+ */
+bool EqualsAsciiCaseInsensitive(std::string_view lhs, std::string_view rhs);
+
 /*****************************************************************************/
 /**
  * Splits a string view into substrings using the specified delimiter.
@@ -89,16 +99,24 @@ namespace DcgmNs
 std::vector<std::string_view> Split(std::string_view value, char delimiter);
 
 /*****************************************************************************/
-/*
- * Takes a range string \d[,\d[-\d]]... and populates a vector with the indices
+/**
+ * Takes a range string \d[,\d[-\d]]... and populates a vector with the indices.
  *
- * @param rangeStr - the string representing the range we're adding
- * @param indices  - the vector we are populating with the numbers in the range
+ * Expansion is rejected before materialization when the inclusive cardinality of
+ * a segment would make indices.size() exceed maxCount (including values already
+ * present in indices and prior comma-separated segments).
+ *
+ * @param[in] rangeStr the string representing the range we're adding
+ * @param[out] indices the vector we are populating with the numbers in the range
+ * @param[in] maxCount maximum allowed size of indices after expansion
  *
  * @return DCGM_ST_OK on success
- *         DCGM_ST_BADPARAM on a malformed range
+ * @return DCGM_ST_BADPARAM on a malformed range or an endpoint outside unsigned int
+ * @return DCGM_ST_MAX_LIMIT when expansion would exceed maxCount
  */
-dcgmReturn_t ParseRangeString(const std::string &rangeStr, std::vector<unsigned int> &indices);
+dcgmReturn_t ParseRangeString(std::string const &rangeStr,
+                              std::vector<unsigned int> &indices,
+                              std::size_t maxCount = DCGM_GROUP_MAX_ENTITIES_V2);
 
 template <typename TIterator>
 std::string Join(TIterator start, TIterator end, std::string_view separator = "")

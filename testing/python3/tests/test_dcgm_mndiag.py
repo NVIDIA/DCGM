@@ -20,6 +20,8 @@ import logger
 import test_utils
 import DcgmMnDiag
 from MockMnubergemmController import MockMnubergemmController
+from MockNvloomController import MockNvloomController
+from MockMnnvbandwidthController import MockMnnvbandwidthController
 
 import os
 from ctypes import *
@@ -28,7 +30,7 @@ import json
 # ------------------------------------------------------
 
 
-def helper_setup_and_run_mndiag(handle, config):
+def helper_setup_and_run_mndiag(handle, config, run_as_non_root=False):
     """
     Helper to setup and run multinode mndiag
     """
@@ -58,7 +60,12 @@ def helper_setup_and_run_mndiag(handle, config):
             testName=testName,
             parameters=testParams,
             handle=handle)
-        response = mndiag.Execute(handle)
+        if run_as_non_root:
+            test_utils.RunAsNonRoot.is_supported(skip_if_not_supported=True)
+            with test_utils.RunAsNonRoot(reload_driver=False):
+                response = mndiag.Execute(handle)
+        else:
+            response = mndiag.Execute(handle)
 
     except Exception:
         helper_print_stderr_output()
@@ -92,9 +99,9 @@ def helper_validate_response(
         expected_num_errors, dcgm_structs.DCGM_MN_DIAG_RESPONSE_ERRORS_MAX)
 
     assert response is not None, "Response should not be None"
-    assert response.version == dcgm_structs.dcgmMnDiagResponse_version1, (
+    assert response.version == dcgm_structs.dcgmMnDiagResponse_version2, (
         f"Got response version {response.version}, "
-        f"expected {dcgm_structs.dcgmMnDiagResponse_version1}")
+        f"expected {dcgm_structs.dcgmMnDiagResponse_version2}")
 
     # Validate host information
     assert response.numHosts == len(hostList), (
@@ -301,13 +308,14 @@ def helper_print_stderr_output():
 # ------------------------------------------------------
 
 
-def helper_run_and_validate_mndiag(handle, config, success=True):
+def helper_run_and_validate_mndiag(
+        handle, config, success=True, run_as_non_root=False):
     """
     Helper to run and validate mndiag
     """
     # Run mndiag
     response, error_entities, driver_versions = helper_setup_and_run_mndiag(
-        handle, config)
+        handle, config, run_as_non_root=run_as_non_root)
 
     # Validate the response
     helper_validate_response(
@@ -494,10 +502,15 @@ def helper_validate_mnubergemm_path(
             remote_log_path, username, ip, is_remote=True)
         if remote_path:
             remote_paths.append((username, ip, remote_path))
-            logger.info(
+            log_fn = logger.info if os.environ.get(
+                "DCGM_MNDIAG_VERBOSE", "0") == "1" else logger.debug
+            log_fn(
                 f"Remote node {username}@{ip} mnubergemm path: {remote_path}")
         else:
             remote_paths.append((username, ip, None))
+
+    logger.info(
+        f"Collected mnubergemm paths from {len(remote_paths)} remote node(s)")
 
     # Compare paths - all should be the same
     all_paths_match = True
@@ -520,7 +533,8 @@ def helper_validate_mnubergemm_path(
 # ------------------------------------------------------
 
 
-def helper_dcgm_mndiag_basic_success(handle, gpuIds):
+def helper_dcgm_mndiag_basic_success(
+        handle, gpuIds, run_as_non_root=False):
     """Test basic successful mndiag execution with mock mnubergemm"""
     logger.info("Starting basic mndiag success test")
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
@@ -557,7 +571,11 @@ def helper_dcgm_mndiag_basic_success(handle, gpuIds):
     }
     config["expected_num_errors"] = len(config["gpu_required_error"].keys())
 
-    helper_run_and_validate_mndiag(handle, config, success=True)
+    helper_run_and_validate_mndiag(
+        handle,
+        config,
+        success=True,
+        run_as_non_root=run_as_non_root)
 
     logger.info("Basic mndiag success test completed successfully")
 
@@ -569,7 +587,22 @@ def helper_dcgm_mndiag_basic_success(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_basic_success(handle, gpuIds):
+    """Verify mnubergemm all-pass on localhost with injected GPUs."""
     helper_dcgm_mndiag_basic_success(handle, gpuIds)
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_basic_success_non_root_caller(handle, gpuIds):
+    """Test a non-root caller using MPI files created by the root hostengine."""
+    helper_dcgm_mndiag_basic_success(
+        handle,
+        gpuIds,
+        run_as_non_root=True)
 
 
 def helper_dcgm_mndiag_basic_failure(handle, gpuIds):
@@ -638,6 +671,7 @@ def helper_dcgm_mndiag_basic_failure(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_basic_failure(handle, gpuIds):
+    """Verify mnubergemm failure reporting on localhost with injected GPUs."""
     helper_dcgm_mndiag_basic_failure(handle, gpuIds)
 
 
@@ -689,6 +723,7 @@ def helper_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds):
+    """Verify mnubergemm mixed pass/fail (variant 1) on localhost."""
     helper_dcgm_mndiag_mixed_pass_fail_1(handle, gpuIds)
 
 
@@ -740,6 +775,7 @@ def helper_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds):
+    """Verify mnubergemm mixed pass/fail (variant 2) on localhost."""
     helper_dcgm_mndiag_mixed_pass_fail_2(handle, gpuIds)
 
 
@@ -805,6 +841,7 @@ def helper_dcgm_mndiag_multinode_basic_success(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_multinode_basic_success(handle, gpuIds):
+    """Verify mnubergemm all-pass across multiple nodes."""
     helper_dcgm_mndiag_multinode_basic_success(handle, gpuIds)
 
 
@@ -888,6 +925,7 @@ def helper_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds):
+    """Verify mnubergemm multinode failure: head and test nodes fail."""
     helper_dcgm_mndiag_multinode_basic_failure_1(handle, gpuIds)
 
 
@@ -940,6 +978,7 @@ def helper_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds):
+    """Verify mnubergemm multinode failure: head fails, test nodes pass."""
     helper_dcgm_mndiag_multinode_basic_failure_2(handle, gpuIds)
 
 
@@ -1004,6 +1043,7 @@ def helper_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds):
+    """Verify mnubergemm multinode failure: head passes, test nodes fail."""
     helper_dcgm_mndiag_multinode_basic_failure_3(handle, gpuIds)
 
 
@@ -1058,6 +1098,7 @@ def helper_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds):
+    """Verify mnubergemm multinode: head passes, all test nodes fail."""
     helper_dcgm_mndiag_multinode_headnode_pass_testnodes_fail(handle, gpuIds)
 
 
@@ -1113,6 +1154,7 @@ def helper_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds):
+    """Verify mnubergemm multinode: head fails, all test nodes pass."""
     helper_dcgm_mndiag_multinode_headnode_fail_testnodes_pass(handle, gpuIds)
 
 
@@ -1173,16 +1215,21 @@ def helper_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds):
 @test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
 @test_utils.run_with_nvml_injected_gpus()
 def test_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds):
+    """Verify mnubergemm multinode mixed pass/fail across nodes."""
     helper_dcgm_mndiag_multinode_mixed_pass_fail(handle, gpuIds)
 
 
-def helper_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds):
+def helper_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds, hostengineApp=None):
     """Test mndiag validate mnubergemm path"""
     logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
 
-    # Configuration variables
-    head_node_log_path = os.path.join(
-        os.getcwd(), "_out_runLogs/dcgm_trace.log")
+    # When --force-logging is active, the host engine writes its trace to a
+    # per-app file (app_NNN_dcgm_trace.log) instead of dcgm_trace.log.
+    if hostengineApp and hostengineApp.dcgm_trace_fname:
+        head_node_log_path = hostengineApp.dcgm_trace_fname
+    else:
+        head_node_log_path = os.path.join(
+            os.getcwd(), "_out_runLogs/dcgm_trace.log")
     remote_log_path = "/var/log/nv-hostengine.log"
 
     config = {}
@@ -1224,7 +1271,1067 @@ def helper_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds):
 
 @test_utils.run_if_mpirun_exists()
 @test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
-@test_utils.run_with_standalone_host_engine(120, heArgs=["--log-level", "debug"], heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_standalone_host_engine(120, heArgs=["--log-level", "debug"], heEnv=test_helpers.helper_dcgm_mndiag.HE_Env, passAppAsArg=True)
 @test_utils.run_with_nvml_injected_gpus()
-def test_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds):
-    helper_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds)
+def test_dcgm_mndiag_multinode_validate_mnubergemm_path(handle, gpuIds, hostengineApp=None):
+    """Verify mnubergemm binary path consistency across all nodes."""
+    helper_dcgm_mndiag_multinode_validate_mnubergemm_path(
+        handle, gpuIds, hostengineApp)
+
+
+# ------------------------------------------------------
+# Backwards compatibility tests
+
+
+def helper_dcgm_mndiag_backwards_compatibility_v1(handle, gpuIds):
+    """Test that v1 structs are still accepted and produce valid results."""
+    logger.info("Starting mndiag backwards compatibility v1 test")
+    logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
+
+    mock_controller = MockMnubergemmController(
+        test_utils.get_mock_mnubergemm_path(),
+        test_utils.get_mock_nvidia_smi_path())
+
+    config = {
+        "hostList": ["localhost"],
+        "gpu_required_info": {
+            0: [
+                "INFO  hosthash=12345 B0I=56789",
+                "OPENMPI/NCCL GEMM PULSE",
+                "T:N FINISHED",
+            ],
+            1: [
+                "INFO  hosthash=12345 B0I=56789",
+                "OPENMPI/NCCL GEMM PULSE",
+                "T:N FINISHED",
+            ]
+        },
+        "gpu_required_error": {},
+        "test_nodes": [],
+        "expected_number_of_entities": 2,
+    }
+    config["expected_num_errors"] = 0
+
+    try:
+        mock_controller.setup_localhost_mock_environment(config)
+
+        mndiag = DcgmMnDiag.DcgmMnDiag(
+            hostList=["localhost"],
+            testName="mnubergemm",
+            parameters=["mnubergemm.time_to_run=1"],
+            handle=handle,
+            version=dcgm_structs.dcgmRunMnDiag_version1)
+        response = mndiag.Execute(handle)
+    finally:
+        mock_controller.cleanup_multinode_mock_environment(config)
+
+    assert response is not None, "Response should not be None"
+    assert response.version == dcgm_structs.dcgmMnDiagResponse_version1, (
+        f"Got response version {response.version}, "
+        f"expected {dcgm_structs.dcgmMnDiagResponse_version1}")
+    assert response.numHosts == 1, f"numHosts {response.numHosts} should be 1"
+    assert response.numTests == 1, f"numTests {response.numTests} should be 1"
+    assert response.numEntities == 2, (
+        f"numEntities {response.numEntities} should be 2")
+
+    logger.info("Backwards compatibility v1 test completed successfully")
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_backwards_compatibility_v1(handle, gpuIds):
+    """Verify backward compatibility with the v1 mndiag response struct."""
+    helper_dcgm_mndiag_backwards_compatibility_v1(handle, gpuIds)
+
+
+# =========================================================================
+# NVLOOM E2E TESTS
+# =========================================================================
+
+
+def helper_setup_and_run_nvloom(handle, config):
+    """Setup mock nvloom_cli environment and run mndiag with testName=nvloom."""
+    try:
+        mock_controller = MockNvloomController(
+            test_utils.get_mock_nvloom_path(),
+            test_utils.get_mock_nvidia_smi_path())
+
+        if len(config.get("test_nodes", [])) > 0:
+            mock_controller.setup_multinode_mock_environment(config)
+            hostList = config["hostList"] + [node["ip"]
+                                             for node in config["test_nodes"]]
+        else:
+            mock_controller.setup_localhost_mock_environment(config)
+            hostList = config["hostList"]
+
+        error_entities = mock_controller.get_error_entities()
+        driver_versions = mock_controller.get_driver_versions(config)
+
+        mndiag = DcgmMnDiag.DcgmMnDiag(
+            hostList=hostList,
+            testName="nvloom",
+            parameters=["nvloom.time_to_run=1"],
+            handle=handle)
+        response = mndiag.Execute(handle)
+
+    except Exception:
+        helper_print_stderr_output()
+        raise
+
+    finally:
+        if config.get("test_nodes"):
+            mock_controller.cleanup_multinode_mock_environment(config)
+        else:
+            mock_controller.cleanup_mock_environment()
+
+    return response, error_entities, driver_versions
+
+
+def helper_validate_nvloom_response(response, config, success=True,
+                                    error_entities=None):
+    """Validate nvloom-format response structure."""
+    if error_entities is None:
+        error_entities = {}
+
+    assert response is not None, "Response should not be None"
+    assert response.version == dcgm_structs.dcgmMnDiagResponse_version2
+
+    assert response.numTests == 1, f"numTests {response.numTests} should be 1"
+    assert response.tests[0].name == "NVLOOM", (
+        f"Test name should be NVLOOM, got {response.tests[0].name}")
+
+    if success:
+        error_detail = ""
+        if response.numErrors > 0:
+            error_msgs = [response.errors[i].msg
+                          for i in range(response.numErrors)]
+            error_detail = (f"; numErrors={response.numErrors}, "
+                            f"errors={error_msgs}")
+        assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, (
+            f"Expected PASS, got {response.tests[0].result}"
+            f"{error_detail}")
+    else:
+        assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+            f"Expected FAIL, got {response.tests[0].result}")
+
+    assert response.numHosts > 0, "Should have at least one host"
+    assert response.numResults > 0, "Should have at least one entity result"
+    assert response.numEntities == response.numResults
+
+    for i in range(response.numResults):
+        result = response.results[i]
+        assert result.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU
+        assert result.testId == 0
+        assert result.hostId < response.numHosts
+
+        if len(error_entities.keys()) > 0:
+            hostname = response.hosts[result.hostId].hostname
+            entity_key = f"{hostname}:{result.entity.entityId}"
+            if entity_key in error_entities.keys():
+                assert result.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+                    f"Entity {i} with key {entity_key} should be FAIL, "
+                    f"got {result.result}")
+            else:
+                assert result.result == dcgm_structs.DCGM_DIAG_RESULT_PASS, (
+                    f"Entity {i} with key {entity_key} should be PASS, "
+                    f"got {result.result}")
+
+    if not success and error_entities:
+        for i in range(response.numErrors):
+            error = response.errors[i]
+            assert error.code == dcgm_errors.DCGM_FR_UNKNOWN
+            assert len(error.msg) > 0
+            all_error_msgs = [m.strip()
+                              for m in error.msg.split(';') if m.strip()]
+            hostname = response.hosts[error.hostId].hostname
+            entity_key = f"{hostname}:{error.entity.entityId}"
+            for expected_msg in error_entities[entity_key]:
+                assert any(expected_msg in actual for actual in all_error_msgs), (
+                    f"Expected error message '{expected_msg}' not found in "
+                    f"actual error messages {all_error_msgs} "
+                    f"for entity {entity_key} (error index {i})"
+                )
+
+
+def helper_dcgm_nvloom_basic_success(handle, gpuIds):
+    """Test nvloom mndiag when mock nvloom_cli simulates all-pass output."""
+    logger.info("Starting nvloom basic success test")
+
+    config = {
+        "hostList": ["localhost"],
+        "gpus_per_host": len(gpuIds),
+        "gpu_required_info": {},
+        "gpu_required_error": {},
+        "test_suites": ["gpu_to_rack_device_to_device_bidir_read_ce"],
+    }
+
+    response, error_entities, _ = helper_setup_and_run_nvloom(handle, config)
+    helper_validate_nvloom_response(response, config, success=True)
+
+    logger.info("Nvloom basic success test completed")
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_nvloom_basic_success(handle, gpuIds):
+    """Verify nvloom all-pass on localhost with injected GPUs."""
+    helper_dcgm_nvloom_basic_success(handle, gpuIds)
+
+
+def helper_dcgm_nvloom_basic_failure(handle, gpuIds):
+    """Test nvloom mndiag when mock nvloom_cli simulates errors."""
+    logger.info("Starting nvloom basic failure test")
+
+    config = {
+        "hostList": ["localhost"],
+        "gpus_per_host": len(gpuIds),
+        "gpu_required_info": {},
+        "gpu_required_error": {
+            0: [
+                "[CUDA_ERROR_UNKNOWN] cuMulticastBindMem failed",
+            ],
+            1: [
+                "[CUDA_ERROR_UNKNOWN] cuMulticastBindMem failed",
+            ],
+        },
+        "test_suites": ["multicast_all_to_all_ce"],
+    }
+
+    response, error_entities, _ = helper_setup_and_run_nvloom(handle, config)
+    helper_validate_nvloom_response(
+        response, config, success=False, error_entities=error_entities)
+
+    logger.info("Nvloom basic failure test completed")
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_nvloom_basic_failure(handle, gpuIds):
+    """Verify nvloom failure reporting on localhost with injected GPUs."""
+    helper_dcgm_nvloom_basic_failure(handle, gpuIds)
+
+
+# ============================================================
+# Multinode nvloom tests
+# ============================================================
+
+def helper_setup_nvloom_testnode_message(config, messages, entities):
+    """Setup test node messages for nvloom multinode tests."""
+    for node in config["test_nodes"]:
+        node["gpu_required_info"] = messages["test_nodes"]["gpu_required_info"]
+        node["gpu_required_error"] = messages["test_nodes"]["gpu_required_error"]
+        entities.update(node["gpu_required_error"].keys())
+
+
+def helper_setup_nvloom_headnode_message(config, messages, entities):
+    """Setup head node messages for nvloom multinode tests."""
+    config["hostList"] = ["localhost"]
+    config["gpu_required_info"] = messages["head_node"]["gpu_required_info"]
+    config["gpu_required_error"] = messages["head_node"]["gpu_required_error"]
+
+    # For nvloom, entities come from "Process" lines, which are gpus_per_host per host
+    gpus_per_host = config.get("gpus_per_host", 4)
+    num_hosts = 1 + len(config["test_nodes"])
+    config["expected_number_of_entities"] = gpus_per_host * num_hosts
+
+    errors = 0
+    for node in config["test_nodes"]:
+        errors += len(node["gpu_required_error"].keys())
+    config["expected_num_errors"] = len(
+        config["gpu_required_error"].keys()) + errors
+
+
+def helper_run_and_validate_nvloom(handle, config, success=True):
+    """Run nvloom mndiag and validate the response."""
+    response, error_entities, _ = helper_setup_and_run_nvloom(handle, config)
+
+    hostList = config["hostList"] + [node["ip"]
+                                     for node in config.get("test_nodes", [])]
+
+    assert response is not None, "Response should not be None"
+    assert response.version == dcgm_structs.dcgmMnDiagResponse_version2
+
+    assert response.numTests == 1, f"numTests {response.numTests} should be 1"
+    assert response.tests[0].name == "NVLOOM", (
+        f"Test name should be NVLOOM, got {response.tests[0].name}")
+
+    if success:
+        error_detail = ""
+        if response.numErrors > 0:
+            error_msgs = [response.errors[i].msg
+                          for i in range(response.numErrors)]
+            error_detail = (f"; numErrors={response.numErrors}, "
+                            f"errors={error_msgs}")
+        assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_PASS, (
+            f"Expected PASS, got {response.tests[0].result}"
+            f"{error_detail}")
+    else:
+        assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+            f"Expected FAIL, got {response.tests[0].result}")
+
+    assert response.numHosts == len(hostList), (
+        f"numHosts {response.numHosts} should match hostList length "
+        f"{len(hostList)}")
+    for i in range(response.numHosts):
+        host = response.hosts[i]
+        assert len(host.hostname) > 0, f"Host {i} has empty hostname"
+        assert host.hostname in hostList, (
+            f"Host {i} hostname {host.hostname} not in hostList")
+
+    assert response.numEntities == response.numResults
+    assert response.numEntities == config["expected_number_of_entities"], (
+        f"numEntities {response.numEntities} should match expected "
+        f"{config['expected_number_of_entities']}")
+
+    for i in range(response.numResults):
+        result = response.results[i]
+        assert result.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU
+        assert result.testId == 0
+        assert result.hostId < response.numHosts
+
+        if len(error_entities.keys()) > 0:
+            hostname = response.hosts[result.hostId].hostname
+            entity_key = f"{hostname}:{result.entity.entityId}"
+            if entity_key in error_entities.keys():
+                assert result.result == dcgm_structs.DCGM_DIAG_RESULT_FAIL, (
+                    f"Entity {i} with key {entity_key} should be FAIL, "
+                    f"got {result.result}")
+            else:
+                assert result.result == dcgm_structs.DCGM_DIAG_RESULT_PASS, (
+                    f"Entity {i} with key {entity_key} should be PASS, "
+                    f"got {result.result}")
+
+    expected_num_errors = min(
+        config.get("expected_num_errors", 0),
+        dcgm_structs.DCGM_MN_DIAG_RESPONSE_ERRORS_MAX)
+    assert response.numErrors == expected_num_errors, (
+        f"numErrors {response.numErrors} should be {expected_num_errors}")
+
+    if not success:
+        for i in range(response.numErrors):
+            error = response.errors[i]
+            assert error.code == dcgm_errors.DCGM_FR_UNKNOWN
+            assert len(error.msg) > 0
+            all_error_msgs = [m.strip()
+                              for m in error.msg.split(';') if m.strip()]
+            hostname = response.hosts[error.hostId].hostname
+            entity_key = f"{hostname}:{error.entity.entityId}"
+            for expected_msg in error_entities[entity_key]:
+                assert any(expected_msg in actual for actual in all_error_msgs), (
+                    f"Expected error message '{expected_msg}' not found in "
+                    f"actual error messages {all_error_msgs} "
+                    f"for entity {entity_key} (error index {i})"
+                )
+
+
+def helper_dcgm_nvloom_multinode_basic_success(handle, gpuIds):
+    """Test nvloom on multiple nodes: pass on head node, pass on test nodes."""
+    logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
+
+    config = {}
+    entities = set()
+
+    helper_setup_multinode_config(config)
+    config["gpus_per_host"] = 4
+    config["test_suites"] = ["gpu_to_rack_device_to_device_bidir_read_ce"]
+
+    messages = {
+        "head_node": {
+            "gpu_required_info": {},
+            "gpu_required_error": {}
+        },
+        "test_nodes": {
+            "gpu_required_info": {},
+            "gpu_required_error": {}
+        }
+    }
+
+    helper_setup_nvloom_testnode_message(config, messages, entities)
+    helper_setup_nvloom_headnode_message(config, messages, entities)
+    helper_run_and_validate_nvloom(handle, config, success=True)
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_nvloom_multinode_basic_success(handle, gpuIds):
+    """Verify nvloom all-pass across multiple nodes."""
+    helper_dcgm_nvloom_multinode_basic_success(handle, gpuIds)
+
+
+def helper_dcgm_nvloom_multinode_basic_failure_1(handle, gpuIds):
+    """Test nvloom on multiple nodes: fail on head node 1 gpu, fail on test nodes multiple gpus."""
+    logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
+
+    config = {}
+    entities = set()
+
+    helper_setup_multinode_config(config)
+    config["gpus_per_host"] = 4
+    config["test_suites"] = ["multicast_all_to_all_ce"]
+
+    messages = {
+        "head_node": {
+            "gpu_required_info": {},
+            "gpu_required_error": {
+                0: [
+                    "[CUDA_ERROR_UNKNOWN] cuMulticastBindMem failed",
+                ],
+            },
+        },
+        "test_nodes": {
+            "gpu_required_info": {},
+            "gpu_required_error": {
+                0: [
+                    "[CUDA_ERROR_UNKNOWN] cuMulticastBindMem failed",
+                ],
+                1: [
+                    "NVLINK Error: link degraded",
+                ],
+                2: [
+                    "[CUDA_ERROR_NOT_READY] cuStreamSynchronize failed",
+                    "Unexpected abort during memory transfer",
+                ],
+                3: [
+                    "IMEX Error: status is DOWN",
+                ],
+            }
+        }
+    }
+
+    helper_setup_nvloom_testnode_message(config, messages, entities)
+    helper_setup_nvloom_headnode_message(config, messages, entities)
+    helper_run_and_validate_nvloom(handle, config, success=False)
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_nvloom_multinode_basic_failure_1(handle, gpuIds):
+    """Verify nvloom multinode failure: head and test nodes fail on multiple GPUs."""
+    helper_dcgm_nvloom_multinode_basic_failure_1(handle, gpuIds)
+
+
+def helper_dcgm_nvloom_multinode_basic_failure_2(handle, gpuIds):
+    """Test nvloom on multiple nodes: fail on head node only, test nodes pass."""
+    logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
+
+    config = {}
+    entities = set()
+
+    helper_setup_multinode_config(config)
+    config["gpus_per_host"] = 4
+    config["test_suites"] = ["gpu_to_rack_device_to_device_bidir_read_ce"]
+
+    messages = {
+        "head_node": {
+            "gpu_required_info": {},
+            "gpu_required_error": {
+                0: [
+                    "[CUDA_ERROR_UNKNOWN] cuMulticastBindMem failed",
+                ],
+            },
+        },
+        "test_nodes": {
+            "gpu_required_info": {},
+            "gpu_required_error": {}
+        }
+    }
+
+    helper_setup_nvloom_testnode_message(config, messages, entities)
+    helper_setup_nvloom_headnode_message(config, messages, entities)
+    helper_run_and_validate_nvloom(handle, config, success=False)
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_nvloom_multinode_basic_failure_2(handle, gpuIds):
+    """Verify nvloom multinode failure: head fails, test nodes pass."""
+    helper_dcgm_nvloom_multinode_basic_failure_2(handle, gpuIds)
+
+
+def helper_dcgm_nvloom_multinode_basic_failure_3(handle, gpuIds):
+    """Test nvloom on multiple nodes: head node passes, test nodes fail with same error."""
+    logger.info(f"mpirun_path: {test_utils.get_mpirun_path()}")
+
+    config = {}
+    entities = set()
+
+    helper_setup_multinode_config(config)
+    config["gpus_per_host"] = 4
+    config["test_suites"] = ["multicast_all_to_all_ce"]
+
+    messages = {
+        "head_node": {
+            "gpu_required_info": {},
+            "gpu_required_error": {}
+        },
+        "test_nodes": {
+            "gpu_required_info": {},
+            "gpu_required_error": {
+                0: [
+                    "[CUDA_ERROR_UNKNOWN] cuMulticastBindMem failed",
+                ],
+            }
+        }
+    }
+
+    helper_setup_nvloom_testnode_message(config, messages, entities)
+    helper_setup_nvloom_headnode_message(config, messages, entities)
+    helper_run_and_validate_nvloom(handle, config, success=False)
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_nvloom_multinode_basic_failure_3(handle, gpuIds):
+    """Verify nvloom multinode failure: head passes, test nodes fail."""
+    helper_dcgm_nvloom_multinode_basic_failure_3(handle, gpuIds)
+
+
+# =========================================================================
+# Multinode nvbandwidth tests
+# =========================================================================
+
+def helper_mnnvbandwidth_config(gpuIds):
+    return {
+        "mock_hosts": [{
+            "hostname": "localhost",
+            "gpu_ids": list(gpuIds),
+        }],
+        "test_nodes": [],
+        "stdout_lines": [],
+    }
+
+
+def helper_add_mnnvbandwidth_test_nodes(config, max_nodes=None):
+    helper_setup_multinode_config(config)
+    if max_nodes is not None:
+        config["test_nodes"] = config["test_nodes"][:max_nodes]
+    for node in config["test_nodes"]:
+        config["mock_hosts"].append({
+            "hostname": node["ip"],
+            "gpu_ids": [0, 1],
+        })
+
+
+def helper_execute_mnnvbandwidth(handle, config, parameters=()):
+    mock_controller = MockMnnvbandwidthController(
+        test_utils.get_mock_mnnvbandwidth_path(),
+        test_utils.get_mock_nvidia_smi_path())
+
+    try:
+        if config["test_nodes"]:
+            mock_controller.setup_multinode_mock_environment(config)
+        else:
+            mock_controller.setup_localhost_mock_environment(config)
+
+        host_list = [
+            host["hostname"] for host in config["mock_hosts"]
+        ]
+        mndiag = DcgmMnDiag.DcgmMnDiag(
+            hostList=host_list,
+            testName="mnnvbandwidth",
+            parameters=parameters,
+            handle=handle)
+        return mndiag.Execute(handle)
+    finally:
+        mock_controller.cleanup_multinode_mock_environment(config)
+
+
+def helper_mnnvbandwidth_process_lines(config):
+    lines = []
+    rank = 0
+    for host in config["mock_hosts"]:
+        for gpu_id in host["gpu_ids"]:
+            lines.append(
+                f"Process {rank} ({host['hostname']}): device {gpu_id}: "
+                f"NVIDIA GB200 (00000000:{rank:02x}:00)")
+            rank += 1
+    return lines
+
+
+def helper_mnnvbandwidth_rank(config, hostname, gpu_id):
+    rank = 0
+    for host in config["mock_hosts"]:
+        for current_gpu_id in host["gpu_ids"]:
+            if (host["hostname"], current_gpu_id) == (hostname, gpu_id):
+                return rank
+            rank += 1
+    raise ValueError(f"No rank found for {hostname} GPU {gpu_id}")
+
+
+def helper_set_mnnvbandwidth_success_output(config, testcase):
+    process_lines = helper_mnnvbandwidth_process_lines(config)
+    device_count = len(process_lines)
+    matrix_lines = [
+        "  " + "".join(f"{column:>10}" for column in range(device_count)),
+    ]
+    matrix_lines.extend(
+        f"{row:>2}" + "".join(
+            f"{'N/A' if row == column else '800.00':>10}"
+            for column in range(device_count))
+        for row in range(device_count)
+    )
+    config["stdout_lines"] = process_lines + [
+        f"Running {testcase}.",
+        "memcpy CE GPU(row) -> GPU(column) bandwidth (GB/s)",
+    ] + matrix_lines + [
+        f"SUM {testcase} {800.0 * device_count * (device_count - 1)}",
+    ]
+
+
+def helper_mnnvbandwidth_entity_pairs(response):
+    pairs = set()
+    for index in range(response.numEntities):
+        entity = response.entities[index]
+        hostname = response.hosts[entity.hostId].hostname
+        pairs.add((hostname, entity.entity.entityId))
+    return pairs
+
+
+def helper_mnnvbandwidth_results(response):
+    results = {}
+    for index in range(response.numResults):
+        result = response.results[index]
+        assert result.entity.entityGroupId == dcgm_fields.DCGM_FE_GPU
+        hostname = response.hosts[result.hostId].hostname
+        entity = (hostname, result.entity.entityId)
+        assert entity not in results
+        results[entity] = result.result
+    return results
+
+
+def helper_validate_mnnvbandwidth_response(
+        response,
+        expected_result,
+        expected_entities,
+        expected_results,
+        expected_num_errors,
+        error_group=None,
+        error_entity_id=None,
+        error_hostname=None,
+        error_substrings=()):
+    actual_errors = [
+        response.errors[index].msg
+        for index in range(response.numErrors)
+    ]
+    assert response.version == dcgm_structs.dcgmMnDiagResponse_version2
+    assert response.numTests == 1
+    assert response.tests[0].name == "MNNVBANDWIDTH"
+    assert response.tests[0].result == expected_result, (
+        f"Expected result {expected_result}, got {response.tests[0].result}; "
+        f"errors: {actual_errors!r}")
+    assert response.numEntities == len(expected_entities)
+    assert response.numResults == len(expected_results)
+    assert response.numErrors == expected_num_errors
+    assert response.tests[0].numResults == len(expected_results)
+    assert response.tests[0].numErrors == expected_num_errors
+    assert response.numHosts == len({
+        hostname for hostname, _ in expected_entities
+    })
+    assert helper_mnnvbandwidth_entity_pairs(
+        response) == set(expected_entities)
+    assert helper_mnnvbandwidth_results(response) == expected_results
+
+    if error_group is not None:
+        assert response.numErrors > 0
+        assert response.errors[0].entity.entityGroupId == error_group
+    if error_entity_id is not None:
+        assert response.numErrors > 0
+        assert response.errors[0].entity.entityId == error_entity_id
+    if error_hostname is not None:
+        assert response.numErrors > 0
+        error = response.errors[0]
+        assert response.hosts[error.hostId].hostname == error_hostname
+
+    for expected_error in error_substrings:
+        assert any(
+            expected_error in error for error in actual_errors), (
+                f"Expected error substring {expected_error!r} not found "
+                f"in {actual_errors!r}")
+
+
+def helper_expected_mnnvbandwidth_entities(config):
+    return {
+        (host["hostname"], gpu_id)
+        for host in config["mock_hosts"]
+        for gpu_id in host["gpu_ids"]
+    }
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_text_success(handle, gpuIds):
+    config = helper_mnnvbandwidth_config(gpuIds)
+    helper_set_mnnvbandwidth_success_output(
+        config, "device_to_device_memcpy_read_ce")
+    response = helper_execute_mnnvbandwidth(handle, config)
+    expected_entities = helper_expected_mnnvbandwidth_entities(config)
+
+    helper_validate_mnnvbandwidth_response(
+        response,
+        dcgm_structs.DCGM_DIAG_RESULT_PASS,
+        expected_entities,
+        dict.fromkeys(
+            expected_entities, dcgm_structs.DCGM_DIAG_RESULT_PASS),
+        0)
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_uses_required_defaults(handle, gpuIds):
+    """Verify mnnvbandwidth selects the required tests and all pairs for a small run."""
+    config = helper_mnnvbandwidth_config(gpuIds)
+    config["required_args"] = [
+        "--testcase",
+        "multinode_device_to_device_memcpy_write_ce",
+        "multinode_device_to_device_memcpy_read_ce",
+        "--targetNumPairs",
+        "-1",
+    ]
+    helper_set_mnnvbandwidth_success_output(
+        config, "multinode_device_to_device_memcpy_read_ce")
+    response = helper_execute_mnnvbandwidth(handle, config)
+    expected_entities = helper_expected_mnnvbandwidth_entities(config)
+
+    helper_validate_mnnvbandwidth_response(
+        response,
+        dcgm_structs.DCGM_DIAG_RESULT_PASS,
+        expected_entities,
+        dict.fromkeys(
+            expected_entities, dcgm_structs.DCGM_DIAG_RESULT_PASS),
+        0)
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_gpu_pairs_all(handle, gpuIds):
+    """Verify gpuPairs=all executes and aggregates every injected GPU pair."""
+    assert len(gpuIds) == 2, "The GB200 mock SKU must expose exactly two GPUs"
+    config = helper_mnnvbandwidth_config(gpuIds)
+    config["required_args"] = [
+        "--pair",
+        "--testcase",
+        "multinode_device_to_device_memcpy_read_sm",
+        "--bufferSize",
+        "1",
+    ]
+    helper_set_mnnvbandwidth_success_output(
+        config, "multinode_device_to_device_memcpy_read_sm")
+
+    response = helper_execute_mnnvbandwidth(
+        handle, config, parameters=["mnnvbandwidth.gpuPairs=all"])
+    expected_entities = helper_expected_mnnvbandwidth_entities(config)
+
+    helper_validate_mnnvbandwidth_response(
+        response,
+        dcgm_structs.DCGM_DIAG_RESULT_PASS,
+        expected_entities,
+        dict.fromkeys(
+            expected_entities, dcgm_structs.DCGM_DIAG_RESULT_PASS),
+        0)
+    assert response.tests[0].auxData.data.startswith(
+        "MNNVBANDWIDTH_SUMMARY planned=1;passed=1;failed=0;")
+    assert ";stdout=" in response.tests[0].auxData.data
+    assert ";stderr=" in response.tests[0].auxData.data
+    assert all(
+        response.entities[index].serialNum == ""
+        for index in range(response.numEntities))
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_text_testcase_failure(
+        handle, gpuIds):
+    config = helper_mnnvbandwidth_config(gpuIds)
+    config["stdout_lines"] = helper_mnnvbandwidth_process_lines(config)
+    config["stderr_lines"] = [
+        "ERROR: Testcase missing_test not found!",
+    ]
+    config["exit_code"] = 1
+    response = helper_execute_mnnvbandwidth(handle, config)
+
+    helper_validate_mnnvbandwidth_response(
+        response,
+        dcgm_structs.DCGM_DIAG_RESULT_FAIL,
+        helper_expected_mnnvbandwidth_entities(config),
+        {},
+        1,
+        error_group=dcgm_fields.DCGM_FE_NONE,
+        error_substrings=("missing_test", "not found"))
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_text_rank_failure(
+        handle, gpuIds):
+    gpu_id = gpuIds[0]
+    config = helper_mnnvbandwidth_config([gpu_id])
+    config.update({
+        "stdout_lines": [
+            f"Process 0 (localhost): device {gpu_id}: "
+            "NVIDIA GB200 (00000000:01:00)",
+        ],
+        "stderr_lines": [
+            (
+                "[CUDA_ERROR_ILLEGAL_ADDRESS] an illegal memory access was "
+                "encountered in expression cudaMemcpy(dst, src, size) on "
+                "localhost, rank = 0 in copy() : multinode_memcpy.cpp:58"
+            ),
+        ],
+        "exit_code": 1,
+    })
+    response = helper_execute_mnnvbandwidth(handle, config)
+
+    helper_validate_mnnvbandwidth_response(
+        response,
+        dcgm_structs.DCGM_DIAG_RESULT_FAIL,
+        {("localhost", gpu_id)},
+        {("localhost", gpu_id): dcgm_structs.DCGM_DIAG_RESULT_FAIL},
+        1,
+        error_group=dcgm_fields.DCGM_FE_GPU,
+        error_entity_id=gpu_id,
+        error_substrings=("CUDA_ERROR_ILLEGAL_ADDRESS",))
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_text_mpi_failure(
+        handle, gpuIds):
+    config = helper_mnnvbandwidth_config(gpuIds)
+    config.update({
+        "stderr_lines": [
+            (
+                "MPI_ABORT was invoked on rank 0 in communicator "
+                "MPI_COMM_WORLD"
+            ),
+        ],
+        "exit_code": 1,
+    })
+    response = helper_execute_mnnvbandwidth(handle, config)
+
+    helper_validate_mnnvbandwidth_response(
+        response,
+        dcgm_structs.DCGM_DIAG_RESULT_FAIL,
+        set(),
+        {},
+        1,
+        error_group=dcgm_fields.DCGM_FE_NONE,
+        error_substrings=("MPI_ABORT",))
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_multinode_remote_exit_failure(
+        handle, gpuIds):
+    config = helper_mnnvbandwidth_config(gpuIds)
+    helper_add_mnnvbandwidth_test_nodes(config, max_nodes=1)
+    helper_set_mnnvbandwidth_success_output(
+        config, "multinode_device_to_device_memcpy_read_ce")
+    # Keep every rank alive through process detection. Without this, the
+    # launcher can finish before the manager observes it and the test only
+    # exercises the generic no-process failure path.
+    config["run_seconds"] = 1
+    failed_node = config["test_nodes"][0]
+    failed_node["exit_code"] = 1
+
+    response = helper_execute_mnnvbandwidth(handle, config)
+
+    assert response.tests[0].result == dcgm_structs.DCGM_DIAG_RESULT_FAIL
+    assert response.tests[0].auxData.data.startswith("MPI exited with code:")
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_multinode_text_success(
+        handle, gpuIds):
+    config = helper_mnnvbandwidth_config(gpuIds)
+    helper_add_mnnvbandwidth_test_nodes(config)
+    helper_set_mnnvbandwidth_success_output(
+        config, "multinode_device_to_device_memcpy_read_ce")
+    response = helper_execute_mnnvbandwidth(handle, config)
+    expected_entities = helper_expected_mnnvbandwidth_entities(config)
+
+    helper_validate_mnnvbandwidth_response(
+        response,
+        dcgm_structs.DCGM_DIAG_RESULT_PASS,
+        expected_entities,
+        dict.fromkeys(
+            expected_entities, dcgm_structs.DCGM_DIAG_RESULT_PASS),
+        0)
+
+
+# NO HARDWARE
+
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_mndiag_mnnvbandwidth_multinode_text_failure(
+        handle, gpuIds):
+    config = helper_mnnvbandwidth_config(gpuIds)
+    helper_add_mnnvbandwidth_test_nodes(config)
+    assert len(config["mock_hosts"]) > 1
+    failed_host = config["mock_hosts"][-1]
+    assert len(failed_host["gpu_ids"]) > 1
+    failed_hostname = failed_host["hostname"]
+    failed_gpu_id = failed_host["gpu_ids"][-1]
+    failed_rank = helper_mnnvbandwidth_rank(
+        config, failed_hostname, failed_gpu_id)
+    assert failed_rank > 0
+    config["stdout_lines"] = helper_mnnvbandwidth_process_lines(config)
+    config["stderr_lines"] = [
+        (
+            "[CUDA_ERROR_ILLEGAL_ADDRESS] an illegal memory access was "
+            "encountered in expression cudaMemcpy(dst, src, size) on "
+            f"{failed_hostname}, rank = {failed_rank} in copy() : "
+            "multinode_memcpy.cpp:58"
+        ),
+    ]
+    response = helper_execute_mnnvbandwidth(handle, config)
+
+    helper_validate_mnnvbandwidth_response(
+        response,
+        dcgm_structs.DCGM_DIAG_RESULT_FAIL,
+        helper_expected_mnnvbandwidth_entities(config),
+        {(failed_hostname, failed_gpu_id):
+            dcgm_structs.DCGM_DIAG_RESULT_FAIL},
+        1,
+        error_group=dcgm_fields.DCGM_FE_GPU,
+        error_entity_id=failed_gpu_id,
+        error_hostname=failed_hostname,
+        error_substrings=("CUDA_ERROR_ILLEGAL_ADDRESS",))
+
+
+def helper_dcgm_nvloom_validate_duration(handle, gpuIds):
+    """Verify that mndiag computes --duration from time_to_run correctly.
+
+    Sets nvloom.time_to_run=300 and checks that the mock nvloom_cli receives
+    --duration equal to floor((300 - 30) / 8) = 33. The default gpu-to-rack
+    suite has 8 testcases in both NVLoom 1.4.1 and 2.0.0.
+    """
+    logger.info("Starting nvloom duration validation test")
+
+    config = {
+        "hostList": ["localhost"],
+        "gpus_per_host": len(gpuIds),
+        "gpu_required_info": {},
+        "gpu_required_error": {},
+        "test_suites": ["gpu_to_rack_device_to_device_bidir_read_ce"],
+    }
+
+    mock_controller = MockNvloomController(
+        test_utils.get_mock_nvloom_path(),
+        test_utils.get_mock_nvidia_smi_path())
+
+    try:
+        mock_controller.cleanup_captured_args()
+        mock_controller.setup_localhost_mock_environment(config)
+
+        time_to_run = 300
+        margin = 30
+        gpu_to_rack_count = 8
+        expected_duration = (time_to_run - margin) // gpu_to_rack_count
+
+        mndiag = DcgmMnDiag.DcgmMnDiag(
+            hostList=config["hostList"],
+            testName="nvloom",
+            parameters=[f"nvloom.time_to_run={time_to_run}"],
+            handle=handle)
+        mndiag.Execute(handle)
+
+        captured_duration = mock_controller.get_captured_duration()
+        assert captured_duration is not None, (
+            "Mock nvloom_cli did not capture --duration argument")
+        assert captured_duration == str(expected_duration), (
+            f"Expected --duration={expected_duration}, "
+            f"got --duration={captured_duration}")
+
+        logger.info(
+            f"Nvloom duration validation passed: --duration={captured_duration}")
+
+    except Exception:
+        helper_print_stderr_output()
+        raise
+
+    finally:
+        mock_controller.cleanup_captured_args()
+        mock_controller.cleanup_mock_environment()
+
+
+# NO HARDWARE
+
+@test_utils.run_if_mpirun_exists()
+@test_utils.run_with_injection_nvml_using_specific_sku(test_helpers.helper_dcgm_mndiag.get_injection_values()["INJECTION_YAML"])
+@test_utils.run_with_standalone_host_engine(120, heEnv=test_helpers.helper_dcgm_mndiag.HE_Env)
+@test_utils.run_with_nvml_injected_gpus()
+def test_dcgm_nvloom_validate_duration(handle, gpuIds):
+    """Verify mndiag passes computed --duration to nvloom_cli."""
+    helper_dcgm_nvloom_validate_duration(handle, gpuIds)

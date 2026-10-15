@@ -1,0 +1,38 @@
+[dependencies.windows-link]
+default-features = false
+version = "0.2.1"
+
+[features]
+default = ["std"]
+std = []
+
+[lib]
+path = "src/lib.rs"
+
+[lints.rust]
+missing_unsafe_on_extern = "warn"
+
+[lints.rust.unexpected_cfgs]
+check-cfg = ["cfg(windows_raw_dylib, windows_slim_errors)"]
+level = "warn"
+priority = 0
+
+[package]
+autobenches = false
+autobins = false
+autoexamples = false
+autolib = false
+autotests = false
+categories = ["os::windows-apis"]
+description = "Windows string types"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+name = "windows-strings"
+readme = "readme.md"
+repository = "https://github.com/microsoft/windows-rs"
+rust-version = "1.82"
+version = "0.5.1"
+
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = []

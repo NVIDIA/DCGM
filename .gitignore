@@ -1,6 +1,10 @@
 _out/
 _out*/
 .clangd/
+.vs/
+.claude/
+.codex/
+.plans/
 **/.idea/
 **/*.nvmk
 **/compile_commands.json
@@ -10,7 +14,11 @@ cscope.out
 **/__pycache__/*.pyc
 __pycache__
 .run/
-rust/target/
-rust/update/
+target/
 **/*.swp
 venv/
+# Agent files mounted into the devcontainer
+.claude/settings.json
+.claude/settings.local.json
+.codex/config.toml
+.cursor/sandbox.json

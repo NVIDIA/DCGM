@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #include "PluginInterface.h"
 #include <DcgmLogging.h>
+#include <DcgmOpsAnyPtr.hpp>
 #include <HangDetectMonitor.h>
 #include <NvvsCommon.h>
 #include <PluginLib.h>
@@ -50,7 +51,7 @@ std::unique_ptr<dcgmDiagPluginEntityList_v1> PopulateEntityList(
 } //namespace
 
 /*****************************************************************************/
-PluginLib::PluginLib()
+PluginLib::PluginLib(DcgmNs::DcgmOpsAnyPtr dcgmOps, NvvsCommon *nvvsCommon)
     : m_pluginPtr(nullptr)
     , m_initialized(false)
     , m_getPluginInterfaceVersionCB(nullptr)
@@ -63,7 +64,9 @@ PluginLib::PluginLib()
     , m_userData(nullptr)
     , m_pluginName()
     , m_description()
-    , m_coreFunctionality()
+    , m_dcgmOps(dcgmOps)
+    , m_nvvsCommon(nvvsCommon)
+    , m_coreFunctionality(m_dcgmOps, m_nvvsCommon)
 {}
 
 /*****************************************************************************/
@@ -80,6 +83,8 @@ PluginLib::PluginLib(PluginLib &&other) noexcept
     , m_userData(other.m_userData)
     , m_pluginName(other.m_pluginName)
     , m_description(other.m_description)
+    , m_dcgmOps(other.m_dcgmOps)
+    , m_nvvsCommon(other.m_nvvsCommon)
     , m_coreFunctionality(std::move(other.m_coreFunctionality))
 {
     other.m_pluginPtr                   = nullptr;
@@ -90,36 +95,6 @@ PluginLib::PluginLib(PluginLib &&other) noexcept
     other.m_retrieveResultsCB           = nullptr;
     other.m_shutdownPluginCB            = nullptr;
     other.m_userData                    = nullptr;
-}
-
-/*****************************************************************************/
-PluginLib &PluginLib::operator=(PluginLib &&other) noexcept
-{
-    if (this != &other)
-    {
-        m_pluginPtr                   = other.m_pluginPtr;
-        m_initialized                 = other.m_initialized;
-        m_getPluginInterfaceVersionCB = other.m_getPluginInterfaceVersionCB;
-        m_getPluginInfoCB             = other.m_getPluginInfoCB;
-        m_initializeCB                = other.m_initializeCB;
-        m_runTestCB                   = other.m_runTestCB;
-        m_retrieveStatsCB             = other.m_retrieveStatsCB;
-        m_retrieveResultsCB           = other.m_retrieveResultsCB;
-        m_shutdownPluginCB            = other.m_shutdownPluginCB;
-        m_userData                    = other.m_userData;
-        m_pluginName                  = other.m_pluginName;
-        m_description                 = other.m_description;
-
-        other.m_pluginPtr                   = nullptr;
-        other.m_initialized                 = false;
-        other.m_getPluginInterfaceVersionCB = nullptr;
-        other.m_runTestCB                   = nullptr;
-        other.m_retrieveStatsCB             = nullptr;
-        other.m_retrieveResultsCB           = nullptr;
-        other.m_userData                    = nullptr;
-    }
-
-    return *this;
 }
 
 /*****************************************************************************/
@@ -389,6 +364,7 @@ dcgmReturn_t PluginLib::InitializePlugin(dcgmHandle_t handle, int pluginId)
                              GetLoggerSeverity(BASE_LOGGER),
                              DcgmLoggingGetCallback(),
                              &pluginAttr,
+                             m_nvvsCommon,
                              m_coreFunctionality.GetHangDetectMonitor());
 
         if (ret == DCGM_ST_OK)
@@ -556,7 +532,7 @@ void PluginLib::RunTest(std::string const &testName,
     dcgmDiagPluginTestParameter_t failEarly;
     dcgmDiagPluginTestParameter_t failCheckInterval;
     SafeCopyTo(failEarly.parameterName, FAIL_EARLY);
-    if (nvvsCommon.failEarly)
+    if (m_nvvsCommon->failEarly)
     {
         SafeCopyTo(failEarly.parameterValue, "true");
     }
@@ -568,13 +544,13 @@ void PluginLib::RunTest(std::string const &testName,
     parameters.push_back(failEarly);
 
     SafeCopyTo(failCheckInterval.parameterName, FAIL_CHECK_INTERVAL);
-    SafeCopyTo(failCheckInterval.parameterValue, std::to_string(nvvsCommon.failCheckInterval).c_str());
+    SafeCopyTo(failCheckInterval.parameterValue, std::to_string(m_nvvsCommon->failCheckInterval).c_str());
     failCheckInterval.type = DcgmPluginParamFloat;
     parameters.push_back(failCheckInterval);
 
-    gpuIgnoreErrorCodeMap_t parsedIgnoreErrorCodeMap = nvvsCommon.parsedIgnoreErrorCodes;
+    gpuIgnoreErrorCodeMap_t parsedIgnoreErrorCodeMap = m_nvvsCommon->parsedIgnoreErrorCodes;
     std::string errStr                               = SetIgnoreErrorCodesParam(
-        parameters, nvvsCommon.ignoreErrorCodesString, parsedIgnoreErrorCodeMap, GetGpuIds(entityInfos));
+        parameters, m_nvvsCommon->ignoreErrorCodesString, parsedIgnoreErrorCodeMap, GetGpuIds(entityInfos));
     if (!errStr.empty())
     {
         DcgmError de { DcgmError::GpuIdTag::Unknown };
@@ -595,8 +571,8 @@ void PluginLib::RunTest(std::string const &testName,
     unsigned int numParameters                 = parameters.size();
     const dcgmDiagPluginTestParameter_t *parms = parameters.data();
 
-    // We don't need to set this up for the software or eud plugin
-    if (m_pluginName != "software" && m_pluginName != "eud")
+    // We don't need to set this up for the software, eud, or cpu_sdc plugin
+    if (m_pluginName != SW_PLUGIN_NAME && m_pluginName != EUD_PLUGIN_NAME && m_pluginName != CPU_SDC_PLUGIN_NAME)
     {
         dcgmReturn_t dcgmRet = m_coreFunctionality.PluginPreStart(m_statFieldIds, entityInfos, m_pluginName);
         if (dcgmRet != DCGM_ST_OK)
@@ -737,8 +713,8 @@ void PluginLib::RunTest(std::string const &testName,
         return;
     }
 
-    // We don't write a stats file or perform these checks for the software or eud plugin
-    if (m_pluginName != "software" && m_pluginName != "eud")
+    // We don't write a stats file or perform these checks for the software, eud, or cpu_sdc plugin
+    if (m_pluginName != SW_PLUGIN_NAME && m_pluginName != EUD_PLUGIN_NAME && m_pluginName != CPU_SDC_PLUGIN_NAME)
     {
         auto customStats    = m_tests.at(testName).GetCustomStats();
         auto testParameters = m_tests.at(testName).GetTestParameters();
@@ -752,6 +728,14 @@ void PluginLib::RunTest(std::string const &testName,
             errStruct.severity = error.GetSeverity();
             errStruct.gpuId    = error.GetGpuId();
             snprintf(errStruct.msg, sizeof(errStruct.msg), "%s", error.GetMessage().c_str());
+            log_warning("Plugin {} test {} reported a failure from common checks "
+                        "on entity {}:{} (code {}): {}",
+                        m_pluginName,
+                        testName,
+                        error.GetEntity().entityGroupId,
+                        error.GetEntity().entityId,
+                        error.GetCode(),
+                        error.GetMessage());
             m_tests.at(testName).AddError(errStruct);
         }
         // Add the ignored errors as information strings
@@ -762,6 +746,14 @@ void PluginLib::RunTest(std::string const &testName,
             auto newInfoMsg = SUPPRESSED_ERROR_STR + error.GetMessage();
             SafeCopyTo(infoStruct.msg, newInfoMsg.c_str());
             infoStruct.entity = error.GetEntity();
+            log_info("Plugin {} test {} had a suppressed error from common checks "
+                     "on entity {}:{} (code {}): {}",
+                     m_pluginName,
+                     testName,
+                     error.GetEntity().entityGroupId,
+                     error.GetEntity().entityId,
+                     error.GetCode(),
+                     error.GetMessage());
             m_tests.at(testName).AddInfo(infoStruct);
         }
     }
@@ -770,14 +762,14 @@ void PluginLib::RunTest(std::string const &testName,
 /*****************************************************************************/
 std::string PluginLib::GetFullLogFileName() const
 {
-    std::string retStr = nvvsCommon.m_statsPath;
+    std::string retStr = m_nvvsCommon->m_statsPath;
 
     /* Make sure path ends in a / */
     if (retStr.size() > 0 && retStr.at(retStr.size() - 1) != '/')
         retStr += "/";
 
     /* Add the base filename */
-    retStr += nvvsCommon.logFile;
+    retStr += m_nvvsCommon->logFile;
 
     std::string logFileTag = m_pluginName;
 
@@ -787,7 +779,7 @@ std::string PluginLib::GetFullLogFileName() const
         retStr += logFileTag;
     }
 
-    switch (nvvsCommon.logFileType)
+    switch (m_nvvsCommon->logFileType)
     {
         default: // Deliberate fall-through
         case NVVS_LOGFILE_TYPE_JSON:
@@ -896,7 +888,7 @@ bool PluginLib::ShouldEnableHangDetection() const
     /* Enable hang detection except for plugins where child processes or
      * worker thread waits could cause false positives. Children and worker
      * threads may be separately monitored for hang detection coverage. */
-    return GetName() != EUD_PLUGIN_NAME;
+    return GetName() != EUD_PLUGIN_NAME && GetName() != CPU_SDC_PLUGIN_NAME;
 }
 
 // Explicit template instantiations

@@ -56,6 +56,8 @@ target_sources(
     PRIVATE
         CompoundValue.cpp
         InjectedNvml.cpp
+        NvmlLogging.cpp
+        NvmlLoggerDependencyProd.cpp
         NvmlFuncReturn.cpp
         NvmlReturnDeserializer.cpp
         PassThruNvml.cpp
@@ -63,11 +65,10 @@ target_sources(
 
 target_link_libraries(nvml_injection PUBLIC nvmli_interface)
 target_link_libraries(nvml_injection PRIVATE nvmli_public sdk_nvml_interface dcgm dcgm_common common_interface)
-target_link_libraries(nvml_injection PRIVATE ${YAML_STATIC_LIBS})
-target_link_libraries(nvml_injection PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/nvml-injection.linux_defs)
+target_link_libraries(nvml_injection PRIVATE yaml-cpp::yaml-cpp)
+target_link_options(nvml_injection PRIVATE -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/nvml-injection.linux_defs)
 target_link_libraries(nvml_injection PRIVATE fmt::fmt)
 target_include_directories(nvml_injection PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories(nvml_injection PRIVATE ${YAML_INCLUDE_DIR})
 target_include_directories(nvmli_public PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 add_subdirectory(tests)

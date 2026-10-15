@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,14 +17,13 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 [--no-clone] --src-dir=<user_provided_folder_path> [-- <cuda local repo url>...]"
-    echo "Example: $0 --no-clone --src-dir=/path/to/source-directory -- https://developer.download.nvidia.com/compute/cuda/12.6.3/local_installers/cuda-repo-ubuntu2004-12-6-local_12.6.3-560.35.05-1_arm64.deb"
+    echo "Usage: $0 [--no-clone] [--multinode] --src-dir=<user_provided_folder_path> [-- <cuda local repo url>...]"
+    echo "Example: $0 --no-clone --multinode --src-dir=/path/to/source-directory -- https://developer.download.nvidia.com/compute/cuda/12.6.3/local_installers/cuda-repo-ubuntu2004-12-6-local_12.6.3-560.35.05-1_arm64.deb"
     exit 1
 }
 
 # Parse arguments
-OPTS=$(getopt -o '' --long no-clone,src-dir: -- "$@")
-if [ $? != 0 ]; then
+if ! OPTS=$(getopt -o '' --long no-clone,multinode,src-dir: -- "$@"); then
     usage
 fi
 
@@ -34,7 +33,7 @@ eval set -- "$OPTS"
 NVBANDWIDTH_BUILD_BUILD_ID_SUFFIX=${NVBANDWIDTH_BUILD_BUILD_ID_SUFFIX:-}
 NVBANDWIDTH_BUILD_IMAGE_NAME=${NVBANDWIDTH_BUILD_IMAGE_NAME:-nvbandwidthbuild}
 NVBANDWIDTH_REPO_URL="${NVBANDWIDTH_REPO_URL:-https://github.com/NVIDIA/nvbandwidth}"
-NVBANDWIDTH_VERSION="${NVBANDWIDTH_VERSION:-V0.8}"
+MULTINODE=0
 
 declare -a cuda_local_repo_urls=(
     'https://developer.download.nvidia.com/compute/cuda/12.9.1/local_installers/cuda-repo-ubuntu2004-12-9-local_12.9.1-575.57.08-1_amd64.deb'
@@ -49,13 +48,19 @@ while true; do
             NOCLONE=
             shift
             ;;
+        --multinode)
+            MULTINODE=1
+            shift
+            ;;
         --src-dir)
             SRC_DIR="$2"
             shift 2
             ;;
         --)
             shift
-            test -z "$@" || cuda_local_repo_urls=( "$@" )
+            if [ "$#" -ne 0 ]; then
+                cuda_local_repo_urls=( "$@" )
+            fi
             break
             ;;
         *)
@@ -76,9 +81,26 @@ UBUNTU_VERSION="${UBUNTU_VERSION:-20.04}"
 declare -A PLATFORMS=( ['x86_64']='amd64' ['aarch64']='arm64' )
 declare -A BASE_IMAGES=( ['amd64']="ubuntu:${UBUNTU_VERSION}" ['arm64']="arm64v8/ubuntu:${UBUNTU_VERSION}" )
 BUILD_PLATFORM="linux/${PLATFORMS[$(uname -m)]}"
-DIR=$(dirname $(realpath $0))
+DIR=$(dirname "$(realpath "$0")")
 REMOTE_DIR="/usr/local/src/nvbandwidth_src"
-SRC_DIR=$(realpath ${SRC_DIR})
+if [ -v NOCLONE ]; then
+    if [ ! -d "${SRC_DIR}" ]; then
+        >&2 echo "Error: Source directory ${SRC_DIR} does not exist."
+        exit 1
+    fi
+    SRC_DIR=$(realpath -- "${SRC_DIR}")
+else
+    SRC_DIR=$(realpath -m -- "${SRC_DIR}")
+fi
+OUTPUT_BINARY_NAME=nvbandwidth
+BUILD_DIR_SUFFIX=
+if [ "$MULTINODE" -eq 1 ]; then
+    NVBANDWIDTH_VERSION="${NVBANDWIDTH_VERSION:-v0.9}"
+    OUTPUT_BINARY_NAME=mnnvbandwidth
+    BUILD_DIR_SUFFIX=-multinode
+else
+    NVBANDWIDTH_VERSION="${NVBANDWIDTH_VERSION:-V0.8}"
+fi
 
 # Clone the repository if --no-clone is not set
 if [ ! -v NOCLONE ]; then
@@ -118,8 +140,9 @@ LOCAL_REGISTRY="localhost:$(
 
 for url in "${cuda_local_repo_urls[@]}";
 do
-    [ -f $(basename "$url") ] || curl --location --output $(basename "$url") "$url"
-    ln -sf $(basename "$url") cuda-repo.deb
+    cuda_repo_deb=$(basename "$url")
+    [ -f "$cuda_repo_deb" ] || curl --location --output "$cuda_repo_deb" "$url"
+    ln -sf "$cuda_repo_deb" cuda-repo.deb
 
     CUDA_VERSION=$(dpkg-deb --field cuda-repo.deb Version)
     TARGET_ARCHITECTURE=$(dpkg-deb --field cuda-repo.deb Architecture)
@@ -132,7 +155,7 @@ do
         TARGET_PLATFORM="linux/$TARGET_ARCHITECTURE"
     
         # We've assumed the host platform and target platform are the same
-        if [ $BUILD_PLATFORM != $TARGET_PLATFORM ]; then
+        if [ "$BUILD_PLATFORM" != "$TARGET_PLATFORM" ]; then
             # Set up QEMU emulation
             docker run --privileged \
                        --rm \
@@ -143,7 +166,7 @@ do
 
             docker buildx create --name mybuilder \
                                  --use \
-                                 --platform $BUILD_PLATFORM,$TARGET_PLATFORM
+                                 --platform "$BUILD_PLATFORM,$TARGET_PLATFORM"
         else
             docker buildx create --name mybuilder --use
         fi
@@ -153,7 +176,7 @@ do
                             --builder mybuilder \
                             --file Dockerfile \
                             --load \
-                            --platform $TARGET_PLATFORM \
+                            --platform "$TARGET_PLATFORM" \
                             --tag "$LOCAL_REGISTRY/$BUILD_TAG" \
                             "$DIR"
     
@@ -163,8 +186,12 @@ do
         docker image prune --force || true
     fi
 
-    CMAKE_BINARY_DIR=_out/build/Linux-$TARGET_ARCHITECTURE-release/cuda$CUDA_VERSION
+    CMAKE_BINARY_DIR=_out/build/Linux-$TARGET_ARCHITECTURE-release/cuda$CUDA_VERSION$BUILD_DIR_SUFFIX
 
+    # Multinode CUDA 13.2 arm64 builds of nvbandwidth v0.9/v0.10.0 fail if CMakeLists.txt
+    # explicitly adds MPI_INCLUDE_PATH because it injects -isystem=/usr/include. Remove
+    # that include_directories line and any existing CMake build directory before retrying;
+    # MPI::MPI_CXX already supplies the required MPI include directories.
     # Launch a container to build the NVBandwidth
     docker run \
         --rm \
@@ -176,12 +203,15 @@ do
         bash -c "
         set -ex;
         cmake -S . \
-              -B $CMAKE_BINARY_DIR \
-              -DMULTINODE=0 \
+              -B \"$CMAKE_BINARY_DIR\" \
+              -DMULTINODE=$MULTINODE \
               -DCMAKE_BUILD_TYPE=Release \
               '-DCMAKE_CUDA_ARCHITECTURES=all' \
               '-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc' \
               '-DCMAKE_SHARED_LINKER_FLAGS=-static-libstdc++ -static-libgcc';
-        cmake --build $CMAKE_BINARY_DIR --verbose;
-        strip $CMAKE_BINARY_DIR/nvbandwidth"
+        cmake --build \"$CMAKE_BINARY_DIR\" --verbose;
+        if [ \"$OUTPUT_BINARY_NAME\" != \"nvbandwidth\" ]; then
+            cp \"$CMAKE_BINARY_DIR/nvbandwidth\" \"$CMAKE_BINARY_DIR/$OUTPUT_BINARY_NAME\";
+        fi;
+        strip \"$CMAKE_BINARY_DIR/$OUTPUT_BINARY_NAME\""
 done

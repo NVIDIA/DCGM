@@ -17,6 +17,7 @@
 #include "NvmlFuncReturn.h"
 #include "dcgm_nvml.h"
 #include "nvml_injection_structs.h"
+#include <DcgmStringHelpers.h>
 #include <InjectedNvml.h>
 #include <InjectionKeys.h>
 #include <NvmlLogging.h>
@@ -28,16 +29,34 @@
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <yaml-cpp/node/node.h>
 
 namespace
 {
 
+std::string const c_eventFilePath = "/run/nvml-injection/event.yaml";
+
+void SleepForEventTimeout(unsigned int timeoutms)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(timeoutms));
+}
+
+template <typename T>
+void ParseOptionalEventField(YAML::Node const &root, char const *fieldName, T &value)
+{
+    if (auto const node = root[fieldName])
+    {
+        value = node.as<T>();
+    }
+}
+
 bool IsDeviceFunc(const std::string &funcname, const std::vector<InjectionArgument> &args)
 {
     return (funcname.starts_with("nvmlDeviceGet") || funcname.starts_with("nvmlGpmQueryDevice")
             || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceWorkloadPowerProfile")
-            || funcname.starts_with("nvmlDeviceReadWritePRM_v") || funcname.starts_with("nvmlGpmQueryDeviceSupport"))
+            || funcname.starts_with("nvmlDeviceReadWritePRM_v") || funcname.starts_with("nvmlDeviceReadPRMCounters_v")
+            || funcname.starts_with("nvmlGpmQueryDeviceSupport"))
            && args.size() >= 1 && args[0].GetType() == INJECTION_DEVICE;
 }
 
@@ -107,7 +126,7 @@ bool MemoryErrorCounterParser(const std::string &key, const YAML::Node &node, At
                     return false;
                 }
 
-                if (!value[FunctionReturn])
+                if (!value[FUNCTION_RETURN])
                 {
                     ah.SetAttribute(key,
                                     layer1Key.value(),
@@ -115,13 +134,13 @@ bool MemoryErrorCounterParser(const std::string &key, const YAML::Node &node, At
                                     layer3Key.value(),
                                     NvmlFuncReturn(NVML_ERROR_UNKNOWN));
                 }
-                auto ret = static_cast<nvmlReturn_t>(value[FunctionReturn].as<int>());
+                auto ret = static_cast<nvmlReturn_t>(value[FUNCTION_RETURN].as<int>());
                 if (ret != NVML_SUCCESS)
                 {
                     ah.SetAttribute(key, layer1Key.value(), layer2Key.value(), layer3Key.value(), NvmlFuncReturn(ret));
                     continue;
                 }
-                auto counter = value[ReturnValue].as<unsigned long long>();
+                auto counter = value[RETURN_VALUE].as<unsigned long long>();
                 ah.SetAttribute(
                     key, layer1Key.value(), layer2Key.value(), layer3Key.value(), NvmlFuncReturn(ret, counter));
             }
@@ -132,51 +151,51 @@ bool MemoryErrorCounterParser(const std::string &key, const YAML::Node &node, At
 
 bool RemappedRowsParser(const std::string &key, const YAML::Node &node, AttributeHolder<nvmlDevice_t> &ah)
 {
-    if (!node || !node[FunctionReturn])
+    if (!node || !node[FUNCTION_RETURN])
     {
         ah.SetAttribute(key, NvmlFuncReturn(NVML_ERROR_UNKNOWN));
         return false;
     }
-    auto ret = static_cast<nvmlReturn_t>(node[FunctionReturn].as<int>());
+    auto ret = static_cast<nvmlReturn_t>(node[FUNCTION_RETURN].as<int>());
     if (ret != NVML_SUCCESS)
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
-    if (!node[ReturnValue] || !node[ReturnValue]["corrRows"] || !node[ReturnValue]["uncRows"]
-        || !node[ReturnValue]["isPending"] || !node[ReturnValue]["failureOccurred"])
+    if (!node[RETURN_VALUE] || !node[RETURN_VALUE]["corrRows"] || !node[RETURN_VALUE]["uncRows"]
+        || !node[RETURN_VALUE]["isPending"] || !node[RETURN_VALUE]["failureOccurred"])
     {
         return false;
     }
     std::vector<InjectionArgument> args;
-    args.emplace_back(node[ReturnValue]["corrRows"].as<unsigned int>());
-    args.emplace_back(node[ReturnValue]["uncRows"].as<unsigned int>());
-    args.emplace_back(node[ReturnValue]["isPending"].as<unsigned int>());
-    args.emplace_back(node[ReturnValue]["failureOccurred"].as<unsigned int>());
+    args.emplace_back(node[RETURN_VALUE]["corrRows"].as<unsigned int>());
+    args.emplace_back(node[RETURN_VALUE]["uncRows"].as<unsigned int>());
+    args.emplace_back(node[RETURN_VALUE]["isPending"].as<unsigned int>());
+    args.emplace_back(node[RETURN_VALUE]["failureOccurred"].as<unsigned int>());
     ah.SetAttribute(key, NvmlFuncReturn(ret, args));
     return true;
 }
 
 bool VmIdParser(const std::string &key, const YAML::Node &node, AttributeHolder<nvmlVgpuInstance_t> &ah)
 {
-    if (!node || !node[FunctionReturn])
+    if (!node || !node[FUNCTION_RETURN])
     {
         ah.SetAttribute(key, NvmlFuncReturn(NVML_ERROR_UNKNOWN));
         return false;
     }
-    auto ret = static_cast<nvmlReturn_t>(node[FunctionReturn].as<int>());
+    auto ret = static_cast<nvmlReturn_t>(node[FUNCTION_RETURN].as<int>());
     if (ret != NVML_SUCCESS)
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
-    if (!node[ReturnValue] || !node[ReturnValue]["vmId"] || !node[ReturnValue]["vmIdType"])
+    if (!node[RETURN_VALUE] || !node[RETURN_VALUE]["vmId"] || !node[RETURN_VALUE]["vmIdType"])
     {
         return false;
     }
     std::vector<InjectionArgument> args;
-    args.emplace_back(node[ReturnValue]["vmId"].as<std::string>());
-    args.emplace_back(static_cast<nvmlVgpuVmIdType_t>(node[ReturnValue]["vmIdType"].as<int>()));
+    args.emplace_back(node[RETURN_VALUE]["vmId"].as<std::string>());
+    args.emplace_back(static_cast<nvmlVgpuVmIdType_t>(node[RETURN_VALUE]["vmIdType"].as<int>()));
     ah.SetAttribute(key, NvmlFuncReturn(ret, args));
     return true;
 }
@@ -190,14 +209,14 @@ bool ProcessUtilizationParser(const std::string &key, const YAML::Node &node, At
     }
     // we record ProcessUtilization using timestamp 0
     auto processes = node[0];
-    auto ret       = static_cast<nvmlReturn_t>(processes[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-    if (ret != NVML_SUCCESS || !processes[ReturnValue])
+    auto ret       = static_cast<nvmlReturn_t>(processes[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+    if (ret != NVML_SUCCESS || !processes[RETURN_VALUE])
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
     ah.SetAttribute(key, NvmlFuncReturn(NVML_SUCCESS));
-    for (YAML::const_iterator it = processes[ReturnValue].begin(); it != processes[ReturnValue].end(); ++it)
+    for (YAML::const_iterator it = processes[RETURN_VALUE].begin(); it != processes[RETURN_VALUE].end(); ++it)
     {
         auto process = *it;
         if (!process["decUtil"] || !process["encUtil"] || !process["memUtil"] || !process["pid"] || !process["smUtil"]
@@ -228,14 +247,14 @@ bool VgpuProcessUtilizationParser(const std::string &key, const YAML::Node &node
     }
     // we record ProcessUtilization using timestamp 0
     auto processes = node[0];
-    auto ret       = static_cast<nvmlReturn_t>(processes[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-    if (ret != NVML_SUCCESS || !processes[ReturnValue])
+    auto ret       = static_cast<nvmlReturn_t>(processes[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+    if (ret != NVML_SUCCESS || !processes[RETURN_VALUE])
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
     ah.SetAttribute(key, NvmlFuncReturn(NVML_SUCCESS));
-    for (YAML::const_iterator it = processes[ReturnValue].begin(); it != processes[ReturnValue].end(); ++it)
+    for (YAML::const_iterator it = processes[RETURN_VALUE].begin(); it != processes[RETURN_VALUE].end(); ++it)
     {
         auto process = *it;
         if (!process["decUtil"] || !process["encUtil"] || !process["memUtil"] || !process["pid"] || !process["smUtil"]
@@ -269,14 +288,14 @@ bool VgpuInstanceUtilizationParser(const std::string &key, const YAML::Node &nod
     }
     // we record ProcessUtilization using timestamp 0
     auto instances = node[0];
-    auto ret       = static_cast<nvmlReturn_t>(instances[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-    if (ret != NVML_SUCCESS || !instances[ReturnValue])
+    auto ret       = static_cast<nvmlReturn_t>(instances[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+    if (ret != NVML_SUCCESS || !instances[RETURN_VALUE])
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
     ah.SetAttribute(key, NvmlFuncReturn(NVML_SUCCESS));
-    for (YAML::const_iterator it = instances[ReturnValue].begin(); it != instances[ReturnValue].end(); ++it)
+    for (YAML::const_iterator it = instances[RETURN_VALUE].begin(); it != instances[RETURN_VALUE].end(); ++it)
     {
         auto instance = *it;
         if (!instance["decUtil"] || !instance["encUtil"] || !instance["memUtil"] || !instance["smUtil"]
@@ -307,25 +326,25 @@ bool VgpuInstanceUtilizationParser(const std::string &key, const YAML::Node &nod
  */
 bool GpmMetricsParser(std::string const &key, YAML::Node const &node, AttributeHolder<nvmlDevice_t> &ah)
 {
-    if (!node || !node[FunctionReturn])
+    if (!node || !node[FUNCTION_RETURN])
     {
         ah.SetAttribute(key, NvmlFuncReturn(NVML_ERROR_UNKNOWN));
         return false;
     }
-    auto ret = static_cast<nvmlReturn_t>(node[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-    if (ret != NVML_SUCCESS || !node[ReturnValue])
+    auto ret = static_cast<nvmlReturn_t>(node[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+    if (ret != NVML_SUCCESS || !node[RETURN_VALUE])
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
 
     nvmlGpmMetricsGet_t metricsGet {};
-    metricsGet.numMetrics = node[ReturnValue].size();
+    metricsGet.numMetrics = node[RETURN_VALUE].size();
     for (unsigned int i = 0; i < NVML_GPM_METRIC_MAX; i++)
     {
         metricsGet.metrics[i].nvmlReturn = NVML_ERROR_INVALID_ARGUMENT;
     }
-    for (YAML::const_iterator it = node[ReturnValue].begin(); it != node[ReturnValue].end(); ++it)
+    for (YAML::const_iterator it = node[RETURN_VALUE].begin(); it != node[RETURN_VALUE].end(); ++it)
     {
         auto metricId = it->first.as<unsigned int>();
         auto value    = it->second;
@@ -335,12 +354,12 @@ bool GpmMetricsParser(std::string const &key, YAML::Node const &node, AttributeH
         }
         metricsGet.metrics[metricId - 1].metricId = metricId;
         metricsGet.metrics[metricId - 1].nvmlReturn
-            = static_cast<nvmlReturn_t>(value[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-        if (!value[ReturnValue] || !value[ReturnValue]["value"])
+            = static_cast<nvmlReturn_t>(value[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+        if (!value[RETURN_VALUE] || !value[RETURN_VALUE]["value"])
         {
             continue;
         }
-        metricsGet.metrics[metricId - 1].value = value[ReturnValue]["value"].as<double>();
+        metricsGet.metrics[metricId - 1].value = value[RETURN_VALUE]["value"].as<double>();
     }
     ah.SetAttribute(key, NvmlFuncReturn(NVML_SUCCESS, metricsGet));
     return true;
@@ -494,19 +513,19 @@ bool InjectedNvml::ParseGlobal(const YAML::Node &global)
 
 bool InjectedNvml::ActiveVgpusParser(const std::string &key, const YAML::Node &node, AttributeHolder<nvmlDevice_t> &ah)
 {
-    if (!node || !node[FunctionReturn])
+    if (!node || !node[FUNCTION_RETURN])
     {
         ah.SetAttribute(key, NvmlFuncReturn(NVML_ERROR_UNKNOWN));
         return false;
     }
-    auto ret = static_cast<nvmlReturn_t>(node[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-    if (ret != NVML_SUCCESS || !node[ReturnValue])
+    auto ret = static_cast<nvmlReturn_t>(node[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+    if (ret != NVML_SUCCESS || !node[RETURN_VALUE])
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
     std::vector<InjectionArgument> injectedArgs;
-    auto elements    = node[ReturnValue].as<std::vector<unsigned>>();
+    auto elements    = node[RETURN_VALUE].as<std::vector<unsigned>>();
     auto numElements = static_cast<unsigned>(elements.size());
     injectedArgs.emplace_back(numElements);
     auto *elementsPtr = reinterpret_cast<nvmlVgpuInstance_t *>(malloc(numElements * sizeof(nvmlVgpuInstance_t)));
@@ -531,18 +550,18 @@ bool InjectedNvml::GpuInstancesParser(const std::string &key, const YAML::Node &
     {
         auto key2    = it->first.as<unsigned int>();
         auto profile = it->second;
-        if (!profile[FunctionReturn])
+        if (!profile[FUNCTION_RETURN])
         {
             NVML_LOG_ERR("profile lacks of FunctionReturn");
             return false;
         }
-        auto profileRet = static_cast<nvmlReturn_t>(profile[FunctionReturn].as<int>());
+        auto profileRet = static_cast<nvmlReturn_t>(profile[FUNCTION_RETURN].as<int>());
         if (profileRet != NVML_SUCCESS)
         {
             ah.SetAttribute(key, key2, NvmlFuncReturn(profileRet));
             continue;
         }
-        auto profileVale     = profile[ReturnValue].as<std::vector<std::string>>();
+        auto profileVale     = profile[RETURN_VALUE].as<std::vector<std::string>>();
         auto *gpuInstanceArr = reinterpret_cast<nvmlGpuInstance_t *>(malloc(sizeof(&profileVale) * profileVale.size()));
         unsigned int idx     = 0;
         for (const auto &gpuInstance : profileVale)
@@ -574,18 +593,18 @@ bool InjectedNvml::TopologyCommonAncestorParser(const std::string &key,
         auto device2UUID     = it->first.as<std::string>();
         nvmlDevice_t device2 = m_uuidToDevice[device2UUID]->GetIdentifier();
         auto ancestor        = it->second;
-        if (!ancestor[FunctionReturn])
+        if (!ancestor[FUNCTION_RETURN])
         {
             NVML_LOG_ERR("ancestor lacks of FunctionReturn");
             return false;
         }
-        auto nvmlRet = static_cast<nvmlReturn_t>(ancestor[FunctionReturn].as<int>());
+        auto nvmlRet = static_cast<nvmlReturn_t>(ancestor[FUNCTION_RETURN].as<int>());
         if (nvmlRet != NVML_SUCCESS)
         {
             ah.SetAttribute(key, device2, NvmlFuncReturn(nvmlRet));
             continue;
         }
-        nvmlGpuTopologyLevel_t gpuTopologyLevel = static_cast<nvmlGpuTopologyLevel_t>(ancestor[ReturnValue].as<int>());
+        nvmlGpuTopologyLevel_t gpuTopologyLevel = static_cast<nvmlGpuTopologyLevel_t>(ancestor[RETURN_VALUE].as<int>());
         ah.SetAttribute(key, device2, NvmlFuncReturn(nvmlRet, gpuTopologyLevel));
     }
     return true;
@@ -624,18 +643,18 @@ bool InjectedNvml::OnSameBoardParser(const std::string &key, const YAML::Node &n
         auto device2UUID     = it->first.as<std::string>();
         nvmlDevice_t device2 = m_uuidToDevice[device2UUID]->GetIdentifier();
         auto value           = it->second;
-        if (!value[FunctionReturn])
+        if (!value[FUNCTION_RETURN])
         {
             NVML_LOG_ERR("ancestor lacks of FunctionReturn");
             return false;
         }
-        auto nvmlRet = static_cast<nvmlReturn_t>(value[FunctionReturn].as<int>());
+        auto nvmlRet = static_cast<nvmlReturn_t>(value[FUNCTION_RETURN].as<int>());
         if (nvmlRet != NVML_SUCCESS)
         {
             ah.SetAttribute(key, device2, NvmlFuncReturn(nvmlRet));
             continue;
         }
-        int onSameBoard = static_cast<int>(value[ReturnValue].as<bool>());
+        int onSameBoard = static_cast<int>(value[RETURN_VALUE].as<bool>());
         ah.SetAttribute(key, device2, NvmlFuncReturn(nvmlRet, onSameBoard));
     }
     return true;
@@ -657,18 +676,18 @@ bool InjectedNvml::P2PStatusParser(std::string const &key, YAML::Node const &nod
             auto p2pCapsIndex  = static_cast<nvmlGpuP2PCapsIndex_t>(p2pIt->first.as<int>());
             auto recordedValue = p2pIt->second;
 
-            if (!recordedValue[FunctionReturn])
+            if (!recordedValue[FUNCTION_RETURN])
             {
                 NVML_LOG_ERR("Expected node 'FunctionReturn'");
                 return false;
             }
-            auto nvmlRet = static_cast<nvmlReturn_t>(recordedValue[FunctionReturn].as<int>());
+            auto nvmlRet = static_cast<nvmlReturn_t>(recordedValue[FUNCTION_RETURN].as<int>());
             if (nvmlRet != NVML_SUCCESS)
             {
                 ah.SetAttribute(key, device2, p2pCapsIndex, NvmlFuncReturn(nvmlRet));
                 continue;
             }
-            nvmlGpuP2PStatus_t p2pStatus = static_cast<nvmlGpuP2PStatus_t>(recordedValue[ReturnValue].as<int>());
+            nvmlGpuP2PStatus_t p2pStatus = static_cast<nvmlGpuP2PStatus_t>(recordedValue[RETURN_VALUE].as<int>());
             ah.SetAttribute(key, device2, p2pCapsIndex, NvmlFuncReturn(nvmlRet, p2pStatus));
         }
     }
@@ -688,21 +707,21 @@ bool InjectedNvml::TopologyNearestGpuParser(const std::string &key,
     {
         auto level = static_cast<nvmlGpuTopologyLevel_t>(it->first.as<int>());
         auto gpus  = it->second;
-        if (!gpus[FunctionReturn])
+        if (!gpus[FUNCTION_RETURN])
         {
             NVML_LOG_ERR("gpus lacks of FunctionReturn");
             return false;
         }
-        auto nvmlRet = static_cast<nvmlReturn_t>(gpus[FunctionReturn].as<int>());
+        auto nvmlRet = static_cast<nvmlReturn_t>(gpus[FUNCTION_RETURN].as<int>());
         if (nvmlRet != NVML_SUCCESS)
         {
             ah.SetAttribute(key, level, NvmlFuncReturn(nvmlRet));
             continue;
         }
-        unsigned int size = gpus[ReturnValue].size();
+        unsigned int size = gpus[RETURN_VALUE].size();
         int idx           = 0;
         auto *deviceArr   = reinterpret_cast<nvmlDevice_t *>(malloc(sizeof(nvmlDevice_t) * size));
-        for (YAML::const_iterator gpuIt = gpus[ReturnValue].begin(); gpuIt != gpus[ReturnValue].end(); ++gpuIt)
+        for (YAML::const_iterator gpuIt = gpus[RETURN_VALUE].begin(); gpuIt != gpus[RETURN_VALUE].end(); ++gpuIt)
         {
             int deviceIdx       = gpuIt->as<int>();
             nvmlDevice_t device = m_indexToDevice[deviceIdx]->GetIdentifier();
@@ -723,14 +742,14 @@ bool InjectedNvml::FieldValuesParser(const std::string &key, const YAML::Node &n
         ah.SetAttribute(key, NvmlFuncReturn(NVML_ERROR_UNKNOWN));
         return false;
     }
-    auto ret = static_cast<nvmlReturn_t>(node[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-    if (ret != NVML_SUCCESS || !node[ReturnValue])
+    auto ret = static_cast<nvmlReturn_t>(node[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+    if (ret != NVML_SUCCESS || !node[RETURN_VALUE])
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
     ah.SetAttribute(key, NvmlFuncReturn(NVML_SUCCESS));
-    for (YAML::const_iterator it = node[ReturnValue].begin(); it != node[ReturnValue].end(); ++it)
+    for (YAML::const_iterator it = node[RETURN_VALUE].begin(); it != node[RETURN_VALUE].end(); ++it)
     {
         auto fieldValue = it->second;
         if (!fieldValue["fieldId"] || !fieldValue["scopeId"] || !fieldValue["timestamp"] || !fieldValue["latencyUsec"]
@@ -965,29 +984,29 @@ bool InjectedNvml::GpuInstanceInfoParser(const std::string &key,
                                          const YAML::Node &node,
                                          AttributeHolder<nvmlGpuInstance_t> &ah)
 {
-    if (!node || !node[FunctionReturn])
+    if (!node || !node[FUNCTION_RETURN])
     {
         return false;
     }
-    auto ret = static_cast<nvmlReturn_t>(node[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-    if (!node[ReturnValue])
+    auto ret = static_cast<nvmlReturn_t>(node[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node[RETURN_VALUE])
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
-    if (!node[ReturnValue]["device"] || !node[ReturnValue]["id"] || !node[ReturnValue]["placement"]
-        || !node[ReturnValue]["profileId"] || !node[ReturnValue]["placement"]["size"]
-        || !node[ReturnValue]["placement"]["start"])
+    if (!node[RETURN_VALUE]["device"] || !node[RETURN_VALUE]["id"] || !node[RETURN_VALUE]["placement"]
+        || !node[RETURN_VALUE]["profileId"] || !node[RETURN_VALUE]["placement"]["size"]
+        || !node[RETURN_VALUE]["placement"]["start"])
     {
         NVML_LOG_ERR("failed to parse GPU instance info due to missing entries");
         return false;
     }
     auto *info            = reinterpret_cast<nvmlGpuInstanceInfo_t *>(malloc(sizeof(nvmlGpuInstanceInfo_t)));
-    info->device          = m_uuidToDevice[node[ReturnValue]["device"].as<std::string>()]->GetIdentifier();
-    info->id              = node[ReturnValue]["id"].as<unsigned int>();
-    info->profileId       = node[ReturnValue]["profileId"].as<unsigned int>();
-    info->placement.size  = node[ReturnValue]["placement"]["size"].as<unsigned int>();
-    info->placement.start = node[ReturnValue]["placement"]["start"].as<unsigned int>();
+    info->device          = m_uuidToDevice[node[RETURN_VALUE]["device"].as<std::string>()]->GetIdentifier();
+    info->id              = node[RETURN_VALUE]["id"].as<unsigned int>();
+    info->profileId       = node[RETURN_VALUE]["profileId"].as<unsigned int>();
+    info->placement.size  = node[RETURN_VALUE]["placement"]["size"].as<unsigned int>();
+    info->placement.start = node[RETURN_VALUE]["placement"]["start"].as<unsigned int>();
     ah.SetAttribute(key, NvmlFuncReturn(ret, InjectionArgument(info, true)));
     return true;
 }
@@ -996,19 +1015,19 @@ bool InjectedNvml::ComputeInstanceInfoParser(const std::string &key,
                                              const YAML::Node &node,
                                              AttributeHolder<nvmlComputeInstance_t> &ah)
 {
-    if (!node || !node[FunctionReturn])
+    if (!node || !node[FUNCTION_RETURN])
     {
         return false;
     }
-    auto ret = static_cast<nvmlReturn_t>(node[FunctionReturn].as<int>(NVML_ERROR_UNKNOWN));
-    if (!node[ReturnValue])
+    auto ret = static_cast<nvmlReturn_t>(node[FUNCTION_RETURN].as<int>(NVML_ERROR_UNKNOWN));
+    if (!node[RETURN_VALUE])
     {
         ah.SetAttribute(key, NvmlFuncReturn(ret));
         return true;
     }
-    if (!node[ReturnValue]["device"] || !node[ReturnValue]["gpuInstance"] || !node[ReturnValue]["id"]
-        || !node[ReturnValue]["profileId"] || !node[ReturnValue]["placement"]["size"]
-        || !node[ReturnValue]["placement"]["start"])
+    if (!node[RETURN_VALUE]["device"] || !node[RETURN_VALUE]["gpuInstance"] || !node[RETURN_VALUE]["id"]
+        || !node[RETURN_VALUE]["profileId"] || !node[RETURN_VALUE]["placement"]["size"]
+        || !node[RETURN_VALUE]["placement"]["start"])
     {
         NVML_LOG_ERR("failed to parse GPU instance info due to missing entries");
         return false;
@@ -1017,7 +1036,7 @@ bool InjectedNvml::ComputeInstanceInfoParser(const std::string &key,
     nvmlGpuInstance_t gpuInstance = nullptr;
     for (auto &gpuInstanceFakeId : m_gpuInstanceCollection)
     {
-        if (gpuInstanceFakeId == node[ReturnValue]["gpuInstance"].as<std::string>())
+        if (gpuInstanceFakeId == node[RETURN_VALUE]["gpuInstance"].as<std::string>())
         {
             gpuInstance = reinterpret_cast<nvmlGpuInstance_t>(&gpuInstanceFakeId);
         }
@@ -1028,12 +1047,12 @@ bool InjectedNvml::ComputeInstanceInfoParser(const std::string &key,
         return false;
     }
     auto *info            = reinterpret_cast<nvmlComputeInstanceInfo_t *>(malloc(sizeof(nvmlComputeInstanceInfo_t)));
-    info->device          = m_uuidToDevice[node[ReturnValue]["device"].as<std::string>()]->GetIdentifier();
+    info->device          = m_uuidToDevice[node[RETURN_VALUE]["device"].as<std::string>()]->GetIdentifier();
     info->gpuInstance     = gpuInstance;
-    info->id              = node[ReturnValue]["id"].as<unsigned int>();
-    info->profileId       = node[ReturnValue]["profileId"].as<unsigned int>();
-    info->placement.size  = node[ReturnValue]["placement"]["size"].as<unsigned int>();
-    info->placement.start = node[ReturnValue]["placement"]["start"].as<unsigned int>();
+    info->id              = node[RETURN_VALUE]["id"].as<unsigned int>();
+    info->profileId       = node[RETURN_VALUE]["profileId"].as<unsigned int>();
+    info->placement.size  = node[RETURN_VALUE]["placement"]["size"].as<unsigned int>();
+    info->placement.start = node[RETURN_VALUE]["placement"]["start"].as<unsigned int>();
     ah.SetAttribute(key, NvmlFuncReturn(ret, InjectionArgument(info, true)));
     return true;
 }
@@ -1391,13 +1410,13 @@ bool InjectedNvml::LoadFromYamlNode(const YAML::Node &root)
         return false;
     }
 
-    if (!ParseGpuInstances(root[GPU_INASTANCE]))
+    if (!ParseGpuInstances(root[GPU_INSTANCE]))
     {
         NVML_LOG_ERR("failed to parse GPU instance part");
         return false;
     }
 
-    if (!ParseComputeInstances(root[COMPUTE_INASTANCE]))
+    if (!ParseComputeInstances(root[COMPUTE_INSTANCE]))
     {
         NVML_LOG_ERR("failed to parse vGPU instance part");
         return false;
@@ -1430,7 +1449,7 @@ bool InjectedNvml::IsGetter(const std::string &funcname) const
         || funcname.starts_with("nvmlComputeInstanceGet") || funcname.starts_with("nvmlVgpuInstanceGet")
         || funcname.starts_with("nvmlVgpuTypeGet") || funcname.starts_with("nvmlDeviceWorkloadPowerProfile")
         || funcname == "nvmlDeviceValidateInforom" || funcname.starts_with("nvmlDeviceReadWritePRM_v")
-        || funcname == "nvmlGpmQueryDeviceSupport")
+        || funcname.starts_with("nvmlDeviceReadPRMCounters_v") || funcname.starts_with("nvmlGpmQueryDeviceSupport"))
     {
         return true;
     }
@@ -1442,7 +1461,11 @@ bool InjectedNvml::IsEventApi(const std::string &funcname) const
 {
     return funcname.starts_with("nvmlSystemEvent") || funcname == "nvmlSystemRegisterEvents"
            || funcname == "nvmlEventSetCreate" || funcname == "nvmlEventSetFree"
-           || funcname == "nvmlDeviceRegisterEvents" || funcname == "nvmlEventSetWait_v2";
+           || funcname == "nvmlDeviceRegisterEvents" || funcname == "nvmlEventSetWait_v2"
+           || funcname == "nvmlEventSetRegisterGpuOperationalEvents_v1" || funcname == "nvmlEventSetWait_v3"
+           || funcname == "nvmlEventSetGetContextCount_v1" || funcname == "nvmlEventSetGetContextInfo_v1"
+           || funcname == "nvmlEventSetGetContextData_v1"
+           || funcname == "nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1";
 }
 
 /*****************************************************************************/
@@ -1817,6 +1840,7 @@ nvmlReturn_t InjectedNvml::GetWrapper(const std::string &funcname,
         "nvmlDeviceGetGpuInstanceProfileInfo",
         "nvmlDeviceGetMigDeviceHandleByIndex",
     };
+
     std::lock_guard<std::mutex> guard(m_mutex);
 
     std::optional<nvmlReturn_t> nvmlRetOpt = GetWrapperSpecialCase(funcname, key, args, values);
@@ -1889,15 +1913,90 @@ nvmlReturn_t InjectedNvml::EventApiWrapper(const std::string &funcname,
                                            std::vector<InjectionArgument> &values)
 {
     // let event related flow control success to prevent failing on starting process.
-    // we will return NVML_ERROR_TIMEOUT for nvmlEventSetWait_v2.
-    if (funcname == "nvmlEventSetCreate" || funcname == "nvmlEventSetFree" || funcname == "nvmlDeviceRegisterEvents"
+    if (funcname == "nvmlEventSetCreate" || funcname == "nvmlDeviceRegisterEvents"
         || funcname == "nvmlSystemEventSetCreate" || funcname == "nvmlSystemEventSetFree")
     {
         return NVML_SUCCESS;
     }
+    if (funcname == "nvmlEventSetFree")
+    {
+        if (args.size() != 1 || args[0].GetType() != INJECTION_EVENTSET)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        std::lock_guard eventGuard(m_eventMutex);
+        m_eventContexts.erase(args[0].AsEventSet());
+        return NVML_SUCCESS;
+    }
+    if (funcname == "nvmlEventSetRegisterGpuOperationalEvents_v1")
+    {
+        std::lock_guard eventGuard(m_eventMutex);
+        if (args.size() != 1 || args[0].GetType() != INJECTION_EVENTSET || values.size() != 1
+            || values[0].GetType() != INJECTION_CONST_GPUOPERATIONALEVENTCONFIG_V1_PTR
+            || values[0].AsConstGpuOperationalEventConfig_v1Ptr() == nullptr)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return NVML_SUCCESS;
+    }
     if (funcname == "nvmlEventSetWait_v2")
     {
-        return NVML_ERROR_TIMEOUT;
+        if (args.size() != 2 || args[0].GetType() != INJECTION_EVENTSET || args[1].GetType() != INJECTION_UINT
+            || values.size() != 1 || values[0].GetType() != INJECTION_EVENTDATA_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlEventSetWaitImpl(values[0].AsEventDataPtr(), args[1].AsUInt());
+    }
+    if (funcname == "nvmlEventSetWait_v3")
+    {
+        if (args.size() != 1 || args[0].GetType() != INJECTION_EVENTSET || values.size() != 1
+            || values[0].GetType() != INJECTION_EVENTSETWAIT_V3_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlEventSetWaitImpl(args[0].AsEventSet(), values[0].AsEventSetWait_v3Ptr());
+    }
+    if (funcname == "nvmlEventSetGetContextCount_v1")
+    {
+        std::lock_guard eventGuard(m_eventMutex);
+        if (args.size() != 1 || args[0].GetType() != INJECTION_EVENTSET || values.size() != 1
+            || values[0].GetType() != INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlEventSetGetContextCountImpl(args[0].AsEventSet(), values[0].AsEventSetGetContextCount_v1Ptr());
+    }
+    if (funcname == "nvmlEventSetGetContextInfo_v1")
+    {
+        std::lock_guard eventGuard(m_eventMutex);
+        if (args.size() != 1 || args[0].GetType() != INJECTION_EVENTSET || values.size() != 1
+            || values[0].GetType() != INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlEventSetGetContextInfoImpl(args[0].AsEventSet(), values[0].AsEventSetGetContextInfo_v1Ptr());
+    }
+    if (funcname == "nvmlEventSetGetContextData_v1")
+    {
+        std::lock_guard eventGuard(m_eventMutex);
+        if (args.size() != 1 || args[0].GetType() != INJECTION_EVENTSET || values.size() != 1
+            || values[0].GetType() != INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlEventSetGetContextDataImpl(args[0].AsEventSet(), values[0].AsEventSetGetContextData_v1Ptr());
+    }
+    if (funcname == "nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1")
+    {
+        std::lock_guard eventGuard(m_eventMutex);
+        if (args.size() != 1 || args[0].GetType() != INJECTION_EVENTSET || values.size() != 1
+            || values[0].GetType() != INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR)
+        {
+            return NVML_ERROR_INVALID_ARGUMENT;
+        }
+        return nvmlEventSetGetGpuOperationalEventContextLegacyXidImpl(
+            args[0].AsEventSet(), values[0].AsEventSetGetGpuOperationalEventContextLegacyXid_v1Ptr());
     }
     if (funcname == "nvmlSystemRegisterEvents")
     {
@@ -2654,6 +2753,371 @@ void InjectedNvml::HandleBindUnbindEvent()
     }
     g_bindGpus.clear();
     g_unbindGpus.clear();
+}
+
+std::optional<YAML::Node> InjectedNvml::ReadEventFile(unsigned int timeoutms)
+{
+    auto const fileContent = m_fileSystemOp->Read(c_eventFilePath);
+    if (!fileContent)
+    {
+        SleepForEventTimeout(timeoutms);
+        return std::nullopt;
+    }
+
+    try
+    {
+        auto root = YAML::Load(*fileContent);
+        if (!root.IsMap() && !root.IsSequence())
+        {
+            NVML_LOG_ERR("event file [%s] must contain a YAML map or sequence", c_eventFilePath.c_str());
+            SleepForEventTimeout(timeoutms);
+            return std::nullopt;
+        }
+        return root;
+    }
+    catch (std::exception const &e)
+    {
+        NVML_LOG_ERR("failed to YAML load [%s], reason [%s]", c_eventFilePath.c_str(), e.what());
+        SleepForEventTimeout(timeoutms);
+        return std::nullopt;
+    }
+}
+
+nvmlReturn_t InjectedNvml::nvmlEventSetWaitImpl(nvmlEventData_t *data, unsigned int timeoutms)
+{
+    if (data == nullptr)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto const root = ReadEventFile(timeoutms);
+    if (!root)
+    {
+        return NVML_ERROR_TIMEOUT;
+    }
+
+    nvmlEventData_t eventData {};
+    eventData.gpuInstanceId     = NVML_GPU_INSTANCE_ID_ANY;
+    eventData.computeInstanceId = NVML_COMPUTE_INSTANCE_ID_ANY;
+
+    try
+    {
+        auto const uuid = (*root)["uuid"].as<std::string>();
+        {
+            std::lock_guard<std::mutex> guard(m_mutex);
+            auto const deviceIt = m_uuidToDevice.find(uuid);
+            if (deviceIt != m_uuidToDevice.end())
+            {
+                eventData.device = deviceIt->second->GetIdentifier();
+            }
+        }
+        if (eventData.device == nullptr)
+        {
+            NVML_LOG_ERR("event file [%s] refers to unknown GPU UUID [%s]", c_eventFilePath.c_str(), uuid.c_str());
+            SleepForEventTimeout(timeoutms);
+            return NVML_ERROR_TIMEOUT;
+        }
+
+        ParseOptionalEventField(*root, "eventType", eventData.eventType);
+        ParseOptionalEventField(*root, "eventData", eventData.eventData);
+        ParseOptionalEventField(*root, "gpuInstanceId", eventData.gpuInstanceId);
+        ParseOptionalEventField(*root, "computeInstanceId", eventData.computeInstanceId);
+    }
+    catch (std::exception const &e)
+    {
+        NVML_LOG_ERR("failed to parse event file [%s], reason [%s]", c_eventFilePath.c_str(), e.what());
+        SleepForEventTimeout(timeoutms);
+        return NVML_ERROR_TIMEOUT;
+    }
+
+    *data = eventData;
+    m_fileSystemOp->Unlink(c_eventFilePath);
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t InjectedNvml::nvmlEventSetWaitImpl(nvmlEventSet_t set, nvmlEventSetWait_v3_t *params)
+{
+    if (params == nullptr)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto deliverPendingEventLocked = [this, set, params]() -> bool {
+        if (m_pendingV3Events.empty())
+        {
+            return false;
+        }
+
+        auto event = std::move(m_pendingV3Events.front());
+        m_pendingV3Events.pop_front();
+        auto const timeoutMs = params->timeoutMs;
+        *params              = event.data;
+        params->timeoutMs    = timeoutMs;
+        m_eventContexts[set] = std::move(event.contexts);
+        return true;
+    };
+
+    {
+        std::lock_guard eventGuard(m_eventMutex);
+        if (deliverPendingEventLocked())
+        {
+            return NVML_SUCCESS;
+        }
+    }
+
+    auto const timeoutMs = params->timeoutMs;
+    auto const root      = ReadEventFile(timeoutMs);
+    if (!root)
+    {
+        return NVML_ERROR_TIMEOUT;
+    }
+
+    std::deque<EventDataV3> parsedEvents;
+
+    try
+    {
+        auto parseEvent = [&parsedEvents](YAML::Node const &eventNode) {
+            if (!eventNode.IsMap())
+            {
+                throw std::runtime_error("each event must be a YAML map");
+            }
+
+            EventDataV3 event;
+            event.data.gpuInstanceId     = NVML_GPU_INSTANCE_ID_ANY;
+            event.data.computeInstanceId = NVML_COMPUTE_INSTANCE_ID_ANY;
+
+            auto const uuid = eventNode["uuid"].as<std::string>();
+            SafeCopyTo(event.data.uuid, uuid.c_str());
+            if (auto const sourceModule = eventNode["sourceModule"])
+            {
+                auto const value = sourceModule.as<std::string>();
+                SafeCopyTo(event.data.sourceModule, value.c_str());
+            }
+
+            ParseOptionalEventField(eventNode, "eventType", event.data.eventType);
+            ParseOptionalEventField(eventNode, "eventData", event.data.eventData);
+            ParseOptionalEventField(eventNode, "groupCursor", event.data.groupCursor);
+            ParseOptionalEventField(eventNode, "instanceId", event.data.instanceId);
+            ParseOptionalEventField(eventNode, "timestampUsec", event.data.timestampUsec);
+            ParseOptionalEventField(eventNode, "traceId", event.data.traceId);
+            ParseOptionalEventField(eventNode, "dataType", event.data.dataType);
+            ParseOptionalEventField(eventNode, "gpuInstanceId", event.data.gpuInstanceId);
+            ParseOptionalEventField(eventNode, "computeInstanceId", event.data.computeInstanceId);
+            ParseOptionalEventField(eventNode, "severity", event.data.severity);
+            ParseOptionalEventField(eventNode, "categoryId", event.data.categoryId);
+            ParseOptionalEventField(eventNode, "moduleEventCode", event.data.moduleEventCode);
+            ParseOptionalEventField(eventNode, "scope", event.data.scope);
+            ParseOptionalEventField(eventNode, "originator", event.data.originator);
+            ParseOptionalEventField(eventNode, "moduleInstance", event.data.moduleInstance);
+            ParseOptionalEventField(eventNode, "chipletId", event.data.chipletId);
+            ParseOptionalEventField(eventNode, "logLevel", event.data.logLevel);
+            ParseOptionalEventField(eventNode, "attributes", event.data.attributes);
+            ParseOptionalEventField(eventNode, "groupCperSize", event.data.groupCperSize);
+            ParseOptionalEventField(eventNode, "groupAttributes", event.data.groupAttributes);
+
+            unsigned int groupSize = 0;
+            ParseOptionalEventField(eventNode, "groupSize", groupSize);
+            unsigned int groupIndex = 0;
+            ParseOptionalEventField(eventNode, "groupIndex", groupIndex);
+            if (!std::in_range<unsigned char>(groupSize) || !std::in_range<unsigned char>(groupIndex))
+            {
+                throw std::runtime_error("groupSize or groupIndex is out of range");
+            }
+            event.data.groupSize  = static_cast<unsigned char>(groupSize);
+            event.data.groupIndex = static_cast<unsigned char>(groupIndex);
+
+            if (auto const contexts = eventNode["contexts"])
+            {
+                if (!contexts.IsSequence())
+                {
+                    throw std::runtime_error("contexts must be a YAML sequence");
+                }
+                for (auto const &contextNode : contexts)
+                {
+                    if (!contextNode.IsMap())
+                    {
+                        throw std::runtime_error("each context must be a YAML map");
+                    }
+
+                    EventContext context;
+                    context.info.nvmlGpuOperationalEventContextType
+                        = contextNode["nvmlGpuOperationalEventContextType"].as<unsigned int>();
+                    context.info.sourceEventContextType = contextNode["sourceEventContextType"].as<unsigned int>();
+                    context.info.dataFormatVersion      = contextNode["dataFormatVersion"].as<unsigned short>();
+
+                    if (auto const payload = contextNode["data"])
+                    {
+                        if (!payload.IsSequence())
+                        {
+                            throw std::runtime_error("context data must be a YAML sequence");
+                        }
+                        for (auto const &byteNode : payload)
+                        {
+                            auto const value = byteNode.as<unsigned int>();
+                            if (!std::in_range<unsigned char>(value))
+                            {
+                                throw std::runtime_error("context data byte is out of range");
+                            }
+                            context.data.push_back(static_cast<unsigned char>(value));
+                        }
+                    }
+                    if (!std::in_range<unsigned int>(context.data.size()))
+                    {
+                        throw std::runtime_error("context data is too large");
+                    }
+                    context.info.dataSize = static_cast<unsigned int>(context.data.size());
+                    event.contexts.push_back(std::move(context));
+                }
+            }
+
+            parsedEvents.push_back(std::move(event));
+        };
+
+        if (root->IsSequence())
+        {
+            if (root->size() == 0)
+            {
+                throw std::runtime_error("event sequence must not be empty");
+            }
+            for (auto const &eventNode : *root)
+            {
+                parseEvent(eventNode);
+            }
+        }
+        else if (auto const events = (*root)["events"])
+        {
+            if (!events.IsSequence() || events.size() == 0)
+            {
+                throw std::runtime_error("events must be a non-empty YAML sequence");
+            }
+            for (auto const &eventNode : events)
+            {
+                parseEvent(eventNode);
+            }
+        }
+        else
+        {
+            parseEvent(*root);
+        }
+    }
+    catch (std::exception const &e)
+    {
+        NVML_LOG_ERR("failed to parse event file [%s], reason [%s]", c_eventFilePath.c_str(), e.what());
+        SleepForEventTimeout(timeoutMs);
+        return NVML_ERROR_TIMEOUT;
+    }
+
+    m_fileSystemOp->Unlink(c_eventFilePath);
+    {
+        std::lock_guard eventGuard(m_eventMutex);
+        m_pendingV3Events = std::move(parsedEvents);
+        return deliverPendingEventLocked() ? NVML_SUCCESS : NVML_ERROR_TIMEOUT;
+    }
+}
+
+nvmlReturn_t InjectedNvml::nvmlEventSetGetContextCountImpl(nvmlEventSet_t set, nvmlEventSetGetContextCount_v1_t *params)
+{
+    if (params == nullptr)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto const contexts = m_eventContexts.find(set);
+    if (contexts == m_eventContexts.end())
+    {
+        return NVML_ERROR_NOT_FOUND;
+    }
+    if (!std::in_range<unsigned int>(contexts->second.size()))
+    {
+        return NVML_ERROR_UNKNOWN;
+    }
+    params->count = static_cast<unsigned int>(contexts->second.size());
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t InjectedNvml::nvmlEventSetGetContextInfoImpl(nvmlEventSet_t set, nvmlEventSetGetContextInfo_v1_t *params)
+{
+    if (params == nullptr)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto const contexts = m_eventContexts.find(set);
+    if (contexts == m_eventContexts.end())
+    {
+        return NVML_ERROR_NOT_FOUND;
+    }
+    if (params->index >= contexts->second.size())
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+    auto const index = params->index;
+    *params          = contexts->second[index].info;
+    params->index    = index;
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t InjectedNvml::nvmlEventSetGetContextDataImpl(nvmlEventSet_t set, nvmlEventSetGetContextData_v1_t *params)
+{
+    if (params == nullptr)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto const contexts = m_eventContexts.find(set);
+    if (contexts == m_eventContexts.end())
+    {
+        return NVML_ERROR_NOT_FOUND;
+    }
+    if (params->index >= contexts->second.size())
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto const &payload = contexts->second[params->index].data;
+    auto const required = static_cast<unsigned int>(payload.size());
+    if (params->data == nullptr || params->dataSize < required)
+    {
+        params->dataSize = required;
+        return required == 0 ? NVML_SUCCESS : NVML_ERROR_INSUFFICIENT_SIZE;
+    }
+
+    std::memcpy(params->data, payload.data(), payload.size());
+    params->dataSize = required;
+    return NVML_SUCCESS;
+}
+
+nvmlReturn_t InjectedNvml::nvmlEventSetGetGpuOperationalEventContextLegacyXidImpl(
+    nvmlEventSet_t set,
+    nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *params)
+{
+    if (params == nullptr)
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto const contexts = m_eventContexts.find(set);
+    if (contexts == m_eventContexts.end())
+    {
+        return NVML_ERROR_NOT_FOUND;
+    }
+    if (params->index >= contexts->second.size())
+    {
+        return NVML_ERROR_INVALID_ARGUMENT;
+    }
+
+    auto const &context = contexts->second[params->index];
+    if (context.info.nvmlGpuOperationalEventContextType != NVML_GPU_OPERATIONAL_EVENT_CONTEXT_TYPE_LEGACY_XID)
+    {
+        return NVML_ERROR_NOT_FOUND;
+    }
+    if (context.data.size() < sizeof(params->xidCode))
+    {
+        return NVML_ERROR_UNKNOWN;
+    }
+
+    std::memcpy(&params->xidCode, context.data.data(), sizeof(params->xidCode));
+    return NVML_SUCCESS;
 }
 
 nvmlReturn_t InjectedNvml::nvmlSystemEventSetWaitImpl(nvmlSystemEventSetWaitRequest_t *request)

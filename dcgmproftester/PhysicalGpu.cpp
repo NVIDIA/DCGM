@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,21 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <DcgmLogging.h>
-#include <cuda.h>
+#include "PhysicalGpu.h"
 
 #include "Arguments.h"
 #include "DcgmCacheManager.h"
 #include "DcgmProfTester.h"
 #include "DcgmSettings.h"
+#include "DistributedCudaContext.h"
 #include "Entity.h"
-#include "PhysicalGpu.h"
 #include "Reporter.h"
 #include "dcgm_fields.h"
 #include "dcgm_fields_internal.hpp"
 #include "timelib.h"
 #include "vector_types.h"
-#include <cublas_proxy.hpp>
+#include <DcgmLogging.h>
+#include <cuda.h>
 #include <dcgm_agent.h>
 
 #include <tclap/Arg.h>
@@ -36,6 +36,7 @@
 #include <tclap/ValueArg.h>
 #include <tclap/ValuesConstraint.h>
 
+#include <algorithm>
 #include <chrono>
 #include <climits>
 #include <csignal>
@@ -180,12 +181,19 @@ static dcgmReturn_t DefaultTickHandler(size_t index,
                                        std::map<Entity, dcgmFieldValue_v1> &values,
                                        DistributedCudaContext &worker);
 
-/*****************************************************************************/
 /* ctor/dtor */
-PhysicalGpu::PhysicalGpu(std::shared_ptr<DcgmProfTester> tester,
+PhysicalGpu::PhysicalGpu(DcgmProfTesterAnyPtr tester,
                          unsigned int gpuId,
-                         const Arguments_t::Parameters &parameters)
+                         const Arguments_t::Parameters &parameters,
+                         DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                         CudaOpsAnyPtr cudaOps,
+                         CudaWorkerThreadFactoryAnyPtr cudaWorkerFactory,
+                         DistributedCudaContextRuntimeAnyUniquePtr runtime)
     : m_tester(std::move(tester))
+    , m_dcgmOps(dcgmOps)
+    , m_cudaOps(cudaOps)
+    , m_cudaWorkerFactory(std::move(cudaWorkerFactory))
+    , m_runtime(std::move(runtime))
     , m_gpuId(gpuId)
     , m_responseFn(nullptr)
 {
@@ -196,7 +204,31 @@ PhysicalGpu::PhysicalGpu(std::shared_ptr<DcgmProfTester> tester,
 /*****************************************************************************/
 PhysicalGpu::~PhysicalGpu()
 {
+    ReleaseCudaContexts(false);
     DestroyDcgmGroups();
+}
+
+void PhysicalGpu::ReleaseCudaContexts(bool resetActiveWorkers)
+{
+    for (auto const &worker : m_ownedCudaContexts)
+    {
+        m_tester->ReportWorkerFailed(*worker);
+    }
+
+    if (resetActiveWorkers)
+    {
+        for (auto *worker : m_activeCudaContexts)
+        {
+            worker->Reset();
+            m_reportedWorkers++;
+        }
+    }
+
+    m_activeCudaContexts.clear();
+    m_inactiveCudaContexts.clear();
+    m_ownedCudaContexts.clear();
+    m_workers    = 0;
+    m_lastWorker = nullptr;
 }
 
 /*****************************************************************************/
@@ -214,7 +246,7 @@ dcgmReturn_t PhysicalGpu::CheckVirtualizationMode(void)
     dcgmFieldValue_v2 value {};
 
     dcgmReturn_t dcgmReturn
-        = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
+        = m_dcgmOps->dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
     if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
     {
         warn_reporter << "Skipping GPU virtualization mode check due to nonzero dcgmReturn " << dcgmReturn
@@ -244,7 +276,7 @@ dcgmReturn_t PhysicalGpu::Init(dcgmHandle_t dcgmHandle)
 
     m_dcgmHandle             = dcgmHandle;
     m_dcgmDeviceAttr.version = dcgmDeviceAttributes_version;
-    dcgmReturn               = dcgmGetDeviceAttributes(m_dcgmHandle, m_gpuId, &m_dcgmDeviceAttr);
+    dcgmReturn               = m_dcgmOps->dcgmGetDeviceAttributes(m_dcgmHandle, m_gpuId, &m_dcgmDeviceAttr);
     if (dcgmReturn != DCGM_ST_OK)
     {
         error_reporter << "dcgmGetDeviceAttributes() returned " << dcgmReturn << "." << error_reporter.new_line;
@@ -263,10 +295,9 @@ dcgmReturn_t PhysicalGpu::Init(dcgmHandle_t dcgmHandle)
     return dcgmReturn;
 }
 
-std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
-    std::shared_ptr<std::map<dcgm_field_entity_group_t, dcgm_field_eid_t>> entities,
-    dcgmGroupEntityPair_t &entity,
-    const std::string &deviceId)
+DistributedCudaContext *PhysicalGpu::AddSlice(std::map<dcgm_field_entity_group_t, dcgm_field_eid_t> entities,
+                                              dcgmGroupEntityPair_t &entity,
+                                              const std::string &deviceId)
 {
     /**
      * We prospectively add a worker slice for this GPU. It may already be added
@@ -285,8 +316,8 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
      * list, or removes them from it, as required.
      */
 
-    std::shared_ptr<DistributedCudaContext> foundCudaContext { nullptr };
-    std::shared_ptr<DistributedCudaContext> foundGiCudaContext { nullptr };
+    DistributedCudaContext *foundCudaContext { nullptr };
+    DistributedCudaContext *foundGiCudaContext { nullptr };
 
     dcgm_field_eid_t gi { 0 };
     dcgm_field_eid_t ci { 0 };
@@ -297,11 +328,11 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
      */
     if (IsMIG())
     {
-        gi = (*entities)[DCGM_FE_GPU_I];
-        ci = (*entities)[DCGM_FE_GPU_CI];
+        gi = entities[DCGM_FE_GPU_I];
+        ci = entities[DCGM_FE_GPU_CI];
     }
 
-    auto cudaContextIt = m_dcgmCudaContexts.begin();
+    auto cudaContextIt = m_activeCudaContexts.begin();
     bool firstCi { false };
 
     /**
@@ -309,9 +340,9 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
      * this one, or at least one with the same GI. The latter matters in the
      * MIG case for DRAM Util tests, as we may only want one CI per GI.
      */
-    for (; cudaContextIt != m_dcgmCudaContexts.end(); cudaContextIt++)
+    for (; cudaContextIt != m_activeCudaContexts.end(); cudaContextIt++)
     {
-        auto cudaContext = *cudaContextIt;
+        auto *cudaContext = *cudaContextIt;
 
         if (cudaContext->EntityId().entityGroupId != entity.entityGroupId)
         {
@@ -350,7 +381,7 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
         /**
          * We found a matching worker.
          */
-        foundCudaContext = std::move(cudaContext);
+        foundCudaContext = cudaContext;
 
         break;
     }
@@ -401,7 +432,7 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
                  */
                 foundCudaContext = inactive_it->second;
                 m_inactiveCudaContexts.extract(inactive_it);
-                m_dcgmCudaContexts.push_back(foundCudaContext);
+                m_activeCudaContexts.push_back(foundCudaContext);
 
                 m_workers++;
 
@@ -420,7 +451,16 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
              */
         }
 
-        foundCudaContext = std::make_shared<DistributedCudaContext>(shared_from_this(), entities, entity, deviceId);
+        auto cudaWorker       = m_cudaWorkerFactory->Create();
+        auto ownedCudaContext = std::make_unique<DistributedCudaContext>(this,
+                                                                         std::move(entities),
+                                                                         entity,
+                                                                         deviceId,
+                                                                         m_dcgmOps,
+                                                                         m_cudaOps,
+                                                                         m_runtime.AsAnyPtr(),
+                                                                         std::move(cudaWorker));
+        foundCudaContext      = ownedCudaContext.get();
 
         /**
          * When we  get the first worker, we get the compute capabilities of
@@ -434,15 +474,15 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
             dcgmFieldValue_v2 value {};
 
             entity.entityGroupId = DCGM_FE_GPU;
-            entity.entityId      = (*entities)[DCGM_FE_GPU];
+            entity.entityId      = foundCudaContext->Entities()[DCGM_FE_GPU];
 
-            dcgmReturn_t dcgmReturn
-                = dcgmEntitiesGetLatestValues(m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
+            dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmEntitiesGetLatestValues(
+                m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
 
             if (dcgmReturn != DCGM_ST_OK)
             {
                 /**
-                 * foundCudaContext will be smart pointer garbage collected.
+                 * ownedCudaContext will clean up the worker.
                  */
 
                 return nullptr; // Failure
@@ -457,7 +497,8 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
          * since the worker vector can be cleared when all work and reporting
          * is complete or if an error occurs.
          */
-        m_dcgmCudaContexts.push_back(foundCudaContext);
+        m_ownedCudaContexts.push_back(std::move(ownedCudaContext));
+        m_activeCudaContexts.push_back(foundCudaContext);
 
         m_workers++;
     }
@@ -478,7 +519,7 @@ std::shared_ptr<DistributedCudaContext> PhysicalGpu::AddSlice(
             if ((m_parameters.m_fieldId == DCGM_FI_PROF_DRAM_UTIL_RATIO) && !firstCi)
             {
                 m_inactiveCudaContexts.insert(std::pair(entity_id_t(gi, ci), *cudaContextIt));
-                m_dcgmCudaContexts.erase(cudaContextIt);
+                m_activeCudaContexts.erase(cudaContextIt);
 
                 --m_workers;
 
@@ -565,48 +606,10 @@ bool PhysicalGpu::ValueGet(std::map<Entity, dcgmFieldValue_v1> &values,
 }
 
 // Abort child processes. Something went very wrong.
-void PhysicalGpu::AbortChildren(unsigned int workers)
+void PhysicalGpu::AbortChildren()
 {
-    if (m_dcgmCudaContexts.empty())
-    {
-        /**
-         * We can get called here if there never were any workers, i.e. a MIG
-         * configuration on a GPU with no actual MIG slices.
-         */
-
-        return;
-    }
-
-    if (workers == 0)
-    {
-        workers = m_workers;
-    }
-
-    for (unsigned int i = 0; i < workers; i++)
-    {
-        /*
-         * Resetting a DistributedCudaContext on the parent process side will
-         * close the pipe file descriptors. When the child process tries
-         * to write or read it will get an error, and exit. Since we ignore
-         * SIGCHLD, there will be no zombies left. This also closes the file
-         * descriptors on the parent side, so any subsequent selects will
-         * fail.
-         *
-         * It is important that we report the worker as failed BEFORE we
-         * reset it as resetting it clears it's file descriptors and the
-         * tester might wish to interrogate it as to WHICH read (from the
-         * tester's side) file descriptor to ignore (or for other information).
-         */
-
-        m_tester->ReportWorkerFailed(m_dcgmCudaContexts[i]);
-        m_dcgmCudaContexts[i]->Reset();
-        m_reportedWorkers++; // We count this one as reported, as it is caput.
-    }
-
+    ReleaseCudaContexts(true);
     DestroyDcgmGroups();
-    m_dcgmCudaContexts.clear();
-    m_workers    = 0;
-    m_lastWorker = nullptr;
 }
 
 /* Nuke child processes. This tries to be gentle before aborting it. It
@@ -618,7 +621,7 @@ void PhysicalGpu::AbortChildren(unsigned int workers)
  */
 void PhysicalGpu::NukeChildren(bool force)
 {
-    for (auto &worker : m_dcgmCudaContexts)
+    for (auto &worker : m_activeCudaContexts)
     {
         worker->Command("X\n"); // tell them nicely...
     }
@@ -626,11 +629,10 @@ void PhysicalGpu::NukeChildren(bool force)
     if (force)
     {
         AbortChildren(); // ... but firmly.
+        return;
     }
 
-    m_dcgmCudaContexts.clear();
-    m_workers    = 0;
-    m_lastWorker = nullptr;
+    ReleaseCudaContexts(false);
 }
 
 static dcgmReturn_t DefaultTickHandler(size_t /*index*/,
@@ -791,7 +793,7 @@ dcgmReturn_t PhysicalGpu::CommandAll(bool all, const char *format, ...)
         m_failedWorkers = 0;
     }
 
-    for (auto &worker : m_dcgmCudaContexts)
+    for (auto &worker : m_activeCudaContexts)
     {
         if (all && worker->Failed())
         {
@@ -823,7 +825,7 @@ dcgmReturn_t PhysicalGpu::CommandAll(bool all, const char *format, ...)
 // Start tests running.
 dcgmReturn_t PhysicalGpu::StartTests(void)
 {
-    if (m_dcgmCudaContexts.size() == 0)
+    if (m_activeCudaContexts.empty())
     {
         DCGM_LOG_ERROR << "Error: no GPUs or MIG instances to run on.";
 
@@ -835,32 +837,26 @@ dcgmReturn_t PhysicalGpu::StartTests(void)
     m_finishedWorkers = 0;
     m_reportedWorkers = 0;
 
-    size_t workers { 0 };
-
-    for (auto &worker : m_dcgmCudaContexts)
+    for (auto &worker : m_activeCudaContexts)
     {
         if (!worker->IsRunning())
         {
             if (worker->Run() < 0)
             {
-                if (workers > 0)
-                {
-                    AbortChildren(workers);
-                }
+                std::string const device = worker->Device();
+                AbortChildren();
 
-                error_reporter << "Failed to start CUDA test on " << worker->Device() << error_reporter.new_line;
+                error_reporter << "Failed to start CUDA test on " << device << error_reporter.new_line;
 
                 return DCGM_ST_GENERIC_ERROR;
             }
-
-            workers++;
         }
         else
         {
             m_startedWorkers++;
         }
 
-        m_tester->ReportWorkerStarted(worker);
+        m_tester->ReportWorkerStarted(*worker);
     }
 
     return CreateDcgmGroups();
@@ -956,7 +952,7 @@ dcgmReturn_t PhysicalGpu::RunTests(void)
 
 
 // Process a response from a GPU slice.
-dcgmReturn_t PhysicalGpu::ProcessResponse(std::shared_ptr<DistributedCudaContext> worker)
+dcgmReturn_t PhysicalGpu::ProcessResponse(DistributedCudaContext *worker)
 
 {
     m_workerStarted  = false;
@@ -964,13 +960,13 @@ dcgmReturn_t PhysicalGpu::ProcessResponse(std::shared_ptr<DistributedCudaContext
     m_workerFinished = false;
     m_workerReported = false;
 
-    auto rtSt = (this->*m_responseFn)(std::move(worker));
+    auto rtSt = (this->*m_responseFn)(worker);
 
     return rtSt;
 }
 
 // Process a response from a GPU slice that is starting up.
-dcgmReturn_t PhysicalGpu::ProcessStartingResponse(std::shared_ptr<DistributedCudaContext> worker)
+dcgmReturn_t PhysicalGpu::ProcessStartingResponse(DistributedCudaContext *worker)
 {
     int retval;
 
@@ -1079,7 +1075,7 @@ dcgmReturn_t PhysicalGpu::ProcessStartingResponse(std::shared_ptr<DistributedCud
 
 
 // Process a response from a GPU slice that is running tests.
-dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCudaContext> worker)
+dcgmReturn_t PhysicalGpu::ProcessRunningResponse(DistributedCudaContext *worker)
 {
     if (m_reportedWorkers >= m_workers) // We finished early
     {
@@ -1253,7 +1249,7 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
              * workers per physical GPU.
              */
 
-            for (auto localWorker : m_dcgmCudaContexts)
+            for (auto localWorker : m_activeCudaContexts)
             {
                 if (worker == localWorker)
                 {
@@ -1397,7 +1393,7 @@ dcgmReturn_t PhysicalGpu::ProcessRunningResponse(std::shared_ptr<DistributedCuda
 }
 
 // Process a response from a GPU slice that has finished running tests.
-dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCudaContext> worker)
+dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(DistributedCudaContext *worker)
 {
     if (m_finishedWorkers < m_workers)
     {
@@ -1482,7 +1478,7 @@ dcgmReturn_t PhysicalGpu::ProcessFinishedResponse(std::shared_ptr<DistributedCud
 
                 size_t workerIdx { 0 };
 
-                for (auto localWorker : m_dcgmCudaContexts)
+                for (auto localWorker : m_activeCudaContexts)
                 {
                     if (worker == localWorker)
                     {
@@ -1672,9 +1668,9 @@ bool PhysicalGpu::Advance(DistributedCudaContext &ignoreWorker, unsigned int act
 
     unsigned int part, parts;
 
-    for (auto &worker : m_dcgmCudaContexts)
+    for (auto &worker : m_activeCudaContexts)
     {
-        if (&*worker == &ignoreWorker)
+        if (worker == &ignoreWorker)
         {
             break;
         }
@@ -1689,9 +1685,9 @@ bool PhysicalGpu::Advance(DistributedCudaContext &ignoreWorker, unsigned int act
         activity = ignoreWorkerActivity;
     }
 
-    for (auto &worker : m_dcgmCudaContexts)
+    for (auto &worker : m_activeCudaContexts)
     {
-        if (&*worker != &ignoreWorker)
+        if (worker != &ignoreWorker)
         {
             worker->GetParts(part, parts);
 
@@ -1800,12 +1796,12 @@ dcgmReturn_t PhysicalGpu::AppendSubtestRecord(double generatedValue, double dcgm
     return DCGM_ST_OK;
 }
 
-struct cbData
+struct PhysicalGpuDcgmValueCbData
 {
     unsigned int m_gpuId;
     std::map<Entity, std::vector<dcgmFieldValue_v1>> &m_values;
 
-    cbData(unsigned int gpuId, std::map<Entity, std::vector<dcgmFieldValue_v1>> &values)
+    PhysicalGpuDcgmValueCbData(unsigned int gpuId, std::map<Entity, std::vector<dcgmFieldValue_v1>> &values)
         : m_gpuId(gpuId)
         , m_values(values)
     {}
@@ -1829,7 +1825,7 @@ dcgmReturn_t PhysicalGpu::CreateDcgmGroups(void)
 
     unsigned short fieldId = m_parameters.m_fieldId;
 
-    dcgmReturn = dcgmFieldGroupCreate(m_dcgmHandle, 1, &fieldId, groupName, &m_fieldGroupId);
+    dcgmReturn = m_dcgmOps->dcgmFieldGroupCreate(m_dcgmHandle, 1, &fieldId, groupName, &m_fieldGroupId);
 
     if (dcgmReturn != DCGM_ST_OK)
     {
@@ -1851,7 +1847,7 @@ dcgmReturn_t PhysicalGpu::DestroyDcgmGroups(void)
         return DCGM_ST_OK;
     }
 
-    dcgmReturn = dcgmFieldGroupDestroy(m_dcgmHandle, m_fieldGroupId);
+    dcgmReturn = m_dcgmOps->dcgmFieldGroupDestroy(m_dcgmHandle, m_fieldGroupId);
     if (dcgmReturn != DCGM_ST_OK)
     {
         error_reporter << "dcgmFieldGroupDestroy() returned " << dcgmReturn << "." << error_reporter.new_line;
@@ -2408,7 +2404,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
                 entity.entityGroupId = DCGM_FE_GPU;
                 entity.entityId      = worker.Entities()[DCGM_FE_GPU];
 
-                dcgmReturn_t dcgmReturn = dcgmEntitiesGetLatestValues(
+                dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmEntitiesGetLatestValues(
                     m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value2);
 
                 if (dcgmReturn != DCGM_ST_OK)
@@ -2423,7 +2419,7 @@ dcgmReturn_t PhysicalGpu::RunSubtestPcieBandwidth(void)
 
                 fieldId = DCGM_FI_DEV_PCIE_LINK_WIDTH;
 
-                dcgmReturn = dcgmEntitiesGetLatestValues(
+                dcgmReturn = m_dcgmOps->dcgmEntitiesGetLatestValues(
                     m_dcgmHandle, &entity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value2);
 
                 if (dcgmReturn != DCGM_ST_OK)
@@ -2536,7 +2532,7 @@ dcgmReturn_t PhysicalGpu::HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs,
 
     if (entity.entityGroupId == DCGM_FE_GPU) // A physical GPU
     {
-        dcgmReturn_t dcgmReturn = dcgmGetDeviceTopology(m_dcgmHandle, m_gpuId, &deviceTopo);
+        dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmGetDeviceTopology(m_dcgmHandle, m_gpuId, &deviceTopo);
 
         if ((dcgmReturn != DCGM_ST_OK) && (dcgmReturn != DCGM_ST_NOT_SUPPORTED))
         {
@@ -2574,8 +2570,8 @@ dcgmReturn_t PhysicalGpu::HelperGetCudaVisibleGPUs(std::string &cudaVisibleGPUs,
 
         dcgmFieldValue_v2 value {};
 
-        dcgmReturn_t dcgmReturn
-            = dcgmEntitiesGetLatestValues(m_dcgmHandle, &tmpEntity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
+        dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmEntitiesGetLatestValues(
+            m_dcgmHandle, &tmpEntity, 1, &fieldId, 1, DCGM_FV_FLAG_LIVE_DATA, &value);
 
         if (dcgmReturn != DCGM_ST_OK || value.status != DCGM_ST_OK)
         {
@@ -2610,7 +2606,7 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
     memset(&deviceTopo, 0, sizeof(deviceTopo));
     deviceTopo.version = dcgmDeviceTopology_version2;
 
-    dcgmReturn_t dcgmReturn = dcgmGetDeviceTopology(m_dcgmHandle, m_gpuId, &deviceTopo);
+    dcgmReturn_t dcgmReturn = m_dcgmOps->dcgmGetDeviceTopology(m_dcgmHandle, m_gpuId, &deviceTopo);
     if (dcgmReturn != DCGM_ST_OK)
     {
         DCGM_LOG_WARNING << "dcgmGetDeviceTopology failed with " << dcgmReturn << " for gpuId " << m_gpuId << "."
@@ -2647,7 +2643,7 @@ dcgmReturn_t PhysicalGpu::HelperGetBestNvLinkPeer(std::string &peerPciBusId, uns
     dcgmDeviceAttributes_t peerDeviceAttr;
     memset(&peerDeviceAttr, 0, sizeof(peerDeviceAttr));
     peerDeviceAttr.version = dcgmDeviceAttributes_version;
-    dcgmReturn             = dcgmGetDeviceAttributes(m_dcgmHandle, bestGpuId, &peerDeviceAttr);
+    dcgmReturn             = m_dcgmOps->dcgmGetDeviceAttributes(m_dcgmHandle, bestGpuId, &peerDeviceAttr);
     if (dcgmReturn != DCGM_ST_OK)
     {
         error_reporter << "dcgmGetDeviceAttributes failed with " << dcgmReturn << " for gpuId " << bestGpuId << "."

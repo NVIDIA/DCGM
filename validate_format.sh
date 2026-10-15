@@ -27,7 +27,7 @@ readonly BATCH_SIZE=$(nproc)
 
 # Python exclusion pattern matching .pep8 config and autopep8 defaults
 # Manual exclusions required: autopep8 has no --assume-filename equivalent for stdin
-readonly PYTHON_EXCLUDE_PATTERN='(^|/)(_out|sdk|PerfWorks|__pycache__)(/|$)|testing/python3/libs_3rdparty/|(^|/)\.|\.md$'
+readonly PYTHON_EXCLUDE_PATTERN='(^|/)(_out|sdk|PerfWorks|__pycache__)(/|$)|(^|/)rust/vendor/|testing/python3/libs_3rdparty/|(^|/)\.|(^|/)README$|\.md$'
 
 function GetChangedFiles(){
     case ${files_from} in

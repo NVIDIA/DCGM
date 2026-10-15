@@ -18,4 +18,6 @@ endif()
 
 add_library(mock_mndiag INTERFACE)
 target_include_directories(mock_mndiag INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(mock_mndiag INTERFACE mndiag_interface)
+target_link_libraries(mock_mndiag INTERFACE
+    mndiag_interface
+    mock_dcgm_ops)

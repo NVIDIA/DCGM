@@ -200,24 +200,34 @@ DCGM_FI_DEV_MEMORY_AFFINITY_1 = 87
 DCGM_FI_DEV_MEMORY_AFFINITY_2 = 88
 # Device MEM affinity. part 1/4 = nodes 192 - 255
 DCGM_FI_DEV_MEMORY_AFFINITY_3 = 89
-DCGM_FI_DEV_BAR1_TOTAL = 90  # Total BAR1 of the GPU
+# Total BAR1 of the GPU in MB. Deprecated: Use DCGM_FI_DEV_BAR1_CAPACITY_BYTES instead.
+DCGM_FI_DEV_BAR1_TOTAL = 90
 DCGM_FI_SYSTEM_GPU_SYNC_BOOST = 91  # Deprecated - Sync boost settings on the node
-DCGM_FI_DEV_BAR1_USED = 92  # Used BAR1 of the GPU in MB
-DCGM_FI_DEV_BAR1_FREE = 93  # Free BAR1 of the GPU in MB
+# Used BAR1 of the GPU in MB. Deprecated: Use DCGM_FI_DEV_BAR1_USED_BYTES instead.
+DCGM_FI_DEV_BAR1_USED = 92
+# Free BAR1 of the GPU in MB. Deprecated: Use DCGM_FI_DEV_BAR1_FREE_BYTES instead.
+DCGM_FI_DEV_BAR1_FREE = 93
 DCGM_FI_DEV_GPM_SUPPORT = 94  # GPM support for the device
 # Clocks and power
-DCGM_FI_DEV_SM_CLOCK = 100  # SM clock for the device
-DCGM_FI_DEV_MEM_CLOCK = 101  # Memory clock for the device
-DCGM_FI_DEV_VIDEO_CLOCK = 102  # Video encoder/decoder clock for the device
-DCGM_FI_DEV_APP_SM_CLOCK = 110  # SM Application clocks
-DCGM_FI_DEV_APP_MEM_CLOCK = 111  # Memory Application clocks
+# SM clock for the device. Deprecated: Use DCGM_FI_DEV_SM_CLOCK_HERTZ instead.
+DCGM_FI_DEV_SM_CLOCK = 100
+# Memory clock for the device. Deprecated: Use DCGM_FI_DEV_MEMORY_CLOCK_HERTZ instead.
+DCGM_FI_DEV_MEM_CLOCK = 101
+# Video encoder/decoder clock for the device. Deprecated: Use DCGM_FI_DEV_VIDEO_CLOCK_HERTZ instead.
+DCGM_FI_DEV_VIDEO_CLOCK = 102
+# SM Application clocks. Deprecated: Use DCGM_FI_DEV_SM_APP_CLOCK_HERTZ instead.
+DCGM_FI_DEV_APP_SM_CLOCK = 110
+# Memory Application clocks. Deprecated: Use DCGM_FI_DEV_MEMORY_APP_CLOCK_HERTZ instead.
+DCGM_FI_DEV_APP_MEM_CLOCK = 111
 # Current clocks event reasons (bitmask of DCGM_CLOCKS_EVENT_REASON_*)
 DCGM_FI_DEV_CLOCKS_EVENT_REASONS = 112
 # Deprecated: Use DCGM_FI_DEV_CLOCKS_EVENT_REASONS instead
 DCGM_FI_DEV_CLOCK_THROTTLE_REASONS = DCGM_FI_DEV_CLOCKS_EVENT_REASONS
-DCGM_FI_DEV_MAX_SM_CLOCK = 113  # Maximum supported SM clock for the device
-DCGM_FI_DEV_MAX_MEM_CLOCK = 114  # Maximum supported Memory clock for the device
-# Maximum supported Video encoder/decoder clock for the device
+# Maximum supported SM clock for the device. Deprecated: Use DCGM_FI_DEV_SM_MAX_CLOCK_HERTZ instead.
+DCGM_FI_DEV_MAX_SM_CLOCK = 113
+# Maximum supported Memory clock for the device. Deprecated: Use DCGM_FI_DEV_MEMORY_MAX_CLOCK_HERTZ instead.
+DCGM_FI_DEV_MAX_MEM_CLOCK = 114
+# Maximum supported Video encoder/decoder clock for the device. Deprecated: Use DCGM_FI_DEV_VIDEO_MAX_CLOCK_HERTZ instead.
 DCGM_FI_DEV_MAX_VIDEO_CLOCK = 115
 # Auto-boost for the device (1 = enabled. 0 = disabled)
 DCGM_FI_DEV_CLOCKS_AUTOBOOST_MODE = 120
@@ -232,7 +242,7 @@ DCGM_FI_DEV_GPU_MAX_OP_TEMP_CELSIUS = 152
 # Thermal margin temperature (distance to nearest slowdown threshold)
 DCGM_FI_DEV_GPU_TEMP_MARGIN_CELSIUS = 153
 DCGM_FI_DEV_BOARD_POWER_WATTS = 155  # Power usage for the device in Watts
-# Total energy consumption for the GPU in mJ since the driver was last reloaded
+# Total energy consumption for the GPU in mJ since the driver was last reloaded. Deprecated: Use DCGM_FI_DEV_GPU_ENERGY_JOULES_TOTAL instead.
 DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION = 156
 # Current instantaneous power usage of the device in Watts
 DCGM_FI_DEV_BOARD_POWER_RAW_WATTS = 157
@@ -268,18 +278,23 @@ DCGM_FI_DEV_FABRIC_CLIQUE_ID = 173
 DCGM_FI_DEV_FABRIC_HEALTH_MASK = 174  # GPU Fabric health Status Mask
 DCGM_FI_DEV_FABRIC_HEALTH_SUMMARY = 175  # GPU Fabric Health Summary
 DCGM_FI_DEV_GPU_PSTATE = 190  # Performance state (P-State) 0-15. 0=highest
-DCGM_FI_DEV_FAN_SPEED = 191  # Fan speed for the device in percent 0-100
+# Fan speed for the device in percent 0-100 (may exceed 100). Deprecated: Use DCGM_FI_DEV_FAN_SPEED_RATIO instead.
+DCGM_FI_DEV_FAN_SPEED = 191
 # Device utilization and telemetry
 # Deprecated - PCIe Tx utilization information
 DCGM_FI_DEV_PCIE_TX_THROUGHPUT = 200
 # Deprecated - PCIe Rx utilization information
 DCGM_FI_DEV_PCIE_RX_THROUGHPUT = 201
 DCGM_FI_DEV_PCIE_REPLAY_TOTAL = 202  # PCIe replay counter
-DCGM_FI_DEV_GPU_UTIL_RATIO = 203  # GPU Utilization
-DCGM_FI_DEV_MEM_COPY_UTIL = 204  # Memory Utilization
+# GPU Utilization in percent 0-100. Deprecated: Use DCGM_FI_DEV_GPU_UTIL_RATIO instead.
+DCGM_FI_DEV_GPU_UTIL = 203
+# Memory Utilization. Deprecated: Use DCGM_FI_DEV_MEMORY_UTIL_RATIO instead.
+DCGM_FI_DEV_MEM_COPY_UTIL = 204
 DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS = 205  # Process accounting stats
-DCGM_FI_DEV_ENC_UTIL = 206  # Encoder utilization
-DCGM_FI_DEV_DEC_UTIL = 207  # Decoder utilization
+# Encoder utilization. Deprecated: Use DCGM_FI_DEV_ENC_UTIL_RATIO instead.
+DCGM_FI_DEV_ENC_UTIL = 206
+# Decoder utilization. Deprecated: Use DCGM_FI_DEV_DEC_UTIL_RATIO instead.
+DCGM_FI_DEV_DEC_UTIL = 207
 # Fields 210, 211, 220, and 221 are internal-only. see dcgm_fields_internal.py
 DCGM_FI_DEV_XID_ERROR = 230  # XID errors. The value is the specific XID error
 DCGM_FI_DEV_PCIE_MAX_LINK_GEN = 235  # PCIe Max Link Generation
@@ -287,26 +302,37 @@ DCGM_FI_DEV_PCIE_MAX_LINK_WIDTH = 236  # PCIe Max Link Width
 DCGM_FI_DEV_PCIE_LINK_GEN = 237  # PCIe Current Link Generation
 DCGM_FI_DEV_PCIE_LINK_WIDTH = 238  # PCIe Current Link Width
 # Violation counters
-DCGM_FI_DEV_POWER_VIOLATION = 240  # Power Violation time in usec
-DCGM_FI_DEV_THERMAL_VIOLATION = 241  # Thermal Violation time in usec
-DCGM_FI_DEV_SYNC_BOOST_VIOLATION = 242  # Sync Boost Violation time in usec
-DCGM_FI_DEV_BOARD_LIMIT_VIOLATION = 243  # Board Limit Violation time in usec.
-DCGM_FI_DEV_LOW_UTIL_VIOLATION = 244  # Low Utilization Violation time in usec.
-DCGM_FI_DEV_RELIABILITY_VIOLATION = 245  # Reliability Violation time in usec.
-# App Clocks Violation time in usec.
+# Power Violation time in ns. Deprecated: Use DCGM_FI_DEV_GPU_POWER_THROTTLE_SECONDS_TOTAL instead.
+DCGM_FI_DEV_POWER_VIOLATION = 240
+# Thermal Violation time in ns. Deprecated: Use DCGM_FI_DEV_GPU_THERMAL_THROTTLE_SECONDS_TOTAL instead.
+DCGM_FI_DEV_THERMAL_VIOLATION = 241
+# Sync Boost Violation time in ns. Deprecated: Use DCGM_FI_DEV_GPU_SYNC_BOOST_THROTTLE_SECONDS_TOTAL instead.
+DCGM_FI_DEV_SYNC_BOOST_VIOLATION = 242
+# Board limit Violation time in ns. Deprecated: Use DCGM_FI_DEV_GPU_LIMIT_THROTTLE_SECONDS_TOTAL instead.
+DCGM_FI_DEV_BOARD_LIMIT_VIOLATION = 243
+# Low utilization Violation time in ns. Deprecated: Use DCGM_FI_DEV_GPU_LOW_UTIL_THROTTLE_SECONDS_TOTAL instead.
+DCGM_FI_DEV_LOW_UTIL_VIOLATION = 244
+# Reliability Violation time in ns. Deprecated: Use DCGM_FI_DEV_GPU_RELIABILITY_THROTTLE_SECONDS_TOTAL instead.
+DCGM_FI_DEV_RELIABILITY_VIOLATION = 245
+# App clock Violation time in ns. Deprecated: Use DCGM_FI_DEV_GPU_APP_THROTTLE_SECONDS_TOTAL instead.
 DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION = 246
-# Base Clocks Violation time in usec.
+# Base clock Violation time in ns. Deprecated: Use DCGM_FI_DEV_GPU_BASE_THROTTLE_SECONDS_TOTAL instead.
 DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION = 247
 # Framebuffer usage
-DCGM_FI_DEV_FB_TOTAL = 250  # Total framebuffer memory in MB
-DCGM_FI_DEV_FB_FREE = 251  # Total framebuffer used in MB
-DCGM_FI_DEV_FB_USED = 252  # Total framebuffer free in MB
-DCGM_FI_DEV_FB_RESERVED = 253  # Total framebuffer reserved in MB
+# Total framebuffer memory in MiB. Deprecated: Use DCGM_FI_DEV_FB_CAPACITY_BYTES instead.
+DCGM_FI_DEV_FB_TOTAL = 250
+# Free framebuffer memory in MiB. Deprecated: Use DCGM_FI_DEV_FB_FREE_BYTES instead.
+DCGM_FI_DEV_FB_FREE = 251
+# Used framebuffer memory in MiB. Deprecated: Use DCGM_FI_DEV_FB_USED_BYTES instead.
+DCGM_FI_DEV_FB_USED = 252
+# Reserved framebuffer memory in MiB. Deprecated: Use DCGM_FI_DEV_FB_RESERVED_BYTES instead.
+DCGM_FI_DEV_FB_RESERVED = 253
 DCGM_FI_DEV_FB_USED_RATIO = 254  # Frame buffer used ratio
 # C2C Link Information (Grace-Hopper)
 DCGM_FI_DEV_C2C_LINK_QUANTITY = 285  # C2C Link Quantity
 DCGM_FI_DEV_C2C_LINK_STATUS = 286  # C2C Link Status
-DCGM_FI_DEV_C2C_MAX_BANDWIDTH = 287  # C2C Link Max Bandwidth
+# C2C Link Max Bandwidth in MB/s. Deprecated: Use DCGM_FI_DEV_C2C_MAX_BANDWIDTH_BYTES_PER_SECOND instead.
+DCGM_FI_DEV_C2C_MAX_BANDWIDTH = 287
 # Device ECC Counters
 DCGM_FI_DEV_ECC_MODE = 300  # Current ECC mode for the device
 DCGM_FI_DEV_ECC_PENDING = 301  # Pending ECC mode for the device
@@ -390,6 +416,7 @@ DCGM_FI_DEV_DIAG_SOFTWARE_RESULT = 360  # Result of the Software test
 DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT = 361  # Result of the NVBandwidth test
 DCGM_FI_DEV_DIAG_STATUS = 362  # Status of the current diag run
 DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT = 363  # Result of the nccl-tests test
+DCGM_FI_DEV_DIAG_CPU_SDC_RESULT = 364  # Result of the CPU SDC test
 
 # Remap availability histogram for each memory bank on the GPU.
 DCGM_FI_DEV_BANK_REMAP_AVAIL_MAX = 385
@@ -468,13 +495,19 @@ DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L4_TOTAL = 434
 DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L5_TOTAL = 435
 # NV Link Recovery Error Counter total for all Lanes
 DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL = 439
-DCGM_FI_DEV_NVLINK_THROUGHPUT_L0 = 440  # NV Link Throughput for Lane 0
-DCGM_FI_DEV_NVLINK_THROUGHPUT_L1 = 441  # NV Link Throughput for Lane 1
-DCGM_FI_DEV_NVLINK_THROUGHPUT_L2 = 442  # NV Link Throughput for Lane 2
-DCGM_FI_DEV_NVLINK_THROUGHPUT_L3 = 443  # NV Link Throughput for Lane 3
-DCGM_FI_DEV_NVLINK_THROUGHPUT_L4 = 444  # NV Link Throughput for Lane 4
-DCGM_FI_DEV_NVLINK_THROUGHPUT_L5 = 445  # NV Link Throughput for Lane 5
-# NV Link Throughput total for all Lanes
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L0_BYTES_PER_SECOND
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L0 = 440
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L1_BYTES_PER_SECOND
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L1 = 441
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L2_BYTES_PER_SECOND
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L2 = 442
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L3_BYTES_PER_SECOND
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L3 = 443
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L4_BYTES_PER_SECOND
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L4 = 444
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L5_BYTES_PER_SECOND
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L5 = 445
+# NV Link Throughput total for all Lanes in MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_TOTAL = 449
 DCGM_FI_DEV_NVLINK_ERROR = 450  # GPU NVLink error information
 DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_L6_TOTAL = 451
@@ -525,17 +558,29 @@ DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L14_TOTAL = 438
 DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L15_TOTAL = 491
 DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L16_TOTAL = 492
 DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_L17_TOTAL = 493
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L6_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L6 = 475
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L7_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L7 = 476
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L8_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L8 = 477
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L9_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L9 = 478
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L10_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L10 = 479
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L11_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L11 = 480
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L12_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L12 = 446
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L13_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L13 = 447
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L14_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L14 = 448
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L15_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L15 = 494
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L16_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L16 = 495
+# MB/s. Deprecated: Use DCGM_FI_DEV_NVLINK_THROUGHPUT_L17_BYTES_PER_SECOND
 DCGM_FI_DEV_NVLINK_THROUGHPUT_L17 = 496
 DCGM_FI_DEV_NVLINK_CRC_ERROR_TOTAL = 497
 DCGM_FI_DEV_NVLINK_RECOVERY_TOTAL = 498
@@ -574,7 +619,8 @@ DCGM_FI_DEV_VGPU_VM_NAME = 521  # vGPU VM name
 DCGM_FI_DEV_VGPU_TYPE = 522  # vGPU type of the vGPU instance
 DCGM_FI_DEV_VGPU_UUID = 523  # UUID of the vGPU instance
 DCGM_FI_DEV_VGPU_DRIVER_VERSION = 524  # Driver version of the vGPU instance
-DCGM_FI_DEV_VGPU_MEMORY_USAGE = 525  # Memory usage of the vGPU instance
+# Memory usage of the vGPU instance in MiB. Deprecated: Use DCGM_FI_DEV_VGPU_FB_USED_BYTES instead.
+DCGM_FI_DEV_VGPU_MEMORY_USAGE = 525
 DCGM_FI_DEV_VGPU_LICENSE_STATUS = 526  # License status of the vGPU
 # Frame rate limit of the vGPU instance
 DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT = 527
@@ -612,8 +658,9 @@ DCGM_FI_DEV_PLATFORM_MODULE_ID = 577  # ID of the GPU within the node
 # port number)
 DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY = 580  # PPRM recovery operation status
 # Time in seconds since last PRM recovery
-DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST = 581
-# Time in milliseconds between last two recoveries
+DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS = 581
+# Time in milliseconds between last two recoveries.
+# Deprecated: Use DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS instead.
 DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO = 582
 # Total successful recovery events counter
 DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SUCCESSFUL_TOTAL = 583
@@ -791,11 +838,13 @@ DCGM_FI_PROF_PCIE_TX_BYTES = 1009
 # The number of bytes of active PCIe rx (read) data including both header
 # and payload.
 DCGM_FI_PROF_PCIE_RX_BYTES = 1010
-# The number of bytes of active NvLink tx (transmit) data including both
-# header and payload.
+# The number of bytes of active NvLink tx (transmit) data including both header and payload.
+# A GPU entity reports the aggregate across all links. A DCGM_FE_LINK dcgm_link_t entity reports
+# the selected link.
 DCGM_FI_PROF_NVLINK_TX_BYTES = 1011
-# The number of bytes of active NvLink rx (receive) data including both
-# header and payload.
+# The number of bytes of active NvLink rx (receive) data including both header and payload.
+# A GPU entity reports the aggregate across all links. A DCGM_FE_LINK dcgm_link_t entity reports
+# the selected link.
 DCGM_FI_PROF_NVLINK_RX_BYTES = 1012
 # The ratio of cycles the IMMA tensor pipe is active (off the peak
 # sustained elapsed cycles)
@@ -833,49 +882,6 @@ DCGM_FI_PROF_NVJPG_UTIL_7_RATIO = 1032
 DCGM_FI_PROF_NVOFA_UTIL_0_RATIO = 1033
 DCGM_FI_PROF_NVOFA_UTIL_1_RATIO = 1034
 
-'''
-The per-link number of bytes of active NvLink TX (transmit) or RX (transmit) data including both header and payload.
-For example: DCGM_FI_PROF_NVLINK_L0_TX_BYTES -> L0 TX
-To get the bandwidth for a link, add the RX and TX value together like
-total = DCGM_FI_PROF_NVLINK_L0_TX_BYTES + DCGM_FI_PROF_NVLINK_L0_RX_BYTES
-'''
-DCGM_FI_PROF_NVLINK_L0_TX_BYTES = 1040
-DCGM_FI_PROF_NVLINK_L0_RX_BYTES = 1041
-DCGM_FI_PROF_NVLINK_L1_TX_BYTES = 1042
-DCGM_FI_PROF_NVLINK_L1_RX_BYTES = 1043
-DCGM_FI_PROF_NVLINK_L2_TX_BYTES = 1044
-DCGM_FI_PROF_NVLINK_L2_RX_BYTES = 1045
-DCGM_FI_PROF_NVLINK_L3_TX_BYTES = 1046
-DCGM_FI_PROF_NVLINK_L3_RX_BYTES = 1047
-DCGM_FI_PROF_NVLINK_L4_TX_BYTES = 1048
-DCGM_FI_PROF_NVLINK_L4_RX_BYTES = 1049
-DCGM_FI_PROF_NVLINK_L5_TX_BYTES = 1050
-DCGM_FI_PROF_NVLINK_L5_RX_BYTES = 1051
-DCGM_FI_PROF_NVLINK_L6_TX_BYTES = 1052
-DCGM_FI_PROF_NVLINK_L6_RX_BYTES = 1053
-DCGM_FI_PROF_NVLINK_L7_TX_BYTES = 1054
-DCGM_FI_PROF_NVLINK_L7_RX_BYTES = 1055
-DCGM_FI_PROF_NVLINK_L8_TX_BYTES = 1056
-DCGM_FI_PROF_NVLINK_L8_RX_BYTES = 1057
-DCGM_FI_PROF_NVLINK_L9_TX_BYTES = 1058
-DCGM_FI_PROF_NVLINK_L9_RX_BYTES = 1059
-DCGM_FI_PROF_NVLINK_L10_TX_BYTES = 1060
-DCGM_FI_PROF_NVLINK_L10_RX_BYTES = 1061
-DCGM_FI_PROF_NVLINK_L11_TX_BYTES = 1062
-DCGM_FI_PROF_NVLINK_L11_RX_BYTES = 1063
-DCGM_FI_PROF_NVLINK_L12_TX_BYTES = 1064
-DCGM_FI_PROF_NVLINK_L12_RX_BYTES = 1065
-DCGM_FI_PROF_NVLINK_L13_TX_BYTES = 1066
-DCGM_FI_PROF_NVLINK_L13_RX_BYTES = 1067
-DCGM_FI_PROF_NVLINK_L14_TX_BYTES = 1068
-DCGM_FI_PROF_NVLINK_L14_RX_BYTES = 1069
-DCGM_FI_PROF_NVLINK_L15_TX_BYTES = 1070
-DCGM_FI_PROF_NVLINK_L15_RX_BYTES = 1071
-DCGM_FI_PROF_NVLINK_L16_TX_BYTES = 1072
-DCGM_FI_PROF_NVLINK_L16_RX_BYTES = 1073
-DCGM_FI_PROF_NVLINK_L17_TX_BYTES = 1074
-DCGM_FI_PROF_NVLINK_L17_RX_BYTES = 1075
-
 # C2C (Chip-to-Chip) interface metrics.
 DCGM_FI_PROF_C2C_TX_ALL_BYTES = 1076
 DCGM_FI_PROF_C2C_TX_DATA_BYTES = 1077
@@ -905,19 +911,19 @@ DCGM_FI_PROF_FP64_CYCLES_ACTIVE_TOTAL = 1094
 DCGM_FI_PROF_FP32_CYCLES_ACTIVE_TOTAL = 1095
 DCGM_FI_PROF_FP16_CYCLES_ACTIVE_TOTAL = 1096
 
-DCGM_FI_DEV_CPU_UTIL_TOTAL = 1100  # CPU Utilization, total
-DCGM_FI_DEV_CPU_UTIL_USER = 1101  # CPU Utilization, user
-DCGM_FI_DEV_CPU_UTIL_NICE = 1102  # CPU Utilization, nice
-DCGM_FI_DEV_CPU_UTIL_SYS = 1103  # CPU Utilization, system time
-DCGM_FI_DEV_CPU_UTIL_IRQ = 1104  # CPU Utilization, interrupt servicing
+DCGM_FI_DEV_CPU_UTIL_RATIO = 1100  # CPU Utilization, total
+DCGM_FI_DEV_CPU_UTIL_USER_RATIO = 1101  # CPU Utilization, user
+DCGM_FI_DEV_CPU_UTIL_NICE_RATIO = 1102  # CPU Utilization, nice
+DCGM_FI_DEV_CPU_UTIL_SYS_RATIO = 1103  # CPU Utilization, system time
+DCGM_FI_DEV_CPU_UTIL_IRQ_RATIO = 1104  # CPU Utilization, interrupt servicing
 DCGM_FI_DEV_CPU_TEMP_CELSIUS = 1110  # CPU temperature
 DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS = 1111  # CPU warning temparature
 DCGM_FI_DEV_CPU_TEMP_CRITICAL_CELSIUS = 1112  # CPU critical temparature
 DCGM_FI_DEV_CPU_CLOCK_CURRENT = 1120  # CPU instantaneous clock speed
 DCGM_FI_DEV_CPU_POWER_WATTS = 1130  # CPU power utilization
 DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS = 1131  # CPU power limit
-DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT = 1132  # SysIO power limit
-DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT = 1133  # Module power limit
+DCGM_FI_DEV_SYSIO_POWER_WATTS = 1132  # SysIO current power usage
+DCGM_FI_DEV_MODULE_POWER_WATTS = 1133  # Module current power usage
 DCGM_FI_DEV_CPU_VENDOR = 1140  # CPU vendor name
 DCGM_FI_DEV_CPU_MODEL = 1141  # CPU model name
 
@@ -952,7 +958,7 @@ DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL = 1208
 DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL = 1209
 
 # Total number of tx error packets that were discarded
-DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS = 1210
+DCGM_FI_DEV_NVLINK_TX_DISCARD_TOTAL = 1210
 
 # Number of times link went from Up to recovery, succeeded and link came
 # back up
@@ -1005,10 +1011,10 @@ DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_WIDTH = 1303
 DCGM_FI_DEV_CONNECTX_EXPECT_PCIE_LINK_SPEED = 1304
 
 # Correctable error status
-DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_STATUS = 1305
+DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERROR_STATUS = 1305
 
 # Correctable error mask
-DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_MASK = 1306
+DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERROR_MASK = 1306
 
 # Uncorrectable error status
 DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_STATUS = 1307
@@ -1020,31 +1026,31 @@ DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_MASK = 1308
 DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_SEVERITY = 1309
 
 # Device temperature
-DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE = 1310
+DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS = 1310
 
 # The last field id of ConnectX
 DCGM_FI_DEV_LAST_CONNECTX_FIELD_ID = 1399
 
-DCGM_FI_DEV_C2C_LINK_ERROR_INTR = 1400
-DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY = 1401
-DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B = 1402
-DCGM_FI_DEV_C2C_LINK_POWER_STATE = 1403
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0 = 1404
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1 = 1405
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2 = 1406
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3 = 1407
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4 = 1408
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5 = 1409
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6 = 1410
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7 = 1411
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8 = 1412
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9 = 1413
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10 = 1414
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11 = 1415
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12 = 1416
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13 = 1417
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14 = 1418
-DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15 = 1419
+DCGM_FI_DEV_C2C_LINK_ERROR_TOTAL = 1400
+DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_TOTAL = 1401
+DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_B2B_TOTAL = 1402
+DCGM_FI_DEV_C2C_LINK_POWER_STATUS = 1403
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_0_TOTAL = 1404
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_1_TOTAL = 1405
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_2_TOTAL = 1406
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_3_TOTAL = 1407
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_4_TOTAL = 1408
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_5_TOTAL = 1409
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_6_TOTAL = 1410
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_7_TOTAL = 1411
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_8_TOTAL = 1412
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_9_TOTAL = 1413
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_10_TOTAL = 1414
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_11_TOTAL = 1415
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_12_TOTAL = 1416
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_13_TOTAL = 1417
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_14_TOTAL = 1418
+DCGM_FI_DEV_NVLINK_FEC_HISTORY_15_TOTAL = 1419
 DCGM_FI_DEV_CLOCKS_EVENT_REASON_SW_POWER_CAP_NS = 1420
 DCGM_FI_DEV_CLOCKS_EVENT_REASON_SYNC_BOOST_COUNT_NS = 1421
 DCGM_FI_DEV_CLOCKS_EVENT_REASON_SW_THERM_SLOWDOWN_NS = 1422
@@ -1054,12 +1060,12 @@ DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN_NS = 1424
 DCGM_FI_DEV_PWR_SMOOTHING_ENABLED = 1425
 DCGM_FI_DEV_PWR_SMOOTHING_PRIV_LVL = 1426
 DCGM_FI_DEV_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED = 1427
-DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL = 1428
-DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR = 1429
+DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL_WATTS = 1428
+DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR_WATTS = 1429
 DCGM_FI_DEV_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING = 1430
 DCGM_FI_DEV_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING = 1431
 DCGM_FI_DEV_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING = 1432
-DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES = 1433
+DCGM_FI_DEV_PWR_SMOOTHING_MAX_PRESET_PROFILES = 1433
 DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR = 1434
 DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE = 1435
 DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE = 1436
@@ -1089,13 +1095,13 @@ DCGM_FI_DEV_MEMORY_UNREPAIRABLE = 1507
 # NVLink State (see NVML_FI_DEV_NVLINK_GET_STATE for return values)
 # This field expects a dcgm_link_t entity to specify the GPU and link index.
 # Use DCGM_FE_LINK entity group when accessing this field.
-DCGM_FI_DEV_NVLINK_GET_STATE = 1508
+DCGM_FI_DEV_NVLINK_LINK_STATUS = 1508
 
 # InfiniBand Port Counter: Port Transmit Wait
 # (see NVML_PRM_COUNTER_ID_PPCNT_PORTCOUNTERS_PORT_XMIT_WAIT for details)
 # This field expects a dcgm_link_t entity to specify the GPU and link index.
 # Use DCGM_FE_LINK entity group when accessing this field.
-DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT = 1509
+DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL = 1509
 
 # 1510 to 1522 reserved for future use
 
@@ -1114,12 +1120,170 @@ DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_PER_LINK_TOTAL = 1528
 DCGM_FI_DEV_NVLINK_THROUGHPUT_PER_LINK = 1529
 DCGM_FI_DEV_NVLINK_TX_THROUGHPUT_PER_LINK = 1530
 DCGM_FI_DEV_NVLINK_RX_THROUGHPUT_PER_LINK = 1531
-# Per-link NVLink GPM throughput counters (bytes), keyed by a dcgm_link_t entity (DCGM_FE_LINK).
-DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK = 1532
-DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK = 1533
+# Base unit field IDs (1600-1799).
+#
+# Fields in this range replace legacy fields defined above that do not conform
+# to the DCGM field naming and measurement standard (see dcgm_field_naming.py).
+# Specifically, each entry replaces a legacy field that uses a non-base unit.
+# Those legacy fields are retained for backward compatibility.
+#
+# Fields in this range are in the same order as their legacy counterparts.
+
+# Total BAR1 capacity of the GPU in bytes
+DCGM_FI_DEV_BAR1_CAPACITY_BYTES = 1600
+
+# Used BAR1 of the GPU in bytes
+DCGM_FI_DEV_BAR1_USED_BYTES = 1601
+
+# Free BAR1 of the GPU in bytes
+DCGM_FI_DEV_BAR1_FREE_BYTES = 1602
+
+# SM clock for the device in hertz
+DCGM_FI_DEV_SM_CLOCK_HERTZ = 1603
+
+# Memory clock for the device in hertz
+DCGM_FI_DEV_MEMORY_CLOCK_HERTZ = 1604
+
+# Video encoder/decoder clock for the device in hertz
+DCGM_FI_DEV_VIDEO_CLOCK_HERTZ = 1605
+
+# SM application clock target for the device in hertz
+DCGM_FI_DEV_SM_APP_CLOCK_HERTZ = 1606
+
+# Memory application clock target for the device in hertz
+DCGM_FI_DEV_MEMORY_APP_CLOCK_HERTZ = 1607
+
+# Maximum supported SM clock for the device in hertz
+DCGM_FI_DEV_SM_MAX_CLOCK_HERTZ = 1608
+
+# Maximum supported memory clock for the device in hertz
+DCGM_FI_DEV_MEMORY_MAX_CLOCK_HERTZ = 1609
+
+# Maximum supported video encoder/decoder clock for the device in hertz
+DCGM_FI_DEV_VIDEO_MAX_CLOCK_HERTZ = 1610
+
+# Total GPU energy consumption in joules since the driver was last reloaded
+DCGM_FI_DEV_GPU_ENERGY_JOULES_TOTAL = 1611
+
+# Fan speed for the device as a ratio of maximum noise-tolerance fan speed (0.0-1.0+)
+DCGM_FI_DEV_FAN_SPEED_RATIO = 1612
+
+# GPU utilization (0.0-1.0)
+DCGM_FI_DEV_GPU_UTIL_RATIO = 1613
+
+# Memory Utilization (0.0-1.0)
+DCGM_FI_DEV_MEMORY_UTIL_RATIO = 1614
+
+# Encoder Utilization (0.0-1.0)
+DCGM_FI_DEV_ENC_UTIL_RATIO = 1615
+
+# Decoder Utilization (0.0-1.0)
+DCGM_FI_DEV_DEC_UTIL_RATIO = 1616
+
+# Cumulative time the GPU was held below application clocks due to power policy, in seconds
+DCGM_FI_DEV_GPU_POWER_THROTTLE_SECONDS_TOTAL = 1617
+
+# Cumulative time the GPU was held below application clocks due to thermal policy, in seconds
+DCGM_FI_DEV_GPU_THERMAL_THROTTLE_SECONDS_TOTAL = 1618
+
+# Cumulative time the GPU was held below application clocks due to sync boost, in seconds
+DCGM_FI_DEV_GPU_SYNC_BOOST_THROTTLE_SECONDS_TOTAL = 1619
+
+# Cumulative time the GPU was held below application clocks due to board limit, in seconds
+DCGM_FI_DEV_GPU_LIMIT_THROTTLE_SECONDS_TOTAL = 1620
+
+# Cumulative time the GPU was held below application clocks due to low utilization, in seconds
+DCGM_FI_DEV_GPU_LOW_UTIL_THROTTLE_SECONDS_TOTAL = 1621
+
+# Cumulative time the GPU was held below application clocks due to board reliability limit, in seconds
+DCGM_FI_DEV_GPU_RELIABILITY_THROTTLE_SECONDS_TOTAL = 1622
+
+# Cumulative time the GPU was held below application clocks by any limiter, in seconds
+DCGM_FI_DEV_GPU_APP_THROTTLE_SECONDS_TOTAL = 1623
+
+# Cumulative time the GPU was held below base clocks, in seconds
+DCGM_FI_DEV_GPU_BASE_THROTTLE_SECONDS_TOTAL = 1624
+
+# Total framebuffer capacity of the GPU in bytes
+DCGM_FI_DEV_FB_CAPACITY_BYTES = 1625
+
+# Free framebuffer of the GPU in bytes
+DCGM_FI_DEV_FB_FREE_BYTES = 1626
+
+# Used framebuffer of the GPU in bytes
+DCGM_FI_DEV_FB_USED_BYTES = 1627
+
+# Reserved framebuffer of the GPU in bytes
+DCGM_FI_DEV_FB_RESERVED_BYTES = 1628
+
+# C2C max bandwidth in bytes per second
+DCGM_FI_DEV_C2C_MAX_BANDWIDTH_BYTES_PER_SECOND = 1629
+
+# NV Link Throughput for Lane 0 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L0_BYTES_PER_SECOND = 1630
+
+# NV Link Throughput for Lane 1 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L1_BYTES_PER_SECOND = 1631
+
+# NV Link Throughput for Lane 2 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L2_BYTES_PER_SECOND = 1632
+
+# NV Link Throughput for Lane 3 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L3_BYTES_PER_SECOND = 1633
+
+# NV Link Throughput for Lane 4 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L4_BYTES_PER_SECOND = 1634
+
+# NV Link Throughput for Lane 5 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L5_BYTES_PER_SECOND = 1635
+
+# NV Link Throughput for Lane 6 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L6_BYTES_PER_SECOND = 1636
+
+# NV Link Throughput for Lane 7 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L7_BYTES_PER_SECOND = 1637
+
+# NV Link Throughput for Lane 8 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L8_BYTES_PER_SECOND = 1638
+
+# NV Link Throughput for Lane 9 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L9_BYTES_PER_SECOND = 1639
+
+# NV Link Throughput for Lane 10 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L10_BYTES_PER_SECOND = 1640
+
+# NV Link Throughput for Lane 11 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L11_BYTES_PER_SECOND = 1641
+
+# NV Link Throughput for Lane 12 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L12_BYTES_PER_SECOND = 1642
+
+# NV Link Throughput for Lane 13 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L13_BYTES_PER_SECOND = 1643
+
+# NV Link Throughput for Lane 14 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L14_BYTES_PER_SECOND = 1644
+
+# NV Link Throughput for Lane 15 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L15_BYTES_PER_SECOND = 1645
+
+# NV Link Throughput for Lane 16 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L16_BYTES_PER_SECOND = 1646
+
+# NV Link Throughput for Lane 17 in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_L17_BYTES_PER_SECOND = 1647
+
+# NV Link Throughput for all lanes in bytes per second
+DCGM_FI_DEV_NVLINK_THROUGHPUT_BYTES_PER_SECOND = 1648
+
+# Used framebuffer of the vGPU instance in bytes
+DCGM_FI_DEV_VGPU_FB_USED_BYTES = 1649
+
+# Gap in seconds between last two PRM recoveries
+DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS = 1650
 
 # 1 greater than maximum fields above. This value can increase in the future
-DCGM_FI_MAX_FIELDS = DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK + 1
+DCGM_FI_MAX_FIELDS = DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS + 1
 
 DCGM_DEPRECATED = 1
 
@@ -1243,7 +1407,6 @@ _DEPRECATED_ALIASES = {
     "DCGM_FI_DEV_FABRIC_MANAGER_ERROR_CODE":                        "DCGM_FI_DEV_FABRIC_MANAGER_ERROR",                            #  171
     "DCGM_FI_DEV_PSTATE":                                           "DCGM_FI_DEV_GPU_PSTATE",                                      #  190
     "DCGM_FI_DEV_PCIE_REPLAY_COUNTER":                              "DCGM_FI_DEV_PCIE_REPLAY_TOTAL",                               #  202
-    "DCGM_FI_DEV_GPU_UTIL":                                         "DCGM_FI_DEV_GPU_UTIL_RATIO",                                  #  203
     "DCGM_FI_DEV_ACCOUNTING_DATA":                                  "DCGM_FI_DEV_PROCESS_ACCOUNTING_STATS",                        #  205
     "DCGM_FI_DEV_XID_ERRORS":                                       "DCGM_FI_DEV_XID_ERROR",                                       #  230
     "DCGM_FI_DEV_FB_USED_PERCENT":                                  "DCGM_FI_DEV_FB_USED_RATIO",                                   #  254
@@ -1357,6 +1520,7 @@ _DEPRECATED_ALIASES = {
     "DCGM_FI_DEV_SUPPORTED_VGPU_TYPE_IDS":                          "DCGM_FI_DEV_VGPU_SUPPORTED_IDS",                              #  509
     "DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATE":                      "DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATUS",                    #  532
     "DCGM_FI_DEV_VGPU_VM_GPU_INSTANCE_ID":                          "DCGM_FI_DEV_VGPU_GPU_INSTANCE_ID",                            #  534
+    "DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST":            "DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS",        #  581
     "DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TOTAL_SUCCESSFUL_EVENTS":    "DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SUCCESSFUL_TOTAL",          #  583
     "DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_SUCCESSFUL_RECOVERY_EVENTS": "DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_RECOVERY_SUCCESSFUL_TOTAL", #  584
     "DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_COUNTER":          "DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_TOTAL",           #  585
@@ -1438,11 +1602,18 @@ _DEPRECATED_ALIASES = {
     "DCGM_FI_PROF_NVJPG7_ACTIVE":                                   "DCGM_FI_PROF_NVJPG_UTIL_7_RATIO",                             # 1032
     "DCGM_FI_PROF_NVOFA0_ACTIVE":                                   "DCGM_FI_PROF_NVOFA_UTIL_0_RATIO",                             # 1033
     "DCGM_FI_PROF_NVOFA1_ACTIVE":                                   "DCGM_FI_PROF_NVOFA_UTIL_1_RATIO",                             # 1034
+    "DCGM_FI_DEV_CPU_UTIL_TOTAL":                                   "DCGM_FI_DEV_CPU_UTIL_RATIO",                                  # 1100
+    "DCGM_FI_DEV_CPU_UTIL_USER":                                    "DCGM_FI_DEV_CPU_UTIL_USER_RATIO",                             # 1101
+    "DCGM_FI_DEV_CPU_UTIL_NICE":                                    "DCGM_FI_DEV_CPU_UTIL_NICE_RATIO",                             # 1102
+    "DCGM_FI_DEV_CPU_UTIL_SYS":                                     "DCGM_FI_DEV_CPU_UTIL_SYS_RATIO",                              # 1103
+    "DCGM_FI_DEV_CPU_UTIL_IRQ":                                     "DCGM_FI_DEV_CPU_UTIL_IRQ_RATIO",                              # 1104
     "DCGM_FI_DEV_CPU_TEMP_CURRENT":                                 "DCGM_FI_DEV_CPU_TEMP_CELSIUS",                                # 1110
     "DCGM_FI_DEV_CPU_TEMP_WARNING":                                 "DCGM_FI_DEV_CPU_TEMP_WARNING_CELSIUS",                        # 1111
     "DCGM_FI_DEV_CPU_TEMP_CRITICAL":                                "DCGM_FI_DEV_CPU_TEMP_CRITICAL_CELSIUS",                       # 1112
     "DCGM_FI_DEV_CPU_POWER_UTIL_CURRENT":                           "DCGM_FI_DEV_CPU_POWER_WATTS",                                 # 1130
     "DCGM_FI_DEV_CPU_POWER_LIMIT":                                  "DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS",                           # 1131
+    "DCGM_FI_DEV_SYSIO_POWER_UTIL_CURRENT":                         "DCGM_FI_DEV_SYSIO_POWER_WATTS",                               # 1132
+    "DCGM_FI_DEV_MODULE_POWER_UTIL_CURRENT":                        "DCGM_FI_DEV_MODULE_POWER_WATTS",                              # 1133
     "DCGM_FI_DEV_NVLINK_COUNT_TX_PACKETS":                          "DCGM_FI_DEV_NVLINK_TX_PACKET_TOTAL",                          # 1200
     "DCGM_FI_DEV_NVLINK_COUNT_TX_BYTES":                            "DCGM_FI_DEV_NVLINK_TX_BYTES_TOTAL",                           # 1201
     "DCGM_FI_DEV_NVLINK_COUNT_RX_PACKETS":                          "DCGM_FI_DEV_NVLINK_RX_PACKET_TOTAL",                          # 1202
@@ -1453,6 +1624,7 @@ _DEPRECATED_ALIASES = {
     "DCGM_FI_DEV_NVLINK_COUNT_RX_REMOTE_ERRORS":                    "DCGM_FI_DEV_NVLINK_RX_REMOTE_ERROR_TOTAL",                    # 1207
     "DCGM_FI_DEV_NVLINK_COUNT_RX_GENERAL_ERRORS":                   "DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL",                   # 1208
     "DCGM_FI_DEV_NVLINK_COUNT_LOCAL_LINK_INTEGRITY_ERRORS":         "DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL",                    # 1209
+    "DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS":                         "DCGM_FI_DEV_NVLINK_TX_DISCARD_TOTAL",                         # 1210
     "DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_SUCCESSFUL_EVENTS":     "DCGM_FI_DEV_NVLINK_RECOVERY_SUCCESSFUL_TOTAL",                # 1211
     "DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_FAILED_EVENTS":         "DCGM_FI_DEV_NVLINK_RECOVERY_FAILED_TOTAL",                    # 1212
     "DCGM_FI_DEV_NVLINK_COUNT_LINK_RECOVERY_EVENTS":                "DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL",                     # 1213
@@ -1463,12 +1635,83 @@ _DEPRECATED_ALIASES = {
     "DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_BER_FLOAT":                 "DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO",                      # 1218
     "DCGM_FI_DEV_NVLINK_COUNT_EFFECTIVE_ERRORS":                    "DCGM_FI_DEV_NVLINK_EFFECTIVE_ERROR_TOTAL",                    # 1219
     "DCGM_FI_DEV_NVLINK_ECC_DATA_ERROR_COUNT_TOTAL":                "DCGM_FI_DEV_NVLINK_ECC_ERROR_TOTAL",                          # 1220
+    "DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_STATUS":                  "DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERROR_STATUS",               # 1305
+    "DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERR_MASK":                    "DCGM_FI_DEV_CONNECTX_CORRECTABLE_ERROR_MASK",                 # 1306
     "DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_STATUS":                "DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_STATUS",             # 1307
     "DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_MASK":                  "DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_MASK",               # 1308
     "DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERR_SEVERITY":              "DCGM_FI_DEV_CONNECTX_UNCORRECTABLE_ERROR_SEVERITY",           # 1309
+    "DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE":                      "DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS",                           # 1310
+    "DCGM_FI_DEV_C2C_LINK_ERROR_INTR":                              "DCGM_FI_DEV_C2C_LINK_ERROR_TOTAL",                            # 1400
+    "DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY":                            "DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_TOTAL",                     # 1401
+    "DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B":                        "DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_B2B_TOTAL",                 # 1402
+    "DCGM_FI_DEV_C2C_LINK_POWER_STATE":                             "DCGM_FI_DEV_C2C_LINK_POWER_STATUS",                           # 1403
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_0_TOTAL",                      # 1404
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_1_TOTAL",                      # 1405
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_2_TOTAL",                      # 1406
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_3_TOTAL",                      # 1407
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_4_TOTAL",                      # 1408
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_5_TOTAL",                      # 1409
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_6_TOTAL",                      # 1410
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_7_TOTAL",                      # 1411
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_8_TOTAL",                      # 1412
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9":                       "DCGM_FI_DEV_NVLINK_FEC_HISTORY_9_TOTAL",                      # 1413
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10":                      "DCGM_FI_DEV_NVLINK_FEC_HISTORY_10_TOTAL",                     # 1414
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11":                      "DCGM_FI_DEV_NVLINK_FEC_HISTORY_11_TOTAL",                     # 1415
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12":                      "DCGM_FI_DEV_NVLINK_FEC_HISTORY_12_TOTAL",                     # 1416
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13":                      "DCGM_FI_DEV_NVLINK_FEC_HISTORY_13_TOTAL",                     # 1417
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14":                      "DCGM_FI_DEV_NVLINK_FEC_HISTORY_14_TOTAL",                     # 1418
+    "DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15":                      "DCGM_FI_DEV_NVLINK_FEC_HISTORY_15_TOTAL",                     # 1419
+    "DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL":                   "DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL_WATTS",            # 1428
+    "DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR":                  "DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR_WATTS",           # 1429
+    "DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES":            "DCGM_FI_DEV_PWR_SMOOTHING_MAX_PRESET_PROFILES",               # 1433
     "DCGM_FI_DEV_PCIE_COUNT_CORRECTABLE_ERRORS":                    "DCGM_FI_DEV_PCIE_CORRECTABLE_ERROR_TOTAL",                    # 1501
     "DCGM_FI_DEV_MEMORY_UNREPAIRABLE_FLAG":                         "DCGM_FI_DEV_MEMORY_UNREPAIRABLE",                             # 1507
+    "DCGM_FI_DEV_NVLINK_GET_STATE":                                 "DCGM_FI_DEV_NVLINK_LINK_STATUS",                              # 1508
+    "DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT":                 "DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL",                 # 1509
     "DCGM_FI_DEV_GET_GPU_RECOVERY_ACTION":                          "DCGM_FI_DEV_GPU_RECOVERY_ACTION",                             # 1523
+}
+
+# These fields were deprecated in DCGM 4.7 and will be removed in DCGM 5.0. Unlike aliases,
+# they must resolve to their historical IDs so older numeric requests remain compatible.
+_DEPRECATED_FIELD_IDS = {
+    "DCGM_FI_PROF_NVLINK_L0_TX_BYTES":  (1040, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L0_RX_BYTES":  (1041, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L1_TX_BYTES":  (1042, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L1_RX_BYTES":  (1043, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L2_TX_BYTES":  (1044, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L2_RX_BYTES":  (1045, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L3_TX_BYTES":  (1046, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L3_RX_BYTES":  (1047, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L4_TX_BYTES":  (1048, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L4_RX_BYTES":  (1049, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L5_TX_BYTES":  (1050, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L5_RX_BYTES":  (1051, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L6_TX_BYTES":  (1052, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L6_RX_BYTES":  (1053, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L7_TX_BYTES":  (1054, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L7_RX_BYTES":  (1055, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L8_TX_BYTES":  (1056, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L8_RX_BYTES":  (1057, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L9_TX_BYTES":  (1058, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L9_RX_BYTES":  (1059, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L10_TX_BYTES": (1060, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L10_RX_BYTES": (1061, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L11_TX_BYTES": (1062, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L11_RX_BYTES": (1063, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L12_TX_BYTES": (1064, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L12_RX_BYTES": (1065, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L13_TX_BYTES": (1066, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L13_RX_BYTES": (1067, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L14_TX_BYTES": (1068, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L14_RX_BYTES": (1069, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L15_TX_BYTES": (1070, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L15_RX_BYTES": (1071, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L16_TX_BYTES": (1072, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L16_RX_BYTES": (1073, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L17_TX_BYTES": (1074, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_L17_RX_BYTES": (1075, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK": (1532, "DCGM_FI_PROF_NVLINK_TX_BYTES"),
+    "DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK": (1533, "DCGM_FI_PROF_NVLINK_RX_BYTES"),
 }
 # autopep8: on
 
@@ -1492,6 +1735,18 @@ def _install_deprecated_alias_resolver():
                     stacklevel=2,
                 )
                 return getattr(self, new_name)
+            if name in _DEPRECATED_FIELD_IDS:
+                if DCGM_DEPRECATED == 0:
+                    raise AttributeError(
+                        f"{name} is deprecated and DCGM_DEPRECATED=0")
+                field_id, new_name = _DEPRECATED_FIELD_IDS[name]
+                warnings.warn(
+                    f"{name} is deprecated and will be removed in DCGM 5.0; "
+                    f"use {new_name} with a DCGM_FE_LINK entity instead",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                return field_id
             raise AttributeError(
                 f"module {self.__name__!r} has no attribute {name!r}")
 

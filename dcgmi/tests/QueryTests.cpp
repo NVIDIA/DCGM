@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
-#include <catch2/catch_all.hpp>
+#include <catch2/catch_test_macros.hpp>
 
-#include "TestHelpers.hpp"
-#include "mock/MockDcgmiGroupInfo.hpp"
+#include <CerrCapture.hpp>
+#include <CoutCapture.hpp>
 
+#include <DcgmStringHelpers.h>
 #include <DcgmVariantHelper.hpp>
 #include <DcgmiOutput.h>
+#include <MockDcgmOps.h>
 #include <Query.h>
 #include <dcgm_agent.h>
 #include <dcgmi_common.h>
 
 #include <cstring>
+#include <memory>
 #include <string.h>
 
 struct CpuRangeCase
@@ -34,123 +37,6 @@ struct CpuRangeCase
     uint32_t bitmaskNumBits;
     std::vector<std::pair<uint32_t, uint32_t>> rangeSet;
 };
-
-namespace
-{
-struct QueryApiState
-{
-    dcgmReturn_t gpuStatusReturn    = DCGM_ST_OK;
-    dcgmReturn_t cpuHierarchyReturn = DCGM_ST_OK;
-    dcgmReturn_t workloadReturn     = DCGM_ST_OK;
-
-    int gpuStatusCallCount    = 0;
-    int cpuHierarchyCallCount = 0;
-    int workloadCallCount     = 0;
-
-    DcgmEntityStatus_t gpuStatus = DcgmEntityStatusOk;
-    dcgmCpuHierarchy_v2 cpuHierarchy {};
-};
-
-QueryApiState g_queryApi;
-
-/**
- * @brief Reset query command mock state to default successful responses.
- * @return void
- * @note Mutates the global g_queryApi state, including return codes, gpuStatus, cpuHierarchy version/CPU count,
- *       CPU serial data, and ownedCores bitmask. Also calls ResetMockDcgmiGroupInfo() for group-query isolation.
- */
-void ResetQueryApi()
-{
-    g_queryApi                      = {};
-    g_queryApi.gpuStatusReturn      = DCGM_ST_OK;
-    g_queryApi.cpuHierarchyReturn   = DCGM_ST_OK;
-    g_queryApi.workloadReturn       = DCGM_ST_OK;
-    g_queryApi.gpuStatus            = DcgmEntityStatusOk;
-    g_queryApi.cpuHierarchy.version = dcgmCpuHierarchy_version2;
-    g_queryApi.cpuHierarchy.numCpus = 1;
-    std::strncpy(
-        g_queryApi.cpuHierarchy.cpus[0].serial, "cpu-serial-0", sizeof(g_queryApi.cpuHierarchy.cpus[0].serial) - 1);
-    g_queryApi.cpuHierarchy.cpus[0].ownedCores.bitmask[0] = 0xfull;
-    ResetMockDcgmiGroupInfo();
-}
-} //namespace
-
-/**
- * @brief Test-only mock for dcgmGetGpuStatus backed by g_queryApi.
- *
- * Increments g_queryApi.gpuStatusCallCount, returns DCGM_ST_BADPARAM for nullptr status, returns
- * g_queryApi.gpuStatusReturn for configured failures, and writes g_queryApi.gpuStatus on success.
- */
-extern "C" dcgmReturn_t dcgmGetGpuStatus(dcgmHandle_t, unsigned int, DcgmEntityStatus_t *status)
-{
-    g_queryApi.gpuStatusCallCount++;
-    if (status == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (g_queryApi.gpuStatusReturn != DCGM_ST_OK)
-    {
-        return g_queryApi.gpuStatusReturn;
-    }
-    *status = g_queryApi.gpuStatus;
-    return DCGM_ST_OK;
-}
-
-/**
- * @brief Test-only mock for dcgmGetCpuHierarchy_v2 backed by g_queryApi.
- *
- * Increments g_queryApi.cpuHierarchyCallCount, returns DCGM_ST_BADPARAM for nullptr cpuHierarchy, returns
- * g_queryApi.cpuHierarchyReturn for configured failures, and copies g_queryApi.cpuHierarchy on success.
- */
-extern "C" dcgmReturn_t dcgmGetCpuHierarchy_v2(dcgmHandle_t, dcgmCpuHierarchy_v2 *cpuHierarchy)
-{
-    g_queryApi.cpuHierarchyCallCount++;
-    if (cpuHierarchy == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (g_queryApi.cpuHierarchyReturn != DCGM_ST_OK)
-    {
-        return g_queryApi.cpuHierarchyReturn;
-    }
-    *cpuHierarchy = g_queryApi.cpuHierarchy;
-    return DCGM_ST_OK;
-}
-
-/**
- * @brief Test-only mock for dcgmGetDeviceWorkloadPowerProfileInfo backed by g_queryApi.
- *
- * Increments g_queryApi.workloadCallCount, returns DCGM_ST_BADPARAM for nullptr outputs, and returns
- * g_queryApi.workloadReturn for configured failures. On success, sets profilesInfo->profileCount,
- * workloadPowerProfile[0] version/profileId/priority, and the
- * profileStatus profileMask, requestedProfileMask, and enforcedProfileMask fields.
- */
-extern "C" dcgmReturn_t dcgmGetDeviceWorkloadPowerProfileInfo(dcgmHandle_t,
-                                                              unsigned int,
-                                                              dcgmWorkloadPowerProfileProfilesInfo_v1 *profilesInfo,
-                                                              dcgmDeviceWorkloadPowerProfilesStatus_v1 *profileStatus)
-{
-    g_queryApi.workloadCallCount++;
-    if (profilesInfo == nullptr || profileStatus == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-
-    if (g_queryApi.workloadReturn != DCGM_ST_OK)
-    {
-        return g_queryApi.workloadReturn;
-    }
-    profilesInfo->profileCount                      = 1;
-    profilesInfo->workloadPowerProfile[0].version   = dcgmWorkloadPowerProfileInfo_version;
-    profilesInfo->workloadPowerProfile[0].profileId = DCGM_POWER_PROFILE_COMPUTE;
-    profilesInfo->workloadPowerProfile[0].priority  = 1;
-    profileStatus->profileMask[0]                   = 0x1;
-    profileStatus->requestedProfileMask[0]          = 0x1;
-    profileStatus->enforcedProfileMask[0]           = 0x1;
-    return DCGM_ST_OK;
-}
 
 TEST_CASE("HelperGetCpuRangesFromBitmask")
 {
@@ -264,7 +150,8 @@ TEST_CASE("Query::DisplayDeviceInfo rejects invalid attribute flags before query
 {
     GIVEN("a Query object and an invalid attribute selector")
     {
-        Query query;
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        Query query(&mockDcgmOps);
 
         SECTION("Duplicate attribute")
         {
@@ -296,8 +183,9 @@ TEST_CASE("Query::DisplayDeviceInfo")
 {
     GIVEN("a Query object and mocked GPU attributes")
     {
-        ResetQueryApi();
-        Query query;
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        mockDcgmOps.m_deviceAttributesState.overrideAttributes = DcgmNs::MockDcgmOps::MakeDefaultDeviceAttributes();
+        Query query(&mockDcgmOps);
         auto handle = static_cast<dcgmHandle_t>(0x90);
 
         SECTION("Identifier attributes are displayed")
@@ -315,18 +203,18 @@ TEST_CASE("Query::DisplayDeviceInfo")
             CoutCapture capture;
 
             CHECK(query.DisplayDeviceInfo(handle, 0, "ptw") == DCGM_ST_OK);
-            CHECK(g_queryApi.workloadCallCount == 1);
+            CHECK(mockDcgmOps.m_queryState.workloadCallCount == 1);
             CHECK(capture.str().find("Power") != std::string::npos);
             CHECK(capture.str().find("Temperature") != std::string::npos);
         }
 
         SECTION("Workload power profile failures do not fail the outer device info request")
         {
-            g_queryApi.workloadReturn = DCGM_ST_BADPARAM;
+            mockDcgmOps.m_queryState.workloadReturn = DCGM_ST_BADPARAM;
             CoutCapture capture;
 
             CHECK(query.DisplayDeviceInfo(handle, 0, "w") == DCGM_ST_OK);
-            CHECK(g_queryApi.workloadCallCount == 1);
+            CHECK(mockDcgmOps.m_queryState.workloadCallCount == 1);
             CHECK(capture.str().find("Unable to get GPU info") != std::string::npos);
         }
     }
@@ -336,13 +224,14 @@ TEST_CASE("Query::DisplayDiscoveredDevices")
 {
     GIVEN("a Query object and mocked entity lists")
     {
-        ResetQueryApi();
-        Query query;
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        Query query(&mockDcgmOps);
         auto handle = static_cast<dcgmHandle_t>(0x93);
 
         SECTION("Empty entity lists are displayed successfully")
         {
-            SetMockDcgmiEntityListForQueryTests(DCGM_ST_OK, {});
+            mockDcgmOps.m_entityListState.returnCode  = DCGM_ST_OK;
+            mockDcgmOps.m_entityListState.gpuEntities = std::vector<dcgm_field_eid_t> {};
             CoutCapture capture;
 
             CHECK(query.DisplayDiscoveredDevices(handle, false) == DCGM_ST_OK);
@@ -353,7 +242,8 @@ TEST_CASE("Query::DisplayDiscoveredDevices")
 
         SECTION("GPU list errors are returned")
         {
-            SetMockDcgmiEntityListForQueryTests(DCGM_ST_BADPARAM, {});
+            mockDcgmOps.m_entityListState.returnCode  = DCGM_ST_BADPARAM;
+            mockDcgmOps.m_entityListState.gpuEntities = std::vector<dcgm_field_eid_t> {};
             CoutCapture capture;
 
             CHECK(query.DisplayDiscoveredDevices(handle, false) == DCGM_ST_BADPARAM);
@@ -362,12 +252,127 @@ TEST_CASE("Query::DisplayDiscoveredDevices")
     }
 }
 
+struct QueryTestFixture
+{
+    struct DiscoveryOutput
+    {
+        dcgmReturn_t result;
+        std::string output;
+    };
+
+    void AddCpuWithoutModel()
+    {
+        mockDcgmOps.AddMockedEntity(DcgmNs::MockDcgmEntity(c_cpuEntity));
+    }
+
+    void AddCpuWithModel(char const *model)
+    {
+        DcgmNs::MockDcgmEntity cpu(c_cpuEntity);
+        dcgmFieldValue_v2 modelValue {};
+        modelValue.version       = dcgmFieldValue_version2;
+        modelValue.entityGroupId = c_cpuEntity.entityGroupId;
+        modelValue.entityId      = c_cpuEntity.entityId;
+        modelValue.fieldId       = DCGM_FI_DEV_CPU_MODEL;
+        modelValue.fieldType     = DCGM_FT_STRING;
+        modelValue.status        = DCGM_ST_OK;
+        SafeCopyTo(modelValue.value.str, model);
+        cpu.InjectFieldValue(DCGM_FI_DEV_CPU_MODEL, modelValue);
+        mockDcgmOps.AddMockedEntity(cpu);
+    }
+
+    DiscoveryOutput RunDiscovery()
+    {
+        CoutCapture capture;
+        dcgmReturn_t const result = query.DisplayDiscoveredDevices(mockDcgmOps.m_handleId, false);
+        return { result, capture.str() };
+    }
+
+    static constexpr dcgmGroupEntityPair_t c_cpuEntity { .entityGroupId = DCGM_FE_CPU, .entityId = 0 };
+    DcgmNs::MockDcgmOps mockDcgmOps;
+    Query query { &mockDcgmOps };
+};
+
+SCENARIO_METHOD(QueryTestFixture, "Query: displays the CPU model during discovery")
+{
+    constexpr char c_testCpuModel[]       = "Test CPU Model";
+    constexpr char c_unknownModelOutput[] = "Name: Unknown";
+
+    GIVEN("a CPU with a model value")
+    {
+        AddCpuWithModel(c_testCpuModel);
+
+        WHEN("discovered devices are displayed")
+        {
+            auto const discovery = RunDiscovery();
+
+            THEN("the model is displayed")
+            {
+                CHECK(discovery.result == DCGM_ST_OK);
+                CHECK(discovery.output.find(std::string("Name: ") + c_testCpuModel) != std::string::npos);
+            }
+        }
+    }
+
+    GIVEN("a CPU whose model field has no cached data")
+    {
+        AddCpuWithoutModel();
+
+        WHEN("discovered devices are displayed")
+        {
+            auto const discovery = RunDiscovery();
+
+            THEN("the model is reported as unknown")
+            {
+                CHECK(discovery.result == DCGM_ST_OK);
+                CHECK(discovery.output.find(c_unknownModelOutput) != std::string::npos);
+            }
+        }
+    }
+
+    GIVEN("a CPU whose model field is queried")
+    {
+        AddCpuWithModel(c_testCpuModel);
+
+        WHEN("discovered devices are displayed")
+        {
+            auto const discovery = RunDiscovery();
+
+            THEN("the temporary CPU model watch is removed before returning")
+            {
+                CHECK(discovery.result == DCGM_ST_OK);
+                CHECK(mockDcgmOps.m_fieldGroupState.watchCallCount == 1);
+                CHECK(mockDcgmOps.m_fieldGroupState.unwatchCallCount == 1);
+                CHECK(mockDcgmOps.m_fieldGroupState.lastUnwatchedGroupId
+                      == mockDcgmOps.m_fieldGroupState.lastWatchedGroupId);
+                CHECK(mockDcgmOps.m_fieldGroupState.lastUnwatchedFieldGroupId
+                      == mockDcgmOps.m_fieldGroupState.lastWatchedFieldGroupId);
+            }
+        }
+    }
+
+    GIVEN("a CPU whose model field contains the DCGM blank string")
+    {
+        AddCpuWithModel(DCGM_STR_BLANK);
+
+        WHEN("discovered devices are displayed")
+        {
+            auto const discovery = RunDiscovery();
+
+            THEN("the model is reported as unknown")
+            {
+                CHECK(discovery.result == DCGM_ST_OK);
+                CHECK(discovery.output.find(c_unknownModelOutput) != std::string::npos);
+            }
+        }
+    }
+}
+
 TEST_CASE("Query::DisplayCpuInfo")
 {
     GIVEN("a Query object and mocked CPU hierarchy")
     {
-        ResetQueryApi();
-        Query query;
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        Query query(&mockDcgmOps);
         auto handle = static_cast<dcgmHandle_t>(0x91);
 
         SECTION("CPU attributes are displayed")
@@ -375,7 +380,7 @@ TEST_CASE("Query::DisplayCpuInfo")
             CoutCapture capture;
 
             CHECK(query.DisplayCpuInfo(handle, 0, "a") == DCGM_ST_OK);
-            CHECK(g_queryApi.cpuHierarchyCallCount == 1);
+            CHECK(mockDcgmOps.m_queryState.cpuHierarchyCallCount == 1);
             CHECK(capture.str().find("CPU ID: 0") != std::string::npos);
             CHECK(capture.str().find("cpu-serial-0") != std::string::npos);
             CHECK(capture.str().find("Cores: 0-3") != std::string::npos);
@@ -386,16 +391,16 @@ TEST_CASE("Query::DisplayCpuInfo")
             CoutCapture capture;
 
             CHECK(query.DisplayCpuInfo(handle, 3, "a") == DCGM_ST_BADPARAM);
-            CHECK(g_queryApi.cpuHierarchyCallCount == 1);
+            CHECK(mockDcgmOps.m_queryState.cpuHierarchyCallCount == 1);
         }
 
         SECTION("CPU hierarchy failures are returned")
         {
-            g_queryApi.cpuHierarchyReturn = DCGM_ST_BADPARAM;
+            mockDcgmOps.m_queryState.cpuHierarchyReturn = DCGM_ST_BADPARAM;
             CoutCapture capture;
 
             CHECK(query.DisplayCpuInfo(handle, 0, "a") == DCGM_ST_BADPARAM);
-            CHECK(g_queryApi.cpuHierarchyCallCount == 1);
+            CHECK(mockDcgmOps.m_queryState.cpuHierarchyCallCount == 1);
         }
     }
 }
@@ -404,23 +409,20 @@ TEST_CASE("Query::DisplayGroupInfo")
 {
     GIVEN("a Query object and mocked group info")
     {
-        ResetQueryApi();
-        Query query;
-        auto handle                                        = static_cast<dcgmHandle_t>(0x92);
-        g_mockDcgmiGroupInfoData.m_groupInfo.count         = 2;
-        g_mockDcgmiGroupInfoData.m_groupInfo.entityList[0] = { DCGM_FE_GPU, 0 };
-        g_mockDcgmiGroupInfoData.m_groupInfo.entityList[1] = { DCGM_FE_CPU, 1 };
-        std::strncpy(g_mockDcgmiGroupInfoData.m_groupInfo.groupName,
-                     "query-group",
-                     sizeof(g_mockDcgmiGroupInfoData.m_groupInfo.groupName) - 1);
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        mockDcgmOps.m_deviceAttributesState.overrideAttributes = DcgmNs::MockDcgmOps::MakeDefaultDeviceAttributes();
+        Query query(&mockDcgmOps);
+        auto handle = static_cast<dcgmHandle_t>(0x92);
+        mockDcgmOps.m_groupInfoState.overrideInfo
+            = DcgmNs::MockDcgmOps::MakeGroupInfo("query-group", { { DCGM_FE_GPU, 0 }, { DCGM_FE_CPU, 1 } });
 
         SECTION("Verbose group output displays GPU details and non-GPU entities")
         {
             CoutCapture capture;
 
             CHECK(query.DisplayGroupInfo(handle, 7, "a", true) == DCGM_ST_OK);
-            CHECK(g_mockDcgmiGroupInfoData.m_groupInfoCallCount == 1);
-            CHECK(g_mockDcgmiGroupInfoData.m_lastRequestedGroupId == 7);
+            CHECK(mockDcgmOps.m_groupInfoState.callCount == 1);
+            CHECK(mockDcgmOps.m_groupInfoState.lastGroupId == 7);
             CHECK(capture.str().find("Device info") != std::string::npos);
             CHECK(capture.str().find("GPU ID: 0") != std::string::npos);
             CHECK(capture.str().find("CPU id: 1") != std::string::npos);
@@ -431,14 +433,14 @@ TEST_CASE("Query::DisplayGroupInfo")
             CoutCapture capture;
 
             CHECK(query.DisplayGroupInfo(handle, 7, "a", false) == DCGM_ST_OK);
-            CHECK(g_mockDcgmiGroupInfoData.m_groupInfoCallCount == 1);
+            CHECK(mockDcgmOps.m_groupInfoState.callCount == 1);
             CHECK(capture.str().find("Group of 2 GPUs") != std::string::npos);
-            CHECK(capture.str().find("Non-homogenous settings") != std::string::npos);
+            CHECK(capture.str().find("Non-homogenous settings across group. Use with -v flag") != std::string::npos);
         }
 
         SECTION("Empty groups are accepted")
         {
-            g_mockDcgmiGroupInfoData.m_groupInfo.count = 0;
+            mockDcgmOps.m_groupInfoState.overrideInfo = DcgmNs::MockDcgmOps::MakeGroupInfo("query-group");
             CoutCapture capture;
 
             CHECK(query.DisplayGroupInfo(handle, 7, "a", false) == DCGM_ST_OK);
@@ -447,7 +449,7 @@ TEST_CASE("Query::DisplayGroupInfo")
 
         SECTION("Group lookup failures are returned")
         {
-            g_mockDcgmiGroupInfoData.m_groupInfoReturn = DCGM_ST_NOT_CONFIGURED;
+            mockDcgmOps.m_groupInfoState.returnCode = DCGM_ST_NOT_CONFIGURED;
             CoutCapture capture;
 
             CHECK(query.DisplayGroupInfo(handle, 7, "a", false) == DCGM_ST_NOT_CONFIGURED);

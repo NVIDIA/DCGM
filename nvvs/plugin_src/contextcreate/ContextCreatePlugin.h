@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,14 @@
 #define CONTEXTCREATEPLUGIN_H
 
 #include "CudaCommon.h"
+#include "CudaCommonAnyUniquePtr.hpp"
 #include "Plugin.h"
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <NvvsStructs.h>
+
+#include <memory>
 
 #define CONTEXT_CREATE_PASS 0
 #define CONTEXT_CREATE_FAIL -1
@@ -27,7 +33,10 @@
 class ContextCreatePlugin : public Plugin
 {
 public:
-    ContextCreatePlugin(dcgmHandle_t handle);
+    ContextCreatePlugin(dcgmHandle_t handle,
+                        DcgmNs::DcgmOpsAnyUniquePtr dcgmOps,
+                        CudaOpsAnyUniquePtr cudaOps,
+                        CudaCommonAnyUniquePtr cudaCommon);
     ~ContextCreatePlugin()
     {}
 
@@ -36,11 +45,12 @@ public:
             unsigned int numParameters,
             dcgmDiagPluginTestParameter_t const *testParameters) override;
 
-    dcgmHandle_t GetHandle();
-
     std::string GetCtxCreateTestName() const;
 
 private:
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique; //!< Owned DCGM API interface.
+    CudaOpsAnyUniquePtr m_cudaOps;               //!< CUDA API interface.
+    CudaCommonAnyUniquePtr m_cudaCommon;
     dcgmHandle_t m_handle;
     std::unique_ptr<dcgmDiagPluginEntityList_v1> m_entityInfo;
     std::unique_ptr<TestParameters> m_testParameters;

@@ -599,6 +599,16 @@ private:
                 }
                 break;
             }
+            case INJECTION_EVENTDATATYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EventDataTypePtr = static_cast<nvmlEventDataType_t *>(malloc(allocateNum * sizeof(*other.m_value.EventDataTypePtr)));
+                if (m_value.EventDataTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.EventDataTypePtr, other.m_value.EventDataTypePtr, allocateNum * sizeof(*other.m_value.EventDataTypePtr));
+                }
+                break;
+            }
             case INJECTION_EVENTDATA_PTR:
             {
                 unsigned int allocateNum = m_isArray ? m_arrLen : 1;
@@ -606,6 +616,56 @@ private:
                 if (m_value.EventDataPtr != nullptr)
                 {
                     std::memcpy(m_value.EventDataPtr, other.m_value.EventDataPtr, allocateNum * sizeof(*other.m_value.EventDataPtr));
+                }
+                break;
+            }
+            case INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EventSetGetContextCount_v1Ptr = static_cast<nvmlEventSetGetContextCount_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.EventSetGetContextCount_v1Ptr)));
+                if (m_value.EventSetGetContextCount_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.EventSetGetContextCount_v1Ptr, other.m_value.EventSetGetContextCount_v1Ptr, allocateNum * sizeof(*other.m_value.EventSetGetContextCount_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EventSetGetContextData_v1Ptr = static_cast<nvmlEventSetGetContextData_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.EventSetGetContextData_v1Ptr)));
+                if (m_value.EventSetGetContextData_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.EventSetGetContextData_v1Ptr, other.m_value.EventSetGetContextData_v1Ptr, allocateNum * sizeof(*other.m_value.EventSetGetContextData_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EventSetGetContextInfo_v1Ptr = static_cast<nvmlEventSetGetContextInfo_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.EventSetGetContextInfo_v1Ptr)));
+                if (m_value.EventSetGetContextInfo_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.EventSetGetContextInfo_v1Ptr, other.m_value.EventSetGetContextInfo_v1Ptr, allocateNum * sizeof(*other.m_value.EventSetGetContextInfo_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr = static_cast<nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr)));
+                if (m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, allocateNum * sizeof(*other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_EVENTSETWAIT_V3_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.EventSetWait_v3Ptr = static_cast<nvmlEventSetWait_v3_t *>(malloc(allocateNum * sizeof(*other.m_value.EventSetWait_v3Ptr)));
+                if (m_value.EventSetWait_v3Ptr != nullptr)
+                {
+                    std::memcpy(m_value.EventSetWait_v3Ptr, other.m_value.EventSetWait_v3Ptr, allocateNum * sizeof(*other.m_value.EventSetWait_v3Ptr));
                 }
                 break;
             }
@@ -866,6 +926,36 @@ private:
                 if (m_value.GpuOperationModePtr != nullptr)
                 {
                     std::memcpy(m_value.GpuOperationModePtr, other.m_value.GpuOperationModePtr, allocateNum * sizeof(*other.m_value.GpuOperationModePtr));
+                }
+                break;
+            }
+            case INJECTION_GPUOPERATIONALEVENTCONFIG_V1_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuOperationalEventConfig_v1Ptr = static_cast<nvmlGpuOperationalEventConfig_v1_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuOperationalEventConfig_v1Ptr)));
+                if (m_value.GpuOperationalEventConfig_v1Ptr != nullptr)
+                {
+                    std::memcpy(m_value.GpuOperationalEventConfig_v1Ptr, other.m_value.GpuOperationalEventConfig_v1Ptr, allocateNum * sizeof(*other.m_value.GpuOperationalEventConfig_v1Ptr));
+                }
+                break;
+            }
+            case INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuOperationalEventContextTypePtr = static_cast<nvmlGpuOperationalEventContextType_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuOperationalEventContextTypePtr)));
+                if (m_value.GpuOperationalEventContextTypePtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuOperationalEventContextTypePtr, other.m_value.GpuOperationalEventContextTypePtr, allocateNum * sizeof(*other.m_value.GpuOperationalEventContextTypePtr));
+                }
+                break;
+            }
+            case INJECTION_GPUOPERATIONALEVENTLOGLEVEL_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.GpuOperationalEventLogLevelPtr = static_cast<nvmlGpuOperationalEventLogLevel_t *>(malloc(allocateNum * sizeof(*other.m_value.GpuOperationalEventLogLevelPtr)));
+                if (m_value.GpuOperationalEventLogLevelPtr != nullptr)
+                {
+                    std::memcpy(m_value.GpuOperationalEventLogLevelPtr, other.m_value.GpuOperationalEventLogLevelPtr, allocateNum * sizeof(*other.m_value.GpuOperationalEventLogLevelPtr));
                 }
                 break;
             }
@@ -1186,6 +1276,16 @@ private:
                 if (m_value.NvlinkVersionPtr != nullptr)
                 {
                     std::memcpy(m_value.NvlinkVersionPtr, other.m_value.NvlinkVersionPtr, allocateNum * sizeof(*other.m_value.NvlinkVersionPtr));
+                }
+                break;
+            }
+            case INJECTION_OPERATIONALEVENTSEVERITY_PTR:
+            {
+                unsigned int allocateNum = m_isArray ? m_arrLen : 1;
+                m_value.OperationalEventSeverityPtr = static_cast<nvmlOperationalEventSeverity_t *>(malloc(allocateNum * sizeof(*other.m_value.OperationalEventSeverityPtr)));
+                if (m_value.OperationalEventSeverityPtr != nullptr)
+                {
+                    std::memcpy(m_value.OperationalEventSeverityPtr, other.m_value.OperationalEventSeverityPtr, allocateNum * sizeof(*other.m_value.OperationalEventSeverityPtr));
                 }
                 break;
             }
@@ -3757,6 +3857,36 @@ public:
     }
 
     // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlEventDataType_t *EventDataTypePtr, bool inHeap = false)
+        : m_type(INJECTION_EVENTDATATYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventDataTypePtr = EventDataTypePtr;
+    }
+    InjectionArgument(nvmlEventDataType_t EventDataType)
+        : m_type(INJECTION_EVENTDATATYPE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventDataType = EventDataType;
+    }
+    InjectionArgument(nvmlEventDataType_t *EventDataTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_EVENTDATATYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventDataTypePtr = EventDataTypePtr;
+    }
+
+    nvmlEventDataType_t *AsEventDataTypePtr() const
+    {
+        return m_value.EventDataTypePtr;
+    }
+
+    nvmlEventDataType_t const &AsEventDataType() const
+    {
+        return m_value.EventDataType;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
     InjectionArgument(nvmlEventData_t *EventDataPtr, bool inHeap = false)
         : m_type(INJECTION_EVENTDATA_PTR), m_inHeap(inHeap)
     {
@@ -3784,6 +3914,156 @@ public:
     nvmlEventData_t const &AsEventData() const
     {
         return m_value.EventData;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlEventSetGetContextCount_v1_t *EventSetGetContextCount_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextCount_v1Ptr = EventSetGetContextCount_v1Ptr;
+    }
+    InjectionArgument(nvmlEventSetGetContextCount_v1_t EventSetGetContextCount_v1)
+        : m_type(INJECTION_EVENTSETGETCONTEXTCOUNT_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextCount_v1 = EventSetGetContextCount_v1;
+    }
+    InjectionArgument(nvmlEventSetGetContextCount_v1_t *EventSetGetContextCount_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextCount_v1Ptr = EventSetGetContextCount_v1Ptr;
+    }
+
+    nvmlEventSetGetContextCount_v1_t *AsEventSetGetContextCount_v1Ptr() const
+    {
+        return m_value.EventSetGetContextCount_v1Ptr;
+    }
+
+    nvmlEventSetGetContextCount_v1_t const &AsEventSetGetContextCount_v1() const
+    {
+        return m_value.EventSetGetContextCount_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlEventSetGetContextData_v1_t *EventSetGetContextData_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextData_v1Ptr = EventSetGetContextData_v1Ptr;
+    }
+    InjectionArgument(nvmlEventSetGetContextData_v1_t EventSetGetContextData_v1)
+        : m_type(INJECTION_EVENTSETGETCONTEXTDATA_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextData_v1 = EventSetGetContextData_v1;
+    }
+    InjectionArgument(nvmlEventSetGetContextData_v1_t *EventSetGetContextData_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextData_v1Ptr = EventSetGetContextData_v1Ptr;
+    }
+
+    nvmlEventSetGetContextData_v1_t *AsEventSetGetContextData_v1Ptr() const
+    {
+        return m_value.EventSetGetContextData_v1Ptr;
+    }
+
+    nvmlEventSetGetContextData_v1_t const &AsEventSetGetContextData_v1() const
+    {
+        return m_value.EventSetGetContextData_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlEventSetGetContextInfo_v1_t *EventSetGetContextInfo_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextInfo_v1Ptr = EventSetGetContextInfo_v1Ptr;
+    }
+    InjectionArgument(nvmlEventSetGetContextInfo_v1_t EventSetGetContextInfo_v1)
+        : m_type(INJECTION_EVENTSETGETCONTEXTINFO_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextInfo_v1 = EventSetGetContextInfo_v1;
+    }
+    InjectionArgument(nvmlEventSetGetContextInfo_v1_t *EventSetGetContextInfo_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetContextInfo_v1Ptr = EventSetGetContextInfo_v1Ptr;
+    }
+
+    nvmlEventSetGetContextInfo_v1_t *AsEventSetGetContextInfo_v1Ptr() const
+    {
+        return m_value.EventSetGetContextInfo_v1Ptr;
+    }
+
+    nvmlEventSetGetContextInfo_v1_t const &AsEventSetGetContextInfo_v1() const
+    {
+        return m_value.EventSetGetContextInfo_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr = EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr;
+    }
+    InjectionArgument(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t EventSetGetGpuOperationalEventContextLegacyXid_v1)
+        : m_type(INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1 = EventSetGetGpuOperationalEventContextLegacyXid_v1;
+    }
+    InjectionArgument(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr = EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr;
+    }
+
+    nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t *AsEventSetGetGpuOperationalEventContextLegacyXid_v1Ptr() const
+    {
+        return m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr;
+    }
+
+    nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t const &AsEventSetGetGpuOperationalEventContextLegacyXid_v1() const
+    {
+        return m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlEventSetWait_v3_t *EventSetWait_v3Ptr, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETWAIT_V3_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetWait_v3Ptr = EventSetWait_v3Ptr;
+    }
+    InjectionArgument(nvmlEventSetWait_v3_t EventSetWait_v3)
+        : m_type(INJECTION_EVENTSETWAIT_V3)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetWait_v3 = EventSetWait_v3;
+    }
+    InjectionArgument(nvmlEventSetWait_v3_t *EventSetWait_v3Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_EVENTSETWAIT_V3_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.EventSetWait_v3Ptr = EventSetWait_v3Ptr;
+    }
+
+    nvmlEventSetWait_v3_t *AsEventSetWait_v3Ptr() const
+    {
+        return m_value.EventSetWait_v3Ptr;
+    }
+
+    nvmlEventSetWait_v3_t const &AsEventSetWait_v3() const
+    {
+        return m_value.EventSetWait_v3;
     }
 
     // The following snippet is generated from write_injection_argument_header
@@ -4524,6 +4804,96 @@ public:
     nvmlGpuOperationMode_t const &AsGpuOperationMode() const
     {
         return m_value.GpuOperationMode;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlGpuOperationalEventConfig_v1_t *GpuOperationalEventConfig_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_GPUOPERATIONALEVENTCONFIG_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventConfig_v1Ptr = GpuOperationalEventConfig_v1Ptr;
+    }
+    InjectionArgument(nvmlGpuOperationalEventConfig_v1_t GpuOperationalEventConfig_v1)
+        : m_type(INJECTION_GPUOPERATIONALEVENTCONFIG_V1)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventConfig_v1 = GpuOperationalEventConfig_v1;
+    }
+    InjectionArgument(nvmlGpuOperationalEventConfig_v1_t *GpuOperationalEventConfig_v1Ptr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUOPERATIONALEVENTCONFIG_V1_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventConfig_v1Ptr = GpuOperationalEventConfig_v1Ptr;
+    }
+
+    nvmlGpuOperationalEventConfig_v1_t *AsGpuOperationalEventConfig_v1Ptr() const
+    {
+        return m_value.GpuOperationalEventConfig_v1Ptr;
+    }
+
+    nvmlGpuOperationalEventConfig_v1_t const &AsGpuOperationalEventConfig_v1() const
+    {
+        return m_value.GpuOperationalEventConfig_v1;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlGpuOperationalEventContextType_t *GpuOperationalEventContextTypePtr, bool inHeap = false)
+        : m_type(INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventContextTypePtr = GpuOperationalEventContextTypePtr;
+    }
+    InjectionArgument(nvmlGpuOperationalEventContextType_t GpuOperationalEventContextType)
+        : m_type(INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventContextType = GpuOperationalEventContextType;
+    }
+    InjectionArgument(nvmlGpuOperationalEventContextType_t *GpuOperationalEventContextTypePtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventContextTypePtr = GpuOperationalEventContextTypePtr;
+    }
+
+    nvmlGpuOperationalEventContextType_t *AsGpuOperationalEventContextTypePtr() const
+    {
+        return m_value.GpuOperationalEventContextTypePtr;
+    }
+
+    nvmlGpuOperationalEventContextType_t const &AsGpuOperationalEventContextType() const
+    {
+        return m_value.GpuOperationalEventContextType;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlGpuOperationalEventLogLevel_t *GpuOperationalEventLogLevelPtr, bool inHeap = false)
+        : m_type(INJECTION_GPUOPERATIONALEVENTLOGLEVEL_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventLogLevelPtr = GpuOperationalEventLogLevelPtr;
+    }
+    InjectionArgument(nvmlGpuOperationalEventLogLevel_t GpuOperationalEventLogLevel)
+        : m_type(INJECTION_GPUOPERATIONALEVENTLOGLEVEL)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventLogLevel = GpuOperationalEventLogLevel;
+    }
+    InjectionArgument(nvmlGpuOperationalEventLogLevel_t *GpuOperationalEventLogLevelPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_GPUOPERATIONALEVENTLOGLEVEL_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.GpuOperationalEventLogLevelPtr = GpuOperationalEventLogLevelPtr;
+    }
+
+    nvmlGpuOperationalEventLogLevel_t *AsGpuOperationalEventLogLevelPtr() const
+    {
+        return m_value.GpuOperationalEventLogLevelPtr;
+    }
+
+    nvmlGpuOperationalEventLogLevel_t const &AsGpuOperationalEventLogLevel() const
+    {
+        return m_value.GpuOperationalEventLogLevel;
     }
 
     // The following snippet is generated from write_injection_argument_header
@@ -5484,6 +5854,36 @@ public:
     nvmlNvlinkVersion_t const &AsNvlinkVersion() const
     {
         return m_value.NvlinkVersion;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(nvmlOperationalEventSeverity_t *OperationalEventSeverityPtr, bool inHeap = false)
+        : m_type(INJECTION_OPERATIONALEVENTSEVERITY_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.OperationalEventSeverityPtr = OperationalEventSeverityPtr;
+    }
+    InjectionArgument(nvmlOperationalEventSeverity_t OperationalEventSeverity)
+        : m_type(INJECTION_OPERATIONALEVENTSEVERITY)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.OperationalEventSeverity = OperationalEventSeverity;
+    }
+    InjectionArgument(nvmlOperationalEventSeverity_t *OperationalEventSeverityPtr, unsigned int arrLen, bool inHeap = false)
+        : m_type(INJECTION_OPERATIONALEVENTSEVERITY_PTR), m_isArray(true), m_arrLen(arrLen), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.OperationalEventSeverityPtr = OperationalEventSeverityPtr;
+    }
+
+    nvmlOperationalEventSeverity_t *AsOperationalEventSeverityPtr() const
+    {
+        return m_value.OperationalEventSeverityPtr;
+    }
+
+    nvmlOperationalEventSeverity_t const &AsOperationalEventSeverity() const
+    {
+        return m_value.OperationalEventSeverity;
     }
 
     // The following snippet is generated from write_injection_argument_header
@@ -8266,6 +8666,18 @@ public:
     const nvmlGpuInstancePlacement_t *AsConstGpuInstancePlacementPtr() const
     {
         return m_value.ConstGpuInstancePlacementPtr;
+    }
+
+    // The following snippet is generated from write_injection_argument_header
+    InjectionArgument(const nvmlGpuOperationalEventConfig_v1_t *ConstGpuOperationalEventConfig_v1Ptr, bool inHeap = false)
+        : m_type(INJECTION_CONST_GPUOPERATIONALEVENTCONFIG_V1_PTR), m_inHeap(inHeap)
+    {
+        memset(&m_value, 0, sizeof(m_value));
+        m_value.ConstGpuOperationalEventConfig_v1Ptr = ConstGpuOperationalEventConfig_v1Ptr;
+    }
+    const nvmlGpuOperationalEventConfig_v1_t *AsConstGpuOperationalEventConfig_v1Ptr() const
+    {
+        return m_value.ConstGpuOperationalEventConfig_v1Ptr;
     }
 
     // The following snippet is generated from write_injection_argument_header

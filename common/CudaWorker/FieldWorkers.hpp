@@ -21,14 +21,13 @@
 
 #include <DcgmLogging.h>
 
-#include <cublas_proxy.hpp>
+#include <CublasOpsAnyPtr.hpp>
+#include <CudaOpsAnyPtr.hpp>
 #include <cuda.h>
 
 #include <timelib.h>
 
 #include <random>
-
-using namespace Dcgm;
 
 /*****************************************************************************/
 /* Attributes of a cuda device
@@ -70,14 +69,16 @@ protected:
 public:
     /* Attributes for the device we're running our workload on */
     CudaWorkerDevice_t m_cudaDevice;
+    CudaOpsAnyPtr m_cudaOps; //!< CUDA API interface.
 
     double m_achievedLoad = 0.0; /* Currently-achieved workload */
     unsigned int m_fieldId;      /* FieldId this worker represents */
 
     /*****************************************************************************/
     /* Constructor */
-    FieldWorkerBase(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
+    FieldWorkerBase(CudaWorkerDevice_t cudaDevice, CudaOpsAnyPtr cudaOps, unsigned int fieldId)
         : m_cudaDevice(cudaDevice)
+        , m_cudaOps(cudaOps)
         , m_fieldId(fieldId)
     {}
 
@@ -234,17 +235,17 @@ public:
                   blockDim.z,
                   sharedMemBytes,
                   waitInNs);
-        cuSt = cuLaunchKernel(m_cudaDevice.m_cuFuncWaitNs,
-                              gridDim.x,
-                              gridDim.y,
-                              gridDim.z,
-                              blockDim.x,
-                              blockDim.y,
-                              blockDim.z,
-                              sharedMemBytes,
-                              NULL,
-                              kernelParams,
-                              NULL);
+        cuSt = m_cudaOps->cuLaunchKernel(m_cudaDevice.m_cuFuncWaitNs,
+                                         gridDim.x,
+                                         gridDim.y,
+                                         gridDim.z,
+                                         blockDim.x,
+                                         blockDim.y,
+                                         blockDim.z,
+                                         sharedMemBytes,
+                                         NULL,
+                                         kernelParams,
+                                         NULL);
         if (cuSt)
         {
             DCGM_LOG_ERROR << "cuLaunchKernel returned " << cuSt;
@@ -305,17 +306,17 @@ public:
                   blockDim.z,
                   sharedMemBytes,
                   waitInNs);
-        cuSt = cuLaunchKernel(function,
-                              gridDim.x,
-                              gridDim.y,
-                              gridDim.z,
-                              blockDim.x,
-                              blockDim.y,
-                              blockDim.z,
-                              sharedMemBytes,
-                              NULL,
-                              kernelParams,
-                              NULL);
+        cuSt = m_cudaOps->cuLaunchKernel(function,
+                                         gridDim.x,
+                                         gridDim.y,
+                                         gridDim.z,
+                                         blockDim.x,
+                                         blockDim.y,
+                                         blockDim.z,
+                                         sharedMemBytes,
+                                         NULL,
+                                         kernelParams,
+                                         NULL);
         if (cuSt)
         {
             DCGM_LOG_ERROR << "cuLaunchKernel returned " << cuSt;
@@ -330,8 +331,8 @@ public:
 class FieldWorkerGrActivity : public FieldWorkerBase
 {
 public:
-    FieldWorkerGrActivity(CudaWorkerDevice_t cudaDevice)
-        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO)
+    FieldWorkerGrActivity(CudaWorkerDevice_t cudaDevice, CudaOpsAnyPtr cudaOps)
+        : FieldWorkerBase(cudaDevice, cudaOps, DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO)
     {}
     ~FieldWorkerGrActivity() = default;
 
@@ -352,7 +353,7 @@ public:
         if (runKernelUsec > 0)
         {
             /* Wait for this kernel to finish. This call should be instant but guarantees the kernel has finished */
-            cuCtxSynchronize();
+            m_cudaOps->cuCtxSynchronize();
         }
 
         m_achievedLoad = loadTarget;
@@ -363,8 +364,8 @@ public:
 class FieldWorkerSmActivity : public FieldWorkerBase
 {
 public:
-    FieldWorkerSmActivity(CudaWorkerDevice_t cudaDevice)
-        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_UTIL_RATIO)
+    FieldWorkerSmActivity(CudaWorkerDevice_t cudaDevice, CudaOpsAnyPtr cudaOps)
+        : FieldWorkerBase(cudaDevice, cudaOps, DCGM_FI_PROF_SM_UTIL_RATIO)
     {}
 
     ~FieldWorkerSmActivity() = default;
@@ -383,7 +384,7 @@ public:
         RunSleepKernel(numSms, 1, dutyCycleLengthMs.count() * 1000);
 
         /* Wait for this kernel to finish. This will block for dutyCycleLengthMs until the kernel finishes */
-        cuCtxSynchronize();
+        m_cudaOps->cuCtxSynchronize();
 
         m_achievedLoad = static_cast<double>(numSms) / m_cudaDevice.m_multiProcessorCount;
     }
@@ -393,8 +394,8 @@ public:
 class FieldWorkerSmOccupancy : public FieldWorkerBase
 {
 public:
-    FieldWorkerSmOccupancy(CudaWorkerDevice_t cudaDevice)
-        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_SM_OCCUPANCY_RATIO)
+    FieldWorkerSmOccupancy(CudaWorkerDevice_t cudaDevice, CudaOpsAnyPtr cudaOps)
+        : FieldWorkerBase(cudaDevice, cudaOps, DCGM_FI_PROF_SM_OCCUPANCY_RATIO)
     {}
 
     ~FieldWorkerSmOccupancy() = default;
@@ -449,7 +450,7 @@ public:
          * Wait for this kernel to finish. This will block for
          * m_dutyCycleLengthMs until the kernel finishes
          */
-        cuCtxSynchronize();
+        m_cudaOps->cuCtxSynchronize();
 
         m_achievedLoad = loadTarget;
     }
@@ -464,14 +465,14 @@ class FieldWorkerPciRxTxBytes : public FieldWorkerBase
     CUdeviceptr_v2 m_deviceMem = (CUdeviceptr_v2) nullptr;
 
 public:
-    FieldWorkerPciRxTxBytes(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
-        : FieldWorkerBase(cudaDevice, fieldId)
+    FieldWorkerPciRxTxBytes(CudaWorkerDevice_t cudaDevice, CudaOpsAnyPtr cudaOps, unsigned int fieldId)
+        : FieldWorkerBase(cudaDevice, cudaOps, fieldId)
     {
         CUresult cuSt;
 
         DCGM_LOG_DEBUG << "Allocating host mem";
 
-        cuSt = cuMemAllocHost_v2(&m_hostMem, m_bufferSize);
+        cuSt = m_cudaOps->cuMemAllocHost_v2(&m_hostMem, m_bufferSize);
         if (cuSt)
         {
             using fmt::v12::enums::format_as;
@@ -483,27 +484,28 @@ public:
         memset(m_hostMem, 0, m_bufferSize);
 
         DCGM_LOG_DEBUG << "Allocating device mem";
-        cuSt = cuMemAlloc_v2(&m_deviceMem, m_bufferSize);
+        cuSt = m_cudaOps->cuMemAlloc_v2(&m_deviceMem, m_bufferSize);
         if (cuSt)
         {
             std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
             throw std::runtime_error(s);
         }
         DCGM_LOG_DEBUG << "Clearing device mem";
-        cuMemsetD32_v2(m_deviceMem, 0, m_bufferSize);
+        size_t const bufferU32Count = m_bufferSize / sizeof(uint32_t);
+        m_cudaOps->cuMemsetD32_v2(m_deviceMem, 0, bufferU32Count);
     }
 
     ~FieldWorkerPciRxTxBytes()
     {
         if (m_hostMem != nullptr)
         {
-            cuMemFreeHost(m_hostMem);
+            m_cudaOps->cuMemFreeHost(m_hostMem);
             m_hostMem = nullptr;
         }
 
         if (m_deviceMem != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree(m_deviceMem);
+            m_cudaOps->cuMemFree_v2(m_deviceMem);
             m_deviceMem = (CUdeviceptr_v2) nullptr;
         }
     }
@@ -530,11 +532,11 @@ public:
             {
                 if (m_fieldId == DCGM_FI_PROF_PCIE_RX_BYTES)
                 {
-                    cuSt = cuMemcpyHtoD_v2(m_deviceMem, m_hostMem, m_bufferSize);
+                    cuSt = m_cudaOps->cuMemcpyHtoD_v2(m_deviceMem, m_hostMem, m_bufferSize);
                 }
                 else /* DCGM_FI_PROF_PCIE_TX_BYTES */
                 {
-                    cuSt = cuMemcpyDtoH_v2(m_hostMem, m_deviceMem, m_bufferSize);
+                    cuSt = m_cudaOps->cuMemcpyDtoH_v2(m_hostMem, m_deviceMem, m_bufferSize);
                 }
 
                 totalBytesTransferred += m_bufferSize;
@@ -561,19 +563,19 @@ class FieldWorkerDramUtil : public FieldWorkerBase
     CUdeviceptr_v2 m_deviceMem2 = (CUdeviceptr_v2) nullptr;
 
 public:
-    FieldWorkerDramUtil(CudaWorkerDevice_t cudaDevice)
-        : FieldWorkerBase(cudaDevice, DCGM_FI_PROF_DRAM_UTIL_RATIO)
+    FieldWorkerDramUtil(CudaWorkerDevice_t cudaDevice, CudaOpsAnyPtr cudaOps)
+        : FieldWorkerBase(cudaDevice, cudaOps, DCGM_FI_PROF_DRAM_UTIL_RATIO)
     {
         CUresult cuSt;
 
         DCGM_LOG_DEBUG << "Allocating device mem";
-        cuSt = cuMemAlloc_v2(&m_deviceMem, m_bufferSize);
+        cuSt = m_cudaOps->cuMemAlloc_v2(&m_deviceMem, m_bufferSize);
         if (cuSt)
         {
             std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
             throw std::runtime_error(s);
         }
-        cuSt = cuMemAlloc_v2(&m_deviceMem2, m_bufferSize);
+        cuSt = m_cudaOps->cuMemAlloc_v2(&m_deviceMem2, m_bufferSize);
         if (cuSt)
         {
             std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
@@ -581,21 +583,22 @@ public:
         }
 
         DCGM_LOG_DEBUG << "Clearing device mem";
-        cuMemsetD32_v2(m_deviceMem, 0, m_bufferSize);
-        cuMemsetD32_v2(m_deviceMem2, 0, m_bufferSize);
+        size_t const bufferU32Count = m_bufferSize / sizeof(uint32_t);
+        m_cudaOps->cuMemsetD32_v2(m_deviceMem, 0, bufferU32Count);
+        m_cudaOps->cuMemsetD32_v2(m_deviceMem2, 0, bufferU32Count);
     }
 
     ~FieldWorkerDramUtil()
     {
         if (m_deviceMem != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree_v2(m_deviceMem);
+            m_cudaOps->cuMemFree_v2(m_deviceMem);
             m_deviceMem = (CUdeviceptr_v2) nullptr;
         }
 
         if (m_deviceMem2 != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree_v2(m_deviceMem2);
+            m_cudaOps->cuMemFree_v2(m_deviceMem2);
             m_deviceMem2 = (CUdeviceptr_v2) nullptr;
         }
     }
@@ -620,7 +623,7 @@ public:
         {
             for (i = 0; i < copiesPerIteration; i++)
             {
-                cuSt = cuMemcpy(m_deviceMem, m_deviceMem2, m_bufferSize);
+                cuSt = m_cudaOps->cuMemcpy(m_deviceMem, m_deviceMem2, m_bufferSize);
                 if (cuSt)
                 {
                     DCGM_LOG_ERROR << "cuMemcpy returned " << cuSt;
@@ -647,15 +650,18 @@ class FieldWorkerNvLinkRwBytes : public FieldWorkerBase
     CUcontext m_deviceCtx1      = nullptr;
 
 public:
-    FieldWorkerNvLinkRwBytes(CudaWorkerDevice_t cudaDevice, unsigned int fieldId, std::string peerBusId)
-        : FieldWorkerBase(cudaDevice, fieldId)
+    FieldWorkerNvLinkRwBytes(CudaWorkerDevice_t cudaDevice,
+                             CudaOpsAnyPtr cudaOps,
+                             unsigned int fieldId,
+                             std::string peerBusId)
+        : FieldWorkerBase(cudaDevice, cudaOps, fieldId)
     {
         m_peerBusId = std::move(peerBusId);
         CUresult cuSt;
         CUdevice peerCuDevice = 0;
 
         /* Find the corresponding cuda device to our peer DCGM device */
-        cuSt = cuDeviceGetByPCIBusId(&peerCuDevice, m_peerBusId.c_str());
+        cuSt = m_cudaOps->cuDeviceGetByPCIBusId(&peerCuDevice, m_peerBusId.c_str());
         if (cuSt)
         {
             std::string s = fmt::format("cuDeviceGetByPCIBusId returned {} for busId {}", cuSt, m_peerBusId);
@@ -665,7 +671,7 @@ public:
 
         /* Create a context on the other GPU */
 
-        cuSt = cuCtxCreate_v2(&m_deviceCtx1, CU_CTX_SCHED_BLOCKING_SYNC, peerCuDevice);
+        cuSt = m_cudaOps->cuCtxCreate_v2(&m_deviceCtx1, CU_CTX_SCHED_BLOCKING_SYNC, peerCuDevice);
         if (cuSt)
         {
             std::string s = fmt::format("cuCtxCreate_v2 returned {}", cuSt);
@@ -673,10 +679,10 @@ public:
             throw std::runtime_error(s);
         }
 
-        cuCtxSetCurrent(m_cudaDevice.m_context);
+        m_cudaOps->cuCtxSetCurrent(m_cudaDevice.m_context);
 
         DCGM_LOG_DEBUG << "Allocating device 0 mem";
-        cuSt = cuMemAlloc_v2(&m_deviceMem0, m_bufferSize);
+        cuSt = m_cudaOps->cuMemAlloc_v2(&m_deviceMem0, m_bufferSize);
         if (cuSt)
         {
             std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
@@ -684,12 +690,13 @@ public:
             throw std::runtime_error(s);
         }
         DCGM_LOG_DEBUG << "Clearing device 0 mem";
-        cuMemsetD32(m_deviceMem0, 0, m_bufferSize);
+        size_t const bufferU32Count = m_bufferSize / sizeof(uint32_t);
+        m_cudaOps->cuMemsetD32_v2(m_deviceMem0, 0, bufferU32Count);
 
-        cuCtxSetCurrent(m_deviceCtx1);
+        m_cudaOps->cuCtxSetCurrent(m_deviceCtx1);
 
         DCGM_LOG_DEBUG << "Allocating device 1 mem";
-        cuSt = cuMemAlloc_v2(&m_deviceMem1, m_bufferSize);
+        cuSt = m_cudaOps->cuMemAlloc_v2(&m_deviceMem1, m_bufferSize);
         if (cuSt)
         {
             std::string s = fmt::format("cuMemAlloc_v2 returned {}", cuSt);
@@ -698,11 +705,11 @@ public:
         }
 
         DCGM_LOG_DEBUG << "Clearing device 1 mem";
-        cuMemsetD32(m_deviceMem1, 0, m_bufferSize);
+        m_cudaOps->cuMemsetD32_v2(m_deviceMem1, 0, bufferU32Count);
 
-        cuCtxSetCurrent(m_cudaDevice.m_context);
+        m_cudaOps->cuCtxSetCurrent(m_cudaDevice.m_context);
 
-        cuSt = cuCtxEnablePeerAccess(m_deviceCtx1, 0);
+        cuSt = m_cudaOps->cuCtxEnablePeerAccess(m_deviceCtx1, 0);
         if (cuSt)
         {
             std::string s = fmt::format("cuCtxEnablePeerAccess returned {}", cuSt);
@@ -715,19 +722,19 @@ public:
     {
         if (m_deviceMem0 != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree_v2(m_deviceMem0);
+            m_cudaOps->cuMemFree_v2(m_deviceMem0);
             m_deviceMem0 = (CUdeviceptr_v2) nullptr;
         }
 
         if (m_deviceMem1 != (CUdeviceptr_v2) nullptr)
         {
-            cuMemFree_v2(m_deviceMem1);
+            m_cudaOps->cuMemFree_v2(m_deviceMem1);
             m_deviceMem1 = (CUdeviceptr_v2) nullptr;
         }
 
         if (m_deviceCtx1 != (CUcontext) nullptr)
         {
-            cuCtxDestroy(m_deviceCtx1);
+            m_cudaOps->cuCtxDestroy_v2(m_deviceCtx1);
             m_deviceCtx1 = (CUcontext) nullptr;
         }
     }
@@ -754,11 +761,11 @@ public:
             {
                 if (m_fieldId == DCGM_FI_PROF_NVLINK_RX_BYTES)
                 {
-                    cuSt = cuMemcpyDtoD_v2(m_deviceMem0, m_deviceMem1, m_bufferSize);
+                    cuSt = m_cudaOps->cuMemcpyDtoD_v2(m_deviceMem0, m_deviceMem1, m_bufferSize);
                 }
                 else /* DCGM_FI_PROF_NVLINK_TX_BYTES */
                 {
-                    cuSt = cuMemcpyDtoD_v2(m_deviceMem1, m_deviceMem0, m_bufferSize);
+                    cuSt = m_cudaOps->cuMemcpyDtoD_v2(m_deviceMem1, m_deviceMem0, m_bufferSize);
                 }
 
                 if (cuSt)
@@ -790,12 +797,17 @@ class FieldWorkerTensorActivity : public FieldWorkerBase
 #if (CUDA_VERSION_USED >= 11)
     cublasLtHandle_t m_cublasLtHandle = nullptr;
 #endif
+    CublasOpsAnyPtr m_cublasOps; //!< cuBLAS API interface.
 
     double m_flopsPerOp = 0.0; /* How many flops are in a single matrix multiply? */
 
 public:
-    FieldWorkerTensorActivity(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
-        : FieldWorkerBase(cudaDevice, fieldId)
+    FieldWorkerTensorActivity(CudaWorkerDevice_t cudaDevice,
+                              CudaOpsAnyPtr cudaOps,
+                              CublasOpsAnyPtr cublasOps,
+                              unsigned int fieldId)
+        : FieldWorkerBase(cudaDevice, cudaOps, fieldId)
+        , m_cublasOps(cublasOps)
     {
         m_arrayDim = m_defaultArrayDim;
 
@@ -825,9 +837,9 @@ public:
         size_t arrayCount    = m_arrayDim * m_arrayDim;
         size_t arrayByteSize = valueSize * arrayCount;
 
-        cublasStatus_t cubSt = CublasProxy::CublasCreate(&m_cublasHandle);
+        cublasStatus_t cubSt = m_cublasOps->cublasCreate_v2(&m_cublasHandle);
 #if (CUDA_VERSION_USED >= 11)
-        auto cubLtSt = CublasProxy::CublasLtCreate(&m_cublasLtHandle);
+        auto cubLtSt = m_cublasOps->cublasLtCreate(&m_cublasLtHandle);
 #endif
 
         if (cubSt != CUBLAS_STATUS_SUCCESS)
@@ -847,9 +859,9 @@ public:
 #endif
 
         CUresult cuSt, cuSt2, cuSt3;
-        cuSt  = cuMemAlloc_v2(&m_deviceA, arrayByteSize);
-        cuSt2 = cuMemAlloc_v2(&m_deviceB, arrayByteSize);
-        cuSt3 = cuMemAlloc_v2(&m_deviceC, arrayByteSize);
+        cuSt  = m_cudaOps->cuMemAlloc_v2(&m_deviceA, arrayByteSize);
+        cuSt2 = m_cudaOps->cuMemAlloc_v2(&m_deviceB, arrayByteSize);
+        cuSt3 = m_cudaOps->cuMemAlloc_v2(&m_deviceC, arrayByteSize);
         if (cuSt || cuSt2 || cuSt3)
         {
             std::string s = fmt::format("cuMemAlloc_v2 returned  {} {} {} for {}", cuSt, cuSt2, cuSt3, arrayByteSize);
@@ -925,15 +937,16 @@ public:
         }
 
         /* Just zero the output array */
-        cuMemsetD32_v2(m_deviceC, 0, arrayByteSize);
+        size_t const arrayU32Count = arrayByteSize / sizeof(uint32_t);
+        m_cudaOps->cuMemsetD32_v2(m_deviceC, 0, arrayU32Count);
 
         /* Copy A and B to the device */
-        cuSt  = cuMemcpyHtoD_v2(m_deviceA, m_hostA, arrayByteSize);
-        cuSt2 = cuMemcpyHtoD_v2(m_deviceB, m_hostB, arrayByteSize);
+        cuSt  = m_cudaOps->cuMemcpyHtoD_v2(m_deviceA, m_hostA, arrayByteSize);
+        cuSt2 = m_cudaOps->cuMemcpyHtoD_v2(m_deviceB, m_hostB, arrayByteSize);
         if (cuSt || cuSt2)
         {
             unsigned int apiVersion = 0;
-            cuCtxGetApiVersion(nullptr, &apiVersion);
+            m_cudaOps->cuCtxGetApiVersion(nullptr, &apiVersion);
 
             std::string s = fmt::format(
                 "cuMemcpyHtoD_v2 failed {} {}. Currently bound context API version: {}", cuSt, cuSt2, apiVersion);
@@ -945,14 +958,14 @@ public:
         /* Should we enable tensor cores? */
         if (m_fieldId == DCGM_FI_PROF_TENSOR_UTIL_RATIO)
         {
-            cubSt = CublasProxy::CublasSetMathMode(m_cublasHandle, CUBLAS_TENSOR_OP_MATH);
+            cubSt = m_cublasOps->cublasSetMathMode(m_cublasHandle, CUBLAS_TENSOR_OP_MATH);
         }
         else
         {
 #if (CUDA_VERSION_USED < 11)
-            cubSt = CublasProxy::CublasSetMathMode(m_cublasHandle, CUBLAS_DEFAULT_MATH);
+            cubSt = m_cublasOps->cublasSetMathMode(m_cublasHandle, CUBLAS_DEFAULT_MATH);
 #else
-            cubSt = CublasProxy::CublasSetMathMode(m_cublasHandle, CUBLAS_PEDANTIC_MATH);
+            cubSt = m_cublasOps->cublasSetMathMode(m_cublasHandle, CUBLAS_PEDANTIC_MATH);
 #endif
         }
         if (cubSt != CUBLAS_STATUS_SUCCESS)
@@ -966,21 +979,21 @@ public:
     ~FieldWorkerTensorActivity()
     {
         /* Wait for any kernels to finish */
-        cuCtxSynchronize();
+        m_cudaOps->cuCtxSynchronize();
 
         if (m_deviceA != 0)
         {
-            cuMemFree_v2(m_deviceA);
+            m_cudaOps->cuMemFree_v2(m_deviceA);
         }
 
         if (m_deviceB != 0)
         {
-            cuMemFree_v2(m_deviceB);
+            m_cudaOps->cuMemFree_v2(m_deviceB);
         }
 
         if (m_deviceC != 0)
         {
-            cuMemFree_v2(m_deviceC);
+            m_cudaOps->cuMemFree_v2(m_deviceC);
         }
 
         if (m_hostA != nullptr)
@@ -994,13 +1007,13 @@ public:
 
         if (m_cublasHandle != nullptr)
         {
-            CublasProxy::CublasDestroy(m_cublasHandle);
+            m_cublasOps->cublasDestroy_v2(m_cublasHandle);
         }
 
 #if (CUDA_VERSION_USED >= 11)
         if (m_cublasLtHandle != nullptr)
         {
-            CublasProxy::CublasLtDestroy(m_cublasLtHandle);
+            m_cublasOps->cublasLtDestroy(m_cublasLtHandle);
         }
 #endif
     }
@@ -1044,25 +1057,26 @@ public:
                 switch (m_fieldId)
                 {
                     case DCGM_FI_PROF_FP32_UTIL_RATIO:
-                        cubSt = CublasProxy::CublasSgemm(m_cublasHandle,
-                                                         CUBLAS_OP_N,
-                                                         CUBLAS_OP_N,
-                                                         m_arrayDim,
-                                                         m_arrayDim,
-                                                         m_arrayDim,
-                                                         &floatAlpha,
-                                                         (float *)m_deviceA,
-                                                         m_arrayDim,
-                                                         (float *)m_deviceB,
-                                                         m_arrayDim,
-                                                         &floatBeta,
-                                                         (float *)m_deviceC,
-                                                         m_arrayDim);
+                        cubSt = m_cublasOps->cublasSgemm_v2(m_cublasHandle,
+                                                            CUBLAS_OP_N,
+                                                            CUBLAS_OP_N,
+                                                            m_arrayDim,
+                                                            m_arrayDim,
+                                                            m_arrayDim,
+                                                            &floatAlpha,
+                                                            (float *)m_deviceA,
+                                                            m_arrayDim,
+                                                            (float *)m_deviceB,
+                                                            m_arrayDim,
+                                                            &floatBeta,
+                                                            (float *)m_deviceC,
+                                                            m_arrayDim);
                         break;
 
                     case DCGM_FI_PROF_FP64_UTIL_RATIO:
 #if (CUDA_VERSION_USED >= 11)
-                        cubLtSt = DcgmNs::DcgmDgemm(m_cublasLtHandle,
+                        cubLtSt = DcgmNs::DcgmDgemm(m_cublasOps,
+                                                    m_cublasLtHandle,
                                                     CUBLAS_OP_N,
                                                     CUBLAS_OP_N,
                                                     m_arrayDim,
@@ -1077,26 +1091,26 @@ public:
                                                     (double *)m_deviceC,
                                                     m_arrayDim);
 #else
-                        cubSt = CublasProxy::CublasDgemm(m_cublasHandle,
-                                                         CUBLAS_OP_N,
-                                                         CUBLAS_OP_N,
-                                                         m_arrayDim,
-                                                         m_arrayDim,
-                                                         m_arrayDim,
-                                                         &alpha,
-                                                         (double *)m_deviceA,
-                                                         m_arrayDim,
-                                                         (double *)m_deviceB,
-                                                         m_arrayDim,
-                                                         &beta,
-                                                         (double *)m_deviceC,
-                                                         m_arrayDim);
+                        cubSt = m_cublasOps->cublasDgemm_v2(m_cublasHandle,
+                                                            CUBLAS_OP_N,
+                                                            CUBLAS_OP_N,
+                                                            m_arrayDim,
+                                                            m_arrayDim,
+                                                            m_arrayDim,
+                                                            &alpha,
+                                                            (double *)m_deviceA,
+                                                            m_arrayDim,
+                                                            (double *)m_deviceB,
+                                                            m_arrayDim,
+                                                            &beta,
+                                                            (double *)m_deviceC,
+                                                            m_arrayDim);
 #endif
                         break;
 
                     case DCGM_FI_PROF_FP16_UTIL_RATIO:
                     case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
-                        cubSt = CublasProxy::CublasHgemm(m_cublasHandle,
+                        cubSt = m_cublasOps->cublasHgemm(m_cublasHandle,
                                                          CUBLAS_OP_N,
                                                          CUBLAS_OP_N,
                                                          m_arrayDim,
@@ -1134,7 +1148,7 @@ public:
                 opsInDutyCycle++;
 
                 /* Wait for any kernels to finish */
-                cuCtxSynchronize();
+                m_cudaOps->cuCtxSynchronize();
             }
         }
 
@@ -1147,8 +1161,8 @@ public:
 class FieldWorkerDataTypeActivity : public FieldWorkerBase
 {
 public:
-    FieldWorkerDataTypeActivity(CudaWorkerDevice_t cudaDevice, unsigned int fieldId)
-        : FieldWorkerBase(cudaDevice, fieldId)
+    FieldWorkerDataTypeActivity(CudaWorkerDevice_t cudaDevice, CudaOpsAnyPtr cudaOps, unsigned int fieldId)
+        : FieldWorkerBase(cudaDevice, cudaOps, fieldId)
     {}
 
     ~FieldWorkerDataTypeActivity() = default;
@@ -1169,7 +1183,7 @@ public:
         RunDoWorkKernel(numSms, threadsPerSm, dutyCycleLengthMs.count() * 1000);
 
         /* Wait for this kernel to finish. This will block for m_dutyCycleLengthMs until the kernel finishes */
-        cuCtxSynchronize();
+        m_cudaOps->cuCtxSynchronize();
 
         m_achievedLoad = loadTarget;
     }

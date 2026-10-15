@@ -1,0 +1,95 @@
+[build-dependencies.rustversion-compat]
+package = "rustversion"
+version = "1.0.6"
+
+[dependencies.cfg-if]
+version = "1.0.0"
+
+[dependencies.once_cell]
+default-features = false
+version = "1.12"
+
+[dependencies.serde]
+optional = true
+version = "1.0"
+
+[dependencies.serde_json]
+optional = true
+version = "1.0"
+
+[dependencies.wasm-bindgen-macro]
+version = "=0.2.126"
+
+[dependencies.wasm-bindgen-shared]
+version = "=0.2.126"
+
+[dev-dependencies.once_cell]
+version = "1"
+
+[features]
+default = ["std"]
+enable-interning = ["std"]
+gg-alloc = []
+msrv = []
+rustversion = []
+serde-serialize = ["serde", "serde_json", "std"]
+spans = []
+std = []
+strict-macro = ["wasm-bindgen-macro/strict-macro"]
+xxx_debug_only_print_generated_code = []
+
+[lib]
+path = "src/lib.rs"
+
+[lints.clippy]
+large_enum_variant = "allow"
+new_without_default = "allow"
+overly_complex_bool_expr = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+uninlined_format_args = "warn"
+
+[lints.rust]
+unused_lifetimes = "warn"
+
+[lints.rust.unexpected_cfgs]
+check-cfg = ["cfg(wasm_bindgen_unstable_test_coverage)", "cfg(wasm_bindgen_use_js_sys)", "cfg(xxx_debug_only_print_generated_code)", "cfg(legacy_eh)"]
+level = "warn"
+priority = 0
+
+[package]
+authors = ["The wasm-bindgen Developers"]
+autobenches = false
+autobins = false
+autoexamples = false
+autolib = false
+autotests = false
+categories = ["wasm"]
+description = """
+Easy support for interacting between JS and Rust.
+"""
+documentation = "https://docs.rs/wasm-bindgen"
+edition = "2021"
+homepage = "https://wasm-bindgen.github.io/wasm-bindgen"
+include = ["/build.rs", "/LICENSE-*", "/src"]
+license = "MIT OR Apache-2.0"
+name = "wasm-bindgen"
+readme = "README.md"
+repository = "https://github.com/wasm-bindgen/wasm-bindgen"
+rust-version = "1.77"
+version = "0.2.126"
+
+[package.metadata.docs.rs]
+features = ["serde-serialize"]
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.paste]
+version = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.serde_derive]
+version = "1.0"
+
+[target.'cfg(target_arch = "wasm64")'.dev-dependencies.paste]
+version = "1"
+
+[target.'cfg(target_arch = "wasm64")'.dev-dependencies.serde_derive]
+version = "1.0"

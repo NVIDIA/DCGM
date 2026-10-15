@@ -16,7 +16,10 @@
 
 #include <algorithm>
 #include <catch2/catch_all.hpp>
+#include <cstddef>
 #include <cstring>
+#include <fmt/format.h>
+#include <limits>
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
@@ -101,6 +104,18 @@ TEST_CASE("dcgmStrToLower")
     }
 }
 
+TEST_CASE("EqualsAsciiCaseInsensitive")
+{
+    CHECK(DcgmNs::EqualsAsciiCaseInsensitive("false", "false"));
+    CHECK(DcgmNs::EqualsAsciiCaseInsensitive("FALSE", "false"));
+    CHECK(DcgmNs::EqualsAsciiCaseInsensitive("Off", "oFf"));
+    CHECK(DcgmNs::EqualsAsciiCaseInsensitive("GPU-ABC_xyz09", "gpu-abc_xyz09"));
+    CHECK(DcgmNs::EqualsAsciiCaseInsensitive("", ""));
+
+    CHECK_FALSE(DcgmNs::EqualsAsciiCaseInsensitive("false", "false "));
+    CHECK_FALSE(DcgmNs::EqualsAsciiCaseInsensitive("true", "trua"));
+}
+
 TEST_CASE("strictStrToInt")
 {
     using namespace DcgmNs;
@@ -183,6 +198,91 @@ TEST_CASE("ParseRangeString")
 
     ret = ParseRangeString("1-5$", indices);
     REQUIRE(ret == DCGM_ST_BADPARAM);
+}
+
+TEST_CASE("ParseRangeString respects maxCount before expansion")
+{
+    using namespace DcgmNs;
+
+    SECTION("Exactly at default limit expands")
+    {
+        STATIC_REQUIRE(DCGM_GROUP_MAX_ENTITIES_V2 > 0);
+        std::vector<unsigned int> indices;
+        auto const atLimit = fmt::format("0-{}", DCGM_GROUP_MAX_ENTITIES_V2 - 1);
+        REQUIRE(ParseRangeString(atLimit, indices) == DCGM_ST_OK);
+        REQUIRE(indices.size() == DCGM_GROUP_MAX_ENTITIES_V2);
+        CHECK(indices.front() == 0);
+        CHECK(indices.back() == DCGM_GROUP_MAX_ENTITIES_V2 - 1);
+    }
+
+    SECTION("One over default limit rejects without materializing")
+    {
+        std::vector<unsigned int> indices;
+        auto const oneOver = fmt::format("0-{}", DCGM_GROUP_MAX_ENTITIES_V2);
+        REQUIRE(ParseRangeString(oneOver, indices) == DCGM_ST_MAX_LIMIT);
+        CHECK(indices.empty());
+    }
+
+    SECTION("UINT_MAX span rejects without materializing")
+    {
+        std::vector<unsigned int> indices;
+        REQUIRE(ParseRangeString("0-4294967295", indices) == DCGM_ST_MAX_LIMIT);
+        CHECK(indices.empty());
+    }
+
+    SECTION("Endpoints above UINT_MAX reject without truncating")
+    {
+        std::vector<unsigned int> indices;
+        REQUIRE(ParseRangeString("0-4294967296", indices) == DCGM_ST_BADPARAM);
+        CHECK(indices.empty());
+
+        REQUIRE(ParseRangeString("4294967296", indices) == DCGM_ST_BADPARAM);
+        CHECK(indices.empty());
+    }
+
+    SECTION("UINT_MAX singleton is accepted when budget allows")
+    {
+        std::vector<unsigned int> indices;
+        REQUIRE(ParseRangeString("4294967295", indices) == DCGM_ST_OK);
+        REQUIRE(indices.size() == 1);
+        CHECK(indices[0] == std::numeric_limits<unsigned int>::max());
+    }
+
+    SECTION("Aggregate comma segments share one budget")
+    {
+        std::vector<unsigned int> indices;
+        // 0-512 => 513 values; 513-1024 => 512 values; total 1025 > 1024
+        REQUIRE(ParseRangeString("0-512,513-1024", indices) == DCGM_ST_MAX_LIMIT);
+        CHECK(indices.size() == 513);
+    }
+
+    SECTION("Pre-populated vector counts toward the budget")
+    {
+        std::vector<unsigned int> indices(1000, 0u);
+        REQUIRE(ParseRangeString("0-30", indices) == DCGM_ST_MAX_LIMIT);
+        CHECK(indices.size() == 1000);
+    }
+
+    SECTION("Caller-supplied maxCount is honored")
+    {
+        std::vector<unsigned int> indices;
+        REQUIRE(ParseRangeString("0-2", indices, 3) == DCGM_ST_OK);
+        REQUIRE(indices.size() == 3);
+
+        indices.clear();
+        REQUIRE(ParseRangeString("0-2", indices, 2) == DCGM_ST_MAX_LIMIT);
+        CHECK(indices.empty());
+    }
+
+    SECTION("maxCount zero rejects any expansion")
+    {
+        std::vector<unsigned int> indices;
+        REQUIRE(ParseRangeString("0", indices, 0) == DCGM_ST_MAX_LIMIT);
+        CHECK(indices.empty());
+
+        REQUIRE(ParseRangeString("0-0", indices, 0) == DCGM_ST_MAX_LIMIT);
+        CHECK(indices.empty());
+    }
 }
 
 TEST_CASE("TokenizeStringQuoted")

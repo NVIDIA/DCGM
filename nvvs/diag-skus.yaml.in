@@ -4562,55 +4562,6 @@ skus:
       is_allowed: true
     pulse_test:
       is_allowed: true
-  - name: GR100 PCIe Faber # NOTE: we need to re-test with newer CUDA at QS
-    # Subsystem is 2275
-    id: '3021'
-    targeted_power:
-      is_allowed: false
-      starting_matrix_dim: 1024
-      target_power: 2299.00
-      use_dgemv: true
-      use_dgemm: false
-      ops_per_requeue: 2
-      cuda_streams_per_gpu: 24
-      enable_fp16_gemm: true
-      fp64_gemm_ratio: 0.6
-      fp16_gemm_ratio: 0.4
-    targeted_stress:
-      is_allowed: true
-      use_dgemm: false
-      #  Copied from sm stress target
-      target_stress: 11755
-    sm_stress:
-      is_allowed: true
-      # dcgmproftester -t 1007 measures ~15600 Multiply by .75 to get 11755
-      target_stress: 11755
-      use_dgemm: false
-    pcie:
-      is_allowed: true
-      h2d_d2h_single_pinned:
-        min_pci_generation: 3.0
-        min_pci_width: 16.0
-      h2d_d2h_single_unpinned:
-        min_pci_generation: 3.0
-        min_pci_width: 16.0
-    memory:
-      is_allowed: true
-      # l1cache_size_kb_per_sm: 164.0 ## This can vary and is an example
-    diagnostic:
-      is_allowed: true
-      matrix_dim: 8192.0
-      always_use_tensor: true
-    memory_bandwidth:
-      is_allowed: true
-      # dcgmproftester -t 1005 shows 5395GB or 5395833. Multiply by .75 to get ~4046800
-      minimum_bandwidth: 4046800
-    pulse_test:
-      is_allowed: false
-    nvbandwidth:
-      is_allowed: true
-    memtest:
-      num_chunks: 8
   - name: Galaxy TS2 # NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition
     id: '2bb4'
     targeted_power:

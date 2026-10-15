@@ -41,13 +41,30 @@
 #ifndef __MEMTEST_H__
 #define __MEMTEST_H__
 
+#include "DcgmRecorder.h"
 #include "MemoryChunkManager.h"
 #include "memtest_wrapper.h"
 #include "misc.h"
+#include <CudaCommonAnyPtr.hpp>
+#include <CudaOpsAnyPtr.hpp>
 #include <DcgmThread/DcgmThread.h>
 #include <NvvsDeviceList.h>
 
 #include <cuda.h>
+
+#include <array>
+
+struct MemtestGpuResults
+{
+    std::array<unsigned int, DCGM_MAX_NUM_DEVICES> errors {};
+    std::array<unsigned int, DCGM_MAX_NUM_DEVICES> skipped {};
+
+    void Reset()
+    {
+        errors.fill(0);
+        skipped.fill(0);
+    }
+};
 
 /*****************************************************************************/
 /* Struct for a single memtest device */
@@ -122,7 +139,13 @@ using memtest_device_p = memtest_device_t *;
 class Memtest
 {
 public:
-    Memtest(TestParameters *testParameters, MemtestPlugin *plugin);
+    Memtest(TestParameters *testParameters,
+            MemtestPlugin *plugin,
+            dcgmHandle_t handle,
+            DcgmNs::DcgmOpsAnyPtr dcgmOps,
+            CudaOpsAnyPtr cudaOps,
+            CudaCommonAnyPtr cudaCommon,
+            NvvsCommon *nvvsCommon);
     ~Memtest();
 
     /*************************************************************************/
@@ -140,7 +163,7 @@ public:
      *        <0 on plugin / test initialization failure
      *
      */
-    int Run(dcgmHandle_t handle, const dcgmDiagPluginEntityList_v1 &entityList);
+    int Run(const dcgmDiagPluginEntityList_v1 &entityList);
 
     /*************************************************************************/
 
@@ -215,6 +238,11 @@ private:
 
     MemtestPlugin *m_plugin;          /* Which plugin we're running as part of. This will be
                                   a pointer to a Memtest instance */
+    dcgmHandle_t m_handle;            /* DCGM connection handle */
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps;  /* DCGM API interface */
+    CudaOpsAnyPtr m_cudaOps;          //!< CUDA API interface.
+    CudaCommonAnyPtr m_cudaCommon;    /* CUDA error/reporting helper */
+    NvvsCommon *m_nvvsCommon;         /* NVVS common state */
     TestParameters *m_testParameters; /* Parameters for this test, passed in from
                                          the framework. DO NOT FREE */
 
@@ -225,6 +253,7 @@ private:
 
     std::unique_ptr<DcgmRecorder> m_dcgmRecorder;
     std::vector<memtest_device_t> m_device; /* Per-device data */
+    MemtestGpuResults m_gpuResults;
 
     // Allows MemtestTest to access private members for unit testing
     friend class MemtestTest;
@@ -243,13 +272,22 @@ private:
     bool m_failGpu;                     /* Whether to fail this gpu, set via env for testing */
     size_t m_numChunks;                 /* Number of memory chunks to use */
     MemoryChunkManager m_memoryManager; /* RAII memory chunk manager */
+    MemtestGpuResults &m_gpuResults;    /* Shared per-run GPU result state */
+    CudaOpsAnyPtr m_cudaOps;            //!< CUDA API interface.
+    CudaCommonAnyPtr m_cudaCommon;      /* CUDA error/reporting helper */
 
     /*************************************************************************/
     int RunTests(MemoryChunkManager const &memoryManager);
 
 public:
     /*************************************************************************/
-    MemtestWorker(memtest_device_p device, TestParameters *tp, MemtestPlugin &plugin, DcgmRecorder &dr);
+    MemtestWorker(memtest_device_p device,
+                  TestParameters *tp,
+                  MemtestPlugin &plugin,
+                  DcgmRecorder &dr,
+                  MemtestGpuResults &gpuResults,
+                  CudaOpsAnyPtr cudaOps,
+                  CudaCommonAnyPtr cudaCommon);
 
     /*************************************************************************/
     virtual ~MemtestWorker() /* Virtual to satisfy ancient compiler */

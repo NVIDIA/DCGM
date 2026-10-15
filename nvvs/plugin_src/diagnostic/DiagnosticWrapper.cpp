@@ -16,10 +16,20 @@
 
 #include "DcgmStringHelpers.h"
 #include "dcgm_fields.h"
+#include <DcgmOps.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <DiagnosticPlugin.h>
 #include <PluginInterface.h>
 #include <PluginLib.h>
 #include <PluginStrings.h>
+
+#include <CublasOps.hpp>
+#include <CublasOpsAnyUniquePtr.hpp>
+#include <CudaCommon.h>
+#include <CudaCommonAnyUniquePtr.hpp>
+#include <CudaOps.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <memory>
 
 extern "C" {
 
@@ -81,14 +91,22 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              NvvsCommonPtr nvvsCommon,
                               HangDetectMonitor *monitor)
 {
-    GpuBurnPlugin *gbp = new GpuBurnPlugin(handle);
-    *userData          = gbp;
+    CudaOpsAnyUniquePtr cudaOps       = std::make_unique<CudaOps>();
+    CudaCommonAnyUniquePtr cudaCommon = std::make_unique<CudaCommon>(cudaOps.AsAnyPtr());
+    auto gbp                          = std::make_unique<GpuBurnPlugin>(handle,
+                                                                        std::make_unique<DcgmNs::DcgmOps>(),
+                                                                        std::move(cudaOps),
+                                                                        std::make_unique<CublasOps>(),
+                                                                        std::move(cudaCommon),
+                                                                        nvvsCommon);
 
     gbp->SetPluginAttr(pluginAttr);
     gbp->SetHangDetectMonitor(monitor);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, gbp->GetDisplayName());
+    *userData = gbp.release();
     return DCGM_ST_OK;
 }
 

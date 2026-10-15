@@ -138,8 +138,6 @@
 /usr/lib/debug/usr
 /usr/lib/debug/usr/bin
 /usr/lib/debug/usr/bin/dcgmproftester11-<PACKAGEVERSION>.aarch64.debug
-/usr/lib/debug/usr/lib64
-/usr/lib/debug/usr/lib64/libdcgm_cublas_proxy11.so.<SOFTWAREVERSION>-<PACKAGEVERSION>.aarch64.debug
 /usr/lib/debug/usr/libexec
 /usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>
 /usr/lib/debug/usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/plugins

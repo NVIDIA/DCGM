@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 #include "CommandLineParser.h"
+
 #include "dcgm_agent.h"
 #include "timelib.h"
 
 #include <DcgmLogging.h>
+#include <DcgmOps.h>
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmSettings.h>
 
 #include <cerrno>
@@ -54,6 +57,7 @@ void InstallCtrlHandler()
 int main(int argc, char *argv[])
 {
     dcgmReturn_t result = DCGM_ST_OK;
+    DcgmNs::DcgmOps dcgmOps;
 
     const std::string logFile = GetLogFilenameFromArgAndEnv("", DCGM_LOGGING_DEFAULT_DCGMI_FILE, DCGM_ENV_LOG_PREFIX);
 
@@ -71,7 +75,7 @@ int main(int argc, char *argv[])
 
     try
     {
-        result = CommandLineParser::ProcessCommandLine(argc, argv);
+        result = CommandLineParser::ProcessCommandLine(argc, argv, &dcgmOps);
     }
     catch (std::exception &e)
     {
@@ -79,6 +83,6 @@ int main(int argc, char *argv[])
         result = static_cast<dcgmReturn_t>(-2);
     }
 
-    dcgmShutdown();
+    dcgmOps.dcgmShutdown();
     return result;
 }

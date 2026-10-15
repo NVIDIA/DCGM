@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "DcgmLogging.h"
+#include "DcgmOpsAnyPtr.hpp"
 #include "DcgmRecorder.h"
 #include "DcgmUtilities.h"
 #include "NvvsCommon.h"
@@ -43,11 +44,96 @@ errorType_t standardErrorFields[] = { { DCGM_FI_DEV_ECC_SBE_VOL_TOTAL, TS_STR_SB
                                       { DCGM_FI_DEV_SXID_FATAL_ERROR, nullptr },
                                       { 0, nullptr } };
 
-unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP_CELSIUS,    DCGM_FI_DEV_GPU_UTIL_RATIO,
+unsigned short standardInfoFields[] = { DCGM_FI_DEV_GPU_TEMP_CELSIUS,    DCGM_FI_DEV_GPU_UTIL,
                                         DCGM_FI_DEV_BOARD_POWER_WATTS,   DCGM_FI_DEV_SM_CLOCK,
                                         DCGM_FI_DEV_MEM_CLOCK,           DCGM_FI_DEV_POWER_VIOLATION,
                                         DCGM_FI_DEV_THERMAL_VIOLATION,   DCGM_FI_DEV_CLOCKS_EVENT_REASONS,
                                         DCGM_FI_DEV_MEMORY_TEMP_CELSIUS, 0 };
+
+namespace
+{
+bool JsonValueContainsPayload(Json::Value const &value)
+{
+    if (value.isNull())
+    {
+        return false;
+    }
+
+    if (value.isArray())
+    {
+        for (auto const &item : value)
+        {
+            if (JsonValueContainsPayload(item))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (value.isObject())
+    {
+        for (auto iter = value.begin(); iter != value.end(); ++iter)
+        {
+            if (JsonValueContainsPayload(*iter))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    return true;
+}
+
+bool GpuStatsContainsPayload(Json::Value const &gpuStats)
+{
+    for (auto iter = gpuStats.begin(); iter != gpuStats.end(); ++iter)
+    {
+        if (iter.key().asString() == "gpuId")
+        {
+            continue;
+        }
+
+        if (JsonValueContainsPayload(*iter))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool JsonStatsContainsPayload(Json::Value const &stats)
+{
+    if (!stats.isObject())
+    {
+        return JsonValueContainsPayload(stats);
+    }
+
+    for (auto iter = stats.begin(); iter != stats.end(); ++iter)
+    {
+        if (iter.key().asString() == GPUS)
+        {
+            for (auto const &gpuStats : *iter)
+            {
+                if (GpuStatsContainsPayload(gpuStats))
+                {
+                    return true;
+                }
+            }
+            continue;
+        }
+
+        if (JsonValueContainsPayload(*iter))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+} //namespace
 
 dcgmReturn_t DcgmRecorderBase::GetCurrentFieldValue(unsigned int, unsigned short, dcgmFieldValue_v2 &, unsigned int)
 {
@@ -64,41 +150,29 @@ std::string DcgmRecorderBase::GetGpuUtilizationNote(unsigned int, timelib64_t)
     return "";
 }
 
-DcgmRecorder::DcgmRecorder()
-    : m_fieldIds()
+DcgmRecorder::DcgmRecorder(dcgmHandle_t handle, DcgmNs::DcgmOpsAnyPtr dcgmOps, NvvsCommon *nvvsCommon)
+    : m_nvvsCommon(nvvsCommon)
+    , m_fieldIds()
     , m_gpuIds()
     , m_fieldGroupId(0)
-    , m_dcgmHandle()
-    , m_dcgmGroup()
-    , m_dcgmSystem()
+    , m_dcgmHandle(dcgmOps, handle)
+    , m_dcgmOps(dcgmOps)
+    , m_dcgmGroup(m_dcgmOps)
+    , m_dcgmSystem(m_dcgmOps, handle)
     , m_valuesHolder()
     , m_nextValuesSinceTs(0)
     , m_watchFrequency(defaultFrequency)
-
 {}
 
-DcgmRecorder::DcgmRecorder(dcgmHandle_t handle)
-    : m_fieldIds()
-    , m_gpuIds()
-    , m_fieldGroupId(0)
-    , m_dcgmHandle(handle)
-    , m_dcgmGroup()
-    , m_dcgmSystem()
-    , m_valuesHolder()
-    , m_nextValuesSinceTs(0)
-    , m_watchFrequency(defaultFrequency)
-
-{
-    m_dcgmSystem.Init(handle);
-}
-
 DcgmRecorder::DcgmRecorder(DcgmRecorder &&other) noexcept
-    : m_fieldIds(other.m_fieldIds)
+    : m_nvvsCommon(other.m_nvvsCommon)
+    , m_fieldIds(other.m_fieldIds)
     , m_gpuIds(other.m_gpuIds)
     , m_fieldGroupId(other.m_fieldGroupId)
     , m_dcgmHandle(std::move(other.m_dcgmHandle))
+    , m_dcgmOps(std::move(other.m_dcgmOps))
     , m_dcgmGroup(std::move(other.m_dcgmGroup))
-    , m_dcgmSystem(other.m_dcgmSystem)
+    , m_dcgmSystem(std::move(other.m_dcgmSystem))
     , m_valuesHolder(other.m_valuesHolder)
     , m_nextValuesSinceTs(other.m_nextValuesSinceTs)
     , m_watchFrequency(other.m_watchFrequency)
@@ -168,26 +242,6 @@ void DcgmRecorder::GetErrorString(dcgmReturn_t ret, std::string &err)
     err = (tmp == nullptr) ? fmt::format("Unknown error from DCGM: {}", ret) : tmp;
 }
 
-dcgmReturn_t DcgmRecorder::Init(const std::string &hostname)
-{
-    dcgmReturn_t ret;
-
-    ret = m_dcgmHandle.ConnectToDcgm(hostname);
-
-    if (ret == DCGM_ST_OK)
-    {
-        m_dcgmSystem.Init(m_dcgmHandle.GetHandle());
-    }
-
-    return ret;
-}
-
-void DcgmRecorder::Init(dcgmHandle_t handle)
-{
-    m_dcgmSystem.Init(handle);
-    m_dcgmHandle = handle;
-}
-
 dcgmReturn_t DcgmRecorder::Shutdown()
 {
     if (m_dcgmHandle.GetHandle() == 0)
@@ -199,7 +253,7 @@ dcgmReturn_t DcgmRecorder::Shutdown()
     if (m_fieldGroupId != 0)
     {
         // coverity[check_return]
-        dcgmFieldGroupDestroy(m_dcgmHandle.GetHandle(), m_fieldGroupId);
+        m_dcgmOps->dcgmFieldGroupDestroy(m_dcgmHandle.GetHandle(), m_fieldGroupId);
         m_fieldGroupId = 0;
     }
 
@@ -359,26 +413,17 @@ int DcgmRecorder::WriteToFile(const std::string &filename, int logFileType, long
 {
     m_customStatHolder.InitGpus(m_gpuIds);
 
-    std::ofstream f;
-    f.open(filename.c_str());
-
-    if (f.fail())
-    {
-        log_error("Unable to open file {}: '{}'", filename, strerror(errno));
-        return -1;
-    }
-
+    std::string output;
 
     switch (logFileType)
     {
         case NVVS_LOGFILE_TYPE_TEXT:
         {
-            std::string output;
             std::string error = GetWatchedFieldsAsString(output, testStart);
-            if (error.size() == 0)
-                f << output;
-            else
-                f << error;
+            if (error.size() != 0)
+            {
+                output = error;
+            }
 
             break;
         }
@@ -390,14 +435,33 @@ int DcgmRecorder::WriteToFile(const std::string &filename, int logFileType, long
             std::string error = GetWatchedFieldsAsJson(jv, testStart);
 
             if (error.size() == 0)
-                f << jv.toStyledString();
+            {
+                if (!JsonStatsContainsPayload(jv))
+                {
+                    return 0;
+                }
+
+                output = jv.toStyledString();
+            }
             else
-                f << error;
+            {
+                output = error;
+            }
         }
 
         break;
     }
 
+    std::ofstream f;
+    f.open(filename.c_str());
+
+    if (f.fail())
+    {
+        log_error("Unable to open file {}: {}", filename, strerror(errno));
+        return -1;
+    }
+
+    f << output;
     f.close();
     return 0;
 }
@@ -408,7 +472,7 @@ dcgmReturn_t DcgmRecorder::GetFieldSummary(dcgmFieldSummaryRequest_t &request)
     std::string errStr;
 
     request.version = dcgmFieldSummaryRequest_version1;
-    ret             = dcgmGetFieldSummary(m_dcgmHandle.GetHandle(), &request);
+    ret             = m_dcgmOps->dcgmGetFieldSummary(m_dcgmHandle.GetHandle(), &request);
 
     if (ret == DCGM_ST_NO_DATA)
     {
@@ -643,7 +707,7 @@ int DcgmRecorder::CheckXIDs(unsigned int gpuId,
     int count = DCGM_MAX_XID_INFO;
     dcgmFieldValue_v1 values[DCGM_MAX_XID_INFO];
 
-    int st = dcgmGetMultipleValuesForField(
+    int st = m_dcgmOps->dcgmGetMultipleValuesForField(
         m_dcgmHandle.GetHandle(), gpuId, DCGM_FI_DEV_XID_ERROR, &count, startTime, 0, DCGM_ORDER_ASCENDING, values);
 
     if (st != DCGM_ST_OK)
@@ -877,11 +941,6 @@ dcgmReturn_t DcgmRecorder::CheckPerSecondErrorConditions(const std::vector<unsig
     return st;
 }
 
-dcgmHandle_t DcgmRecorder::GetHandle()
-{
-    return m_dcgmHandle.GetHandle();
-}
-
 void DcgmRecorder::SetSingleGroupStat(const std::string &gpuId, const std::string &name, const std::string &value)
 {
     m_customStatHolder.SetSingleGroupStat(gpuId, name, value);
@@ -958,9 +1017,9 @@ int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId,
     uint64_t mask                     = failureMask;
 
     // Update mask to ignore clocks event reasons given by the ignoreMask
-    if (nvvsCommon.clocksEventIgnoreMask != DCGM_INT64_BLANK && nvvsCommon.clocksEventIgnoreMask > 0)
+    if (m_nvvsCommon->clocksEventIgnoreMask != DCGM_INT64_BLANK && m_nvvsCommon->clocksEventIgnoreMask > 0)
     {
-        mask &= ~nvvsCommon.clocksEventIgnoreMask;
+        mask &= ~m_nvvsCommon->clocksEventIgnoreMask;
     }
 
     dcgmFieldValue_v1 dfv;
@@ -988,7 +1047,7 @@ int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId,
 
     if (maskedResult)
     {
-        const char *detail = NULL;
+        const char *detail = nullptr;
         double timeDiff    = (dfv.ts - startTime) / 1000000.0;
 
         if ((maskedResult & DCGM_CLOCKS_EVENT_REASON_HW_SLOWDOWN))
@@ -1012,7 +1071,7 @@ int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId,
                      "Please check the power supply.";
         }
 
-        if (detail != NULL)
+        if (detail != nullptr)
         {
             rc = DR_VIOLATION;
             DcgmError d { gpuId };
@@ -1022,49 +1081,6 @@ int DcgmRecorder::CheckForClocksEvent(unsigned int gpuId,
     }
 
     return rc;
-}
-
-int DcgmRecorder::CheckEffectiveBER(unsigned int gpuId, std::vector<DcgmError> &fatalErrorList)
-{
-    dcgmFieldValue_v2 value;
-    // First try cached data to allow injected test values to be detected
-    dcgmReturn_t ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, value, 0);
-
-    // If cached data is not available or not supported, try live data
-    if (ret == DCGM_ST_NO_DATA || ret == DCGM_ST_NOT_WATCHED || value.status == DCGM_ST_NO_DATA
-        || value.status == DCGM_ST_NOT_WATCHED)
-    {
-        ret = GetCurrentFieldValue(gpuId, DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, value, DCGM_FV_FLAG_LIVE_DATA);
-    }
-    if (ret == DCGM_ST_NOT_SUPPORTED || value.status == DCGM_ST_NOT_SUPPORTED)
-    {
-        log_debug("Skipping effective BER check because it is unsupported.");
-        return DR_SUCCESS;
-    }
-    if (ret != DCGM_ST_OK)
-    {
-        DcgmError d { gpuId };
-        DCGM_ERROR_FORMAT_MESSAGE_DCGM(DCGM_FR_FIELD_QUERY, d, ret, "effective BER", gpuId);
-        fatalErrorList.push_back(d);
-        return DR_COMM_ERROR;
-    }
-
-    auto const effectiveBer = value.value.i64;
-    // Effective BER is the bit error rate itself, and a rate of 0 indicates a healthy system.
-    // However, in NVML the smallest value is 1.5e-254, to be able to compare and avoid precision issues
-    // with the decoded value, we decode it here and compare the mantissa and exponent to 15 and 255
-    // directly, rather than using the decoded field (i.e., DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RATIO).
-    auto const [mantissa, exponent, ber] = DcgmNs::Utils::NvmlBerParser(effectiveBer);
-    bool const exceedsThreshold          = DcgmNs::Utils::IsEffectiveBerThresholdExceeded(mantissa, exponent);
-    if (exceedsThreshold)
-    {
-        DcgmError d { gpuId };
-        DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_NVLINK_EFFECTIVE_BER_THRESHOLD, d, ber, gpuId);
-        fatalErrorList.push_back(d);
-        return DR_VIOLATION;
-    }
-
-    return DR_SUCCESS;
 }
 
 dcgmReturn_t DcgmRecorder::GetCurrentFieldValue(unsigned int gpuId,
@@ -1098,7 +1114,7 @@ std::string DcgmRecorder::GetGpuUtilizationNote(unsigned int gpuId, timelib64_t 
     std::stringstream msg;
     dcgmFieldSummaryRequest_t fsr;
     memset(&fsr, 0, sizeof(fsr));
-    fsr.fieldId         = DCGM_FI_DEV_GPU_UTIL_RATIO;
+    fsr.fieldId         = DCGM_FI_DEV_GPU_UTIL;
     fsr.entityGroupId   = DCGM_FE_GPU;
     fsr.entityId        = gpuId;
     fsr.summaryTypeMask = DCGM_SUMMARY_MAX;
@@ -1225,7 +1241,7 @@ void DcgmRecorder::CheckCommonErrors(TestParameters &tp,
         thresholdsPtr = &thresholds;
     }
 
-    dcgmUpdateAllFields(m_dcgmHandle.GetHandle(), 1);
+    m_dcgmOps->dcgmUpdateAllFields(m_dcgmHandle.GetHandle(), 1);
     for (auto &&entityInfo : entityInfos)
     {
         if (entityInfo.entity.entityGroupId != DCGM_FE_GPU)

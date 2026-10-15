@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,15 @@
 
 namespace
 {
+/**
+ * Test adapter that exposes protected hostengine command-line parsing helpers.
+ */
+class TestHostEngineCommandLine : public HostEngineCommandLine
+{
+public:
+    using HostEngineCommandLine::ParseBindIp;
+};
+
 HostEngineCommandLine Parse(std::vector<std::string> args)
 {
     std::vector<char *> argv;
@@ -67,7 +76,7 @@ TEST_CASE("HostEngineCommandLine::ParseBindIp")
         { "{invalid}", "{invalid}" },
     };
 
-    HostEngineCommandLineInterface hecl {};
+    TestHostEngineCommandLine hecl {};
 
     for (auto const &test : tests)
     {

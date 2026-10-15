@@ -16,4 +16,4 @@
 install(
     FILES third-party-notices.txt
     DESTINATION "${CMAKE_INSTALL_DOCDIR}"
-    COMPONENT Core)
+    COMPONENT libdcgm)

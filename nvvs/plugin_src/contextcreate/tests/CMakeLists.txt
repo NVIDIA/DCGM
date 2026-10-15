@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,30 +24,21 @@ target_sources(contextcreatetests
         ../ContextCreatePlugin.cpp
 )
 
-target_include_directories(contextcreatetests PRIVATE ${YAML_INCLUDE_DIR})
-target_include_directories(contextcreatetests PRIVATE ${JSONCPP_INCLUDE_DIR})
-target_include_directories(contextcreatetests PRIVATE ${CUDA12_INCLUDE_DIR})
-target_include_directories(contextcreatetests PRIVATE ${PROJECT_SOURCE_DIR}/cublas_proxy)
-target_include_directories(contextcreatetests PRIVATE ..) # include the plugin dir
-target_include_directories(contextcreatetests PRIVATE ../../include) # include the plugin_src/include dir
-
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
-# NOTE: linking cuda is not allowed for this library. We are using a CUDA stub library instead (testing_cuda_stubs)
-#
 target_link_libraries(contextcreatetests
     PRIVATE
         nvvs_without_main_objects
+        nvvs_plugins_contextcreate_interface
         Catch2::Catch2WithMain
-        testing_cuda_stubs
-        testing_dcgm_cublas_stubs
-        cuda_common_interface
+        mock_cuda_ops
+        mock_cuda_common
         common_interface
         mock_common
+        mock_dcgm_ops
+        test-utils
 )
 target_link_libraries(contextcreatetests PUBLIC nvvs_interface)
-target_link_libraries(contextcreatetests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
-target_link_libraries(contextcreatetests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(contextcreatetests PRIVATE yaml-cpp::yaml-cpp jsoncpp_static rt dl)
+target_link_libraries(contextcreatetests PRIVATE Threads::Threads)
 target_link_libraries(contextcreatetests PRIVATE sdk_nvml_loader)
 target_link_libraries(contextcreatetests PRIVATE sdk_nvml_essentials_objects fmt::fmt)
 target_link_libraries(contextcreatetests PUBLIC nvvs_plugins_common_objects)

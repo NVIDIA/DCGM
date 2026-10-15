@@ -14,17 +14,185 @@
  * limitations under the License.
  */
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
-#define DCGM_NVML_TASK_RUNNER_TEST
 #include <NvmlTaskRunner.hpp>
-#undef DCGM_NVML_TASK_RUNNER_TEST
 #include <UnitTestHelpers.h>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <cstring>
+#include <exception>
+#include <future>
 #include <latch>
+#include <string_view>
 #include <thread>
+#include <vector>
+
+namespace
+{
+/**
+ * Test adapter that exposes the NVML task runner's protected test seams.
+ */
+class TestNvmlTaskRunner : public NvmlTaskRunner
+{
+public:
+    ~TestNvmlTaskRunner() override
+    {
+        try
+        {
+            (void)StopAndWait(0);
+        }
+        catch (std::exception const &e)
+        {
+            WARN("TestNvmlTaskRunner worker failed during shutdown: " << e.what());
+        }
+        catch (...)
+        {
+            WARN("TestNvmlTaskRunner worker failed during shutdown");
+        }
+    }
+
+    using NvmlTaskRunner::m_ongoingTasks;
+    using NvmlTaskRunner::NvmlEventSetWaitImpl;
+};
+
+struct EventWaitTestData
+{
+    std::promise<void> waitStarted;
+    std::future<void> waitStartedFuture { waitStarted.get_future() };
+    std::promise<void> canWaitComplete;
+    std::future<void> canWaitCompleteFuture { canWaitComplete.get_future() };
+    nvmlEventSet_t receivedSet   = nullptr;
+    unsigned int receivedTimeout = 0;
+    nvmlReturn_t returnValue     = NVML_ERROR_TIMEOUT;
+};
+
+constexpr auto c_syncTimeout = std::chrono::seconds(4);
+
+nvmlReturn_t EventSetWaitForTest(nvmlEventSet_t set, EventWaitTestData *data, unsigned int timeoutms)
+{
+    data->receivedSet     = set;
+    data->receivedTimeout = timeoutms;
+    data->waitStarted.set_value();
+    if (data->canWaitCompleteFuture.wait_for(c_syncTimeout) != std::future_status::ready)
+    {
+        return NVML_ERROR_TIMEOUT;
+    }
+    return data->returnValue;
+}
+
+class NvmlTaskRunnerTestFixture
+{
+protected:
+    TestNvmlTaskRunner tr;
+};
+
+
+template <typename T>
+auto SnapshotBytes(T const &value)
+{
+    std::array<std::byte, sizeof(T)> bytes {};
+    std::memcpy(bytes.data(), &value, sizeof(value));
+    return bytes;
+}
+
+template <typename T>
+void CheckBytesUnchanged(T const &value, std::array<std::byte, sizeof(T)> const &expected)
+{
+    CHECK(std::memcmp(expected.data(), &value, sizeof(value)) == 0);
+}
+
+template <typename T>
+struct OutputSnapshot
+{
+    std::string_view name;
+    T const &value;
+    std::array<std::byte, sizeof(T)> expected;
+};
+
+template <typename T>
+OutputSnapshot<T> MakeOutputSnapshot(std::string_view name, T const &value)
+{
+    return { name, value, SnapshotBytes(value) };
+}
+
+template <typename T>
+void CheckOutputSnapshot(OutputSnapshot<T> const &snapshot)
+{
+    INFO("output: " << snapshot.name);
+    CheckBytesUnchanged(snapshot.value, snapshot.expected);
+}
+} // namespace
+
+#define OUT(value) MakeOutputSnapshot(#value, value)
+
+SCENARIO_METHOD(NvmlTaskRunnerTestFixture, "NvmlTaskRunner: event wait is tracked without using the task queue")
+{
+    EventWaitTestData eventData;
+    auto const eventSet            = reinterpret_cast<nvmlEventSet_t>(&eventData);
+    unsigned int constexpr timeout = 1234;
+    nvmlReturn_t eventWaitResult   = NVML_ERROR_UNKNOWN;
+    std::promise<void> blockStarted;
+    auto blockStartedFuture = blockStarted.get_future();
+    std::promise<void> blockCompleted;
+    auto blockCompletedFuture = blockCompleted.get_future();
+
+    std::jthread eventWaitThread(
+        [&]() { eventWaitResult = tr.NvmlEventSetWaitImpl(EventSetWaitForTest, eventSet, &eventData, timeout); });
+    REQUIRE(eventData.waitStartedFuture.wait_for(c_syncTimeout) == std::future_status::ready);
+
+    CHECK(tr.m_ongoingTasks.load(std::memory_order_acquire) == 1);
+
+    std::jthread blockThread([&]() {
+        blockStarted.set_value();
+        tr.BlockNewTasks();
+        blockCompleted.set_value();
+    });
+
+    REQUIRE(blockStartedFuture.wait_for(c_syncTimeout) == std::future_status::ready);
+    CHECK(blockCompletedFuture.wait_for(std::chrono::seconds(0)) == std::future_status::timeout);
+
+    eventData.canWaitComplete.set_value();
+    eventWaitThread.join();
+    REQUIRE(blockCompletedFuture.wait_for(c_syncTimeout) == std::future_status::ready);
+    blockThread.join();
+
+    CHECK(eventWaitResult == eventData.returnValue);
+    CHECK(eventData.receivedSet == eventSet);
+    CHECK(eventData.receivedTimeout == timeout);
+    CHECK(tr.m_ongoingTasks.load(std::memory_order_acquire) == 0);
+}
+
+SCENARIO_METHOD(NvmlTaskRunnerTestFixture, "NvmlTaskRunner: event methods reject a blocked task runner")
+{
+    tr.Start();
+    tr.BlockNewTasks();
+
+    nvmlEventData_t eventData {};
+    nvmlEventSetWait_v3_t eventWaitParams {};
+    nvmlGpuOperationalEventConfig_v1_t config {};
+    nvmlEventSetGetContextCount_v1_t contextCountParams {};
+    nvmlEventSetGetContextInfo_v1_t contextInfoParams {};
+    nvmlEventSetGetContextData_v1_t contextDataParams {};
+    nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t legacyXidParams {};
+
+    CHECK(tr.NvmlEventSetWait(nullptr, &eventData, 0) == NVML_ERROR_UNINITIALIZED);
+    CHECK(tr.NvmlEventSetWait_v2(nullptr, &eventData, 0) == NVML_ERROR_UNINITIALIZED);
+    CHECK(tr.NvmlEventSetWait_v3(nullptr, &eventWaitParams) == NVML_ERROR_UNINITIALIZED);
+    CHECK(tr.NvmlEventSetRegisterGpuOperationalEvents_v1(nullptr, &config) == NVML_ERROR_UNINITIALIZED);
+    CHECK(tr.NvmlEventSetGetContextCount_v1(nullptr, &contextCountParams) == NVML_ERROR_UNINITIALIZED);
+    CHECK(tr.NvmlEventSetGetContextInfo_v1(nullptr, &contextInfoParams) == NVML_ERROR_UNINITIALIZED);
+    CHECK(tr.NvmlEventSetGetContextData_v1(nullptr, &contextDataParams) == NVML_ERROR_UNINITIALIZED);
+    CHECK(tr.NvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, &legacyXidParams)
+          == NVML_ERROR_UNINITIALIZED);
+    CHECK(tr.m_ongoingTasks.load(std::memory_order_acquire) == 0);
+}
 
 TEST_CASE("NvmlTaskRunner: BlockNewTasks and AllowNewTasks")
 {
-    NvmlTaskRunner tr;
+    TestNvmlTaskRunner tr;
 
     tr.Start();
 
@@ -85,7 +253,7 @@ TEST_CASE("NvmlTaskRunner: GetSafeNvmlHandles")
     REQUIRE(ret == NVML_SUCCESS);
     DcgmNs::Defer defer([&] { nvmlShutdown(); });
 
-    NvmlTaskRunner tr;
+    TestNvmlTaskRunner tr;
     tr.Start();
 
     auto result = tr.GetSafeNvmlHandles();
@@ -135,7 +303,7 @@ TEST_CASE("NvmlTaskRunner: GetSafeMigNvmlHandle")
     REQUIRE(ret == NVML_SUCCESS);
     DcgmNs::Defer defer([&] { nvmlShutdown(); });
 
-    NvmlTaskRunner tr;
+    TestNvmlTaskRunner tr;
     tr.Start();
 
     auto result = tr.GetSafeNvmlHandles();
@@ -179,7 +347,7 @@ TEST_CASE("NvmlTaskRunner: NvmlDeviceGetGpuInstances")
     REQUIRE(ret == NVML_SUCCESS);
     DcgmNs::Defer defer([&] { nvmlShutdown(); });
 
-    NvmlTaskRunner tr;
+    TestNvmlTaskRunner tr;
     tr.Start();
 
     auto result = tr.GetSafeNvmlHandles();
@@ -231,7 +399,7 @@ TEST_CASE("NvmlTaskRunner: NvmlGpuInstanceGetComputeInstances")
     REQUIRE(ret == NVML_SUCCESS);
     DcgmNs::Defer defer([&] { nvmlShutdown(); });
 
-    NvmlTaskRunner tr;
+    TestNvmlTaskRunner tr;
     tr.Start();
 
     auto result = tr.GetSafeNvmlHandles();
@@ -280,891 +448,1264 @@ TEST_CASE("NvmlTaskRunner: NvmlGpuInstanceGetComputeInstances")
     }
 }
 
-TEST_CASE("NvmlTaskRunner generated public methods reject stale safe handles")
+SCENARIO("NvmlTaskRunner: generated methods reject stale safe handles broadly")
 {
-    NvmlTaskRunner tr;
+    TestNvmlTaskRunner tr;
     tr.Start();
-    SafeNvmlHandle staleDevice {};
-    staleDevice.generation = tr.GetGeneration() + 1;
-
-    SafeVgpuTypeId staleVgpuType {};
-    staleVgpuType.generation = tr.GetGeneration() + 1;
-
-    SafeVgpuInstance staleVgpuInstance {};
-    staleVgpuInstance.generation = tr.GetGeneration() + 1;
-
-    SafeGpuInstance staleGpuInstance {};
-    staleGpuInstance.generation = tr.GetGeneration() + 1;
-
-    SafeComputeInstance staleComputeInstance {};
-    staleComputeInstance.generation = tr.GetGeneration() + 1;
-
-    char text[64] {};
-    unsigned int uintValue {};
-    unsigned int uintValue2 {};
-    unsigned int uintValue3 {};
-    unsigned long ulongValues[4] {};
-    unsigned long long ullValue {};
-    unsigned long long ullValue2 {};
-    int intValue {};
-    int intValue2 {};
-
-    nvmlAccountingStats_t accountingStats {};
-    nvmlBAR1Memory_t bar1Memory {};
-    nvmlBridgeChipHierarchy_t bridgeHierarchy {};
-    nvmlComputeMode_t computeMode {};
-    nvmlEccErrorCounts_t eccCounts {};
-    nvmlEccSramErrorStatus_t sramStatus {};
-    nvmlEnableState_t enableState {};
-    nvmlEnableState_t enableState2 {};
-    nvmlExcludedDeviceInfo_t excludedDeviceInfo {};
-    nvmlFBCStats_t fbcStats {};
-    nvmlFBCSessionInfo_t fbcSessionInfo {};
-    nvmlFieldValue_t fieldValue {};
-    nvmlGpuDynamicPstatesInfo_t dynamicPstatesInfo {};
-    nvmlGpuFabricInfo_t gpuFabricInfo {};
-    nvmlGpuFabricInfoV_t gpuFabricInfoV {};
-    nvmlGpuInstance_t gpuInstance {};
-    nvmlGpuInstanceInfo_t gpuInstanceInfo {};
-    nvmlGpuInstancePlacement_t gpuInstancePlacement {};
-    nvmlGpuInstanceProfileInfo_t gpuInstanceProfileInfo {};
-    nvmlGpuInstanceProfileInfo_v2_t gpuInstanceProfileInfoV2 {};
-    nvmlGpuThermalSettings_t thermalSettings {};
-    nvmlGpuOperationMode_t gpuMode {};
-    nvmlGpuOperationMode_t gpuMode2 {};
-    nvmlGpuP2PStatus_t p2pStatus {};
-    nvmlGpuTopologyLevel_t topologyLevel {};
-    nvmlGpuVirtualizationMode_t virtualizationMode {};
-    nvmlMarginTemperature_t marginTemperature {};
-    nvmlMemory_t memory {};
-    nvmlMemory_v2_t memoryV2 {};
-    nvmlPciInfo_t pciInfo {};
-    nvmlPlatformInfo_t platformInfo {};
-    nvmlPRMCounterList_v1_t prmCounterList {};
-    nvmlPRMTLV_v1_t prmBuffer {};
-    nvmlComputeInstance_t computeInstance {};
-    nvmlComputeInstanceInfo_t computeInstanceInfo {};
-    nvmlComputeInstanceProfileInfo_t computeInstanceProfileInfo {};
-    nvmlComputeInstanceProfileInfo_v2_t computeInstanceProfileInfoV2 {};
-    nvmlProcessInfo_t processInfo {};
-    nvmlProcessInfo_v1_t processInfoV1 {};
-    nvmlProcessInfo_v2_t processInfoV2 {};
-    nvmlProcessUtilizationSample_t processUtilizationSample {};
-    nvmlPstates_t pstate {};
-    nvmlReturn_t nvmlReturn {};
-    nvmlRowRemapperHistogramValues_t rowRemapperHistogramValues {};
-    nvmlUnrepairableMemoryStatus_t unrepairableMemory {};
-    nvmlUtilization_t utilization {};
-    nvmlValueType_t valueType {};
-    nvmlVgpuCapability_t vgpuCapability {};
-    nvmlVgpuLicenseInfo_t vgpuLicenseInfo {};
-    nvmlVgpuMetadata_t vgpuMetadata {};
-    nvmlVgpuPgpuCompatibility_t vgpuCompatibility {};
-    nvmlVgpuPgpuMetadata_t pgpuMetadata {};
-    nvmlVgpuProcessUtilizationSample_t vgpuProcessUtilizationSample {};
-    nvmlVgpuVmIdType_t vgpuVmIdType {};
-    nvmlViolationTime_t violationTime {};
-    nvmlGpmSample_t gpmSample {};
-    nvmlGpmSupport_t gpmSupport {};
-    nvmlWorkloadPowerProfileCurrentProfiles_t currentProfiles {};
-    nvmlWorkloadPowerProfileProfilesInfo_t profilesInfo {};
-    nvmlWorkloadPowerProfileUpdateProfiles_v1_t updateProfiles {};
-
-    SECTION("Device identity and state methods")
+    GIVEN("safe wrapper values from a future generation")
     {
-        CHECK(tr.NvmlDeviceGetClockInfo(staleDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxClockInfo(staleDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeMode(staleDevice, &computeMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetComputeMode(staleDevice, computeMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCudaComputeCapability(staleDevice, &intValue, &intValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDisplayMode(staleDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEccMode(staleDevice, &enableState, &enableState2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetEccMode(staleDevice, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDefaultEccMode(staleDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBoardId(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBoardPartNumber(staleDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetName(staleDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBrand(staleDevice, reinterpret_cast<nvmlBrandType_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSerial(staleDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetUUID(staleDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetIndex(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMinorNumber(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPersistenceMode(staleDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetPersistenceMode(staleDevice, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVbiosVersion(staleDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDisplayActive(staleDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDriverModel(staleDevice,
-                                          reinterpret_cast<nvmlDriverModel_t *>(&intValue),
-                                          reinterpret_cast<nvmlDriverModel_t *>(&intValue2))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetInforomVersion(staleDevice, static_cast<nvmlInforomObject_t>(0), text, sizeof(text))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetInforomImageVersion(staleDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetInforomConfigurationChecksum(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceValidateInforom(staleDevice) == NVML_ERROR_UNINITIALIZED);
-    }
+        auto const staleGeneration = tr.GetGeneration() + 1;
+        SafeNvmlHandle device { reinterpret_cast<nvmlDevice_t>(0x1), 0, staleGeneration };
+        SafeNvmlHandle device2 { reinterpret_cast<nvmlDevice_t>(0x2), 1, staleGeneration };
+        SafeGpuInstance gpuInstance { reinterpret_cast<nvmlGpuInstance_t>(0x3), staleGeneration };
+        SafeComputeInstance computeInstance { reinterpret_cast<nvmlComputeInstance_t>(0x4), staleGeneration };
+        SafeVgpuInstance vgpuInstance { 5, staleGeneration };
+        SafeVgpuTypeId vgpuTypeId { 6, staleGeneration };
 
-    SECTION("Device memory, power, and thermal methods")
-    {
-        CHECK(tr.NvmlDeviceGetMemoryInfo(staleDevice, &memory) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemoryInfo_v2(staleDevice, &memoryV2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBAR1MemoryInfo(staleDevice, &bar1Memory) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetUtilizationRates(staleDevice, &utilization) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerState(staleDevice, &pstate) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPerformanceState(staleDevice, &pstate) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerUsage(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTotalEnergyConsumption(staleDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerManagementMode(staleDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerManagementLimit(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerManagementDefaultLimit(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEnforcedPowerLimit(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetPowerManagementLimit(staleDevice, uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerSource(staleDevice, reinterpret_cast<nvmlPowerSource_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerManagementLimitConstraints(staleDevice, &uintValue, &uintValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTemperature(staleDevice, static_cast<nvmlTemperatureSensors_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTemperatureThreshold(staleDevice, static_cast<nvmlTemperatureThresholds_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetTemperatureThreshold(staleDevice, static_cast<nvmlTemperatureThresholds_t>(0), &intValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMarginTemperature(staleDevice, &marginTemperature) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFanSpeed(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFanSpeed_v2(staleDevice, 0, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTargetFanSpeed(staleDevice, 0, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetFanSpeed_v2(staleDevice, 0, uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetDefaultFanSpeed_v2(staleDevice, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNumFans(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetThermalSettings(staleDevice, 0, &thermalSettings) == NVML_ERROR_UNINITIALIZED);
-    }
+        unsigned int uintValue        = 0;
+        unsigned int uintValue2       = 0;
+        unsigned int uintValue3       = 0;
+        unsigned int uintValue4       = 0;
+        unsigned long long ullValue   = 0;
+        unsigned long long ullValue2  = 0;
+        unsigned long long eventTypes = 0;
+        unsigned long long retiredAddresses[2] {};
+        unsigned long long retiredTimestamps[2] {};
+        unsigned long ulongValue = 0;
+        int intValue             = 0;
+        int intValue2            = 0;
+        char text[64] {};
+        nvmlClockType_t clockType = NVML_CLOCK_GRAPHICS;
+        nvmlComputeMode_t computeMode {};
+        nvmlEnableState_t enableState {};
+        nvmlEccCounterType_t eccCounterType   = NVML_VOLATILE_ECC;
+        nvmlMemoryErrorType_t memoryErrorType = NVML_MEMORY_ERROR_TYPE_CORRECTED;
+        nvmlPstates_t pstate {};
+        nvmlDriverModel_t currentDriverModel {};
+        nvmlDriverModel_t pendingDriverModel {};
+        nvmlGpuP2PStatus_t p2pStatus {};
+        nvmlGpuTopologyLevel_t topologyLevel {};
+        nvmlGpuInstanceInfo_t gpuInstanceInfo {};
+        nvmlGpuInstanceProfileInfo_t gpuInstanceProfileInfo {};
+        nvmlGpuInstanceProfileInfo_v2_t gpuInstanceProfileInfoV2 {};
+        nvmlGpuInstancePlacement_t gpuInstancePlacement {};
+        nvmlComputeInstanceInfo_t computeInstanceInfo {};
+        nvmlComputeInstanceProfileInfo_t computeInstanceProfileInfo {};
+        nvmlComputeInstanceProfileInfo_v2_t computeInstanceProfileInfoV2 {};
+        nvmlProcessInfo_v1_t processInfoV1 {};
+        nvmlProcessInfo_v2_t processInfoV2 {};
+        nvmlProcessInfo_t processInfo {};
+        nvmlAccountingStats_t accountingStats {};
+        nvmlBAR1Memory_t bar1Memory {};
+        nvmlBrandType_t brand {};
+        nvmlBridgeChipHierarchy_t bridgeHierarchy {};
+        nvmlDeviceArchitecture_t architecture {};
+        nvmlEccErrorCounts_t eccCounts {};
+        nvmlEccSramErrorStatus_t sramStatus {};
+        nvmlFieldValue_t fieldValue {};
+        nvmlGpuDynamicPstatesInfo_t dynamicPstatesInfo {};
+        nvmlGpuFabricInfo_t gpuFabricInfo {};
+        nvmlGpuFabricInfoV_t gpuFabricInfoV {};
+        nvmlGpuThermalSettings_t thermalSettings {};
+        nvmlMarginTemperature_t marginTemperature {};
+        nvmlMemory_t memory {};
+        nvmlMemory_v2_t memoryV2 {};
+        nvmlDeviceAttributes_t attributes {};
+        nvmlPciInfo_t pciInfo {};
+        nvmlPlatformInfo_t platformInfo {};
+        nvmlPRMCounterList_v1_t prmCounterList {};
+        nvmlNvLinkUtilizationControl_t nvlinkControl {};
+        nvmlPerfPolicyType_t perfPolicyType = NVML_PERF_POLICY_POWER;
+        nvmlPowerSource_t powerSource {};
+        nvmlRowRemapperHistogramValues_t rowRemapperHistogramValues {};
+        nvmlTemperatureSensors_t temperatureSensor = NVML_TEMPERATURE_GPU;
+        nvmlTemperatureThresholds_t threshold      = NVML_TEMPERATURE_THRESHOLD_SHUTDOWN;
+        nvmlUnrepairableMemoryStatus_t unrepairableMemory {};
+        nvmlUtilization_t utilization {};
+        nvmlValueType_t valueType {};
+        nvmlViolationTime_t violationTime {};
+        nvmlVgpuCapability_t vgpuCapability = NVML_VGPU_CAP_NVLINK_P2P;
+        nvmlVgpuLicenseInfo_t vgpuLicenseInfo {};
+        nvmlVgpuMetadata_t vgpuMetadata {};
+        nvmlVgpuPgpuMetadata_t pgpuMetadata {};
+        nvmlEncoderSessionInfo_t encoderSessionInfo {};
+        nvmlFBCSessionInfo_t fbcSessionInfo {};
+        nvmlVgpuProcessUtilizationSample_t vgpuProcessUtilizationSample {};
+        nvmlVgpuVmIdType_t vgpuVmIdType {};
+        nvmlWorkloadPowerProfileCurrentProfiles_t currentProfiles {};
+        nvmlWorkloadPowerProfileProfilesInfo_t profilesInfo {};
+        nvmlWorkloadPowerProfileRequestedProfiles_t requestedProfiles {};
+        nvmlWorkloadPowerProfileUpdateProfiles_v1_t updateProfiles {};
+        nvmlGpmSample_t gpmSample {};
+        nvmlGpmSupport_t gpmSupport {};
+        std::vector<SafeGpuInstance> gpuInstances(1);
+        std::vector<SafeComputeInstance> computeInstances(1);
+        unsigned int instanceCount = 1;
 
-    SECTION("Device pci, topology, process, and accounting methods")
-    {
-        CHECK(tr.NvmlDeviceGetPciInfo(staleDevice, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPciInfo_v2(staleDevice, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPciInfo_v3(staleDevice, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxPcieLinkGeneration(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxPcieLinkWidth(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCurrPcieLinkGeneration(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCurrPcieLinkWidth(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPcieThroughput(staleDevice, static_cast<nvmlPcieUtilCounter_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPcieReplayCounter(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPcieLinkMaxSpeed(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPcieSpeed(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetIrqNum(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBusType(staleDevice, reinterpret_cast<nvmlBusType_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBridgeChipInfo(staleDevice, &bridgeHierarchy) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDetailedEccErrors(
-                  staleDevice, static_cast<nvmlMemoryErrorType_t>(0), static_cast<nvmlEccCounterType_t>(0), &eccCounts)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTotalEccErrors(
-                  staleDevice, static_cast<nvmlMemoryErrorType_t>(0), static_cast<nvmlEccCounterType_t>(0), &ullValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceClearEccErrorCounts(staleDevice, static_cast<nvmlEccCounterType_t>(0))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemoryErrorCounter(staleDevice,
-                                                 static_cast<nvmlMemoryErrorType_t>(0),
-                                                 static_cast<nvmlEccCounterType_t>(0),
-                                                 static_cast<nvmlMemoryLocation_t>(0),
-                                                 &ullValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetUnrepairableMemoryFlag(staleDevice, &unrepairableMemory) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetViolationStatus(staleDevice, static_cast<nvmlPerfPolicyType_t>(0), &violationTime)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSramEccErrorStatus(staleDevice, &sramStatus) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuOperationMode(staleDevice, &gpuMode, &gpuMode2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetGpuOperationMode(staleDevice, gpuMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMultiGpuBoard(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemoryAffinity(staleDevice, 4, ulongValues, static_cast<nvmlAffinityScope_t>(0))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCpuAffinityWithinScope(staleDevice, 4, ulongValues, static_cast<nvmlAffinityScope_t>(0))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCpuAffinity(staleDevice, 4, ulongValues) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetCpuAffinity(staleDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceClearCpuAffinity(staleDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTopologyCommonAncestor(staleDevice, staleDevice, &topologyLevel)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetP2PStatus(staleDevice, staleDevice, static_cast<nvmlGpuP2PCapsIndex_t>(0), &p2pStatus)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeRunningProcesses(staleDevice, &uintValue, &processInfoV1)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeRunningProcesses_v2(staleDevice, &uintValue, &processInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeRunningProcesses_v3(staleDevice, &uintValue, &processInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGraphicsRunningProcesses(staleDevice, &uintValue, &processInfoV1)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGraphicsRunningProcesses_v2(staleDevice, &uintValue, &processInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGraphicsRunningProcesses_v3(staleDevice, &uintValue, &processInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMPSComputeRunningProcesses(staleDevice, &uintValue, &processInfoV1)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMPSComputeRunningProcesses_v2(staleDevice, &uintValue, &processInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMPSComputeRunningProcesses_v3(staleDevice, &uintValue, &processInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetProcessUtilization(staleDevice, &processUtilizationSample, &uintValue, 0)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAccountingMode(staleDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetAccountingMode(staleDevice, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAccountingStats(staleDevice, 1, &accountingStats) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAccountingPids(staleDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAccountingBufferSize(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceClearAccountingPids(staleDevice) == NVML_ERROR_UNINITIALIZED);
-    }
+        auto check = [&](std::string_view methodName, auto &&call, auto const &...outputs) {
+            INFO("method: " << methodName);
+            CHECK(call() == NVML_ERROR_UNINITIALIZED);
+            (CheckOutputSnapshot(outputs), ...);
+        };
 
-    SECTION("Device nvlink, virtualization, and vgpu methods")
-    {
-        CHECK(tr.NvmlDeviceGetApplicationsClock(staleDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDefaultApplicationsClock(staleDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxCustomerBoostClock(staleDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetClock(
-                  staleDevice, static_cast<nvmlClockType_t>(0), static_cast<nvmlClockId_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedMemoryClocks(staleDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedGraphicsClocks(staleDevice, uintValue, &uintValue2, &uintValue3)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetGpuLockedClocks(staleDevice, 0, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetGpuLockedClocks(staleDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetMemoryLockedClocks(staleDevice, 0, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetMemoryLockedClocks(staleDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetApplicationsClocks(staleDevice, 0, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetApplicationsClocks(staleDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAutoBoostedClocksEnabled(staleDevice, &enableState, &enableState2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetAutoBoostedClocksEnabled(staleDevice, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetDefaultAutoBoostedClocksEnabled(staleDevice, enableState, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCurrentClocksEventReasons(staleDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCurrentClocksThrottleReasons(staleDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedClocksEventReasons(staleDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedClocksThrottleReasons(staleDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkState(staleDevice, 0, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkVersion(staleDevice, 0, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkRemotePciInfo(staleDevice, 0, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkRemotePciInfo_v2(staleDevice, 0, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkRemoteDeviceType(
-                  staleDevice, 0, reinterpret_cast<nvmlIntNvLinkDeviceType_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkCapability(staleDevice, 0, static_cast<nvmlNvLinkCapability_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkErrorCounter(staleDevice, 0, static_cast<nvmlNvLinkErrorCounter_t>(0), &ullValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetNvLinkErrorCounters(staleDevice, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetNvLinkUtilizationControl(staleDevice, 0, 0, nullptr, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkUtilizationControl(staleDevice, 0, 0, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkUtilizationCounter(staleDevice, 0, 0, &ullValue, &ullValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceFreezeNvLinkUtilizationCounter(staleDevice, 0, 0, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetNvLinkUtilizationCounter(staleDevice, 0, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVirtualizationMode(staleDevice, &virtualizationMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetVirtualizationMode(staleDevice, virtualizationMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCreatableVgpus(staleDevice, &uintValue, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVgpuUtilization(staleDevice, 0, &valueType, &uintValue, nullptr)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVgpuMetadata(staleDevice, &pgpuMetadata, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPgpuMetadataString(staleDevice, text, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVgpuProcessUtilization(staleDevice, 0, &uintValue, &vgpuProcessUtilizationSample)
-              == NVML_ERROR_UNINITIALIZED);
-    }
+        WHEN("generated safe-handle methods are called")
+        {
+            THEN("each stale-generation call rejects the handle before invoking real NVML")
+            {
+                check(
+                    "NvmlDeviceGetClockInfo",
+                    [&] { return tr.NvmlDeviceGetClockInfo(device, clockType, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetMaxClockInfo",
+                    [&] { return tr.NvmlDeviceGetMaxClockInfo(device, clockType, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetComputeMode",
+                    [&] { return tr.NvmlDeviceGetComputeMode(device, &computeMode); },
+                    OUT(computeMode));
+                check("NvmlDeviceSetComputeMode", [&] { return tr.NvmlDeviceSetComputeMode(device, computeMode); });
+                check(
+                    "NvmlDeviceGetCudaComputeCapability",
+                    [&] { return tr.NvmlDeviceGetCudaComputeCapability(device, &intValue, &intValue2); },
+                    OUT(intValue),
+                    OUT(intValue2));
+                check(
+                    "NvmlDeviceGetDriverModel",
+                    [&] { return tr.NvmlDeviceGetDriverModel(device, &currentDriverModel, &pendingDriverModel); },
+                    OUT(currentDriverModel),
+                    OUT(pendingDriverModel));
+                check(
+                    "NvmlDeviceGetDisplayMode",
+                    [&] { return tr.NvmlDeviceGetDisplayMode(device, &enableState); },
+                    OUT(enableState));
+                check(
+                    "NvmlDeviceGetDisplayActive",
+                    [&] { return tr.NvmlDeviceGetDisplayActive(device, &enableState); },
+                    OUT(enableState));
+                check(
+                    "NvmlDeviceGetPersistenceMode",
+                    [&] { return tr.NvmlDeviceGetPersistenceMode(device, &enableState); },
+                    OUT(enableState));
+                check("NvmlDeviceSetPersistenceMode",
+                      [&] { return tr.NvmlDeviceSetPersistenceMode(device, enableState); });
+                check(
+                    "NvmlDeviceGetEccMode",
+                    [&] { return tr.NvmlDeviceGetEccMode(device, &enableState, &enableState); },
+                    OUT(enableState));
+                check(
+                    "NvmlDeviceGetDefaultEccMode",
+                    [&] { return tr.NvmlDeviceGetDefaultEccMode(device, &enableState); },
+                    OUT(enableState));
+                check("NvmlDeviceSetEccMode", [&] { return tr.NvmlDeviceSetEccMode(device, enableState); });
+                check("NvmlDeviceClearEccErrorCounts",
+                      [&] { return tr.NvmlDeviceClearEccErrorCounts(device, eccCounterType); });
+                check(
+                    "NvmlDeviceGetMemoryInfo",
+                    [&] { return tr.NvmlDeviceGetMemoryInfo(device, &memory); },
+                    OUT(memory));
+                check(
+                    "NvmlDeviceGetMemoryInfo_v2",
+                    [&] { return tr.NvmlDeviceGetMemoryInfo_v2(device, &memoryV2); },
+                    OUT(memoryV2));
+                check(
+                    "NvmlDeviceGetBAR1MemoryInfo",
+                    [&] { return tr.NvmlDeviceGetBAR1MemoryInfo(device, &bar1Memory); },
+                    OUT(bar1Memory));
+                check(
+                    "NvmlDeviceGetUtilizationRates",
+                    [&] { return tr.NvmlDeviceGetUtilizationRates(device, &utilization); },
+                    OUT(utilization));
+                check(
+                    "NvmlDeviceGetEncoderUtilization",
+                    [&] { return tr.NvmlDeviceGetEncoderUtilization(device, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlDeviceGetDecoderUtilization",
+                    [&] { return tr.NvmlDeviceGetDecoderUtilization(device, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlDeviceGetPowerState",
+                    [&] { return tr.NvmlDeviceGetPowerState(device, &pstate); },
+                    OUT(pstate));
+                check(
+                    "NvmlDeviceGetPerformanceState",
+                    [&] { return tr.NvmlDeviceGetPerformanceState(device, &pstate); },
+                    OUT(pstate));
+                check(
+                    "NvmlDeviceGetPowerUsage",
+                    [&] { return tr.NvmlDeviceGetPowerUsage(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetTotalEnergyConsumption",
+                    [&] { return tr.NvmlDeviceGetTotalEnergyConsumption(device, &ullValue); },
+                    OUT(ullValue));
+                check(
+                    "NvmlDeviceGetPowerManagementMode",
+                    [&] { return tr.NvmlDeviceGetPowerManagementMode(device, &enableState); },
+                    OUT(enableState));
+                check(
+                    "NvmlDeviceGetPowerManagementLimit",
+                    [&] { return tr.NvmlDeviceGetPowerManagementLimit(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetPowerManagementLimitConstraints",
+                    [&] { return tr.NvmlDeviceGetPowerManagementLimitConstraints(device, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlDeviceGetPowerManagementDefaultLimit",
+                    [&] { return tr.NvmlDeviceGetPowerManagementDefaultLimit(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetEnforcedPowerLimit",
+                    [&] { return tr.NvmlDeviceGetEnforcedPowerLimit(device, &uintValue); },
+                    OUT(uintValue));
+                check("NvmlDeviceGetPciInfo", [&] { return tr.NvmlDeviceGetPciInfo(device, &pciInfo); }, OUT(pciInfo));
+                check(
+                    "NvmlDeviceGetPciInfo_v2",
+                    [&] { return tr.NvmlDeviceGetPciInfo_v2(device, &pciInfo); },
+                    OUT(pciInfo));
+                check(
+                    "NvmlDeviceGetPciInfo_v3",
+                    [&] { return tr.NvmlDeviceGetPciInfo_v3(device, &pciInfo); },
+                    OUT(pciInfo));
+                check(
+                    "NvmlDeviceGetMaxPcieLinkGeneration",
+                    [&] { return tr.NvmlDeviceGetMaxPcieLinkGeneration(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetMaxPcieLinkWidth",
+                    [&] { return tr.NvmlDeviceGetMaxPcieLinkWidth(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetCurrPcieLinkGeneration",
+                    [&] { return tr.NvmlDeviceGetCurrPcieLinkGeneration(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetCurrPcieLinkWidth",
+                    [&] { return tr.NvmlDeviceGetCurrPcieLinkWidth(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetBridgeChipInfo",
+                    [&] { return tr.NvmlDeviceGetBridgeChipInfo(device, &bridgeHierarchy); },
+                    OUT(bridgeHierarchy));
+                check(
+                    "NvmlDeviceGetTopologyCommonAncestor",
+                    [&] { return tr.NvmlDeviceGetTopologyCommonAncestor(device, device2, &topologyLevel); },
+                    OUT(topologyLevel));
+                check(
+                    "NvmlDeviceGetP2PStatus",
+                    [&] { return tr.NvmlDeviceGetP2PStatus(device, device2, NVML_P2P_CAPS_INDEX_READ, &p2pStatus); },
+                    OUT(p2pStatus));
+                check(
+                    "NvmlDeviceGetTemperature",
+                    [&] { return tr.NvmlDeviceGetTemperature(device, temperatureSensor, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetTemperatureThreshold",
+                    [&] { return tr.NvmlDeviceGetTemperatureThreshold(device, threshold, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceSetTemperatureThreshold",
+                    [&] { return tr.NvmlDeviceSetTemperatureThreshold(device, threshold, &intValue); },
+                    OUT(intValue));
+                check(
+                    "NvmlDeviceGetMarginTemperature",
+                    [&] { return tr.NvmlDeviceGetMarginTemperature(device, &marginTemperature); },
+                    OUT(marginTemperature));
+                check(
+                    "NvmlDeviceGetFanSpeed",
+                    [&] { return tr.NvmlDeviceGetFanSpeed(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetFanSpeed_v2",
+                    [&] { return tr.NvmlDeviceGetFanSpeed_v2(device, 0, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetTargetFanSpeed",
+                    [&] { return tr.NvmlDeviceGetTargetFanSpeed(device, 0, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetNumFans",
+                    [&] { return tr.NvmlDeviceGetNumFans(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetComputeRunningProcesses",
+                    [&] { return tr.NvmlDeviceGetComputeRunningProcesses(device, &uintValue, &processInfoV1); },
+                    OUT(uintValue),
+                    OUT(processInfoV1));
+                check(
+                    "NvmlDeviceGetComputeRunningProcesses_v2",
+                    [&] { return tr.NvmlDeviceGetComputeRunningProcesses_v2(device, &uintValue, &processInfoV2); },
+                    OUT(uintValue),
+                    OUT(processInfoV2));
+                check(
+                    "NvmlDeviceGetComputeRunningProcesses_v3",
+                    [&] { return tr.NvmlDeviceGetComputeRunningProcesses_v3(device, &uintValue, &processInfo); },
+                    OUT(uintValue),
+                    OUT(processInfo));
+                check(
+                    "NvmlDeviceGetGraphicsRunningProcesses",
+                    [&] { return tr.NvmlDeviceGetGraphicsRunningProcesses(device, &uintValue, &processInfoV1); },
+                    OUT(uintValue),
+                    OUT(processInfoV1));
+                check(
+                    "NvmlDeviceGetGraphicsRunningProcesses_v2",
+                    [&] { return tr.NvmlDeviceGetGraphicsRunningProcesses_v2(device, &uintValue, &processInfoV2); },
+                    OUT(uintValue),
+                    OUT(processInfoV2));
+                check(
+                    "NvmlDeviceGetGraphicsRunningProcesses_v3",
+                    [&] { return tr.NvmlDeviceGetGraphicsRunningProcesses_v3(device, &uintValue, &processInfo); },
+                    OUT(uintValue),
+                    OUT(processInfo));
+                check(
+                    "NvmlDeviceGetMPSComputeRunningProcesses",
+                    [&] { return tr.NvmlDeviceGetMPSComputeRunningProcesses(device, &uintValue, &processInfoV1); },
+                    OUT(uintValue),
+                    OUT(processInfoV1));
+                check(
+                    "NvmlDeviceGetMPSComputeRunningProcesses_v2",
+                    [&] { return tr.NvmlDeviceGetMPSComputeRunningProcesses_v2(device, &uintValue, &processInfoV2); },
+                    OUT(uintValue),
+                    OUT(processInfoV2));
+                check(
+                    "NvmlDeviceGetMPSComputeRunningProcesses_v3",
+                    [&] { return tr.NvmlDeviceGetMPSComputeRunningProcesses_v3(device, &uintValue, &processInfo); },
+                    OUT(uintValue),
+                    OUT(processInfo));
+                check(
+                    "NvmlDeviceGetAccountingMode",
+                    [&] { return tr.NvmlDeviceGetAccountingMode(device, &enableState); },
+                    OUT(enableState));
+                check("NvmlDeviceSetAccountingMode",
+                      [&] { return tr.NvmlDeviceSetAccountingMode(device, enableState); });
+                check("NvmlDeviceClearAccountingPids", [&] { return tr.NvmlDeviceClearAccountingPids(device); });
+                check(
+                    "NvmlDeviceGetAccountingStats",
+                    [&] { return tr.NvmlDeviceGetAccountingStats(device, 123, &accountingStats); },
+                    OUT(accountingStats));
+                check(
+                    "NvmlDeviceGetAccountingPids",
+                    [&] { return tr.NvmlDeviceGetAccountingPids(device, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlDeviceGetAccountingBufferSize",
+                    [&] { return tr.NvmlDeviceGetAccountingBufferSize(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetProcessUtilization",
+                    [&] { return tr.NvmlDeviceGetProcessUtilization(device, nullptr, &uintValue, 0); },
+                    OUT(uintValue));
+                check("NvmlDeviceGetName", [&] { return tr.NvmlDeviceGetName(device, text, sizeof(text)); }, OUT(text));
+                check("NvmlDeviceGetBrand", [&] { return tr.NvmlDeviceGetBrand(device, &brand); }, OUT(brand));
+                check(
+                    "NvmlDeviceGetSerial",
+                    [&] { return tr.NvmlDeviceGetSerial(device, text, sizeof(text)); },
+                    OUT(text));
+                check("NvmlDeviceGetUUID", [&] { return tr.NvmlDeviceGetUUID(device, text, sizeof(text)); }, OUT(text));
+                check("NvmlDeviceGetIndex", [&] { return tr.NvmlDeviceGetIndex(device, &uintValue); }, OUT(uintValue));
+                check(
+                    "NvmlDeviceGetMinorNumber",
+                    [&] { return tr.NvmlDeviceGetMinorNumber(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetBoardId",
+                    [&] { return tr.NvmlDeviceGetBoardId(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetBoardPartNumber",
+                    [&] { return tr.NvmlDeviceGetBoardPartNumber(device, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlDeviceGetDetailedEccErrors",
+                    [&] {
+                        return tr.NvmlDeviceGetDetailedEccErrors(device, memoryErrorType, eccCounterType, &eccCounts);
+                    },
+                    OUT(eccCounts));
+                check(
+                    "NvmlDeviceGetTotalEccErrors",
+                    [&] { return tr.NvmlDeviceGetTotalEccErrors(device, memoryErrorType, eccCounterType, &ullValue); },
+                    OUT(ullValue));
+                check(
+                    "NvmlDeviceGetUnrepairableMemoryFlag",
+                    [&] { return tr.NvmlDeviceGetUnrepairableMemoryFlag(device, &unrepairableMemory); },
+                    OUT(unrepairableMemory));
+                check(
+                    "NvmlDeviceGetMemoryErrorCounter",
+                    [&] {
+                        return tr.NvmlDeviceGetMemoryErrorCounter(
+                            device, memoryErrorType, eccCounterType, NVML_MEMORY_LOCATION_DRAM, &ullValue);
+                    },
+                    OUT(ullValue));
+                check(
+                    "NvmlDeviceGetViolationStatus",
+                    [&] { return tr.NvmlDeviceGetViolationStatus(device, perfPolicyType, &violationTime); },
+                    OUT(violationTime));
+                check(
+                    "NvmlDeviceGetSramEccErrorStatus",
+                    [&] { return tr.NvmlDeviceGetSramEccErrorStatus(device, &sramStatus); },
+                    OUT(sramStatus));
+                check(
+                    "NvmlDeviceGetGpuOperationMode",
+                    [&] {
+                        return tr.NvmlDeviceGetGpuOperationMode(device,
+                                                                reinterpret_cast<nvmlGpuOperationMode_t *>(&intValue),
+                                                                reinterpret_cast<nvmlGpuOperationMode_t *>(&intValue2));
+                    },
+                    OUT(intValue),
+                    OUT(intValue2));
+                check("NvmlDeviceSetGpuOperationMode",
+                      [&] { return tr.NvmlDeviceSetGpuOperationMode(device, static_cast<nvmlGpuOperationMode_t>(0)); });
+                check(
+                    "NvmlDeviceGetInforomConfigurationChecksum",
+                    [&] { return tr.NvmlDeviceGetInforomConfigurationChecksum(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetInforomVersion",
+                    [&] { return tr.NvmlDeviceGetInforomVersion(device, NVML_INFOROM_OEM, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlDeviceGetInforomImageVersion",
+                    [&] { return tr.NvmlDeviceGetInforomImageVersion(device, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlDeviceGetVbiosVersion",
+                    [&] { return tr.NvmlDeviceGetVbiosVersion(device, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlDeviceGetMultiGpuBoard",
+                    [&] { return tr.NvmlDeviceGetMultiGpuBoard(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetCpuAffinity",
+                    [&] { return tr.NvmlDeviceGetCpuAffinity(device, 1, &ulongValue); },
+                    OUT(ulongValue));
+                check("NvmlDeviceSetCpuAffinity", [&] { return tr.NvmlDeviceSetCpuAffinity(device); });
+                check("NvmlDeviceClearCpuAffinity", [&] { return tr.NvmlDeviceClearCpuAffinity(device); });
+                check("NvmlDeviceValidateInforom", [&] { return tr.NvmlDeviceValidateInforom(device); });
+                check("NvmlDeviceSetDriverModel",
+                      [&] { return tr.NvmlDeviceSetDriverModel(device, currentDriverModel, 0); });
+                check("NvmlDeviceSetGpuLockedClocks", [&] { return tr.NvmlDeviceSetGpuLockedClocks(device, 0, 0); });
+                check("NvmlDeviceResetGpuLockedClocks", [&] { return tr.NvmlDeviceResetGpuLockedClocks(device); });
+                check("NvmlDeviceSetMemoryLockedClocks",
+                      [&] { return tr.NvmlDeviceSetMemoryLockedClocks(device, 0, 0); });
+                check("NvmlDeviceResetMemoryLockedClocks",
+                      [&] { return tr.NvmlDeviceResetMemoryLockedClocks(device); });
+                check("NvmlDeviceSetApplicationsClocks",
+                      [&] { return tr.NvmlDeviceSetApplicationsClocks(device, 0, 0); });
+                check(
+                    "NvmlDeviceGetMaxCustomerBoostClock",
+                    [&] { return tr.NvmlDeviceGetMaxCustomerBoostClock(device, clockType, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetClock",
+                    [&] { return tr.NvmlDeviceGetClock(device, clockType, NVML_CLOCK_ID_CURRENT, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetDefaultApplicationsClock",
+                    [&] { return tr.NvmlDeviceGetDefaultApplicationsClock(device, clockType, &uintValue); },
+                    OUT(uintValue));
+                check("NvmlDeviceResetApplicationsClocks",
+                      [&] { return tr.NvmlDeviceResetApplicationsClocks(device); });
+                check(
+                    "NvmlDeviceGetAutoBoostedClocksEnabled",
+                    [&] { return tr.NvmlDeviceGetAutoBoostedClocksEnabled(device, &enableState, &enableState); },
+                    OUT(enableState));
+                check("NvmlDeviceSetAutoBoostedClocksEnabled",
+                      [&] { return tr.NvmlDeviceSetAutoBoostedClocksEnabled(device, enableState); });
+                check("NvmlDeviceSetDefaultAutoBoostedClocksEnabled",
+                      [&] { return tr.NvmlDeviceSetDefaultAutoBoostedClocksEnabled(device, enableState, 0); });
+                check("NvmlDeviceSetPowerManagementLimit",
+                      [&] { return tr.NvmlDeviceSetPowerManagementLimit(device, 0); });
+                check(
+                    "NvmlDeviceGetCurrentClocksEventReasons",
+                    [&] { return tr.NvmlDeviceGetCurrentClocksEventReasons(device, &ullValue); },
+                    OUT(ullValue));
+                check(
+                    "NvmlDeviceGetCurrentClocksThrottleReasons",
+                    [&] { return tr.NvmlDeviceGetCurrentClocksThrottleReasons(device, &ullValue); },
+                    OUT(ullValue));
+                check(
+                    "NvmlDeviceGetSupportedClocksEventReasons",
+                    [&] { return tr.NvmlDeviceGetSupportedClocksEventReasons(device, &ullValue); },
+                    OUT(ullValue));
+                check(
+                    "NvmlDeviceGetSupportedClocksThrottleReasons",
+                    [&] { return tr.NvmlDeviceGetSupportedClocksThrottleReasons(device, &ullValue); },
+                    OUT(ullValue));
+                check(
+                    "NvmlDeviceGetSupportedEventTypes",
+                    [&] { return tr.NvmlDeviceGetSupportedEventTypes(device, &eventTypes); },
+                    OUT(eventTypes));
+                check(
+                    "NvmlDeviceGetRetiredPages",
+                    [&] {
+                        return tr.NvmlDeviceGetRetiredPages(device,
+                                                            NVML_PAGE_RETIREMENT_CAUSE_MULTIPLE_SINGLE_BIT_ECC_ERRORS,
+                                                            &uintValue,
+                                                            retiredAddresses);
+                    },
+                    OUT(uintValue),
+                    OUT(retiredAddresses));
+                check(
+                    "NvmlDeviceGetRetiredPages_v2",
+                    [&] {
+                        return tr.NvmlDeviceGetRetiredPages_v2(
+                            device,
+                            NVML_PAGE_RETIREMENT_CAUSE_MULTIPLE_SINGLE_BIT_ECC_ERRORS,
+                            &uintValue,
+                            retiredAddresses,
+                            retiredTimestamps);
+                    },
+                    OUT(uintValue),
+                    OUT(retiredAddresses),
+                    OUT(retiredTimestamps));
+                check(
+                    "NvmlDeviceGetRetiredPagesPendingStatus",
+                    [&] { return tr.NvmlDeviceGetRetiredPagesPendingStatus(device, &enableState); },
+                    OUT(enableState));
+                check("NvmlDeviceSetAPIRestriction", [&] {
+                    return tr.NvmlDeviceSetAPIRestriction(
+                        device, NVML_RESTRICTED_API_SET_APPLICATION_CLOCKS, enableState);
+                });
+                check(
+                    "NvmlDeviceGetAPIRestriction",
+                    [&] {
+                        return tr.NvmlDeviceGetAPIRestriction(
+                            device, NVML_RESTRICTED_API_SET_APPLICATION_CLOCKS, &enableState);
+                    },
+                    OUT(enableState));
+                check(
+                    "NvmlDeviceGetSamples",
+                    [&] {
+                        return tr.NvmlDeviceGetSamples(
+                            device, NVML_TOTAL_POWER_SAMPLES, 0, &valueType, &uintValue, nullptr);
+                    },
+                    OUT(valueType),
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetPcieThroughput",
+                    [&] { return tr.NvmlDeviceGetPcieThroughput(device, NVML_PCIE_UTIL_TX_BYTES, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetPcieReplayCounter",
+                    [&] { return tr.NvmlDeviceGetPcieReplayCounter(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetNvLinkState",
+                    [&] { return tr.NvmlDeviceGetNvLinkState(device, 0, &enableState); },
+                    OUT(enableState));
+                check(
+                    "NvmlDeviceGetNvLinkVersion",
+                    [&] { return tr.NvmlDeviceGetNvLinkVersion(device, 0, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetNvLinkRemotePciInfo",
+                    [&] { return tr.NvmlDeviceGetNvLinkRemotePciInfo(device, 0, &pciInfo); },
+                    OUT(pciInfo));
+                check(
+                    "NvmlDeviceGetNvLinkRemotePciInfo_v2",
+                    [&] { return tr.NvmlDeviceGetNvLinkRemotePciInfo_v2(device, 0, &pciInfo); },
+                    OUT(pciInfo));
+                check(
+                    "NvmlDeviceGetNvLinkRemoteDeviceType",
+                    [&] {
+                        return tr.NvmlDeviceGetNvLinkRemoteDeviceType(
+                            device, 0, reinterpret_cast<nvmlIntNvLinkDeviceType_t *>(&intValue));
+                    },
+                    OUT(intValue));
+                check(
+                    "NvmlDeviceSetNvLinkUtilizationControl",
+                    [&] { return tr.NvmlDeviceSetNvLinkUtilizationControl(device, 0, 0, &nvlinkControl, 0); },
+                    OUT(nvlinkControl));
+                check(
+                    "NvmlDeviceGetNvLinkUtilizationControl",
+                    [&] { return tr.NvmlDeviceGetNvLinkUtilizationControl(device, 0, 0, &nvlinkControl); },
+                    OUT(nvlinkControl));
+                check(
+                    "NvmlDeviceGetNvLinkCapability",
+                    [&] {
+                        return tr.NvmlDeviceGetNvLinkCapability(device, 0, NVML_NVLINK_CAP_P2P_SUPPORTED, &uintValue);
+                    },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetNvLinkErrorCounter",
+                    [&] {
+                        return tr.NvmlDeviceGetNvLinkErrorCounter(device, 0, NVML_NVLINK_ERROR_DL_REPLAY, &ullValue);
+                    },
+                    OUT(ullValue));
+                check("NvmlDeviceResetNvLinkErrorCounters",
+                      [&] { return tr.NvmlDeviceResetNvLinkErrorCounters(device, 0); });
+                check(
+                    "NvmlDeviceGetNvLinkUtilizationCounter",
+                    [&] { return tr.NvmlDeviceGetNvLinkUtilizationCounter(device, 0, 0, &ullValue, &ullValue2); },
+                    OUT(ullValue),
+                    OUT(ullValue2));
+                check("NvmlDeviceFreezeNvLinkUtilizationCounter",
+                      [&] { return tr.NvmlDeviceFreezeNvLinkUtilizationCounter(device, 0, 0, enableState); });
+                check("NvmlDeviceResetNvLinkUtilizationCounter",
+                      [&] { return tr.NvmlDeviceResetNvLinkUtilizationCounter(device, 0, 0); });
+                check(
+                    "NvmlDeviceGetGspFirmwareVersion",
+                    [&] { return tr.NvmlDeviceGetGspFirmwareVersion(device, text); },
+                    OUT(text));
+                check(
+                    "NvmlDeviceGetGspFirmwareMode",
+                    [&] { return tr.NvmlDeviceGetGspFirmwareMode(device, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check("NvmlDeviceSetVirtualizationMode", [&] {
+                    return tr.NvmlDeviceSetVirtualizationMode(device, static_cast<nvmlGpuVirtualizationMode_t>(0));
+                });
+                check(
+                    "NvmlDeviceGetCreatableVgpus",
+                    [&] { return tr.NvmlDeviceGetCreatableVgpus(device, &uintValue, nullptr); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetVgpuUtilization",
+                    [&] { return tr.NvmlDeviceGetVgpuUtilization(device, 0, &valueType, &uintValue, nullptr); },
+                    OUT(valueType),
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetVgpuMetadata",
+                    [&] { return tr.NvmlDeviceGetVgpuMetadata(device, &pgpuMetadata, &uintValue); },
+                    OUT(pgpuMetadata),
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetPgpuMetadataString",
+                    [&] { return tr.NvmlDeviceGetPgpuMetadataString(device, text, &uintValue); },
+                    OUT(uintValue),
+                    OUT(text));
+                check(
+                    "NvmlDeviceGetVgpuProcessUtilization",
+                    [&] {
+                        return tr.NvmlDeviceGetVgpuProcessUtilization(
+                            device, 0, &uintValue, &vgpuProcessUtilizationSample);
+                    },
+                    OUT(uintValue),
+                    OUT(vgpuProcessUtilizationSample));
+                check(
+                    "NvmlDeviceGetEncoderCapacity",
+                    [&] { return tr.NvmlDeviceGetEncoderCapacity(device, NVML_ENCODER_QUERY_H264, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetEncoderStats",
+                    [&] { return tr.NvmlDeviceGetEncoderStats(device, &uintValue, &uintValue2, &uintValue3); },
+                    OUT(uintValue),
+                    OUT(uintValue2),
+                    OUT(uintValue3));
+                check(
+                    "NvmlDeviceGetEncoderSessions",
+                    [&] { return tr.NvmlDeviceGetEncoderSessions(device, &uintValue, nullptr); },
+                    OUT(uintValue));
+                check("NvmlDeviceGetFBCStats", [&] { return tr.NvmlDeviceGetFBCStats(device, nullptr); });
+                check(
+                    "NvmlDeviceGetFieldValues",
+                    [&] { return tr.NvmlDeviceGetFieldValues(device, 1, &fieldValue); },
+                    OUT(fieldValue));
+                check("NvmlDeviceGetGridLicensableFeatures",
+                      [&] { return tr.NvmlDeviceGetGridLicensableFeatures(device, nullptr); });
+                check("NvmlDeviceGetGridLicensableFeatures_v2",
+                      [&] { return tr.NvmlDeviceGetGridLicensableFeatures_v2(device, nullptr); });
+                check("NvmlDeviceGetGridLicensableFeatures_v3",
+                      [&] { return tr.NvmlDeviceGetGridLicensableFeatures_v3(device, nullptr); });
+                check("NvmlDeviceGetGridLicensableFeatures_v4",
+                      [&] { return tr.NvmlDeviceGetGridLicensableFeatures_v4(device, nullptr); });
+                check("NvmlDeviceSetMigMode", [&] { return tr.NvmlDeviceSetMigMode(device, 0, nullptr); });
+                check(
+                    "NvmlDeviceGetMigMode",
+                    [&] { return tr.NvmlDeviceGetMigMode(device, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlDeviceGetGpuInstanceProfileInfo",
+                    [&] { return tr.NvmlDeviceGetGpuInstanceProfileInfo(device, 0, &gpuInstanceProfileInfo); },
+                    OUT(gpuInstanceProfileInfo));
+                check(
+                    "NvmlDeviceGetGpuInstanceProfileInfoV",
+                    [&] { return tr.NvmlDeviceGetGpuInstanceProfileInfoV(device, 0, &gpuInstanceProfileInfoV2); },
+                    OUT(gpuInstanceProfileInfoV2));
+                check(
+                    "NvmlDeviceGetGpuInstanceRemainingCapacity",
+                    [&] { return tr.NvmlDeviceGetGpuInstanceRemainingCapacity(device, 0, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetGpuInstancePossiblePlacements",
+                    [&] {
+                        return tr.NvmlDeviceGetGpuInstancePossiblePlacements(
+                            device, 0, &gpuInstancePlacement, &uintValue);
+                    },
+                    OUT(gpuInstancePlacement),
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetGpuInstancePossiblePlacements_v2",
+                    [&] {
+                        return tr.NvmlDeviceGetGpuInstancePossiblePlacements_v2(
+                            device, 0, &gpuInstancePlacement, &uintValue);
+                    },
+                    OUT(gpuInstancePlacement),
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceCreateGpuInstance",
+                    [&] {
+                        return tr.NvmlDeviceCreateGpuInstance(
+                            device, 0, reinterpret_cast<nvmlGpuInstance_t *>(&gpuInstance.gpuInstance));
+                    },
+                    OUT(gpuInstance));
+                check(
+                    "NvmlDeviceCreateGpuInstanceWithPlacement",
+                    [&] {
+                        return tr.NvmlDeviceCreateGpuInstanceWithPlacement(
+                            device,
+                            0,
+                            &gpuInstancePlacement,
+                            reinterpret_cast<nvmlGpuInstance_t *>(&gpuInstance.gpuInstance));
+                    },
+                    OUT(gpuInstancePlacement),
+                    OUT(gpuInstance));
+                check("NvmlGpuInstanceDestroy", [&] { return tr.NvmlGpuInstanceDestroy(gpuInstance); });
+                check(
+                    "NvmlDeviceGetGpuInstances",
+                    [&] { return tr.NvmlDeviceGetGpuInstances(device, 0, gpuInstances, instanceCount); },
+                    OUT(gpuInstances),
+                    OUT(instanceCount));
+                check(
+                    "NvmlGpuInstanceGetInfo",
+                    [&] { return tr.NvmlGpuInstanceGetInfo(gpuInstance, &gpuInstanceInfo); },
+                    OUT(gpuInstanceInfo));
+                check(
+                    "NvmlDeviceGetGpuInstanceById",
+                    [&] {
+                        return tr.NvmlDeviceGetGpuInstanceById(
+                            device, 0, reinterpret_cast<nvmlGpuInstance_t *>(&gpuInstance.gpuInstance));
+                    },
+                    OUT(gpuInstance));
+                check(
+                    "NvmlGpuInstanceGetComputeInstanceProfileInfo",
+                    [&] {
+                        return tr.NvmlGpuInstanceGetComputeInstanceProfileInfo(
+                            gpuInstance, 0, 0, &computeInstanceProfileInfo);
+                    },
+                    OUT(computeInstanceProfileInfo));
+                check(
+                    "NvmlGpuInstanceGetComputeInstanceProfileInfoV",
+                    [&] {
+                        return tr.NvmlGpuInstanceGetComputeInstanceProfileInfoV(
+                            gpuInstance, 0, 0, &computeInstanceProfileInfoV2);
+                    },
+                    OUT(computeInstanceProfileInfoV2));
+                check(
+                    "NvmlGpuInstanceGetComputeInstanceRemainingCapacity",
+                    [&] { return tr.NvmlGpuInstanceGetComputeInstanceRemainingCapacity(gpuInstance, 0, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlGpuInstanceCreateComputeInstance",
+                    [&] {
+                        return tr.NvmlGpuInstanceCreateComputeInstance(
+                            gpuInstance,
+                            0,
+                            reinterpret_cast<nvmlComputeInstance_t *>(&computeInstance.computeInstance));
+                    },
+                    OUT(computeInstance));
+                check("NvmlComputeInstanceDestroy", [&] { return tr.NvmlComputeInstanceDestroy(computeInstance); });
+                check(
+                    "NvmlGpuInstanceGetComputeInstances",
+                    [&] {
+                        return tr.NvmlGpuInstanceGetComputeInstances(gpuInstance, 0, computeInstances, instanceCount);
+                    },
+                    OUT(computeInstances),
+                    OUT(instanceCount));
+                check(
+                    "NvmlGpuInstanceGetComputeInstanceById",
+                    [&] {
+                        return tr.NvmlGpuInstanceGetComputeInstanceById(
+                            gpuInstance,
+                            0,
+                            reinterpret_cast<nvmlComputeInstance_t *>(&computeInstance.computeInstance));
+                    },
+                    OUT(computeInstance));
+                check(
+                    "NvmlComputeInstanceGetInfo",
+                    [&] { return tr.NvmlComputeInstanceGetInfo(computeInstance, &computeInstanceInfo); },
+                    OUT(computeInstanceInfo));
+                check(
+                    "NvmlComputeInstanceGetInfo_v2",
+                    [&] { return tr.NvmlComputeInstanceGetInfo_v2(computeInstance, &computeInstanceInfo); },
+                    OUT(computeInstanceInfo));
+                check(
+                    "NvmlDeviceIsMigDeviceHandle",
+                    [&] { return tr.NvmlDeviceIsMigDeviceHandle(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetGpuInstanceId",
+                    [&] { return tr.NvmlDeviceGetGpuInstanceId(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetComputeInstanceId",
+                    [&] { return tr.NvmlDeviceGetComputeInstanceId(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetMaxMigDeviceCount",
+                    [&] { return tr.NvmlDeviceGetMaxMigDeviceCount(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetAttributes",
+                    [&] { return tr.NvmlDeviceGetAttributes(device, &attributes); },
+                    OUT(attributes));
+                check(
+                    "NvmlDeviceGetAttributes_v2",
+                    [&] { return tr.NvmlDeviceGetAttributes_v2(device, &attributes); },
+                    OUT(attributes));
+                check(
+                    "NvmlDeviceGetRemappedRows",
+                    [&] {
+                        return tr.NvmlDeviceGetRemappedRows(device, &uintValue, &uintValue2, &uintValue3, &uintValue4);
+                    },
+                    OUT(uintValue),
+                    OUT(uintValue2),
+                    OUT(uintValue3),
+                    OUT(uintValue4));
+                check(
+                    "NvmlDeviceGetRowRemapperHistogram",
+                    [&] { return tr.NvmlDeviceGetRowRemapperHistogram(device, &rowRemapperHistogramValues); },
+                    OUT(rowRemapperHistogramValues));
+                check("NvmlDeviceGetBusType", [&] { return tr.NvmlDeviceGetBusType(device, nullptr); });
+                check(
+                    "NvmlDeviceGetIrqNum", [&] { return tr.NvmlDeviceGetIrqNum(device, &uintValue); }, OUT(uintValue));
+                check(
+                    "NvmlDeviceGetNumGpuCores",
+                    [&] { return tr.NvmlDeviceGetNumGpuCores(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetPowerSource",
+                    [&] { return tr.NvmlDeviceGetPowerSource(device, &powerSource); },
+                    OUT(powerSource));
+                check(
+                    "NvmlDeviceGetMemoryBusWidth",
+                    [&] { return tr.NvmlDeviceGetMemoryBusWidth(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetPcieLinkMaxSpeed",
+                    [&] { return tr.NvmlDeviceGetPcieLinkMaxSpeed(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetAdaptiveClockInfoStatus",
+                    [&] { return tr.NvmlDeviceGetAdaptiveClockInfoStatus(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetPcieSpeed",
+                    [&] { return tr.NvmlDeviceGetPcieSpeed(device, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlDeviceGetDynamicPstatesInfo",
+                    [&] { return tr.NvmlDeviceGetDynamicPstatesInfo(device, &dynamicPstatesInfo); },
+                    OUT(dynamicPstatesInfo));
+                check("NvmlDeviceSetFanSpeed_v2", [&] { return tr.NvmlDeviceSetFanSpeed_v2(device, 0, 0); });
+                check("NvmlDeviceSetDefaultFanSpeed_v2", [&] { return tr.NvmlDeviceSetDefaultFanSpeed_v2(device, 0); });
+                check(
+                    "NvmlDeviceGetThermalSettings",
+                    [&] { return tr.NvmlDeviceGetThermalSettings(device, 0, &thermalSettings); },
+                    OUT(thermalSettings));
+                check(
+                    "NvmlDeviceGetMinMaxClockOfPState",
+                    [&] {
+                        return tr.NvmlDeviceGetMinMaxClockOfPState(device, clockType, pstate, &uintValue, &uintValue2);
+                    },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlDeviceGetSupportedPerformanceStates",
+                    [&] { return tr.NvmlDeviceGetSupportedPerformanceStates(device, &pstate, 1); },
+                    OUT(pstate));
+                check(
+                    "NvmlDeviceGetGpcClkVfOffset",
+                    [&] { return tr.NvmlDeviceGetGpcClkVfOffset(device, &intValue); },
+                    OUT(intValue));
+                check("NvmlDeviceSetGpcClkVfOffset", [&] { return tr.NvmlDeviceSetGpcClkVfOffset(device, 0); });
+                check(
+                    "NvmlDeviceGetMemClkVfOffset",
+                    [&] { return tr.NvmlDeviceGetMemClkVfOffset(device, &intValue); },
+                    OUT(intValue));
+                check("NvmlDeviceSetMemClkVfOffset", [&] { return tr.NvmlDeviceSetMemClkVfOffset(device, 0); });
+                check(
+                    "NvmlDeviceGetMinMaxFanSpeed",
+                    [&] { return tr.NvmlDeviceGetMinMaxFanSpeed(device, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlDeviceGetGpcClkMinMaxVfOffset",
+                    [&] { return tr.NvmlDeviceGetGpcClkMinMaxVfOffset(device, &intValue, &intValue2); },
+                    OUT(intValue),
+                    OUT(intValue2));
+                check(
+                    "NvmlDeviceGetMemClkMinMaxVfOffset",
+                    [&] { return tr.NvmlDeviceGetMemClkMinMaxVfOffset(device, &intValue, &intValue2); },
+                    OUT(intValue),
+                    OUT(intValue2));
+                check("NvmlGpmSampleGet", [&] { return tr.NvmlGpmSampleGet(device, gpmSample); }, OUT(gpmSample));
+                check(
+                    "NvmlGpmMigSampleGet",
+                    [&] { return tr.NvmlGpmMigSampleGet(device, 0, gpmSample); },
+                    OUT(gpmSample));
+                check(
+                    "NvmlGpmQueryDeviceSupport",
+                    [&] { return tr.NvmlGpmQueryDeviceSupport(device, &gpmSupport); },
+                    OUT(gpmSupport));
+                check(
+                    "NvmlDeviceGetGpuFabricInfo",
+                    [&] { return tr.NvmlDeviceGetGpuFabricInfo(device, &gpuFabricInfo); },
+                    OUT(gpuFabricInfo));
+                check(
+                    "NvmlDeviceGetGpuFabricInfoV",
+                    [&] { return tr.NvmlDeviceGetGpuFabricInfoV(device, &gpuFabricInfoV); },
+                    OUT(gpuFabricInfoV));
+                check(
+                    "NvmlDeviceGetArchitecture",
+                    [&] { return tr.NvmlDeviceGetArchitecture(device, &architecture); },
+                    OUT(architecture));
+                check(
+                    "NvmlDeviceWorkloadPowerProfileGetProfilesInfo",
+                    [&] { return tr.NvmlDeviceWorkloadPowerProfileGetProfilesInfo(device, &profilesInfo); },
+                    OUT(profilesInfo));
+                check(
+                    "NvmlDeviceWorkloadPowerProfileGetCurrentProfiles",
+                    [&] { return tr.NvmlDeviceWorkloadPowerProfileGetCurrentProfiles(device, &currentProfiles); },
+                    OUT(currentProfiles));
+                check(
+                    "NvmlDeviceWorkloadPowerProfileSetRequestedProfiles",
+                    [&] { return tr.NvmlDeviceWorkloadPowerProfileSetRequestedProfiles(device, &requestedProfiles); },
+                    OUT(requestedProfiles));
+                check(
+                    "NvmlDeviceWorkloadPowerProfileClearRequestedProfiles",
+                    [&] { return tr.NvmlDeviceWorkloadPowerProfileClearRequestedProfiles(device, &requestedProfiles); },
+                    OUT(requestedProfiles));
+                check(
+                    "NvmlDeviceGetPlatformInfo",
+                    [&] { return tr.NvmlDeviceGetPlatformInfo(device, &platformInfo); },
+                    OUT(platformInfo));
+                check(
+                    "NvmlDeviceReadPRMCounters_v1",
+                    [&] { return tr.NvmlDeviceReadPRMCounters_v1(device, &prmCounterList); },
+                    OUT(prmCounterList));
+                check("NvmlDeviceReadWritePRM_v1",
+                      [&] { return tr.NvmlDeviceReadWritePRM_v1(device, static_cast<nvmlPRMTLV_v1_t *>(nullptr)); });
+                check(
+                    "NvmlDeviceGetHostVgpuMode",
+                    [&] {
+                        return tr.NvmlDeviceGetHostVgpuMode(device, reinterpret_cast<nvmlHostVgpuMode_t *>(&intValue));
+                    },
+                    OUT(intValue));
+                check(
+                    "NvmlDeviceWorkloadPowerProfileUpdateProfiles_v1",
+                    [&] { return tr.NvmlDeviceWorkloadPowerProfileUpdateProfiles_v1(device, &updateProfiles); },
+                    OUT(updateProfiles));
+            }
+        }
 
-    SECTION("Vgpu type and instance methods")
-    {
-        CHECK(tr.NvmlVgpuTypeGetClass(staleVgpuType, text, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetName(staleVgpuType, text, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetGpuInstanceProfileId(staleVgpuType, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetDeviceID(staleVgpuType, &ullValue, &ullValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetFramebufferSize(staleVgpuType, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetNumDisplayHeads(staleVgpuType, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetResolution(staleVgpuType, 0, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetLicense(staleVgpuType, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetFrameRateLimit(staleVgpuType, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetMaxInstancesPerVm(staleVgpuType, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetCapabilities(staleVgpuType, vgpuCapability, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetVmID(staleVgpuInstance, text, sizeof(text), &vgpuVmIdType)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetUUID(staleVgpuInstance, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetMdevUUID(staleVgpuInstance, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetVmDriverVersion(staleVgpuInstance, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetFbUsage(staleVgpuInstance, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetLicenseStatus(staleVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetLicenseInfo(staleVgpuInstance, &vgpuLicenseInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetLicenseInfo_v2(staleVgpuInstance, &vgpuLicenseInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetType(staleVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetFrameRateLimit(staleVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetEccMode(staleVgpuInstance, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetEncoderCapacity(staleVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceSetEncoderCapacity(staleVgpuInstance, uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetMetadata(staleVgpuInstance, &vgpuMetadata, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetGpuPciId(staleVgpuInstance, text, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetGpuInstanceId(staleVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetEncoderStats(staleVgpuInstance, &uintValue, &uintValue2, &uintValue3)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetEncoderSessions(staleVgpuInstance, &uintValue, nullptr)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetFBCStats(staleVgpuInstance, &fbcStats) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetFBCSessions(staleVgpuInstance, &uintValue, &fbcSessionInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetAccountingMode(staleVgpuInstance, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetAccountingPids(staleVgpuInstance, &uintValue, &uintValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetAccountingStats(staleVgpuInstance, 1, &accountingStats)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceClearAccountingPids(staleVgpuInstance) == NVML_ERROR_UNINITIALIZED);
+        WHEN("generated vGPU wrapper types are stale")
+        {
+            THEN("each stale vGPU call reports uninitialized")
+            {
+                check(
+                    "NvmlVgpuInstanceGetUUID",
+                    [&] { return tr.NvmlVgpuInstanceGetUUID(vgpuInstance, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlVgpuInstanceGetMdevUUID",
+                    [&] { return tr.NvmlVgpuInstanceGetMdevUUID(vgpuInstance, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlVgpuInstanceGetVmDriverVersion",
+                    [&] { return tr.NvmlVgpuInstanceGetVmDriverVersion(vgpuInstance, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlVgpuInstanceGetVmID",
+                    [&] { return tr.NvmlVgpuInstanceGetVmID(vgpuInstance, text, sizeof(text), &vgpuVmIdType); },
+                    OUT(vgpuVmIdType),
+                    OUT(text));
+                check(
+                    "NvmlVgpuInstanceGetFbUsage",
+                    [&] { return tr.NvmlVgpuInstanceGetFbUsage(vgpuInstance, &ullValue); },
+                    OUT(ullValue));
+                check(
+                    "NvmlVgpuInstanceGetLicenseStatus",
+                    [&] { return tr.NvmlVgpuInstanceGetLicenseStatus(vgpuInstance, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuInstanceGetLicenseInfo",
+                    [&] { return tr.NvmlVgpuInstanceGetLicenseInfo(vgpuInstance, &vgpuLicenseInfo); },
+                    OUT(vgpuLicenseInfo));
+                check(
+                    "NvmlVgpuInstanceGetLicenseInfo_v2",
+                    [&] { return tr.NvmlVgpuInstanceGetLicenseInfo_v2(vgpuInstance, &vgpuLicenseInfo); },
+                    OUT(vgpuLicenseInfo));
+                check(
+                    "NvmlVgpuInstanceGetType",
+                    [&] { return tr.NvmlVgpuInstanceGetType(vgpuInstance, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuInstanceGetFrameRateLimit",
+                    [&] { return tr.NvmlVgpuInstanceGetFrameRateLimit(vgpuInstance, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuInstanceGetEccMode",
+                    [&] { return tr.NvmlVgpuInstanceGetEccMode(vgpuInstance, &enableState); },
+                    OUT(enableState));
+                check(
+                    "NvmlVgpuInstanceGetEncoderCapacity",
+                    [&] { return tr.NvmlVgpuInstanceGetEncoderCapacity(vgpuInstance, &uintValue); },
+                    OUT(uintValue));
+                check("NvmlVgpuInstanceSetEncoderCapacity",
+                      [&] { return tr.NvmlVgpuInstanceSetEncoderCapacity(vgpuInstance, uintValue); });
+                check(
+                    "NvmlVgpuInstanceGetMetadata",
+                    [&] { return tr.NvmlVgpuInstanceGetMetadata(vgpuInstance, &vgpuMetadata, &uintValue); },
+                    OUT(vgpuMetadata),
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuInstanceGetGpuPciId",
+                    [&] { return tr.NvmlVgpuInstanceGetGpuPciId(vgpuInstance, text, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuInstanceGetGpuInstanceId",
+                    [&] { return tr.NvmlVgpuInstanceGetGpuInstanceId(vgpuInstance, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuInstanceGetEncoderStats",
+                    [&] {
+                        return tr.NvmlVgpuInstanceGetEncoderStats(vgpuInstance, &uintValue, &uintValue2, &uintValue3);
+                    },
+                    OUT(uintValue),
+                    OUT(uintValue2),
+                    OUT(uintValue3));
+                check(
+                    "NvmlVgpuInstanceGetEncoderSessions",
+                    [&] {
+                        return tr.NvmlVgpuInstanceGetEncoderSessions(vgpuInstance, &uintValue, &encoderSessionInfo);
+                    },
+                    OUT(uintValue),
+                    OUT(encoderSessionInfo));
+                check("NvmlVgpuInstanceGetFBCStats",
+                      [&] { return tr.NvmlVgpuInstanceGetFBCStats(vgpuInstance, nullptr); });
+                check(
+                    "NvmlVgpuInstanceGetFBCSessions",
+                    [&] { return tr.NvmlVgpuInstanceGetFBCSessions(vgpuInstance, &uintValue, &fbcSessionInfo); },
+                    OUT(uintValue),
+                    OUT(fbcSessionInfo));
+                check(
+                    "NvmlVgpuInstanceGetAccountingMode",
+                    [&] { return tr.NvmlVgpuInstanceGetAccountingMode(vgpuInstance, &enableState); },
+                    OUT(enableState));
+                check(
+                    "NvmlVgpuInstanceGetAccountingPids",
+                    [&] { return tr.NvmlVgpuInstanceGetAccountingPids(vgpuInstance, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlVgpuInstanceGetAccountingStats",
+                    [&] { return tr.NvmlVgpuInstanceGetAccountingStats(vgpuInstance, 123, &accountingStats); },
+                    OUT(accountingStats));
+                check("NvmlVgpuInstanceClearAccountingPids",
+                      [&] { return tr.NvmlVgpuInstanceClearAccountingPids(vgpuInstance); });
+                check(
+                    "NvmlVgpuTypeGetClass",
+                    [&] { return tr.NvmlVgpuTypeGetClass(vgpuTypeId, text, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuTypeGetName",
+                    [&] { return tr.NvmlVgpuTypeGetName(vgpuTypeId, text, &uintValue); },
+                    OUT(uintValue),
+                    OUT(text));
+                check(
+                    "NvmlVgpuTypeGetGpuInstanceProfileId",
+                    [&] { return tr.NvmlVgpuTypeGetGpuInstanceProfileId(vgpuTypeId, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuTypeGetDeviceID",
+                    [&] { return tr.NvmlVgpuTypeGetDeviceID(vgpuTypeId, &ullValue, &ullValue2); },
+                    OUT(ullValue),
+                    OUT(ullValue2));
+                check(
+                    "NvmlVgpuTypeGetFramebufferSize",
+                    [&] { return tr.NvmlVgpuTypeGetFramebufferSize(vgpuTypeId, &ullValue); },
+                    OUT(ullValue));
+                check(
+                    "NvmlVgpuTypeGetNumDisplayHeads",
+                    [&] { return tr.NvmlVgpuTypeGetNumDisplayHeads(vgpuTypeId, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuTypeGetResolution",
+                    [&] { return tr.NvmlVgpuTypeGetResolution(vgpuTypeId, 0, &uintValue, &uintValue2); },
+                    OUT(uintValue),
+                    OUT(uintValue2));
+                check(
+                    "NvmlVgpuTypeGetLicense",
+                    [&] { return tr.NvmlVgpuTypeGetLicense(vgpuTypeId, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlVgpuTypeGetFrameRateLimit",
+                    [&] { return tr.NvmlVgpuTypeGetFrameRateLimit(vgpuTypeId, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuTypeGetMaxInstancesPerVm",
+                    [&] { return tr.NvmlVgpuTypeGetMaxInstancesPerVm(vgpuTypeId, &uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlVgpuTypeGetCapabilities",
+                    [&] { return tr.NvmlVgpuTypeGetCapabilities(vgpuTypeId, vgpuCapability, &uintValue); },
+                    OUT(uintValue));
+            }
+        }
     }
-
-    SECTION("Generated MIG, fabric, and platform methods")
-    {
-        CHECK(tr.NvmlDeviceSetMigMode(staleDevice, 0, &nvmlReturn) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMigMode(staleDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceProfileInfo(staleDevice, 0, &gpuInstanceProfileInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceProfileInfoV(staleDevice, 0, &gpuInstanceProfileInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceRemainingCapacity(staleDevice, 0, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstancePossiblePlacements(staleDevice, 0, &gpuInstancePlacement, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstancePossiblePlacements_v2(staleDevice, 0, &gpuInstancePlacement, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceCreateGpuInstance(staleDevice, 0, &gpuInstance) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceCreateGpuInstanceWithPlacement(staleDevice, 0, &gpuInstancePlacement, &gpuInstance)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceById(staleDevice, 0, &gpuInstance) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceIsMigDeviceHandle(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceId(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeInstanceId(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxMigDeviceCount(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceDestroy(staleGpuInstance) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetInfo(staleGpuInstance, &gpuInstanceInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetComputeInstanceProfileInfo(staleGpuInstance, 0, 0, &computeInstanceProfileInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetComputeInstanceProfileInfoV(staleGpuInstance, 0, 0, &computeInstanceProfileInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetComputeInstanceRemainingCapacity(staleGpuInstance, 0, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceCreateComputeInstance(staleGpuInstance, 0, &computeInstance)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetComputeInstanceById(staleGpuInstance, 0, &computeInstance)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlComputeInstanceDestroy(staleComputeInstance) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlComputeInstanceGetInfo(staleComputeInstance, &computeInstanceInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlComputeInstanceGetInfo_v2(staleComputeInstance, &computeInstanceInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpmMigSampleGet(staleDevice, 0, gpmSample) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpmSampleGet(staleDevice, gpmSample) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpmQueryDeviceSupport(staleDevice, &gpmSupport) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuFabricInfo(staleDevice, &gpuFabricInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuFabricInfoV(staleDevice, &gpuFabricInfoV) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetArchitecture(staleDevice, reinterpret_cast<nvmlDeviceArchitecture_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceWorkloadPowerProfileGetProfilesInfo(staleDevice, &profilesInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceWorkloadPowerProfileGetCurrentProfiles(staleDevice, &currentProfiles)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceWorkloadPowerProfileUpdateProfiles_v1(staleDevice, &updateProfiles)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPlatformInfo(staleDevice, &platformInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceReadPRMCounters_v1(staleDevice, &prmCounterList) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceReadWritePRM_v1(staleDevice, &prmBuffer) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDynamicPstatesInfo(staleDevice, &dynamicPstatesInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAdaptiveClockInfoStatus(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNumGpuCores(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemoryBusWidth(staleDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMinMaxClockOfPState(
-                  staleDevice, static_cast<nvmlClockType_t>(0), pstate, &uintValue, &uintValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedPerformanceStates(staleDevice, &pstate, 1) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpcClkVfOffset(staleDevice, &intValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetGpcClkVfOffset(staleDevice, intValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemClkVfOffset(staleDevice, &intValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetMemClkVfOffset(staleDevice, intValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMinMaxFanSpeed(staleDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpcClkMinMaxVfOffset(staleDevice, &intValue, &intValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemClkMinMaxVfOffset(staleDevice, &intValue, &intValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAttributes(staleDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAttributes_v2(staleDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetRemappedRows(staleDevice, &uintValue, &uintValue2, &uintValue3, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetRowRemapperHistogram(staleDevice, &rowRemapperHistogramValues)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFieldValues(staleDevice, 1, &fieldValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGridLicensableFeatures(staleDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGridLicensableFeatures_v2(staleDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGridLicensableFeatures_v3(staleDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGridLicensableFeatures_v4(staleDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGspFirmwareVersion(staleDevice, text) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGspFirmwareMode(staleDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEncoderCapacity(staleDevice, static_cast<nvmlEncoderType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEncoderStats(staleDevice, &uintValue, &uintValue2, &uintValue3)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEncoderSessions(staleDevice, &uintValue, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFBCStats(staleDevice, &fbcStats) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFBCSessions(staleDevice, &uintValue, &fbcSessionInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetHostVgpuMode(staleDevice, reinterpret_cast<nvmlHostVgpuMode_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-    }
-
-    (void)excludedDeviceInfo;
-    (void)gpuMode;
-    (void)gpuMode2;
-    (void)fbcStats;
-    (void)vgpuCompatibility;
 }
 
-TEST_CASE("NvmlTaskRunner generated public methods reject blocked task runner")
+
+SCENARIO("NvmlTaskRunner: generated system and event methods reject unavailable execution")
 {
-    NvmlTaskRunner tr;
-    tr.Start();
-    tr.BlockNewTasks();
-    SafeNvmlHandle currentDevice {};
-    currentDevice.generation = tr.GetGeneration();
+    bool const saturatedQueue = GENERATE(false, true);
+    CAPTURE(saturatedQueue);
 
-    SafeVgpuTypeId currentVgpuType {};
-    currentVgpuType.generation = tr.GetGeneration();
-
-    SafeVgpuInstance currentVgpuInstance {};
-    currentVgpuInstance.generation = tr.GetGeneration();
-
-    SafeGpuInstance currentGpuInstance {};
-    currentGpuInstance.generation = tr.GetGeneration();
-
-    SafeComputeInstance currentComputeInstance {};
-    currentComputeInstance.generation = tr.GetGeneration();
-
-    char text[64] {};
-    unsigned int uintValue {};
-    unsigned int uintValue2 {};
-    unsigned int uintValue3 {};
-    unsigned long ulongValues[4] {};
-    unsigned long long ullValue {};
-    unsigned long long ullValue2 {};
-    int intValue {};
-    int intValue2 {};
-
-    nvmlAccountingStats_t accountingStats {};
-    nvmlBAR1Memory_t bar1Memory {};
-    nvmlBridgeChipHierarchy_t bridgeHierarchy {};
-    nvmlComputeMode_t computeMode {};
-    nvmlEccErrorCounts_t eccCounts {};
-    nvmlEccSramErrorStatus_t sramStatus {};
-    nvmlEnableState_t enableState {};
-    nvmlEnableState_t enableState2 {};
-    nvmlExcludedDeviceInfo_t excludedDeviceInfo {};
-    nvmlFBCStats_t fbcStats {};
-    nvmlFBCSessionInfo_t fbcSessionInfo {};
-    nvmlFieldValue_t fieldValue {};
-    nvmlGpuDynamicPstatesInfo_t dynamicPstatesInfo {};
-    nvmlGpuFabricInfo_t gpuFabricInfo {};
-    nvmlGpuFabricInfoV_t gpuFabricInfoV {};
-    nvmlGpuInstance_t gpuInstance {};
-    nvmlGpuInstanceInfo_t gpuInstanceInfo {};
-    nvmlGpuInstancePlacement_t gpuInstancePlacement {};
-    nvmlGpuInstanceProfileInfo_t gpuInstanceProfileInfo {};
-    nvmlGpuInstanceProfileInfo_v2_t gpuInstanceProfileInfoV2 {};
-    nvmlGpuThermalSettings_t thermalSettings {};
-    nvmlGpuOperationMode_t gpuMode {};
-    nvmlGpuOperationMode_t gpuMode2 {};
-    nvmlGpuP2PStatus_t p2pStatus {};
-    nvmlGpuTopologyLevel_t topologyLevel {};
-    nvmlGpuVirtualizationMode_t virtualizationMode {};
-    nvmlMarginTemperature_t marginTemperature {};
-    nvmlMemory_t memory {};
-    nvmlMemory_v2_t memoryV2 {};
-    nvmlPciInfo_t pciInfo {};
-    nvmlPlatformInfo_t platformInfo {};
-    nvmlPRMCounterList_v1_t prmCounterList {};
-    nvmlPRMTLV_v1_t prmBuffer {};
-    nvmlComputeInstance_t computeInstance {};
-    nvmlComputeInstanceInfo_t computeInstanceInfo {};
-    nvmlComputeInstanceProfileInfo_t computeInstanceProfileInfo {};
-    nvmlComputeInstanceProfileInfo_v2_t computeInstanceProfileInfoV2 {};
-    nvmlProcessInfo_t processInfo {};
-    nvmlProcessInfo_v1_t processInfoV1 {};
-    nvmlProcessInfo_v2_t processInfoV2 {};
-    nvmlProcessUtilizationSample_t processUtilizationSample {};
-    nvmlPstates_t pstate {};
-    nvmlReturn_t nvmlReturn {};
-    nvmlRowRemapperHistogramValues_t rowRemapperHistogramValues {};
-    nvmlUnrepairableMemoryStatus_t unrepairableMemory {};
-    nvmlUtilization_t utilization {};
-    nvmlValueType_t valueType {};
-    nvmlVgpuCapability_t vgpuCapability {};
-    nvmlVgpuLicenseInfo_t vgpuLicenseInfo {};
-    nvmlVgpuMetadata_t vgpuMetadata {};
-    nvmlVgpuPgpuCompatibility_t vgpuCompatibility {};
-    nvmlVgpuPgpuMetadata_t pgpuMetadata {};
-    nvmlVgpuProcessUtilizationSample_t vgpuProcessUtilizationSample {};
-    nvmlVgpuVmIdType_t vgpuVmIdType {};
-    nvmlViolationTime_t violationTime {};
-    nvmlGpmSample_t gpmSample {};
-    nvmlGpmSupport_t gpmSupport {};
-    nvmlWorkloadPowerProfileCurrentProfiles_t currentProfiles {};
-    nvmlWorkloadPowerProfileProfilesInfo_t profilesInfo {};
-    nvmlWorkloadPowerProfileUpdateProfiles_v1_t updateProfiles {};
-
-    SECTION("Device identity and state methods")
+    TestNvmlTaskRunner tr;
+    if (saturatedQueue)
     {
-        CHECK(tr.NvmlDeviceGetClockInfo(currentDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxClockInfo(currentDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeMode(currentDevice, &computeMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetComputeMode(currentDevice, computeMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCudaComputeCapability(currentDevice, &intValue, &intValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDisplayMode(currentDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEccMode(currentDevice, &enableState, &enableState2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetEccMode(currentDevice, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDefaultEccMode(currentDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBoardId(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBoardPartNumber(currentDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetName(currentDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBrand(currentDevice, reinterpret_cast<nvmlBrandType_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSerial(currentDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetUUID(currentDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetIndex(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMinorNumber(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPersistenceMode(currentDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetPersistenceMode(currentDevice, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVbiosVersion(currentDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDisplayActive(currentDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDriverModel(currentDevice,
-                                          reinterpret_cast<nvmlDriverModel_t *>(&intValue),
-                                          reinterpret_cast<nvmlDriverModel_t *>(&intValue2))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetInforomVersion(currentDevice, static_cast<nvmlInforomObject_t>(0), text, sizeof(text))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetInforomImageVersion(currentDevice, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetInforomConfigurationChecksum(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceValidateInforom(currentDevice) == NVML_ERROR_UNINITIALIZED);
+        tr.SetQueueCapacity(1);
+        auto pendingTask
+            = tr.Enqueue(DcgmNs::make_task("held system queue saturation task", [] { return NVML_SUCCESS; }));
+        REQUIRE(pendingTask.has_value());
+    }
+    else
+    {
+        tr.BlockNewTasks();
     }
 
-    SECTION("Device memory, power, and thermal methods")
+    GIVEN("system, unit, event, and device-event method arguments")
     {
-        CHECK(tr.NvmlDeviceGetMemoryInfo(currentDevice, &memory) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemoryInfo_v2(currentDevice, &memoryV2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBAR1MemoryInfo(currentDevice, &bar1Memory) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetUtilizationRates(currentDevice, &utilization) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerState(currentDevice, &pstate) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPerformanceState(currentDevice, &pstate) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerUsage(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTotalEnergyConsumption(currentDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerManagementMode(currentDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerManagementLimit(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerManagementDefaultLimit(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEnforcedPowerLimit(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetPowerManagementLimit(currentDevice, uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerSource(currentDevice, reinterpret_cast<nvmlPowerSource_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPowerManagementLimitConstraints(currentDevice, &uintValue, &uintValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTemperature(currentDevice, static_cast<nvmlTemperatureSensors_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(
-            tr.NvmlDeviceGetTemperatureThreshold(currentDevice, static_cast<nvmlTemperatureThresholds_t>(0), &uintValue)
-            == NVML_ERROR_UNINITIALIZED);
-        CHECK(
-            tr.NvmlDeviceSetTemperatureThreshold(currentDevice, static_cast<nvmlTemperatureThresholds_t>(0), &intValue)
-            == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMarginTemperature(currentDevice, &marginTemperature) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFanSpeed(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFanSpeed_v2(currentDevice, 0, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTargetFanSpeed(currentDevice, 0, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetFanSpeed_v2(currentDevice, 0, uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetDefaultFanSpeed_v2(currentDevice, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNumFans(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetThermalSettings(currentDevice, 0, &thermalSettings) == NVML_ERROR_UNINITIALIZED);
-    }
+        SafeNvmlHandle device { reinterpret_cast<nvmlDevice_t>(0x1), 0, tr.GetGeneration() };
+        char text[64] {};
+        int intValue                  = 0;
+        unsigned int uintValue        = 0;
+        unsigned long long eventTypes = 0;
+        nvmlUnit_t unit               = reinterpret_cast<nvmlUnit_t>(0x2);
+        nvmlEventSet_t eventSet       = reinterpret_cast<nvmlEventSet_t>(0x3);
+        nvmlUnitFanSpeeds_t fanSpeeds {};
+        nvmlLedState_t ledState {};
+        nvmlPSUInfo_t psuInfo {};
+        nvmlUnitInfo_t unitInfo {};
+        nvmlHwbcEntry_t hwbcEntry {};
+        nvmlVgpuMetadata_t vgpuMetadata {};
+        nvmlVgpuPgpuMetadata_t pgpuMetadata {};
+        nvmlVgpuPgpuCompatibility_t compatibility {};
+        nvmlExcludedDeviceInfo_t excludedDeviceInfo {};
+        nvmlVgpuVersion_t supportedVersion {};
+        nvmlVgpuVersion_t currentVersion {};
+        nvmlConfComputeSystemState_t ccMode {};
+        nvmlGpmMetricsGet_t metricsGet {};
+        nvmlGpmSample_t gpmSample {};
+        nvmlSystemEventSetCreateRequest_t eventCreate {};
+        nvmlSystemEventSetFreeRequest_t eventFree {};
+        nvmlSystemRegisterEventRequest_t eventRegister {};
+        nvmlSystemEventSetWaitRequest_t eventWait {};
 
-    SECTION("Device pci, topology, process, and accounting methods")
-    {
-        CHECK(tr.NvmlDeviceGetPciInfo(currentDevice, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPciInfo_v2(currentDevice, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPciInfo_v3(currentDevice, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxPcieLinkGeneration(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxPcieLinkWidth(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCurrPcieLinkGeneration(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCurrPcieLinkWidth(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPcieThroughput(currentDevice, static_cast<nvmlPcieUtilCounter_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPcieReplayCounter(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPcieLinkMaxSpeed(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPcieSpeed(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetIrqNum(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBusType(currentDevice, reinterpret_cast<nvmlBusType_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetBridgeChipInfo(currentDevice, &bridgeHierarchy) == NVML_ERROR_UNINITIALIZED);
-        CHECK(
-            tr.NvmlDeviceGetDetailedEccErrors(
-                currentDevice, static_cast<nvmlMemoryErrorType_t>(0), static_cast<nvmlEccCounterType_t>(0), &eccCounts)
-            == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTotalEccErrors(
-                  currentDevice, static_cast<nvmlMemoryErrorType_t>(0), static_cast<nvmlEccCounterType_t>(0), &ullValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceClearEccErrorCounts(currentDevice, static_cast<nvmlEccCounterType_t>(0))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemoryErrorCounter(currentDevice,
-                                                 static_cast<nvmlMemoryErrorType_t>(0),
-                                                 static_cast<nvmlEccCounterType_t>(0),
-                                                 static_cast<nvmlMemoryLocation_t>(0),
-                                                 &ullValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetUnrepairableMemoryFlag(currentDevice, &unrepairableMemory) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetViolationStatus(currentDevice, static_cast<nvmlPerfPolicyType_t>(0), &violationTime)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSramEccErrorStatus(currentDevice, &sramStatus) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuOperationMode(currentDevice, &gpuMode, &gpuMode2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetGpuOperationMode(currentDevice, gpuMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMultiGpuBoard(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemoryAffinity(currentDevice, 4, ulongValues, static_cast<nvmlAffinityScope_t>(0))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCpuAffinityWithinScope(currentDevice, 4, ulongValues, static_cast<nvmlAffinityScope_t>(0))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCpuAffinity(currentDevice, 4, ulongValues) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetCpuAffinity(currentDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceClearCpuAffinity(currentDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetTopologyCommonAncestor(currentDevice, currentDevice, &topologyLevel)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetP2PStatus(currentDevice, currentDevice, static_cast<nvmlGpuP2PCapsIndex_t>(0), &p2pStatus)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeRunningProcesses(currentDevice, &uintValue, &processInfoV1)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeRunningProcesses_v2(currentDevice, &uintValue, &processInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeRunningProcesses_v3(currentDevice, &uintValue, &processInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGraphicsRunningProcesses(currentDevice, &uintValue, &processInfoV1)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGraphicsRunningProcesses_v2(currentDevice, &uintValue, &processInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGraphicsRunningProcesses_v3(currentDevice, &uintValue, &processInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMPSComputeRunningProcesses(currentDevice, &uintValue, &processInfoV1)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMPSComputeRunningProcesses_v2(currentDevice, &uintValue, &processInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMPSComputeRunningProcesses_v3(currentDevice, &uintValue, &processInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetProcessUtilization(currentDevice, &processUtilizationSample, &uintValue, 0)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAccountingMode(currentDevice, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetAccountingMode(currentDevice, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAccountingStats(currentDevice, 1, &accountingStats) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAccountingPids(currentDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAccountingBufferSize(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceClearAccountingPids(currentDevice) == NVML_ERROR_UNINITIALIZED);
-    }
+        auto check = [&](std::string_view methodName, auto &&call, auto const &...outputs) {
+            INFO("method: " << methodName);
+            CHECK(call() == NVML_ERROR_UNINITIALIZED);
+            (CheckOutputSnapshot(outputs), ...);
+        };
 
-    SECTION("Device nvlink, virtualization, and vgpu methods")
-    {
-        CHECK(tr.NvmlDeviceGetApplicationsClock(currentDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDefaultApplicationsClock(currentDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxCustomerBoostClock(currentDevice, static_cast<nvmlClockType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetClock(
-                  currentDevice, static_cast<nvmlClockType_t>(0), static_cast<nvmlClockId_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedMemoryClocks(currentDevice, &uintValue, &uintValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedGraphicsClocks(currentDevice, uintValue, &uintValue2, &uintValue3)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetGpuLockedClocks(currentDevice, 0, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetGpuLockedClocks(currentDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetMemoryLockedClocks(currentDevice, 0, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetMemoryLockedClocks(currentDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetApplicationsClocks(currentDevice, 0, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetApplicationsClocks(currentDevice) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAutoBoostedClocksEnabled(currentDevice, &enableState, &enableState2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetAutoBoostedClocksEnabled(currentDevice, enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetDefaultAutoBoostedClocksEnabled(currentDevice, enableState, 0)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCurrentClocksEventReasons(currentDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCurrentClocksThrottleReasons(currentDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedClocksEventReasons(currentDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedClocksThrottleReasons(currentDevice, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkState(currentDevice, 0, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkVersion(currentDevice, 0, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkRemotePciInfo(currentDevice, 0, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkRemotePciInfo_v2(currentDevice, 0, &pciInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkRemoteDeviceType(
-                  currentDevice, 0, reinterpret_cast<nvmlIntNvLinkDeviceType_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkCapability(currentDevice, 0, static_cast<nvmlNvLinkCapability_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkErrorCounter(currentDevice, 0, static_cast<nvmlNvLinkErrorCounter_t>(0), &ullValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetNvLinkErrorCounters(currentDevice, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetNvLinkUtilizationControl(currentDevice, 0, 0, nullptr, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkUtilizationControl(currentDevice, 0, 0, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNvLinkUtilizationCounter(currentDevice, 0, 0, &ullValue, &ullValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceFreezeNvLinkUtilizationCounter(currentDevice, 0, 0, enableState)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceResetNvLinkUtilizationCounter(currentDevice, 0, 0) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVirtualizationMode(currentDevice, &virtualizationMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetVirtualizationMode(currentDevice, virtualizationMode) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetCreatableVgpus(currentDevice, &uintValue, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVgpuUtilization(currentDevice, 0, &valueType, &uintValue, nullptr)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVgpuMetadata(currentDevice, &pgpuMetadata, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPgpuMetadataString(currentDevice, text, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetVgpuProcessUtilization(currentDevice, 0, &uintValue, &vgpuProcessUtilizationSample)
-              == NVML_ERROR_UNINITIALIZED);
+        WHEN("the generated public methods are invoked while execution is unavailable")
+        {
+            THEN("every method returns uninitialized without invoking real NVML")
+            {
+                check("NvmlDeviceRegisterEvents", [&] { return tr.NvmlDeviceRegisterEvents(device, 0x10, eventSet); });
+                check(
+                    "NvmlDeviceGetSupportedEventTypes",
+                    [&] { return tr.NvmlDeviceGetSupportedEventTypes(device, &eventTypes); },
+                    OUT(eventTypes));
+                check(
+                    "NvmlSystemGetDriverVersion",
+                    [&] { return tr.NvmlSystemGetDriverVersion(text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlSystemGetNVMLVersion",
+                    [&] { return tr.NvmlSystemGetNVMLVersion(text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlSystemGetCudaDriverVersion",
+                    [&] { return tr.NvmlSystemGetCudaDriverVersion(&intValue); },
+                    OUT(intValue));
+                check(
+                    "NvmlSystemGetCudaDriverVersion_v2",
+                    [&] { return tr.NvmlSystemGetCudaDriverVersion_v2(&intValue); },
+                    OUT(intValue));
+                check("NvmlUnitGetCount", [&] { return tr.NvmlUnitGetCount(&uintValue); }, OUT(uintValue));
+                check(
+                    "NvmlUnitGetFanSpeedInfo",
+                    [&] { return tr.NvmlUnitGetFanSpeedInfo(unit, &fanSpeeds); },
+                    OUT(fanSpeeds));
+                check("NvmlUnitGetHandleByIndex", [&] { return tr.NvmlUnitGetHandleByIndex(0, &unit); }, OUT(unit));
+                check("NvmlUnitGetLedState", [&] { return tr.NvmlUnitGetLedState(unit, &ledState); }, OUT(ledState));
+                check("NvmlUnitSetLedState", [&] { return tr.NvmlUnitSetLedState(unit, NVML_LED_COLOR_GREEN); });
+                check("NvmlUnitGetPsuInfo", [&] { return tr.NvmlUnitGetPsuInfo(unit, &psuInfo); }, OUT(psuInfo));
+                check(
+                    "NvmlUnitGetTemperature",
+                    [&] { return tr.NvmlUnitGetTemperature(unit, 0, &uintValue); },
+                    OUT(uintValue));
+                check("NvmlUnitGetUnitInfo", [&] { return tr.NvmlUnitGetUnitInfo(unit, &unitInfo); }, OUT(unitInfo));
+                check(
+                    "NvmlSystemGetHicVersion",
+                    [&] { return tr.NvmlSystemGetHicVersion(&uintValue, &hwbcEntry); },
+                    OUT(uintValue),
+                    OUT(hwbcEntry));
+                check("NvmlEventSetCreate", [&] { return tr.NvmlEventSetCreate(&eventSet); }, OUT(eventSet));
+                check("NvmlEventSetFree", [&] { return tr.NvmlEventSetFree(eventSet); });
+                check(
+                    "NvmlSystemGetProcessName",
+                    [&] { return tr.NvmlSystemGetProcessName(1234, text, sizeof(text)); },
+                    OUT(text));
+                check(
+                    "NvmlGetVgpuCompatibility",
+                    [&] { return tr.NvmlGetVgpuCompatibility(&vgpuMetadata, &pgpuMetadata, &compatibility); },
+                    OUT(vgpuMetadata),
+                    OUT(pgpuMetadata),
+                    OUT(compatibility));
+                check(
+                    "NvmlGetExcludedDeviceCount",
+                    [&] { return tr.NvmlGetExcludedDeviceCount(&uintValue); },
+                    OUT(uintValue));
+                check(
+                    "NvmlGetExcludedDeviceInfoByIndex",
+                    [&] { return tr.NvmlGetExcludedDeviceInfoByIndex(0, &excludedDeviceInfo); },
+                    OUT(excludedDeviceInfo));
+                check(
+                    "NvmlGetVgpuVersion",
+                    [&] { return tr.NvmlGetVgpuVersion(&supportedVersion, &currentVersion); },
+                    OUT(supportedVersion),
+                    OUT(currentVersion));
+                check(
+                    "NvmlSetVgpuVersion", [&] { return tr.NvmlSetVgpuVersion(&currentVersion); }, OUT(currentVersion));
+                check(
+                    "NvmlSystemGetConfComputeState",
+                    [&] { return tr.NvmlSystemGetConfComputeState(&ccMode); },
+                    OUT(ccMode));
+                check("NvmlGpmMetricsGet", [&] { return tr.NvmlGpmMetricsGet(&metricsGet); }, OUT(metricsGet));
+                check("NvmlGpmSampleAlloc", [&] { return tr.NvmlGpmSampleAlloc(&gpmSample); }, OUT(gpmSample));
+                check("NvmlGpmSampleFree", [&] { return tr.NvmlGpmSampleFree(gpmSample); });
+                check(
+                    "NvmlSystemEventSetCreate",
+                    [&] { return tr.NvmlSystemEventSetCreate(&eventCreate); },
+                    OUT(eventCreate));
+                check("NvmlSystemEventSetFree", [&] { return tr.NvmlSystemEventSetFree(&eventFree); }, OUT(eventFree));
+                check(
+                    "NvmlSystemRegisterEvents",
+                    [&] { return tr.NvmlSystemRegisterEvents(&eventRegister); },
+                    OUT(eventRegister));
+                check("NvmlSystemEventSetWait", [&] { return tr.NvmlSystemEventSetWait(&eventWait); }, OUT(eventWait));
+            }
+        }
     }
-
-    SECTION("Vgpu type and instance methods")
-    {
-        CHECK(tr.NvmlVgpuTypeGetClass(currentVgpuType, text, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetName(currentVgpuType, text, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetGpuInstanceProfileId(currentVgpuType, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetDeviceID(currentVgpuType, &ullValue, &ullValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetFramebufferSize(currentVgpuType, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetNumDisplayHeads(currentVgpuType, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetResolution(currentVgpuType, 0, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetLicense(currentVgpuType, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetFrameRateLimit(currentVgpuType, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetMaxInstancesPerVm(currentVgpuType, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuTypeGetCapabilities(currentVgpuType, vgpuCapability, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetVmID(currentVgpuInstance, text, sizeof(text), &vgpuVmIdType)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetUUID(currentVgpuInstance, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetMdevUUID(currentVgpuInstance, text, sizeof(text)) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetVmDriverVersion(currentVgpuInstance, text, sizeof(text))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetFbUsage(currentVgpuInstance, &ullValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetLicenseStatus(currentVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetLicenseInfo(currentVgpuInstance, &vgpuLicenseInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetLicenseInfo_v2(currentVgpuInstance, &vgpuLicenseInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetType(currentVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetFrameRateLimit(currentVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetEccMode(currentVgpuInstance, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetEncoderCapacity(currentVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceSetEncoderCapacity(currentVgpuInstance, uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetMetadata(currentVgpuInstance, &vgpuMetadata, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetGpuPciId(currentVgpuInstance, text, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetGpuInstanceId(currentVgpuInstance, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetEncoderStats(currentVgpuInstance, &uintValue, &uintValue2, &uintValue3)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetEncoderSessions(currentVgpuInstance, &uintValue, nullptr)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetFBCStats(currentVgpuInstance, &fbcStats) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetFBCSessions(currentVgpuInstance, &uintValue, &fbcSessionInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetAccountingMode(currentVgpuInstance, &enableState) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetAccountingPids(currentVgpuInstance, &uintValue, &uintValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceGetAccountingStats(currentVgpuInstance, 1, &accountingStats)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlVgpuInstanceClearAccountingPids(currentVgpuInstance) == NVML_ERROR_UNINITIALIZED);
-    }
-
-    SECTION("Generated MIG, fabric, and platform methods")
-    {
-        CHECK(tr.NvmlDeviceSetMigMode(currentDevice, 0, &nvmlReturn) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMigMode(currentDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceProfileInfo(currentDevice, 0, &gpuInstanceProfileInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceProfileInfoV(currentDevice, 0, &gpuInstanceProfileInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceRemainingCapacity(currentDevice, 0, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstancePossiblePlacements(currentDevice, 0, &gpuInstancePlacement, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstancePossiblePlacements_v2(currentDevice, 0, &gpuInstancePlacement, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceCreateGpuInstance(currentDevice, 0, &gpuInstance) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceCreateGpuInstanceWithPlacement(currentDevice, 0, &gpuInstancePlacement, &gpuInstance)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceById(currentDevice, 0, &gpuInstance) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceIsMigDeviceHandle(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuInstanceId(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetComputeInstanceId(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMaxMigDeviceCount(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceDestroy(currentGpuInstance) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetInfo(currentGpuInstance, &gpuInstanceInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetComputeInstanceProfileInfo(currentGpuInstance, 0, 0, &computeInstanceProfileInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetComputeInstanceProfileInfoV(currentGpuInstance, 0, 0, &computeInstanceProfileInfoV2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetComputeInstanceRemainingCapacity(currentGpuInstance, 0, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceCreateComputeInstance(currentGpuInstance, 0, &computeInstance)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpuInstanceGetComputeInstanceById(currentGpuInstance, 0, &computeInstance)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlComputeInstanceDestroy(currentComputeInstance) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlComputeInstanceGetInfo(currentComputeInstance, &computeInstanceInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlComputeInstanceGetInfo_v2(currentComputeInstance, &computeInstanceInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpmMigSampleGet(currentDevice, 0, gpmSample) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpmSampleGet(currentDevice, gpmSample) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlGpmQueryDeviceSupport(currentDevice, &gpmSupport) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuFabricInfo(currentDevice, &gpuFabricInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpuFabricInfoV(currentDevice, &gpuFabricInfoV) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetArchitecture(currentDevice, reinterpret_cast<nvmlDeviceArchitecture_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceWorkloadPowerProfileGetProfilesInfo(currentDevice, &profilesInfo)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceWorkloadPowerProfileGetCurrentProfiles(currentDevice, &currentProfiles)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceWorkloadPowerProfileUpdateProfiles_v1(currentDevice, &updateProfiles)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetPlatformInfo(currentDevice, &platformInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceReadPRMCounters_v1(currentDevice, &prmCounterList) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceReadWritePRM_v1(currentDevice, &prmBuffer) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetDynamicPstatesInfo(currentDevice, &dynamicPstatesInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAdaptiveClockInfoStatus(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetNumGpuCores(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemoryBusWidth(currentDevice, &uintValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMinMaxClockOfPState(
-                  currentDevice, static_cast<nvmlClockType_t>(0), pstate, &uintValue, &uintValue2)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetSupportedPerformanceStates(currentDevice, &pstate, 1) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpcClkVfOffset(currentDevice, &intValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetGpcClkVfOffset(currentDevice, intValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemClkVfOffset(currentDevice, &intValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceSetMemClkVfOffset(currentDevice, intValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMinMaxFanSpeed(currentDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGpcClkMinMaxVfOffset(currentDevice, &intValue, &intValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetMemClkMinMaxVfOffset(currentDevice, &intValue, &intValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAttributes(currentDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetAttributes_v2(currentDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetRemappedRows(currentDevice, &uintValue, &uintValue2, &uintValue3, &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetRowRemapperHistogram(currentDevice, &rowRemapperHistogramValues)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFieldValues(currentDevice, 1, &fieldValue) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGridLicensableFeatures(currentDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGridLicensableFeatures_v2(currentDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGridLicensableFeatures_v3(currentDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGridLicensableFeatures_v4(currentDevice, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGspFirmwareVersion(currentDevice, text) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetGspFirmwareMode(currentDevice, &uintValue, &uintValue2) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEncoderCapacity(currentDevice, static_cast<nvmlEncoderType_t>(0), &uintValue)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEncoderStats(currentDevice, &uintValue, &uintValue2, &uintValue3)
-              == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetEncoderSessions(currentDevice, &uintValue, nullptr) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFBCStats(currentDevice, &fbcStats) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetFBCSessions(currentDevice, &uintValue, &fbcSessionInfo) == NVML_ERROR_UNINITIALIZED);
-        CHECK(tr.NvmlDeviceGetHostVgpuMode(currentDevice, reinterpret_cast<nvmlHostVgpuMode_t *>(&intValue))
-              == NVML_ERROR_UNINITIALIZED);
-    }
-
-    (void)excludedDeviceInfo;
-    (void)gpuMode;
-    (void)gpuMode2;
-    (void)fbcStats;
-    (void)vgpuCompatibility;
 }

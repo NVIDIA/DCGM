@@ -21,7 +21,7 @@ tar xf /tmp/downloads/zlib.tar.gz -C zlib/src --strip-components=1
 
 pushd zlib/build
 
-export CFLAGS="${CFLAGS:-} -fPIC -Wno-error"
+export CFLAGS="${CFLAGS:+$CFLAGS }-fPIC -Wno-error"
 ../src/configure --prefix=$CMAKE_STAGING_PREFIX
 
 make

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,12 @@
 #ifndef _NVVS_NVVS_GPU_H
 #define _NVVS_NVVS_GPU_H
 
+#include "DcgmHandle.h"
+#include "DcgmSystem.h"
 #include "Device.h"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <string>
 
 typedef struct
@@ -42,7 +45,7 @@ class Gpu : public Device
 {
     /***************************PUBLIC***********************************/
 public:
-    Gpu(unsigned int gpuId);
+    Gpu(unsigned int gpuId, DcgmNs::DcgmOpsAnyPtr dcgmOps, DcgmHandle *dcgmHandle, DcgmSystemBase *dcgmSystem);
     ~Gpu();
 
     enum gpuEnumMethod_enum
@@ -188,6 +191,9 @@ private:
     std::string m_serial;
     DcgmEntityStatus_t m_status;
     bool m_useSsid = false;
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; // DCGM API interface.
+    DcgmHandle *m_dcgmHandle;        // DCGM connection handle.
+    DcgmSystemBase *m_dcgmSystem;    // DCGM system interface.
 
     void PopulateMaxMemoryClock(void);
 

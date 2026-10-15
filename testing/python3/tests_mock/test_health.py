@@ -202,15 +202,7 @@ def test_dcgm_embedded_nvlink5_error_counters():
     trampoline()
 
 
-def test_dcgm_standalone_blackwell_symbol_ber_aggregate_floor_health():
-    trampoline()
-
-
 def test_dcgm_standalone_nvlink5_error_counters():
-    trampoline()
-
-
-def test_dcgm_health_nvlink_effective_ber_threshold():
     trampoline()
 
 

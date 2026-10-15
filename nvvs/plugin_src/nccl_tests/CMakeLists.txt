@@ -14,6 +14,14 @@
 
 add_subdirectory(tests)
 
+if (BUILD_TESTING)
+    target_sources(ncclteststests
+        PRIVATE
+            NcclTestsPlugin.cpp
+            NcclTestsWrapper.cpp
+    )
+endif()
+
 declare_nvvs_plugin(nccl_tests .)
 
 add_subdirectory(Cuda12)

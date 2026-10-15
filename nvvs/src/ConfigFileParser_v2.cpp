@@ -13,29 +13,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <algorithm>
-#include <filesystem>
-#include <fmt/ranges.h>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <stdexcept>
-#include <unordered_set>
-#include <vector>
-
-// for dirname and readlink
-#include <libgen.h>
-#include <unistd.h>
-
 #include "ConfigFileParser_v2.h"
-#include "CpuHelpers.h"
+
 #include "CpuSet.h"
 #include "FallbackDiagConfig.h"
 #include "NvvsCommon.h"
 #include "ParsingUtility.h"
-#include "dcgm_fields.h"
-#include "dcgm_structs.h"
+
+#include <CpuHelpers.h>
+#include <DcgmOps.h>
 #include <EntityListHelpers.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs.h>
+
+#include <fmt/ranges.h>
+
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+// for dirname and readlink
+#include <libgen.h>
+#include <sstream>
+#include <stdexcept>
+#include <unistd.h>
+#include <unordered_set>
+#include <vector>
 
 using namespace DcgmNs::Nvvs;
 
@@ -195,7 +198,10 @@ bool FrameworkConfig::SetFrameworkConfigValue(nvvs_fwcfg_enum field, const std::
 /* ctor saves off the input parameters to local copies/references and opens
  * the config file
  */
-ConfigFileParser_v2::ConfigFileParser_v2(const std::string &configFile, const FrameworkConfig &fwcfg)
+ConfigFileParser_v2::ConfigFileParser_v2(NvvsCommon *nvvsCommon,
+                                         const std::string &configFile,
+                                         const FrameworkConfig &fwcfg)
+    : m_nvvsCommon(nvvsCommon)
 {
     DCGM_LOG_DEBUG << "ConfigFileParser_v2 ctor with configFile" << configFile;
 
@@ -433,11 +439,11 @@ std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareGpuSet(std::vector<dcgmGr
     gpuSet->GetProperties().name  = fwcfg.name;
     gpuSet->GetProperties().busid = fwcfg.busid;
     gpuSet->GetProperties().uuid  = fwcfg.uuid;
-    if (!nvvsCommon.fakegpusString.empty())
+    if (!m_nvvsCommon->fakegpusString.empty())
     {
         std::vector<unsigned int> indexVector;
         // potentially a csv
-        std::stringstream ss(nvvsCommon.fakegpusString);
+        std::stringstream ss(m_nvvsCommon->fakegpusString);
         int i;
 
         while (ss >> i)
@@ -451,11 +457,11 @@ std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareGpuSet(std::vector<dcgmGr
         gpuSet->GetProperties().index   = std::move(indexVector);
         gpuSet->GetProperties().present = true; // so that things are parsed further down
     }
-    else if (!nvvsCommon.indexString.empty())
+    else if (!m_nvvsCommon->indexString.empty())
     {
         std::vector<unsigned int> indexVector;
         // potentially a csv
-        std::stringstream ss(nvvsCommon.indexString);
+        std::stringstream ss(m_nvvsCommon->indexString);
         int i;
 
         while (ss >> i)
@@ -490,9 +496,9 @@ std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareGpuSet(std::vector<dcgmGr
         return nullptr;
     }
 
-    if (nvvsCommon.desiredTest.empty())
+    if (m_nvvsCommon->desiredTest.empty())
     {
-        nvvsCommon.desiredTest.insert(fwcfg.testname);
+        m_nvvsCommon->desiredTest.insert(fwcfg.testname);
     }
 
     for (auto const &idx : gpuSet->GetProperties().index)
@@ -559,10 +565,11 @@ std::unique_ptr<EntitySet> ConfigFileParser_v2::PrepareCpuSet(std::vector<dcgmGr
 void ConfigFileParser_v2::PrepareEntitySets(dcgmHandle_t dcgmHandle)
 {
     std::vector<dcgmGroupEntityPair_t> entityGroups;
-    auto err = DcgmNs::EntityListWithMigAndUuidParser(dcgmHandle, nvvsCommon.entityIds, entityGroups);
+    DcgmNs::DcgmOps dcgmOps;
+    auto err = DcgmNs::EntityListWithMigAndUuidParser(dcgmHandle, m_nvvsCommon->entityIds, entityGroups, &dcgmOps);
     if (!err.empty())
     {
-        std::string errMsg = fmt::format("failed to parse entity ids: {} with err: {}", nvvsCommon.entityIds, err);
+        std::string errMsg = fmt::format("failed to parse entity ids: {} with err: {}", m_nvvsCommon->entityIds, err);
         log_error(errMsg);
         throw std::runtime_error(errMsg);
     }
@@ -583,14 +590,14 @@ void ConfigFileParser_v2::PrepareEntitySets(dcgmHandle_t dcgmHandle)
 void ConfigFileParser_v2::legacyGlobalStructHelper()
 {
     NvvsFrameworkConfig fwcfg = m_fwcfg.GetFWCFG();
-    nvvsCommon.logFile        = fwcfg.dataFile;
-    nvvsCommon.logFileType    = fwcfg.dataFileType;
-    nvvsCommon.serialize      = fwcfg.overrideSerial;
-    if (nvvsCommon.parse == false) // if it was turned on in the command line, don't overwrite it
+    m_nvvsCommon->logFile     = fwcfg.dataFile;
+    m_nvvsCommon->logFileType = fwcfg.dataFileType;
+    m_nvvsCommon->serialize   = fwcfg.overrideSerial;
+    if (m_nvvsCommon->parse == false) // if it was turned on in the command line, don't overwrite it
     {
-        nvvsCommon.parse = fwcfg.scriptable;
+        m_nvvsCommon->parse = fwcfg.scriptable;
     }
-    nvvsCommon.requirePersistenceMode = fwcfg.requirePersistence;
+    m_nvvsCommon->requirePersistenceMode = fwcfg.requirePersistence;
 }
 
 /*****************************************************************************/

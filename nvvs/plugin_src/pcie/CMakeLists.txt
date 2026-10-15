@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,32 +17,49 @@ declare_nvvs_plugin(busgrind .)
 
 set(PCIE_PLUGIN_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 
+add_library(pcie_bw_checker_interface INTERFACE)
+target_sources(pcie_bw_checker_interface INTERFACE
+    "${PCIE_PLUGIN_BASE_DIR}/bw_checker/BwCheckerMain.h")
+target_include_directories(pcie_bw_checker_interface INTERFACE
+    "${PCIE_PLUGIN_BASE_DIR}/bw_checker")
+
+add_library(pcie_bw_checker STATIC)
+target_sources(pcie_bw_checker PRIVATE
+    "${PCIE_PLUGIN_BASE_DIR}/bw_checker/BwChecker.cpp")
+target_link_libraries(pcie_bw_checker
+    PUBLIC
+        jsoncpp_static
+        pcie_bw_checker_interface)
+
 macro(define_bw_checker CHECKER_NAME CUDA_VER)
     target_sources(${CHECKER_NAME}_${CUDA_VER}
         PRIVATE
-            "${PCIE_PLUGIN_BASE_DIR}/bw_checker/BwCheckerMain.cpp")
+            "${PCIE_PLUGIN_BASE_DIR}/bw_checker/BwCheckerMain.cpp"
+            "${PCIE_PLUGIN_BASE_DIR}/bw_checker/BwCheckerMain.h")
 
     target_include_directories(${CHECKER_NAME}_${CUDA_VER}
         PRIVATE
-            "${PCIE_PLUGIN_BASE_DIR}/bw_checker"
-            "${JSONCPP_INCLUDE_DIR}"
-            "${CUDA${CUDA_VER}_INCLUDE_DIR}")
+            "${PCIE_PLUGIN_BASE_DIR}/bw_checker")
 
     target_link_libraries(${CHECKER_NAME}_${CUDA_VER}
         PRIVATE
-            ${CUDA${CUDA_VER}_STATIC_LIBS}
             common_interface
-            dcgm_cublas_proxy${CUDA_VER}
             dcgm_cuda_worker${CUDA_VER}
+            cublas_ops${CUDA_VER}
+            cuda_ops${CUDA_VER}
+            pcie_bw_checker
+            pcie_bw_checker_interface
             dcgm_thread dcgm_common dcgm
         PUBLIC
-            ${CUDA${CUDA_VER}_LIBS}
-            ${JSONCPP_STATIC_LIBS}
+            jsoncpp_static
             dcgmi_interface)
 endmacro()
 
 foreach(CUDA_VER IN LISTS SUPPORTED_CUDA_VERSIONS)
     add_subdirectory(Cuda${CUDA_VER})
+    target_link_libraries(Pcie_${CUDA_VER}
+        PRIVATE
+            cublas_ops${CUDA_VER})
 endforeach()
 
 add_subdirectory(bw_checker)

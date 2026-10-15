@@ -51,7 +51,7 @@ for fieldId in range(
         dcgm_fields_internal.DCGM_FI_PROF_NVLINK_THROUGHPUT_PER_LINK_LAST + 1):
     g_profilingFieldIds.append(fieldId)
 for fieldId in range(
-        dcgm_fields.DCGM_FI_DEV_CPU_UTIL_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_CPU_UTIL_RATIO,
         dcgm_fields.DCGM_FI_DEV_CPU_MODEL + 1):
     g_profilingFieldIds.append(fieldId)
 for fieldId in range(
@@ -60,10 +60,10 @@ for fieldId in range(
     g_profilingFieldIds.append(fieldId)
 for fieldId in range(
         dcgm_fields.DCGM_FI_DEV_FIRST_CONNECTX_FIELD_ID,
-        dcgm_fields.DCGM_FI_DEV_CONNECTX_DEVICE_TEMPERATURE + 1):
+        dcgm_fields.DCGM_FI_DEV_CONNECTX_TEMP_CELSIUS + 1):
     g_profilingFieldIds.append(fieldId)
 for fieldId in range(
-        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_INTR,
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_TOTAL,
         dcgm_fields.DCGM_FI_DEV_CLOCKS_EVENT_REASON_HW_POWER_BRAKE_SLOWDOWN_NS + 1):
     g_profilingFieldIds.append(fieldId)
 
@@ -75,7 +75,7 @@ def get_usec_since_1970():
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_injection_gpus(1)
 def test_dcgm_field_values_since_agent(handle, gpuIds):
@@ -980,6 +980,7 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         dcgm_fields.DCGM_FI_DEV_VGPU_UUID,
         dcgm_fields.DCGM_FI_DEV_VGPU_DRIVER_VERSION,
         dcgm_fields.DCGM_FI_DEV_VGPU_MEMORY_USAGE,
+        dcgm_fields.DCGM_FI_DEV_VGPU_FB_USED_BYTES,
         dcgm_fields.DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATUS,
         dcgm_fields.DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT,
         dcgm_fields.DCGM_FI_DEV_VGPU_PCI_ID,
@@ -1005,11 +1006,13 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         dcgm_fields.DCGM_FI_DEV_DIAG_NVBANDWIDTH_RESULT,
         dcgm_fields.DCGM_FI_DEV_DIAG_STATUS,
         dcgm_fields.DCGM_FI_DEV_DIAG_NCCL_TESTS_RESULT,
+        dcgm_fields.DCGM_FI_DEV_DIAG_CPU_SDC_RESULT,
         # NvLink PRM fields require DCGM_FE_LINK entity type instead of GPU
         # entity type
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPRM_OPER_RECOVERY,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_SINCE_LAST,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SINCE_LAST_SECONDS,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_TIME_BETWEEN_LAST_TWO,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_LAST_GAP_SECONDS,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_RECOVERY_SUCCESSFUL_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_RECOVERY_SUCCESSFUL_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_PHYSICAL_LINK_DOWN_TOTAL,
@@ -1025,8 +1028,8 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         # The bind/unbind event field is available only when an event is
         # detected by NVML
         dcgm_fields.DCGM_FI_SYSTEM_GPU_BIND_EVENT,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_PORT_XMIT_WAIT,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_PPCNT_IBPC_TX_WAIT_TOTAL,
         dcgm_fields.DCGM_FI_DEV_GPU_RECOVERY_ACTION,
         dcgm_fields.DCGM_FI_DEV_NVSWITCH_FIRMWARE_VERSION,
         # Per-link NVLink metrics fields require DCGM_FE_LINK entity type instead of GPU entity type
@@ -1051,12 +1054,12 @@ def test_dcgm_fields_all_fieldids_valid(handle, gpuIds):
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_ENABLED,
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PRIV_LVL,
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_IMM_RAMP_DOWN_ENABLED,
-        dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL,
-        dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR,
+        dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_CEIL_WATTS,
+        dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_APPLIED_TMP_FLOOR_WATTS,
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_MAX_PERCENT_TMP_FLOOR_SETTING,
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_MIN_PERCENT_TMP_FLOOR_SETTING,
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_HW_CIRCUITRY_PERCENT_LIFETIME_REMAINING,
-        dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_MAX_NUM_PRESET_PROFILES,
+        dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_MAX_PRESET_PROFILES,
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_PERCENT_TMP_FLOOR,
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_UP_RATE,
         dcgm_fields.DCGM_FI_DEV_PWR_SMOOTHING_PROFILE_RAMP_DOWN_RATE,
@@ -2064,7 +2067,7 @@ def test_unrepairable_memory_query(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_nvlink_state_field(handle, gpuIds):
@@ -2097,7 +2100,7 @@ def test_nvlink_state_field(handle, gpuIds):
         # Create field group with the NVLink state field
         fieldGroupObj = pydcgm.DcgmFieldGroup(
             handleObj, f"nvlink_state_group_L{linkIndex}", [
-                dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE])
+                dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS])
 
         # Set up field watcher (use EntityWatcher for DCGM_FE_LINK entities)
         fieldWatcher = dcgm_field_helpers.DcgmFieldGroupEntityWatcher(
@@ -2115,8 +2118,8 @@ def test_nvlink_state_field(handle, gpuIds):
                 dcgm_fields.DCGM_FE_LINK]:
             entityValues = fieldWatcher.values[dcgm_fields.DCGM_FE_LINK][linkEntityId]
 
-            if dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE in entityValues:
-                for value in entityValues[dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE]:
+            if dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS in entityValues:
+                for value in entityValues[dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS]:
                     if not value.isBlank:
                         assert value.value in validStates, (
                             f"Invalid NVLink state {value.value} for link "
@@ -2126,7 +2129,7 @@ def test_nvlink_state_field(handle, gpuIds):
 
 # NO HARDWARE
 
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_nvlink_state_field_injection(handle, gpuIds):
@@ -2161,7 +2164,7 @@ def test_nvlink_state_field_injection(handle, gpuIds):
         # Create field group with the NVLink state field
         fieldGroupObj = pydcgm.DcgmFieldGroup(
             handleObj, f"nvlink_injection_group_L{linkIndex}", [
-                dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE])
+                dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS])
 
         # Set up field watcher (use EntityWatcher for DCGM_FE_LINK entities)
         fieldWatcher = dcgm_field_helpers.DcgmFieldGroupEntityWatcher(
@@ -2178,7 +2181,7 @@ def test_nvlink_state_field_injection(handle, gpuIds):
         ret = dcgm_field_injection_helpers.inject_field_value_i64(
             handle,
             linkEntityId,
-            dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE,
+            dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS,
             expectedValue,
             0,
             dcgm_fields.DCGM_FE_LINK)
@@ -2192,9 +2195,9 @@ def test_nvlink_state_field_injection(handle, gpuIds):
             f"Link entity {linkEntityId:08x} not found in watcher values")
 
         entityValues = fieldWatcher.values[dcgm_fields.DCGM_FE_LINK][linkEntityId]
-        assert dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE in entityValues, f"NVLink state field not found for link {linkIndex}"
+        assert dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS in entityValues, f"NVLink state field not found for link {linkIndex}"
 
-        values = entityValues[dcgm_fields.DCGM_FI_DEV_NVLINK_GET_STATE]
+        values = entityValues[dcgm_fields.DCGM_FI_DEV_NVLINK_LINK_STATUS]
         assert len(
             values) > 0, f"No values found for NVLink state field on link {linkIndex}"
 
@@ -2205,7 +2208,7 @@ def test_nvlink_state_field_injection(handle, gpuIds):
 # NO HARDWARE
 
 @skip_test_if_no_dcgm_nvml()
-@test_utils.run_with_injection_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(120)
 @test_utils.run_with_injection_gpus()
 def test_gpu_recovery_action_field_values(handle, gpuIds):
@@ -2214,8 +2217,9 @@ def test_gpu_recovery_action_field_values(handle, gpuIds):
     gpuId = gpuIds[0]
 
     # Test all valid enum values from nvmlDeviceGpuRecoveryAction_t
-    # 0=NONE, 1=GPU_RESET, 2=NODE_REBOOT, 3=DRAIN_P2P, 4=DRAIN_AND_RESET
-    test_values = list(range(0, 5))
+    # 0=NONE, 1=GPU_RESET, 2=NODE_REBOOT, 3=DRAIN_P2P, 4=DRAIN_AND_RESET,
+    # 5=RECOVER_IMEX_DOMAIN
+    test_values = list(range(0, 6))
 
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
@@ -2447,7 +2451,7 @@ def test_nvlink_count_aggregate_behavior_injection(handle, gpuIds):
         dcgm_fields.DCGM_FI_DEV_NVLINK_RX_REMOTE_ERROR_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_RX_GENERAL_ERROR_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_INTEGRITY_ERROR_TOTAL,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_TX_DISCARDS,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_TX_DISCARD_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_SUCCESSFUL_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_FAILED_TOTAL,
         dcgm_fields.DCGM_FI_DEV_NVLINK_RECOVERY_EVENT_TOTAL,
@@ -2524,20 +2528,20 @@ def test_c2c_link_fields(handle, gpuIds):
     '''
     Test C2C link fields have values
 
-    * DCGM_FI_DEV_C2C_LINK_ERROR_INTR
-    * DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY
-    * DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B
-    * DCGM_FI_DEV_C2C_LINK_POWER_STATE
+    * DCGM_FI_DEV_C2C_LINK_ERROR_TOTAL
+    * DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_TOTAL
+    * DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_B2B_TOTAL
+    * DCGM_FI_DEV_C2C_LINK_POWER_STATUS
     '''
     gpuId = gpuIds[0]
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
     dcgmSystem = dcgmHandle.GetSystem()
 
     fieldIds = [
-        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_INTR,
-        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY,
-        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_REPLAY_B2B,
-        dcgm_fields.DCGM_FI_DEV_C2C_LINK_POWER_STATE,
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_ERROR_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_REPLAY_ERROR_B2B_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_C2C_LINK_POWER_STATUS,
     ]
     fieldGroup = pydcgm.DcgmFieldGroup(
         dcgmHandle, "test_c2c_link_fields", fieldIds)
@@ -2569,22 +2573,22 @@ def test_nvlink_fec_history_fields(handle, gpuIds):
     dcgmSystem = dcgmHandle.GetSystem()
 
     fieldIds = [
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_0,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_1,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_2,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_3,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_4,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_5,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_6,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_7,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_8,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_9,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_10,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_11,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_12,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_13,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_14,
-        dcgm_fields.DCGM_FI_DEV_NVLINK_COUNT_FEC_HISTORY_15,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_0_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_1_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_2_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_3_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_4_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_5_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_6_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_7_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_8_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_9_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_10_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_11_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_12_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_13_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_14_TOTAL,
+        dcgm_fields.DCGM_FI_DEV_NVLINK_FEC_HISTORY_15_TOTAL,
     ]
     fieldGroup = pydcgm.DcgmFieldGroup(
         dcgmHandle, "test_nvlink_fec_history_fields", fieldIds)
@@ -2739,8 +2743,8 @@ def test_nvlink_gpm_per_link_prof_fields(handle, gpuIds):
     linkIndex = 18
     linkEntity = _make_link_entity(gpuId, linkIndex)
     fieldIds = [
-        dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES_PER_LINK,
-        dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES_PER_LINK,
+        dcgm_fields.DCGM_FI_PROF_NVLINK_TX_BYTES,
+        dcgm_fields.DCGM_FI_PROF_NVLINK_RX_BYTES,
     ]
 
     dcgmHandle = pydcgm.DcgmHandle(handle=handle)
@@ -2868,6 +2872,63 @@ def test_nvlink_count_perlink_real_hardware(handle, gpuIds):
     if failed:
         raise AssertionError(
             "Per-link validation failed:\n  " +
+            "\n  ".join(failed))
+
+
+# NO HARDWARE
+
+@skip_test_if_no_dcgm_nvml()
+@test_utils.run_with_injection_nvml_using_specific_sku('B200.yaml')
+@test_utils.run_with_standalone_host_engine(120)
+@test_utils.run_with_nvml_injected_gpus()
+def test_nvlink_count_perlink_live_injection(handle, gpuIds):
+    """
+    Injection stand-in for test_nvlink_count_perlink_real_hardware.
+
+    Live FE_LINK COUNT reads via DCGM_FV_FLAG_LIVE_DATA (no DCGM cache inject).
+    B200.yaml supplies NVML FieldValues so this hits ReadAndCacheNvLinkFields /
+    ReadAndCacheNvLinkCountField for per-link COUNT fields.
+    """
+    gpuId = gpuIds[0]
+    # Link 0: B200.yaml has COUNT FieldValues with scopeId 0
+    link_indices = [0]
+    fields = [
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_TX_PACKET_TOTAL, "Tx packets"),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_TX_BYTES_TOTAL, "Tx bytes"),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_PACKET_TOTAL, "Rx packets"),
+        (dcgm_fields.DCGM_FI_DEV_NVLINK_RX_BYTES_TOTAL, "Rx bytes"),
+    ]
+
+    failed = []
+    validated = 0
+    for link_idx in link_indices:
+        for field_id, name in fields:
+            entity = dcgm_structs.c_dcgmGroupEntityPair_t()
+            entity.entityGroupId = dcgm_fields.DCGM_FE_LINK
+            entity.entityId = _encode_link_entity(gpuId, link_idx)
+            values = dcgm_agent.dcgmEntitiesGetLatestValues(
+                handle, [entity], [field_id], dcgm_structs.DCGM_FV_FLAG_LIVE_DATA)
+            if not values:
+                failed.append(f"Link {link_idx} {name}: no values returned")
+                continue
+            val = values[0].value.i64
+            status = values[0].status
+            blank = dcgmvalue.DCGM_INT64_IS_BLANK(
+                val) or status != dcgm_structs.DCGM_ST_OK
+            logger.info(
+                f"Link {link_idx} {name}: value={val} status={status} blank={blank}")
+            if blank:
+                failed.append(
+                    f"Link {link_idx} {name}: blank/failed "
+                    f"(value={val}, status={status})")
+            else:
+                validated += 1
+
+    logger.info(
+        f"Validated {validated}/{len(link_indices) * len(fields)} live FE_LINK COUNT reads")
+    if failed:
+        raise AssertionError(
+            "Per-link live COUNT validation failed (injection):\n  " +
             "\n  ".join(failed))
 
 

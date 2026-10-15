@@ -16,41 +16,17 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "TestHelpers.hpp"
-#include "mock/MockDcgmiGroupInfo.hpp"
-#include "mock/MockDcgmiStatus.hpp"
+#include <CoutCapture.hpp>
 
+#include <MockDcgmOps.h>
 #include <Policy.h>
 #include <dcgm_agent.h>
 #include <dcgm_structs.h>
 
-#include <cstring>
 #include <string>
-#include <vector>
 
 namespace
 {
-struct PolicyApiState
-{
-    dcgmReturn_t policyGetReturn  = DCGM_ST_OK;
-    dcgmReturn_t policySetReturn  = DCGM_ST_OK;
-    dcgmReturn_t unregisterReturn = DCGM_ST_OK;
-
-    int policyGetCallCount  = 0;
-    int policySetCallCount  = 0;
-    int unregisterCallCount = 0;
-
-    dcgmStatus_t lastStatusHandle       = 0;
-    dcgmHandle_t lastHandle             = 0;
-    dcgmGpuGrp_t lastGroupId            = 0;
-    int lastPolicyGetCount              = 0;
-    dcgmPolicyCondition_t lastCondition = {};
-    dcgmPolicy_t lastPolicy {};
-    std::vector<dcgmPolicy_t> policies;
-};
-
-PolicyApiState g_policyApi;
-
 class TestSetPolicy : public SetPolicy
 {
 public:
@@ -74,16 +50,6 @@ public:
     }
 };
 
-void ResetPolicyApi()
-{
-    g_policyApi                  = {};
-    g_policyApi.policyGetReturn  = DCGM_ST_OK;
-    g_policyApi.policySetReturn  = DCGM_ST_OK;
-    g_policyApi.unregisterReturn = DCGM_ST_OK;
-    ResetMockDcgmiStatus();
-    ResetMockDcgmiGroupInfo();
-}
-
 dcgmPolicy_t MakePolicy()
 {
     dcgmPolicy_t policy {};
@@ -98,84 +64,14 @@ dcgmPolicy_t MakePolicy()
     return policy;
 }
 
-void SetGroupInfo(std::string const &name, std::vector<dcgmGroupEntityPair_t> const &entities)
-{
-    REQUIRE(entities.size() <= std::size(g_mockDcgmiGroupInfoData.m_groupInfo.entityList));
-
-    g_mockDcgmiGroupInfoData.m_groupInfo.count = static_cast<unsigned int>(entities.size());
-    std::strncpy(g_mockDcgmiGroupInfoData.m_groupInfo.groupName,
-                 name.c_str(),
-                 sizeof(g_mockDcgmiGroupInfoData.m_groupInfo.groupName) - 1);
-    g_mockDcgmiGroupInfoData.m_groupInfo.groupName[sizeof(g_mockDcgmiGroupInfoData.m_groupInfo.groupName) - 1] = '\0';
-    for (size_t i = 0; i < entities.size(); ++i)
-    {
-        g_mockDcgmiGroupInfoData.m_groupInfo.entityList[i] = entities[i];
-    }
-}
 } //namespace
-
-extern "C" dcgmReturn_t dcgmPolicySet(dcgmHandle_t handle,
-                                      dcgmGpuGrp_t groupId,
-                                      dcgmPolicy_t *policy,
-                                      dcgmStatus_t statusHandle)
-{
-    g_policyApi.policySetCallCount++;
-    g_policyApi.lastHandle       = handle;
-    g_policyApi.lastGroupId      = groupId;
-    g_policyApi.lastStatusHandle = statusHandle;
-
-    if (policy != nullptr)
-    {
-        g_policyApi.lastPolicy = *policy;
-    }
-
-    return g_policyApi.policySetReturn;
-}
-
-extern "C" dcgmReturn_t dcgmPolicyGet(dcgmHandle_t handle,
-                                      dcgmGpuGrp_t groupId,
-                                      int count,
-                                      dcgmPolicy_t *policy,
-                                      dcgmStatus_t statusHandle)
-{
-    g_policyApi.policyGetCallCount++;
-    g_policyApi.lastHandle         = handle;
-    g_policyApi.lastGroupId        = groupId;
-    g_policyApi.lastPolicyGetCount = count;
-    g_policyApi.lastStatusHandle   = statusHandle;
-
-    if (policy == nullptr)
-    {
-        return DCGM_ST_BADPARAM;
-    }
-    if (g_policyApi.policyGetReturn != DCGM_ST_OK)
-    {
-        return g_policyApi.policyGetReturn;
-    }
-
-    for (int i = 0; i < count && i < static_cast<int>(g_policyApi.policies.size()); ++i)
-    {
-        policy[i] = g_policyApi.policies[i];
-    }
-
-    return DCGM_ST_OK;
-}
-
-extern "C" dcgmReturn_t dcgmPolicyUnregister(dcgmHandle_t handle, dcgmGpuGrp_t groupId, dcgmPolicyCondition_t condition)
-{
-    g_policyApi.unregisterCallCount++;
-    g_policyApi.lastHandle    = handle;
-    g_policyApi.lastGroupId   = groupId;
-    g_policyApi.lastCondition = condition;
-    return g_policyApi.unregisterReturn;
-}
 
 TEST_CASE("Policy::SetCurrentViolationPolicy")
 {
     GIVEN("a policy manager with mocked status and policy APIs")
     {
-        ResetPolicyApi();
-        Policy policyManager;
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        Policy policyManager(&mockDcgmOps);
         dcgmPolicy_t policy  = MakePolicy();
         auto handle          = static_cast<dcgmHandle_t>(0x11);
         unsigned int groupId = 7;
@@ -188,63 +84,86 @@ TEST_CASE("Policy::SetCurrentViolationPolicy")
             THEN("the policy API receives the handle, group, policy, and status handle")
             {
                 CHECK(result == DCGM_ST_OK);
-                CHECK(g_mockDcgmiStatusData.statusCreateCallCount == 1);
-                CHECK(g_policyApi.policySetCallCount == 1);
-                CHECK(g_mockDcgmiStatusData.statusDestroyCallCount == 1);
-                CHECK(g_policyApi.lastHandle == handle);
-                CHECK(g_policyApi.lastGroupId == static_cast<dcgmGpuGrp_t>(groupId));
-                CHECK(g_policyApi.lastStatusHandle == g_mockDcgmiStatusData.statusHandle);
-                CHECK(g_policyApi.lastPolicy.condition == policy.condition);
-                CHECK(g_policyApi.lastPolicy.parms[DCGM_POLICY_COND_IDX_POWER].val.llval == 250);
-                CHECK(g_policyApi.lastStatusHandle == g_mockDcgmiStatusData.statusHandle);
-                CHECK(g_mockDcgmiStatusData.lastDestroyedStatus == g_mockDcgmiStatusData.statusHandle);
+                CHECK(mockDcgmOps.m_statusState.createCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.setCallCount == 1);
+                CHECK(mockDcgmOps.m_statusState.destroyCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.lastHandle == handle);
+                CHECK(mockDcgmOps.m_policyState.lastGroupId == static_cast<dcgmGpuGrp_t>(groupId));
+                CHECK(mockDcgmOps.m_policyState.lastStatusHandle == mockDcgmOps.m_statusState.createdHandle);
+                CHECK(mockDcgmOps.m_policyState.lastPolicy.condition == policy.condition);
+                CHECK(mockDcgmOps.m_policyState.lastPolicy.parms[DCGM_POLICY_COND_IDX_POWER].val.llval == 250);
+                CHECK(mockDcgmOps.m_policyState.lastStatusHandle == mockDcgmOps.m_statusState.createdHandle);
+                CHECK(mockDcgmOps.m_statusState.lastDestroyedStatus == mockDcgmOps.m_statusState.createdHandle);
             }
         }
 
         WHEN("creating the status handle fails")
         {
-            g_mockDcgmiStatusData.statusCreateReturn = DCGM_ST_BADPARAM;
+            mockDcgmOps.m_statusState.createReturn = DCGM_ST_BADPARAM;
             CoutCapture capture;
             dcgmReturn_t result = policyManager.SetCurrentViolationPolicy(handle, groupId, policy);
 
             THEN("the policy call is skipped and the error is returned")
             {
                 CHECK(result == DCGM_ST_BADPARAM);
-                CHECK(g_mockDcgmiStatusData.statusCreateCallCount == 1);
-                CHECK(g_policyApi.policySetCallCount == 0);
-                CHECK(g_mockDcgmiStatusData.statusDestroyCallCount == 0);
+                CHECK(mockDcgmOps.m_statusState.createCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.setCallCount == 0);
+                CHECK(mockDcgmOps.m_statusState.destroyCallCount == 0);
             }
         }
 
         WHEN("destroying the status handle fails after a successful set")
         {
-            g_mockDcgmiStatusData.statusDestroyReturn = DCGM_ST_BADPARAM;
+            mockDcgmOps.m_statusState.destroyReturn = DCGM_ST_BADPARAM;
             CoutCapture capture;
             dcgmReturn_t result = policyManager.SetCurrentViolationPolicy(handle, groupId, policy);
 
             THEN("the set still succeeds and the cleanup failure is reported")
             {
                 CHECK(result == DCGM_ST_OK);
-                CHECK(g_policyApi.policySetCallCount == 1);
-                CHECK(g_mockDcgmiStatusData.statusDestroyCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.setCallCount == 1);
+                CHECK(mockDcgmOps.m_statusState.destroyCallCount == 1);
                 CHECK(capture.str().find("Error: Cannot delete status handler") != std::string::npos);
             }
         }
     }
 }
 
+TEST_CASE("Policy::RunFieldPolicyCommand uses DcgmOps for field policies")
+{
+    DcgmNs::MockDcgmOps mockDcgmOps;
+    Policy policyManager(&mockDcgmOps);
+    auto const handle = static_cast<dcgmHandle_t>(0x21);
+
+    FieldPolicyOptions options;
+    options.action         = FieldPolicyAction::Create;
+    options.fieldId        = DCGM_FI_DEV_GPU_TEMP_CELSIUS;
+    options.name           = "temperature";
+    options.threshold      = 80.0;
+    options.policyOperator = DCGM_POLICY_OP_GT;
+    options.channelMask    = DCGM_POLICY_CHANNEL_CONSOLE;
+
+    CoutCapture capture;
+    REQUIRE(policyManager.RunFieldPolicyCommand(handle, options, false) == DCGM_ST_OK);
+    REQUIRE(mockDcgmOps.m_fieldPolicyState.createCallCount == 1);
+    REQUIRE(mockDcgmOps.m_fieldPolicyState.lastHandle == handle);
+    REQUIRE(mockDcgmOps.m_fieldPolicyState.lastFieldId == DCGM_FI_DEV_GPU_TEMP_CELSIUS);
+    REQUIRE(mockDcgmOps.m_fieldPolicyState.lastName == "temperature");
+}
+
 TEST_CASE("Policy::DisplayCurrentViolationPolicy")
 {
     GIVEN("a group with current policies")
     {
-        ResetPolicyApi();
-        Policy policyManager;
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        Policy policyManager(&mockDcgmOps);
         auto handle          = static_cast<dcgmHandle_t>(0x18);
         unsigned int groupId = 5;
         auto policy          = MakePolicy();
 
-        SetGroupInfo("display-group", { { DCGM_FE_GPU, 1 }, { DCGM_FE_GPU, 2 } });
-        g_policyApi.policies = { policy, policy };
+        mockDcgmOps.m_groupInfoState.overrideInfo
+            = DcgmNs::MockDcgmOps::MakeGroupInfo("display-group", { { DCGM_FE_GPU, 1 }, { DCGM_FE_GPU, 2 } });
+        mockDcgmOps.m_policyState.policies = { policy, policy };
 
         WHEN("compact text output is requested")
         {
@@ -259,11 +178,11 @@ TEST_CASE("Policy::DisplayCurrentViolationPolicy")
                 CHECK(output.find("display-group") != std::string::npos);
                 CHECK(output.find("Double-bit ECC errors") != std::string::npos);
                 CHECK(output.find("Max power threshold") != std::string::npos);
-                CHECK(g_mockDcgmiGroupInfoData.m_groupInfoCallCount == 1);
-                CHECK(g_mockDcgmiStatusData.statusCreateCallCount == 1);
-                CHECK(g_policyApi.policyGetCallCount == 1);
-                CHECK(g_policyApi.lastPolicyGetCount == 2);
-                CHECK(g_mockDcgmiStatusData.statusDestroyCallCount == 1);
+                CHECK(mockDcgmOps.m_groupInfoState.callCount == 1);
+                CHECK(mockDcgmOps.m_statusState.createCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.getCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.lastPolicyGetCount == 2);
+                CHECK(mockDcgmOps.m_statusState.destroyCallCount == 1);
             }
         }
 
@@ -279,7 +198,7 @@ TEST_CASE("Policy::DisplayCurrentViolationPolicy")
                 CHECK(output.find("GPU ID: 1") != std::string::npos);
                 CHECK(output.find("GPU ID: 2") != std::string::npos);
                 CHECK(result == DCGM_ST_OK);
-                CHECK(g_policyApi.policyGetCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.getCallCount == 1);
             }
         }
 
@@ -296,7 +215,7 @@ TEST_CASE("Policy::DisplayCurrentViolationPolicy")
             fullPolicy.parms[DCGM_POLICY_COND_IDX_MAX_PAGES_RETIRED].val.llval = 12;
             fullPolicy.parms[DCGM_POLICY_COND_IDX_THERMAL].tag                 = dcgmPolicyConditionParams_t::LLONG;
             fullPolicy.parms[DCGM_POLICY_COND_IDX_THERMAL].val.llval           = 88;
-            g_policyApi.policies                                               = { fullPolicy, fullPolicy };
+            mockDcgmOps.m_policyState.policies                                 = { fullPolicy, fullPolicy };
 
             CoutCapture capture;
             dcgmReturn_t result = policyManager.DisplayCurrentViolationPolicy(handle, groupId, true, false);
@@ -314,13 +233,13 @@ TEST_CASE("Policy::DisplayCurrentViolationPolicy")
 
         WHEN("compact output sees non-homogeneous policy fields")
         {
-            auto otherPolicy       = MakePolicy();
-            otherPolicy.condition  = DCGM_POLICY_COND_PCI;
-            otherPolicy.mode       = DCGM_POLICY_MODE_MANUAL;
-            otherPolicy.action     = DCGM_POLICY_ACTION_NONE;
-            otherPolicy.validation = DCGM_POLICY_VALID_SV_LONG;
-            otherPolicy.response   = DCGM_POLICY_FAILURE_NONE;
-            g_policyApi.policies   = { policy, otherPolicy };
+            auto otherPolicy                   = MakePolicy();
+            otherPolicy.condition              = DCGM_POLICY_COND_PCI;
+            otherPolicy.mode                   = DCGM_POLICY_MODE_MANUAL;
+            otherPolicy.action                 = DCGM_POLICY_ACTION_NONE;
+            otherPolicy.validation             = DCGM_POLICY_VALID_SV_LONG;
+            otherPolicy.response               = DCGM_POLICY_FAILURE_NONE;
+            mockDcgmOps.m_policyState.policies = { policy, otherPolicy };
 
             CoutCapture capture;
             dcgmReturn_t result = policyManager.DisplayCurrentViolationPolicy(handle, groupId, false, false);
@@ -329,37 +248,37 @@ TEST_CASE("Policy::DisplayCurrentViolationPolicy")
             {
                 auto output = capture.str();
                 CHECK(output.find("****") != std::string::npos);
-                CHECK(output.find("Non-homogenous settings") != std::string::npos);
+                CHECK(output.find("Non-homogenous settings across group. Use with -v flag") != std::string::npos);
                 CHECK(result == DCGM_ST_OK);
             }
         }
 
         WHEN("the group lookup fails")
         {
-            g_mockDcgmiGroupInfoData.m_groupInfoReturn = DCGM_ST_NOT_CONFIGURED;
+            mockDcgmOps.m_groupInfoState.returnCode = DCGM_ST_NOT_CONFIGURED;
             CoutCapture capture;
             dcgmReturn_t result = policyManager.DisplayCurrentViolationPolicy(handle, groupId, false, false);
 
             THEN("policy lookup is skipped")
             {
                 CHECK(result == DCGM_ST_NOT_CONFIGURED);
-                CHECK(g_mockDcgmiStatusData.statusCreateCallCount == 0);
-                CHECK(g_policyApi.policyGetCallCount == 0);
+                CHECK(mockDcgmOps.m_statusState.createCallCount == 0);
+                CHECK(mockDcgmOps.m_policyState.getCallCount == 0);
             }
         }
 
         WHEN("creating the status handle fails")
         {
-            g_mockDcgmiStatusData.statusCreateReturn = DCGM_ST_BADPARAM;
+            mockDcgmOps.m_statusState.createReturn = DCGM_ST_BADPARAM;
             CoutCapture capture;
             dcgmReturn_t result = policyManager.DisplayCurrentViolationPolicy(handle, groupId, false, false);
 
             THEN("the allocated policy buffer is cleaned up without a policy query")
             {
                 CHECK(result == DCGM_ST_BADPARAM);
-                CHECK(g_mockDcgmiStatusData.statusCreateCallCount == 1);
-                CHECK(g_policyApi.policyGetCallCount == 0);
-                CHECK(g_mockDcgmiStatusData.statusDestroyCallCount == 0);
+                CHECK(mockDcgmOps.m_statusState.createCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.getCallCount == 0);
+                CHECK(mockDcgmOps.m_statusState.destroyCallCount == 0);
             }
         }
     }
@@ -369,9 +288,9 @@ TEST_CASE("SetPolicy::DoExecuteConnected")
 {
     GIVEN("a set-policy command with a configured DCGM handle")
     {
-        ResetPolicyApi();
+        DcgmNs::MockDcgmOps mockDcgmOps;
         dcgmPolicy_t policy = MakePolicy();
-        TestSetPolicy command("localhost", policy, 12);
+        TestSetPolicy command("localhost", policy, 12, &mockDcgmOps);
         auto handle = static_cast<dcgmHandle_t>(0x22);
 
         WHEN("the command executes")
@@ -382,10 +301,10 @@ TEST_CASE("SetPolicy::DoExecuteConnected")
             THEN("it forwards the request to Policy::SetCurrentViolationPolicy")
             {
                 CHECK(result == DCGM_ST_OK);
-                CHECK(g_policyApi.policySetCallCount == 1);
-                CHECK(g_policyApi.lastHandle == handle);
-                CHECK(g_policyApi.lastGroupId == 12);
-                CHECK(g_policyApi.lastPolicy.condition == policy.condition);
+                CHECK(mockDcgmOps.m_policyState.setCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.lastHandle == handle);
+                CHECK(mockDcgmOps.m_policyState.lastGroupId == 12);
+                CHECK(mockDcgmOps.m_policyState.lastPolicy.condition == policy.condition);
             }
         }
     }
@@ -395,8 +314,8 @@ TEST_CASE("Policy::UnregisterPolicyUpdates")
 {
     GIVEN("a policy manager with a mocked unregister API")
     {
-        ResetPolicyApi();
-        Policy policyManager;
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        Policy policyManager(&mockDcgmOps);
         auto handle            = static_cast<dcgmHandle_t>(0x33);
         unsigned int groupId   = 13;
         unsigned int condition = DCGM_POLICY_COND_DBE | DCGM_POLICY_COND_XID;
@@ -408,23 +327,23 @@ TEST_CASE("Policy::UnregisterPolicyUpdates")
             THEN("the condition is forwarded as a policy condition")
             {
                 CHECK(result == DCGM_ST_OK);
-                CHECK(g_policyApi.unregisterCallCount == 1);
-                CHECK(g_policyApi.lastHandle == handle);
-                CHECK(g_policyApi.lastGroupId == static_cast<dcgmGpuGrp_t>(groupId));
-                CHECK(g_policyApi.lastCondition == static_cast<dcgmPolicyCondition_t>(condition));
+                CHECK(mockDcgmOps.m_policyState.unregisterCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.lastHandle == handle);
+                CHECK(mockDcgmOps.m_policyState.lastGroupId == static_cast<dcgmGpuGrp_t>(groupId));
+                CHECK(mockDcgmOps.m_policyState.lastCondition == static_cast<dcgmPolicyCondition_t>(condition));
             }
         }
 
         WHEN("unregister fails")
         {
-            g_policyApi.unregisterReturn = DCGM_ST_BADPARAM;
+            mockDcgmOps.m_policyState.unregisterReturn = DCGM_ST_BADPARAM;
             CoutCapture capture;
             dcgmReturn_t result = policyManager.UnregisterPolicyUpdates(handle, groupId, condition);
 
             THEN("the error is returned and printed")
             {
                 CHECK(result == DCGM_ST_BADPARAM);
-                CHECK(g_policyApi.unregisterCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.unregisterCallCount == 1);
                 CHECK(capture.str().find("Error: Cannot unregister to receive policy violations") != std::string::npos);
             }
         }
@@ -435,22 +354,121 @@ TEST_CASE("RegPolicy::~RegPolicy")
 {
     GIVEN("a registration command with a live handle")
     {
-        ResetPolicyApi();
+        DcgmNs::MockDcgmOps mockDcgmOps;
         auto handle = static_cast<dcgmHandle_t>(0x44);
 
         WHEN("the command is destroyed")
         {
             {
-                TestRegPolicy command("localhost", 4, DCGM_POLICY_COND_THERMAL);
+                TestRegPolicy command("localhost", 4, DCGM_POLICY_COND_THERMAL, &mockDcgmOps);
                 command.SetHandle(handle);
             }
 
             THEN("the registered condition is unregistered")
             {
-                CHECK(g_policyApi.unregisterCallCount == 1);
-                CHECK(g_policyApi.lastHandle == handle);
-                CHECK(g_policyApi.lastGroupId == 4);
-                CHECK(g_policyApi.lastCondition == DCGM_POLICY_COND_THERMAL);
+                CHECK(mockDcgmOps.m_policyState.unregisterCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.lastHandle == handle);
+                CHECK(mockDcgmOps.m_policyState.lastGroupId == 4);
+                CHECK(mockDcgmOps.m_policyState.lastCondition == DCGM_POLICY_COND_THERMAL);
+            }
+        }
+    }
+}
+
+TEST_CASE("Policy::RegisterForPolicyUpdates reports registration failures")
+{
+    GIVEN("a policy manager with a mocked register API")
+    {
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        Policy policyManager(&mockDcgmOps);
+        auto handle          = static_cast<dcgmHandle_t>(0x55);
+        unsigned int groupId = 14;
+
+        WHEN("registration fails before entering the listen loop")
+        {
+            mockDcgmOps.m_policyState.registerReturn = DCGM_ST_NOT_SUPPORTED;
+            CoutCapture capture;
+            dcgmReturn_t result = policyManager.RegisterForPolicyUpdates(handle, groupId, DCGM_POLICY_COND_DBE);
+
+            THEN("all policy conditions are requested and the error is returned")
+            {
+                auto allConditions = static_cast<dcgmPolicyCondition_t>(
+                    DCGM_POLICY_COND_DBE | DCGM_POLICY_COND_PCI | DCGM_POLICY_COND_MAX_PAGES_RETIRED
+                    | DCGM_POLICY_COND_THERMAL | DCGM_POLICY_COND_POWER | DCGM_POLICY_COND_NVLINK
+                    | DCGM_POLICY_COND_XID);
+
+                CHECK(result == DCGM_ST_NOT_SUPPORTED);
+                CHECK(mockDcgmOps.m_policyState.registerCallCount == 1);
+                CHECK(mockDcgmOps.m_policyState.lastHandle == handle);
+                CHECK(mockDcgmOps.m_policyState.lastGroupId == static_cast<dcgmGpuGrp_t>(groupId));
+                CHECK(mockDcgmOps.m_policyState.lastRegisteredCondition == allConditions);
+                CHECK(mockDcgmOps.m_policyState.lastCallback != nullptr);
+                CHECK(mockDcgmOps.m_policyState.lastUserData == 0);
+                CHECK(capture.str().find("Policy management is only supported on Tesla GPUs") != std::string::npos);
+            }
+        }
+    }
+}
+
+TEST_CASE("Captured policy registration callback formats each policy condition")
+{
+    GIVEN("a captured production callback without entering the listen loop")
+    {
+        DcgmNs::MockDcgmOps mockDcgmOps;
+        Policy policyManager(&mockDcgmOps);
+        mockDcgmOps.m_policyState.registerReturn = DCGM_ST_NOT_SUPPORTED;
+        auto handle                              = static_cast<dcgmHandle_t>(0x66);
+
+        {
+            CoutCapture capture;
+            CHECK(policyManager.RegisterForPolicyUpdates(handle, 15, DCGM_POLICY_COND_DBE) == DCGM_ST_NOT_SUPPORTED);
+        }
+        REQUIRE(mockDcgmOps.m_policyState.lastCallback != nullptr);
+        auto callback = mockDcgmOps.m_policyState.lastCallback;
+        auto userData = mockDcgmOps.m_policyState.lastUserData;
+
+        struct TestCase
+        {
+            dcgmPolicyCondition_t condition;
+            char const *expected;
+        };
+
+        TestCase cases[] = {
+            { DCGM_POLICY_COND_DBE, "double-bit ECC" },
+            { DCGM_POLICY_COND_PCI, "PCIe replay" },
+            { DCGM_POLICY_COND_MAX_PAGES_RETIRED, "maximum number of retired pages" },
+            { DCGM_POLICY_COND_THERMAL, "maximum thermal limit" },
+            { DCGM_POLICY_COND_POWER, "maximum power limit" },
+            { DCGM_POLICY_COND_NVLINK, "NVLink Counter" },
+            { DCGM_POLICY_COND_XID, "XID error" },
+            { static_cast<dcgmPolicyCondition_t>(0), "unknown error" },
+        };
+
+        THEN("the captured callback emits the user-facing diagnostic text for each condition")
+        {
+            for (auto const &testCase : cases)
+            {
+                CAPTURE(testCase.condition);
+                dcgmPolicyCallbackResponse_t response {};
+                response.condition                    = testCase.condition;
+                response.val.pci.timestamp            = 1700000000;
+                response.val.pci.counter              = 11;
+                response.val.mpr.timestamp            = 1700000001;
+                response.val.mpr.sbepages             = 3;
+                response.val.mpr.dbepages             = 4;
+                response.val.thermal.timestamp        = 1700000002;
+                response.val.thermal.thermalViolation = 91;
+                response.val.power.timestamp          = 1700000003;
+                response.val.power.powerViolation     = 255;
+                response.val.nvlink.timestamp         = 1700000004;
+                response.val.nvlink.fieldId           = DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL;
+                response.val.nvlink.counter           = 7;
+                response.val.xid.timestamp            = 1700000005;
+                response.val.xid.errnum               = 79;
+
+                CoutCapture capture;
+                CHECK(callback(&response, userData) == 0);
+                CHECK(capture.str().find(testCase.expected) != std::string::npos);
             }
         }
     }

@@ -383,6 +383,11 @@ is less than this percentage, the test will be skipped */
 #define CPU_EUD_TEST_NAME  "cpu_eud"
 
 /****************************************************************************
+ * CPU SDC PLUGIN
+ ***************************************************************************/
+#define CPU_SDC_PLUGIN_NAME "cpu_sdc"
+
+/****************************************************************************
  * NVBandwidth PLUGIN
  ***************************************************************************/
 #define NVBANDWIDTH_PLUGIN_NAME     "nvbandwidth"
@@ -476,10 +481,19 @@ is less than this percentage, the test will be skipped */
 /******************************************************************************
  * RIST PLUGIN
  *****************************************************************************/
-#define RIST_PLUGIN_NAME     "rist"
-#define RIST_PLUGIN_CATEGORY PLUGIN_CATEGORY_HW
+#define RIST_PLUGIN_NAME       "rist"
+#define RIST_PLUGIN_CATEGORY   PLUGIN_CATEGORY_HW
+#define RIST_STR_TEST_DURATION "test_duration"
+#define RIST_STR_CFG           "cfg"
+#define RIST_STR_CFG_LIST      "cfg_list"
+#define RIST_STR_CFG_LIST_PATH "cfg_list_path"
+#define RIST_STR_LOG_TELEMETRY "log_telemetry"
 
-#define DCGM_RIST_BIN_PATH_ENV "DCGM_RIST_BIN_PATH"
+#define DCGM_RIST_BIN_PATH_ENV                  "DCGM_RIST_BIN_PATH"
+#define DCGM_RIST_SKIP_BIN_PERMISSION_CHECK_ENV "DCGM_RIST_SKIP_BIN_PERMISSION_CHECK"
+#define DCGM_RIST_CFG_ENV                       "DCGM_RIST_CFG"
+#define DCGM_RIST_CFG_LIST_ENV                  "DCGM_RIST_CFG_LIST"
+#define DCGM_RIST_CFG_LIST_PATH_ENV             "DCGM_RIST_CFG_LIST_PATH"
 
 /******************************************************************************
  * COMMON TO ALL PLUGINS

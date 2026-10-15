@@ -81,6 +81,38 @@ def test_dcgm_policy_get_with_no_gpus_standalone():
     trampoline()
 
 
+def test_dcgm_field_policy_violation():
+    trampoline()
+
+
+def test_dcgm_field_policy_disabled():
+    trampoline()
+
+
+def test_dcgm_field_policy_wrong_gpu():
+    trampoline()
+
+
+def test_dcgm_field_policy_callback():
+    trampoline()
+
+
+def test_dcgm_field_policy_rate_limit_is_preserved():
+    trampoline()
+
+
+def test_dcgm_field_policy_enable_disable_and_delete():
+    trampoline()
+
+
+def test_dcgm_field_policy_modify_and_get_all():
+    trampoline()
+
+
+def test_dcgm_field_policy_import():
+    trampoline()
+
+
 @test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_standalone_host_engine(40)
 @test_utils.run_with_nvml_injected_gpus()

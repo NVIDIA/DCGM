@@ -44,11 +44,11 @@ dcgmReturn_t ParseArgs(ArgumentSet_t &argumentSet, std::vector<std::string> args
     return argumentSet.Parse(static_cast<int>(argv.size()), argv.data());
 }
 
-std::vector<std::shared_ptr<Arguments_t>> CollectArguments(ArgumentSet_t &argumentSet)
+std::vector<Arguments_t> CollectArguments(ArgumentSet_t &argumentSet)
 {
-    std::vector<std::shared_ptr<Arguments_t>> collected;
-    auto ret = argumentSet.Process([&](std::shared_ptr<Arguments_t> arguments) {
-        collected.push_back(std::move(arguments));
+    std::vector<Arguments_t> collected;
+    auto ret = argumentSet.Process([&](Arguments_t const &arguments) {
+        collected.push_back(arguments);
         return DCGM_ST_OK;
     });
     REQUIRE(ret == DCGM_ST_OK);
@@ -94,14 +94,14 @@ TEST_CASE("dcgmproftester ArgumentSet parses explicit field and gpu options")
             THEN("one snapshot is generated per requested field")
             {
                 REQUIRE(collected.size() == 2);
-                CHECK(collected[0]->m_parameters.m_fieldId == DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO);
-                CHECK(collected[1]->m_parameters.m_fieldId == DCGM_FI_PROF_SM_UTIL_RATIO);
-                CHECK(collected[0]->m_gpuIds == std::vector<unsigned int> { 0, 2 });
+                CHECK(collected[0].m_parameters.m_fieldId == DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO);
+                CHECK(collected[1].m_parameters.m_fieldId == DCGM_FI_PROF_SM_UTIL_RATIO);
+                CHECK(collected[0].m_gpuIds == std::vector<unsigned int> { 0, 2 });
             }
 
             THEN("shared options are copied into each snapshot")
             {
-                auto const &params = collected[0]->m_parameters;
+                auto const &params = collected[0].m_parameters;
                 CHECK(params.m_generate == false);
                 CHECK(params.m_report == true);
                 CHECK(params.m_validate == true);
@@ -136,10 +136,10 @@ TEST_CASE("dcgmproftester ArgumentSet computes validation ranges")
 
         auto collected = CollectArguments(argumentSet);
         REQUIRE(collected.size() == 1);
-        CHECK(collected[0]->m_parameters.m_minValue == 95.0);
-        CHECK(collected[0]->m_parameters.m_maxValue == 105.0);
-        CHECK(collected[0]->m_parameters.m_percentTolerance == true);
-        CHECK(collected[0]->m_parameters.m_tolerance == 5.0);
+        CHECK(collected[0].m_parameters.m_minValue == 95.0);
+        CHECK(collected[0].m_parameters.m_maxValue == 105.0);
+        CHECK(collected[0].m_parameters.m_percentTolerance == true);
+        CHECK(collected[0].m_parameters.m_tolerance == 5.0);
     }
 
     SECTION("max value with absolute tolerance")
@@ -157,10 +157,10 @@ TEST_CASE("dcgmproftester ArgumentSet computes validation ranges")
 
         auto collected = CollectArguments(argumentSet);
         REQUIRE(collected.size() == 1);
-        CHECK(collected[0]->m_parameters.m_minValue == 44.0);
-        CHECK(collected[0]->m_parameters.m_maxValue == 50.0);
-        CHECK(collected[0]->m_parameters.m_percentTolerance == false);
-        CHECK(collected[0]->m_parameters.m_tolerance == 3.0);
+        CHECK(collected[0].m_parameters.m_minValue == 44.0);
+        CHECK(collected[0].m_parameters.m_maxValue == 50.0);
+        CHECK(collected[0].m_parameters.m_percentTolerance == false);
+        CHECK(collected[0].m_parameters.m_tolerance == 3.0);
     }
 
     SECTION("min value with percent tolerance")
@@ -178,10 +178,10 @@ TEST_CASE("dcgmproftester ArgumentSet computes validation ranges")
 
         auto collected = CollectArguments(argumentSet);
         REQUIRE(collected.size() == 1);
-        CHECK(collected[0]->m_parameters.m_minValue == 90.0);
-        CHECK(collected[0]->m_parameters.m_maxValue == Catch::Approx(110.0));
-        CHECK(collected[0]->m_parameters.m_percentTolerance == true);
-        CHECK(collected[0]->m_parameters.m_tolerance == 10.0);
+        CHECK(collected[0].m_parameters.m_minValue == 90.0);
+        CHECK(collected[0].m_parameters.m_maxValue == Catch::Approx(110.0));
+        CHECK(collected[0].m_parameters.m_percentTolerance == true);
+        CHECK(collected[0].m_parameters.m_tolerance == 10.0);
     }
 
     SECTION("min value with absolute tolerance")
@@ -199,10 +199,10 @@ TEST_CASE("dcgmproftester ArgumentSet computes validation ranges")
 
         auto collected = CollectArguments(argumentSet);
         REQUIRE(collected.size() == 1);
-        CHECK(collected[0]->m_parameters.m_minValue == 90.0);
-        CHECK(collected[0]->m_parameters.m_maxValue == 98.0);
-        CHECK(collected[0]->m_parameters.m_percentTolerance == false);
-        CHECK(collected[0]->m_parameters.m_tolerance == 4.0);
+        CHECK(collected[0].m_parameters.m_minValue == 90.0);
+        CHECK(collected[0].m_parameters.m_maxValue == 98.0);
+        CHECK(collected[0].m_parameters.m_percentTolerance == false);
+        CHECK(collected[0].m_parameters.m_tolerance == 4.0);
     }
 
     SECTION("match value with absolute tolerance")
@@ -220,10 +220,10 @@ TEST_CASE("dcgmproftester ArgumentSet computes validation ranges")
 
         auto collected = CollectArguments(argumentSet);
         REQUIRE(collected.size() == 1);
-        CHECK(collected[0]->m_parameters.m_minValue == 47.0);
-        CHECK(collected[0]->m_parameters.m_maxValue == 53.0);
-        CHECK(collected[0]->m_parameters.m_percentTolerance == false);
-        CHECK(collected[0]->m_parameters.m_tolerance == 3.0);
+        CHECK(collected[0].m_parameters.m_minValue == 47.0);
+        CHECK(collected[0].m_parameters.m_maxValue == 53.0);
+        CHECK(collected[0].m_parameters.m_percentTolerance == false);
+        CHECK(collected[0].m_parameters.m_tolerance == 3.0);
     }
 }
 
@@ -239,10 +239,10 @@ TEST_CASE("dcgmproftester ArgumentSet uses defaults and field aliases")
         auto collected = CollectArguments(argumentSet);
         REQUIRE_FALSE(collected.empty());
         auto first = collected.front();
-        CHECK(first->m_parameters.m_fieldId == DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO);
-        CHECK(first->m_parameters.m_valueValid == true);
-        CHECK(first->m_parameters.m_minValue == 1.0);
-        CHECK(first->m_parameters.m_maxValue == 2.0);
+        CHECK(first.m_parameters.m_fieldId == DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO);
+        CHECK(first.m_parameters.m_valueValid == true);
+        CHECK(first.m_parameters.m_minValue == 1.0);
+        CHECK(first.m_parameters.m_maxValue == 2.0);
     }
 
     SECTION("nvlink alias limits generated fields")
@@ -253,8 +253,8 @@ TEST_CASE("dcgmproftester ArgumentSet uses defaults and field aliases")
 
         auto collected = CollectArguments(argumentSet);
         REQUIRE(collected.size() == 2);
-        CHECK(collected.front()->m_parameters.m_fieldId == DCGM_FI_PROF_NVLINK_TX_BYTES);
-        CHECK(collected.back()->m_parameters.m_fieldId == DCGM_FI_PROF_NVLINK_RX_BYTES);
+        CHECK(collected.front().m_parameters.m_fieldId == DCGM_FI_PROF_NVLINK_TX_BYTES);
+        CHECK(collected.back().m_parameters.m_fieldId == DCGM_FI_PROF_NVLINK_RX_BYTES);
     }
 
     SECTION("nonvlink alias stops before nvlink fields")
@@ -265,8 +265,8 @@ TEST_CASE("dcgmproftester ArgumentSet uses defaults and field aliases")
 
         auto collected = CollectArguments(argumentSet);
         REQUIRE_FALSE(collected.empty());
-        CHECK(collected.front()->m_parameters.m_fieldId == DCGM_FI_PROF_FIRST_ID);
-        CHECK(collected.back()->m_parameters.m_fieldId == DCGM_FI_PROF_PCIE_RX_BYTES);
+        CHECK(collected.front().m_parameters.m_fieldId == DCGM_FI_PROF_FIRST_ID);
+        CHECK(collected.back().m_parameters.m_fieldId == DCGM_FI_PROF_PCIE_RX_BYTES);
     }
 }
 
@@ -292,5 +292,103 @@ TEST_CASE("dcgmproftester ArgumentSet rejects invalid input")
                           "--mode",
                           "generateload,wat" })
               == DCGM_ST_OK);
+    }
+}
+
+SCENARIO("dcgmproftester ArgumentSet snapshots flags and reset behavior")
+{
+    GIVEN("switch flags that can be cleared by --reset between field snapshots")
+    {
+        WHEN("flags are set before a field with no reset")
+        {
+            ArgumentSet_t argumentSet("dcgmproftester", "test");
+            REQUIRE(ParseArgs(argumentSet,
+                              { "dcgmproftester",
+                                "--no-dcgm-validation",
+                                "--dvs",
+                                "--target-max-value",
+                                "-t",
+                                std::to_string(DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO) })
+                    == DCGM_ST_OK);
+            auto collected = CollectArguments(argumentSet);
+
+            THEN("the snapshot retains the switch flags")
+            {
+                REQUIRE(collected.size() == 1);
+                CHECK(collected[0].m_parameters.m_fieldId == DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO);
+                CHECK(collected[0].m_parameters.m_noDcgmValidation);
+                CHECK(collected[0].m_parameters.m_dvsOutput);
+                CHECK(collected[0].m_parameters.m_targetMaxValue);
+            }
+        }
+
+        WHEN("snapshots are split by --reset between field options")
+        {
+            ArgumentSet_t argumentSet("dcgmproftester", "test");
+            REQUIRE(ParseArgs(argumentSet,
+                              { "dcgmproftester",
+                                "--no-dcgm-validation",
+                                "--dvs",
+                                "--target-max-value",
+                                "-t",
+                                std::to_string(DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO),
+                                "--reset",
+                                "-t",
+                                std::to_string(DCGM_FI_PROF_SM_UTIL_RATIO) })
+                    == DCGM_ST_OK);
+            auto collected = CollectArguments(argumentSet);
+
+            THEN("the reset clears pending switch flags before either snapshot is emitted")
+            {
+                REQUIRE(collected.size() == 2);
+                CHECK(collected[0].m_parameters.m_fieldId == DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO);
+                CHECK_FALSE(collected[0].m_parameters.m_noDcgmValidation);
+                CHECK_FALSE(collected[0].m_parameters.m_dvsOutput);
+                CHECK_FALSE(collected[0].m_parameters.m_targetMaxValue);
+
+                CHECK(collected[1].m_parameters.m_fieldId == DCGM_FI_PROF_SM_UTIL_RATIO);
+                CHECK_FALSE(collected[1].m_parameters.m_noDcgmValidation);
+                CHECK_FALSE(collected[1].m_parameters.m_dvsOutput);
+                CHECK_FALSE(collected[1].m_parameters.m_targetMaxValue);
+            }
+        }
+    }
+}
+
+SCENARIO("dcgmproftester ArgumentSet parses GPU list edge cases")
+{
+    GIVEN("a fresh argument set with explicit GPU ids")
+    {
+        WHEN("the GPU list contains empty positions")
+        {
+            ArgumentSet_t argumentSet("dcgmproftester", "test");
+            REQUIRE(ParseArgs(argumentSet,
+                              { "dcgmproftester", "-t", std::to_string(DCGM_FI_PROF_SM_UTIL_RATIO), "-i", "7,,9," })
+                    == DCGM_ST_OK);
+            auto collected = CollectArguments(argumentSet);
+
+            THEN("empty positions are interpreted as GPU id zero by the legacy parser")
+            {
+                REQUIRE(collected.size() == 1);
+                CHECK(collected[0].m_gpuIds == std::vector<unsigned int> { 7, 0, 9 });
+                CHECK(argumentSet.GetGpuIdsString() == "7,,9,");
+            }
+        }
+
+        WHEN("the GPU list contains a non-numeric token")
+        {
+            ArgumentSet_t argumentSet("dcgmproftester", "test");
+            REQUIRE(ParseArgs(argumentSet,
+                              { "dcgmproftester", "-t", std::to_string(DCGM_FI_PROF_SM_UTIL_RATIO), "-i", "1,nope" })
+                    == DCGM_ST_OK);
+            auto collected = CollectArguments(argumentSet);
+
+            THEN("the legacy parser preserves IDs before the invalid token and still generates a snapshot")
+            {
+                REQUIRE(collected.size() == 1);
+                CHECK(collected[0].m_gpuIds == std::vector<unsigned int> { 1 });
+                CHECK(argumentSet.GetGpuIdsString() == "1,nope");
+            }
+        }
     }
 }

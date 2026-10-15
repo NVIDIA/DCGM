@@ -115,11 +115,11 @@ def test_sysmon_reading_injected_values(handle, cpuIds, coreIds):
     entityPair.entityId = coreIds[0]
     offset = 5
 
-    injection_info = [[dcgm_fields.DCGM_FI_DEV_CPU_UTIL_TOTAL, 100.0],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER, 65.0],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_NICE, 66.0],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_SYS, 25.0],
-                      [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_IRQ, 10.0],
+    injection_info = [[dcgm_fields.DCGM_FI_DEV_CPU_UTIL_RATIO, 100.0],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER_RATIO, 65.0],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_NICE_RATIO, 66.0],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_SYS_RATIO, 25.0],
+                      [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_IRQ_RATIO, 10.0],
                       [dcgm_fields.DCGM_FI_DEV_CPU_TEMP_CELSIUS, 71.0],
                       [dcgm_fields.DCGM_FI_DEV_CPU_CLOCK_CURRENT, 1294],
                       [dcgm_fields.DCGM_FI_DEV_CPU_POWER_LIMIT_WATTS, 150.0],
@@ -185,7 +185,7 @@ def test_dcgm_sysmon_fields_with_dcgmreader(handle):
 
     dcgmGroup = dcgmSystem.GetGroupWithEntities('cpugroup', cpuEntities)
 
-    fieldIds = [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER,
+    fieldIds = [dcgm_fields.DCGM_FI_DEV_CPU_UTIL_USER_RATIO,
                 ]
 
     updateFrequencyUsec = 200000  # 200ms

@@ -77,6 +77,7 @@ if (DEFINED ENV{${_Rust_LINKER_ENV}} AND NOT "$ENV{${_Rust_LINKER_ENV}}" STREQUA
     set(_Rust_LINKER "$ENV{${_Rust_LINKER_ENV}}")
 endif()
 set(Rust_LINKER "${_Rust_LINKER}" CACHE FILEPATH "Linker used for Rust crates")
+unset(_Rust_LINKER)
 
 find_package(Corrosion REQUIRED)
 
@@ -187,8 +188,8 @@ function(rust_crate)
         CARGO_TARGET ${Rust_CARGO_TARGET}
         IMPORTED_CRATES _IMPORTED_CRATES
         PROFILE ${RUST_PROFILE}
-        # LOCKED # Comment out LOCKED and FROZEN as our vendoring is still in progress.
-        # FROZEN # Comment out LOCKED and FROZEN as our vendoring is still in progress.
+        LOCKED
+        FROZEN
         ${RUST_UNPARSED_ARGUMENTS}
     )
 
@@ -203,6 +204,44 @@ function(rust_crate)
         # "early EOF on jobserver pipe". Let Cargo create its own jobserver.
         corrosion_set_env_vars(${imported_crate} "CARGO_MAKEFLAGS=")
         corrosion_set_env_vars(${imported_crate} "MAKEFLAGS=")
+
+        # Export the cross-toolchain values consumed by the dcgm-bindgen
+        # build helper. The crate's `CmakeToolchain::from_env` reads these
+        # four variables to skip its `cmake -P` fallback path; when the outer
+        # build supplies all of them, dcgm-bindgen never needs to spawn a
+        # subprocess to re-evaluate the toolchain file.
+        #
+        # The two list-shaped values keep their native CMake `;` separator
+        # at the consumer (build.rs splits on `;`), but each `;` must be
+        # double-escaped here. Reasoning, by hop:
+        #   1. CMake string parsing turns `\\\\;` in source into `\\;` (2 chars)
+        #      in the value passed to `corrosion_set_env_vars`.
+        #   2. `corrosion_set_env_vars` body dereferences `${env_var}`
+        #      unquoted, which unescapes one level and yields `\;`. CMake's
+        #      list parser treats `\;` as a single escaped semicolon, so the
+        #      property stores the entire `KEY=v1;v2;v3` as ONE element
+        #      rather than splitting it into three.
+        #   3. The genex pipeline that feeds `cmake -E env` preserves the
+        #      escape, so cargo eventually sees a single env var whose value
+        #      contains literal `;` characters.
+        # Without this escape, corrosion silently drops all but the first
+        # element (verified empirically with `cmake -E echo` against a
+        # corrosion-style property pipeline).
+        if(DEFINED CMAKE_SYSROOT
+                AND DEFINED CMAKE_LIBRARY_ARCHITECTURE
+                AND DEFINED CMAKE_C_STANDARD_INCLUDE_DIRECTORIES
+                AND DEFINED CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES)
+            string(REPLACE ";" "\\\\;" _dcgm_bindgen_c_dirs "${CMAKE_C_STANDARD_INCLUDE_DIRECTORIES}")
+            string(REPLACE ";" "\\\\;" _dcgm_bindgen_cxx_dirs "${CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES}")
+            corrosion_set_env_vars(${imported_crate}
+                "DCGM_BINDGEN_SYSROOT=${CMAKE_SYSROOT}")
+            corrosion_set_env_vars(${imported_crate}
+                "DCGM_BINDGEN_TARGET_TRIPLE=${CMAKE_LIBRARY_ARCHITECTURE}")
+            corrosion_set_env_vars(${imported_crate}
+                "DCGM_BINDGEN_C_INCLUDE_DIRS=${_dcgm_bindgen_c_dirs}")
+            corrosion_set_env_vars(${imported_crate}
+                "DCGM_BINDGEN_CXX_INCLUDE_DIRS=${_dcgm_bindgen_cxx_dirs}")
+        endif()
 
         foreach(env_var IN LISTS RUST_ENV)
             corrosion_set_env_vars(${imported_crate} "${env_var}")
@@ -282,6 +321,7 @@ function(rust_crate)
             set_property(TARGET ${imported_crate}-shared PROPERTY
                 RUST_SONAME_LINK "${_soname_major_path}")
         endif()
+
         if(TARGET ${imported_crate}-static)
             list(APPEND _variants "static")
         endif()
@@ -296,6 +336,7 @@ function(rust_crate)
         # more problems than solutions. To disable the logic in corrosion-rs, we need to set the linker for each
         # imported crate manually.
         corrosion_set_linker(${imported_crate} "${Rust_LINKER}")
+        corrosion_add_target_local_rustflags(${imported_crate} "-Clink-arg=-fuse-ld=mold")
 
         if(NOT _variants)
             list(APPEND _variants "bin")
@@ -309,5 +350,19 @@ function(rust_crate)
     if(DEFINED RUST_IMPORTED_CRATES AND NOT RUST_IMPORTED_CRATES STREQUAL "")
         set(${RUST_IMPORTED_CRATES} ${_IMPORTED_CRATES} PARENT_SCOPE)
     endif()
-
 endfunction()
+
+# Mirror the parent of Corrosion's --target-dir so clean removes both Cargo
+# build artifacts and the otherwise-empty cargo directory while preserving
+# Cargo's downloaded source cache under CARGO_HOME.
+get_cmake_property(_Rust_IS_MULTI_CONFIG GENERATOR_IS_MULTI_CONFIG)
+
+if(_Rust_IS_MULTI_CONFIG)
+    set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
+        ADDITIONAL_CLEAN_FILES "${CMAKE_BINARY_DIR}/$<CONFIG>/cargo")
+else()
+    set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
+        ADDITIONAL_CLEAN_FILES "${CMAKE_BINARY_DIR}/cargo")
+endif()
+
+unset(_Rust_IS_MULTI_CONFIG)

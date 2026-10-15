@@ -60,7 +60,7 @@ g_publishFieldIds = [
     dcgm_fields.DCGM_FI_DEV_BOARD_POWER_WATTS,
     dcgm_fields.DCGM_FI_DEV_GPU_TEMP_CELSIUS,
     dcgm_fields.DCGM_FI_DEV_SM_CLOCK,
-    dcgm_fields.DCGM_FI_DEV_GPU_UTIL_RATIO,
+    dcgm_fields.DCGM_FI_DEV_GPU_UTIL,
     dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_PENDING,
     dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_SBE_TOTAL,
     dcgm_fields.DCGM_FI_DEV_PAGE_RETIRED_DBE_TOTAL,
@@ -175,7 +175,12 @@ class DcgmCollectdPlugin(DcgmReader):
                 if fieldId in self.m_dcgmIgnoreFields:
                     continue
 
-                fieldTag = self.m_fieldIdToInfo[fieldId].tag
+                field = dcgm_fields_collectd.CollectdMetadataDict.get(fieldId)
+
+                if field is None:
+                    raise KeyError(f"{fieldId}")
+
+                fieldTag = field.name
                 lastValTime = float("inf")
 
                 # Filter out times too close together (< 1.0 sec) but always

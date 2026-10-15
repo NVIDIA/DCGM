@@ -145,6 +145,11 @@ void ExerciseBroadGeneratedStubSet(StubMode mode)
     nvmlEnableState_t enableState {};
     nvmlEnableState_t enableState2 {};
     nvmlEventData_t eventData {};
+    nvmlEventSetWait_v3_t eventWaitV3 {};
+    nvmlEventSetGetContextCount_v1_t eventContextCount {};
+    nvmlEventSetGetContextData_v1_t eventContextData {};
+    nvmlEventSetGetContextInfo_v1_t eventContextInfo {};
+    nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t eventContextLegacyXid {};
     nvmlExcludedDeviceInfo_t excludedDeviceInfo {};
     nvmlFBCStats_t fbcStats {};
     nvmlFBCSessionInfo_t fbcSessionInfo {};
@@ -157,6 +162,7 @@ void ExerciseBroadGeneratedStubSet(StubMode mode)
     nvmlGpuInstancePlacement_t gpuInstancePlacement {};
     nvmlGpuInstanceProfileInfo_t gpuInstanceProfileInfo {};
     nvmlGpuInstanceProfileInfo_v2_t gpuInstanceProfileInfoV2 {};
+    nvmlGpuOperationalEventConfig_v1_t gpuOperationalEventConfig {};
     nvmlGpuThermalSettings_t thermalSettings {};
     nvmlGpuOperationMode_t gpuMode {};
     nvmlGpuOperationMode_t gpuMode2 {};
@@ -356,8 +362,14 @@ void ExerciseBroadGeneratedStubSet(StubMode mode)
         check([&] { return nvmlEventSetCreate(&eventSet); });
         check([&] { return nvmlDeviceRegisterEvents(device, ullValue, eventSet); });
         check([&] { return nvmlDeviceGetSupportedEventTypes(device, &ullValue); });
-        check([&] { return nvmlEventSetWait(eventSet, &eventData, 1); });
-        check([&] { return nvmlEventSetWait_v2(eventSet, &eventData, 1); });
+        check([&] { return nvmlEventSetWait(eventSet, &eventData, 0); });
+        check([&] { return nvmlEventSetWait_v2(eventSet, &eventData, 0); });
+        check([&] { return nvmlEventSetRegisterGpuOperationalEvents_v1(eventSet, &gpuOperationalEventConfig); });
+        check([&] { return nvmlEventSetWait_v3(eventSet, &eventWaitV3); });
+        check([&] { return nvmlEventSetGetContextCount_v1(eventSet, &eventContextCount); });
+        check([&] { return nvmlEventSetGetContextInfo_v1(eventSet, &eventContextInfo); });
+        check([&] { return nvmlEventSetGetContextData_v1(eventSet, &eventContextData); });
+        check([&] { return nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(eventSet, &eventContextLegacyXid); });
         check([&] { return nvmlEventSetFree(eventSet); });
     }
 

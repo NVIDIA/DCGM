@@ -1837,8 +1837,16 @@ typedef dcgmWorkloadPowerProfile_v1 dcgmWorkloadPowerProfile_t;
 #define dcgmWorkloadPowerProfile_version1 MAKE_DCGM_VERSION(dcgmWorkloadPowerProfile_v1, 1)
 #define dcgmWorkloadPowerProfile_version  dcgmWorkloadPowerProfile_version1
 
-/*Remove from doxygen documentation
- *
+/**
+ * @defgroup DCGM_LegacyGroupPolicy Deprecated Legacy Group Policy
+ * @ingroup dcgmStructs
+ * @deprecated Use \ref dcgmPolicySpec_t and \ref dcgm_policy_violation_t for field-policy
+ *             configuration and violations.
+ * @{
+ */
+
+/** @cond DOXYGEN_SHOULD_SKIP_THIS */
+/**
  * Define the structure that contains specific policy information
  */
 typedef struct
@@ -1851,30 +1859,28 @@ typedef struct
     unsigned int notifyOnMaxRetiredPages; //!< number of retired pages to occur before notification
 } dcgmPolicyViolation_v1;
 
-/*Remove from doxygen documentation
- *
- * Represents the versioning for the dcgmPolicyViolation_v1 structure
- */
-
-/*
+/**
  * Typedef for \ref dcgmPolicyViolation_v1
  */
 typedef dcgmPolicyViolation_v1 dcgmPolicyViolation_t;
 
-/*
+/**
  * Version 1 for \ref dcgmPolicyViolation_v1
  */
 #define dcgmPolicyViolation_version1 MAKE_DCGM_VERSION(dcgmPolicyViolation_v1, 1)
 
-/*
+/**
  * Latest version for \ref dcgmPolicyViolation_t
  */
 #define dcgmPolicyViolation_version dcgmPolicyViolation_version1
+/** @endcond */
 
 /**
  * Enumeration for policy conditions.
  * When used as part of dcgmPolicy_t these have corresponding parameters to
  * allow them to be switched on/off or set specific violation thresholds
+ *
+ * @deprecated Use field-policy field IDs and comparison operators instead.
  */
 typedef enum dcgmPolicyConditionIdx_enum
 {
@@ -1896,6 +1902,8 @@ typedef enum dcgmPolicyConditionIdx_enum
  * Bitmask enumeration for policy conditions.
  * When used as part of dcgmPolicy_t these have corresponding parameters to
  * allow them to be switched on/off or set specific violation thresholds
+ *
+ * @deprecated Use field-policy field IDs and comparison operators instead.
  */
 typedef enum dcgmPolicyCondition_enum
 {
@@ -1915,6 +1923,8 @@ typedef enum dcgmPolicyCondition_enum
  * This structure contains a tag that represents the type of the value being passed
  * as well as a "val" which is a union of the possible value types.  For example,
  * to pass a true boolean: tag = BOOL, val.boolean = 1.
+ *
+ * @deprecated Use \ref dcgmPolicySpec_t instead.
  */
 typedef struct dcgmPolicyConditionParams_st
 {
@@ -1932,6 +1942,8 @@ typedef struct dcgmPolicyConditionParams_st
 
 /**
  * Enumeration for policy modes
+ *
+ * @deprecated Use field-policy state and Cache Manager-driven evaluation instead.
  */
 typedef enum dcgmPolicyMode_enum
 {
@@ -1941,6 +1953,8 @@ typedef enum dcgmPolicyMode_enum
 
 /**
  * Enumeration for policy isolation modes
+ *
+ * @deprecated No field-policy equivalent is currently available.
  */
 typedef enum dcgmPolicyIsolation_enum
 {
@@ -1949,6 +1963,8 @@ typedef enum dcgmPolicyIsolation_enum
 
 /**
  * Enumeration for policy actions
+ *
+ * @deprecated No field-policy equivalent is currently available.
  */
 typedef enum dcgmPolicyAction_enum
 {
@@ -1958,6 +1974,8 @@ typedef enum dcgmPolicyAction_enum
 
 /**
  * Enumeration for policy validation actions
+ *
+ * @deprecated Used by the legacy group-policy interface and the deprecated \ref dcgmActionValidate.
  */
 typedef enum dcgmPolicyValidation_enum
 {
@@ -1970,6 +1988,8 @@ typedef enum dcgmPolicyValidation_enum
 
 /**
  * Enumeration for policy failure responses
+ *
+ * @deprecated No field-policy equivalent is currently available.
  */
 typedef enum dcgmPolicyFailureResp_enum
 {
@@ -1978,6 +1998,8 @@ typedef enum dcgmPolicyFailureResp_enum
 
 /**
  * Structure to fill when a user queries for policy violations
+ *
+ * @deprecated Use \ref dcgm_policy_violation_t instead.
  */
 typedef struct
 {
@@ -1987,6 +2009,8 @@ typedef struct
 
 /**
  * Define the structure that specifies a policy to be enforced for a GPU
+ *
+ * @deprecated Use \ref dcgmPolicySpec_t instead.
  */
 typedef struct
 {
@@ -2093,6 +2117,8 @@ typedef struct
 
 /**
  * Define the structure that is given to the callback function
+ *
+ * @deprecated Use \ref dcgm_policy_violation_t instead.
  */
 typedef struct
 {
@@ -2132,8 +2158,118 @@ typedef dcgmPolicyCallbackResponse_v2 dcgmPolicyCallbackResponse_t;
 /**
  * Represents a callback to receive updates from asynchronous functions.
  * Currently the only implemented callback function is dcgmPolicyRegister_v2.
+ *
+ * @deprecated Use \ref fpRecvPolicyViolation instead.
  */
 typedef int (*fpRecvUpdates)(dcgmPolicyCallbackResponse_t *response, uint64_t userData);
+
+/** @} */
+
+
+#define DCGM_POLICY_MAX_POLICIES   1525
+#define DCGM_POLICY_MAX_VIOLATIONS 128
+#define DCGM_POLICY_MAX_PATH       4096
+
+/**
+ * Comparison operators for field-based policies.
+ */
+typedef enum dcgmPolicyOperator_enum
+{
+    DCGM_POLICY_OP_GT      = 0, //!< Greater than (>)
+    DCGM_POLICY_OP_GE      = 1, //!< Greater than or equal (>=)
+    DCGM_POLICY_OP_LT      = 2, //!< Less than (<)
+    DCGM_POLICY_OP_LE      = 3, //!< Less than or equal (<=)
+    DCGM_POLICY_OP_EQ      = 4, //!< Equal (==)
+    DCGM_POLICY_OP_NE      = 5, //!< Not equal (!=)
+    DCGM_POLICY_OP_CHANGED = 6, //!< Value changed from previous
+    DCGM_POLICY_OP_COUNT   = 7  //!< Sentinel value - keep as last entry
+} dcgmPolicyOperator_t;
+
+/**
+ * Enabled/disabled state for field-based policies.
+ */
+typedef enum dcgmPolicyState_enum
+{
+    DCGM_POLICY_STATE_DISABLED = 0, //!< Policy is disabled and will not trigger notifications
+    DCGM_POLICY_STATE_ENABLED  = 1  //!< Policy is active and will trigger notifications on violation
+} dcgmPolicyState_t;
+
+/**
+ * Notification channels for field-based policy violations.
+ */
+typedef enum dcgmPolicyChannel_enum
+{
+    DCGM_POLICY_CHANNEL_CONSOLE  = 0x1, //!< Output to console (stdout)
+    DCGM_POLICY_CHANNEL_FILE     = 0x2, //!< Output to log file (JSON format)
+    DCGM_POLICY_CHANNEL_CALLBACK = 0x4, //!< Programmatic callback for application integration
+} dcgmPolicyChannel_t;
+
+/**
+ * Field-based policy configuration accepted from callers.
+ */
+typedef struct dcgmPolicySpec_v1
+{
+    unsigned int version;                                 //!< IN: dcgmPolicySpec_version.
+    unsigned short fieldId;                               //!< IN: DCGM field ID this policy monitors.
+    char name[DCGM_MAX_STR_LENGTH];                       //!< IN: NUL-terminated display name.
+    double threshold;                                     //!< IN: Comparison threshold.
+    dcgmPolicyOperator_t policyOperator;                  //!< IN: Comparison operator.
+    dcgmGroupEntityPair_t entities[DCGM_MAX_NUM_DEVICES]; //!< IN: Entities; empty means all GPUs for now.
+    unsigned int entityCount;                             //!< IN: Number of valid entries in entities.
+    unsigned int channelMask;                             //!< IN: Bitmask of dcgmPolicyChannel_t values.
+    dcgmPolicyState_t state;                              //!< IN: Initial enabled/disabled state.
+    unsigned int rateLimitSec;                            //!< IN: Minimum seconds between notifications.
+} dcgmPolicySpec_v1;
+
+#define dcgmPolicySpec_version1 MAKE_DCGM_VERSION(dcgmPolicySpec_v1, 1)
+#define dcgmPolicySpec_version  dcgmPolicySpec_version1
+typedef dcgmPolicySpec_v1 dcgmPolicySpec_t;
+
+/**
+ * Field-based policy readback state returned by the policy module.
+ */
+typedef struct dcgmPolicyInfo_v1
+{
+    unsigned int version;                                 //!< OUT: dcgmPolicyInfo_version.
+    uint64_t policyId;                                    //!< OUT: Module-owned policy identifier.
+    unsigned short fieldId;                               //!< OUT: DCGM field ID this policy monitors.
+    char name[DCGM_MAX_STR_LENGTH];                       //!< OUT: NUL-terminated display name.
+    double currentValue;                                  //!< OUT: Last module-recorded current value.
+    double threshold;                                     //!< OUT: Comparison threshold.
+    dcgmPolicyOperator_t policyOperator;                  //!< OUT: Comparison operator.
+    dcgmGroupEntityPair_t entities[DCGM_MAX_NUM_DEVICES]; //!< OUT: Entities; empty means all GPUs for now.
+    unsigned int entityCount;                             //!< OUT: Number of valid entries in entities.
+    unsigned int channelMask;                             //!< OUT: Bitmask of dcgmPolicyChannel_t values.
+    dcgmPolicyState_t state;                              //!< OUT: Enabled/disabled state.
+    unsigned int rateLimitSec;                            //!< OUT: Minimum seconds between notifications.
+    int64_t createdAt;                                    //!< OUT: Creation timestamp in usec since 1970.
+    unsigned int violationCount;                          //!< OUT: Module-owned violation count.
+    int64_t lastTriggeredTimestamp;                       //!< OUT: Latest violation timestamp in usec since 1970.
+} dcgmPolicyInfo_v1;
+
+#define dcgmPolicyInfo_version1 MAKE_DCGM_VERSION(dcgmPolicyInfo_v1, 1)
+#define dcgmPolicyInfo_version  dcgmPolicyInfo_version1
+typedef dcgmPolicyInfo_v1 dcgmPolicyInfo_t;
+
+/**
+ * Field-based policy violation event.
+ */
+typedef struct dcgm_policy_violation
+{
+    uint64_t policyId;                    //!< Unique policy identifier.
+    char policyName[DCGM_MAX_STR_LENGTH]; //!< Name of the policy.
+    char fieldName[DCGM_MAX_STR_LENGTH];  //!< Human-readable field name.
+    unsigned short fieldId;               //!< DCGM field ID.
+    dcgmGroupEntityPair_t entity;         //!< Entity that triggered the violation.
+    double currentValue;                  //!< Current value that violated the policy.
+    double thresholdValue;                //!< Threshold value from policy.
+    dcgmPolicyOperator_t policyOperator;  //!< Comparison operator.
+    unsigned int channelMask;             //!< Bitmask of notification channels (dcgmPolicyChannel_t).
+    int64_t timestamp;                    //!< When the violation occurred (usec since 1970).
+} dcgm_policy_violation_t;
+
+typedef int (*fpRecvPolicyViolation)(dcgm_policy_violation_t *violation, uint64_t userData);
+
 
 /**
  * Set above size of largest blob entry. Currently this is dcgmDeviceVgpuTypeInfo_v1
@@ -2303,6 +2439,7 @@ typedef enum dcgmHealthSystems_enum
     DCGM_HEALTH_WATCH_NVSWITCH_NONFATAL = 0x400,  //!< Non-fatal errors in NvSwitch
     DCGM_HEALTH_WATCH_NVSWITCH_FATAL    = 0x800,  //!< Fatal errors in NvSwitch
     DCGM_HEALTH_WATCH_CONNECTX          = 0x1000, //!< ConnectX device health
+    DCGM_HEALTH_WATCH_IMEX              = 0x2000, //!< IMEX daemon and domain health
 
     // ...
     DCGM_HEALTH_WATCH_ALL = 0xFFFFFFFF //!< All watches enabled
@@ -2311,6 +2448,7 @@ typedef enum dcgmHealthSystems_enum
 #define DCGM_HEALTH_WATCH_COUNT_V1 10 /*!< For iterating through the dcgmHealthSystems_v1 enum */
 #define DCGM_HEALTH_WATCH_COUNT_V2 12 /*!< For iterating through the dcgmHealthSystems_v2 enum */
 #define DCGM_HEALTH_WATCH_COUNT_V3 13 /*!< For iterating through the dcgmHealthSystems_v3 enum */
+#define DCGM_HEALTH_WATCH_COUNT_V4 14 /*!< For iterating through the dcgmHealthSystems_v4 enum */
 
 /**
  * Health Watch test results
@@ -3600,7 +3738,13 @@ typedef struct
 /**
  * Maximum number of Multi Node Hosts Supported
  */
-#define DCGM_MAX_NUM_HOSTS 72 //!< Maximum number of hosts in a multi-node diagnostic
+#define DCGM_MAX_NUM_HOSTS 72 //!< Maximum number of hosts in a multi-node diagnostic (legacy)
+
+/**
+ * Maximum number of hosts for multi-node diagnostics (mndiag-specific).
+ * Sized to cover NVL576 (288 Grace CPUs) with headroom for future growth.
+ */
+#define DCGM_MNDIAG_MAX_NUM_HOSTS 576
 
 /**
  * Multi-node diagnostic parameters structure v1
@@ -3613,18 +3757,43 @@ typedef struct
     char testParms[DCGM_MAX_TEST_PARMS][DCGM_MAX_TEST_PARMS_LEN_V2]; //!< Parameters to set for specified tests
 } dcgmRunMnDiag_v1;
 
-typedef dcgmRunMnDiag_v1 dcgmRunMnDiag_t;
-
 /**
- * Version 1 for \ref dcgmRunMnDiag_t
+ * Version 1 for \ref dcgmRunMnDiag_v1
  */
 #define dcgmRunMnDiag_version1 MAKE_DCGM_VERSION(dcgmRunMnDiag_v1, 1)
-#define dcgmRunMnDiag_version  dcgmRunMnDiag_version1
+
+/**
+ * Multi-node diagnostic parameters structure v2
+ * Expanded hostList to support up to DCGM_MNDIAG_MAX_NUM_HOSTS hosts.
+ */
+typedef struct
+{
+    unsigned int version;
+    char hostList[DCGM_MNDIAG_MAX_NUM_HOSTS][DCGM_MAX_STR_LENGTH];   //!< Host list for multi-node diagnostic
+    char testName[DCGM_MAX_STR_LENGTH];                              //!< Specified list of test names.
+    char testParms[DCGM_MAX_TEST_PARMS][DCGM_MAX_TEST_PARMS_LEN_V2]; //!< Parameters to set for specified tests
+} dcgmRunMnDiag_v2;
+
+typedef dcgmRunMnDiag_v2 dcgmRunMnDiag_t;
+
+/**
+ * Version 2 for \ref dcgmRunMnDiag_t
+ */
+#define dcgmRunMnDiag_version2 MAKE_DCGM_VERSION(dcgmRunMnDiag_v2, 2)
+#define dcgmRunMnDiag_version  dcgmRunMnDiag_version2
 
 
 #define DCGM_MN_DIAG_RESPONSE_TESTS_MAX             4  //!< The maximum number of tests that can be reported.
 #define DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX 16 //!< The maximum number of entities per host.
-#define DCGM_MN_DIAG_RESPONSE_HOSTS_MAX             72 //!< The maximum number of hosts that can be reported.
+
+/* Frozen V1 constants — preserve v1 struct ABI */
+#define DCGM_MN_DIAG_RESPONSE_HOSTS_MAX_V1 72
+#define DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1 \
+    (DCGM_MN_DIAG_RESPONSE_HOSTS_MAX_V1 * DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
+#define DCGM_MN_DIAG_RESPONSE_RESULTS_MAX_V1 (DCGM_MN_DIAG_RESPONSE_TESTS_MAX * DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1)
+
+/* Current (v2) constants */
+#define DCGM_MN_DIAG_RESPONSE_HOSTS_MAX 576 //!< The maximum number of hosts that can be reported.
 #define DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX \
     (DCGM_MN_DIAG_RESPONSE_HOSTS_MAX * DCGM_MN_DIAG_RESPONSE_ENTITIES_PER_HOST_MAX)
 #define DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX 32 //!< The maximum number of per-entity errors that can be reported.
@@ -3695,14 +3864,45 @@ typedef struct
 
     unsigned char errorIndices[DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX]; //!< Per-entity error indices for this run.
     unsigned char infoIndices[DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX];   //!< Per-entity info indices for this run.
-    unsigned short resultIndices[DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX];    //!< Per-entity result indices for this run.
+    unsigned short resultIndices[DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1]; //!< Per-entity result indices for this run.
     unsigned char _unused3[4];                                           //!< Padding bytes for alignment
     dcgmMnDiagTestAuxData_v1 auxData;                                    //!< Auxiliary data for the test run
 } dcgmMnDiagTestRun_v1;
 #pragma GCC diagnostic pop
-typedef dcgmMnDiagTestRun_v1 dcgmMnDiagTestRun_t;
 #define dcgmMnDiagTestRun_version1 MAKE_DCGM_VERSION(dcgmMnDiagTestRun_v1, 1)
-#define dcgmMnDiagTestRun_version  dcgmMnDiagTestRun_version1
+
+/**
+ * Information about each multi-node test run v2.
+ * Enlarged resultIndices to support up to DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX entities.
+ *
+ * Since DCGM 4.4
+ */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    char name[DCGM_MN_DIAG_TEST_RUN_NAME_LEN];       //!< The name of the test.
+    char pluginName[DCGM_MN_DIAG_TEST_RUN_NAME_LEN]; //!< Plugin name that this test belongs to
+
+    dcgmDiagResult_t result; //!< Overall result of the plugin (PASS, FAIL, SKIP, WARN, NOT_RUN).
+
+    unsigned char numErrors;     //!< Number of errors, always 0 on PASS.
+    unsigned char numInfo;       //!< Number of info msgs.
+    unsigned char categoryIndex; //!< Index into DiagResponse.categories
+    unsigned char _unused1;      //!< padding byte for alignment
+
+    unsigned short numResults; //!< Number of entity results.
+    unsigned char _unused2[2]; //!< Padding bytes for alignment
+
+    unsigned char errorIndices[DCGM_MN_DIAG_TEST_RUN_ERROR_INDICES_MAX]; //!< Per-entity error indices for this run.
+    unsigned char infoIndices[DCGM_MN_DIAG_TEST_RUN_INFO_INDICES_MAX];   //!< Per-entity info indices for this run.
+    unsigned short resultIndices[DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX];    //!< Per-entity result indices for this run.
+    dcgmMnDiagTestAuxData_v1 auxData;                                    //!< Auxiliary data for the test run
+} dcgmMnDiagTestRun_v2;
+#pragma GCC diagnostic pop
+typedef dcgmMnDiagTestRun_v2 dcgmMnDiagTestRun_t;
+#define dcgmMnDiagTestRun_version2 MAKE_DCGM_VERSION(dcgmMnDiagTestRun_v2, 2)
+#define dcgmMnDiagTestRun_version  dcgmMnDiagTestRun_version2
 
 /**
  * Additional entity details for multi-node diagnostic run.
@@ -3787,7 +3987,7 @@ typedef dcgmMnDiagEntityResult_v1 dcgmMnDiagEntityResult_t;
 #define dcgmMnDiagEntityResult_version  dcgmMnDiagEntityResult_version1
 
 /**
- * Global multi-node diagnostics result structure v1
+ * Global multi-node diagnostics result structure v1 (frozen with V1-sized arrays)
  */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wpadded"
@@ -3804,18 +4004,14 @@ typedef struct
     unsigned short numResults;  //!< Number of test results for the test run
     char _unusedPad1[2];
 
-    dcgmMnDiagHosts_v1 hosts[DCGM_MN_DIAG_RESPONSE_HOSTS_MAX];   //!< Host information for hosts in this diagnostic run
-    dcgmMnDiagTestRun_v1 tests[DCGM_MN_DIAG_RESPONSE_TESTS_MAX]; //!< Test run information for each relevant test.
-    dcgmMnDiagEntity_v1 entities[DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX]; //!< Entity information for this test run
-    dcgmMnDiagError_v1 errors[DCGM_MN_DIAG_RESPONSE_ERRORS_MAX];      //!< Accumulated error messages from the test run
-    dcgmMnDiagInfo_v1 info[DCGM_MN_DIAG_RESPONSE_INFO_MAX];           //!< Information messages from the test run
-    dcgmMnDiagEntityResult_v1 results[DCGM_MN_DIAG_RESPONSE_RESULTS_MAX]; //!< Test results from the test run
+    dcgmMnDiagHosts_v1 hosts[DCGM_MN_DIAG_RESPONSE_HOSTS_MAX_V1];            //!< Host information
+    dcgmMnDiagTestRun_v1 tests[DCGM_MN_DIAG_RESPONSE_TESTS_MAX];             //!< Test run information
+    dcgmMnDiagEntity_v1 entities[DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX_V1];     //!< Entity information
+    dcgmMnDiagError_v1 errors[DCGM_MN_DIAG_RESPONSE_ERRORS_MAX];             //!< Accumulated error messages
+    dcgmMnDiagInfo_v1 info[DCGM_MN_DIAG_RESPONSE_INFO_MAX];                  //!< Information messages
+    dcgmMnDiagEntityResult_v1 results[DCGM_MN_DIAG_RESPONSE_RESULTS_MAX_V1]; //!< Test results
 } dcgmMnDiagResponse_v1;
 #pragma GCC diagnostic pop
-/**
- * Typedef for \ref dcgmMnDiagResponse_v1
- */
-typedef dcgmMnDiagResponse_v1 dcgmMnDiagResponse_t;
 
 /**
  * Version 1 for \ref dcgmMnDiagResponse_v1
@@ -3823,9 +4019,47 @@ typedef dcgmMnDiagResponse_v1 dcgmMnDiagResponse_t;
 #define dcgmMnDiagResponse_version1 MAKE_DCGM_VERSION(dcgmMnDiagResponse_v1, 1)
 
 /**
- * Latest version for \ref dcgmMndiagResponse_t
+ * Global multi-node diagnostics result structure v2
+ * Enlarged arrays to support up to 1024 hosts and 16384 entities.
+ * numHosts widened from unsigned char to unsigned short.
+ *
+ * Since DCGM 4.4
  */
-#define dcgmMnDiagResponse_version dcgmMnDiagResponse_version1
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpadded"
+typedef struct
+{
+    unsigned int version;    //!< version number (dcgmMnDiagResponse_v2)
+    unsigned short numHosts; //!< Number of hosts in this diagnostic run
+    unsigned char numTests;  //!< Number of tests that were executed
+    char _unusedPad1;        //!< Padding byte for alignment
+    unsigned short
+        numErrors; //!< Number of errors generated during this test (includes per-gpu, system, and global level)
+    unsigned short
+        numInfos; //!< Number of info messages generated during this test (includes per-gpu, system, and global level)
+    unsigned short numEntities; //!< Number of entities across all hosts in this diagnostic run
+    unsigned short numResults;  //!< Number of test results for the test run
+
+    dcgmMnDiagHosts_v1 hosts[DCGM_MN_DIAG_RESPONSE_HOSTS_MAX];            //!< Host information
+    dcgmMnDiagTestRun_v2 tests[DCGM_MN_DIAG_RESPONSE_TESTS_MAX];          //!< Test run information
+    dcgmMnDiagEntity_v1 entities[DCGM_MN_DIAG_RESPONSE_ENTITIES_MAX];     //!< Entity information
+    dcgmMnDiagError_v1 errors[DCGM_MN_DIAG_RESPONSE_ERRORS_MAX];          //!< Accumulated error messages
+    dcgmMnDiagInfo_v1 info[DCGM_MN_DIAG_RESPONSE_INFO_MAX];               //!< Information messages
+    dcgmMnDiagEntityResult_v1 results[DCGM_MN_DIAG_RESPONSE_RESULTS_MAX]; //!< Test results
+} dcgmMnDiagResponse_v2;
+#pragma GCC diagnostic pop
+
+typedef dcgmMnDiagResponse_v2 dcgmMnDiagResponse_t;
+
+/**
+ * Version 2 for \ref dcgmMnDiagResponse_v2
+ */
+#define dcgmMnDiagResponse_version2 MAKE_DCGM_VERSION(dcgmMnDiagResponse_v2, 2)
+
+/**
+ * Latest version for \ref dcgmMnDiagResponse_t
+ */
+#define dcgmMnDiagResponse_version dcgmMnDiagResponse_version2
 
 /**
  * Flags for dcgmGetEntityGroupEntities's flags parameter

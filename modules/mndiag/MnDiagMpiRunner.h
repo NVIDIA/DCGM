@@ -21,6 +21,7 @@
 #include "dcgm_mndiag_structs.hpp"
 #include <chrono>
 #include <expected>
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <string>
@@ -49,9 +50,9 @@ public:
     {}
 
     /**
-     * @brief Destructor
+     * @brief Destructor. Removes the temporary hostfile if one was created.
      */
-    virtual ~MnDiagMpiRunner() = default;
+    ~MnDiagMpiRunner() override;
 
     /**
      * @brief Type alias for the routing interface resolver function.
@@ -90,9 +91,20 @@ public:
      *
      * This method expects a pointer to dcgmRunMnDiag_t.
      *
-     * @param params Pointer to dcgmRunMnDiag_t
+     * @param[in] params Pointer to dcgmRunMnDiag_t.
+     * @return Empty on success.
+     * @return `DCGM_ST_BADPARAM` when the input cannot form a valid MPI command.
      */
-    void ConstructMpiCommand(void const *params) override;
+    std::expected<void, dcgmReturn_t> ConstructMpiCommand(void const *params) override;
+
+    /** Execute a manager-coordinated batch. */
+    virtual std::expected<void, dcgmReturn_t> RunBatch([[maybe_unused]] dcgmRunMnDiag_t const &params,
+                                                       [[maybe_unused]] nodeInfoMap_t const &nodeInfo,
+                                                       [[maybe_unused]] dcgmMnDiagResponse_t &response,
+                                                       [[maybe_unused]] std::chrono::milliseconds timeout)
+    {
+        return std::unexpected(DCGM_ST_NOT_SUPPORTED);
+    }
 
     /**
      * @brief Get the path to the test binary
@@ -123,6 +135,39 @@ public:
     virtual std::expected<std::chrono::milliseconds, dcgmReturn_t> GetTestRunTime(dcgmRunMnDiag_t const &params) const;
 
 protected:
+    /** Adjust the merged parameter map before it is converted to CLI arguments.
+     *
+     * Called by ParseDcgmMnDiagToMpiCommand after user-supplied testParms have
+     * been merged into the defaults map. Subclasses override this to rename
+     * keys, inject test-specific flags, or remove inapplicable entries.
+     * The default implementation is a no-op.
+     *
+     * @param[in,out] paramsMap     The merged parameter map to modify in place.
+     * @param[in]     processCount  Total MPI process count for the run.
+     */
+    virtual void AdjustParamsMap(std::unordered_map<std::string, std::string> &paramsMap,
+                                 unsigned int processCount) const;
+
+    virtual std::expected<void, dcgmReturn_t> UpdateParamsMapFromRunParameter(
+        std::unordered_map<std::string, std::string> &paramsMap,
+        std::string_view paramString) const;
+
+    /**
+     * Determine whether a parameter value must be expanded into multiple command-line arguments.
+     *
+     * @param[in] key Parameter name without the test prefix.
+     * @return true when the value is a whitespace-separated argument list; otherwise false.
+     */
+    virtual bool IsMultiTokenParameter([[maybe_unused]] std::string_view key) const
+    {
+        return false;
+    }
+
+    virtual bool ShouldSetNetLinkOrder() const
+    {
+        return true;
+    }
+
     /**
      * @brief Get the path to the mpirun binary specific to mnubergemm
      *
@@ -134,13 +179,13 @@ private:
     /**
      * @brief Parse a dcgmRunMnDiag_ struct into an mpirun command for mnubergemm
      *
-     * @param drmnd The dcgmRunMnDiag_v1 struct containing parameters for mnubergemm.
+     * @param drmnd The dcgmRunMnDiag_v2 struct containing parameters for mnubergemm.
      *              The passthrough testParms are not validated here, same as the current behavior of EUD as of DCGM 4.2
      *              For those with security concerns, we already have the following security assumption built in:
      *              only a certain trusted user is allowed to successfully launch mndiag - the user previously vetted
      *              for remote ssh access
      */
-    void ParseDcgmMnDiagToMpiCommand_v1(dcgmRunMnDiag_v1 const &drmnd);
+    void ParseDcgmMnDiagToMpiCommand(dcgmRunMnDiag_v2 const &drmnd);
 
     /**
      * Check that the mpirun binary and ompi_info report the same Open MPI version.
@@ -159,8 +204,10 @@ private:
 
     unsigned int m_totalProcessCount { 0 };
     RoutingInterfaceResolver m_routingInterfaceResolver;
+    std::filesystem::path m_mpiHostfilePath; //!< Temp hostfile passed to mpirun --hostfile
 
     friend class MnDiagMpiMnubergemmRunnerTests;
+    friend class MnDiagMpiNvloomRunnerTests;
 
 protected:
     mutable std::optional<std::expected<std::string, dcgmReturn_t>> m_testBinaryPath; //!< nullopt = not yet resolved

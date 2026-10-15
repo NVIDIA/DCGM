@@ -12,15 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(DcgmThread)
-add_subdirectory(serialize)
-add_subdirectory(CudaWorker)
-add_subdirectory(CudaLib)
-
-add_subdirectory(transport)
-add_subdirectory(mock)
 add_subdirectory(ChildProcess)
+add_subdirectory(CublasOps)
+add_subdirectory(CudaWorker)
+add_subdirectory(CudaOps)
+add_subdirectory(DcgmOps)
+add_subdirectory(DcgmThread)
+add_subdirectory(FileHandle)
+add_subdirectory(mock)
+add_subdirectory(serialize)
+add_subdirectory(test-utils)
 add_subdirectory(tests)
+add_subdirectory(transport)
+add_subdirectory(UserCredentials)
 
 configure_file(DcgmBuildInfo.cpp.in DcgmBuildInfo.cpp @ONLY)
 
@@ -32,6 +36,7 @@ target_sources(buildinfo_objects PRIVATE
 target_include_directories(common_interface INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(common_interface INTERFACE
     dcgm_interface
+    file_handle
     nvmli_interface
     sdk_nvml_interface)
 
@@ -45,6 +50,23 @@ target_link_libraries(dcgm_logging PUBLIC
     fmt::fmt
     nvmli_interface
     plog::plog)
+
+add_library(nvbandwidth_common STATIC)
+
+target_sources(nvbandwidth_common PRIVATE
+    nvbandwidth/NvBandwidthOutputParser.cpp
+    nvbandwidth/NvBandwidthOutputParser.hpp
+    nvbandwidth/NVBandwidthResult.cpp
+    nvbandwidth/NVBandwidthResult.h)
+
+target_include_directories(nvbandwidth_common PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/nvbandwidth")
+
+target_link_libraries(nvbandwidth_common
+    PUBLIC
+        serialize_interface
+    PRIVATE
+        dcgm_common
+        dcgm_logging)
 
 target_sources(dcgm_mutex PRIVATE
     DcgmMutex.cpp
@@ -63,8 +85,6 @@ target_sources(dcgm_common PRIVATE
     DcgmFvBuffer.h
     DcgmGPUHardwareLimits.h
     DcgmGroupEntityPairHelpers.h
-    DcgmLib.cpp
-    DcgmLib.h
     DcgmPolicyRequest.cpp
     DcgmPolicyRequest.h
     DcgmRequest.cpp
@@ -114,11 +134,14 @@ target_link_libraries(dcgm_common PUBLIC
     childprocess
     buildinfo_objects
     common_interface
+    dcgm_ops
     dcgm_logging
     dl
+    file_handle
     fmt::fmt
     sdk_nvml_essentials_objects
-    transport_objects)
+    transport_objects
+    user_credentials)
 
 target_sources(common_watch_objects PRIVATE
     DcgmError.h
@@ -127,7 +150,9 @@ target_sources(common_watch_objects PRIVATE
     DcgmWatchTable.cpp
     DcgmWatchTable.h)
 
-target_link_libraries(common_watch_objects PUBLIC common_interface dcgm_logging)
+target_link_libraries(common_watch_objects PUBLIC
+    common_interface
+    dcgm_logging)
 
 add_library(task_context_manager STATIC)
 

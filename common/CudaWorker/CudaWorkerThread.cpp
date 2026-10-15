@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cublas_proxy.hpp>
 #include <cuda.h>
 
 #if (CUDA_VERSION_USED >= 11)
@@ -28,6 +27,7 @@
 #include "CudaWorkerThread.hpp"
 #include "FieldWorkers.hpp"
 
+#include <stdexcept>
 
 /*****************************************************************************/
 /**
@@ -75,7 +75,9 @@ static std::string BuildFullPathToPtx()
 }
 
 /*****************************************************************************/
-CudaWorkerThread::CudaWorkerThread()
+CudaWorkerThread::CudaWorkerThread(CudaOpsAnyPtr cudaOps, FieldWorkerFactoryAnyUniquePtr fieldWorkerFactory)
+    : m_cudaOps(cudaOps)
+    , m_fieldWorkerFactory(std::move(fieldWorkerFactory))
 {
     /* The actual heavy lifting is done in Init() */
 }
@@ -167,7 +169,7 @@ dcgmReturn_t CudaWorkerThread::LoadModule(void)
 {
     CUresult cuSt;
 
-    cuSt = cuCtxSetCurrent(m_cudaDevice.m_context);
+    cuSt = m_cudaOps->cuCtxSetCurrent(m_cudaDevice.m_context);
     if (cuSt)
     {
         DCGM_LOG_ERROR << "cuCtxSetCurrent failed. cuSt: " << cuSt;
@@ -177,7 +179,7 @@ dcgmReturn_t CudaWorkerThread::LoadModule(void)
     /* Load our cuda module so we can find all of the functions */
     auto ptxFileName = BuildFullPathToPtx();
 
-    cuSt = cuModuleLoad(&m_cudaDevice.m_module, ptxFileName.c_str());
+    cuSt = m_cudaOps->cuModuleLoad(&m_cudaDevice.m_module, ptxFileName.c_str());
     if (cuSt)
     {
         DCGM_LOG_ERROR << "Unable to load cuda module DcgmProfTesterKernels.ptx. cuSt: " << cuSt;
@@ -185,7 +187,7 @@ dcgmReturn_t CudaWorkerThread::LoadModule(void)
     }
 
     /* Load functions from our cuda module */
-    cuSt = cuModuleGetFunction(&m_cudaDevice.m_cuFuncWaitNs, m_cudaDevice.m_module, "waitNs");
+    cuSt = m_cudaOps->cuModuleGetFunction(&m_cudaDevice.m_cuFuncWaitNs, m_cudaDevice.m_module, "waitNs");
     if (cuSt)
     {
         DCGM_LOG_ERROR << "Unable to load cuda function waitNs. cuSt: " << cuSt;
@@ -193,7 +195,7 @@ dcgmReturn_t CudaWorkerThread::LoadModule(void)
     }
 
     /* Load functions from our cuda module */
-    cuSt = cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP64, m_cudaDevice.m_module, "doWorkloadFP64");
+    cuSt = m_cudaOps->cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP64, m_cudaDevice.m_module, "doWorkloadFP64");
     if (cuSt)
     {
         DCGM_LOG_ERROR << "Unable to load cuda function doWorkloadFP64. cuSt: " << cuSt;
@@ -201,7 +203,7 @@ dcgmReturn_t CudaWorkerThread::LoadModule(void)
     }
 
     /* Load functions from our cuda module */
-    cuSt = cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP32, m_cudaDevice.m_module, "doWorkloadFP32");
+    cuSt = m_cudaOps->cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP32, m_cudaDevice.m_module, "doWorkloadFP32");
     if (cuSt)
     {
         DCGM_LOG_ERROR << "Unable to load cuda function doWorkloadFP32. cuSt: " << cuSt;
@@ -209,7 +211,7 @@ dcgmReturn_t CudaWorkerThread::LoadModule(void)
     }
 
     /* Load functions from our cuda module */
-    cuSt = cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP16, m_cudaDevice.m_module, "doWorkloadFP16");
+    cuSt = m_cudaOps->cuModuleGetFunction(&m_cudaDevice.m_cuFuncDoWorkFP16, m_cudaDevice.m_module, "doWorkloadFP16");
     if (cuSt)
     {
         DCGM_LOG_ERROR << "Unable to load cuda function doWorkloadFP16. cuSt: " << cuSt;
@@ -255,11 +257,12 @@ dcgmReturn_t CudaWorkerThread::Init(CUdevice device)
 namespace
 {
 std::string FmtCudaError(std::string_view call,
+                         CudaOpsAnyPtr cudaOps,
                          CUresult const cuSt,
                          std::optional<CUdevice> const device = std::nullopt)
 {
     char const *errStr = "";
-    cuGetErrorString(cuSt, &errStr);
+    cudaOps->cuGetErrorString(cuSt, &errStr);
 
     if (device.has_value())
     {
@@ -271,7 +274,7 @@ std::string FmtCudaError(std::string_view call,
 }; //namespace
 
 // See also LOG_CUDA_ERROR in nvvs/plugin_src/cuda_common/CudaCommon.h.
-#define LOG_CUDA_ERROR(fn, cuSt, ...) log_error(FmtCudaError((fn), (cuSt), ##__VA_ARGS__))
+#define LOG_CUDA_ERROR(fn, cuSt, ...) log_error(FmtCudaError((fn), m_cudaOps, (cuSt), ##__VA_ARGS__))
 
 /*****************************************************************************/
 dcgmReturn_t CudaWorkerThread::AttachToCudaDeviceFromTaskThread(CUdevice device)
@@ -279,20 +282,20 @@ dcgmReturn_t CudaWorkerThread::AttachToCudaDeviceFromTaskThread(CUdevice device)
     int st;
     CUresult cuSt;
 
-    if (cuSt = cuInit(0); cuSt != CUDA_SUCCESS)
+    if (cuSt = m_cudaOps->cuInit(0); cuSt != CUDA_SUCCESS)
     {
         LOG_CUDA_ERROR("cuInit", cuSt);
         return DCGM_ST_GENERIC_ERROR;
     }
 
-    if (cuSt = cuDeviceGet(&m_cudaDevice.m_device, device); cuSt != CUDA_SUCCESS)
+    if (cuSt = m_cudaOps->cuDeviceGet(&m_cudaDevice.m_device, device); cuSt != CUDA_SUCCESS)
     {
         LOG_CUDA_ERROR("cuDeviceGet", cuSt, device);
         return DCGM_ST_GENERIC_ERROR;
     }
 
     /* Do per-device initialization. */
-    if (cuSt = cuCtxCreate_v2(&m_cudaDevice.m_context, CU_CTX_SCHED_BLOCKING_SYNC, m_cudaDevice.m_device);
+    if (cuSt = m_cudaOps->cuCtxCreate_v2(&m_cudaDevice.m_context, CU_CTX_SCHED_BLOCKING_SYNC, m_cudaDevice.m_device);
         cuSt != CUDA_SUCCESS)
     {
         LOG_CUDA_ERROR("cuCtxCreate_v2", cuSt, m_cudaDevice.m_device);
@@ -312,7 +315,7 @@ dcgmReturn_t CudaWorkerThread::AttachToCudaDeviceFromTaskThread(CUdevice device)
 
     for (auto const &[value, cuDevAttr] : attributes)
     {
-        if (cuSt = cuDeviceGetAttribute(value, cuDevAttr, m_cudaDevice.m_device); cuSt != CUDA_SUCCESS)
+        if (cuSt = m_cudaOps->cuDeviceGetAttribute(value, cuDevAttr, m_cudaDevice.m_device); cuSt != CUDA_SUCCESS)
         {
             LOG_CUDA_ERROR(fmt::format("cuDeviceGetAttribute({})", cuDevAttr), cuSt, m_cudaDevice.m_device);
         }
@@ -366,49 +369,7 @@ dcgmReturn_t CudaWorkerThread::AttachToCudaDevice(CUdevice device)
 /*****************************************************************************/
 std::unique_ptr<FieldWorkerBase> CudaWorkerThread::AllocateFieldWorker(unsigned int fieldId, bool preferCublas)
 {
-    switch (fieldId)
-    {
-        case DCGM_FI_PROF_GR_ENGINE_UTIL_RATIO:
-            return std::move(std::make_unique<FieldWorkerGrActivity>(m_cudaDevice));
-
-        case DCGM_FI_PROF_SM_UTIL_RATIO:
-            return std::move(std::make_unique<FieldWorkerSmActivity>(m_cudaDevice));
-
-        case DCGM_FI_PROF_SM_OCCUPANCY_RATIO:
-            return std::move(std::make_unique<FieldWorkerSmOccupancy>(m_cudaDevice));
-
-        case DCGM_FI_PROF_PCIE_RX_BYTES:
-        case DCGM_FI_PROF_PCIE_TX_BYTES:
-            return std::move(std::make_unique<FieldWorkerPciRxTxBytes>(m_cudaDevice, fieldId));
-
-        case DCGM_FI_PROF_DRAM_UTIL_RATIO:
-            return std::move(std::make_unique<FieldWorkerDramUtil>(m_cudaDevice));
-
-        case DCGM_FI_PROF_NVLINK_RX_BYTES:
-        case DCGM_FI_PROF_NVLINK_TX_BYTES:
-            return std::move(std::make_unique<FieldWorkerNvLinkRwBytes>(m_cudaDevice, fieldId, m_cudaPeerBusId));
-
-        case DCGM_FI_PROF_FP16_UTIL_RATIO:
-        case DCGM_FI_PROF_FP32_UTIL_RATIO:
-        case DCGM_FI_PROF_FP64_UTIL_RATIO:
-            if (preferCublas)
-            {
-                return std::move(std::make_unique<FieldWorkerTensorActivity>(m_cudaDevice, fieldId));
-            }
-            else
-            {
-                return std::move(std::make_unique<FieldWorkerDataTypeActivity>(m_cudaDevice, fieldId));
-            }
-
-        case DCGM_FI_PROF_TENSOR_UTIL_RATIO:
-            return std::move(std::make_unique<FieldWorkerTensorActivity>(m_cudaDevice, fieldId));
-
-        default:
-            DCGM_LOG_ERROR << "Unhandled fieldId " << fieldId;
-            return nullptr;
-    }
-
-    return nullptr;
+    return m_fieldWorkerFactory->Create(m_cudaDevice, m_cudaPeerBusId, fieldId, preferCublas);
 }
 
 /*****************************************************************************/
@@ -422,7 +383,7 @@ void CudaWorkerThread::SetWorkloadAndTargetFromTaskThread(unsigned int fieldId, 
     /* Are we changing to idle? */
     if (fieldId == 0)
     {
-        m_fieldWorker.reset(nullptr);
+        m_fieldWorker.reset();
     }
     else if (fieldId != m_activeFieldId)
     {

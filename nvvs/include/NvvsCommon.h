@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include "DcgmError.h"
 #include "DcgmLogging.h"
 #include "Gpu.h"
+#include "NvvsPluginResult.h"
 #include <fmt/format.h>
 
 #include <atomic>
@@ -39,6 +40,8 @@
 
 /* Has the user requested a stop? 1=yes. 0=no. Defined in main.cpp */
 extern std::atomic_int32_t main_should_stop;
+/* MAIN_RET_? #define of the error to return or MAIN_RET_OK if no errors have occured */
+extern int mainReturnCode;
 
 /* Each suite adds additional tests to the previous level with XLONG being the superset */
 enum suiteNames_enum
@@ -62,15 +65,6 @@ enum logFileType_enum
      * is used in tp->AddDouble(). Currently NvidiaValidationSuite.cpp */
 };
 
-/* Plugin test result states */
-typedef enum nvvsPluginResult_enum
-{
-    NVVS_RESULT_PASS,
-    NVVS_RESULT_WARN,
-    NVVS_RESULT_FAIL,
-    NVVS_RESULT_SKIP
-} nvvsPluginResult_t;
-
 // nvvsPluginGpuResults: map GPU IDs to the NVVS Plugin result for the GPU (i.e. Pass | Fail | Warn | Skip)
 typedef std::map<unsigned int, nvvsPluginResult_t> nvvsPluginGpuResults_t;
 
@@ -85,27 +79,26 @@ class NvvsCommon
 {
 public:
     NvvsCommon();
-    NvvsCommon(const NvvsCommon &other);
-    NvvsCommon &operator=(const NvvsCommon &other);
-    void Init();
+    NvvsCommon(const NvvsCommon &)            = delete;
+    NvvsCommon &operator=(const NvvsCommon &) = delete;
+    NvvsCommon(NvvsCommon &&)                 = delete;
+    NvvsCommon &operator=(NvvsCommon &&)      = delete;
     void SetStatsPath(const std::string &statsPath);
 
-    // structure for global variables
-    std::string logFile;          /* file prefix for statistics */
-    std::string m_statsPath;      /* Path where statistics files should be saved */
-    logFileType_enum logFileType; /* format for statistics to log */
-    bool parse;                   /* output parseable format */
-    bool quietMode;               /* quiet mode prints no output to the console, all results
-                                   * are available via logs or return code only */
-    bool serialize;               /* serialize tests that would normally be parallel */
-    bool overrideMinMax;          /* override parm min/max values */
-    bool verbose;                 /* enable verbose metric reporting */
-    bool requirePersistenceMode;  /* require persistence mode to be enabled (default true) */
-    bool configless;              /* enable configless operation */
-    bool statsOnlyOnFail;         /* enable output of statistics files only on an failure */
-    unsigned long long errorMask; /* error mask for inforom */
-    int mainReturnCode;     /* MAIN_RET_? #define of the error to return or MAIN_RET_OK if no errors have occured */
-    std::string pluginPath; /* Path given in command line for plugins */
+    std::string logFile;                            /* file prefix for statistics */
+    std::string m_statsPath;                        /* Path where statistics files should be saved */
+    logFileType_enum logFileType;                   /* format for statistics to log */
+    bool parse;                                     /* output parseable format */
+    bool quietMode;                                 /* quiet mode prints no output to the console, all results
+                                                     * are available via logs or return code only */
+    bool serialize;                                 /* serialize tests that would normally be parallel */
+    bool overrideMinMax;                            /* override parm min/max values */
+    bool verbose;                                   /* enable verbose metric reporting */
+    bool requirePersistenceMode;                    /* require persistence mode to be enabled (default true) */
+    bool configless;                                /* enable configless operation */
+    bool statsOnlyOnFail;                           /* enable output of statistics files only on an failure */
+    unsigned long long errorMask;                   /* error mask for inforom */
+    std::string pluginPath;                         /* Path given in command line for plugins */
     std::set<std::string, std::less<>> desiredTest; /* Specific test(s) asked for on the command line */
     bool isEudOnly;                                 /* True if user requested ONLY EUD via -r eud */
     std::string indexString;                        /* A potentially comma-separated list of GPUs to run NVVS on */
@@ -137,23 +130,33 @@ private:
     static unsigned int constexpr DEFAULT_HANG_DETECT_EXPIRY_SEC { 600 };
 };
 
-extern NvvsCommon nvvsCommon;
-
 std::string GetTestDisplayName(dcgmPerGpuTestIndices_t testIndex);
 dcgmPerGpuTestIndices_t GetTestIndex(const std::string &testName);
 dcgmDiagResult_t NvvsPluginResultToDiagResult(nvvsPluginResult_enum nvvsResult);
 nvvsPluginResult_t DcgmResultToNvvsResult(dcgmDiagResult_t const result);
 
 /**
- * Common formatter for test-end debug logging.
+ * Return a human-readable name for an NVVS plugin result.
+ *
+ * @param[in] result Plugin result to convert.
+ *
+ * @return `"PASS"`, `"WARN"`, `"FAIL"`, or `"SKIP"` for the corresponding
+ *         result, or `"UNKNOWN"` for an unrecognized value. The returned view
+ *         refers to a static string literal and is valid for the program's
+ *         lifetime.
+ */
+std::string_view NvvsPluginResultToString(nvvsPluginResult_t result);
+
+/**
+ * Common formatter for test-end logging.
  *
  * @param[in] testName   Display name of the test (e.g. `"CUDA Main Library"`); callers must use the same name in
  *                       the matching `Test {} start` log line.
- * @param[in] result     Final result of the test; shown as the underlying integer.
+ * @param[in] result     Final result of the test; shown as a human-readable string.
  * @param[in] duration   Elapsed time of the test, measured by the caller; shown as ms.
  * @param[in] configless `true` when NVVS is running in configless mode.
  *
- * @return The formatted log message, intended for `log_debug("{}", …)` so source-location capture stays at the
+ * @return The formatted log message, intended for `log_info("{}", …)` so source-location capture stays at the
  *         caller.
  *
  * @note Does not throw under normal operation; may throw `std::bad_alloc` if string formatting cannot allocate.
@@ -166,7 +169,7 @@ nvvsPluginResult_t DcgmResultToNvvsResult(dcgmDiagResult_t const result);
     std::chrono::duration<double> const seconds = duration;
     return fmt::format("Test {} had result {}. Duration {:.3f}s. Configless is {}",
                        testName,
-                       static_cast<int>(result),
+                       NvvsPluginResultToString(result),
                        seconds.count(),
                        configless);
 }

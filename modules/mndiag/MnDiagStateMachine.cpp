@@ -37,6 +37,7 @@ MnDiagStateMachine::MnDiagStateMachine(
     , m_releaseResourcesCallback(std::move(releaseResourcesCallback))
     , m_setStatusCallback(std::move(setStatusCallback))
     , m_getMpiProcessInfoCallback(std::move(getMpiProcessInfoCallback))
+    , m_baselineReservationTimeout(reservationTimeout)
     , m_reservationTimeout(reservationTimeout)
     , m_processExecutionTimeout(processExecutionTimeout)
 {
@@ -329,13 +330,18 @@ void MnDiagStateMachine::HandleWaitingState()
 void MnDiagStateMachine::HandleReservedState()
 {
     // Check if reservation has timed out
-    auto currentTime = std::chrono::steady_clock::now();
-    auto elapsedTime = currentTime - m_reservationTime;
+    std::chrono::milliseconds reservationTimeout;
+    {
+        DcgmLockGuard lg(&m_mutex);
+        reservationTimeout = m_reservationTimeout;
+    }
+    auto const currentTime = std::chrono::steady_clock::now();
+    auto const elapsedTime = currentTime - m_reservationTime;
 
-    if (elapsedTime >= m_reservationTimeout)
+    if (elapsedTime >= reservationTimeout)
     {
         log_warning("Reservation timed out after {} seconds, no MPI process detected",
-                    m_reservationTimeout.count() / 1000.0);
+                    reservationTimeout.count() / 1000.0);
 
         // Go to FINISHING and then to WAITING
         TransitionTo(State::FINISHING);

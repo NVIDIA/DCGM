@@ -1,0 +1,86 @@
+Introduction
+------------
+
+This README describes the layout, structure, and means to maintain the
+tests_mock subdirectory tree.
+
+tests_mock serves to parallel the tests directory tree, with matching of
+*.py path names and within each file, tests, for those tests that do not
+require physical hardware GPUs. Each test that appears in a test_*.py either
+"trampolines" to an existing test with the same name in a file in the same
+sub-path under tests, that does not require live GPUs, or calls a "helper"
+function in such a file that is also called with a similar test in the target
+file, but with different decorators -- the decorators distinguishing between
+using live GPUs in the one case, and NVML-injected fake GPUs in the other.
+
+Example
+-------
+
+This is an excerpt from tests_mock/test_action.py:
+
+from tests.test_action import helper_dcgm_action_validate_embedded
+from tests.test_action import helper_dcgm_action_validate_remote
+from tests.test_action import helper_dcgm_action_run_diag_embedded
+from tests.test_action import helper_dcgm_action_run_diag_remote
+from tests.test_action import helper_dcgm_action_run_diag_gpu_list
+from tests.test_action import helper_dcgm_action_run_diag_bad_validation
+
+from _test_helpers import skip_test_if_no_dcgm_nvml
+
+import test_utils
+# Explicit so trampoline introspection works.
+from test_utils import trampoline
+
+
+@test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
+@test_utils.run_with_embedded_host_engine()
+@test_utils.run_with_nvml_injected_gpus()
+@test_utils.for_all_same_sku_gpus()
+@test_utils.run_only_as_root()
+@test_utils.run_with_max_power_limit_set()
+def test_dcgm_action_validate_embedded(handle, gpuIds):
+    helper_dcgm_action_validate_embedded(handle, gpuIds)
+
+...
+
+def test_dcgm_action_run_diag_on_heterogeneous_env():
+    trampoline()
+
+Here, we import the helper functions used by GPU-centric tests in
+tests/test_action.py and GPU-less tests in tests_mock/test_action.py. The
+test test_dcgm_action_validate_embedded in tests/test_action likely uses live
+GPUs, but we substitute an NVML-injected A100 GPU using the A100.yaml. The
+difference is managed by different decorator sequences. Refactoring a test
+under tests into a helper and a decorated test that calls it is a common
+process.
+
+The test test_dcgm_action_run_diag_on_heterogeneous_env calls an existing
+test in tests/test_action.py with the same name, using its decorators. This
+is expected to be an existing (legacy, if you will) test that does not require
+live GPUs.
+
+trampoline() is not usually executed (though it would run the similar test
+under tests, if run) -- it is processed by the test framework using
+introspection to identfy the test to run.
+
+This is achieved by explicitly importing trampoline from test_utils.
+
+Running tests under tests_mock instead of tests
+-----------------------------------------------
+
+Running main.py accepts --test-dirs to specify test directory roots other than
+the default tests (and multiple directories can be specified, separated by
+commas, so tests and tests_mock tests can be run as a single pass, with
+duplicates run only once). Alternately, specifying --no-hw (no hardware)
+appends _mock to all test directories specified with --test-dirs (with tests as
+the default, so tests_mock), will run the mocked test suite as opposed to the
+live and legacy non-hardware test suite.
+
+Reporting on Hardware-only, non-Hardware, and Mocked-Hardware
+-------------------------------------------------------------
+
+A script has been included in testing/python3, test_state.py which, if run from
+that directory will compare tests in tests_mock and tests and report which ones
+are Hardware-only, non-Hardware, and Mocked-Hardware. If run on a HEAD of
+a branch and prior to a commit, and diffing the results, tests can be identified
+that might be considered for mocking.

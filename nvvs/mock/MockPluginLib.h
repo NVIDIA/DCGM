@@ -18,6 +18,7 @@
 #include "PluginInterface.h"
 #include "dcgm_errors.h"
 #include "dcgm_fields.h"
+#include <DcgmOpsAnyPtr.hpp>
 #include <PluginLib.h>
 #include <PluginLibTest.h>
 #include <PluginStrings.h>
@@ -31,8 +32,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-class HangDetectMonitor;
 
 /**
  * Minimal stand-in for PluginLib in unit tests. Per-test state mirrors PluginLib's
@@ -59,7 +58,8 @@ public:
         std::vector<std::vector<dcgm_field_eid_t>> runEntityIdSnapshots;
     };
 
-    MockPluginLib()                                     = default;
+    explicit MockPluginLib(DcgmNs::DcgmOpsAnyPtr, NvvsCommon *)
+    {}
     MockPluginLib(MockPluginLib const &)                = delete;
     MockPluginLib &operator=(MockPluginLib const &)     = delete;
     MockPluginLib(MockPluginLib &&) noexcept            = default;

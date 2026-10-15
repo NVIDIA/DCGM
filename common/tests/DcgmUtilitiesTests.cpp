@@ -18,10 +18,14 @@
 #include <DcgmUtilities.h>
 
 #include <DcgmException.hpp>
-#include <Defer.hpp>
+#include <ScopedFd.hpp>
+#include <TempDir.hpp>
+#include <TempExecutable.hpp>
+#include <UserCredentials.hpp>
 #include <chrono>
 #include <csignal>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -30,6 +34,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <unordered_set>
+#include <vector>
 
 #include <catch2/catch_all.hpp>
 
@@ -58,6 +63,26 @@ TEST_CASE("Utils: GetMaxAge")
 
     maxAge = DcgmNs::Utils::GetMaxAge(10ms, 400ms, 10);
     REQUIRE(maxAge == 1s);
+
+    SECTION("sample duration wins after slack")
+    {
+        CHECK(DcgmNs::Utils::GetMaxAge(250ms, 1s, 8, 0.5) == 3s);
+    }
+
+    SECTION("negative sample count is normalized to the minimum retention")
+    {
+        CHECK(DcgmNs::Utils::GetMaxAge(500ms, 0ms, -4, 0.1) == 1s);
+    }
+
+    SECTION("negative slack reduces the sample duration before normalization")
+    {
+        CHECK(DcgmNs::Utils::GetMaxAge(500ms, 0ms, 4, -0.5) == 1s);
+    }
+
+    SECTION("explicit max age wins over computed sample duration")
+    {
+        CHECK(DcgmNs::Utils::GetMaxAge(250ms, 5s, 8, 0.5) == 5s);
+    }
 }
 
 TEST_CASE("Utils: EraseIf (map)")
@@ -124,6 +149,11 @@ TEST_CASE("DcgmException")
     {
         REQUIRE(ex.what() == nullptr);
     }
+}
+
+TEST_CASE("NvmlReturnToDcgmReturn: FUNCTION_NOT_FOUND maps to NOT_SUPPORTED")
+{
+    REQUIRE(DcgmNs::Utils::NvmlReturnToDcgmReturn(NVML_ERROR_FUNCTION_NOT_FOUND) == DCGM_ST_NOT_SUPPORTED);
 }
 
 TEST_CASE("Dcgmi Config: Bitmask helper")
@@ -328,14 +358,32 @@ TEST_CASE("Utils: FileHandle ownership")
         DcgmNs::Utils::FileHandle readFd(fds[0]);
         DcgmNs::Utils::FileHandle writeFd(fds[1]);
 
-        int rawReadFd = readFd.Release();
-        REQUIRE(rawReadFd == fds[0]);
+        ScopedFd rawReadFd(readFd.Release());
+        REQUIRE(rawReadFd.Get() == fds[0]);
         CHECK(readFd.Get() == -1);
-
-        REQUIRE(close(rawReadFd) == 0);
     }
 
-    SECTION("Move assignment swaps ownership")
+    SECTION("Move constructor transfers fd and errno")
+    {
+        int fds[2];
+        REQUIRE(pipe(fds) == 0);
+
+        DcgmNs::Utils::FileHandle source(fds[0]);
+        DcgmNs::Utils::FileHandle writeEnd(fds[1]);
+
+        REQUIRE(source.Write("x", 1) == -1);
+        REQUIRE(source.GetErrno() == EBADF);
+
+        int const originalFd                  = source.Get();
+        DcgmNs::Utils::FileHandle destination = std::move(source);
+
+        CHECK(destination.Get() == originalFd);
+        CHECK(destination.GetErrno() == EBADF);
+        CHECK(source.Get() == -1);
+        CHECK(source.GetErrno() == 0);
+    }
+
+    SECTION("Move assignment closes prior fd and transfers ownership and errno")
     {
         int firstPipe[2];
         int secondPipe[2];
@@ -347,13 +395,21 @@ TEST_CASE("Utils: FileHandle ownership")
         DcgmNs::Utils::FileHandle secondRead(secondPipe[0]);
         DcgmNs::Utils::FileHandle secondWrite(secondPipe[1]);
 
-        int originalFirstRead  = firstRead.Get();
-        int originalSecondRead = secondRead.Get();
+        REQUIRE(firstRead.GetErrno() == 0);
+        REQUIRE(secondRead.Write("x", 1) == -1);
+        REQUIRE(secondRead.GetErrno() == EBADF);
+
+        int const originalFirstRead  = firstRead.Get();
+        int const originalSecondRead = secondRead.Get();
 
         firstRead = std::move(secondRead);
 
         CHECK(firstRead.Get() == originalSecondRead);
-        CHECK(secondRead.Get() == originalFirstRead);
+        CHECK(firstRead.GetErrno() == EBADF);
+        CHECK(secondRead.Get() == -1);
+        CHECK(secondRead.GetErrno() == 0);
+        CHECK((fcntl(originalFirstRead, F_GETFD) == -1 && errno == EBADF));
+        CHECK(fcntl(originalSecondRead, F_GETFD) != -1);
     }
 
     SECTION("GIVEN invalid handle WHEN reading or writing THEN EBADF is reported")
@@ -365,6 +421,8 @@ TEST_CASE("Utils: FileHandle ownership")
         CHECK(handle.GetErrno() == EBADF);
         CHECK(handle.Write("x", 1) == -1);
         CHECK(handle.GetErrno() == EBADF);
+        CHECK(handle.WriteExact("x", 1) == -1);
+        CHECK(handle.GetErrno() == EBADF);
     }
 
     SECTION("GIVEN pipe-backed handles WHEN reading and writing THEN exact data is transferred")
@@ -375,7 +433,7 @@ TEST_CASE("Utils: FileHandle ownership")
         DcgmNs::Utils::FileHandle writeFd(fds[1]);
         std::array<std::byte, 4> buffer {};
 
-        REQUIRE(writeFd.Write("dcgm", 4) == 4);
+        REQUIRE(writeFd.WriteExact("dcgm", 4) == 4);
         REQUIRE(readFd.ReadExact(buffer.data(), buffer.size()) == 4);
         CHECK(std::string(reinterpret_cast<char *>(buffer.data()), buffer.size()) == "dcgm");
     }
@@ -430,10 +488,25 @@ TEST_CASE("Utils: PipePair helpers")
 
 TEST_CASE("Utils: dynamic loading and low-level IO")
 {
+    SECTION("GIVEN a process handle WHEN loading a known exported symbol THEN a callable pointer is returned")
+    {
+        void *handle = dlopen(nullptr, RTLD_LAZY);
+        REQUIRE(handle != nullptr);
+        DcgmNs::Defer closeHandle([&] { dlclose(handle); });
+
+        using GetPidFn = pid_t (*)();
+        auto *symbol   = DcgmNs::Utils::LoadFunction(handle, "getpid", "self");
+
+        REQUIRE(symbol != nullptr);
+        auto getPid = reinterpret_cast<GetPidFn>(symbol);
+        CHECK(getPid() == getpid());
+    }
+
     SECTION("GIVEN missing symbol WHEN loading function THEN nullptr is returned")
     {
         void *handle = dlopen(nullptr, RTLD_LAZY);
         REQUIRE(handle != nullptr);
+        DcgmNs::Defer closeHandle([&] { dlclose(handle); });
 
         CHECK(DcgmNs::Utils::LoadFunction(handle, "dcgm_missing_symbol_for_test", "self") == nullptr);
     }
@@ -454,31 +527,46 @@ TEST_CASE("Utils: dynamic loading and low-level IO")
 
 TEST_CASE("Utils: BER and log path helpers")
 {
-    SECTION("GIVEN BER values WHEN parsed and checked THEN threshold rules are applied")
+    SECTION("raw zero decodes to zero")
     {
-        CHECK_FALSE(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(15, 255));
-        CHECK_FALSE(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(1, 12));
-        CHECK(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(2, 12));
-        CHECK_FALSE(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(10, 13));
-        CHECK(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(11, 13));
-        CHECK(DcgmNs::Utils::IsEffectiveBerThresholdExceeded(1, 11));
-
         auto const [mantissa, exponent, parsed] = DcgmNs::Utils::NvmlBerParser(0);
         CHECK(mantissa == 0);
         CHECK(exponent == 0);
         CHECK(parsed == 0.0);
     }
-}
 
-TEST_CASE("Utils: FindExecutable", "[DcgmUtilities]")
+    SECTION("packed mantissa and exponent are decoded")
+    {
+        // (5 << 8) | 15 -> mantissa 5, exponent 15 -> 5e-15
+        auto const [mantissa, exponent, parsed] = DcgmNs::Utils::NvmlBerParser((5 << 8) | 15);
+        CHECK(mantissa == 5);
+        CHECK(exponent == 15);
+        CHECK_THAT(parsed, Catch::Matchers::WithinRel(5e-15, 1e-12));
+    }
+
+    SECTION("GIVEN an encoded BER value WHEN parsed THEN mantissa exponent and value are decoded")
+    {
+        auto const encodedBer = static_cast<int64_t>((3 << NVML_NVLINK_BER_MANTISSA_SHIFT) | 4);
+
+        auto const [mantissa, exponent, parsed] = DcgmNs::Utils::NvmlBerParser(encodedBer);
+
+        CHECK(mantissa == 3);
+        CHECK(exponent == 4);
+        CHECK_THAT(parsed, Catch::Matchers::WithinAbs(0.0003, 0.00000001));
+    }
+
+    SECTION("GIVEN root checker helpers WHEN queried THEN they reflect the process effective user")
+    {
+        DcgmNs::Utils::RunningUserChecker checker;
+
+        CHECK(DcgmNs::Utils::IsRunningAsRoot() == (geteuid() == 0));
+        CHECK(checker.IsRoot() == DcgmNs::Utils::IsRunningAsRoot());
+    }
+}
+TEST_CASE("Utils: FindExecutable")
 {
-    // Create a temporary directory and executable for testing
-    std::filesystem::path tempDir = std::filesystem::current_path() / "tmp";
-    std::filesystem::create_directories(tempDir);
-    std::filesystem::path testExecutable = tempDir / "test_exe";
-    std::ofstream { testExecutable }.close();
-    std::filesystem::permissions(
-        testExecutable, std::filesystem::perms::owner_exec, std::filesystem::perm_options::add);
+    auto tempDir        = TempDir::Random("dcgm-find-executable-");
+    auto testExecutable = TempExecutable::Fixed(tempDir.Path() / "test_exe");
 
     struct TestCase
     {
@@ -492,17 +580,17 @@ TEST_CASE("Utils: FindExecutable", "[DcgmUtilities]")
 
     std::vector<TestCase> testCases
         = { { "Executable found in search paths",
-              { tempDir.string() },
+              { tempDir.Path().string() },
               true,
-              testExecutable.string(),
-              tempDir.string(),
+              testExecutable.Path().string(),
+              tempDir.Path().string(),
               DCGM_ST_OK },
             { "Executable not found returns error", { "/nonexistent/path" }, false, "", "", DCGM_ST_NO_DATA },
             { "Multiple search paths - found in second path",
-              { "/nonexistent", tempDir.string() },
+              { "/nonexistent", tempDir.Path().string() },
               true,
-              testExecutable.string(),
-              tempDir.string(),
+              testExecutable.Path().string(),
+              tempDir.Path().string(),
               DCGM_ST_OK } };
 
     for (const auto &tc : testCases)
@@ -525,11 +613,19 @@ TEST_CASE("Utils: FindExecutable", "[DcgmUtilities]")
         }
     }
 
-    // Cleanup
-    std::filesystem::remove_all(tempDir);
+    SECTION("Empty search paths leave the output directory unchanged")
+    {
+        std::string executableDir = "unchanged";
+
+        auto result = DcgmNs::Utils::FindExecutable("test_exe", {}, executableDir);
+
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error() == DCGM_ST_NO_DATA);
+        CHECK(executableDir == "unchanged");
+    }
 }
 
-TEST_CASE("Utils: IsProcessRunning", "[DcgmUtilities]")
+TEST_CASE("Utils: IsProcessRunning")
 {
     SECTION("Invalid PIDs return false")
     {
@@ -548,47 +644,99 @@ TEST_CASE("Utils: IsProcessRunning", "[DcgmUtilities]")
     }
 }
 
-TEST_CASE("Utils: TerminateProcess", "[DcgmUtilities]")
+TEST_CASE("Utils: TerminateProcess")
 {
+    auto const testPid = static_cast<pid_t>(42);
+    std::vector<int> sentSignals;
+    auto sendSignal = [&sentSignals, testPid](pid_t pid, int signalNumber) {
+        REQUIRE(pid == testPid);
+        sentSignals.push_back(signalNumber);
+    };
+    auto makeCallbacks = [&sendSignal](DcgmNs::Utils::LivenessCheckFn isAlive) {
+        return DcgmNs::Utils::TerminateProcessCallbacks {
+            .isAlive    = isAlive,
+            .sendSignal = sendSignal,
+        };
+    };
+
     SECTION("Invalid PID is a no-op")
     {
-        auto result
-            = DcgmNs::Utils::TerminateProcess(-1, [](pid_t) { return true; }, 1, std::chrono::milliseconds { 10 });
+        auto result = DcgmNs::Utils::TerminateProcess(
+            -1, makeCallbacks([](pid_t) { return true; }), 1, std::chrono::milliseconds { 10 });
         REQUIRE(result == DCGM_ST_OK);
+        REQUIRE(sentSignals.empty());
     }
 
     SECTION("Already-dead process succeeds immediately")
     {
-        auto result
-            = DcgmNs::Utils::TerminateProcess(42, [](pid_t) { return false; }, 4, std::chrono::milliseconds { 10 });
+        auto result = DcgmNs::Utils::TerminateProcess(
+            testPid, makeCallbacks([](pid_t) { return false; }), 4, std::chrono::milliseconds { 10 });
         REQUIRE(result == DCGM_ST_OK);
+        REQUIRE(sentSignals.empty());
+    }
+
+    SECTION("Missing callbacks return DCGM_ST_BADPARAM")
+    {
+        auto missingIsAlive = DcgmNs::Utils::TerminateProcessCallbacks {
+            .isAlive    = nullptr,
+            .sendSignal = sendSignal,
+        };
+        CHECK(DcgmNs::Utils::TerminateProcess(testPid, missingIsAlive, 1, std::chrono::milliseconds { 1 })
+              == DCGM_ST_BADPARAM);
+        CHECK(sentSignals.empty());
+
+        auto missingSendSignal = DcgmNs::Utils::TerminateProcessCallbacks {
+            .isAlive = [](pid_t) { return true; },
+            .sendSignal = nullptr,
+        };
+        CHECK(DcgmNs::Utils::TerminateProcess(testPid, missingSendSignal, 1, std::chrono::milliseconds { 1 })
+              == DCGM_ST_BADPARAM);
+        CHECK(sentSignals.empty());
     }
 
     SECTION("Returns DCGM_ST_CHILD_NOT_KILLED when process stays alive")
     {
-        auto result
-            = DcgmNs::Utils::TerminateProcess(42, [](pid_t) { return true; }, 2, std::chrono::milliseconds { 1 });
+        auto result = DcgmNs::Utils::TerminateProcess(
+            testPid, makeCallbacks([](pid_t) { return true; }), 2, std::chrono::milliseconds { 1 });
         REQUIRE(result == DCGM_ST_CHILD_NOT_KILLED);
+        REQUIRE(sentSignals == std::vector { SIGTERM, SIGKILL });
     }
 
     SECTION("Process that dies after first signal")
     {
         int callCount = 0;
-        auto result   = DcgmNs::Utils::TerminateProcess(
-            42,
-            [&callCount](pid_t) {
-                ++callCount;
-                return callCount <= 1;
-            },
-            4,
-            std::chrono::milliseconds { 1 });
+        auto result   = DcgmNs::Utils::TerminateProcess(testPid,
+                                                        makeCallbacks([&callCount](pid_t) {
+                                                          ++callCount;
+                                                          return callCount <= 1;
+                                                        }),
+                                                        4,
+                                                        std::chrono::milliseconds { 1 });
         REQUIRE(result == DCGM_ST_OK);
-        // 1: loop-check (alive) → send SIGTERM, 2: loop-check (dead) → exit, 3: post-loop check
+        // 1: loop-check (alive) -> send SIGTERM, 2: loop-check (dead) -> exit, 3: post-loop check
         REQUIRE(callCount == 3);
+        REQUIRE(sentSignals == std::vector { SIGTERM });
+    }
+
+    SECTION("No attempts returns child-not-killed when the liveness callback still reports alive")
+    {
+        int callCount = 0;
+        // PID is arbitrary: liveness is supplied by the injected predicate and maxAttempts==0
+        // means no signal is ever sent, so no real process is touched.
+        auto result = DcgmNs::Utils::TerminateProcess(42,
+                                                      makeCallbacks([&callCount](pid_t) {
+                                                          ++callCount;
+                                                          return true;
+                                                      }),
+                                                      0,
+                                                      std::chrono::milliseconds { 1 });
+
+        CHECK(result == DCGM_ST_CHILD_NOT_KILLED);
+        CHECK(callCount == 1);
     }
 }
 
-TEST_CASE("Utils: KillAndReapChild with forked process", "[DcgmUtilities]")
+TEST_CASE("Utils: KillAndReapChild with forked process")
 {
     pid_t child = fork();
     REQUIRE(child >= 0);
@@ -602,11 +750,14 @@ TEST_CASE("Utils: KillAndReapChild with forked process", "[DcgmUtilities]")
     REQUIRE(kill(child, 0) == 0);
     DcgmNs::Utils::KillAndReapChild(child, 4, std::chrono::milliseconds { 50 });
 
-    int status;
-    REQUIRE(waitpid(child, &status, WNOHANG) <= 0);
+    int status   = 0;
+    errno        = 0;
+    int const rc = waitpid(child, &status, WNOHANG);
+    REQUIRE(rc == -1);
+    REQUIRE(errno == ECHILD);
 }
 
-TEST_CASE("Utils: StopProcess", "[DcgmUtilities]")
+TEST_CASE("Utils: StopProcess")
 {
     SECTION("Non-existent process returns DCGM_ST_INSTANCE_NOT_FOUND")
     {
@@ -618,5 +769,387 @@ TEST_CASE("Utils: StopProcess", "[DcgmUtilities]")
     {
         REQUIRE(DcgmNs::Utils::StopProcess(-1, 1, std::chrono::milliseconds { 10 }) == DCGM_ST_INSTANCE_NOT_FOUND);
         REQUIRE(DcgmNs::Utils::StopProcess(0, 1, std::chrono::milliseconds { 10 }) == DCGM_ST_INSTANCE_NOT_FOUND);
+    }
+}
+
+SCENARIO("Utils: maps NVML errors")
+{
+    GIVEN("representative NVML return codes")
+    {
+        struct Case
+        {
+            nvmlReturn_t nvml;
+            dcgmReturn_t dcgm;
+        };
+        std::array<Case, 16> const cases { {
+            { NVML_SUCCESS, DCGM_ST_OK },
+            { NVML_ERROR_NOT_SUPPORTED, DCGM_ST_NOT_SUPPORTED },
+            { NVML_ERROR_FUNCTION_NOT_FOUND, DCGM_ST_NOT_SUPPORTED },
+            { NVML_ERROR_NO_PERMISSION, DCGM_ST_NO_PERMISSION },
+            { NVML_ERROR_NOT_FOUND, DCGM_ST_NO_DATA },
+            { NVML_ERROR_TIMEOUT, DCGM_ST_TIMEOUT },
+            { NVML_ERROR_GPU_IS_LOST, DCGM_ST_GPU_IS_LOST },
+            { NVML_ERROR_RESET_REQUIRED, DCGM_ST_RESET_REQUIRED },
+            { NVML_ERROR_INVALID_ARGUMENT, DCGM_ST_BADPARAM },
+            { NVML_ERROR_INSUFFICIENT_RESOURCES, DCGM_ST_INSUFFICIENT_RESOURCES },
+            { NVML_ERROR_UNINITIALIZED, DCGM_ST_NVML_NOT_LOADED },
+            { NVML_ERROR_IRQ_ISSUE, DCGM_ST_NVML_ERROR },
+            { NVML_ERROR_LIBRARY_NOT_FOUND, DCGM_ST_NVML_ERROR },
+            { NVML_ERROR_DRIVER_NOT_LOADED, DCGM_ST_NVML_ERROR },
+            { NVML_ERROR_INSUFFICIENT_SIZE, DCGM_ST_NVML_ERROR },
+            { NVML_ERROR_UNKNOWN, DCGM_ST_NVML_ERROR },
+        } };
+
+        WHEN("the NVML values are translated")
+        {
+            THEN("each public mapping remains stable")
+            {
+                for (auto const &tc : cases)
+                {
+                    CAPTURE(tc.nvml);
+                    CHECK(DcgmNs::Utils::NvmlReturnToDcgmReturn(tc.nvml) == tc.dcgm);
+                }
+            }
+        }
+    }
+}
+
+SCENARIO("Utils: ChangeUser rejects an unknown privilege policy")
+{
+    GIVEN("an unexpected privilege policy value")
+    {
+        UserCredentials credentials { getegid(), geteuid(), {} };
+
+        WHEN("ChangeUser is called")
+        {
+            auto result = ChangeUser(static_cast<ChangeUserPolicy>(999), credentials);
+
+            THEN("it fails without changing the effective user or group")
+            {
+                CHECK_FALSE(result.has_value());
+                CHECK(geteuid() == credentials.uid);
+                CHECK(getegid() == credentials.gid);
+            }
+        }
+    }
+}
+
+SCENARIO("Utils: container helpers notify only removed elements")
+{
+    GIVEN("a map with removable and retained entries")
+    {
+        std::map<std::string, int> values { { "drop-a", 1 }, { "keep", 2 }, { "drop-b", 3 } };
+        std::vector<std::string> notified;
+
+        WHEN("EraseAndNotifyIf removes matching entries")
+        {
+            auto const removed = DcgmNs::Utils::EraseAndNotifyIf(
+                values,
+                [](auto const &entry) { return entry.first.starts_with("drop"); },
+                [&notified](auto const &entry) { notified.push_back(entry.first); });
+
+            THEN("only removed entries are reported to the callback")
+            {
+                CHECK(removed == 2);
+                CHECK(values.size() == 1);
+                REQUIRE(values.contains("keep"));
+                CHECK(values.at("keep") == 2);
+                CHECK_THAT(notified, Catch::Matchers::UnorderedEquals(std::vector<std::string> { "drop-a", "drop-b" }));
+            }
+        }
+    }
+
+    GIVEN("a set with no matching entries")
+    {
+        std::set<int> values { 1, 2, 3 };
+        int callbackCount = 0;
+
+        WHEN("EraseAndNotifyIf has nothing to erase")
+        {
+            auto const removed = DcgmNs::Utils::EraseAndNotifyIf(
+                values, [](int value) { return value > 10; }, [&callbackCount](int) { ++callbackCount; });
+
+            THEN("the container and callback state remain unchanged")
+            {
+                CHECK(removed == 0);
+                CHECK(values == std::set<int> { 1, 2, 3 });
+                CHECK(callbackCount == 0);
+            }
+        }
+    }
+}
+
+SCENARIO("Utils: low-level pipe reads expose EOF and moved-handle behavior")
+{
+    GIVEN("an invalid file handle")
+    {
+        fmt::memory_buffer output;
+
+        WHEN("ReadProcessOutput tries to monitor it")
+        {
+            int const result = DcgmNs::Utils::ReadProcessOutput(output, DcgmNs::Utils::FileHandle {});
+
+            THEN("the descriptor error is returned and output remains empty")
+            {
+                CHECK(result == EBADF);
+                CHECK(output.size() == 0);
+            }
+        }
+    }
+
+    GIVEN("a pipe with a closed writer")
+    {
+        int fds[2];
+        REQUIRE(pipe(fds) == 0);
+        DcgmNs::Utils::FileHandle readFd(fds[0]);
+        DcgmNs::Utils::FileHandle writeFd(fds[1]);
+        writeFd = DcgmNs::Utils::FileHandle {};
+        fmt::memory_buffer output;
+
+        WHEN("ReadProcessOutput consumes the receiver")
+        {
+            int const result = DcgmNs::Utils::ReadProcessOutput(output, std::move(readFd));
+
+            THEN("EOF is reported as successful empty output")
+            {
+                CHECK(result == 0);
+                CHECK(output.size() == 0);
+                CHECK(readFd.Get() == -1);
+            }
+        }
+    }
+
+    GIVEN("a pipe with a short payload")
+    {
+        int fds[2];
+        REQUIRE(pipe(fds) == 0);
+        DcgmNs::Utils::FileHandle readFd(fds[0]);
+        DcgmNs::Utils::FileHandle writeFd(fds[1]);
+        REQUIRE(writeFd.Write("abc", 3) == 3);
+        writeFd = DcgmNs::Utils::FileHandle {};
+        fmt::memory_buffer output;
+
+        WHEN("ReadProcessOutput drains the receiver")
+        {
+            int const result = DcgmNs::Utils::ReadProcessOutput(output, std::move(readFd));
+
+            THEN("the exact bytes are appended to the output buffer")
+            {
+                CHECK(result == 0);
+                CHECK(fmt::to_string(output) == "abc");
+                CHECK(readFd.Get() == -1);
+            }
+        }
+    }
+}
+
+
+SCENARIO("Utils: ForkAndExecCommand exposes child output and failure paths")
+{
+    GIVEN("a missing output handle")
+    {
+        WHEN("ForkAndExecCommand is asked to run a valid program")
+        {
+            auto const pid = DcgmNs::Utils::ForkAndExecCommand(
+                { "/bin/true" }, nullptr, nullptr, nullptr, false, nullptr, nullptr);
+
+            THEN("the contract rejects the invalid caller-owned output pointer")
+            {
+                CHECK(pid == -1);
+            }
+        }
+    }
+
+    GIVEN("a child process that writes separate stdout and stderr streams")
+    {
+        DcgmNs::Utils::FileHandle stdoutFd;
+        DcgmNs::Utils::FileHandle stderrFd;
+        pid_t child = DcgmNs::Utils::ForkAndExecCommand({ "/bin/sh", "-c", "printf dcgm-out; printf dcgm-err >&2" },
+                                                        nullptr,
+                                                        &stdoutFd,
+                                                        &stderrFd,
+                                                        false,
+                                                        nullptr,
+                                                        nullptr);
+        REQUIRE(child > 0);
+        DcgmNs::Defer cleanup([&] {
+            if (child > 0)
+            {
+                DcgmNs::Utils::KillAndReapChild(child, 4, std::chrono::milliseconds { 50 });
+            }
+        });
+
+        WHEN("the parent drains both pipes")
+        {
+            fmt::memory_buffer stdoutOutput;
+            fmt::memory_buffer stderrOutput;
+
+            auto const stdoutResult = DcgmNs::Utils::ReadProcessOutput(stdoutOutput, std::move(stdoutFd));
+            auto const stderrResult = DcgmNs::Utils::ReadProcessOutput(stderrOutput, std::move(stderrFd));
+            int status              = 0;
+            REQUIRE(waitpid(child, &status, 0) == child);
+            child = -1;
+
+            THEN("stdout and stderr are preserved independently")
+            {
+                CHECK(stdoutResult == 0);
+                CHECK(stderrResult == 0);
+                CHECK(WIFEXITED(status));
+                CHECK(WEXITSTATUS(status) == 0);
+                CHECK(fmt::to_string(stdoutOutput) == "dcgm-out");
+                CHECK(fmt::to_string(stderrOutput) == "dcgm-err");
+            }
+        }
+    }
+
+    GIVEN("a child process that reads stdin")
+    {
+        DcgmNs::Utils::FileHandle stdinFd;
+        DcgmNs::Utils::FileHandle stdoutFd;
+        pid_t child
+            = DcgmNs::Utils::ForkAndExecCommand({ "/bin/cat" }, &stdinFd, &stdoutFd, nullptr, true, nullptr, nullptr);
+        REQUIRE(child > 0);
+        DcgmNs::Defer cleanup([&] {
+            if (child > 0)
+            {
+                DcgmNs::Utils::KillAndReapChild(child, 4, std::chrono::milliseconds { 50 });
+            }
+        });
+
+        WHEN("the parent writes input and closes stdin")
+        {
+            REQUIRE(stdinFd.Write("from-parent", 11) == 11);
+            stdinFd = DcgmNs::Utils::FileHandle {};
+
+            fmt::memory_buffer output;
+            auto const readResult = DcgmNs::Utils::ReadProcessOutput(output, std::move(stdoutFd));
+            int status            = 0;
+            REQUIRE(waitpid(child, &status, 0) == child);
+            child = -1;
+
+            THEN("the child receives exactly the provided input")
+            {
+                CHECK(readResult == 0);
+                CHECK(WIFEXITED(status));
+                CHECK(WEXITSTATUS(status) == 0);
+                CHECK(fmt::to_string(output) == "from-parent");
+            }
+        }
+    }
+
+    GIVEN("a child process with stderr redirected into stdout")
+    {
+        DcgmNs::Utils::FileHandle stdoutFd;
+        DcgmNs::Utils::FileHandle stderrFd;
+        pid_t child = DcgmNs::Utils::ForkAndExecCommand({ "/bin/sh", "-c", "printf joined-out; printf joined-err >&2" },
+                                                        nullptr,
+                                                        &stdoutFd,
+                                                        &stderrFd,
+                                                        true,
+                                                        nullptr,
+                                                        nullptr);
+        REQUIRE(child > 0);
+        DcgmNs::Defer cleanup([&] {
+            if (child > 0)
+            {
+                DcgmNs::Utils::KillAndReapChild(child, 4, std::chrono::milliseconds { 50 });
+            }
+        });
+
+        WHEN("the parent drains stdout")
+        {
+            fmt::memory_buffer output;
+
+            auto const readResult = DcgmNs::Utils::ReadProcessOutput(output, std::move(stdoutFd));
+            int status            = 0;
+            REQUIRE(waitpid(child, &status, 0) == child);
+            child = -1;
+
+            THEN("both streams are available from the stdout pipe")
+            {
+                CHECK(readResult == 0);
+                CHECK(stderrFd.Get() == -1);
+                CHECK(WIFEXITED(status));
+                CHECK(WEXITSTATUS(status) == 0);
+                CHECK(fmt::to_string(output) == "joined-outjoined-err");
+            }
+        }
+    }
+
+    GIVEN("an executable path that cannot be launched")
+    {
+        DcgmNs::Utils::FileHandle stdoutFd;
+        DcgmNs::Utils::FileHandle stderrFd;
+        pid_t child = DcgmNs::Utils::ForkAndExecCommand(
+            { "/no/such/dcgm-test-executable" }, nullptr, &stdoutFd, &stderrFd, false, nullptr, nullptr);
+        REQUIRE(child > 0);
+        DcgmNs::Defer cleanup([&] {
+            if (child > 0)
+            {
+                DcgmNs::Utils::KillAndReapChild(child, 4, std::chrono::milliseconds { 50 });
+            }
+        });
+
+        WHEN("the parent drains stderr")
+        {
+            fmt::memory_buffer stderrOutput;
+
+            auto const stderrResult = DcgmNs::Utils::ReadProcessOutput(stderrOutput, std::move(stderrFd));
+            int status              = 0;
+            REQUIRE(waitpid(child, &status, 0) == child);
+            child = -1;
+
+            THEN("the child reports the exec failure")
+            {
+                CHECK(stderrResult == 0);
+                CHECK(WIFEXITED(status));
+                CHECK(WEXITSTATUS(status) != 0);
+                CHECK_THAT(fmt::to_string(stderrOutput), Catch::Matchers::ContainsSubstring("Could not exec"));
+            }
+        }
+    }
+
+    GIVEN("a non-existent service account")
+    {
+        if (!PasswdIsFilesOnly())
+        {
+            SKIP("Skipping service account failure test: /etc/nsswitch.conf passwd is not 'files' only");
+        }
+
+        DcgmNs::Utils::FileHandle stdoutFd;
+        DcgmNs::Utils::FileHandle stderrFd;
+        pid_t child = DcgmNs::Utils::ForkAndExecCommand({ "/bin/true" },
+                                                        nullptr,
+                                                        &stdoutFd,
+                                                        &stderrFd,
+                                                        false,
+                                                        "dcgm_missing_service_account_for_unit_test",
+                                                        nullptr);
+        REQUIRE(child > 0);
+        DcgmNs::Defer cleanup([&] {
+            if (child > 0)
+            {
+                DcgmNs::Utils::KillAndReapChild(child, 4, std::chrono::milliseconds { 50 });
+            }
+        });
+
+        WHEN("the parent drains stderr")
+        {
+            fmt::memory_buffer stderrOutput;
+
+            auto const stderrResult = DcgmNs::Utils::ReadProcessOutput(stderrOutput, std::move(stderrFd));
+            int status              = 0;
+            REQUIRE(waitpid(child, &status, 0) == child);
+            child = -1;
+
+            THEN("the child reports the missing credentials before exec")
+            {
+                CHECK(stderrResult == 0);
+                CHECK(WIFEXITED(status));
+                CHECK(WEXITSTATUS(status) != 0);
+                CHECK_THAT(fmt::to_string(stderrOutput),
+                           Catch::Matchers::ContainsSubstring("Unable to find credentials"));
+            }
+        }
     }
 }

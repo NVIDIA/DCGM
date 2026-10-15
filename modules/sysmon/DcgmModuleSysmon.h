@@ -19,6 +19,9 @@
 #include "DcgmCpuTopology.h"
 #include "DcgmSystemMonitor.h"
 #include "MessageGuard.hpp"
+#include "SysmonFileSystemAnyPtr.hpp"
+#include "SysmonSystemMonitorAnyPtr.hpp"
+#include "SysmonWatchTableAnyPtr.hpp"
 #include "dcgm_sysmon_structs.h"
 
 #include <DcgmModule.h>
@@ -73,6 +76,29 @@ class DcgmModuleSysmon
 {
 public:
     explicit DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc);
+    /**
+     * Construct a sysmon module with an injected system monitor dependency.
+     *
+     * @param[in] dcc Core callbacks used by this module.
+     * @param[in] systemMonitor Non-owning, non-null system monitor dependency.
+     * @throws std::invalid_argument if systemMonitor is null.
+     * @note Injected dependencies must outlive this module. The destructor stops the task runner before member
+     * destruction completes.
+     */
+    DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc, SysmonSystemMonitorAnyPtr systemMonitor);
+    /**
+     * Construct a sysmon module with injected system monitor and watch table dependencies.
+     *
+     * @param[in] dcc Core callbacks used by this module.
+     * @param[in] systemMonitor Non-owning, non-null system monitor dependency.
+     * @param[in] watchTable Non-owning, non-null watch table dependency.
+     * @throws std::invalid_argument if systemMonitor or watchTable is null.
+     * @note Injected dependencies must outlive this module. The destructor stops the task runner before member
+     * destruction completes.
+     */
+    DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc,
+                     SysmonSystemMonitorAnyPtr systemMonitor,
+                     SysmonWatchTableAnyPtr watchTable);
 
     ~DcgmModuleSysmon();
     /*************************************************************************/
@@ -106,17 +132,29 @@ public:
      */
     static dcgmReturn_t PopulateOwnedCoresBitmaskFromRangeString(dcgm_sysmon_cpu_t &cpu, const std::string &rangeStr);
     static void PopulateOwnedCoresBitmask(dcgm_sysmon_cpu_t &cpu);
+    /**
+     * Populate owned CPU cores through an injected filesystem dependency.
+     *
+     * @param[in,out] cpu CPU record whose owned-core bitmask is populated.
+     * @param[in] fs Non-owning, non-null filesystem dependency.
+     * @throws std::invalid_argument if fs is null.
+     * @throws std::runtime_error if the owned-core range is malformed or exceeds the bitmask capacity.
+     */
+    static void PopulateOwnedCoresBitmask(dcgm_sysmon_cpu_t &cpu, SysmonFileSystemAnyPtr fs);
 
-#ifndef DCGM_SYSMON_TEST // Allow sysmon tests to peek in
-private:
-#endif
+protected:
     enum class TaskRunnerStartMode
     {
         Start,
         Defer,
     };
 
-    DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc, TaskRunnerStartMode startMode);
+    explicit DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc, TaskRunnerStartMode startMode);
+    DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc, SysmonSystemMonitorAnyPtr systemMonitor, TaskRunnerStartMode startMode);
+    DcgmModuleSysmon(dcgmCoreCallbacks_t &dcc,
+                     SysmonSystemMonitorAnyPtr systemMonitor,
+                     SysmonWatchTableAnyPtr watchTable,
+                     TaskRunnerStartMode startMode);
 
     using GetCpusMessage = DcgmNs::MessageGuard<dcgm_sysmon_msg_get_cpus_t, dcgm_sysmon_msg_get_cpus_version>;
     using WatchFieldsMessage
@@ -136,8 +174,10 @@ private:
     DcgmCpuTopology m_cpuTopology;
     std::ifstream m_procStat;
     sysmonUtilSampleMap_t m_utilizationSamples;
-    DcgmWatchTable m_watchTable; /* Table of watchers */
-    DcgmSystemMonitor m_sysmon;
+    SysmonWatchTable m_defaultWatchTable;
+    SysmonWatchTableAnyPtr m_watchTable;
+    SysmonSystemMonitor m_defaultSysmon;
+    SysmonSystemMonitorAnyPtr m_sysmon;
     std::string m_coreSpeedBaseDir;
     std::atomic_bool m_paused;
     DcgmNs::Timelib::TimePoint m_maxSampleAge;

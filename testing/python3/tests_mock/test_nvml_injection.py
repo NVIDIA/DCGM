@@ -44,7 +44,3 @@ def test_inject_key_with_two_values_standalone():
 
 def test_inject_struct_standalone():
     trampoline()
-
-
-def test_gpm_metrics_supported():
-    trampoline()

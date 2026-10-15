@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ add_executable(module_common_tests)
 target_sources(module_common_tests
     PRIVATE
         DcgmResourceHandleTests.cpp
+        DcgmCoreProxyTests.cpp
 )
 
 target_include_directories(module_common_tests 
@@ -42,7 +43,7 @@ target_link_libraries(module_common_tests
 )
 
 # Add only necessary system libraries
-target_link_libraries(module_common_tests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(module_common_tests PRIVATE Threads::Threads)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(module_common_tests EXTRA_ARGS --colour-mode ansi)

@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,29 +23,20 @@ target_sources(targetedpowertests
         ../TargetedPower_wrapper.cpp
 )
 
-target_include_directories(targetedpowertests PRIVATE ${YAML_INCLUDE_DIR})
-target_include_directories(targetedpowertests PRIVATE ${JSONCPP_INCLUDE_DIR})
-target_include_directories(targetedpowertests PRIVATE ${CUDA12_INCLUDE_DIR})
-target_include_directories(targetedpowertests PRIVATE ${PROJECT_SOURCE_DIR}/cublas_proxy)
-target_include_directories(targetedpowertests PRIVATE ..) # include the plugin dir
-target_include_directories(targetedpowertests PRIVATE ../../include) # include the plugin_src/include dir
-
-# NOTE: linking dcgmlib is not allowed for this library. Instead, make a mock implementation
-#       for any libdcgm function that is needed.
-# NOTE: linking cuda is not allowed for this library. We are using a CUDA stub library instead (testing_cuda_stubs)
-#
 target_link_libraries(targetedpowertests
     PRIVATE
         nvvs_without_main_objects
+        nvvs_plugins_targetedpower_interface
         Catch2::Catch2WithMain
-        testing_cuda_stubs
-        testing_cuda_stubs_interface
-        testing_dcgm_cublas_stubs
-        cuda_common_interface
+        mock_cuda_ops
+        mock_cuda_common
+        mock_cublas_ops
+        mock_common
+        mock_dcgm_ops
 )
 target_link_libraries(targetedpowertests PUBLIC nvvs_interface)
-target_link_libraries(targetedpowertests PRIVATE ${YAML_STATIC_LIBS} ${JSONCPP_STATIC_LIBS} rt dl)
-target_link_libraries(targetedpowertests PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(targetedpowertests PRIVATE yaml-cpp::yaml-cpp jsoncpp_static rt dl)
+target_link_libraries(targetedpowertests PRIVATE Threads::Threads)
 target_link_libraries(targetedpowertests PRIVATE sdk_nvml_loader)
 target_link_libraries(targetedpowertests PRIVATE sdk_nvml_essentials_objects fmt::fmt)
 target_link_libraries(targetedpowertests PUBLIC nvvs_plugins_common_objects)

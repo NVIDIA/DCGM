@@ -25,9 +25,11 @@
 #include <dcgm_structs.h>
 
 #include <iostream>
+#include <utility>
 
 
-VersionInfo::VersionInfo(std::string hostname)
+VersionInfo::VersionInfo(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
 {
     m_hostName = std::move(hostname);
 
@@ -36,17 +38,22 @@ VersionInfo::VersionInfo(std::string hostname)
     m_timeout = 100;
 }
 
-dcgmReturn_t VersionInfo::DoExecuteConnected()
+static void PrintLocalBuildInfo()
 {
     // Local build info
     static DcgmNs::DcgmBuildInfo buildInfo;
     std::cout << "\nLocal build info:\n";
     std::cout << buildInfo;
+}
+
+dcgmReturn_t VersionInfo::DoExecuteConnected()
+{
+    PrintLocalBuildInfo();
 
     dcgmVersionInfo_t versionInfo = {};
 
     versionInfo.version = dcgmVersionInfo_version;
-    dcgmReturn_t ret    = dcgmHostengineVersionInfo(m_dcgmHandle, &versionInfo);
+    dcgmReturn_t ret    = m_dcgmOps->dcgmHostengineVersionInfo(m_dcgmHandle, &versionInfo);
 
     if (DCGM_ST_OK != ret)
     {
@@ -59,6 +66,14 @@ dcgmReturn_t VersionInfo::DoExecuteConnected()
     std::cout << serverBuildInfo;
 
     return DCGM_ST_OK;
+}
+
+dcgmReturn_t VersionInfo::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus)
+{
+    PrintLocalBuildInfo();
+    std::cout << "\nHostengine build info not available: could not connect to hostengine at " << m_hostName << ": "
+              << errorString(connectionStatus) << std::endl;
+    return connectionStatus;
 }
 
 /*****************************************************************************/

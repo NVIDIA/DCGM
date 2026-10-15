@@ -17,38 +17,95 @@
 
 set -ex
 
-# First install Rust x86_64-unknown-linux-gnu for all targets.
-# This is required to install host tools for cargo.
+HOST_TRIPLE=x86_64-unknown-linux-gnu
+RUST_TARGET=$ARCHITECTURE-unknown-linux-gnu
+RUST_TARGETS=$HOST_TRIPLE
 
-mkdir rust_install
-tar xf /tmp/downloads/rust.tar.xz -C rust_install --strip-components=1
-
-# This installs into /usr/local/bin
-./rust_install/install.sh --prefix=$RUST_INSTALL_PREFIX
-
-rm -rf rust_install
-
-# Now install rust-std for the target if it's different from x86_64-unknown-linux-gnu
-# The target location must match where the rustc above was installed
-
-if [ -f "/tmp/downloads/rust-std-$TARGET.tar.xz" ]; then
-    mkdir rust-std
-    tar xf "/tmp/downloads/rust-std-$TARGET.tar.xz" -C rust-std --strip-components=1
-
-    ./rust-std/install.sh --prefix=$RUST_INSTALL_PREFIX
-
-    rm -rf rust-std
-else
-    echo "No rust-std artifact found for target: $TARGET" >&2
+if [[ $RUST_TARGET != "$HOST_TRIPLE" ]]; then
+    RUST_TARGETS+=",$RUST_TARGET"
 fi
 
-# Now install rust-src (solely for the rust-analyzer proper work for now)
-mkdir rust-src
-tar xf /tmp/downloads/rust-src.tar.xz -C rust-src --strip-components=1
+mkdir rust
+tar xf /tmp/downloads/rust.tar.xz -C rust --strip-components=1
+cd rust
 
-./rust-src/install.sh --prefix=$RUST_INSTALL_PREFIX --components=rust-src
+# Use Rust's distribution profile, but install only the tools needed by the build image.
+cat > bootstrap.toml <<EOF
+profile = "dist"
+change-id = "ignore"
 
-rm -rf rust-src
+[build]
+profiler = true
+tools = [
+    "cargo",
+    "clippy",
+    "rustdoc",
+    "rustfmt",
+    "rust-analyzer",
+    "rust-analyzer-proc-macro-srv",
+    "src",
+    "wasm-component-ld",
+    "llvm-bitcode-linker",
+]
+
+[install]
+prefix = "$RUST_INSTALL_PREFIX"
+
+[rust]
+codegen-backends = ["llvm"]
+llvm-bitcode-linker = true
+llvm-tools = true
+
+[target.$HOST_TRIPLE]
+cc = "/usr/bin/clang"
+cxx = "/usr/bin/clang++"
+linker = "/usr/bin/clang"
+llvm-libunwind = "in-tree"
+EOF
+
+if [[ $ARCHITECTURE != "x86_64" ]]; then
+cat >> bootstrap.toml <<EOF
+
+[target.$RUST_TARGET]
+cc = "/opt/cross/bin/$TARGET-gcc"
+cxx = "/opt/cross/bin/$TARGET-g++"
+ar = "/opt/cross/bin/$TARGET-ar"
+linker = "/opt/cross/bin/$TARGET-gcc"
+llvm-libunwind = "in-tree"
+EOF
+fi
+
+unset CMAKE_TOOLCHAIN_FILE
+# Observed: Clang 22 can crash sporadically when compiling Cargo's bundled SQLite at -O3.
+# Limit only bootstrap's C dependencies to -O2; Rust and LLVM keep the dist profile's settings.
+export CFLAGS_x86_64_unknown_linux_gnu=-O2
+if [[ $RUST_TARGET == "aarch64-unknown-linux-gnu" ]]
+then
+    # profiler_builtins uses legacy __sync atomics whose GCC outline helpers are not provided by
+    # Rust's compiler_builtins. Keep the profiler runtime self-contained instead of linking libgcc.
+    export CFLAGS_aarch64_unknown_linux_gnu=-mno-outline-atomics
+fi
+RUST_VERSION=$(<src/version)
+./x.py install \
+    --build "$HOST_TRIPLE" \
+    --host "$HOST_TRIPLE" \
+    --target "$RUST_TARGETS"
+
+RUSTC=$RUST_INSTALL_PREFIX/bin/rustc
+COMPONENTS=$RUST_INSTALL_PREFIX/lib/rustlib/components
+
+"$RUSTC" --version | grep -q "^rustc $RUST_VERSION "
+"$RUSTC" -vV | grep -qx "host: $HOST_TRIPLE"
+test -d "$("$RUSTC" --target "$RUST_TARGET" --print target-libdir)"
+test -f "$COMPONENTS"
+if grep -q '^rustc-dev' "$COMPONENTS"
+then
+    echo "ERROR: rustc-dev was installed unexpectedly" >&2
+    exit 1
+fi
+
+cd ..
+rm -rf rust
 
 mkdir -p /.cargo
 cat <<EOF > /.cargo/config.toml
@@ -65,3 +122,87 @@ runner = "/usr/bin/qemu-$ARCHITECTURE -L /opt/cross/$ARCHITECTURE-linux-gnu/sysr
 linker = "/usr/bin/clang"
 EOF
 fi
+
+PROBE_DIR=$(mktemp -d)
+mkdir -p "$PROBE_DIR/src"
+
+cat > "$PROBE_DIR/Cargo.toml" <<EOF
+[package]
+name = "rust-unwind-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+EOF
+
+cat > "$PROBE_DIR/src/main.rs" <<'EOF'
+fn assert_unwinds() {
+    assert!(std::panic::catch_unwind(|| panic!("unwind probe")).is_err());
+}
+
+fn main() {
+    std::panic::set_hook(Box::new(|_| {}));
+    assert_unwinds();
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn panic_unwinds() {
+        std::panic::set_hook(Box::new(|_| {}));
+        super::assert_unwinds();
+    }
+}
+EOF
+
+IFS=',' read -r -a RUST_TARGET_LIST <<< "$RUST_TARGETS"
+for RUST_PROBE_TARGET in "${RUST_TARGET_LIST[@]}"
+do
+    RUST_PROBE_LINKER=/usr/bin/clang
+    if [[ $RUST_PROBE_TARGET != "$HOST_TRIPLE" ]]
+    then
+        RUST_PROBE_LINKER=/opt/cross/bin/$TARGET-gcc
+    fi
+
+    RUSTFLAGS="-C instrument-coverage" \
+    CARGO_TARGET_DIR="$PROBE_DIR/target" \
+        "$RUST_INSTALL_PREFIX/bin/cargo" build \
+        --quiet \
+        --manifest-path "$PROBE_DIR/Cargo.toml" \
+        --config "target.$RUST_PROBE_TARGET.linker=\"$RUST_PROBE_LINKER\"" \
+        --target "$RUST_PROBE_TARGET"
+
+    PROBE_BINARY="$PROBE_DIR/target/$RUST_PROBE_TARGET/debug/rust-unwind-probe"
+    PROBE_DYNAMIC=$(/usr/bin/llvm-readelf --dynamic "$PROBE_BINARY")
+    if grep -q libgcc_s <<< "$PROBE_DYNAMIC"
+    then
+        echo "ERROR: $RUST_PROBE_TARGET Rust binary depends on libgcc_s" >&2
+        printf '%s\n' "$PROBE_DYNAMIC" >&2
+        exit 1
+    fi
+
+    RUST_PROBE_RUN_PROFILE="$PROBE_DIR/$RUST_PROBE_TARGET-run.profraw"
+    LLVM_PROFILE_FILE="$RUST_PROBE_RUN_PROFILE" \
+    RUSTFLAGS="-C instrument-coverage" \
+    CARGO_TARGET_DIR="$PROBE_DIR/target" \
+        "$RUST_INSTALL_PREFIX/bin/cargo" run \
+        --quiet \
+        --manifest-path "$PROBE_DIR/Cargo.toml" \
+        --config "target.$RUST_PROBE_TARGET.linker=\"$RUST_PROBE_LINKER\"" \
+        --target "$RUST_PROBE_TARGET"
+
+    test -s "$RUST_PROBE_RUN_PROFILE"
+
+    RUST_PROBE_TEST_PROFILE="$PROBE_DIR/$RUST_PROBE_TARGET-test.profraw"
+    LLVM_PROFILE_FILE="$RUST_PROBE_TEST_PROFILE" \
+    RUSTFLAGS="-C instrument-coverage" \
+    CARGO_TARGET_DIR="$PROBE_DIR/target" \
+        "$RUST_INSTALL_PREFIX/bin/cargo" test \
+        --verbose \
+        --manifest-path "$PROBE_DIR/Cargo.toml" \
+        --config "target.$RUST_PROBE_TARGET.linker=\"$RUST_PROBE_LINKER\"" \
+        --target "$RUST_PROBE_TARGET"
+
+    test -s "$RUST_PROBE_TEST_PROFILE"
+done
+
+rm -rf "$PROBE_DIR"

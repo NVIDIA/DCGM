@@ -168,7 +168,17 @@ DCGM_FR_RETEST_REQUESTED = 130  # Retest requested before providing results
 DCGM_FR_CONTAINED_ERROR = 131  # GPU contained error
 # Uncorrectable row remap threshold exceeded
 DCGM_FR_UNCORRECTABLE_ROW_REMAP_LIMIT = 132
-DCGM_FR_ERROR_SENTINEL = 133  # MUST BE THE LAST ERROR CODE
+DCGM_FR_CPU_SDC_TEST_FAILED = 133  # SDC test failed
+DCGM_FR_RIST_TEST_FAILED = 134  # RIST test failed
+DCGM_FR_RIST_NO_RESULTS = 135  # RISTApp did not produce usable test results
+DCGM_FR_RIST_PROTOCOL = 136  # RISTApp produced malformed protocol output
+DCGM_FR_RIST_NONZERO_EXIT = 137  # RISTApp exited with a non-zero exit code
+DCGM_FR_CHILD_TERMINATED = 138  # Child process terminated abnormally
+DCGM_FR_RIST_TIMEOUT = 139  # RISTApp timed out
+DCGM_FR_RIST_HEARTBEAT_STALLED = 140  # RISTApp heartbeat stalled
+DCGM_FR_CHILD_SPAWN_FAILED = 141  # Child process failed to spawn
+DCGM_FR_GPU_RECOVERY_IMEX_DOMAIN = 142  # GPU requires IMEX domain recovery
+DCGM_FR_ERROR_SENTINEL = 143  # MUST BE THE LAST ERROR CODE
 
 # Deprecated throttling-related events
 # Deprecated: Use DCGM_FR_CLOCKS_EVENT_THERMAL instead
@@ -210,6 +220,7 @@ DCGM_FR_EC_HARDWARE_PCIE = 13
 DCGM_FR_EC_HARDWARE_POWER = 14
 DCGM_FR_EC_HARDWARE_OTHER = 15
 DCGM_FR_EC_INTERNAL_OTHER = 16
+DCGM_FR_EC_SOFTWARE_CPU_SDC = 17
 
 
 # Messages for the error codes. All messages must be defined in the ERROR_CODE_MSG <msg> format
@@ -386,6 +397,9 @@ DCGM_FR_GPU_RECOVERY_RESET_MSG = "GPU %u requires a reset to recover from a faul
 DCGM_FR_GPU_RECOVERY_REBOOT_MSG = "GPU %u fault may have left the OS in an inconsistent state. Recovery action: %ld (NODE_REBOOT)."
 DCGM_FR_GPU_RECOVERY_DRAIN_P2P_MSG = "GPU %u requires peer-to-peer traffic to be quiesced. Recovery action: %ld (DRAIN_P2P)."
 DCGM_FR_GPU_RECOVERY_DRAIN_RESET_MSG = "GPU %u operating at reduced capacity due to a fault. Recovery action: %ld (DRAIN_AND_RESET)."
+DCGM_FR_GPU_RECOVERY_IMEX_DOMAIN_MSG = "GPU %u requires IMEX domain recovery. Recovery action: %ld (RECOVER_IMEX_DOMAIN)."
+DCGM_FR_CPU_SDC_TEST_FAILED_MSG = ""
+DCGM_FR_CHILD_SPAWN_FAILED_MSG = ""
 
 # Suggestions for next steps for the corresponding error message
 DCGM_FR_OK_NEXT = "N/A"
@@ -527,6 +541,9 @@ DCGM_FR_GPU_RECOVERY_RESET_NEXT = "Terminate all GPU processes and reset the GPU
 DCGM_FR_GPU_RECOVERY_REBOOT_NEXT = "Reboot the operating system to restore a consistent state."
 DCGM_FR_GPU_RECOVERY_DRAIN_P2P_NEXT = "Terminate GPU processes conducting peer-to-peer traffic and disable UVM persistence mode. Check GPU health status again after draining."
 DCGM_FR_GPU_RECOVERY_DRAIN_RESET_NEXT = "Do not schedule new work on this GPU. Reset the GPU after existing work has drained."
+DCGM_FR_GPU_RECOVERY_IMEX_DOMAIN_NEXT = "Recover or re-establish the IMEX domain."
+DCGM_FR_CPU_SDC_TEST_FAILED_NEXT = ""
+DCGM_FR_CHILD_SPAWN_FAILED_NEXT = ""
 
 
 def dcgmErrorGetPriorityByCode(code):

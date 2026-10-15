@@ -15,9 +15,12 @@
  */
 #pragma once
 
+#include <DcgmOpsAnyPtr.hpp>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <Plugin.h>
 #include <PluginCommon.h>
 #include <PluginStrings.h>
+#include <memory>
 
 static constexpr auto NCCL_TESTS_DESCRIPTION                    = "This plugin will run the NCCL tests.";
 static constexpr auto NCCL_TESTS_EXECUTABLE                     = "all_reduce_perf";
@@ -30,7 +33,7 @@ namespace DcgmNs::Nvvs::Plugins::NcclTests
 class NcclTestsPlugin : public Plugin
 {
 public:
-    NcclTestsPlugin(dcgmHandle_t handle);
+    NcclTestsPlugin(dcgmHandle_t handle, DcgmNs::DcgmOpsAnyUniquePtr dcgmOps, NvvsCommon *nvvsCommon);
     ~NcclTestsPlugin();
 
     /*************************************************************************/
@@ -56,8 +59,9 @@ private:
     std::string GetNcclTestsTestName() const;
 
     /*************************************************************************/
-    TestParameters m_testParameters; /* Parameters for this test, passed in from the framework.
-                                        Set when the go() method is called. DO NOT FREE */
+    TestParameters m_testParameters;             /* Parameters for this test, passed in from the framework.
+                                                    Set when the go() method is called. DO NOT FREE */
+    DcgmNs::DcgmOpsAnyUniquePtr m_dcgmOpsUnique; /* Owned DCGM API interface */
     DcgmRecorder m_dcgmRecorder;
     bool m_dcgmRecorderInitialized { false };
     dcgmHandle_t m_handle { 0 };

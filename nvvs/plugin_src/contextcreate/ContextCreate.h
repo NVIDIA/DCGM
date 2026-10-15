@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@
 #include "dcgm_structs.h"
 #include "timelib.h"
 #include <CudaCommon.h>
+#include <CudaCommonAnyPtr.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOpsAnyPtr.hpp>
 #include <NvvsStructs.h>
 
 #define CTX_CREATED 0x0
@@ -37,16 +40,19 @@ public:
     CUdevice cuDevice {};
     CUcontext cuContext {};
 
-    ContextCreateDevice()
-        : PluginDevice()
+    ContextCreateDevice(DcgmNs::DcgmOpsAnyPtr dcgmOps, CudaOpsAnyPtr cudaOps)
+        : PluginDevice(dcgmOps, cudaOps)
     {}
 
     ContextCreateDevice(std::string const &testName,
                         unsigned int ndi,
                         const char *pciBusId,
                         Plugin *p,
-                        DcgmHandle &handle)
-        : PluginDevice(testName, ndi, pciBusId, p)
+                        DcgmHandle &handle,
+                        DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                        CudaOpsAnyPtr cudaOps,
+                        CudaCommonAnyPtr cudaCommon)
+        : PluginDevice(testName, ndi, pciBusId, p, dcgmOps, handle.GetHandle(), cudaOps)
         , cuContext(0)
     {
         char buf[256] {};
@@ -54,7 +60,7 @@ public:
         dcgmDeviceAttributes_t attr {};
         attr.version = dcgmDeviceAttributes_version3;
 
-        dcgmReturn_t ret = dcgmGetDeviceAttributes(handle.GetHandle(), ndi, &attr);
+        dcgmReturn_t ret = dcgmOps->dcgmGetDeviceAttributes(handle.GetHandle(), ndi, &attr);
 
         if (ret != DCGM_ST_OK)
         {
@@ -65,13 +71,13 @@ public:
             throw d;
         }
 
-        CUresult cuSt = cuInit(0);
+        CUresult cuSt = cudaOps->cuInit(0);
 
         if (cuSt)
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuInit");
-            cuGetErrorString(cuSt, &errorString);
+            cudaOps->cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
             {
                 snprintf(buf,
@@ -79,18 +85,18 @@ public:
                          ": '%s' (%d)%s",
                          errorString,
                          static_cast<int>(cuSt),
-                         GetAdditionalCuInitDetail(cuSt));
+                         cudaCommon->GetAdditionalCuInitDetail(cuSt));
                 d.AddDetail(buf);
             }
             throw d;
         }
 
-        cuSt = cuDeviceGetByPCIBusId(&cuDevice, attr.identifiers.pciBusId);
+        cuSt = cudaOps->cuDeviceGetByPCIBusId(&cuDevice, attr.identifiers.pciBusId);
         if (cuSt)
         {
             DcgmError d { gpuId };
             DCGM_ERROR_FORMAT_MESSAGE(DCGM_FR_CUDA_API, d, "cuDeviceGetByPCIBusId");
-            cuGetErrorString(cuSt, &errorString);
+            cudaOps->cuGetErrorString(cuSt, &errorString);
             if (errorString != NULL)
             {
                 snprintf(buf, sizeof(buf), ": '%s' (%d) for GPU %u", errorString, static_cast<int>(cuSt), this->gpuId);
@@ -104,7 +110,12 @@ public:
 class ContextCreate
 {
 public:
-    ContextCreate(TestParameters *testParameters, ContextCreatePlugin *plugin, dcgmHandle_t handle);
+    ContextCreate(TestParameters *testParameters,
+                  ContextCreatePlugin *plugin,
+                  dcgmHandle_t handle,
+                  DcgmNs::DcgmOpsAnyPtr dcgmOps,
+                  CudaOpsAnyPtr cudaOps,
+                  CudaCommonAnyPtr cudaCommon);
     ~ContextCreate();
 
     /*************************************************************************/
@@ -148,13 +159,22 @@ public:
      *           1 for skipping
      *          -1 for failure to create
      */
-    template <typename cuCtxCreateFunc      = decltype(&cuCtxCreate),
-              typename cuCtxDestroyFunc     = decltype(&cuCtxDestroy),
-              typename cuGetErrorStringFunc = decltype(&cuGetErrorString)>
+    template <typename cuCtxCreateFunc, typename cuCtxDestroyFunc>
     int CanCreateContext(std::vector<std::unique_ptr<ContextCreateDevice>> &theDevices,
-                         cuCtxCreateFunc cuCtxCreateImpl           = cuCtxCreate_v2,
-                         cuCtxDestroyFunc cuCtxDestroyImpl         = cuCtxDestroy,
-                         cuGetErrorStringFunc cuGetErrorStringImpl = cuGetErrorString)
+                         cuCtxCreateFunc cuCtxCreateImpl,
+                         cuCtxDestroyFunc cuCtxDestroyImpl)
+    {
+        return CanCreateContext(
+            theDevices, cuCtxCreateImpl, cuCtxDestroyImpl, [this](CUresult cuSt, const char **errStr) {
+                return m_cudaOps->cuGetErrorString(cuSt, errStr);
+            });
+    }
+
+    template <typename cuCtxCreateFunc, typename cuCtxDestroyFunc, typename cuGetErrorStringFunc>
+    int CanCreateContext(std::vector<std::unique_ptr<ContextCreateDevice>> &theDevices,
+                         cuCtxCreateFunc cuCtxCreateImpl,
+                         cuCtxDestroyFunc cuCtxDestroyImpl,
+                         cuGetErrorStringFunc cuGetErrorStringImpl)
     {
         int created = CTX_CREATED;
         CUresult cuSt;
@@ -208,6 +228,9 @@ private:
     DcgmRecorder *m_dcgmRecorder;
     DcgmHandle m_dcgmHandle;
     DcgmGroup m_dcgmGroup;
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; /* DCGM API interface */
+    CudaOpsAnyPtr m_cudaOps;         //!< CUDA API interface.
+    CudaCommonAnyPtr m_cudaCommon;
 };
 
 #endif

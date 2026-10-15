@@ -108,6 +108,7 @@ def test_dcgm_run_diagnostic_validate(handle, gpuIds):
 @test_utils.run_with_injection_nvml_using_specific_sku('A100.yaml')
 @test_utils.run_with_embedded_host_engine()
 @test_utils.run_with_nvml_injected_gpus()
+@test_utils.run_with_non_mig_cuda_visible_devices(requested=True)
 def test_dcgm_get_pid_info_validate(handle, gpuIds):
     helper_dcgm_get_pid_info_validate(handle, gpuIds)
 

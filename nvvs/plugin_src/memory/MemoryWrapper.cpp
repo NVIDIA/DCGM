@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,17 @@
 #include "Memory_wrapper.h"
 #include "dcgm_fields.h"
 
+#include <CudaCommon.h>
+#include <CudaCommonAnyUniquePtr.hpp>
+#include <CudaOps.hpp>
+#include <CudaOpsAnyUniquePtr.hpp>
+#include <DcgmOps.h>
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <PluginInterface.h>
 #include <PluginLib.h>
 #include <PluginStrings.h>
+
+#include <memory>
 
 extern "C" {
 
@@ -78,13 +86,17 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t handle,
                               DcgmLoggingSeverity_t loggingSeverity,
                               hostEngineAppenderCallbackFp_t loggingCallback,
                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              NvvsCommonPtr nvvsCommon,
                               HangDetectMonitor * /* monitor */)
 {
-    Memory *mem = new Memory(handle);
-    *userData   = mem;
+    CudaOpsAnyUniquePtr cudaOps       = std::make_unique<CudaOps>();
+    CudaCommonAnyUniquePtr cudaCommon = std::make_unique<CudaCommon>(cudaOps.AsAnyPtr());
+    auto mem                          = std::make_unique<Memory>(
+        handle, std::make_unique<DcgmNs::DcgmOps>(), std::move(cudaOps), std::move(cudaCommon), nvvsCommon);
 
     mem->SetPluginAttr(pluginAttr);
     InitializeLoggingCallbacks(loggingSeverity, loggingCallback, mem->GetDisplayName());
+    *userData = mem.release();
     return DCGM_ST_OK;
 }
 

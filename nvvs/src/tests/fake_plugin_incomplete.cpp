@@ -57,6 +57,7 @@ dcgmReturn_t InitializePlugin(dcgmHandle_t /* handle */,
                               DcgmLoggingSeverity_t /* loggingSeverity */,
                               hostEngineAppenderCallbackFp_t /* loggingCallback */,
                               dcgmDiagPluginAttr_v1 const *pluginAttr,
+                              NvvsCommonPtr /* nvvsCommon */,
                               HangDetectMonitor * /* monitor */)
 {
     if (pluginAttr != nullptr)

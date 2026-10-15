@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -303,21 +303,20 @@ private:
     Argument_t<std::string> m_logLevelString;
     Argument_t<std::string> m_configFile;
 
-    std::vector<std::shared_ptr<Arguments_t>> m_arguments;
+    std::vector<Arguments_t> m_arguments; //!< Parsed argument snapshots processed in declaration order.
     bool m_snapshotReady { false };
     std::string m_lastFieldIds { "all" };
 
-    dcgmReturn_t ProcessIntegerList(
-        std::string,
-        std::shared_ptr<Arguments_t>,
-        bool,
-        dcgmReturn_t (*callback)(ArgumentSet_t &, std::shared_ptr<Arguments_t>, bool, unsigned int arg));
+    dcgmReturn_t ProcessIntegerList(std::string,
+                                    Arguments_t &,
+                                    bool,
+                                    dcgmReturn_t (*callback)(ArgumentSet_t &, Arguments_t &, bool, unsigned int arg));
 
     dcgmReturn_t ProcessStringList(
         std::string,
-        std::shared_ptr<Arguments_t>,
+        Arguments_t &,
         bool,
-        dcgmReturn_t (*callback)(ArgumentSet_t &, std::shared_ptr<Arguments_t>, bool, const std::string &arg));
+        dcgmReturn_t (*callback)(ArgumentSet_t &, Arguments_t &, bool, const std::string &arg));
 
     dcgmReturn_t ProcessFieldIds(void);
 
@@ -644,7 +643,13 @@ public:
 
     dcgmReturn_t Parse(int argc, char *argv[]);
 
-    dcgmReturn_t Process(std::function<dcgmReturn_t(std::shared_ptr<Arguments_t> arguments)>);
+    /**
+     * Process each parsed argument snapshot.
+     *
+     * @param[in] processArgument Callback invoked for each argument snapshot.
+     * @return DCGM_ST_OK on success, or the first error returned by the callback.
+     */
+    dcgmReturn_t Process(std::function<dcgmReturn_t(Arguments_t const &arguments)> processArgument);
 
     std::string GetGpuIdsString(void);
 };

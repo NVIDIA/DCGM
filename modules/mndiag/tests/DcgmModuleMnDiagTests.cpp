@@ -17,6 +17,8 @@
 #include <DcgmModuleMnDiag.h>
 #include <dcgm_mndiag_structs.hpp>
 
+#include "UniquePtrUtil.h"
+
 #include <catch2/catch_all.hpp>
 
 namespace
@@ -67,7 +69,7 @@ TEST_CASE("DcgmModuleMnDiag::ProcessMessage rejects undersized head node message
     DcgmModuleMnDiag mnDiagModule(dcc);
 
     dcgm_module_command_header_t header {};
-    PopulateMnDiagHeader(header, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version1);
+    PopulateMnDiagHeader(header, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version2);
     header.length = sizeof(dcgm_module_command_header_t);
     CHECK(mnDiagModule.ProcessMessage(&header) == DCGM_ST_BADPARAM);
 }
@@ -122,7 +124,7 @@ TEST_CASE("DcgmModuleMnDiag::ProcessMessage handles routing and pause branches")
         REQUIRE(mnDiagModule.ProcessMessage(&pauseMsg.header) == DCGM_ST_OK);
 
         dcgm_module_command_header_t runHeader {};
-        PopulateMnDiagHeader(runHeader, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version1);
+        PopulateMnDiagHeader(runHeader, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version2);
         runHeader.length = sizeof(dcgm_module_command_header_t);
 
         CHECK(mnDiagModule.ProcessMessage(&runHeader) == DCGM_ST_PAUSED);
@@ -136,33 +138,36 @@ TEST_CASE("DcgmModuleMnDiag::ProcessMessage validates run message versions")
 
     SECTION("run header version mismatch")
     {
-        dcgm_mndiag_msg_run_v1 msg {};
-        PopulateMnDiagHeader(msg.header, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version1 - 1);
+        auto msgPtr = MakeUniqueZero<dcgm_mndiag_msg_run_v2>();
+        auto &msg   = *msgPtr;
+        PopulateMnDiagHeader(msg.header, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version2 - 1);
         msg.header.length    = sizeof(msg);
-        msg.params.version   = dcgmRunMnDiag_version1;
-        msg.response.version = dcgmMnDiagResponse_version1;
+        msg.params.version   = dcgmRunMnDiag_version2;
+        msg.response.version = dcgmMnDiagResponse_version2;
 
         CHECK(mnDiagModule.ProcessMessage(&msg.header) == DCGM_ST_VER_MISMATCH);
     }
 
     SECTION("run params version mismatch")
     {
-        dcgm_mndiag_msg_run_v1 msg {};
-        PopulateMnDiagHeader(msg.header, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version1);
+        auto msgPtr = MakeUniqueZero<dcgm_mndiag_msg_run_v2>();
+        auto &msg   = *msgPtr;
+        PopulateMnDiagHeader(msg.header, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version2);
         msg.header.length    = sizeof(msg);
-        msg.params.version   = dcgmRunMnDiag_version1 - 1;
-        msg.response.version = dcgmMnDiagResponse_version1;
+        msg.params.version   = dcgmRunMnDiag_version2 - 1;
+        msg.response.version = dcgmMnDiagResponse_version2;
 
         CHECK(mnDiagModule.ProcessMessage(&msg.header) == DCGM_ST_VER_MISMATCH);
     }
 
     SECTION("run response version mismatch")
     {
-        dcgm_mndiag_msg_run_v1 msg {};
-        PopulateMnDiagHeader(msg.header, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version1);
+        auto msgPtr = MakeUniqueZero<dcgm_mndiag_msg_run_v2>();
+        auto &msg   = *msgPtr;
+        PopulateMnDiagHeader(msg.header, DCGM_MNDIAG_SR_RUN, dcgm_mndiag_msg_run_version2);
         msg.header.length    = sizeof(msg);
-        msg.params.version   = dcgmRunMnDiag_version1;
-        msg.response.version = dcgmMnDiagResponse_version1 - 1;
+        msg.params.version   = dcgmRunMnDiag_version2;
+        msg.response.version = dcgmMnDiagResponse_version2 - 1;
 
         CHECK(mnDiagModule.ProcessMessage(&msg.header) == DCGM_ST_VER_MISMATCH);
     }

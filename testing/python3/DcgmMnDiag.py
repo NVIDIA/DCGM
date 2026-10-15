@@ -32,7 +32,7 @@ class DcgmMnDiag:
             testName=None,
             parameters=[],
             handle=None,
-            version=dcgm_structs.dcgmRunMnDiag_version1):
+            version=dcgm_structs.dcgmRunMnDiag_version2):
         """
         Constructor for DcgmMnDiag
 
@@ -41,15 +41,22 @@ class DcgmMnDiag:
         """
         self.version = version
         self.handle = handle
-        self.runMnDiagInfo = dcgm_structs.c_dcgmRunMnDiag_v1()
         self.hostEngineAddress = hostEngineAddress
         self.numHosts = 0
         self.numParams = 0
+
+        if version == dcgm_structs.dcgmRunMnDiag_version1:
+            self.runMnDiagInfo = dcgm_structs.c_dcgmRunMnDiag_v1()
+            self._maxHosts = dcgm_structs.DCGM_MAX_NUM_HOSTS
+        else:
+            self.runMnDiagInfo = dcgm_structs.c_dcgmRunMnDiag_v2()
+            self._maxHosts = dcgm_structs.DCGM_MNDIAG_MAX_NUM_HOSTS
+
         self.runMnDiagInfo.version = version
 
         if hostList:
             for i, host in enumerate(hostList):
-                if i >= dcgm_structs.DCGM_MAX_NUM_HOSTS:
+                if i >= self._maxHosts:
                     break
                 host_bytes = host.encode('utf-8')
                 # Zero-fill the array first
@@ -58,10 +65,10 @@ class DcgmMnDiag:
                 # Copy the host string
                 self.runMnDiagInfo.hostList[i][:len(host_bytes)] = host_bytes
             self.numHosts = len(hostList)
-            if self.numHosts > dcgm_structs.DCGM_MAX_NUM_HOSTS:
+            if self.numHosts > self._maxHosts:
                 raise ValueError(
                     f"Cannot add more than "
-                    f"{dcgm_structs.DCGM_MAX_NUM_HOSTS} hosts, "
+                    f"{self._maxHosts} hosts, "
                     f"got {self.numHosts}")
 
         if testName:
@@ -99,10 +106,10 @@ class DcgmMnDiag:
         self.runMnDiagInfo.hostList[self.numHosts][len(host_bytes)] = 0
         self.numHosts += 1
 
-        if self.numHosts > dcgm_structs.DCGM_MAX_NUM_HOSTS:
+        if self.numHosts > self._maxHosts:
             raise ValueError(
                 f"Cannot add more than "
-                f"{dcgm_structs.DCGM_MAX_NUM_HOSTS} hosts, "
+                f"{self._maxHosts} hosts, "
                 f"got {self.numHosts}")
 
     def SetTestName(self, testName):
@@ -115,10 +122,10 @@ class DcgmMnDiag:
 
     def AddParameter(self, parameterStr):
         """Add a parameter to the diagnostic run"""
-        if len(parameterStr) >= dcgm_structs.DCGM_MAX_TEST_PARMS_LEN:
+        if len(parameterStr) >= dcgm_structs.DCGM_MAX_TEST_PARMS_LEN_V2:
             raise ValueError(
                 f"Parameter exceeds maximum length of "
-                f"{dcgm_structs.DCGM_MAX_TEST_PARMS_LEN}")
+                f"{dcgm_structs.DCGM_MAX_TEST_PARMS_LEN_V2}")
 
         # Convert string to bytes and copy to the correct parameter slot
         param_bytes = parameterStr.encode('utf-8')
@@ -141,4 +148,5 @@ class DcgmMnDiag:
         """Execute the diagnostic"""
         if self.numHosts == 0:
             raise ValueError("No hosts specified for diagnostic")
-        return dcgm_agent.dcgmRunMnDiagnostic(handle, self.runMnDiagInfo)
+        return dcgm_agent.dcgmRunMnDiagnostic(
+            handle, self.runMnDiagInfo, runMnDiagVersion=self.version)

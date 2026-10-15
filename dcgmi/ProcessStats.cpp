@@ -21,15 +21,19 @@
  */
 
 #include "ProcessStats.h"
+
 #include "CommandOutputController.h"
-#include "DcgmLogging.h"
-#include "dcgm_agent.h"
-#include "dcgm_structs.h"
+
+#include <DcgmLogging.h>
+#include <dcgm_agent.h>
+#include <dcgm_structs.h>
+
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <time.h>
+#include <utility>
 
 /**************************************************************************************/
 
@@ -68,10 +72,9 @@ char OVERALL_HEALTH[] = "+-----  Overall Health  -------------+-----------------
 
 /*****************************************************************************************/
 
-ProcessStats::ProcessStats()
-{
-    // TODO Auto-generated constructor stub
-}
+ProcessStats::ProcessStats(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+{}
 
 ProcessStats::~ProcessStats()
 {
@@ -86,7 +89,8 @@ dcgmReturn_t ProcessStats::EnableWatches(dcgmHandle_t mNvcmHandle,
 {
     dcgmReturn_t result;
 
-    result = dcgmWatchPidFields(mNvcmHandle, groupId, 1000 * (long long)updateIntervalMs, (double)maxKeepAgeSec, 0);
+    result = m_dcgmOps->dcgmWatchPidFields(
+        mNvcmHandle, groupId, 1000 * (long long)updateIntervalMs, (double)maxKeepAgeSec, 0);
 
     if (result != DCGM_ST_OK)
     {
@@ -109,7 +113,7 @@ dcgmReturn_t ProcessStats::DisableWatches(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t
     std::unique_ptr<dcgmGroupInfo_t> stNvcmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
 
     stNvcmGroupInfo->version = dcgmGroupInfo_version;
-    result                   = dcgmGroupGetInfo(mNvcmHandle, groupId, stNvcmGroupInfo.get());
+    result                   = m_dcgmOps->dcgmGroupGetInfo(mNvcmHandle, groupId, stNvcmGroupInfo.get());
     if (DCGM_ST_OK != result)
     {
         std::string error = (result == DCGM_ST_NOT_CONFIGURED) ? "The Group is not found" : errorString(result);
@@ -137,7 +141,7 @@ dcgmReturn_t ProcessStats::ViewProcessStats(dcgmHandle_t mNvcmHandle,
     pidInfo.version = dcgmPidInfo_version;
     pidInfo.pid     = pid;
 
-    result = dcgmGetPidInfo(mNvcmHandle, groupId, &pidInfo);
+    result = m_dcgmOps->dcgmGetPidInfo(mNvcmHandle, groupId, &pidInfo);
 
     if (result == DCGM_ST_NOT_WATCHED)
     {
@@ -194,13 +198,13 @@ dcgmReturn_t ProcessStats::StartJob(dcgmHandle_t mNvcmHandle, dcgmGpuGrp_t group
 {
     dcgmReturn_t result;
 
-    if (jobId.length() > 64)
+    if (jobId.length() >= ProcessStats::c_dcgmJobIdBufferLength)
     {
         std::cout << "Error: Unable to start job for group. Return: Job ID too long." << std::endl;
         return DCGM_ST_BADPARAM;
     }
 
-    result = dcgmJobStartStats(mNvcmHandle, groupId, (char *)jobId.c_str());
+    result = m_dcgmOps->dcgmJobStartStats(mNvcmHandle, groupId, (char *)jobId.c_str());
 
     if (result != DCGM_ST_OK)
     {
@@ -225,13 +229,13 @@ dcgmReturn_t ProcessStats::StopJob(dcgmHandle_t mNvcmHandle, std::string jobId)
 {
     dcgmReturn_t result;
 
-    if (jobId.length() > 64)
+    if (jobId.length() >= ProcessStats::c_dcgmJobIdBufferLength)
     {
-        std::cout << "Error: Unable to stop job for group. Return: Job ID too long." << std::endl;
+        std::cout << "Error: Unable to stop job. Return: Job ID too long." << std::endl;
         return DCGM_ST_BADPARAM;
     }
 
-    result = dcgmJobStopStats(mNvcmHandle, (char *)jobId.c_str());
+    result = m_dcgmOps->dcgmJobStopStats(mNvcmHandle, (char *)jobId.c_str());
 
     if (result != DCGM_ST_OK)
     {
@@ -255,13 +259,13 @@ dcgmReturn_t ProcessStats::RemoveJob(dcgmHandle_t mNvcmHandle, std::string jobId
 {
     dcgmReturn_t result;
 
-    if (jobId.length() > 64)
+    if (jobId.length() >= ProcessStats::c_dcgmJobIdBufferLength)
     {
-        std::cout << "Error: Unable to stop job for group. Return: Job ID too long." << std::endl;
+        std::cout << "Error: Unable to remove job. Return: Job ID too long." << std::endl;
         return DCGM_ST_BADPARAM;
     }
 
-    result = dcgmJobRemove(mNvcmHandle, (char *)jobId.c_str());
+    result = m_dcgmOps->dcgmJobRemove(mNvcmHandle, (char *)jobId.c_str());
     if (result != DCGM_ST_OK)
     {
         if (result == DCGM_ST_NO_DATA)
@@ -283,7 +287,7 @@ dcgmReturn_t ProcessStats::RemoveAllJobs(dcgmHandle_t mNvcmHandle)
 {
     dcgmReturn_t result;
 
-    result = dcgmJobRemoveAll(mNvcmHandle);
+    result = m_dcgmOps->dcgmJobRemoveAll(mNvcmHandle);
     if (result != DCGM_ST_OK)
     {
         std::cout << "Error: Unable to remove jobs. Return: " << errorString(result) << "." << std::endl;
@@ -303,13 +307,13 @@ dcgmReturn_t ProcessStats::ViewJobStats(dcgmHandle_t mNvcmHandle, std::string jo
     dcgmReturn_t result;
     dcgmJobInfo_t jobInfo;
     jobInfo.version = dcgmJobInfo_version;
-    if (jobId.length() > 64)
+    if (jobId.length() >= ProcessStats::c_dcgmJobIdBufferLength)
     {
-        std::cout << "Error: Unable to stop job for group. Return: Job ID too long." << std::endl;
+        std::cout << "Error: Unable to retrieve job statistics. Return: Job ID too long." << std::endl;
         return DCGM_ST_BADPARAM;
     }
 
-    result = dcgmJobGetStats(mNvcmHandle, (char *)jobId.c_str(), &jobInfo);
+    result = m_dcgmOps->dcgmJobGetStats(mNvcmHandle, (char *)jobId.c_str(), &jobInfo);
 
     if (result != DCGM_ST_OK)
     {
@@ -1051,6 +1055,8 @@ std::string ProcessStats::HelperHealthSystemToString(dcgmHealthSystems_enum syst
             return "Driver Health";
         case DCGM_HEALTH_WATCH_CONNECTX:
             return "ConnectX Health";
+        case DCGM_HEALTH_WATCH_IMEX:
+            return "IMEX Health";
         default:
             return DCGM_STR_BLANK;
     }
@@ -1076,7 +1082,13 @@ std::string ProcessStats::HelperHealthResultToString(dcgmHealthWatchResults_t he
  *****************************************************************************/
 
 /*****************************************************************************/
-EnableWatches::EnableWatches(std::string hostname, unsigned int groupId, int updateIntervalMs, int maxKeepAgeSec)
+EnableWatches::EnableWatches(std::string hostname,
+                             unsigned int groupId,
+                             int updateIntervalMs,
+                             int maxKeepAgeSec,
+                             DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , m_processStatsObj(dcgmOps)
 {
     m_hostName         = std::move(hostname);
     m_groupId          = (dcgmGpuGrp_t)(long long)groupId;
@@ -1100,7 +1112,9 @@ dcgmReturn_t EnableWatches::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-DisableWatches::DisableWatches(std::string hostname, unsigned int groupId)
+DisableWatches::DisableWatches(std::string hostname, unsigned int groupId, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProcessStatsObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
     mGroupId   = (dcgmGpuGrp_t)(long long)groupId;
@@ -1122,7 +1136,13 @@ dcgmReturn_t DisableWatches::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-ViewProcessStats::ViewProcessStats(std::string hostname, unsigned int groupId, unsigned int pid, bool verbose)
+ViewProcessStats::ViewProcessStats(std::string hostname,
+                                   unsigned int groupId,
+                                   unsigned int pid,
+                                   bool verbose,
+                                   DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProcessStatsObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
     mPid       = pid;
@@ -1147,7 +1167,9 @@ dcgmReturn_t ViewProcessStats::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-StartJob::StartJob(std::string hostname, unsigned int groupId, std::string jobId)
+StartJob::StartJob(std::string hostname, unsigned int groupId, std::string jobId, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProcessStatsObj(dcgmOps)
 {
     m_hostName  = std::move(hostname);
     mGroupId    = (dcgmGpuGrp_t)(long long)groupId;
@@ -1171,7 +1193,9 @@ dcgmReturn_t StartJob::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-StopJob::StopJob(std::string hostname, std::string jobId)
+StopJob::StopJob(std::string hostname, std::string jobId, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProcessStatsObj(dcgmOps)
 {
     m_hostName  = std::move(hostname);
     this->jobId = std::move(jobId);
@@ -1193,7 +1217,9 @@ dcgmReturn_t StopJob::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-RemoveJob::RemoveJob(std::string hostname, std::string jobId)
+RemoveJob::RemoveJob(std::string hostname, std::string jobId, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProcessStatsObj(dcgmOps)
 {
     m_hostName  = std::move(hostname);
     this->jobId = std::move(jobId);
@@ -1215,7 +1241,9 @@ dcgmReturn_t RemoveJob::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-RemoveAllJobs::RemoveAllJobs(std::string hostname)
+RemoveAllJobs::RemoveAllJobs(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProcessStatsObj(dcgmOps)
 {
     m_hostName = std::move(hostname);
 
@@ -1236,7 +1264,9 @@ dcgmReturn_t RemoveAllJobs::DoExecuteConnected()
  *****************************************************************************/
 
 /*****************************************************************************/
-ViewJobStats::ViewJobStats(std::string hostname, std::string jobId, bool verbose)
+ViewJobStats::ViewJobStats(std::string hostname, std::string jobId, bool verbose, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , mProcessStatsObj(dcgmOps)
 {
     m_hostName    = std::move(hostname);
     this->jobId   = std::move(jobId);

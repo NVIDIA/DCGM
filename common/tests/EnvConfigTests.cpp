@@ -16,32 +16,31 @@
 
 #include <catch2/catch_all.hpp>
 
-#include <Defer.hpp>
 #include <EnvConfig.h>
+#include <ScopedEnvVars.hpp>
+#include <TempFile.hpp>
 
-#include <filesystem>
-#include <fstream>
+#include <optional>
 
 TEST_CASE("EnvConfig: SupportNonNvidiaCpu")
 {
     SECTION("Default")
     {
+        ScopedEnvVars envVars("DCGM_SUPPORT_NON_NVIDIA_CPU", std::nullopt);
         EnvConfig envConfig;
         REQUIRE(envConfig.SupportNonNvidiaCpu() == false);
     }
 
     SECTION("Set to true by environment variable")
     {
-        setenv("DCGM_SUPPORT_NON_NVIDIA_CPU", "1", 0);
-        DcgmNs::Defer defer([] { unsetenv("DCGM_SUPPORT_NON_NVIDIA_CPU"); });
+        ScopedEnvVars envVars("DCGM_SUPPORT_NON_NVIDIA_CPU", "1");
         EnvConfig envConfig;
         REQUIRE(envConfig.SupportNonNvidiaCpu() == true);
     }
 
     SECTION("Environment variable set but not 1")
     {
-        setenv("DCGM_SUPPORT_NON_NVIDIA_CPU", "Capoo", 0);
-        DcgmNs::Defer defer([] { unsetenv("DCGM_SUPPORT_NON_NVIDIA_CPU"); });
+        ScopedEnvVars envVars("DCGM_SUPPORT_NON_NVIDIA_CPU", "Capoo");
         EnvConfig envConfig;
         REQUIRE(envConfig.SupportNonNvidiaCpu() == false);
     }
@@ -50,13 +49,6 @@ TEST_CASE("EnvConfig: SupportNonNvidiaCpu")
 TEST_CASE("EnvConfig: IsEnvVarPathToRegularFile")
 {
     EnvConfig envConfig;
-    auto tempFilePath = std::filesystem::temp_directory_path() / "dcgm-env-config-test-file";
-
-    std::filesystem::remove(tempFilePath);
-    DcgmNs::Defer cleanup([&tempFilePath] {
-        unsetenv("DCGM_ENV_CONFIG_TEST_PATH");
-        std::filesystem::remove(tempFilePath);
-    });
 
     SECTION("Null environment variable name")
     {
@@ -65,30 +57,27 @@ TEST_CASE("EnvConfig: IsEnvVarPathToRegularFile")
 
     SECTION("Unset environment variable")
     {
-        unsetenv("DCGM_ENV_CONFIG_TEST_PATH");
+        ScopedEnvVars envVars("DCGM_ENV_CONFIG_TEST_PATH", std::nullopt);
         REQUIRE(envConfig.IsEnvVarPathToRegularFile("DCGM_ENV_CONFIG_TEST_PATH") == false);
     }
 
     SECTION("Empty environment variable")
     {
-        REQUIRE(setenv("DCGM_ENV_CONFIG_TEST_PATH", "", 1) == 0);
+        ScopedEnvVars envVars("DCGM_ENV_CONFIG_TEST_PATH", "");
         REQUIRE(envConfig.IsEnvVarPathToRegularFile("DCGM_ENV_CONFIG_TEST_PATH") == false);
     }
 
     SECTION("Nonexistent path")
     {
-        REQUIRE(setenv("DCGM_ENV_CONFIG_TEST_PATH", "/nonexistent/dcgm-env-config-test-file", 1) == 0);
+        ScopedEnvVars envVars("DCGM_ENV_CONFIG_TEST_PATH", "/nonexistent/dcgm-env-config-test-file");
         REQUIRE(envConfig.IsEnvVarPathToRegularFile("DCGM_ENV_CONFIG_TEST_PATH") == false);
     }
 
     SECTION("Regular file path")
     {
-        std::ofstream out(tempFilePath);
-        REQUIRE(out.good());
-        out << "test";
-        out.close();
+        auto tempFile = TempFile::Random("test", "dcgm-env-config-test-file-");
 
-        REQUIRE(setenv("DCGM_ENV_CONFIG_TEST_PATH", tempFilePath.c_str(), 1) == 0);
+        ScopedEnvVars envVars("DCGM_ENV_CONFIG_TEST_PATH", tempFile.Path().string());
         REQUIRE(envConfig.IsEnvVarPathToRegularFile("DCGM_ENV_CONFIG_TEST_PATH") == true);
     }
 }

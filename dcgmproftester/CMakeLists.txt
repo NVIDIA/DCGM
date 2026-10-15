@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,24 +12,66 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(tests)
+add_library(dcgmproftester_interface INTERFACE)
+target_sources(dcgmproftester_interface INTERFACE
+    Arguments.h
+    DcgmProfTester.h
+    DcgmProfTesterAnyPtr.hpp
+    DistributedCudaContext.h
+    DistributedCudaContextRuntime.hpp
+    DistributedCudaContextRuntimeAnyPtr.hpp
+    DistributedCudaContextRuntimeAnyUniquePtr.hpp
+    DistributedCudaContextRuntimeFactory.h
+    DistributedCudaContextRuntimeFactoryAnyUniquePtr.hpp
+    Entity.h
+    PhysicalGpu.h
+    PhysicalGpuAnyPtr.hpp
+    Reporter.h)
+
+target_include_directories(dcgmproftester_interface INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}")
+
+target_link_libraries(dcgmproftester_interface INTERFACE
+    common_interface)
 
 macro(define_dcgmproftester cuda_version)
     set(dcgmproftester_exec dcgmproftester${cuda_version})
+    set(dcgmproftester_lib dcgmproftester_lib${cuda_version})
 
-    target_compile_definitions(${dcgmproftester_exec}
-        PRIVATE CUDA_VERSION_USED=${cuda_version})
-
-    target_link_libraries(${dcgmproftester_exec}
+    target_sources(${dcgmproftester_lib}
         PRIVATE
-            ${CMAKE_THREAD_LIBS_INIT}
-            ${CUDA${cuda_version}_LIBS}
-            ${CUDA${cuda_version}_STATIC_LIBS}
+            Arguments.cpp
+            Arguments.h
+            DcgmProfTester.cpp
+            DcgmProfTester.h
+            DcgmProfTesterAnyPtr.hpp
+            DistributedCudaContext.cpp
+            DistributedCudaContext.h
+            DistributedCudaContextRuntime.cpp
+            DistributedCudaContextRuntime.hpp
+            DistributedCudaContextRuntimeAnyPtr.hpp
+            DistributedCudaContextRuntimeAnyUniquePtr.hpp
+            DistributedCudaContextRuntimeFactory.cpp
+            DistributedCudaContextRuntimeFactory.h
+            DistributedCudaContextRuntimeFactoryAnyUniquePtr.hpp
+            Entity.cpp
+            Entity.h
+            PhysicalGpu.cpp
+            PhysicalGpu.h
+            PhysicalGpuAnyPtr.hpp
+            Reporter.cpp
+            Reporter.h)
+
+    target_link_libraries(${dcgmproftester_lib}
+        PUBLIC
+            dcgm_cuda_worker${cuda_version}
+            dcgmproftester_interface
+        PRIVATE
+            Threads::Threads
             common_interface
+            cuda_ops_interface${cuda_version}
             dcgm
             dcgm_common
-            dcgm_cublas_proxy${cuda_version}
-            dcgm_cuda_worker${cuda_version}
             dcgm_interface
             dcgm_logging
             dcgm_mutex
@@ -39,41 +81,46 @@ macro(define_dcgmproftester cuda_version)
             sdk_nvml_essentials_objects
             transport_objects)
 
-    target_include_directories(${dcgmproftester_exec}
+    target_sources(${dcgmproftester_exec}
         PRIVATE
-            "${CUDA${cuda_version}_INCLUDE_DIR}")
+            DcgmProfTesterMain.cpp)
 
     target_link_options(${dcgmproftester_exec}
         PRIVATE
             -Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/proftester.linux_def)
-
-    target_sources(${dcgmproftester_exec}
+    target_link_libraries(${dcgmproftester_exec}
         PRIVATE
-            DcgmProfTester.cpp
-            DcgmProfTester.h
-            DistributedCudaContext.cpp
-            DistributedCudaContext.h
-            Entity.h
-            Entity.cpp
-            PhysicalGpu.cpp
-            PhysicalGpu.h
-            Arguments.cpp
-            Arguments.h
-            Reporter.cpp
-            Reporter.h
-            ${COMMON_SRCS})
+            Threads::Threads
+            common_interface
+            dcgm
+            dcgm_common
+            dcgm_cuda_worker${cuda_version}
+            dcgm_interface
+            dcgm_logging
+            dcgm_mutex
+            ${dcgmproftester_lib}
+            cublas_ops${cuda_version}
+            cuda_ops${cuda_version}
+            dl
+            fmt::fmt
+            rt
+            sdk_nvml_essentials_objects
+            transport_objects)
 endmacro()
 
 define_dcgmproftester(11)
 define_dcgmproftester(12)
 define_dcgmproftester(13)
 
-install(
-    FILES DcgmProfTesterKernels.ptx
-    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
-    COMPONENT Core)
+add_subdirectory(mock)
+add_subdirectory(tests)
 
 install(
     FILES DcgmProfTesterKernels.ptx
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/dcgm_tests/apps/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+    DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
+    COMPONENT dcgmproftesterkernels)
+
+install(
+    FILES DcgmProfTesterKernels.ptx
+    DESTINATION "${DCGM_TESTS_APP_DIR}/${CMAKE_INSTALL_LIBEXECDIR}/${PROJECT_NAME}"
     COMPONENT Tests)

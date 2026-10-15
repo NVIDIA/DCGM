@@ -26,7 +26,9 @@ target_link_libraries(dcgmi_objects_without_main PUBLIC
     diag_interface
     dcgmmodulemndiag_common
     mndiag_interface
-    ${JSONCPP_STATIC_LIBS}
+    dcgmmodulepolicy_common
+    policy_interface
+    jsoncpp_static
     nvmli_interface)
 
 target_sources(dcgmi_objects_without_main PRIVATE

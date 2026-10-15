@@ -17,6 +17,7 @@
 #ifndef DCGM_MNDIAG_MANAGER_H
 #define DCGM_MNDIAG_MANAGER_H
 
+#include <expected>
 #include <fmt/format.h>
 #include <json/json.h>
 #include <optional>
@@ -34,13 +35,13 @@
 #include "dcgm_mndiag_structs.hpp"
 #include "dcgm_structs.h"
 #include <DcgmCoreProxy.h>
+#include <DcgmOpsAnyPtr.hpp>
 #include <DcgmResourceHandle.h>
 #include <SSHTunnelManager.hpp>
 
 #include "MnDiagCommon.h"
 #include "MnDiagProcessUtils.h"
 
-#include "DcgmApiBase.h"
 #include "DcgmCoreProxyBase.h"
 #include "DcgmResourceHandleBase.h"
 #include "DcgmResourceHandleFactoryBase.h"
@@ -63,6 +64,8 @@ struct ConnectionInfo
     uid_t uid;
     std::string remoteSocketPath;
 };
+
+using ConnectionMap = std::unordered_map<std::string, ConnectionInfo, StringHash, std::equal_to<>>;
 
 struct HostInfo
 {
@@ -97,14 +100,22 @@ struct TestInfo
 class DcgmMnDiagManager
 {
 public:
-    explicit DcgmMnDiagManager(dcgmCoreCallbacks_t &dcc);
+    /**
+     * Creates a manager using a borrowed DCGM operations implementation.
+     *
+     * @param[in] dcc Core callback functions supplied by the module.
+     * @param[in] dcgmOps Borrowed DCGM operations implementation. The caller must keep it alive for the manager
+     * lifetime.
+     */
+    DcgmMnDiagManager(dcgmCoreCallbacks_t &dcc, DcgmNs::DcgmOpsAnyPtr dcgmOps);
+
     ~DcgmMnDiagManager();
 
     /**
      * @brief Handles the run head node command
-     * @param params Parameters including host list and diagnostic settings
-     * @param effectiveUid Effective UID of the caller
-     * @param response Reference to a response structure to be populated with the results
+     * @param[in] params Parameters including host list and diagnostic settings
+     * @param[in] effectiveUid Effective UID of the caller
+     * @param[out] response Reference to a response structure to be populated with the results
      * @return dcgmReturn_t DCGM_ST_OK if successful
      */
     dcgmReturn_t HandleRunHeadNode(dcgmRunMnDiag_t const &params, uid_t effectiveUid, dcgmMnDiagResponse_t &response);
@@ -118,9 +129,9 @@ public:
      * 3. Launches the diagnostic
      * 4. Populates the response structure with the results
 
-     * @param params Parameters including host list and diagnostic settings
-     * @param effectiveUid Effective UID of the caller
-     * @param response Reference to a response structure to be populated with the results
+     * @param[in] params Parameters including host list and diagnostic settings
+     * @param[in] effectiveUid Effective UID of the caller
+     * @param[out] response Reference to a response structure to be populated with the results
      * @return dcgmReturn_t DCGM_ST_OK if successful
      */
     dcgmReturn_t RunHeadNode(dcgmRunMnDiag_t const &params, uid_t effectiveUid, dcgmMnDiagResponse_t &response);
@@ -187,7 +198,7 @@ private:
     /**
      * @brief Sets the status of the diagnostic
      *        Callback used by the MnDiagStateMachine
-     * @param status The new status of the diagnostic
+     * @param[in] status The new status of the diagnostic
      */
     void SetStatus(MnDiagStatus status);
 
@@ -199,10 +210,10 @@ private:
 
     /**
      * @brief Extracts the hostname and port from a host string
-     * @param host The host string to extract from
-     * @param hostname The extracted hostname
-     * @param port The extracted port
-     * @param socketPath The extracted socket path (for Unix socket connections)
+     * @param[in] host The host string to extract from
+     * @param[out] hostname The extracted hostname
+     * @param[out] port The extracted port
+     * @param[out] socketPath The extracted socket path (for Unix socket connections)
      * @return DCGM_ST_OK if successful, DCGM_ST_BADPARAM if the host string is invalid
      */
     dcgmReturn_t ExtractHostnameAndPort(std::string const &host,
@@ -223,7 +234,7 @@ private:
 
     /**
      * @brief Checks if a host is a loopback address
-     * @param host The host string to check
+     * @param[in] host The host string to check
      * @return true if the host is a loopback address, false otherwise
      */
     bool IsLoopback(std::string_view host);
@@ -256,13 +267,13 @@ private:
 
     /**
      * @brief Populates the response structure for a failed MPI process
-     * @param mpiRunner The MPI runner instance
-     * @param response The response structure to populate
-     * @param mpiPID The PID of the MPI process
-     * @param logPaths The log paths for the MPI process
+     * @param[in] mpiRunner The MPI runner instance
+     * @param[out] response The response structure to populate
+     * @param[in] mpiPID The PID of the MPI process
+     * @param[in] logPaths The log paths for the MPI process
      */
     void PopulateMpiFailureResponseStruct(MnDiagMpiRunnerBase *mpiRunner,
-                                          dcgmMnDiagResponse_v1 &response,
+                                          dcgmMnDiagResponse_v2 &response,
                                           std::optional<pid_t> mpiPID,
                                           DcgmNs::Utils::LogPaths const &logPaths);
 
@@ -286,53 +297,55 @@ private:
 
     /**
      * @brief Starts a tunnel session for the given connection parameters
-     * @param params Connection parameters including hostname and address
+     * @param[in,out] params Connection parameters including hostname and address
      * @return TunnelState indicating success or failure
      */
     DcgmNs::Common::RemoteConn::detail::TunnelState StartTunnelSession(ConnectionParams &params);
 
     /**
      * @brief Ends a tunnel session (opposite of StartTunnelSession)
-     * @param params Connection parameters
+     * @param[in] params Connection parameters
      */
     void EndTunnelSession(ConnectionParams const &params);
 
     /**
      * @brief Parses connection parameters from a host string
-     * @param host The host string to parse
-     * @param effectiveUid The effective user ID
+     * @param[in] host The host string to parse
+     * @param[in] effectiveUid The effective user ID
      * @return ConnectionParams structure with parsed information
      */
     ConnectionParams ParseConnectionParams(std::string const &host, uid_t effectiveUid);
 
     /**
      * @brief Creates a DCGM connection through the established tunnel
-     * @param params Connection parameters with local address populated
-     * @param handle Output parameter for the DCGM handle
+     * @param[in] params Connection parameters with local address populated
+     * @param[out] handle Output parameter for the DCGM handle
      * @return dcgmReturn_t indicating success or failure
      */
     dcgmReturn_t CreateDcgmConnection(ConnectionParams const &params, dcgmHandle_t &handle);
 
     /**
      * @brief Creates and stores ConnectionInfo from successful connection
-     * @param params Connection parameters used to establish the connection
-     * @param handle DCGM connection handle
+     * @param[in] params Connection parameters used to establish the connection
+     * @param[in] handle DCGM connection handle
      * @return ConnectionInfo structure for storage in m_connections
      */
     ConnectionInfo CreateConnectionInfo(ConnectionParams const &params, dcgmHandle_t handle);
 
     /**
      * @brief Connects to a single remote node using the unified connection logic (without authorization)
-     * @param params Connection parameters
-     * @return dcgmReturn_t indicating success or failure
+     * @param[in] params Connection parameters (taken by value; StartTunnelSession mutates localAddress)
+     * @return ConnectionInfo on success, or dcgmReturn_t error code on failure
      */
-    dcgmReturn_t ConnectSingleNode(ConnectionParams params);
+    std::expected<ConnectionInfo, dcgmReturn_t> ConnectSingleNode(ConnectionParams params);
 
     /**
      * @brief Cleans up connections
      * @return DCGM_ST_OK if successful, DCGM_ST_* on failure
      */
     dcgmReturn_t CleanupConnections();
+
+    static constexpr std::size_t c_maxConcurrentHostRequests = 64; //!< Max hosts per batch in MultinodeRequest fan-out
 
     // Member variables
     HostInfo m_localHostInfo;                     //!< Local host information including hostname and IP addresses
@@ -345,7 +358,7 @@ private:
 
     /*!< hostname -> ConnectionInfo mapping
          TODO: Consider changing to {hostname, gpuid} -> ConnectionInfo */
-    std::unordered_map<std::string, ConnectionInfo, StringHash, std::equal_to<>> m_connections;
+    ConnectionMap m_connections;
 
     MnDiagStatus m_status;                          //!< Current status of the diagnostic
     std::unique_ptr<DcgmCoreProxyBase> m_coreProxy; //!< Proxy for interacting with DCGM core
@@ -359,7 +372,7 @@ private:
     std::unique_ptr<DcgmResourceHandleBase> m_resourceHandle; //!< Resource handle for interacting with the hostengine
     std::unique_ptr<DcgmResourceHandleFactoryBase> m_resourceHandleFactory; //!< Factory for creating resource handles
 
-    std::unique_ptr<DcgmApiBase> m_dcgmApi; //!< DCGM API for making module requests
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< Borrowed DCGM operations used by the manager
 
     std::unique_ptr<TcpSSHTunnelManagerBase> m_tcpSSHTunnelManager; //!< Manager for TCP SSH tunnels
     std::unique_ptr<UdsSSHTunnelManagerBase> m_udsSSHTunnelManager; //!< Manager for Unix domain socket SSH tunnels

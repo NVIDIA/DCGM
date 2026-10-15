@@ -22,6 +22,8 @@
 
 #include "Command.h"
 
+#include <DcgmOpsAnyPtr.hpp>
+
 
 /*****************************************************************************
  * Define classes to extend commands
@@ -33,13 +35,15 @@
 class VersionInfo : public Command
 {
 public:
-    VersionInfo(std::string hostname);
+    VersionInfo(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     /*****************************************************************************
      * Override the Execute method for getting version info
      *****************************************************************************/
     dcgmReturn_t DoExecuteConnected() override;
+
+    dcgmReturn_t DoExecuteConnectionFailure(dcgmReturn_t connectionStatus) override;
 };
 
 #endif /* VERSION_H */

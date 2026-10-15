@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,34 +16,28 @@
 
 #include "BwCheckerMain.h"
 
-#ifndef __BW_CHECKER_TESTS__
-#endif
 #include <DcgmStringHelpers.h>
 #include <NvcmTCLAP.h>
 #include <json/json.h>
 
+#include <cstdlib>
 #include <fmt/format.h>
-#include <sstream>
+#include <iostream>
+#include <limits>
+#include <map>
 #include <string>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <thread>
 #include <vector>
 
-#ifndef __BW_CHECKER_TESTS__
-#include <cuda.h>
-#include <cuda_runtime.h>
-#endif
+#include <CudaOps.hpp>
 
 #define D2H_NAME    "bwchecker"
 #define D2H_VERSION "1.0"
 
-/*
- * This macro is used to remove CUDA code and the main function since they aren't meaningfully
- * covered in catch2 unit tests which are often run without GPUs and can cause issues.
- */
-#ifndef __BW_CHECKER_TESTS__
-bool CudaCallLogIfError(const std::string &callName, cudaError_t cuSt, unsigned int gpuId, Json::Value &root)
+bool CudaCallLogIfError(CudaOps &cudaOps,
+                        const std::string &callName,
+                        cudaError_t cuSt,
+                        unsigned int gpuId,
+                        Json::Value &root)
 {
     if (cuSt == cudaSuccess)
     {
@@ -52,12 +46,12 @@ bool CudaCallLogIfError(const std::string &callName, cudaError_t cuSt, unsigned 
 
     if (gpuId == std::numeric_limits<unsigned int>::max())
     {
-        root[BWC_JSON_ERRORS][0] = fmt::format("CUDA call {} failed: '{}'", callName, cudaGetErrorString(cuSt));
+        root[BWC_JSON_ERRORS][0] = fmt::format("CUDA call {} failed: '{}'", callName, cudaOps.cudaGetErrorString(cuSt));
     }
     else
     {
         root[BWC_JSON_ERRORS][0]
-            = fmt::format("CUDA call {} for GPU {} failed: '{}'", callName, gpuId, cudaGetErrorString(cuSt));
+            = fmt::format("CUDA call {} for GPU {} failed: '{}'", callName, gpuId, cudaOps.cudaGetErrorString(cuSt));
     }
 
     return true;
@@ -69,6 +63,8 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
                              bool pinned,
                              Json::Value &root)
 {
+    CudaOps cudaOps;
+
     // Needs:
     // GPU list
     // ints per copy
@@ -100,23 +96,29 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
     for (size_t d = 0; d < gpuCount; d++)
     {
         CUdevice cudaDevice;
-        cudaError_t cuSt = cudaDeviceGetByPCIBusId(&cudaDevice, pairs[d].pciBusId.c_str());
+        cudaError_t cuSt = cudaOps.cudaDeviceGetByPCIBusId(&cudaDevice, pairs[d].pciBusId.c_str());
         if (cuSt != cudaSuccess)
         {
             root[BWC_JSON_ERRORS][0]
                 = fmt::format("Couldn't select the CUDA device with PCI bus id {} for GPU {}: '{}'",
                               pairs[d].pciBusId,
                               pairs[d].gpuId,
-                              cudaGetErrorString(cuSt));
+                              cudaOps.cudaGetErrorString(cuSt));
             return;
         }
 
-        cudaSetDevice(cudaDevice);
-        if (CudaCallLogIfError("cudaMalloc", cudaMalloc(&d_buffers[d], intsPerCopy * sizeof(int)), pairs[d].gpuId, root)
-            || CudaCallLogIfError("cudaEventCreate", cudaEventCreate(&start[d]), pairs[d].gpuId, root)
-            || CudaCallLogIfError("cudaEventCreate", cudaEventCreate(&stop[d]), pairs[d].gpuId, root)
-            || CudaCallLogIfError("cudaStreamCreate", cudaStreamCreate(&stream1[d]), pairs[d].gpuId, root)
-            || CudaCallLogIfError("cudaStreamCreate", cudaStreamCreate(&stream2[d]), pairs[d].gpuId, root))
+        cudaOps.cudaSetDevice(cudaDevice);
+        if (CudaCallLogIfError(cudaOps,
+                               "cudaMalloc",
+                               cudaOps.cudaMalloc(reinterpret_cast<void **>(&d_buffers[d]), intsPerCopy * sizeof(int)),
+                               pairs[d].gpuId,
+                               root)
+            || CudaCallLogIfError(cudaOps, "cudaEventCreate", cudaOps.cudaEventCreate(&start[d]), pairs[d].gpuId, root)
+            || CudaCallLogIfError(cudaOps, "cudaEventCreate", cudaOps.cudaEventCreate(&stop[d]), pairs[d].gpuId, root)
+            || CudaCallLogIfError(
+                cudaOps, "cudaStreamCreate", cudaOps.cudaStreamCreate(&stream1[d]), pairs[d].gpuId, root)
+            || CudaCallLogIfError(
+                cudaOps, "cudaStreamCreate", cudaOps.cudaStreamCreate(&stream2[d]), pairs[d].gpuId, root))
         {
             return;
         }
@@ -127,8 +129,9 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
 
     if (pinned)
     {
-        if (CudaCallLogIfError("cudaMallocHost",
-                               cudaMallocHost(&h_buffer, intsPerCopy * sizeof(int)),
+        if (CudaCallLogIfError(cudaOps,
+                               "cudaMallocHost",
+                               cudaOps.cudaMallocHost(reinterpret_cast<void **>(&h_buffer), intsPerCopy * sizeof(int)),
                                std::numeric_limits<unsigned int>::max(),
                                root))
         {
@@ -145,76 +148,78 @@ void TestHostDeviceBandwidth(std::vector<dcgmGpuPciIdPair_t> &pairs,
     for (size_t i = 0; i < gpuCount; i++)
     {
         results[i].dcgmGpuId = pairs[i].gpuId;
-        cudaSetDevice(gpuIdToCudaHandle[pairs[i].gpuId]);
+        cudaOps.cudaSetDevice(gpuIdToCudaHandle[pairs[i].gpuId]);
 
         // D2H bandwidth test
         // coverity[leaked_storage] this macro can exit the function without freeing h_buffer
-        if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
+        if (CudaCallLogIfError(cudaOps, "cudaDeviceSynchronize", cudaOps.cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
             goto cleanup;
         }
-        cudaEventRecord(start[i]);
+        cudaOps.cudaEventRecord(start[i]);
 
         for (unsigned int r = 0; r < iterations; r++)
         {
-            cudaMemcpyAsync(h_buffer, d_buffers[i], sizeof(int) * intsPerCopy, cudaMemcpyDeviceToHost);
+            cudaOps.cudaMemcpyAsync(h_buffer, d_buffers[i], sizeof(int) * intsPerCopy, cudaMemcpyDeviceToHost);
         }
 
-        cudaEventRecord(stop[i]);
-        if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
+        cudaOps.cudaEventRecord(stop[i]);
+        if (CudaCallLogIfError(cudaOps, "cudaDeviceSynchronize", cudaOps.cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
             goto cleanup;
         }
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps.cudaEventElapsedTime(&time_ms, start[i], stop[i]);
         time_s = time_ms / 1e3;
 
         gb                         = intsPerCopy * sizeof(int) * iterations / (double)1e9;
         results[i].bandwidths[D2H] = gb / time_s;
 
         // H2D bandwidth test
-        if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
+        if (CudaCallLogIfError(cudaOps, "cudaDeviceSynchronize", cudaOps.cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
             goto cleanup;
         }
-        cudaEventRecord(start[i]);
+        cudaOps.cudaEventRecord(start[i]);
 
         for (unsigned int r = 0; r < iterations; r++)
         {
-            cudaMemcpyAsync(d_buffers[i], h_buffer, sizeof(int) * intsPerCopy, cudaMemcpyHostToDevice);
+            cudaOps.cudaMemcpyAsync(d_buffers[i], h_buffer, sizeof(int) * intsPerCopy, cudaMemcpyHostToDevice);
         }
-        cudaEventRecord(stop[i]);
-        if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
+        cudaOps.cudaEventRecord(stop[i]);
+        if (CudaCallLogIfError(cudaOps, "cudaDeviceSynchronize", cudaOps.cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
             goto cleanup;
         }
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps.cudaEventElapsedTime(&time_ms, start[i], stop[i]);
         time_s = time_ms / 1e3;
 
         gb                         = intsPerCopy * sizeof(int) * iterations / (double)1e9;
         results[i].bandwidths[H2D] = gb / time_s;
 
         // Bidirectional
-        if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
+        if (CudaCallLogIfError(cudaOps, "cudaDeviceSynchronize", cudaOps.cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
             goto cleanup;
         }
-        cudaEventRecord(start[i]);
+        cudaOps.cudaEventRecord(start[i]);
 
         for (unsigned int r = 0; r < iterations; r++)
         {
-            cudaMemcpyAsync(d_buffers[i], h_buffer, sizeof(int) * intsPerCopy, cudaMemcpyHostToDevice, stream1[i]);
-            cudaMemcpyAsync(h_buffer, d_buffers[i], sizeof(int) * intsPerCopy, cudaMemcpyDeviceToHost, stream2[i]);
+            cudaOps.cudaMemcpyAsync(
+                d_buffers[i], h_buffer, sizeof(int) * intsPerCopy, cudaMemcpyHostToDevice, stream1[i]);
+            cudaOps.cudaMemcpyAsync(
+                h_buffer, d_buffers[i], sizeof(int) * intsPerCopy, cudaMemcpyDeviceToHost, stream2[i]);
         }
 
-        cudaEventRecord(stop[i]);
-        if (CudaCallLogIfError("cudaDeviceSynchronize", cudaDeviceSynchronize(), pairs[i].gpuId, root))
+        cudaOps.cudaEventRecord(stop[i]);
+        if (CudaCallLogIfError(cudaOps, "cudaDeviceSynchronize", cudaOps.cudaDeviceSynchronize(), pairs[i].gpuId, root))
         {
             goto cleanup;
         }
 
-        cudaEventElapsedTime(&time_ms, start[i], stop[i]);
+        cudaOps.cudaEventElapsedTime(&time_ms, start[i], stop[i]);
         time_s = time_ms / 1e3;
 
         gb                           = 2 * intsPerCopy * sizeof(int) * iterations / (double)1e9;
@@ -227,7 +232,7 @@ cleanup:
     // Done, cleaning up
     if (pinned)
     {
-        cudaFreeHost(h_buffer);
+        cudaOps.cudaFreeHost(h_buffer);
     }
     else
     {
@@ -236,12 +241,14 @@ cleanup:
 
     for (size_t d = 0; d < gpuCount; d++)
     {
-        cudaSetDevice(gpuIdToCudaHandle[pairs[d].gpuId]);
-        if (CudaCallLogIfError("cudaFree", cudaFree(d_buffers[d]), pairs[d].gpuId, root)
-            || CudaCallLogIfError("cudaEventDestroy", cudaEventDestroy(start[d]), pairs[d].gpuId, root)
-            || CudaCallLogIfError("cudaEventDestroy", cudaEventDestroy(stop[d]), pairs[d].gpuId, root)
-            || CudaCallLogIfError("cudaStreamDestroy", cudaStreamDestroy(stream1[d]), pairs[d].gpuId, root)
-            || CudaCallLogIfError("cudaStreamDestroy", cudaStreamDestroy(stream2[d]), pairs[d].gpuId, root))
+        cudaOps.cudaSetDevice(gpuIdToCudaHandle[pairs[d].gpuId]);
+        if (CudaCallLogIfError(cudaOps, "cudaFree", cudaOps.cudaFree(d_buffers[d]), pairs[d].gpuId, root)
+            || CudaCallLogIfError(cudaOps, "cudaEventDestroy", cudaOps.cudaEventDestroy(start[d]), pairs[d].gpuId, root)
+            || CudaCallLogIfError(cudaOps, "cudaEventDestroy", cudaOps.cudaEventDestroy(stop[d]), pairs[d].gpuId, root)
+            || CudaCallLogIfError(
+                cudaOps, "cudaStreamDestroy", cudaOps.cudaStreamDestroy(stream1[d]), pairs[d].gpuId, root)
+            || CudaCallLogIfError(
+                cudaOps, "cudaStreamDestroy", cudaOps.cudaStreamDestroy(stream2[d]), pairs[d].gpuId, root))
         {
             return;
         }
@@ -250,27 +257,6 @@ cleanup:
     return;
 }
 
-
-#endif
-
-void AppendResultsToJson(std::vector<bwTestResult_t> &results, Json::Value &root)
-{
-    for (unsigned int i = 0; i < results.size(); i++)
-    {
-        Json::Value gpu;
-        if (results[i].error.empty() == false)
-        {
-            gpu[BWC_JSON_ERROR] = results[i].error;
-        }
-        gpu[BWC_JSON_MAX_RX_BW]    = results[i].bandwidths[H2D];
-        gpu[BWC_JSON_MAX_TX_BW]    = results[i].bandwidths[D2H];
-        gpu[BWC_JSON_MAX_BIDIR_BW] = results[i].bandwidths[BIDIR];
-        gpu[BWC_JSON_GPU_ID]       = results[i].dcgmGpuId;
-        root[BWC_JSON_GPUS][i]     = gpu;
-    }
-}
-
-#ifndef __BW_CHECKER_TESTS__
 
 int main(int argc, char *argv[])
 {
@@ -344,4 +330,3 @@ int main(int argc, char *argv[])
         return 1;
     }
 }
-#endif // __BW_CHECKER_TESTS__

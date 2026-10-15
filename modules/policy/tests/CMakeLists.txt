@@ -23,6 +23,19 @@ target_sources(policyModuleTests
         DcgmPolicyManagerTests.cpp
         ../DcgmModulePolicy.cpp
         ../DcgmPolicyManager.cpp
+        DcgmPolicyTests.cpp
+        ../DcgmPolicy.cpp
+        DcgmPolicyRegistryTests.cpp
+        ../DcgmPolicyRegistry.cpp
+        DcgmPolicyEvaluatorTests.cpp
+        ../DcgmPolicyEvaluator.cpp
+        DcgmPolicyNotificationRouterTests.cpp
+        ../DcgmPolicyNotificationRouter.cpp
+        ../DcgmPolicyCallbackRAII.cpp
+        DcgmPolicyUtilsTests.cpp
+        ../DcgmPolicyUtils.cpp
+        DcgmPolicyPersistentTests.cpp
+        ../DcgmPolicyPersistent.cpp
 )
 
 target_link_libraries(policyModuleTests
@@ -33,14 +46,20 @@ target_link_libraries(policyModuleTests
         module_common_objects
         dcgm
         dcgm_common
+        dcgm_static_private
         dcgm_logging
         dcgm_mutex
+        dcgm_thread
         Catch2::Catch2WithMain
-        ${CMAKE_THREAD_LIBS_INIT}
+        test-utils
+        Threads::Threads
         fmt::fmt
         rt
         dl
 )
+
+# Pulled in by DcgmPolicyPersistent (yaml-cpp) and DcgmPolicyNotificationRouter (jsoncpp)
+target_link_libraries(policyModuleTests PRIVATE yaml-cpp::yaml-cpp jsoncpp_static)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     catch_discover_tests(policyModuleTests EXTRA_ARGS --colour-mode ansi)

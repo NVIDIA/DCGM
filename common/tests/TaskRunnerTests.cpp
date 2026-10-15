@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 
 #include <Task.hpp>
 #include <TaskRunner.hpp>
+
+#include <ScopedEnvVars.hpp>
 
 #include <unordered_set>
 
@@ -243,6 +245,52 @@ TEST_CASE("TaskRunner: Multiple runners", "[!mayfail]")
     CHECK(seenIds.size() == 10);
 }
 
+TEST_CASE("TaskRunner: Queue capacity rejects tasks at the configured limit")
+{
+    TestTaskRunner tr;
+
+    SECTION("Zero capacity rejects simple tasks")
+    {
+        tr.SetQueueCapacity(0);
+
+        auto fut = tr.Enqueue(make_task([] { return 10; }));
+
+        CHECK_FALSE(fut.has_value());
+    }
+
+    SECTION("Simple tasks reject when the queue size equals capacity")
+    {
+        tr.SetQueueCapacity(1);
+
+        auto first = tr.Enqueue(make_task([] { return 10; }));
+        REQUIRE(first.has_value());
+
+        auto second = tr.Enqueue(make_task([] { return 20; }));
+
+        CHECK_FALSE(second.has_value());
+    }
+
+    SECTION("Deferred tasks reject when the queue size equals capacity")
+    {
+        tr.SetQueueCapacity(1);
+
+        auto makeDeferredTask = [](int value) {
+            return make_task([value] {
+                std::promise<int> promise;
+                promise.set_value(value);
+                return promise.get_future().share();
+            });
+        };
+
+        auto first = tr.Enqueue(makeDeferredTask(10));
+        REQUIRE(first.has_value());
+
+        auto second = tr.Enqueue(makeDeferredTask(20));
+
+        CHECK_FALSE(second.has_value());
+    }
+}
+
 TEST_CASE("TaskRunner: Limited Queue")
 {
     const size_t cTaskRunnerCapacity = 10;
@@ -338,4 +386,121 @@ TEST_CASE("TaskRunner Periodic Tasks")
 
     // Counter should have increased
     REQUIRE(counter > 0);
+}
+
+
+SCENARIO("TaskRunner constructor honors environment configuration")
+{
+    GIVEN("a configured queue capacity")
+    {
+        ScopedEnvVars envVars(
+            { { "__DCGM_TASK_RUNNER_QUEUE_SIZE", "1" }, { "__DCGM_TASK_RUNNER_DEBUG", std::nullopt } });
+
+        WHEN("tasks are enqueued without running the queue")
+        {
+            TaskRunner runner;
+            auto first  = runner.Enqueue(make_task([] { return 1; }));
+            auto second = runner.Enqueue(make_task([] { return 2; }));
+
+            THEN("the queue capacity from the environment is enforced")
+            {
+                REQUIRE(first.has_value());
+                CHECK_FALSE(second.has_value());
+            }
+        }
+    }
+
+    GIVEN("invalid environment values")
+    {
+        ScopedEnvVars envVars({ { "__DCGM_TASK_RUNNER_QUEUE_SIZE", "not-a-number" },
+                                { "__DCGM_TASK_RUNNER_DEBUG", "also-not-a-number" } });
+
+        WHEN("the runner is constructed and executes a task")
+        {
+            TestTaskRunner runner;
+            auto future = runner.Enqueue(make_task([] { return 42; }));
+            auto result = runner.Run(true);
+
+            THEN("the invalid environment values are ignored")
+            {
+                REQUIRE(future.has_value());
+                CHECK(result == TaskRunner::RunResult::Ok);
+                CHECK(future->get() == 42);
+            }
+        }
+    }
+}
+
+SCENARIO("TaskRunner stop and one-iteration behavior is observable")
+{
+    GIVEN("a stopped runner")
+    {
+        TaskRunner runner;
+        runner.Stop();
+
+        WHEN("Run is called after Stop")
+        {
+            auto result = runner.Run(true);
+
+            THEN("the runner reports that it can no longer run")
+            {
+                CHECK(result == TaskRunner::RunResult::NoLongerValid);
+            }
+        }
+    }
+
+    GIVEN("a runner with no queued work")
+    {
+        TestTaskRunner runner;
+
+        WHEN("one iteration is requested")
+        {
+            auto result = runner.Run(true);
+
+            THEN("the empty iteration succeeds without changing validity")
+            {
+                CHECK(result == TaskRunner::RunResult::Ok);
+            }
+        }
+    }
+
+    GIVEN("a deferred task that is not ready")
+    {
+        TestTaskRunner runner;
+        bool firstRun = true;
+        auto future   = runner.Enqueue(make_task([&firstRun]() mutable -> std::optional<int> {
+            if (firstRun)
+            {
+                firstRun = false;
+                return std::nullopt;
+            }
+
+            return 7;
+        }));
+
+        WHEN("only one iteration is run")
+        {
+            auto firstResult = runner.Run(true);
+
+            THEN("the task remains pending and is re-queued")
+            {
+                REQUIRE(future.has_value());
+                CHECK(firstResult == TaskRunner::RunResult::Ok);
+                CHECK(future->wait_for(std::chrono::milliseconds(0)) == std::future_status::timeout);
+            }
+        }
+
+        WHEN("a second iteration is run")
+        {
+            REQUIRE(runner.Run(true) == TaskRunner::RunResult::Ok);
+            auto secondResult = runner.Run(true);
+
+            THEN("the deferred task eventually completes")
+            {
+                REQUIRE(future.has_value());
+                CHECK(secondResult == TaskRunner::RunResult::Ok);
+                CHECK(future->get() == 7);
+            }
+        }
+    }
 }

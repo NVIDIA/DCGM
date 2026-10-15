@@ -1,0 +1,30 @@
+name: Tests
+
+on: [push]
+
+jobs:
+  test-latest:
+    name: Test on Latest
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Test
+        run: make test
+
+  test-stable:
+    name: Test on 1.56.0
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.56.0
+      - name: Restore Cargo.lock
+        run: cp Cargo.lock.msrv Cargo.lock
+      - name: Test
+        run: make test

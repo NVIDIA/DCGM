@@ -17,6 +17,7 @@
 #pragma once
 
 #include "NvmlTaskRunner.hpp"
+#include "TopologyNvmlTaskRunnerAnyPtr.hpp"
 #include "dcgm_structs.h"
 #include "dcgm_structs_internal.h"
 
@@ -168,6 +169,9 @@ bool HasStrongConnection(std::vector<DcgmGpuConnectionPair> &connections, uint32
 dcgmReturn_t PopulateTopologyAffinity(NvmlTaskRunner &nvmlDriver,
                                       std::vector<dcgm_topology_helper_t> const &gpuInfo,
                                       dcgmAffinity_t &affinity);
+dcgmReturn_t PopulateTopologyAffinity(TopologyNvmlTaskRunnerAnyPtr nvmlDriver,
+                                      std::vector<dcgm_topology_helper_t> const &gpuInfo,
+                                      dcgmAffinity_t &affinity);
 
 /*****************************************************************************/
 dcgmReturn_t HelperSelectGpusByTopology(std::vector<unsigned int> &gpuIds,
@@ -184,6 +188,9 @@ dcgmReturn_t HelperSelectGpusByTopology(std::vector<unsigned int> &gpuIds,
 dcgmReturn_t UpdateNvLinkLinkStateFromNvml(NvmlTaskRunner &nvmlDriver,
                                            dcgm_topology_helper_t *gpuInfo,
                                            bool migIsEnabledForAnyGpu);
+dcgmReturn_t UpdateNvLinkLinkStateFromNvml(TopologyNvmlTaskRunnerAnyPtr nvmlDriver,
+                                           dcgm_topology_helper_t *gpuInfo,
+                                           bool migIsEnabledForAnyGpu);
 
 /*************************************************************************/
 /*
@@ -196,6 +203,10 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
                                     std::vector<dcgm_topology_helper_t> const &gpuInfo,
                                     dcgmTopology_t **topology_pp,
                                     unsigned int &topologySize);
+dcgmReturn_t PopulateTopologyNvLink(TopologyNvmlTaskRunnerAnyPtr nvmlDriver,
+                                    std::vector<dcgm_topology_helper_t> const &gpuInfo,
+                                    dcgmTopology_t **topology_pp,
+                                    unsigned int &topologySize);
 
 /*************************************************************************/
 /**
@@ -204,6 +215,9 @@ dcgmReturn_t PopulateTopologyNvLink(NvmlTaskRunner &nvmlDriver,
  * Helper for GetActiveNvSwitchNvLinkCountsForAllGpus
  */
 dcgmReturn_t HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNVML(NvmlTaskRunner &nvmlDriver,
+                                                                    std::vector<dcgm_topology_helper_t> const &gpuInfo,
+                                                                    std::vector<unsigned int> &gpuCounts);
+dcgmReturn_t HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNVML(TopologyNvmlTaskRunnerAnyPtr nvmlDriver,
                                                                     std::vector<dcgm_topology_helper_t> const &gpuInfo,
                                                                     std::vector<unsigned int> &gpuCounts);
 
@@ -227,5 +241,8 @@ dcgmReturn_t HelperGetActiveNvSwitchNvLinkCountsForAllGpusUsingNSCQ(std::vector<
  * Returns DCGM_ST_OK if gpuCounts are populated
  */
 dcgmReturn_t GetActiveNvSwitchNvLinkCountsForAllGpus(NvmlTaskRunner &nvmlDriver,
+                                                     std::vector<dcgm_topology_helper_t> const &gpuInfo,
+                                                     std::vector<unsigned int> &gpuCounts);
+dcgmReturn_t GetActiveNvSwitchNvLinkCountsForAllGpus(TopologyNvmlTaskRunnerAnyPtr nvmlDriver,
                                                      std::vector<dcgm_topology_helper_t> const &gpuInfo,
                                                      std::vector<unsigned int> &gpuCounts);

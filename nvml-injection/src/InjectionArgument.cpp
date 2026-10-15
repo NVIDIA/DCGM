@@ -26,6 +26,7 @@
 #include "NvmlLogging.h"
 #include <limits.h>
 #include <cstring>
+#include <functional>
 
 
 // The following snippet is generated from write_injection_argument_cpp
@@ -100,6 +101,10 @@ int nvmlPSUInfo_tCompare(const nvmlPSUInfo_t &a, const nvmlPSUInfo_t &b);
 int nvmlUnitFanInfo_tCompare(const nvmlUnitFanInfo_t &a, const nvmlUnitFanInfo_t &b);
 int nvmlUnitFanSpeeds_tCompare(const nvmlUnitFanSpeeds_t &a, const nvmlUnitFanSpeeds_t &b);
 int nvmlEventData_tCompare(const nvmlEventData_t &a, const nvmlEventData_t &b);
+int nvmlEventSetGetContextCount_v1_tCompare(const nvmlEventSetGetContextCount_v1_t &a, const nvmlEventSetGetContextCount_v1_t &b);
+int nvmlEventSetGetContextInfo_v1_tCompare(const nvmlEventSetGetContextInfo_v1_t &a, const nvmlEventSetGetContextInfo_v1_t &b);
+int nvmlEventSetGetContextData_v1_tCompare(const nvmlEventSetGetContextData_v1_t &a, const nvmlEventSetGetContextData_v1_t &b);
+int nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_tCompare(const nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t &a, const nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t &b);
 int nvmlSystemEventData_v1_tCompare(const nvmlSystemEventData_v1_t &a, const nvmlSystemEventData_v1_t &b);
 int nvmlAccountingStats_tCompare(const nvmlAccountingStats_t &a, const nvmlAccountingStats_t &b);
 int nvmlEncoderSessionInfo_tCompare(const nvmlEncoderSessionInfo_t &a, const nvmlEncoderSessionInfo_t &b);
@@ -116,6 +121,8 @@ int nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(const nvmlConfCompute
 int nvmlGpuFabricInfo_tCompare(const nvmlGpuFabricInfo_t &a, const nvmlGpuFabricInfo_t &b);
 int nvmlGpuFabricInfo_v2_tCompare(const nvmlGpuFabricInfo_v2_t &a, const nvmlGpuFabricInfo_v2_t &b);
 int nvmlGpuFabricInfoV_tCompare(const nvmlGpuFabricInfoV_t &a, const nvmlGpuFabricInfoV_t &b);
+int nvmlGpuOperationalEventConfig_v1_tCompare(const nvmlGpuOperationalEventConfig_v1_t &a, const nvmlGpuOperationalEventConfig_v1_t &b);
+int nvmlEventSetWait_v3_tCompare(const nvmlEventSetWait_v3_t &a, const nvmlEventSetWait_v3_t &b);
 int nvmlSystemDriverBranchInfo_tCompare(const nvmlSystemDriverBranchInfo_t &a, const nvmlSystemDriverBranchInfo_t &b);
 int nvmlTemperature_tCompare(const nvmlTemperature_t &a, const nvmlTemperature_t &b);
 int nvmlNvlinkSupportedBwModes_tCompare(const nvmlNvlinkSupportedBwModes_t &a, const nvmlNvlinkSupportedBwModes_t &b);
@@ -1543,7 +1550,7 @@ int nvmlVgpuSchedulerLog_tCompare(const nvmlVgpuSchedulerLog_t &a, const nvmlVgp
     {
         return a.arrMode < b.arrMode ? -1 : 1;
     }
-    NVML_LOG_ERR("nvmlVgpuSchedulerParams_t conatins union, and cannot compare now. May cause problems...");
+    NVML_LOG_ERR("nvmlVgpuSchedulerParams_t contains union, and cannot compare now. May cause problems...");
     // The following snippet is generated from write_struct_compare_definition
     if (a.entriesCount != b.entriesCount)
     {
@@ -1573,7 +1580,7 @@ int nvmlVgpuSchedulerGetState_tCompare(const nvmlVgpuSchedulerGetState_t &a, con
     {
         return a.arrMode < b.arrMode ? -1 : 1;
     }
-    NVML_LOG_ERR("nvmlVgpuSchedulerParams_t conatins union, and cannot compare now. May cause problems...");
+    NVML_LOG_ERR("nvmlVgpuSchedulerParams_t contains union, and cannot compare now. May cause problems...");
     return 0;
 }
 
@@ -1590,7 +1597,7 @@ int nvmlVgpuSchedulerSetState_tCompare(const nvmlVgpuSchedulerSetState_t &a, con
     {
         return a.enableARRMode < b.enableARRMode ? -1 : 1;
     }
-    NVML_LOG_ERR("nvmlVgpuSchedulerSetParams_t conatins union, and cannot compare now. May cause problems...");
+    NVML_LOG_ERR("nvmlVgpuSchedulerSetParams_t contains union, and cannot compare now. May cause problems...");
     return 0;
 }
 
@@ -2004,6 +2011,85 @@ int nvmlEventData_tCompare(const nvmlEventData_t &a, const nvmlEventData_t &b)
     if (a.computeInstanceId != b.computeInstanceId)
     {
         return a.computeInstanceId < b.computeInstanceId ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlEventSetGetContextCount_v1_tCompare(const nvmlEventSetGetContextCount_v1_t &a, const nvmlEventSetGetContextCount_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.count != b.count)
+    {
+        return a.count < b.count ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlEventSetGetContextInfo_v1_tCompare(const nvmlEventSetGetContextInfo_v1_t &a, const nvmlEventSetGetContextInfo_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.index != b.index)
+    {
+        return a.index < b.index ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.nvmlGpuOperationalEventContextType != b.nvmlGpuOperationalEventContextType)
+    {
+        return a.nvmlGpuOperationalEventContextType < b.nvmlGpuOperationalEventContextType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.sourceEventContextType != b.sourceEventContextType)
+    {
+        return a.sourceEventContextType < b.sourceEventContextType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.dataSize != b.dataSize)
+    {
+        return a.dataSize < b.dataSize ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.dataFormatVersion != b.dataFormatVersion)
+    {
+        return a.dataFormatVersion < b.dataFormatVersion ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlEventSetGetContextData_v1_tCompare(const nvmlEventSetGetContextData_v1_t &a, const nvmlEventSetGetContextData_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.data != b.data)
+    {
+        return std::less<void const *>{}(a.data, b.data) ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.index != b.index)
+    {
+        return a.index < b.index ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.dataSize != b.dataSize)
+    {
+        return a.dataSize < b.dataSize ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_tCompare(const nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t &a, const nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.index != b.index)
+    {
+        return a.index < b.index ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.xidCode != b.xidCode)
+    {
+        return a.xidCode < b.xidCode ? -1 : 1;
     }
     return 0;
 }
@@ -2478,6 +2564,158 @@ int nvmlGpuFabricInfoV_tCompare(const nvmlGpuFabricInfoV_t &a, const nvmlGpuFabr
     if (a.healthSummary != b.healthSummary)
     {
         return a.healthSummary < b.healthSummary ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlGpuOperationalEventConfig_v1_tCompare(const nvmlGpuOperationalEventConfig_v1_t &a, const nvmlGpuOperationalEventConfig_v1_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.uuid, b.uuid); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.minLogLevel != b.minLogLevel)
+    {
+        return a.minLogLevel < b.minLogLevel ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.minSeverity != b.minSeverity)
+    {
+        return a.minSeverity < b.minSeverity ? -1 : 1;
+    }
+    return 0;
+}
+
+// The following snippet is generated from write_struct_compare_definition
+int nvmlEventSetWait_v3_tCompare(const nvmlEventSetWait_v3_t &a, const nvmlEventSetWait_v3_t &b)
+{
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timeoutMs != b.timeoutMs)
+    {
+        return a.timeoutMs < b.timeoutMs ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.dataType != b.dataType)
+    {
+        return a.dataType < b.dataType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.uuid, b.uuid); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (auto ret = strcmp(a.sourceModule, b.sourceModule); ret)
+    {
+        return ret;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.eventType != b.eventType)
+    {
+        return a.eventType < b.eventType ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.eventData != b.eventData)
+    {
+        return a.eventData < b.eventData ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.groupCursor != b.groupCursor)
+    {
+        return a.groupCursor < b.groupCursor ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.instanceId != b.instanceId)
+    {
+        return a.instanceId < b.instanceId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.timestampUsec != b.timestampUsec)
+    {
+        return a.timestampUsec < b.timestampUsec ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.traceId != b.traceId)
+    {
+        return a.traceId < b.traceId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.gpuInstanceId != b.gpuInstanceId)
+    {
+        return a.gpuInstanceId < b.gpuInstanceId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.computeInstanceId != b.computeInstanceId)
+    {
+        return a.computeInstanceId < b.computeInstanceId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.severity != b.severity)
+    {
+        return a.severity < b.severity ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.categoryId != b.categoryId)
+    {
+        return a.categoryId < b.categoryId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.moduleEventCode != b.moduleEventCode)
+    {
+        return a.moduleEventCode < b.moduleEventCode ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.scope != b.scope)
+    {
+        return a.scope < b.scope ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.originator != b.originator)
+    {
+        return a.originator < b.originator ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.moduleInstance != b.moduleInstance)
+    {
+        return a.moduleInstance < b.moduleInstance ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.chipletId != b.chipletId)
+    {
+        return a.chipletId < b.chipletId ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.logLevel != b.logLevel)
+    {
+        return a.logLevel < b.logLevel ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.attributes != b.attributes)
+    {
+        return a.attributes < b.attributes ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.groupCperSize != b.groupCperSize)
+    {
+        return a.groupCperSize < b.groupCperSize ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.groupAttributes != b.groupAttributes)
+    {
+        return a.groupAttributes < b.groupAttributes ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.groupSize != b.groupSize)
+    {
+        return a.groupSize < b.groupSize ? -1 : 1;
+    }
+    // The following snippet is generated from write_struct_compare_definition
+    if (a.groupIndex != b.groupIndex)
+    {
+        return a.groupIndex < b.groupIndex ? -1 : 1;
     }
     return 0;
 }
@@ -5162,6 +5400,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             break;
         }
         // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_EVENTDATATYPE:
+        {
+            if (other.m_type == INJECTION_EVENTDATATYPE)
+            {
+                memcpy(&m_value.EventDataType, &other.m_value.EventDataType, sizeof(*&m_value.EventDataType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTDATATYPE_PTR)
+            {
+                memcpy(&m_value.EventDataType, other.m_value.EventDataTypePtr, sizeof(*&m_value.EventDataType));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_EVENTDATATYPE_PTR:
+        {
+            if (other.m_type == INJECTION_EVENTDATATYPE_PTR)
+            {
+                memcpy(m_value.EventDataTypePtr, other.m_value.EventDataTypePtr, sizeof(*m_value.EventDataTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTDATATYPE)
+            {
+                memcpy(m_value.EventDataTypePtr, &other.m_value.EventDataType, sizeof(*m_value.EventDataTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
         case INJECTION_EVENTDATA:
         {
             if (other.m_type == INJECTION_EVENTDATA)
@@ -5188,6 +5457,161 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_EVENTDATA)
             {
                 memcpy(m_value.EventDataPtr, &other.m_value.EventData, sizeof(*m_value.EventDataPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_EVENTSETGETCONTEXTCOUNT_V1:
+        {
+            if (other.m_type == INJECTION_EVENTSETGETCONTEXTCOUNT_V1)
+            {
+                memcpy(&m_value.EventSetGetContextCount_v1, &other.m_value.EventSetGetContextCount_v1, sizeof(*&m_value.EventSetGetContextCount_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR)
+            {
+                memcpy(&m_value.EventSetGetContextCount_v1, other.m_value.EventSetGetContextCount_v1Ptr, sizeof(*&m_value.EventSetGetContextCount_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR:
+        {
+            if (other.m_type == INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR)
+            {
+                memcpy(m_value.EventSetGetContextCount_v1Ptr, other.m_value.EventSetGetContextCount_v1Ptr, sizeof(*m_value.EventSetGetContextCount_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETGETCONTEXTCOUNT_V1)
+            {
+                memcpy(m_value.EventSetGetContextCount_v1Ptr, &other.m_value.EventSetGetContextCount_v1, sizeof(*m_value.EventSetGetContextCount_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_EVENTSETGETCONTEXTDATA_V1:
+        {
+            if (other.m_type == INJECTION_EVENTSETGETCONTEXTDATA_V1)
+            {
+                memcpy(&m_value.EventSetGetContextData_v1, &other.m_value.EventSetGetContextData_v1, sizeof(*&m_value.EventSetGetContextData_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR)
+            {
+                memcpy(&m_value.EventSetGetContextData_v1, other.m_value.EventSetGetContextData_v1Ptr, sizeof(*&m_value.EventSetGetContextData_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR:
+        {
+            if (other.m_type == INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR)
+            {
+                memcpy(m_value.EventSetGetContextData_v1Ptr, other.m_value.EventSetGetContextData_v1Ptr, sizeof(*m_value.EventSetGetContextData_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETGETCONTEXTDATA_V1)
+            {
+                memcpy(m_value.EventSetGetContextData_v1Ptr, &other.m_value.EventSetGetContextData_v1, sizeof(*m_value.EventSetGetContextData_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_EVENTSETGETCONTEXTINFO_V1:
+        {
+            if (other.m_type == INJECTION_EVENTSETGETCONTEXTINFO_V1)
+            {
+                memcpy(&m_value.EventSetGetContextInfo_v1, &other.m_value.EventSetGetContextInfo_v1, sizeof(*&m_value.EventSetGetContextInfo_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR)
+            {
+                memcpy(&m_value.EventSetGetContextInfo_v1, other.m_value.EventSetGetContextInfo_v1Ptr, sizeof(*&m_value.EventSetGetContextInfo_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR:
+        {
+            if (other.m_type == INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR)
+            {
+                memcpy(m_value.EventSetGetContextInfo_v1Ptr, other.m_value.EventSetGetContextInfo_v1Ptr, sizeof(*m_value.EventSetGetContextInfo_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETGETCONTEXTINFO_V1)
+            {
+                memcpy(m_value.EventSetGetContextInfo_v1Ptr, &other.m_value.EventSetGetContextInfo_v1, sizeof(*m_value.EventSetGetContextInfo_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1:
+        {
+            if (other.m_type == INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1)
+            {
+                memcpy(&m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1, &other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1, sizeof(*&m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR)
+            {
+                memcpy(&m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1, other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, sizeof(*&m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR:
+        {
+            if (other.m_type == INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR)
+            {
+                memcpy(m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, sizeof(*m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1)
+            {
+                memcpy(m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, &other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1, sizeof(*m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_EVENTSETWAIT_V3:
+        {
+            if (other.m_type == INJECTION_EVENTSETWAIT_V3)
+            {
+                memcpy(&m_value.EventSetWait_v3, &other.m_value.EventSetWait_v3, sizeof(*&m_value.EventSetWait_v3));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETWAIT_V3_PTR)
+            {
+                memcpy(&m_value.EventSetWait_v3, other.m_value.EventSetWait_v3Ptr, sizeof(*&m_value.EventSetWait_v3));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_EVENTSETWAIT_V3_PTR:
+        {
+            if (other.m_type == INJECTION_EVENTSETWAIT_V3_PTR)
+            {
+                memcpy(m_value.EventSetWait_v3Ptr, other.m_value.EventSetWait_v3Ptr, sizeof(*m_value.EventSetWait_v3Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_EVENTSETWAIT_V3)
+            {
+                memcpy(m_value.EventSetWait_v3Ptr, &other.m_value.EventSetWait_v3, sizeof(*m_value.EventSetWait_v3Ptr));
                 set = true;
             }
             break;
@@ -5994,6 +6418,99 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_GPUOPERATIONMODE)
             {
                 memcpy(m_value.GpuOperationModePtr, &other.m_value.GpuOperationMode, sizeof(*m_value.GpuOperationModePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUOPERATIONALEVENTCONFIG_V1:
+        {
+            if (other.m_type == INJECTION_GPUOPERATIONALEVENTCONFIG_V1)
+            {
+                memcpy(&m_value.GpuOperationalEventConfig_v1, &other.m_value.GpuOperationalEventConfig_v1, sizeof(*&m_value.GpuOperationalEventConfig_v1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUOPERATIONALEVENTCONFIG_V1_PTR)
+            {
+                memcpy(&m_value.GpuOperationalEventConfig_v1, other.m_value.GpuOperationalEventConfig_v1Ptr, sizeof(*&m_value.GpuOperationalEventConfig_v1));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUOPERATIONALEVENTCONFIG_V1_PTR:
+        {
+            if (other.m_type == INJECTION_GPUOPERATIONALEVENTCONFIG_V1_PTR)
+            {
+                memcpy(m_value.GpuOperationalEventConfig_v1Ptr, other.m_value.GpuOperationalEventConfig_v1Ptr, sizeof(*m_value.GpuOperationalEventConfig_v1Ptr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUOPERATIONALEVENTCONFIG_V1)
+            {
+                memcpy(m_value.GpuOperationalEventConfig_v1Ptr, &other.m_value.GpuOperationalEventConfig_v1, sizeof(*m_value.GpuOperationalEventConfig_v1Ptr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE:
+        {
+            if (other.m_type == INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE)
+            {
+                memcpy(&m_value.GpuOperationalEventContextType, &other.m_value.GpuOperationalEventContextType, sizeof(*&m_value.GpuOperationalEventContextType));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE_PTR)
+            {
+                memcpy(&m_value.GpuOperationalEventContextType, other.m_value.GpuOperationalEventContextTypePtr, sizeof(*&m_value.GpuOperationalEventContextType));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE_PTR:
+        {
+            if (other.m_type == INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE_PTR)
+            {
+                memcpy(m_value.GpuOperationalEventContextTypePtr, other.m_value.GpuOperationalEventContextTypePtr, sizeof(*m_value.GpuOperationalEventContextTypePtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE)
+            {
+                memcpy(m_value.GpuOperationalEventContextTypePtr, &other.m_value.GpuOperationalEventContextType, sizeof(*m_value.GpuOperationalEventContextTypePtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_GPUOPERATIONALEVENTLOGLEVEL:
+        {
+            if (other.m_type == INJECTION_GPUOPERATIONALEVENTLOGLEVEL)
+            {
+                memcpy(&m_value.GpuOperationalEventLogLevel, &other.m_value.GpuOperationalEventLogLevel, sizeof(*&m_value.GpuOperationalEventLogLevel));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUOPERATIONALEVENTLOGLEVEL_PTR)
+            {
+                memcpy(&m_value.GpuOperationalEventLogLevel, other.m_value.GpuOperationalEventLogLevelPtr, sizeof(*&m_value.GpuOperationalEventLogLevel));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_GPUOPERATIONALEVENTLOGLEVEL_PTR:
+        {
+            if (other.m_type == INJECTION_GPUOPERATIONALEVENTLOGLEVEL_PTR)
+            {
+                memcpy(m_value.GpuOperationalEventLogLevelPtr, other.m_value.GpuOperationalEventLogLevelPtr, sizeof(*m_value.GpuOperationalEventLogLevelPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_GPUOPERATIONALEVENTLOGLEVEL)
+            {
+                memcpy(m_value.GpuOperationalEventLogLevelPtr, &other.m_value.GpuOperationalEventLogLevel, sizeof(*m_value.GpuOperationalEventLogLevelPtr));
                 set = true;
             }
             break;
@@ -6986,6 +7503,37 @@ nvmlReturn_t InjectionArgument::SetValueFrom(const InjectionArgument &other)
             else if (other.m_type == INJECTION_NVLINKVERSION)
             {
                 memcpy(m_value.NvlinkVersionPtr, &other.m_value.NvlinkVersion, sizeof(*m_value.NvlinkVersionPtr));
+                set = true;
+            }
+            break;
+        }
+        // The following snippet is generated from write_set_value_from_case_entry
+        case INJECTION_OPERATIONALEVENTSEVERITY:
+        {
+            if (other.m_type == INJECTION_OPERATIONALEVENTSEVERITY)
+            {
+                memcpy(&m_value.OperationalEventSeverity, &other.m_value.OperationalEventSeverity, sizeof(*&m_value.OperationalEventSeverity));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_OPERATIONALEVENTSEVERITY_PTR)
+            {
+                memcpy(&m_value.OperationalEventSeverity, other.m_value.OperationalEventSeverityPtr, sizeof(*&m_value.OperationalEventSeverity));
+                set = true;
+            }
+            break;
+        }
+        case INJECTION_OPERATIONALEVENTSEVERITY_PTR:
+        {
+            if (other.m_type == INJECTION_OPERATIONALEVENTSEVERITY_PTR)
+            {
+                memcpy(m_value.OperationalEventSeverityPtr, other.m_value.OperationalEventSeverityPtr, sizeof(*m_value.OperationalEventSeverityPtr) * (other.m_isArray ? other.m_arrLen : 1));
+                set = true;
+            }
+            // The following snippet is generated from write_set_value_from_case_entry
+            else if (other.m_type == INJECTION_OPERATIONALEVENTSEVERITY)
+            {
+                memcpy(m_value.OperationalEventSeverityPtr, &other.m_value.OperationalEventSeverity, sizeof(*m_value.OperationalEventSeverityPtr));
                 set = true;
             }
             break;
@@ -10208,7 +10756,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlAccountingStats_tCompare(*m_value.AccountingStatsPtr, *other.m_value.AccountingStatsPtr); ret)
+                        if (auto ret = nvmlAccountingStats_tCompare(m_value.AccountingStatsPtr[i], other.m_value.AccountingStatsPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10270,7 +10818,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlBAR1Memory_tCompare(*m_value.BAR1MemoryPtr, *other.m_value.BAR1MemoryPtr); ret)
+                        if (auto ret = nvmlBAR1Memory_tCompare(m_value.BAR1MemoryPtr[i], other.m_value.BAR1MemoryPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10332,7 +10880,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlBridgeChipHierarchy_tCompare(*m_value.BridgeChipHierarchyPtr, *other.m_value.BridgeChipHierarchyPtr); ret)
+                        if (auto ret = nvmlBridgeChipHierarchy_tCompare(m_value.BridgeChipHierarchyPtr[i], other.m_value.BridgeChipHierarchyPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10355,7 +10903,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlBridgeChipInfo_tCompare(*m_value.BridgeChipInfoPtr, *other.m_value.BridgeChipInfoPtr); ret)
+                        if (auto ret = nvmlBridgeChipInfo_tCompare(m_value.BridgeChipInfoPtr[i], other.m_value.BridgeChipInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10456,7 +11004,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlC2cModeInfo_v1_tCompare(*m_value.C2cModeInfo_v1Ptr, *other.m_value.C2cModeInfo_v1Ptr); ret)
+                        if (auto ret = nvmlC2cModeInfo_v1_tCompare(m_value.C2cModeInfo_v1Ptr[i], other.m_value.C2cModeInfo_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -10479,7 +11027,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlClkMonFaultInfo_tCompare(*m_value.ClkMonFaultInfoPtr, *other.m_value.ClkMonFaultInfoPtr); ret)
+                        if (auto ret = nvmlClkMonFaultInfo_tCompare(m_value.ClkMonFaultInfoPtr[i], other.m_value.ClkMonFaultInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10502,7 +11050,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlClkMonStatus_tCompare(*m_value.ClkMonStatusPtr, *other.m_value.ClkMonStatusPtr); ret)
+                        if (auto ret = nvmlClkMonStatus_tCompare(m_value.ClkMonStatusPtr[i], other.m_value.ClkMonStatusPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10603,7 +11151,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlClockOffset_tCompare(*m_value.ClockOffsetPtr, *other.m_value.ClockOffsetPtr); ret)
+                        if (auto ret = nvmlClockOffset_tCompare(m_value.ClockOffsetPtr[i], other.m_value.ClockOffsetPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10665,7 +11213,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlComputeInstanceInfo_tCompare(*m_value.ComputeInstanceInfoPtr, *other.m_value.ComputeInstanceInfoPtr); ret)
+                        if (auto ret = nvmlComputeInstanceInfo_tCompare(m_value.ComputeInstanceInfoPtr[i], other.m_value.ComputeInstanceInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10688,7 +11236,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlComputeInstancePlacement_tCompare(*m_value.ComputeInstancePlacementPtr, *other.m_value.ComputeInstancePlacementPtr); ret)
+                        if (auto ret = nvmlComputeInstancePlacement_tCompare(m_value.ComputeInstancePlacementPtr[i], other.m_value.ComputeInstancePlacementPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10711,7 +11259,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlComputeInstanceProfileInfo_tCompare(*m_value.ComputeInstanceProfileInfoPtr, *other.m_value.ComputeInstanceProfileInfoPtr); ret)
+                        if (auto ret = nvmlComputeInstanceProfileInfo_tCompare(m_value.ComputeInstanceProfileInfoPtr[i], other.m_value.ComputeInstanceProfileInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10734,7 +11282,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlComputeInstanceProfileInfo_v2_tCompare(*m_value.ComputeInstanceProfileInfo_v2Ptr, *other.m_value.ComputeInstanceProfileInfo_v2Ptr); ret)
+                        if (auto ret = nvmlComputeInstanceProfileInfo_v2_tCompare(m_value.ComputeInstanceProfileInfo_v2Ptr[i], other.m_value.ComputeInstanceProfileInfo_v2Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -10757,7 +11305,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlComputeInstanceProfileInfo_v3_tCompare(*m_value.ComputeInstanceProfileInfo_v3Ptr, *other.m_value.ComputeInstanceProfileInfo_v3Ptr); ret)
+                        if (auto ret = nvmlComputeInstanceProfileInfo_v3_tCompare(m_value.ComputeInstanceProfileInfo_v3Ptr[i], other.m_value.ComputeInstanceProfileInfo_v3Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -10843,7 +11391,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(*m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr, *other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr); ret)
+                        if (auto ret = nvmlConfComputeGetKeyRotationThresholdInfo_v1_tCompare(m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr[i], other.m_value.ConfComputeGetKeyRotationThresholdInfo_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -10866,7 +11414,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlConfComputeGpuAttestationReport_tCompare(*m_value.ConfComputeGpuAttestationReportPtr, *other.m_value.ConfComputeGpuAttestationReportPtr); ret)
+                        if (auto ret = nvmlConfComputeGpuAttestationReport_tCompare(m_value.ConfComputeGpuAttestationReportPtr[i], other.m_value.ConfComputeGpuAttestationReportPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10889,7 +11437,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlConfComputeGpuCertificate_tCompare(*m_value.ConfComputeGpuCertificatePtr, *other.m_value.ConfComputeGpuCertificatePtr); ret)
+                        if (auto ret = nvmlConfComputeGpuCertificate_tCompare(m_value.ConfComputeGpuCertificatePtr[i], other.m_value.ConfComputeGpuCertificatePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10912,7 +11460,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlConfComputeMemSizeInfo_tCompare(*m_value.ConfComputeMemSizeInfoPtr, *other.m_value.ConfComputeMemSizeInfoPtr); ret)
+                        if (auto ret = nvmlConfComputeMemSizeInfo_tCompare(m_value.ConfComputeMemSizeInfoPtr[i], other.m_value.ConfComputeMemSizeInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10935,7 +11483,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlConfComputeSetKeyRotationThresholdInfo_v1_tCompare(*m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr, *other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr); ret)
+                        if (auto ret = nvmlConfComputeSetKeyRotationThresholdInfo_v1_tCompare(m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr[i], other.m_value.ConfComputeSetKeyRotationThresholdInfo_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -10958,7 +11506,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlConfComputeSystemCaps_tCompare(*m_value.ConfComputeSystemCapsPtr, *other.m_value.ConfComputeSystemCapsPtr); ret)
+                        if (auto ret = nvmlConfComputeSystemCaps_tCompare(m_value.ConfComputeSystemCapsPtr[i], other.m_value.ConfComputeSystemCapsPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -10981,7 +11529,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlConfComputeSystemState_tCompare(*m_value.ConfComputeSystemStatePtr, *other.m_value.ConfComputeSystemStatePtr); ret)
+                        if (auto ret = nvmlConfComputeSystemState_tCompare(m_value.ConfComputeSystemStatePtr[i], other.m_value.ConfComputeSystemStatePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11043,7 +11591,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlCoolerInfo_tCompare(*m_value.CoolerInfoPtr, *other.m_value.CoolerInfoPtr); ret)
+                        if (auto ret = nvmlCoolerInfo_tCompare(m_value.CoolerInfoPtr[i], other.m_value.CoolerInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11183,7 +11731,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlDeviceAttributes_tCompare(*m_value.DeviceAttributesPtr, *other.m_value.DeviceAttributesPtr); ret)
+                        if (auto ret = nvmlDeviceAttributes_tCompare(m_value.DeviceAttributesPtr[i], other.m_value.DeviceAttributesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11206,7 +11754,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlDeviceCapabilities_tCompare(*m_value.DeviceCapabilitiesPtr, *other.m_value.DeviceCapabilitiesPtr); ret)
+                        if (auto ret = nvmlDeviceCapabilities_tCompare(m_value.DeviceCapabilitiesPtr[i], other.m_value.DeviceCapabilitiesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11229,7 +11777,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlDeviceCurrentClockFreqs_tCompare(*m_value.DeviceCurrentClockFreqsPtr, *other.m_value.DeviceCurrentClockFreqsPtr); ret)
+                        if (auto ret = nvmlDeviceCurrentClockFreqs_tCompare(m_value.DeviceCurrentClockFreqsPtr[i], other.m_value.DeviceCurrentClockFreqsPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11291,7 +11839,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlDevicePerfModes_tCompare(*m_value.DevicePerfModesPtr, *other.m_value.DevicePerfModesPtr); ret)
+                        if (auto ret = nvmlDevicePerfModes_tCompare(m_value.DevicePerfModesPtr[i], other.m_value.DevicePerfModesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11377,7 +11925,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlDramEncryptionInfo_tCompare(*m_value.DramEncryptionInfoPtr, *other.m_value.DramEncryptionInfoPtr); ret)
+                        if (auto ret = nvmlDramEncryptionInfo_tCompare(m_value.DramEncryptionInfoPtr[i], other.m_value.DramEncryptionInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11478,7 +12026,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlEccErrorCounts_tCompare(*m_value.EccErrorCountsPtr, *other.m_value.EccErrorCountsPtr); ret)
+                        if (auto ret = nvmlEccErrorCounts_tCompare(m_value.EccErrorCountsPtr[i], other.m_value.EccErrorCountsPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11501,7 +12049,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlEccSramErrorStatus_tCompare(*m_value.EccSramErrorStatusPtr, *other.m_value.EccSramErrorStatusPtr); ret)
+                        if (auto ret = nvmlEccSramErrorStatus_tCompare(m_value.EccSramErrorStatusPtr[i], other.m_value.EccSramErrorStatusPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11563,7 +12111,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlEncoderSessionInfo_tCompare(*m_value.EncoderSessionInfoPtr, *other.m_value.EncoderSessionInfoPtr); ret)
+                        if (auto ret = nvmlEncoderSessionInfo_tCompare(m_value.EncoderSessionInfoPtr[i], other.m_value.EncoderSessionInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11616,6 +12164,45 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     break; // NOT REACHED
                 }
+                case INJECTION_EVENTDATATYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.EventDataTypePtr == *other.m_value.EventDataTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.EventDataTypePtr < *other.m_value.EventDataTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.EventDataTypePtr[i] == other.m_value.EventDataTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.EventDataTypePtr[i] < other.m_value.EventDataTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTDATATYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.EventDataType < other.m_value.EventDataType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.EventDataType > other.m_value.EventDataType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
                 case INJECTION_EVENTDATA_PTR:
                 {
                     // The following snippet is generated from write_injection_argument_compare
@@ -11625,7 +12212,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlEventData_tCompare(*m_value.EventDataPtr, *other.m_value.EventDataPtr); ret)
+                        if (auto ret = nvmlEventData_tCompare(m_value.EventDataPtr[i], other.m_value.EventDataPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11637,6 +12224,121 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                 {
                     // The following snippet is generated from write_injection_argument_compare
                     return nvmlEventData_tCompare(m_value.EventData, other.m_value.EventData);
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlEventSetGetContextCount_v1_tCompare(*m_value.EventSetGetContextCount_v1Ptr, *other.m_value.EventSetGetContextCount_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlEventSetGetContextCount_v1_tCompare(m_value.EventSetGetContextCount_v1Ptr[i], other.m_value.EventSetGetContextCount_v1Ptr[i]); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETGETCONTEXTCOUNT_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlEventSetGetContextCount_v1_tCompare(m_value.EventSetGetContextCount_v1, other.m_value.EventSetGetContextCount_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlEventSetGetContextData_v1_tCompare(*m_value.EventSetGetContextData_v1Ptr, *other.m_value.EventSetGetContextData_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlEventSetGetContextData_v1_tCompare(m_value.EventSetGetContextData_v1Ptr[i], other.m_value.EventSetGetContextData_v1Ptr[i]); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETGETCONTEXTDATA_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlEventSetGetContextData_v1_tCompare(m_value.EventSetGetContextData_v1, other.m_value.EventSetGetContextData_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlEventSetGetContextInfo_v1_tCompare(*m_value.EventSetGetContextInfo_v1Ptr, *other.m_value.EventSetGetContextInfo_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlEventSetGetContextInfo_v1_tCompare(m_value.EventSetGetContextInfo_v1Ptr[i], other.m_value.EventSetGetContextInfo_v1Ptr[i]); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETGETCONTEXTINFO_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlEventSetGetContextInfo_v1_tCompare(m_value.EventSetGetContextInfo_v1, other.m_value.EventSetGetContextInfo_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_tCompare(*m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr, *other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_tCompare(m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr[i], other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr[i]); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_tCompare(m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1, other.m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETWAIT_V3_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlEventSetWait_v3_tCompare(*m_value.EventSetWait_v3Ptr, *other.m_value.EventSetWait_v3Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlEventSetWait_v3_tCompare(m_value.EventSetWait_v3Ptr[i], other.m_value.EventSetWait_v3Ptr[i]); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_EVENTSETWAIT_V3:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlEventSetWait_v3_tCompare(m_value.EventSetWait_v3, other.m_value.EventSetWait_v3);
                     break; // NOT REACHED
                 }
                 case INJECTION_EVENTSET_PTR:
@@ -11661,7 +12363,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlExcludedDeviceInfo_tCompare(*m_value.ExcludedDeviceInfoPtr, *other.m_value.ExcludedDeviceInfoPtr); ret)
+                        if (auto ret = nvmlExcludedDeviceInfo_tCompare(m_value.ExcludedDeviceInfoPtr[i], other.m_value.ExcludedDeviceInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11684,7 +12386,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlFBCSessionInfo_tCompare(*m_value.FBCSessionInfoPtr, *other.m_value.FBCSessionInfoPtr); ret)
+                        if (auto ret = nvmlFBCSessionInfo_tCompare(m_value.FBCSessionInfoPtr[i], other.m_value.FBCSessionInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11746,7 +12448,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlFBCStats_tCompare(*m_value.FBCStatsPtr, *other.m_value.FBCStatsPtr); ret)
+                        if (auto ret = nvmlFBCStats_tCompare(m_value.FBCStatsPtr[i], other.m_value.FBCStatsPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11808,7 +12510,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlFanSpeedInfo_tCompare(*m_value.FanSpeedInfoPtr, *other.m_value.FanSpeedInfoPtr); ret)
+                        if (auto ret = nvmlFanSpeedInfo_tCompare(m_value.FanSpeedInfoPtr[i], other.m_value.FanSpeedInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11870,7 +12572,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlFieldValue_tCompare(*m_value.FieldValuePtr, *other.m_value.FieldValuePtr); ret)
+                        if (auto ret = nvmlFieldValue_tCompare(m_value.FieldValuePtr[i], other.m_value.FieldValuePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -11971,7 +12673,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpmSupport_tCompare(*m_value.GpmSupportPtr, *other.m_value.GpmSupportPtr); ret)
+                        if (auto ret = nvmlGpmSupport_tCompare(m_value.GpmSupportPtr[i], other.m_value.GpmSupportPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12007,7 +12709,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuFabricInfoV_tCompare(*m_value.GpuFabricInfoVPtr, *other.m_value.GpuFabricInfoVPtr); ret)
+                        if (auto ret = nvmlGpuFabricInfoV_tCompare(m_value.GpuFabricInfoVPtr[i], other.m_value.GpuFabricInfoVPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12030,7 +12732,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuFabricInfo_tCompare(*m_value.GpuFabricInfoPtr, *other.m_value.GpuFabricInfoPtr); ret)
+                        if (auto ret = nvmlGpuFabricInfo_tCompare(m_value.GpuFabricInfoPtr[i], other.m_value.GpuFabricInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12053,7 +12755,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuFabricInfo_v2_tCompare(*m_value.GpuFabricInfo_v2Ptr, *other.m_value.GpuFabricInfo_v2Ptr); ret)
+                        if (auto ret = nvmlGpuFabricInfo_v2_tCompare(m_value.GpuFabricInfo_v2Ptr[i], other.m_value.GpuFabricInfo_v2Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -12115,7 +12817,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstanceInfo_tCompare(*m_value.GpuInstanceInfoPtr, *other.m_value.GpuInstanceInfoPtr); ret)
+                        if (auto ret = nvmlGpuInstanceInfo_tCompare(m_value.GpuInstanceInfoPtr[i], other.m_value.GpuInstanceInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12138,7 +12840,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstancePlacement_tCompare(*m_value.GpuInstancePlacementPtr, *other.m_value.GpuInstancePlacementPtr); ret)
+                        if (auto ret = nvmlGpuInstancePlacement_tCompare(m_value.GpuInstancePlacementPtr[i], other.m_value.GpuInstancePlacementPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12161,7 +12863,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstanceProfileInfo_tCompare(*m_value.GpuInstanceProfileInfoPtr, *other.m_value.GpuInstanceProfileInfoPtr); ret)
+                        if (auto ret = nvmlGpuInstanceProfileInfo_tCompare(m_value.GpuInstanceProfileInfoPtr[i], other.m_value.GpuInstanceProfileInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12184,7 +12886,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstanceProfileInfo_v2_tCompare(*m_value.GpuInstanceProfileInfo_v2Ptr, *other.m_value.GpuInstanceProfileInfo_v2Ptr); ret)
+                        if (auto ret = nvmlGpuInstanceProfileInfo_v2_tCompare(m_value.GpuInstanceProfileInfo_v2Ptr[i], other.m_value.GpuInstanceProfileInfo_v2Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -12207,7 +12909,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGpuInstanceProfileInfo_v3_tCompare(*m_value.GpuInstanceProfileInfo_v3Ptr, *other.m_value.GpuInstanceProfileInfo_v3Ptr); ret)
+                        if (auto ret = nvmlGpuInstanceProfileInfo_v3_tCompare(m_value.GpuInstanceProfileInfo_v3Ptr[i], other.m_value.GpuInstanceProfileInfo_v3Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -12264,6 +12966,107 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                         return -1;
                     }
                     else if (m_value.GpuOperationMode > other.m_value.GpuOperationMode)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUOPERATIONALEVENTCONFIG_V1_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        return nvmlGpuOperationalEventConfig_v1_tCompare(*m_value.GpuOperationalEventConfig_v1Ptr, *other.m_value.GpuOperationalEventConfig_v1Ptr);
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (auto ret = nvmlGpuOperationalEventConfig_v1_tCompare(m_value.GpuOperationalEventConfig_v1Ptr[i], other.m_value.GpuOperationalEventConfig_v1Ptr[i]); ret)
+                        {
+                            return ret;
+                        }
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUOPERATIONALEVENTCONFIG_V1:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    return nvmlGpuOperationalEventConfig_v1_tCompare(m_value.GpuOperationalEventConfig_v1, other.m_value.GpuOperationalEventConfig_v1);
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.GpuOperationalEventContextTypePtr == *other.m_value.GpuOperationalEventContextTypePtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.GpuOperationalEventContextTypePtr < *other.m_value.GpuOperationalEventContextTypePtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.GpuOperationalEventContextTypePtr[i] == other.m_value.GpuOperationalEventContextTypePtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.GpuOperationalEventContextTypePtr[i] < other.m_value.GpuOperationalEventContextTypePtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.GpuOperationalEventContextType < other.m_value.GpuOperationalEventContextType)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.GpuOperationalEventContextType > other.m_value.GpuOperationalEventContextType)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUOPERATIONALEVENTLOGLEVEL_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.GpuOperationalEventLogLevelPtr == *other.m_value.GpuOperationalEventLogLevelPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.GpuOperationalEventLogLevelPtr < *other.m_value.GpuOperationalEventLogLevelPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.GpuOperationalEventLogLevelPtr[i] == other.m_value.GpuOperationalEventLogLevelPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.GpuOperationalEventLogLevelPtr[i] < other.m_value.GpuOperationalEventLogLevelPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_GPUOPERATIONALEVENTLOGLEVEL:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.GpuOperationalEventLogLevel < other.m_value.GpuOperationalEventLogLevel)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.GpuOperationalEventLogLevel > other.m_value.GpuOperationalEventLogLevel)
                     {
                         return 1;
                     }
@@ -12490,7 +13293,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGridLicensableFeature_tCompare(*m_value.GridLicensableFeaturePtr, *other.m_value.GridLicensableFeaturePtr); ret)
+                        if (auto ret = nvmlGridLicensableFeature_tCompare(m_value.GridLicensableFeaturePtr[i], other.m_value.GridLicensableFeaturePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12513,7 +13316,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGridLicensableFeatures_tCompare(*m_value.GridLicensableFeaturesPtr, *other.m_value.GridLicensableFeaturesPtr); ret)
+                        if (auto ret = nvmlGridLicensableFeatures_tCompare(m_value.GridLicensableFeaturesPtr[i], other.m_value.GridLicensableFeaturesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12536,7 +13339,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlGridLicenseExpiry_tCompare(*m_value.GridLicenseExpiryPtr, *other.m_value.GridLicenseExpiryPtr); ret)
+                        if (auto ret = nvmlGridLicenseExpiry_tCompare(m_value.GridLicenseExpiryPtr[i], other.m_value.GridLicenseExpiryPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12637,7 +13440,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlHwbcEntry_tCompare(*m_value.HwbcEntryPtr, *other.m_value.HwbcEntryPtr); ret)
+                        if (auto ret = nvmlHwbcEntry_tCompare(m_value.HwbcEntryPtr[i], other.m_value.HwbcEntryPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12777,7 +13580,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlLedState_tCompare(*m_value.LedStatePtr, *other.m_value.LedStatePtr); ret)
+                        if (auto ret = nvmlLedState_tCompare(m_value.LedStatePtr[i], other.m_value.LedStatePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12800,7 +13603,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlMarginTemperature_tCompare(*m_value.MarginTemperaturePtr, *other.m_value.MarginTemperaturePtr); ret)
+                        if (auto ret = nvmlMarginTemperature_tCompare(m_value.MarginTemperaturePtr[i], other.m_value.MarginTemperaturePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12823,7 +13626,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlMask255_tCompare(*m_value.Mask255Ptr, *other.m_value.Mask255Ptr); ret)
+                        if (auto ret = nvmlMask255_tCompare(m_value.Mask255Ptr[i], other.m_value.Mask255Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -12924,7 +13727,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlMemory_tCompare(*m_value.MemoryPtr, *other.m_value.MemoryPtr); ret)
+                        if (auto ret = nvmlMemory_tCompare(m_value.MemoryPtr[i], other.m_value.MemoryPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -12947,7 +13750,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlMemory_v2_tCompare(*m_value.Memory_v2Ptr, *other.m_value.Memory_v2Ptr); ret)
+                        if (auto ret = nvmlMemory_v2_tCompare(m_value.Memory_v2Ptr[i], other.m_value.Memory_v2Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13048,7 +13851,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlNvLinkPowerThres_tCompare(*m_value.NvLinkPowerThresPtr, *other.m_value.NvLinkPowerThresPtr); ret)
+                        if (auto ret = nvmlNvLinkPowerThres_tCompare(m_value.NvLinkPowerThresPtr[i], other.m_value.NvLinkPowerThresPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13071,7 +13874,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlNvLinkUtilizationControl_tCompare(*m_value.NvLinkUtilizationControlPtr, *other.m_value.NvLinkUtilizationControlPtr); ret)
+                        if (auto ret = nvmlNvLinkUtilizationControl_tCompare(m_value.NvLinkUtilizationControlPtr[i], other.m_value.NvLinkUtilizationControlPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13172,7 +13975,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlNvlinkGetBwMode_tCompare(*m_value.NvlinkGetBwModePtr, *other.m_value.NvlinkGetBwModePtr); ret)
+                        if (auto ret = nvmlNvlinkGetBwMode_tCompare(m_value.NvlinkGetBwModePtr[i], other.m_value.NvlinkGetBwModePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13195,7 +13998,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlNvlinkSetBwMode_tCompare(*m_value.NvlinkSetBwModePtr, *other.m_value.NvlinkSetBwModePtr); ret)
+                        if (auto ret = nvmlNvlinkSetBwMode_tCompare(m_value.NvlinkSetBwModePtr[i], other.m_value.NvlinkSetBwModePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13218,7 +14021,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlNvlinkSupportedBwModes_tCompare(*m_value.NvlinkSupportedBwModesPtr, *other.m_value.NvlinkSupportedBwModesPtr); ret)
+                        if (auto ret = nvmlNvlinkSupportedBwModes_tCompare(m_value.NvlinkSupportedBwModesPtr[i], other.m_value.NvlinkSupportedBwModesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13262,6 +14065,45 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                         return -1;
                     }
                     else if (m_value.NvlinkVersion > other.m_value.NvlinkVersion)
+                    {
+                        return 1;
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                    break; // NOT REACHED
+                }
+                case INJECTION_OPERATIONALEVENTSEVERITY_PTR:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (!m_isArray)
+                    {
+                        if (*m_value.OperationalEventSeverityPtr == *other.m_value.OperationalEventSeverityPtr)
+                        {
+                            return 0;
+                        }
+                        return *m_value.OperationalEventSeverityPtr < *other.m_value.OperationalEventSeverityPtr ? -1 : 1;
+                    }
+                    for (unsigned i = 0; i < m_arrLen; ++i)
+                    {
+                        if (m_value.OperationalEventSeverityPtr[i] == other.m_value.OperationalEventSeverityPtr[i])
+                        {
+                            continue;
+                        }
+                        return m_value.OperationalEventSeverityPtr[i] < other.m_value.OperationalEventSeverityPtr[i] ? -1 : 1;
+                    }
+                    return 0;
+                    break; // NOT REACHED
+                }
+                case INJECTION_OPERATIONALEVENTSEVERITY:
+                {
+                    // The following snippet is generated from write_injection_argument_compare
+                    if (m_value.OperationalEventSeverity < other.m_value.OperationalEventSeverity)
+                    {
+                        return -1;
+                    }
+                    else if (m_value.OperationalEventSeverity > other.m_value.OperationalEventSeverity)
                     {
                         return 1;
                     }
@@ -13319,7 +14161,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPRMCounterInput_v1_tCompare(*m_value.PRMCounterInput_v1Ptr, *other.m_value.PRMCounterInput_v1Ptr); ret)
+                        if (auto ret = nvmlPRMCounterInput_v1_tCompare(m_value.PRMCounterInput_v1Ptr[i], other.m_value.PRMCounterInput_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13342,7 +14184,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPRMCounterList_v1_tCompare(*m_value.PRMCounterList_v1Ptr, *other.m_value.PRMCounterList_v1Ptr); ret)
+                        if (auto ret = nvmlPRMCounterList_v1_tCompare(m_value.PRMCounterList_v1Ptr[i], other.m_value.PRMCounterList_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13365,7 +14207,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPRMCounterValue_v1_tCompare(*m_value.PRMCounterValue_v1Ptr, *other.m_value.PRMCounterValue_v1Ptr); ret)
+                        if (auto ret = nvmlPRMCounterValue_v1_tCompare(m_value.PRMCounterValue_v1Ptr[i], other.m_value.PRMCounterValue_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13388,7 +14230,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPRMCounter_v1_tCompare(*m_value.PRMCounter_v1Ptr, *other.m_value.PRMCounter_v1Ptr); ret)
+                        if (auto ret = nvmlPRMCounter_v1_tCompare(m_value.PRMCounter_v1Ptr[i], other.m_value.PRMCounter_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13411,7 +14253,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPRMTLV_v1_tCompare(*m_value.PRMTLV_v1Ptr, *other.m_value.PRMTLV_v1Ptr); ret)
+                        if (auto ret = nvmlPRMTLV_v1_tCompare(m_value.PRMTLV_v1Ptr[i], other.m_value.PRMTLV_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13434,7 +14276,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPSUInfo_tCompare(*m_value.PSUInfoPtr, *other.m_value.PSUInfoPtr); ret)
+                        if (auto ret = nvmlPSUInfo_tCompare(m_value.PSUInfoPtr[i], other.m_value.PSUInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13496,7 +14338,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPciInfoExt_tCompare(*m_value.PciInfoExtPtr, *other.m_value.PciInfoExtPtr); ret)
+                        if (auto ret = nvmlPciInfoExt_tCompare(m_value.PciInfoExtPtr[i], other.m_value.PciInfoExtPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13519,7 +14361,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPciInfo_tCompare(*m_value.PciInfoPtr, *other.m_value.PciInfoPtr); ret)
+                        if (auto ret = nvmlPciInfo_tCompare(m_value.PciInfoPtr[i], other.m_value.PciInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13659,7 +14501,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPlatformInfo_tCompare(*m_value.PlatformInfoPtr, *other.m_value.PlatformInfoPtr); ret)
+                        if (auto ret = nvmlPlatformInfo_tCompare(m_value.PlatformInfoPtr[i], other.m_value.PlatformInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13682,7 +14524,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPlatformInfo_v1_tCompare(*m_value.PlatformInfo_v1Ptr, *other.m_value.PlatformInfo_v1Ptr); ret)
+                        if (auto ret = nvmlPlatformInfo_v1_tCompare(m_value.PlatformInfo_v1Ptr[i], other.m_value.PlatformInfo_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13861,7 +14703,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlPowerValue_v2_tCompare(*m_value.PowerValue_v2Ptr, *other.m_value.PowerValue_v2Ptr); ret)
+                        if (auto ret = nvmlPowerValue_v2_tCompare(m_value.PowerValue_v2Ptr[i], other.m_value.PowerValue_v2Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13884,7 +14726,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessDetailList_tCompare(*m_value.ProcessDetailListPtr, *other.m_value.ProcessDetailListPtr); ret)
+                        if (auto ret = nvmlProcessDetailList_tCompare(m_value.ProcessDetailListPtr[i], other.m_value.ProcessDetailListPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13907,7 +14749,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessDetail_v1_tCompare(*m_value.ProcessDetail_v1Ptr, *other.m_value.ProcessDetail_v1Ptr); ret)
+                        if (auto ret = nvmlProcessDetail_v1_tCompare(m_value.ProcessDetail_v1Ptr[i], other.m_value.ProcessDetail_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13930,7 +14772,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessInfo_tCompare(*m_value.ProcessInfoPtr, *other.m_value.ProcessInfoPtr); ret)
+                        if (auto ret = nvmlProcessInfo_tCompare(m_value.ProcessInfoPtr[i], other.m_value.ProcessInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -13953,7 +14795,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessInfo_v1_tCompare(*m_value.ProcessInfo_v1Ptr, *other.m_value.ProcessInfo_v1Ptr); ret)
+                        if (auto ret = nvmlProcessInfo_v1_tCompare(m_value.ProcessInfo_v1Ptr[i], other.m_value.ProcessInfo_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13976,7 +14818,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessUtilizationInfo_v1_tCompare(*m_value.ProcessUtilizationInfo_v1Ptr, *other.m_value.ProcessUtilizationInfo_v1Ptr); ret)
+                        if (auto ret = nvmlProcessUtilizationInfo_v1_tCompare(m_value.ProcessUtilizationInfo_v1Ptr[i], other.m_value.ProcessUtilizationInfo_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -13999,7 +14841,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessUtilizationSample_tCompare(*m_value.ProcessUtilizationSamplePtr, *other.m_value.ProcessUtilizationSamplePtr); ret)
+                        if (auto ret = nvmlProcessUtilizationSample_tCompare(m_value.ProcessUtilizationSamplePtr[i], other.m_value.ProcessUtilizationSamplePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14022,7 +14864,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlProcessesUtilizationInfo_tCompare(*m_value.ProcessesUtilizationInfoPtr, *other.m_value.ProcessesUtilizationInfoPtr); ret)
+                        if (auto ret = nvmlProcessesUtilizationInfo_tCompare(m_value.ProcessesUtilizationInfoPtr[i], other.m_value.ProcessesUtilizationInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14162,7 +15004,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlRowRemapperHistogramValues_tCompare(*m_value.RowRemapperHistogramValuesPtr, *other.m_value.RowRemapperHistogramValuesPtr); ret)
+                        if (auto ret = nvmlRowRemapperHistogramValues_tCompare(m_value.RowRemapperHistogramValuesPtr[i], other.m_value.RowRemapperHistogramValuesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14185,7 +15027,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlSample_tCompare(*m_value.SamplePtr, *other.m_value.SamplePtr); ret)
+                        if (auto ret = nvmlSample_tCompare(m_value.SamplePtr[i], other.m_value.SamplePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14247,7 +15089,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlSystemConfComputeSettings_tCompare(*m_value.SystemConfComputeSettingsPtr, *other.m_value.SystemConfComputeSettingsPtr); ret)
+                        if (auto ret = nvmlSystemConfComputeSettings_tCompare(m_value.SystemConfComputeSettingsPtr[i], other.m_value.SystemConfComputeSettingsPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14270,7 +15112,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlSystemDriverBranchInfo_tCompare(*m_value.SystemDriverBranchInfoPtr, *other.m_value.SystemDriverBranchInfoPtr); ret)
+                        if (auto ret = nvmlSystemDriverBranchInfo_tCompare(m_value.SystemDriverBranchInfoPtr[i], other.m_value.SystemDriverBranchInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14293,7 +15135,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlSystemEventData_v1_tCompare(*m_value.SystemEventData_v1Ptr, *other.m_value.SystemEventData_v1Ptr); ret)
+                        if (auto ret = nvmlSystemEventData_v1_tCompare(m_value.SystemEventData_v1Ptr[i], other.m_value.SystemEventData_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -14446,7 +15288,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlTemperature_tCompare(*m_value.TemperaturePtr, *other.m_value.TemperaturePtr); ret)
+                        if (auto ret = nvmlTemperature_tCompare(m_value.TemperaturePtr[i], other.m_value.TemperaturePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14547,7 +15389,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlUnitFanInfo_tCompare(*m_value.UnitFanInfoPtr, *other.m_value.UnitFanInfoPtr); ret)
+                        if (auto ret = nvmlUnitFanInfo_tCompare(m_value.UnitFanInfoPtr[i], other.m_value.UnitFanInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14570,7 +15412,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlUnitFanSpeeds_tCompare(*m_value.UnitFanSpeedsPtr, *other.m_value.UnitFanSpeedsPtr); ret)
+                        if (auto ret = nvmlUnitFanSpeeds_tCompare(m_value.UnitFanSpeedsPtr[i], other.m_value.UnitFanSpeedsPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14593,7 +15435,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlUnitInfo_tCompare(*m_value.UnitInfoPtr, *other.m_value.UnitInfoPtr); ret)
+                        if (auto ret = nvmlUnitInfo_tCompare(m_value.UnitInfoPtr[i], other.m_value.UnitInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14629,7 +15471,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlUnrepairableMemoryStatus_tCompare(*m_value.UnrepairableMemoryStatusPtr, *other.m_value.UnrepairableMemoryStatusPtr); ret)
+                        if (auto ret = nvmlUnrepairableMemoryStatus_tCompare(m_value.UnrepairableMemoryStatusPtr[i], other.m_value.UnrepairableMemoryStatusPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14652,7 +15494,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlUtilization_tCompare(*m_value.UtilizationPtr, *other.m_value.UtilizationPtr); ret)
+                        if (auto ret = nvmlUtilization_tCompare(m_value.UtilizationPtr[i], other.m_value.UtilizationPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14831,7 +15673,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuHeterogeneousMode_tCompare(*m_value.VgpuHeterogeneousModePtr, *other.m_value.VgpuHeterogeneousModePtr); ret)
+                        if (auto ret = nvmlVgpuHeterogeneousMode_tCompare(m_value.VgpuHeterogeneousModePtr[i], other.m_value.VgpuHeterogeneousModePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14854,7 +15696,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuInstanceUtilizationInfo_v1_tCompare(*m_value.VgpuInstanceUtilizationInfo_v1Ptr, *other.m_value.VgpuInstanceUtilizationInfo_v1Ptr); ret)
+                        if (auto ret = nvmlVgpuInstanceUtilizationInfo_v1_tCompare(m_value.VgpuInstanceUtilizationInfo_v1Ptr[i], other.m_value.VgpuInstanceUtilizationInfo_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -14877,7 +15719,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuInstanceUtilizationSample_tCompare(*m_value.VgpuInstanceUtilizationSamplePtr, *other.m_value.VgpuInstanceUtilizationSamplePtr); ret)
+                        if (auto ret = nvmlVgpuInstanceUtilizationSample_tCompare(m_value.VgpuInstanceUtilizationSamplePtr[i], other.m_value.VgpuInstanceUtilizationSamplePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14939,7 +15781,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuInstancesUtilizationInfo_tCompare(*m_value.VgpuInstancesUtilizationInfoPtr, *other.m_value.VgpuInstancesUtilizationInfoPtr); ret)
+                        if (auto ret = nvmlVgpuInstancesUtilizationInfo_tCompare(m_value.VgpuInstancesUtilizationInfoPtr[i], other.m_value.VgpuInstancesUtilizationInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14962,7 +15804,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuLicenseExpiry_tCompare(*m_value.VgpuLicenseExpiryPtr, *other.m_value.VgpuLicenseExpiryPtr); ret)
+                        if (auto ret = nvmlVgpuLicenseExpiry_tCompare(m_value.VgpuLicenseExpiryPtr[i], other.m_value.VgpuLicenseExpiryPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -14985,7 +15827,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuLicenseInfo_tCompare(*m_value.VgpuLicenseInfoPtr, *other.m_value.VgpuLicenseInfoPtr); ret)
+                        if (auto ret = nvmlVgpuLicenseInfo_tCompare(m_value.VgpuLicenseInfoPtr[i], other.m_value.VgpuLicenseInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15008,7 +15850,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuMetadata_tCompare(*m_value.VgpuMetadataPtr, *other.m_value.VgpuMetadataPtr); ret)
+                        if (auto ret = nvmlVgpuMetadata_tCompare(m_value.VgpuMetadataPtr[i], other.m_value.VgpuMetadataPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15070,7 +15912,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuPgpuCompatibility_tCompare(*m_value.VgpuPgpuCompatibilityPtr, *other.m_value.VgpuPgpuCompatibilityPtr); ret)
+                        if (auto ret = nvmlVgpuPgpuCompatibility_tCompare(m_value.VgpuPgpuCompatibilityPtr[i], other.m_value.VgpuPgpuCompatibilityPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15093,7 +15935,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuPgpuMetadata_tCompare(*m_value.VgpuPgpuMetadataPtr, *other.m_value.VgpuPgpuMetadataPtr); ret)
+                        if (auto ret = nvmlVgpuPgpuMetadata_tCompare(m_value.VgpuPgpuMetadataPtr[i], other.m_value.VgpuPgpuMetadataPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15116,7 +15958,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuPlacementId_tCompare(*m_value.VgpuPlacementIdPtr, *other.m_value.VgpuPlacementIdPtr); ret)
+                        if (auto ret = nvmlVgpuPlacementId_tCompare(m_value.VgpuPlacementIdPtr[i], other.m_value.VgpuPlacementIdPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15139,7 +15981,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuPlacementList_tCompare(*m_value.VgpuPlacementListPtr, *other.m_value.VgpuPlacementListPtr); ret)
+                        if (auto ret = nvmlVgpuPlacementList_tCompare(m_value.VgpuPlacementListPtr[i], other.m_value.VgpuPlacementListPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15162,7 +16004,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuPlacementList_v1_tCompare(*m_value.VgpuPlacementList_v1Ptr, *other.m_value.VgpuPlacementList_v1Ptr); ret)
+                        if (auto ret = nvmlVgpuPlacementList_v1_tCompare(m_value.VgpuPlacementList_v1Ptr[i], other.m_value.VgpuPlacementList_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -15185,7 +16027,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuProcessUtilizationInfo_v1_tCompare(*m_value.VgpuProcessUtilizationInfo_v1Ptr, *other.m_value.VgpuProcessUtilizationInfo_v1Ptr); ret)
+                        if (auto ret = nvmlVgpuProcessUtilizationInfo_v1_tCompare(m_value.VgpuProcessUtilizationInfo_v1Ptr[i], other.m_value.VgpuProcessUtilizationInfo_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -15208,7 +16050,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuProcessUtilizationSample_tCompare(*m_value.VgpuProcessUtilizationSamplePtr, *other.m_value.VgpuProcessUtilizationSamplePtr); ret)
+                        if (auto ret = nvmlVgpuProcessUtilizationSample_tCompare(m_value.VgpuProcessUtilizationSamplePtr[i], other.m_value.VgpuProcessUtilizationSamplePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15231,7 +16073,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuProcessesUtilizationInfo_tCompare(*m_value.VgpuProcessesUtilizationInfoPtr, *other.m_value.VgpuProcessesUtilizationInfoPtr); ret)
+                        if (auto ret = nvmlVgpuProcessesUtilizationInfo_tCompare(m_value.VgpuProcessesUtilizationInfoPtr[i], other.m_value.VgpuProcessesUtilizationInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15254,7 +16096,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuRuntimeState_tCompare(*m_value.VgpuRuntimeStatePtr, *other.m_value.VgpuRuntimeStatePtr); ret)
+                        if (auto ret = nvmlVgpuRuntimeState_tCompare(m_value.VgpuRuntimeStatePtr[i], other.m_value.VgpuRuntimeStatePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15277,7 +16119,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuSchedulerCapabilities_tCompare(*m_value.VgpuSchedulerCapabilitiesPtr, *other.m_value.VgpuSchedulerCapabilitiesPtr); ret)
+                        if (auto ret = nvmlVgpuSchedulerCapabilities_tCompare(m_value.VgpuSchedulerCapabilitiesPtr[i], other.m_value.VgpuSchedulerCapabilitiesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15300,7 +16142,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuSchedulerGetState_tCompare(*m_value.VgpuSchedulerGetStatePtr, *other.m_value.VgpuSchedulerGetStatePtr); ret)
+                        if (auto ret = nvmlVgpuSchedulerGetState_tCompare(m_value.VgpuSchedulerGetStatePtr[i], other.m_value.VgpuSchedulerGetStatePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15323,7 +16165,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuSchedulerLogEntry_tCompare(*m_value.VgpuSchedulerLogEntryPtr, *other.m_value.VgpuSchedulerLogEntryPtr); ret)
+                        if (auto ret = nvmlVgpuSchedulerLogEntry_tCompare(m_value.VgpuSchedulerLogEntryPtr[i], other.m_value.VgpuSchedulerLogEntryPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15346,7 +16188,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuSchedulerLog_tCompare(*m_value.VgpuSchedulerLogPtr, *other.m_value.VgpuSchedulerLogPtr); ret)
+                        if (auto ret = nvmlVgpuSchedulerLog_tCompare(m_value.VgpuSchedulerLogPtr[i], other.m_value.VgpuSchedulerLogPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15369,7 +16211,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuSchedulerSetState_tCompare(*m_value.VgpuSchedulerSetStatePtr, *other.m_value.VgpuSchedulerSetStatePtr); ret)
+                        if (auto ret = nvmlVgpuSchedulerSetState_tCompare(m_value.VgpuSchedulerSetStatePtr[i], other.m_value.VgpuSchedulerSetStatePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15392,7 +16234,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuTypeBar1Info_tCompare(*m_value.VgpuTypeBar1InfoPtr, *other.m_value.VgpuTypeBar1InfoPtr); ret)
+                        if (auto ret = nvmlVgpuTypeBar1Info_tCompare(m_value.VgpuTypeBar1InfoPtr[i], other.m_value.VgpuTypeBar1InfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15454,7 +16296,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlVgpuVersion_tCompare(*m_value.VgpuVersionPtr, *other.m_value.VgpuVersionPtr); ret)
+                        if (auto ret = nvmlVgpuVersion_tCompare(m_value.VgpuVersionPtr[i], other.m_value.VgpuVersionPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15555,7 +16397,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlViolationTime_tCompare(*m_value.ViolationTimePtr, *other.m_value.ViolationTimePtr); ret)
+                        if (auto ret = nvmlViolationTime_tCompare(m_value.ViolationTimePtr[i], other.m_value.ViolationTimePtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15578,7 +16420,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlWorkloadPowerProfileCurrentProfiles_tCompare(*m_value.WorkloadPowerProfileCurrentProfilesPtr, *other.m_value.WorkloadPowerProfileCurrentProfilesPtr); ret)
+                        if (auto ret = nvmlWorkloadPowerProfileCurrentProfiles_tCompare(m_value.WorkloadPowerProfileCurrentProfilesPtr[i], other.m_value.WorkloadPowerProfileCurrentProfilesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15601,7 +16443,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlWorkloadPowerProfileInfo_tCompare(*m_value.WorkloadPowerProfileInfoPtr, *other.m_value.WorkloadPowerProfileInfoPtr); ret)
+                        if (auto ret = nvmlWorkloadPowerProfileInfo_tCompare(m_value.WorkloadPowerProfileInfoPtr[i], other.m_value.WorkloadPowerProfileInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15624,7 +16466,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlWorkloadPowerProfileProfilesInfo_tCompare(*m_value.WorkloadPowerProfileProfilesInfoPtr, *other.m_value.WorkloadPowerProfileProfilesInfoPtr); ret)
+                        if (auto ret = nvmlWorkloadPowerProfileProfilesInfo_tCompare(m_value.WorkloadPowerProfileProfilesInfoPtr[i], other.m_value.WorkloadPowerProfileProfilesInfoPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15647,7 +16489,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlWorkloadPowerProfileRequestedProfiles_tCompare(*m_value.WorkloadPowerProfileRequestedProfilesPtr, *other.m_value.WorkloadPowerProfileRequestedProfilesPtr); ret)
+                        if (auto ret = nvmlWorkloadPowerProfileRequestedProfiles_tCompare(m_value.WorkloadPowerProfileRequestedProfilesPtr[i], other.m_value.WorkloadPowerProfileRequestedProfilesPtr[i]); ret)
                         {
                             return ret;
                         }
@@ -15670,7 +16512,7 @@ int InjectionArgument::Compare(const InjectionArgument &other) const
                     }
                     for (unsigned i = 0; i < m_arrLen; ++i)
                     {
-                        if (auto ret = nvmlWorkloadPowerProfileUpdateProfiles_v1_tCompare(*m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr, *other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr); ret)
+                        if (auto ret = nvmlWorkloadPowerProfileUpdateProfiles_v1_tCompare(m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr[i], other.m_value.WorkloadPowerProfileUpdateProfiles_v1Ptr[i]); ret)
                         {
                             return ret;
                         }
@@ -16366,11 +17208,59 @@ InjectionArgument::~InjectionArgument()
             }
             break;
         }
+        case INJECTION_EVENTDATATYPE_PTR:
+        {
+            if (m_inHeap && m_value.EventDataTypePtr)
+            {
+                free(m_value.EventDataTypePtr);
+            }
+            break;
+        }
         case INJECTION_EVENTDATA_PTR:
         {
             if (m_inHeap && m_value.EventDataPtr)
             {
                 free(m_value.EventDataPtr);
+            }
+            break;
+        }
+        case INJECTION_EVENTSETGETCONTEXTCOUNT_V1_PTR:
+        {
+            if (m_inHeap && m_value.EventSetGetContextCount_v1Ptr)
+            {
+                free(m_value.EventSetGetContextCount_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_EVENTSETGETCONTEXTDATA_V1_PTR:
+        {
+            if (m_inHeap && m_value.EventSetGetContextData_v1Ptr)
+            {
+                free(m_value.EventSetGetContextData_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_EVENTSETGETCONTEXTINFO_V1_PTR:
+        {
+            if (m_inHeap && m_value.EventSetGetContextInfo_v1Ptr)
+            {
+                free(m_value.EventSetGetContextInfo_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_EVENTSETGETGPUOPERATIONALEVENTCONTEXTLEGACYXID_V1_PTR:
+        {
+            if (m_inHeap && m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr)
+            {
+                free(m_value.EventSetGetGpuOperationalEventContextLegacyXid_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_EVENTSETWAIT_V3_PTR:
+        {
+            if (m_inHeap && m_value.EventSetWait_v3Ptr)
+            {
+                free(m_value.EventSetWait_v3Ptr);
             }
             break;
         }
@@ -16579,6 +17469,30 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.GpuOperationModePtr)
             {
                 free(m_value.GpuOperationModePtr);
+            }
+            break;
+        }
+        case INJECTION_GPUOPERATIONALEVENTCONFIG_V1_PTR:
+        {
+            if (m_inHeap && m_value.GpuOperationalEventConfig_v1Ptr)
+            {
+                free(m_value.GpuOperationalEventConfig_v1Ptr);
+            }
+            break;
+        }
+        case INJECTION_GPUOPERATIONALEVENTCONTEXTTYPE_PTR:
+        {
+            if (m_inHeap && m_value.GpuOperationalEventContextTypePtr)
+            {
+                free(m_value.GpuOperationalEventContextTypePtr);
+            }
+            break;
+        }
+        case INJECTION_GPUOPERATIONALEVENTLOGLEVEL_PTR:
+        {
+            if (m_inHeap && m_value.GpuOperationalEventLogLevelPtr)
+            {
+                free(m_value.GpuOperationalEventLogLevelPtr);
             }
             break;
         }
@@ -16835,6 +17749,14 @@ InjectionArgument::~InjectionArgument()
             if (m_inHeap && m_value.NvlinkVersionPtr)
             {
                 free(m_value.NvlinkVersionPtr);
+            }
+            break;
+        }
+        case INJECTION_OPERATIONALEVENTSEVERITY_PTR:
+        {
+            if (m_inHeap && m_value.OperationalEventSeverityPtr)
+            {
+                free(m_value.OperationalEventSeverityPtr);
             }
             break;
         }

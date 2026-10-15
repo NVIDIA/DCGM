@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +17,12 @@ if (NOT BUILD_TESTING)
 endif()
 
 add_executable(hostenginetests)
-target_compile_definitions(hostenginetests PRIVATE HOSTENGINE_TESTS)
 
 target_sources(hostenginetests
                PRIVATE
                HostEngineCommandLineTests.cpp
+               HostEngineTestUtils.hpp
+               HostEngineMainTests.cpp
                HostEngineOutputTests.cpp)
 
 target_link_libraries(hostenginetests PRIVATE 
@@ -31,6 +32,7 @@ target_link_libraries(hostenginetests PRIVATE
     dcgm
     buildinfo_objects
     dcgm_common
+    test-utils
     Catch2::Catch2WithMain)
 
 if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")

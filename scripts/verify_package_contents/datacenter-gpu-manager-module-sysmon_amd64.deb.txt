@@ -1,0 +1,9 @@
+./usr/
+./usr/libexec/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulesysmon.so.<MAJORVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulesysmon.so.<SOFTWAREVERSION>
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-module-sysmon/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-module-sysmon/copyright

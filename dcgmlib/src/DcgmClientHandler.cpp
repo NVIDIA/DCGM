@@ -95,6 +95,7 @@ void DcgmClientHandler::ProcessDisconnect(dcgm_connection_id_t connectionId)
     if (it == m_connectionRequests.end())
     {
         DCGM_LOG_DEBUG << "No requests were outstanding for connectionId " << connectionId;
+        m_connectionAttributes.erase(connectionId);
         return;
     }
 

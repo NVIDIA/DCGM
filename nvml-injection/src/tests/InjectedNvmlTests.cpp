@@ -18,8 +18,11 @@
 #include <InjectedNvml.h>
 #include <InjectionKeys.h>
 #include <MockFileSystemOperator.h>
+#include <ScopedEnvVars.hpp>
 #include <UnitTestHelpers.h>
+#include <array>
 #include <catch2/catch_all.hpp>
+#include <chrono>
 #include <condition_variable>
 #include <fmt/format.h>
 #include <future>
@@ -118,7 +121,389 @@ void Teardown()
     InjectedNvml::Reset();
 }
 
+class BlockingReadFileSystemOperator : public MockFileSystemOperator
+{
+public:
+    std::optional<std::string> Read(std::string_view /* path */) override
+    {
+        m_readStarted.set_value();
+        m_allowReadToCompleteFuture.wait();
+        return std::nullopt;
+    }
+
+    std::future<void> GetReadStartedFuture()
+    {
+        return m_readStarted.get_future();
+    }
+
+    void AllowReadToComplete()
+    {
+        m_allowReadToComplete.set_value();
+    }
+
+private:
+    std::promise<void> m_readStarted;
+    std::promise<void> m_allowReadToComplete;
+    std::future<void> m_allowReadToCompleteFuture { m_allowReadToComplete.get_future() };
+};
+
+class NvmlEventWaitTestFixture
+{
+protected:
+    NvmlEventWaitTestFixture()
+        : injectedNvml(InjectedNvml::Init())
+    {}
+
+    ~NvmlEventWaitTestFixture()
+    {
+        Teardown();
+    }
+
+    void SetEventFile(std::string const &content)
+    {
+        auto fsOp = std::make_unique<MockFileSystemOperator>();
+        fsOp->MockFileContent(eventFilePath, content);
+        fsOp->MockUnlink(eventFilePath, true);
+        injectedNvml->SetFileSystemOp(std::move(fsOp));
+    }
+
+    void SetMissingEventFile()
+    {
+        injectedNvml->SetFileSystemOp(std::make_unique<MockFileSystemOperator>());
+    }
+
+    static constexpr char const *eventFilePath = "/run/nvml-injection/event.yaml";
+    InjectedNvml *injectedNvml;
+};
+
 } //namespace
+
+SCENARIO_METHOD(NvmlEventWaitTestFixture, "InjectedNvml: event wait v2 reads and consumes an event file")
+{
+    std::vector<nvmlDevice_t> devices;
+    REQUIRE(GetDevices(devices, 1) == NVML_SUCCESS);
+    InjectionArgument deviceArg(devices[0]);
+    auto const [uuidRet, uuid] = injectedNvml->GetString(deviceArg, INJECTION_UUID_KEY);
+    REQUIRE(uuidRet == NVML_SUCCESS);
+
+    SetEventFile(fmt::format("uuid: {}\n"
+                             "eventType: {}\n"
+                             "eventData: 79\n"
+                             "gpuInstanceId: 3\n"
+                             "computeInstanceId: 4\n",
+                             uuid,
+                             nvmlEventTypeXidCriticalError));
+
+    nvmlEventData_t eventData {};
+    REQUIRE(nvmlEventSetWait_v2(nullptr, &eventData, 0) == NVML_SUCCESS);
+    CHECK(eventData.device == devices[0]);
+    CHECK(eventData.eventType == nvmlEventTypeXidCriticalError);
+    CHECK(eventData.eventData == 79);
+    CHECK(eventData.gpuInstanceId == 3);
+    CHECK(eventData.computeInstanceId == 4);
+
+    CHECK(nvmlEventSetWait_v2(nullptr, &eventData, 0) == NVML_ERROR_TIMEOUT);
+    CHECK(eventData.device == devices[0]);
+    CHECK(eventData.eventData == 79);
+}
+
+SCENARIO_METHOD(NvmlEventWaitTestFixture, "InjectedNvml: event wait v3 reads an extended event file")
+{
+    SetEventFile("uuid: GPU-test-uuid\n"
+                 "sourceModule: GSP\n"
+                 "eventType: 0\n"
+                 "eventData: 79\n"
+                 "groupCursor: 4294967297\n"
+                 "instanceId: 4294967298\n"
+                 "timestampUsec: 4294967299\n"
+                 "traceId: 4294967300\n"
+                 "dataType: 1\n"
+                 "gpuInstanceId: 5\n"
+                 "computeInstanceId: 6\n"
+                 "severity: 40\n"
+                 "categoryId: 7\n"
+                 "moduleEventCode: 8\n"
+                 "scope: 9\n"
+                 "originator: 10\n"
+                 "moduleInstance: 11\n"
+                 "chipletId: 12\n"
+                 "logLevel: 50\n"
+                 "attributes: 13\n"
+                 "groupCperSize: 14\n"
+                 "groupAttributes: 3\n"
+                 "groupSize: 15\n"
+                 "groupIndex: 2\n");
+
+    nvmlGpuOperationalEventConfig_v1_t config {};
+    CHECK(nvmlEventSetRegisterGpuOperationalEvents_v1(nullptr, &config) == NVML_SUCCESS);
+    CHECK(nvmlEventSetRegisterGpuOperationalEvents_v1(nullptr, nullptr) == NVML_ERROR_INVALID_ARGUMENT);
+
+    nvmlEventSetWait_v3_t eventData {};
+    eventData.timeoutMs = 17;
+    REQUIRE(nvmlEventSetWait_v3(nullptr, &eventData) == NVML_SUCCESS);
+    CHECK(eventData.timeoutMs == 17);
+    CHECK(std::string_view(eventData.uuid) == "GPU-test-uuid");
+    CHECK(std::string_view(eventData.sourceModule) == "GSP");
+    CHECK(eventData.eventType == 0);
+    CHECK(eventData.eventData == 79);
+    CHECK(eventData.groupCursor == 4294967297ULL);
+    CHECK(eventData.instanceId == 4294967298ULL);
+    CHECK(eventData.timestampUsec == 4294967299ULL);
+    CHECK(eventData.traceId == 4294967300ULL);
+    CHECK(eventData.dataType == NVML_EVENT_DATA_TYPE_GPU_OPERATIONAL_EVENT);
+    CHECK(eventData.gpuInstanceId == 5);
+    CHECK(eventData.computeInstanceId == 6);
+    CHECK(eventData.severity == NVML_OPERATIONAL_EVENT_SEVERITY_FATAL);
+    CHECK(eventData.categoryId == 7);
+    CHECK(eventData.moduleEventCode == 8);
+    CHECK(eventData.scope == 9);
+    CHECK(eventData.originator == 10);
+    CHECK(eventData.moduleInstance == 11);
+    CHECK(eventData.chipletId == 12);
+    CHECK(eventData.logLevel == NVML_GPU_OPERATIONAL_EVENT_LOG_LEVEL_ERROR);
+    CHECK(eventData.attributes == 13);
+    CHECK(eventData.groupCperSize == 14);
+    CHECK(eventData.groupAttributes == 3);
+    CHECK(eventData.groupSize == 15);
+    CHECK(eventData.groupIndex == 2);
+}
+
+SCENARIO_METHOD(NvmlEventWaitTestFixture, "InjectedNvml: context queries proceed while event wait reads its file")
+{
+    auto fsOp              = std::make_unique<BlockingReadFileSystemOperator>();
+    auto *blockingFsOp     = fsOp.get();
+    auto readStarted       = blockingFsOp->GetReadStartedFuture();
+    auto const syncTimeout = std::chrono::seconds(4);
+    injectedNvml->SetFileSystemOp(std::move(fsOp));
+
+    nvmlEventSetWait_v3_t eventData {};
+    nvmlReturn_t waitRet = NVML_ERROR_UNKNOWN;
+    std::jthread waitThread([&]() { waitRet = nvmlEventSetWait_v3(nullptr, &eventData); });
+
+    auto const readStartedStatus = readStarted.wait_for(syncTimeout);
+    if (readStartedStatus != std::future_status::ready)
+    {
+        blockingFsOp->AllowReadToComplete();
+        waitThread.join();
+        REQUIRE(readStartedStatus == std::future_status::ready);
+    }
+
+    nvmlEventSetGetContextCount_v1_t count {};
+    auto contextQuery
+        = std::async(std::launch::async, [&]() { return nvmlEventSetGetContextCount_v1(nullptr, &count); });
+    auto const contextQueryStatus = contextQuery.wait_for(syncTimeout);
+
+    blockingFsOp->AllowReadToComplete();
+    waitThread.join();
+
+    REQUIRE(contextQueryStatus == std::future_status::ready);
+    CHECK(contextQuery.get() == NVML_ERROR_NOT_FOUND);
+    CHECK(waitRet == NVML_ERROR_TIMEOUT);
+}
+
+SCENARIO_METHOD(NvmlEventWaitTestFixture, "InjectedNvml: event wait v3 queues events and exposes contexts")
+{
+    SetEventFile("events:\n"
+                 "  - uuid: GPU-first\n"
+                 "    dataType: 1\n"
+                 "    instanceId: 100\n"
+                 "    contexts:\n"
+                 "      - nvmlGpuOperationalEventContextType: 1\n"
+                 "        sourceEventContextType: 42\n"
+                 "        dataFormatVersion: 3\n"
+                 "        data: [79, 0, 0, 0]\n"
+                 "      - nvmlGpuOperationalEventContextType: 0\n"
+                 "        sourceEventContextType: 99\n"
+                 "        dataFormatVersion: 1\n"
+                 "        data: []\n"
+                 "  - uuid: GPU-second\n"
+                 "    dataType: 1\n"
+                 "    instanceId: 200\n"
+                 "    contexts:\n"
+                 "      - nvmlGpuOperationalEventContextType: 0\n"
+                 "        sourceEventContextType: 77\n"
+                 "        dataFormatVersion: 2\n"
+                 "        data: [170, 187]\n"
+                 "  - uuid: GPU-third\n"
+                 "    dataType: 1\n"
+                 "    instanceId: 300\n"
+                 "    contexts: []\n");
+
+    nvmlEventSetGetContextCount_v1_t count { .count = 99 };
+    CHECK(nvmlEventSetGetContextCount_v1(nullptr, &count) == NVML_ERROR_NOT_FOUND);
+    CHECK(count.count == 99);
+    nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t legacyXid { .index = 0, .xidCode = 123 };
+    CHECK(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, &legacyXid) == NVML_ERROR_NOT_FOUND);
+    CHECK(legacyXid.xidCode == 123);
+
+    nvmlEventSetWait_v3_t eventData {};
+    REQUIRE(nvmlEventSetWait_v3(nullptr, &eventData) == NVML_SUCCESS);
+    CHECK(eventData.instanceId == 100);
+
+    REQUIRE(nvmlEventSetGetContextCount_v1(nullptr, &count) == NVML_SUCCESS);
+    CHECK(count.count == 2);
+    CHECK(nvmlEventSetGetContextCount_v1(nullptr, nullptr) == NVML_ERROR_INVALID_ARGUMENT);
+
+    nvmlEventSetGetContextInfo_v1_t info {};
+    info.index = 0;
+    REQUIRE(nvmlEventSetGetContextInfo_v1(nullptr, &info) == NVML_SUCCESS);
+    CHECK(info.nvmlGpuOperationalEventContextType == NVML_GPU_OPERATIONAL_EVENT_CONTEXT_TYPE_LEGACY_XID);
+    CHECK(info.sourceEventContextType == 42);
+    CHECK(info.dataSize == 4);
+    CHECK(info.dataFormatVersion == 3);
+    info.index = 2;
+    CHECK(nvmlEventSetGetContextInfo_v1(nullptr, &info) == NVML_ERROR_INVALID_ARGUMENT);
+    CHECK(nvmlEventSetGetContextInfo_v1(nullptr, nullptr) == NVML_ERROR_INVALID_ARGUMENT);
+
+    nvmlEventSetGetContextData_v1_t contextData { .data = nullptr, .index = 0, .dataSize = 0 };
+    CHECK(nvmlEventSetGetContextData_v1(nullptr, &contextData) == NVML_ERROR_INSUFFICIENT_SIZE);
+    CHECK(contextData.dataSize == 4);
+
+    std::array<unsigned char, 3> smallBuffer { 0xEE, 0xEE, 0xEE };
+    contextData.data     = smallBuffer.data();
+    contextData.dataSize = smallBuffer.size();
+    CHECK(nvmlEventSetGetContextData_v1(nullptr, &contextData) == NVML_ERROR_INSUFFICIENT_SIZE);
+    CHECK(contextData.dataSize == 4);
+    CHECK((smallBuffer == std::array<unsigned char, 3> { 0xEE, 0xEE, 0xEE }));
+
+    std::array<unsigned char, 4> payload {};
+    contextData.data     = payload.data();
+    contextData.dataSize = payload.size();
+    REQUIRE(nvmlEventSetGetContextData_v1(nullptr, &contextData) == NVML_SUCCESS);
+    CHECK(contextData.dataSize == 4);
+    CHECK((payload == std::array<unsigned char, 4> { 79, 0, 0, 0 }));
+
+    REQUIRE(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, &legacyXid) == NVML_SUCCESS);
+    CHECK(legacyXid.xidCode == 79);
+    legacyXid.index = 1;
+    CHECK(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, &legacyXid) == NVML_ERROR_NOT_FOUND);
+    legacyXid.index = 2;
+    CHECK(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, &legacyXid) == NVML_ERROR_INVALID_ARGUMENT);
+    CHECK(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, nullptr) == NVML_ERROR_INVALID_ARGUMENT);
+
+    contextData = { .data = nullptr, .index = 1, .dataSize = 123 };
+    CHECK(nvmlEventSetGetContextData_v1(nullptr, &contextData) == NVML_SUCCESS);
+    CHECK(contextData.dataSize == 0);
+    contextData = { .data = payload.data(), .index = 2, .dataSize = contextData.dataSize };
+    CHECK(nvmlEventSetGetContextData_v1(nullptr, &contextData) == NVML_ERROR_INVALID_ARGUMENT);
+    CHECK(nvmlEventSetGetContextData_v1(nullptr, nullptr) == NVML_ERROR_INVALID_ARGUMENT);
+
+    REQUIRE(nvmlEventSetWait_v3(nullptr, &eventData) == NVML_SUCCESS);
+    CHECK(eventData.instanceId == 200);
+    REQUIRE(nvmlEventSetGetContextCount_v1(nullptr, &count) == NVML_SUCCESS);
+    CHECK(count.count == 1);
+    info.index = 0;
+    REQUIRE(nvmlEventSetGetContextInfo_v1(nullptr, &info) == NVML_SUCCESS);
+    CHECK(info.sourceEventContextType == 77);
+    CHECK(info.dataSize == 2);
+    legacyXid.index = 0;
+    CHECK(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, &legacyXid) == NVML_ERROR_NOT_FOUND);
+
+    REQUIRE(nvmlEventSetWait_v3(nullptr, &eventData) == NVML_SUCCESS);
+    CHECK(eventData.instanceId == 300);
+    REQUIRE(nvmlEventSetGetContextCount_v1(nullptr, &count) == NVML_SUCCESS);
+    CHECK(count.count == 0);
+
+    eventData.instanceId = 400;
+    CHECK(nvmlEventSetWait_v3(nullptr, &eventData) == NVML_ERROR_TIMEOUT);
+    CHECK(eventData.instanceId == 400);
+    REQUIRE(nvmlEventSetGetContextCount_v1(nullptr, &count) == NVML_SUCCESS);
+    CHECK(count.count == 0);
+
+    REQUIRE(nvmlEventSetFree(nullptr) == NVML_SUCCESS);
+    CHECK(nvmlEventSetGetContextCount_v1(nullptr, &count) == NVML_ERROR_NOT_FOUND);
+    CHECK(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, &legacyXid) == NVML_ERROR_NOT_FOUND);
+}
+
+SCENARIO_METHOD(NvmlEventWaitTestFixture, "InjectedNvml: invalid v3 batches preserve event and context state")
+{
+    SetEventFile("- uuid: GPU-first\n"
+                 "  instanceId: 100\n"
+                 "  contexts:\n"
+                 "    - nvmlGpuOperationalEventContextType: 1\n"
+                 "      sourceEventContextType: 42\n"
+                 "      dataFormatVersion: 1\n"
+                 "      data: [17]\n");
+
+    nvmlEventSetWait_v3_t eventData {};
+    REQUIRE(nvmlEventSetWait_v3(nullptr, &eventData) == NVML_SUCCESS);
+
+    nvmlEventSetGetContextCount_v1_t count {};
+    REQUIRE(nvmlEventSetGetContextCount_v1(nullptr, &count) == NVML_SUCCESS);
+    REQUIRE(count.count == 1);
+    nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1_t legacyXid { .index = 0, .xidCode = 123 };
+    CHECK(nvmlEventSetGetGpuOperationalEventContextLegacyXid_v1(nullptr, &legacyXid) == NVML_ERROR_UNKNOWN);
+    CHECK(legacyXid.xidCode == 123);
+
+    SetEventFile("- uuid: GPU-invalid\n"
+                 "  instanceId: 200\n"
+                 "  contexts:\n"
+                 "    - nvmlGpuOperationalEventContextType: 0\n"
+                 "      sourceEventContextType: 43\n"
+                 "      dataFormatVersion: 1\n"
+                 "      data: [256]\n"); // 256 is out of range for a byte-sized field
+
+    eventData.instanceId = 300;
+    CHECK(nvmlEventSetWait_v3(nullptr, &eventData) == NVML_ERROR_TIMEOUT);
+    CHECK(eventData.instanceId == 300);
+    REQUIRE(nvmlEventSetGetContextCount_v1(nullptr, &count) == NVML_SUCCESS);
+    CHECK(count.count == 1);
+
+    nvmlEventSetGetContextInfo_v1_t info {};
+    info.index = 0;
+    REQUIRE(nvmlEventSetGetContextInfo_v1(nullptr, &info) == NVML_SUCCESS);
+    CHECK(info.sourceEventContextType == 42);
+}
+
+SCENARIO_METHOD(NvmlEventWaitTestFixture, "InjectedNvml: event waits time out without a valid event file")
+{
+    nvmlEventData_t eventData {};
+    eventData.eventData = 123;
+    nvmlEventSetWait_v3_t eventDataV2 {};
+    eventDataV2.traceId = 456;
+
+    GIVEN("the event file does not exist")
+    {
+        SetMissingEventFile();
+
+        CHECK(nvmlEventSetWait_v2(nullptr, &eventData, 0) == NVML_ERROR_TIMEOUT);
+        CHECK(nvmlEventSetWait_v3(nullptr, &eventDataV2) == NVML_ERROR_TIMEOUT);
+        CHECK(eventData.eventData == 123);
+        CHECK(eventDataV2.traceId == 456);
+    }
+
+    GIVEN("the event file contains malformed YAML")
+    {
+        SetEventFile("uuid: [\n");
+
+        CHECK(nvmlEventSetWait_v2(nullptr, &eventData, 0) == NVML_ERROR_TIMEOUT);
+        CHECK(nvmlEventSetWait_v3(nullptr, &eventDataV2) == NVML_ERROR_TIMEOUT);
+        CHECK(eventData.eventData == 123);
+        CHECK(eventDataV2.traceId == 456);
+    }
+
+    GIVEN("a v2 event refers to an unknown GPU")
+    {
+        SetEventFile("uuid: GPU-unknown\neventData: 79\n");
+
+        CHECK(nvmlEventSetWait_v2(nullptr, &eventData, 0) == NVML_ERROR_TIMEOUT);
+        CHECK(eventData.eventData == 123);
+    }
+
+    GIVEN("a v3 byte-sized field is out of range")
+    {
+        SetEventFile("uuid: GPU-test-uuid\ngroupSize: 256\n");
+
+        CHECK(nvmlEventSetWait_v3(nullptr, &eventDataV2) == NVML_ERROR_TIMEOUT);
+        CHECK(eventDataV2.traceId == 456);
+    }
+}
+
+SCENARIO_METHOD(NvmlEventWaitTestFixture, "InjectedNvml: event waits reject null output buffers")
+{
+    CHECK(nvmlEventSetWait_v2(nullptr, nullptr, 0) == NVML_ERROR_INVALID_ARGUMENT);
+    CHECK(nvmlEventSetWait_v3(nullptr, nullptr) == NVML_ERROR_INVALID_ARGUMENT);
+}
 
 TEST_CASE("InjectedNvml: Basic Injection")
 {
@@ -1134,8 +1519,7 @@ TEST_CASE("Detachment before nvmlInit_v2")
     }
     // H200.yaml has 8 GPUs
     unsigned int constexpr devCount = 8;
-    setenv("DCGM_NVML_INJECTION_GPU_DETACHED_BEFORE_HAND", "1,2,3", 1);
-    DcgmNs::Defer defer([] { unsetenv("DCGM_NVML_INJECTION_GPU_DETACHED_BEFORE_HAND"); });
+    ScopedEnvVars envVars("DCGM_NVML_INJECTION_GPU_DETACHED_BEFORE_HAND", "1,2,3");
     auto ret = nvmlInit_v2();
     REQUIRE(ret == NVML_SUCCESS);
     unsigned int count = 0;

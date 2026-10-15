@@ -30,14 +30,13 @@ ARG CROSSTOOL_GMP_URL
 ARG CROSSTOOL_ISL_URL
 ARG CROSSTOOL_LIBICONV_URL
 ARG CROSSTOOL_LINUX_URL
+ARG CROSSTOOL_MOLD_URL
 ARG CROSSTOOL_MPC_URL
 ARG CROSSTOOL_MPFR_URL
 ARG CROSSTOOL_NCURSES_URL
 ARG CROSSTOOL_ZLIB_URL
 ARG CROSSTOOL_ZSTD_URL
-ARG RUSTC_URL
-ARG RUST_SRC_URL
-ARG RUST_STD_AARCH64_LINUX_GNU_URL
+ARG RUST_URL
 
 ARG CORROSION_SHA256SUM
 ARG CROSSTOOL_SHA256SUM
@@ -50,14 +49,13 @@ ARG CROSSTOOL_GMP_SHA256SUM
 ARG CROSSTOOL_ISL_SHA256SUM
 ARG CROSSTOOL_LIBICONV_SHA256SUM
 ARG CROSSTOOL_LINUX_SHA256SUM
+ARG CROSSTOOL_MOLD_SHA256SUM
 ARG CROSSTOOL_MPC_SHA256SUM
 ARG CROSSTOOL_MPFR_SHA256SUM
 ARG CROSSTOOL_NCURSES_SHA256SUM
 ARG CROSSTOOL_ZLIB_SHA256SUM
 ARG CROSSTOOL_ZSTD_SHA256SUM
-ARG RUSTC_SHA256SUM
-ARG RUST_SRC_SHA256SUM
-ARG RUST_STD_AARCH64_LINUX_GNU_SHA256SUM
+ARG RUST_SHA256SUM
 
 ADD --checksum=${CORROSION_SHA256SUM}                  ${CORROSION_URL}                  /corrosion.tar.gz
 ADD --checksum=${CROSSTOOL_SHA256SUM}                  ${CROSSTOOL_URL}                  /crosstool-ng.tar.gz
@@ -70,14 +68,13 @@ ADD --checksum=${CROSSTOOL_GMP_SHA256SUM}              ${CROSSTOOL_GMP_URL}     
 ADD --checksum=${CROSSTOOL_ISL_SHA256SUM}              ${CROSSTOOL_ISL_URL}              /crosstool-ng/isl-0.26.tar.xz
 ADD --checksum=${CROSSTOOL_LIBICONV_SHA256SUM}         ${CROSSTOOL_LIBICONV_URL}         /crosstool-ng/libiconv-1.16.tar.gz
 ADD --checksum=${CROSSTOOL_LINUX_SHA256SUM}            ${CROSSTOOL_LINUX_URL}            /crosstool-ng/linux-4.20.17.tar.xz
+ADD --checksum=${CROSSTOOL_MOLD_SHA256SUM}             ${CROSSTOOL_MOLD_URL}             /crosstool-ng/v2.40.4.tar.gz
 ADD --checksum=${CROSSTOOL_MPC_SHA256SUM}              ${CROSSTOOL_MPC_URL}              /crosstool-ng/mpc-1.3.1.tar.gz
 ADD --checksum=${CROSSTOOL_MPFR_SHA256SUM}             ${CROSSTOOL_MPFR_URL}             /crosstool-ng/mpfr-4.2.2.tar.xz
 ADD --checksum=${CROSSTOOL_NCURSES_SHA256SUM}          ${CROSSTOOL_NCURSES_URL}          /crosstool-ng/ncurses-6.4.tar.gz
 ADD --checksum=${CROSSTOOL_ZLIB_SHA256SUM}             ${CROSSTOOL_ZLIB_URL}             /crosstool-ng/zlib-1.3.1.tar.xz
 ADD --checksum=${CROSSTOOL_ZSTD_SHA256SUM}             ${CROSSTOOL_ZSTD_URL}             /crosstool-ng/zstd-1.5.5.tar.gz
-ADD --checksum=${RUSTC_SHA256SUM}                      ${RUSTC_URL}                      /rust.tar.xz
-ADD --checksum=${RUST_SRC_SHA256SUM}                   ${RUST_SRC_URL}                   /rust-src.tar.xz
-ADD --checksum=${RUST_STD_AARCH64_LINUX_GNU_SHA256SUM} ${RUST_STD_AARCH64_LINUX_GNU_URL} /rust-std-aarch64-linux-gnu.tar.xz
+ADD --checksum=${RUST_SHA256SUM}                       ${RUST_URL}                       /rust.tar.xz
 
 FROM scratch AS cuda-downloads
 
@@ -124,6 +121,7 @@ RUN set -ex; \
         automake \
         bison \
         build-essential \
+        cmake \
         curl \
         file \
         flex \
@@ -205,6 +203,10 @@ set(CMAKE_C_COMPILER_TARGET "\${CMAKE_LIBRARY_ARCHITECTURE}")
 set(CMAKE_CXX_COMPILER "/opt/cross/bin/\${CMAKE_LIBRARY_ARCHITECTURE}-g++")
 set(CMAKE_CXX_COMPILER_TARGET "\${CMAKE_LIBRARY_ARCHITECTURE}")
 set(CMAKE_CXX_FLAGS_INIT "-static-libstdc++")
+
+set(CMAKE_C_LINKER "/opt/cross/\${CMAKE_LIBRARY_ARCHITECTURE}/bin/mold")
+set(CMAKE_CXX_LINKER "/opt/cross/\${CMAKE_LIBRARY_ARCHITECTURE}/bin/mold")
+set(CMAKE_LINKER_TYPE "MOLD")
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
@@ -319,6 +321,7 @@ architecture = '$ARCHITECTURE'
 target = '$TARGET'
 crossroot = '/opt/cross'
 sysroot = crossroot / target / 'sysroot'
+mold = crossroot / target / 'bin' / 'mold'
 linker_paths = [
   '-L' + sysroot / 'usr' / 'lib',
   '-L' + sysroot / 'usr' / 'lib' / target,
@@ -329,7 +332,7 @@ linker_paths = [
 ar = crossroot / 'bin' / target + '-ar'
 c = crossroot / 'bin' / target + '-gcc'
 cpp = crossroot / 'bin' / target + '-g++'
-ld = crossroot / 'bin' / target + '-ld'
+ld = mold
 strip = crossroot / 'bin' / target + '-strip'
 pkg-config = 'pkg-config'
 
@@ -347,9 +350,9 @@ pkg_config_libdir = [
 ]
 
 [built-in options]
-c_ld = crossroot / 'bin' / target + '-ld'
+c_ld = 'mold'
 c_link_args = linker_paths
-cpp_ld = crossroot / 'bin' / target + '-ld'
+cpp_ld = 'mold'
 cpp_link_args = ['-static-libstdc++'] + linker_paths
 EOF
 
@@ -363,22 +366,38 @@ ENV RUST_INSTALL_PREFIX=/usr/local
 RUN --mount=type=bind,from=downloads,source=/,target=/tmp/downloads \
     --mount=type=bind,source=scripts/rust,target=/tmp/scripts/rust \
  set -ex \
+ && export DEBIAN_FRONTEND=noninteractive \
+ && apt update \
+ && apt install --quiet --assume-yes --no-install-recommends build-essential \
  && export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/clang \
  && /tmp/scripts/rust/rust.sh \
+ && RUST_MIN_STACK=33554432 CC=/usr/bin/clang CXX=/usr/bin/clang++ cargo install --force \
+                  --locked \
+                  --root=$RUST_INSTALL_PREFIX \
+                  cargo-audit@0.22.2 \
+                  cargo-auditable@0.7.5 \
+                  cargo-deny@0.20.2 \
+                  cargo-make@0.37.24 \
+                  cargo-vet@0.10.2 \
+                  bindgen-cli@0.72.1 \
+                  cargo-llvm-cov@0.8.7 \
+                  bacon@3.24.0 \
  && CC=/usr/bin/clang CXX=/usr/bin/clang++ cargo install --force \
                   --locked \
                   --root=$RUST_INSTALL_PREFIX \
-                  cargo-audit@0.22.1 \
-                  cargo-auditable@0.7.4 \
-                  cargo-about@0.8.4 \
-                  cargo-deny@0.19.4 \
-                  cargo-make@0.37.24 \
-                  cargo-vet@0.10.2 \
-                  cargo-vendor-filterer@0.5.18 \
-                  bindgen-cli@0.72.1 \
-                  cargo-llvm-cov@0.8.7 \
-                  bacon@3.22.0 \
+                  --features=cli \
+                  cargo-about@0.9.1 \
+ && CC=/usr/bin/clang CXX=/usr/bin/clang++ cargo install --force \
+                  --locked \
+                  --root=$RUST_INSTALL_PREFIX \
+                  --git=https://github.com/coreos/cargo-vendor-filterer \
+                  --rev=26e53809accc52a628d028fe485670cdfecf8c65 \
+                  cargo-vendor-filterer \
  && rm -rf $HOME/.cargo \
- && /tmp/scripts/rust/corrosion.sh
+ && /tmp/scripts/rust/corrosion.sh \
+ && apt remove --quiet --assume-yes build-essential \
+ && apt autoremove --purge --quiet --assume-yes \
+ && apt clean --quiet --assume-yes \
+ && rm -rf /var/lib/apt/lists/*
 
 ENV DCGM_BUILD_INSIDE_DOCKER=1

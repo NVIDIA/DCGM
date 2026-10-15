@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,21 +19,28 @@
 #include "DcgmiOutput.h"
 #include "dcgm_structs.h"
 
+#include <DcgmOpsAnyPtr.hpp>
+
 class DcgmiProfile
 {
 public:
-    DcgmiProfile()          = default;
+    explicit DcgmiProfile(DcgmNs::DcgmOpsAnyPtr dcgmOps);
     virtual ~DcgmiProfile() = default;
     dcgmReturn_t RunProfileList(dcgmHandle_t dcgmHandle, unsigned int gpuId, bool outputAsJson);
     dcgmReturn_t RunProfileSetPause(dcgmHandle_t dcgmHandle, bool pause);
 
 private:
+    DcgmNs::DcgmOpsAnyPtr m_dcgmOps; //!< DCGM API interface.
 };
 
 class DcgmiProfileList : public Command
 {
 public:
-    DcgmiProfileList(std::string hostname, std::string gpuIdsStr, std::string groupIdStr, bool outputAsJson);
+    DcgmiProfileList(std::string hostname,
+                     std::string gpuIdsStr,
+                     std::string groupIdStr,
+                     bool outputAsJson,
+                     DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;
@@ -52,7 +59,7 @@ private:
 class DcgmiProfileSetPause : public Command
 {
 public:
-    DcgmiProfileSetPause(std::string hostname, bool pause);
+    DcgmiProfileSetPause(std::string hostname, bool pause, DcgmNs::DcgmOpsAnyPtr dcgmOps);
 
 protected:
     dcgmReturn_t DoExecuteConnected() override;

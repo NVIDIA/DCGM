@@ -18,5 +18,9 @@
 from test_utils import trampoline
 
 
+def test_gpm_metrics_supported():
+    trampoline()
+
+
 def test_gpm_cumulative_metrics():
     trampoline()

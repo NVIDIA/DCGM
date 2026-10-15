@@ -1,0 +1,3 @@
+# The dependency graph is transitioning from syn 2 to syn 3. Both versions are
+# required until all proc-macro dependencies support syn 3.
+allowed-duplicate-crates = ["syn"]

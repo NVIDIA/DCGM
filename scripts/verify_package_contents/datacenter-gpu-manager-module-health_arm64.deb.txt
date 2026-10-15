@@ -1,0 +1,9 @@
+./usr/
+./usr/libexec/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulehealth.so.<MAJORVERSION>
+./usr/libexec/datacenter-gpu-manager-<MAJORVERSION>/libdcgmmodulehealth.so.<SOFTWAREVERSION>
+./usr/share/
+./usr/share/doc/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-module-health/
+./usr/share/doc/datacenter-gpu-manager-<MAJORVERSION>-module-health/copyright

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,25 @@
 #include <cstdlib>
 #include <dcgm_api_export.h>
 #include <dcgm_structs.h>
+#include <stdexcept>
 
 namespace DcgmNs
 {
-static std::unique_ptr<DcgmNvSwitchManagerBase> createSwitchManager(dcgmCoreCallbacks_t *dcc)
+namespace
+{
+    std::unique_ptr<DcgmNvSwitchManagerBase> RequireNvSwitchManager(
+        std::unique_ptr<DcgmNvSwitchManagerBase> nvswitchMgr)
+    {
+        if (nvswitchMgr == nullptr)
+        {
+            throw std::invalid_argument("DcgmModuleNvSwitch requires a non-null NvSwitch manager");
+        }
+
+        return nvswitchMgr;
+    }
+} // namespace
+
+std::unique_ptr<DcgmNvSwitchManagerBase> DcgmModuleNvSwitch::CreateSwitchManager(dcgmCoreCallbacks_t *dcc)
 {
     std::unique_ptr<DcgmNvSwitchManagerBase> nvswitchMgr;
 
@@ -47,9 +62,9 @@ static std::unique_ptr<DcgmNvSwitchManagerBase> createSwitchManager(dcgmCoreCall
     return nvswitchMgr;
 }
 
-DcgmModuleNvSwitch::DcgmModuleNvSwitch(dcgmCoreCallbacks_t &dcc)
+DcgmModuleNvSwitch::DcgmModuleNvSwitch(dcgmCoreCallbacks_t &dcc, std::unique_ptr<DcgmNvSwitchManagerBase> nvswitchMgr)
     : DcgmModuleWithCoreProxy(dcc)
-    , m_nvswitchMgrPtr(createSwitchManager(&dcc))
+    , m_nvswitchMgrPtr(RequireNvSwitchManager(std::move(nvswitchMgr)))
     , m_nvswitchMgr(*m_nvswitchMgrPtr)
     , m_lastLinkStatusUpdateUsec(0)
 {
@@ -470,12 +485,13 @@ void DcgmModuleNvSwitch::RescanDevicesState()
 {
     log_debug("Rescanning devices states");
     auto dcgmReturn = m_nvswitchMgr.ReadNvSwitchStatusAllSwitches();
-    if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED)
+    if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED && dcgmReturn != DCGM_ST_UNINITIALIZED)
     {
         log_warning("ReadNvSwitchStatusAllSwitches() returned: [{}].", errorString(dcgmReturn));
     }
     dcgmReturn = m_nvswitchMgr.ReadIbCxStatusAllIbCxCards();
-    if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED && dcgmReturn != DCGM_ST_NOT_SUPPORTED)
+    if (dcgmReturn != DCGM_ST_OK && dcgmReturn != DCGM_ST_PAUSED && dcgmReturn != DCGM_ST_NOT_SUPPORTED
+        && dcgmReturn != DCGM_ST_UNINITIALIZED)
     {
         log_warning("ReadIbCxStatusAllIbCxCards() returned: [{}].", errorString(dcgmReturn));
     }
@@ -485,18 +501,21 @@ void DcgmModuleNvSwitch::RescanDevicesState()
 unsigned int DcgmModuleNvSwitch::RunOnce()
 {
     timelib64_t nextUpdateTimeUsec;
-    timelib64_t untilNextLinkStatusUsec;                       /* How long until our next switch status rescan */
-    timelib64_t const linkStatusRescanIntervalUsec = 30000000; /* How long until our next switch status rescan */
-    timelib64_t const minUpdateIntervalUsec        = 1000;     /* Minimum update interval in microseconds */
+    timelib64_t untilNextLinkStatusUsec;                          /* How long until our next switch status rescan */
+    timelib64_t const linkStatusRescanIntervalUsec   = 30000000;  /* 30 s */
+    timelib64_t const disconnectedRescanIntervalUsec = 300000000; /* 5 min */
+    timelib64_t const minUpdateIntervalUsec          = 1000;      /* Minimum update interval in microseconds */
 
-    /* Update link statuses every 30 seconds */
+    timelib64_t const rescanIntervalUsec
+        = m_nvswitchMgr.IsDisconnected() ? disconnectedRescanIntervalUsec : linkStatusRescanIntervalUsec;
+
     timelib64_t now         = timelib_usecSince1970();
-    untilNextLinkStatusUsec = -((now - m_lastLinkStatusUpdateUsec) - linkStatusRescanIntervalUsec);
+    untilNextLinkStatusUsec = -((now - m_lastLinkStatusUpdateUsec) - rescanIntervalUsec);
     if (untilNextLinkStatusUsec <= 0)
     {
         RescanDevicesState();
         m_lastLinkStatusUpdateUsec = now;
-        untilNextLinkStatusUsec    = linkStatusRescanIntervalUsec;
+        untilNextLinkStatusUsec    = rescanIntervalUsec;
     }
 
     m_nvswitchMgr.UpdateFields(nextUpdateTimeUsec, now);
@@ -504,30 +523,24 @@ unsigned int DcgmModuleNvSwitch::RunOnce()
     {
         /*
          * If there are no watches, returned value for nextUpdateTimeUsec will be 0. Set it equal to
-         * linkStatusRescanIntervalUsec i.e 30 seconds.
+         * the active rescan interval (30 s normally, 5 min when disconnected).
          */
-        nextUpdateTimeUsec = linkStatusRescanIntervalUsec;
+        nextUpdateTimeUsec = rescanIntervalUsec;
     }
     else
     {
-        /*
-         * Determine the absolute time of the next update, then convert to relative time.
-         * If nextUpdateTimeUsec is lower than the minimum update interval, set it to the minimum update interval.
-         */
+        /* Determine the absolute time of the next update, then convert to relative time. */
         nextUpdateTimeUsec = nextUpdateTimeUsec - now;
-        if (nextUpdateTimeUsec < minUpdateIntervalUsec)
-        {
-            log_info(
-                "Next update time {} usec, is below minimum update interval {} usec, setting it to minimum update interval.",
-                nextUpdateTimeUsec,
-                minUpdateIntervalUsec);
-            nextUpdateTimeUsec = minUpdateIntervalUsec;
-        }
     }
 
     /* Adjust our nextUpdateTimeUsec for whichever is sooner between when watches will
-      update again or when we need to rescan links */
+      update again or when we need to rescan links. Keep it at or above the minimum update
+      interval so we do not return 0 ms. */
     nextUpdateTimeUsec = std::min(nextUpdateTimeUsec, untilNextLinkStatusUsec);
+    if (nextUpdateTimeUsec < minUpdateIntervalUsec)
+    {
+        nextUpdateTimeUsec = minUpdateIntervalUsec;
+    }
 
     log_verbose("Next update in {} usec.", nextUpdateTimeUsec);
     return nextUpdateTimeUsec / 1000;
@@ -663,7 +676,7 @@ extern "C" {
 /*************************************************************************/
 DCGM_PUBLIC_API DcgmModule *dcgm_alloc_module_instance(dcgmCoreCallbacks_t *dcc)
 {
-    return SafeWrapper([=] { return new DcgmModuleNvSwitch(*dcc); });
+    return SafeWrapper([=] { return new DcgmModuleNvSwitch(*dcc, DcgmModuleNvSwitch::CreateSwitchManager(dcc)); });
 }
 
 /*************************************************************************/

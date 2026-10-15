@@ -17,15 +17,18 @@
 
 #include <DcgmCacheManager.h>
 #include <Defer.hpp>
+#include <ScopedDcgmFields.hpp>
 #include <UnitTestHelpers.h>
 #include <dcgm_fields.h>
 #include <nvml_injection.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -86,10 +89,9 @@ void RequireBufferedString(DcgmFvBuffer &fvBuffer, unsigned short fieldId, std::
 }
 } // namespace
 
-SCENARIO("BufferOrCacheLatestVgpuValue validates its field metadata")
+SCENARIO("BufferOrCacheLatestVgpuValue: validates its field metadata")
 {
-    DcgmFieldsInit();
-    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     DcgmCacheManager cacheManager;
     dcgmcm_update_thread_t threadCtx {};
@@ -125,7 +127,7 @@ SCENARIO("BufferOrCacheLatestVgpuValue validates its field metadata")
     }
 }
 
-SCENARIO("BufferOrCacheLatestVgpuValue caches scalar vGPU values from NVML")
+SCENARIO("BufferOrCacheLatestVgpuValue: caches scalar vGPU values from NVML")
 {
     auto restoreEnv = WithNvmlInjectionSkuFile("vGPU.yaml");
     if (!restoreEnv)
@@ -133,8 +135,7 @@ SCENARIO("BufferOrCacheLatestVgpuValue caches scalar vGPU values from NVML")
         SKIP("Sku file not found: vGPU.yaml");
     }
 
-    DcgmFieldsInit();
-    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     REQUIRE(nvmlInit_v2() == NVML_SUCCESS);
     DcgmNs::Defer deferNvml([] { nvmlShutdown(); });
@@ -184,6 +185,26 @@ SCENARIO("BufferOrCacheLatestVgpuValue caches scalar vGPU values from NVML")
         }
     }
 
+    GIVEN("a watched vGPU framebuffer-used-bytes field")
+    {
+        unsigned short constexpr fieldId = DCGM_FI_DEV_VGPU_FB_USED_BYTES;
+        dcgm_field_meta_p fieldMeta      = DcgmFieldGetById(fieldId);
+        REQUIRE(fieldMeta != nullptr);
+        auto context = MakeVgpuUpdateContext(fieldId);
+
+        WHEN("the latest value is buffered or cached")
+        {
+            dcgmReturn_t const result
+                = BufferOrCacheLatestVgpuValue(cacheManager, context.threadCtx, nvmlDriver, vgpuId, fieldMeta);
+
+            THEN("the framebuffer usage is published in bytes")
+            {
+                REQUIRE(result == DCGM_ST_OK);
+                RequireBufferedInt64(context.fvBuffer, fieldId, 1342439424);
+            }
+        }
+    }
+
     GIVEN("a watched vGPU frame-rate-limit field")
     {
         unsigned short constexpr fieldId = DCGM_FI_DEV_VGPU_FRAME_RATE_LIMIT;
@@ -225,7 +246,7 @@ SCENARIO("BufferOrCacheLatestVgpuValue caches scalar vGPU values from NVML")
     }
 }
 
-SCENARIO("BufferOrCacheLatestVgpuValue caches string vGPU values from NVML")
+SCENARIO("BufferOrCacheLatestVgpuValue: caches string vGPU values from NVML")
 {
     auto restoreEnv = WithNvmlInjectionSkuFile("vGPU.yaml");
     if (!restoreEnv)
@@ -233,8 +254,7 @@ SCENARIO("BufferOrCacheLatestVgpuValue caches string vGPU values from NVML")
         SKIP("Sku file not found: vGPU.yaml");
     }
 
-    DcgmFieldsInit();
-    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     REQUIRE(nvmlInit_v2() == NVML_SUCCESS);
     DcgmNs::Defer deferNvml([] { nvmlShutdown(); });
@@ -363,7 +383,7 @@ ValueType const &RequireBufferedBlob(DcgmFvBuffer &fvBuffer, unsigned short fiel
 }
 } // namespace
 
-SCENARIO("BufferOrCacheLatestVgpuValue caches blob vGPU values from NVML")
+SCENARIO("BufferOrCacheLatestVgpuValue: caches blob vGPU values from NVML")
 {
     auto restoreEnv = WithNvmlInjectionSkuFile("vGPU.yaml");
     if (!restoreEnv)
@@ -371,8 +391,7 @@ SCENARIO("BufferOrCacheLatestVgpuValue caches blob vGPU values from NVML")
         SKIP("Sku file not found: vGPU.yaml");
     }
 
-    DcgmFieldsInit();
-    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     REQUIRE(nvmlInit_v2() == NVML_SUCCESS);
     DcgmNs::Defer deferNvml([] { nvmlShutdown(); });
@@ -481,7 +500,7 @@ SCENARIO("BufferOrCacheLatestVgpuValue caches blob vGPU values from NVML")
     }
 }
 
-SCENARIO("GetDeviceFBCSessionsInfo buffers empty device FBC session lists")
+SCENARIO("GetDeviceFBCSessionsInfo: buffers empty device FBC session lists")
 {
     auto restoreEnv = WithNvmlInjectionSkuFile("vGPU.yaml");
     if (!restoreEnv)
@@ -489,8 +508,7 @@ SCENARIO("GetDeviceFBCSessionsInfo buffers empty device FBC session lists")
         SKIP("Sku file not found: vGPU.yaml");
     }
 
-    DcgmFieldsInit();
-    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     REQUIRE(nvmlInit_v2() == NVML_SUCCESS);
     DcgmNs::Defer deferNvml([] { nvmlShutdown(); });
@@ -815,7 +833,7 @@ nvmlFBCSessionInfo_t MakeNvmlFbcSession(unsigned int ordinal)
 }
 } // namespace
 
-SCENARIO("DcgmVgpuDetail FBC session helpers use injectable dependencies")
+SCENARIO("DcgmVgpuDetail: FBC session helpers use injectable dependencies")
 {
     DcgmCacheManager cacheManager;
     NvmlTaskRunner nvmlDriver;
@@ -950,6 +968,36 @@ SCENARIO("DcgmVgpuDetail FBC session helpers use injectable dependencies")
         }
     }
 
+    GIVEN("NVML reports more sessions than the DCGM payload can size")
+    {
+        MockFbcDependencies deps;
+        unsigned int constexpr reportedCount = DCGM_MAX_FBC_SESSIONS + 1;
+        deps.reportedSessionCount            = reportedCount;
+        for (unsigned int i = 0; i < reportedCount; i++)
+        {
+            deps.sessions.push_back(MakeNvmlFbcSession(i));
+        }
+
+        WHEN("vGPU FBC session information is requested")
+        {
+            DcgmVgpuDetail::FbcSessionOps depsWrapper(&deps);
+            dcgmReturn_t const result = DcgmVgpuDetail::GetVgpuInstanceFBCSessionsInfo(
+                cacheManager, nvmlDriver, vgpuId, threadCtx, &watchInfo, now, expireTime, depsWrapper);
+
+            THEN("the appended payload is clamped to the destination capacity")
+            {
+                REQUIRE(result == DCGM_ST_OK);
+                REQUIRE(deps.appends.size() == 1);
+                CHECK(deps.appends[0].valueSize == static_cast<int>(sizeof(dcgmDeviceFbcSessions_t)));
+                auto const &sessions = CapturedSessions(deps.appends[0]);
+                CHECK(sessions.sessionCount == DCGM_MAX_FBC_SESSIONS);
+                CHECK(sessions.sessionInfo[0].sessionId == deps.sessions[0].sessionId);
+                CHECK(sessions.sessionInfo[DCGM_MAX_FBC_SESSIONS - 1].sessionId
+                      == deps.sessions[DCGM_MAX_FBC_SESSIONS - 1].sessionId);
+            }
+        }
+    }
+
     GIVEN("NVML reports two active vGPU FBC sessions")
     {
         MockFbcDependencies deps;
@@ -994,7 +1042,7 @@ SCENARIO("DcgmVgpuDetail FBC session helpers use injectable dependencies")
     }
 }
 
-SCENARIO("DcgmVgpuDetail device FBC sessions use the same operation bundle")
+SCENARIO("DcgmVgpuDetail: device FBC sessions use the same operation bundle")
 {
     DcgmCacheManager cacheManager;
     NvmlTaskRunner nvmlDriver;
@@ -1032,9 +1080,39 @@ SCENARIO("DcgmVgpuDetail device FBC sessions use the same operation bundle")
             }
         }
     }
+
+    GIVEN("NVML reports more device FBC sessions than the DCGM payload can size")
+    {
+        MockFbcDependencies deps;
+        unsigned int constexpr reportedCount = DCGM_MAX_FBC_SESSIONS + 3;
+        deps.reportedSessionCount            = reportedCount;
+        for (unsigned int i = 0; i < reportedCount; i++)
+        {
+            deps.sessions.push_back(MakeNvmlFbcSession(i));
+        }
+
+        WHEN("device FBC session information is requested")
+        {
+            DcgmVgpuDetail::FbcSessionOps depsWrapper(&deps);
+            dcgmReturn_t const result = DcgmVgpuDetail::GetDeviceFBCSessionsInfo(
+                cacheManager, nvmlDriver, device, threadCtx, &watchInfo, 111, 222, depsWrapper);
+
+            THEN("the appended payload is clamped to the destination capacity")
+            {
+                REQUIRE(result == DCGM_ST_OK);
+                REQUIRE(deps.appends.size() == 1);
+                CHECK(deps.appends[0].valueSize == static_cast<int>(sizeof(dcgmDeviceFbcSessions_t)));
+                auto const &sessions = CapturedSessions(deps.appends[0]);
+                CHECK(sessions.sessionCount == DCGM_MAX_FBC_SESSIONS);
+                CHECK(sessions.sessionInfo[0].sessionId == deps.sessions[0].sessionId);
+                CHECK(sessions.sessionInfo[DCGM_MAX_FBC_SESSIONS - 1].sessionId
+                      == deps.sessions[DCGM_MAX_FBC_SESSIONS - 1].sessionId);
+            }
+        }
+    }
 }
 
-SCENARIO("DcgmVgpuDetail FBC session helpers handle empty successful session lists")
+SCENARIO("DcgmVgpuDetail: FBC session helpers handle empty successful session lists")
 {
     DcgmCacheManager cacheManager;
     NvmlTaskRunner nvmlDriver;
@@ -1197,6 +1275,10 @@ struct MockBufferDependencies : UnsupportedVgpuDependencies
 
     nvmlReturn_t NvmlVgpuInstanceGetGpuPciId(NvmlTaskRunner &, SafeVgpuInstance, char *buffer, unsigned int *length)
     {
+        if (pciIdReturn == NVML_ERROR_DRIVER_NOT_LOADED)
+        {
+            return pciIdReturn;
+        }
         std::snprintf(buffer, *length, "%s", pciId.c_str());
         return pciIdReturn;
     }
@@ -1360,12 +1442,29 @@ dcgmReturn_t BufferWithMockDeps(unsigned short fieldId, MockBufferDependencies &
     return DcgmVgpuDetail::BufferOrCacheLatestVgpuValue(
         cacheManager, threadCtx, nvmlDriver, vgpuId, fieldMeta, depsWrapper, fbcOps);
 }
+
+void RequireSingleAppendedInt64(MockBufferDependencies const &deps,
+                                dcgmcm_watch_info_t const &watchInfo,
+                                long long expectedValue,
+                                nvmlReturn_t expectedLastStatus)
+{
+    REQUIRE(deps.appendedInt64s.size() == 1);
+    CHECK(deps.appendedInt64s[0].value1 == expectedValue);
+    CHECK(deps.appendedInt64s[0].value2 == 0);
+    CHECK(deps.appendedInt64s[0].timestamp == deps.now);
+    CHECK(deps.appendedInt64s[0].expireTime == deps.now - watchInfo.maxAgeUsec);
+    CHECK(deps.appendedStrings.empty());
+    CHECK(deps.appendedBlobs.empty());
+    CHECK(deps.watchUpdates.empty());
+    CHECK(watchInfo.lastStatus == expectedLastStatus);
+    CHECK(watchInfo.lastQueriedUsec == deps.now);
+}
 } // namespace
 
-SCENARIO("DcgmVgpuDetail BufferOrCacheLatestVgpuValue buffers scalar and string fields through injectable dependencies")
+SCENARIO(
+    "DcgmVgpuDetail: BufferOrCacheLatestVgpuValue buffers scalar and string fields through injectable dependencies")
 {
-    DcgmFieldsInit();
-    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     dcgmcm_watch_info_t watchInfo {};
     watchInfo.monitorIntervalUsec = 1;
@@ -1589,6 +1688,32 @@ SCENARIO("DcgmVgpuDetail BufferOrCacheLatestVgpuValue buffers scalar and string 
         }
     }
 
+    GIVEN("NVML returns framebuffer usage for the bytes field")
+    {
+        auto const fbUsageBytes = GENERATE(as<unsigned long long> {},
+                                           0ull,
+                                           1ull,
+                                           1536ull,
+                                           768ull * 1024ull * 1024ull,
+                                           static_cast<unsigned long long>(std::numeric_limits<long long>::max() - 1),
+                                           static_cast<unsigned long long>(std::numeric_limits<long long>::max()));
+        CAPTURE(fbUsageBytes);
+
+        MockBufferDependencies deps;
+        deps.fbUsageBytes = fbUsageBytes;
+
+        WHEN("the framebuffer-used-bytes field is buffered")
+        {
+            dcgmReturn_t const result = BufferWithMockDeps(DCGM_FI_DEV_VGPU_FB_USED_BYTES, deps, watchInfo);
+
+            THEN("the usage is appended in bytes")
+            {
+                REQUIRE(result == DCGM_ST_OK);
+                RequireSingleAppendedInt64(deps, watchInfo, static_cast<long long>(fbUsageBytes), NVML_SUCCESS);
+            }
+        }
+    }
+
     GIVEN("NVML cannot return framebuffer usage")
     {
         MockBufferDependencies deps;
@@ -1604,6 +1729,24 @@ SCENARIO("DcgmVgpuDetail BufferOrCacheLatestVgpuValue buffers scalar and string 
                 REQUIRE(deps.appendedInt64s.size() == 1);
                 CHECK(deps.appendedInt64s[0].value1 == deps.errorInt64Value);
                 CHECK(watchInfo.lastStatus == NVML_ERROR_UNKNOWN);
+            }
+        }
+    }
+
+    GIVEN("NVML cannot return framebuffer usage for the bytes field")
+    {
+        MockBufferDependencies deps;
+        deps.fbUsageReturn = NVML_ERROR_UNKNOWN;
+        deps.mappedReturn  = DCGM_ST_NOT_SUPPORTED;
+
+        WHEN("the framebuffer-used-bytes field is buffered")
+        {
+            dcgmReturn_t const result = BufferWithMockDeps(DCGM_FI_DEV_VGPU_FB_USED_BYTES, deps, watchInfo);
+
+            THEN("the mapped integer error is appended")
+            {
+                REQUIRE(result == deps.mappedReturn);
+                RequireSingleAppendedInt64(deps, watchInfo, deps.errorInt64Value, NVML_ERROR_UNKNOWN);
             }
         }
     }
@@ -1683,6 +1826,26 @@ SCENARIO("DcgmVgpuDetail BufferOrCacheLatestVgpuValue buffers scalar and string 
                 REQUIRE(result == DCGM_ST_OK);
                 REQUIRE(deps.appendedStrings.size() == 1);
                 CHECK(deps.appendedStrings[0] == "00000000:00:00.0");
+                CHECK(deps.watchUpdates.empty());
+            }
+        }
+    }
+
+    GIVEN("NVML reports DRIVER_NOT_LOADED for the vGPU PCI id")
+    {
+        MockBufferDependencies deps;
+        deps.pciIdReturn = NVML_ERROR_DRIVER_NOT_LOADED;
+
+        WHEN("the PCI id field is buffered")
+        {
+            dcgmReturn_t const result = BufferWithMockDeps(DCGM_FI_DEV_VGPU_PCI_ID, deps, watchInfo);
+
+            THEN("the placeholder PCI id is appended without changing the watch interval")
+            {
+                REQUIRE(result == DCGM_ST_OK);
+                REQUIRE(deps.appendedStrings.size() == 1);
+                CHECK(deps.appendedStrings[0] == "00000000:00:00.0");
+                CHECK(watchInfo.lastStatus == NVML_ERROR_DRIVER_NOT_LOADED);
                 CHECK(deps.watchUpdates.empty());
             }
         }
@@ -1890,10 +2053,9 @@ SCENARIO("DcgmVgpuDetail BufferOrCacheLatestVgpuValue buffers scalar and string 
     }
 }
 
-SCENARIO("DcgmVgpuDetail BufferOrCacheLatestVgpuValue formats license status through injectable dependencies")
+SCENARIO("DcgmVgpuDetail: BufferOrCacheLatestVgpuValue formats license status through injectable dependencies")
 {
-    DcgmFieldsInit();
-    DcgmNs::Defer deferFields([] { DcgmFieldsTerm(); });
+    ScopedDcgmFields fields;
 
     dcgm_field_meta_p fieldMeta = DcgmFieldGetById(DCGM_FI_DEV_VGPU_INSTANCE_LICENSE_STATUS);
     REQUIRE(fieldMeta != nullptr);

@@ -21,7 +21,25 @@
  */
 
 #include "Diag.h"
-#include "dcgm_fields.h"
+
+#include "NvcmTCLAP.h"
+#include "dcgmi_common.h"
+
+#include <DcgmBuildInfo.hpp>
+#include <DcgmDiagCommon.h>
+#include <DcgmGroupEntityPairHelpers.h>
+#include <DcgmOps.h>
+#include <DcgmStringHelpers.h>
+#include <EntityListHelpers.h>
+#include <NvvsJsonStrings.h>
+#include <PluginStrings.h>
+#include <dcgm_agent.h>
+#include <dcgm_errors.h>
+#include <dcgm_fields.h>
+#include <dcgm_structs.h>
+#include <dcgm_structs_internal.h>
+#include <dcgm_test_apis.h>
+
 #include <charconv>
 #include <chrono>
 #include <condition_variable>
@@ -42,22 +60,6 @@
 #include <unistd.h>
 #include <utility>
 #include <vector>
-
-#define DCGM_INIT_UUID
-#include "DcgmDiagCommon.h"
-#include "DcgmGroupEntityPairHelpers.h"
-#include "DcgmStringHelpers.h"
-#include "EntityListHelpers.h"
-#include "NvcmTCLAP.h"
-#include "NvvsJsonStrings.h"
-#include "PluginStrings.h"
-#include "dcgm_agent.h"
-#include "dcgm_errors.h"
-#include "dcgm_structs.h"
-#include "dcgm_structs_internal.h"
-#include "dcgm_test_apis.h"
-#include "dcgmi_common.h"
-#include <DcgmBuildInfo.hpp>
 
 /* Process Info */
 char DIAG_HEADER[] = "+---------------------------+------------------------------------------------+\n"
@@ -108,14 +110,14 @@ void handle_signal_during_diag(int /* signum */)
     }
 }
 
-struct EudTestVersion
+struct DiagTestVersion
 {
     std::optional<std::string> version;
     std::optional<std::string> eudPackageVersion;
 };
 } //namespace
 
-EudTestVersion GetEudTestVersion(std::string_view testName, dcgmDiagResponse_v12 const &diagResponse)
+DiagTestVersion GetDiagTestVersion(std::string_view testName, dcgmDiagResponse_v12 const &diagResponse)
 {
     dcgmDiagTestAuxData_v1 const *auxData = nullptr;
 
@@ -146,7 +148,7 @@ EudTestVersion GetEudTestVersion(std::string_view testName, dcgmDiagResponse_v12
         return {};
     }
 
-    EudTestVersion result {};
+    DiagTestVersion result {};
 
     if (json.isMember("version") && json["version"].isString())
     {
@@ -166,8 +168,9 @@ EudTestVersion GetEudTestVersion(std::string_view testName, dcgmDiagResponse_v12
  * RemoteDiagExecutor
  *****************************************************************************
  *****************************************************************************/
-RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v10 &drd)
-    : m_handle(handle)
+RemoteDiagExecutor::RemoteDiagExecutor(dcgmHandle_t handle, dcgmRunDiag_v10 &drd, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+    , m_handle(handle)
     , m_response(std::make_unique<dcgmDiagResponse_v12>())
     , m_result(DCGM_ST_OK)
 {
@@ -189,7 +192,7 @@ void RemoteDiagExecutor::run()
 
             while (!st.stop_requested())
             {
-                auto ret = dcgmDiagSendHeartbeat(m_handle);
+                auto ret = m_dcgmOps->dcgmDiagSendHeartbeat(m_handle);
                 if (ret != DCGM_ST_OK)
                 {
                     log_debug("Failed to send heartbeat: {}", ret);
@@ -199,7 +202,7 @@ void RemoteDiagExecutor::run()
             }
         });
     }
-    m_result = dcgmActionValidate_v2(m_handle, &m_drd, m_response.get());
+    m_result = m_dcgmOps->dcgmActionValidate_v2(m_handle, &m_drd, m_response.get());
 }
 
 dcgmReturn_t RemoteDiagExecutor::GetResult() const
@@ -220,8 +223,9 @@ dcgmDiagResponse_v12 const &RemoteDiagExecutor::GetResponse() const
  *****************************************************************************/
 
 /*****************************************************************************/
-Diag::Diag(unsigned int iterations, const std::string &hostname)
-    : m_jsonOutput(false)
+Diag::Diag(unsigned int iterations, const std::string &hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+    , m_jsonOutput(false)
     , m_iterations(iterations)
     , m_hostname(hostname)
 {
@@ -278,7 +282,7 @@ dcgmReturn_t Diag::GetFailureResult(dcgmDiagResponse_v12 &response)
                 || error.entity.entityGroupId == DCGM_FE_GPU
                 || (error.entity.entityGroupId == DCGM_FE_NONE && error.code != 0))
             {
-                if (dcgmErrorGetPriorityByCode(error.code) == DCGM_ERROR_ISOLATE)
+                if (m_dcgmOps->dcgmErrorGetPriorityByCode(error.code) == DCGM_ERROR_ISOLATE)
                 {
                     // Stop here as a serious error was reported.
                     return DCGM_ST_NVVS_ISOLATE_ERROR;
@@ -365,6 +369,39 @@ static std::optional<std::string> GetResponseSystemErrors(dcgmDiagResponse_v12 c
 }
 
 /*******************************************************************************/
+std::string Diag::HelperBuildFailureMessage(dcgmDiagResponse_v12 const &response, dcgmReturn_t result) const
+{
+    std::stringstream errMsg;
+    if (std::strlen(m_drd.fakeGpuList) != 0)
+    {
+        errMsg << "Error: Unable to complete diagnostic for fake GPUs " << m_drd.fakeGpuList << ". ";
+    }
+    else if (m_drd.groupId == DCGM_GROUP_NULL)
+    {
+        if (m_drd.entityIds[0] != '\0')
+        {
+            errMsg << "Error: Unable to complete diagnostic for entities " << m_drd.entityIds << ". ";
+        }
+        else
+        {
+            errMsg << "Error: Unable to complete diagnostic. ";
+        }
+    }
+    else
+    {
+        errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)m_drd.groupId << ". ";
+    }
+    errMsg << "Return: (" << std::to_underlying(result) << ") : " << errorString(result) << "\n";
+
+    if (auto const systemErrors = GetResponseSystemErrors(response); systemErrors.has_value())
+    {
+        errMsg << *systemErrors << "\n";
+    }
+
+    return errMsg.str();
+}
+
+/*******************************************************************************/
 dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 {
     std::unique_ptr<dcgmDiagResponse_v12> responseUptr = std::make_unique<dcgmDiagResponse_v12>();
@@ -376,7 +413,7 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
     {
         auto pDcgmGroupInfo = std::make_unique<dcgmGroupInfo_t>();
 
-        if (auto ret = dcgmGroupGetInfo(handle, m_drd.groupId, pDcgmGroupInfo.get()); ret != DCGM_ST_OK)
+        if (auto ret = m_dcgmOps->dcgmGroupGetInfo(handle, m_drd.groupId, pDcgmGroupInfo.get()); ret != DCGM_ST_OK)
         {
             log_error("Failed to get the entities in this group [{}].", m_drd.groupId);
         }
@@ -385,7 +422,7 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
     {
         // entity-id cases
         std::vector<dcgmGroupEntityPair_t> entityGroups;
-        auto err = DcgmNs::EntityListWithMigAndUuidParser(handle, m_drd.entityIds, entityGroups);
+        auto err = DcgmNs::EntityListWithMigAndUuidParser(handle, m_drd.entityIds, entityGroups, m_dcgmOps);
         if (!err.empty())
         {
             std::stringstream errMsg;
@@ -435,45 +472,19 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
     }
     else if (result != DCGM_ST_OK)
     {
-        std::stringstream errMsg;
-        if (std::strlen(m_drd.fakeGpuList) != 0)
-        {
-            errMsg << "Error: Unable to complete diagnostic for fake GPUs " << m_drd.fakeGpuList << ". ";
-        }
-        else if (m_drd.groupId == DCGM_GROUP_NULL)
-        {
-            if (m_drd.entityIds[0] != '\0')
-            {
-                errMsg << "Error: Unable to complete diagnostic for entities " << m_drd.entityIds << ". ";
-            }
-            else
-            {
-                errMsg << "Error: Unable to complete diagnostic. ";
-            }
-        }
-        else
-        {
-            errMsg << "Error: Unable to complete diagnostic for group " << (unsigned int)(uintptr_t)m_drd.groupId
-                   << ". ";
-        }
-        errMsg << "Return: (" << std::to_underlying(result) << ") : " << errorString(result) << "\n";
-
-        if (auto const &systemErrors = GetResponseSystemErrors(response); systemErrors.has_value())
-        {
-            errMsg << *systemErrors;
-        }
+        std::string errMsg = HelperBuildFailureMessage(response, result);
 
         if (result == DCGM_ST_TIMEOUT)
         {
             // If there was a timeout, we attempt to stop the launched diagnostic before returning.
-            if (dcgmReturn_t ret = dcgmStopDiagnostic(handle); ret != DCGM_ST_OK)
+            if (dcgmReturn_t ret = m_dcgmOps->dcgmStopDiagnostic(handle); ret != DCGM_ST_OK)
             {
-                errMsg << "\nError: Could not stop the launched diagnostic.";
+                errMsg += "\nError: Could not stop the launched diagnostic.";
                 log_error("There was an error stopping the launched diagnostic. Return: {}", ret);
             }
         }
 
-        HelperDisplayFailureMessage(errMsg.str(), result);
+        HelperDisplayFailureMessage(errMsg, result);
         return result;
     }
     else
@@ -521,7 +532,7 @@ dcgmReturn_t Diag::RunDiagOnce(dcgmHandle_t handle)
 /*******************************************************************************/
 dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v12 &response)
 {
-    std::unique_ptr<RemoteDiagExecutor> rde = std::make_unique<RemoteDiagExecutor>(handle, m_drd);
+    std::unique_ptr<RemoteDiagExecutor> rde = std::make_unique<RemoteDiagExecutor>(handle, m_drd, m_dcgmOps);
     dcgmReturn_t result                     = DCGM_ST_OK;
     diag_stopDiagOnSignal                   = true;
 
@@ -536,7 +547,7 @@ dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v12
             {
                 // We cannot use AbortDiag as it will fail to connect to the remote host engine.
                 // Since it is embedded host engine, we can use handle directly to stop the diagnostic
-                if (dcgmReturn_t ret = dcgmStopDiagnostic(handle); ret != DCGM_ST_OK)
+                if (dcgmReturn_t ret = m_dcgmOps->dcgmStopDiagnostic(handle); ret != DCGM_ST_OK)
                 {
                     log_error("There was an error stopping the launched diagnostic. Return: {}", ret);
                 }
@@ -545,7 +556,7 @@ dcgmReturn_t Diag::ExecuteDiagOnServer(dcgmHandle_t handle, dcgmDiagResponse_v12
             {
                 // For remote host engine, we need to use AbortDiag to connect to the remote host and stop the
                 // diagnostic
-                AbortDiag ad(m_hostname);
+                AbortDiag ad(m_hostname, m_dcgmOps);
                 ad.Execute();
             }
             // After calling `dcgmStopDiagnostic`, NVVS is likely to be stopped. Typically, we shouldn't need to wait
@@ -685,7 +696,7 @@ void Diag::HelperDisplayMetadata(dcgmDiagResponse_v12 const &response) const
     std::cout << DIAG_INFO;
     HelperDisplayVersionAndDevIds(response);
     HelperDisplayCpuInfo(response);
-    HelperDisplayEudTestsVersion(response);
+    HelperDisplayTestVersions(response);
 }
 
 /**
@@ -767,13 +778,13 @@ void Diag::HelperDisplayCpuInfo(dcgmDiagResponse_v12 const &response) const
     cmdView.display();
 }
 
-void Diag::HelperDisplayEudTestsVersion(dcgmDiagResponse_v12 const &response) const
+void Diag::HelperDisplayTestVersions(dcgmDiagResponse_v12 const &response) const
 {
     CommandOutputController cmdView = CommandOutputController();
 
     cmdView.setDisplayStencil(DIAG_DATA);
 
-    auto gpuEudVersion = GetEudTestVersion(EUD_PLUGIN_NAME, response);
+    auto gpuEudVersion = GetDiagTestVersion(EUD_PLUGIN_NAME, response);
     if (gpuEudVersion.version.has_value())
     {
         cmdView.addDisplayParameter(DATA_NAME_TAG, "EUD Test Version");
@@ -787,7 +798,7 @@ void Diag::HelperDisplayEudTestsVersion(dcgmDiagResponse_v12 const &response) co
         cmdView.display();
     }
 
-    auto cpuEudVersion = GetEudTestVersion(CPU_EUD_TEST_NAME, response);
+    auto cpuEudVersion = GetDiagTestVersion(CPU_EUD_TEST_NAME, response);
     if (cpuEudVersion.version.has_value())
     {
         cmdView.addDisplayParameter(DATA_NAME_TAG, "CPU EUD Test Version");
@@ -798,6 +809,14 @@ void Diag::HelperDisplayEudTestsVersion(dcgmDiagResponse_v12 const &response) co
     {
         cmdView.addDisplayParameter(DATA_NAME_TAG, "CPU EUD Package Version");
         cmdView.addDisplayParameter(DATA_INFO_TAG, *cpuEudVersion.eudPackageVersion);
+        cmdView.display();
+    }
+
+    auto cpuSdcVersion = GetDiagTestVersion(CPU_SDC_PLUGIN_NAME, response);
+    if (cpuSdcVersion.version.has_value())
+    {
+        cmdView.addDisplayParameter(DATA_NAME_TAG, "CPU SDC Binary Version");
+        cmdView.addDisplayParameter(DATA_INFO_TAG, *cpuSdcVersion.version);
         cmdView.display();
     }
 }
@@ -1182,7 +1201,7 @@ void Diag::HelperJsonAddEntities(Json::Value &output, dcgmDiagResponse_v12 const
 
 void Diag::HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v12 const &response)
 {
-    auto gpuEudVersion = GetEudTestVersion(EUD_PLUGIN_NAME, response);
+    auto gpuEudVersion = GetDiagTestVersion(EUD_PLUGIN_NAME, response);
     if (gpuEudVersion.version.has_value())
     {
         output[NVVS_METADATA]["EUD Test Version"] = *gpuEudVersion.version;
@@ -1192,7 +1211,7 @@ void Diag::HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v12 const
         output[NVVS_METADATA]["EUD Package Version"] = *gpuEudVersion.eudPackageVersion;
     }
 
-    auto cpuEudVersion = GetEudTestVersion(CPU_EUD_TEST_NAME, response);
+    auto cpuEudVersion = GetDiagTestVersion(CPU_EUD_TEST_NAME, response);
     if (cpuEudVersion.version.has_value())
     {
         output[NVVS_METADATA]["CPU EUD Test Version"] = *cpuEudVersion.version;
@@ -1200,6 +1219,12 @@ void Diag::HelperJsonAddMetadata(Json::Value &output, dcgmDiagResponse_v12 const
     if (cpuEudVersion.eudPackageVersion.has_value())
     {
         output[NVVS_METADATA]["CPU EUD Package Version"] = *cpuEudVersion.eudPackageVersion;
+    }
+
+    auto cpuSdcVersion = GetDiagTestVersion(CPU_SDC_PLUGIN_NAME, response);
+    if (cpuSdcVersion.version.has_value())
+    {
+        output[NVVS_METADATA]["CPU SDC Binary Version"] = *cpuSdcVersion.version;
     }
 
     if (response.dcgmVersion[0] != '\0')
@@ -1323,8 +1348,10 @@ StartDiag::StartDiag(const std::string &hostname,
                      const std::string &configPath,
                      bool jsonOutput,
                      dcgmRunDiag_v10 &drd,
-                     unsigned int iterations)
-    : m_diagObj(iterations, hostname)
+                     unsigned int iterations,
+                     DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
+    , m_diagObj(iterations, hostname, dcgmOps)
 
 {
     std::string configFileContents;
@@ -1395,7 +1422,7 @@ dcgmReturn_t StartDiag::StartListenerServer()
     sprintf(listenIp, "127.0.0.1");
     int connTcp = 1;
 
-    ret = dcgmEngineRun(listenPort, listenIp, connTcp);
+    ret = m_dcgmOps->dcgmEngineRun(listenPort, listenIp, connTcp);
 
     if (ret != DCGM_ST_OK)
     {
@@ -1424,7 +1451,7 @@ dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus
     params.logFile  = nullptr;
     params.severity = DcgmLoggingSeverityUnspecified;
 
-    connectionStatus = dcgmStartEmbedded_v2(&params);
+    connectionStatus = m_dcgmOps->dcgmStartEmbedded_v2(&params);
 
     if (connectionStatus != DCGM_ST_OK)
     {
@@ -1436,7 +1463,7 @@ dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus
         m_diagObj.SetEmbeddedHostEngine(true);
         connectionStatus = m_diagObj.RunStartDiag(params.dcgmHandle);
 
-        dcgmStopEmbedded(params.dcgmHandle);
+        m_dcgmOps->dcgmStopEmbedded(params.dcgmHandle);
     }
     return connectionStatus;
 }
@@ -1449,7 +1476,8 @@ dcgmReturn_t StartDiag::DoExecuteConnectionFailure(dcgmReturn_t connectionStatus
  *****************************************************************************/
 
 /*****************************************************************************/
-AbortDiag::AbortDiag(std::string hostname)
+AbortDiag::AbortDiag(std::string hostname, DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : Command(dcgmOps)
 {
     m_hostName = std::move(hostname);
 }
@@ -1457,5 +1485,5 @@ AbortDiag::AbortDiag(std::string hostname)
 /*****************************************************************************/
 dcgmReturn_t AbortDiag::DoExecuteConnected()
 {
-    return dcgmStopDiagnostic(m_dcgmHandle);
+    return m_dcgmOps->dcgmStopDiagnostic(m_dcgmHandle);
 }

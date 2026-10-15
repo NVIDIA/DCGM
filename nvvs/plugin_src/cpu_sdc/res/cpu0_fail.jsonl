@@ -1,0 +1,2 @@
+{"sdc": {"version": "1.2.3"}}
+{"test_result": {"return_code": 0,"test_id": "MemTest1","test_num": 1,"test_suite_len": 2,"test_status": "Fail","test_details": "failure from mocked_cpu_sdc using rust!", "device_type": "Cpu","device_ids": ["0"]}}

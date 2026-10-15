@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,17 +18,49 @@
 #include <array>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
-#define TARGETED_STRESS_TESTS
+#include <DcgmOpsAnyUniquePtr.hpp>
 #include <DcgmSystem.h>
+#include <MockCublasOps.h>
+#include <MockCudaCommon.h>
+#include <MockCudaOps.h>
+#include <MockDcgmOps.h>
+#include <NvvsCommon.h>
 #include <PluginInterface.h>
 #include <PluginStrings.h>
+#include <ScopedAtomic.hpp>
 #include <TargetedStress_wrapper.h>
 #include <UniquePtrUtil.h>
 
-#include <CudaStubControl.h>
 #include <dcgm_errors.h>
 
+
+namespace
+{
+struct TargetedStressTestFixture
+{
+    std::unique_ptr<DcgmNs::MockDcgmOps> mockDcgmOpsUnique;
+    DcgmNs::MockDcgmOps *mockDcgmOps;
+    std::unique_ptr<MockCudaOps> mockCudaOpsUnique;
+    MockCudaOps *mockCudaOps;
+    std::unique_ptr<MockCublasOps> mockCublasOpsUnique;
+    std::unique_ptr<MockCudaCommon> mockCudaCommonUnique;
+    NvvsCommon nvvsCommon;
+
+    TargetedStressTestFixture()
+        : mockDcgmOpsUnique(std::make_unique<DcgmNs::MockDcgmOps>())
+        , mockDcgmOps(mockDcgmOpsUnique.get())
+        , mockCudaOpsUnique(std::make_unique<MockCudaOps>())
+        , mockCudaOps(mockCudaOpsUnique.get())
+        , mockCublasOpsUnique(std::make_unique<MockCublasOps>())
+        , mockCudaCommonUnique(std::make_unique<MockCudaCommon>())
+    {}
+};
+} // namespace
+
+namespace
+{
 dcgmDiagPluginEntityList_v1 MakeTargetedStressEntityList(unsigned int gpuCount,
                                                          DcgmEntityStatus_t status,
                                                          unsigned int pciDeviceId)
@@ -67,40 +99,50 @@ dcgmDiagPluginTestParameter_t MakeTargetedStressStringParameter(std::string_view
     return param;
 }
 
-class CudaStubMemoryGuard
+/**
+ * Test adapter that exposes protected targeted-stress execution state.
+ */
+class TestConstantPerf : public ConstantPerf
 {
 public:
-    CudaStubMemoryGuard()
-    {
-        cudaStubAllocateMemory = true;
-    }
+    TestConstantPerf(dcgmHandle_t handle,
+                     std::unique_ptr<DcgmNs::MockDcgmOps> dcgmOps,
+                     std::unique_ptr<MockCudaOps> cudaOps,
+                     std::unique_ptr<MockCublasOps> cublasOps,
+                     std::unique_ptr<MockCudaCommon> cudaCommon,
+                     NvvsCommon *nvvsCommon)
+        : ConstantPerf(handle,
+                       std::move(dcgmOps),
+                       std::move(cudaOps),
+                       std::move(cublasOps),
+                       std::move(cudaCommon),
+                       nvvsCommon)
+    {}
 
-    ~CudaStubMemoryGuard()
-    {
-        cudaStubAllocateMemory = false;
-    }
+    using ConstantPerf::CheckGpuPerf;
+    using ConstantPerf::CheckPassFail;
+    using ConstantPerf::CudaInit;
+    using ConstantPerf::m_atATime;
+    using ConstantPerf::m_dcgmCommErrorOccurred;
+    using ConstantPerf::m_device;
+    using ConstantPerf::m_targetPerf;
+    using ConstantPerf::m_testDuration;
+    using ConstantPerf::m_testParameters;
+    using ConstantPerf::m_useDgemm;
+    using ConstantPerf::RunTest;
 };
+} // namespace
 
-class CudaStubResultGuard
-{
-public:
-    ~CudaStubResultGuard()
-    {
-        cudaStreamCreateResult        = cudaSuccess;
-        cudaEventCreateResult         = cudaSuccess;
-        cudaGetDeviceCountResult      = cudaSuccess;
-        cudaGetDevicePropertiesResult = cudaSuccess;
-        cudaHostAllocResult           = cudaSuccess;
-        cudaMallocResult              = cudaSuccess;
-        cudaStubDeviceCount           = 2;
-    }
-};
-
-TEST_CASE("TargetedStress::Init handles empty and fake GPU inputs")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::Init handles empty and fake GPU inputs")
 {
     GIVEN("a targeted stress plugin")
     {
-        auto cp = std::make_unique<ConstantPerf>((dcgmHandle_t)1);
+        auto cp = std::make_unique<TestConstantPerf>((dcgmHandle_t)1,
+                                                     std::move(mockDcgmOpsUnique),
+                                                     std::move(mockCudaOpsUnique),
+                                                     std::move(mockCublasOpsUnique),
+                                                     std::move(mockCudaCommonUnique),
+                                                     &nvvsCommon);
 
         SECTION("nullptr entity list is rejected")
         {
@@ -126,11 +168,16 @@ TEST_CASE("TargetedStress::Init handles empty and fake GPU inputs")
     }
 }
 
-TEST_CASE("TargetedStress::Go handles early exits")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::Go handles early exits")
 {
     GIVEN("a targeted stress plugin")
     {
-        auto cp = std::make_unique<ConstantPerf>((dcgmHandle_t)1);
+        auto cp = std::make_unique<TestConstantPerf>((dcgmHandle_t)1,
+                                                     std::move(mockDcgmOpsUnique),
+                                                     std::move(mockCudaOpsUnique),
+                                                     std::move(mockCublasOpsUnique),
+                                                     std::move(mockCudaCommonUnique),
+                                                     &nvvsCommon);
 
         SECTION("unknown test names return before initialization")
         {
@@ -157,7 +204,7 @@ TEST_CASE("TargetedStress::Go handles early exits")
             REQUIRE(cp->GetGpuResults(cp->GetTargetedStressTestName()).at(0) == NVVS_RESULT_PASS);
         }
 
-        SECTION("disabled test is skipped before running CUDA workload")
+        SECTION("disabled test is skipped before running CUDA workload (DCGM_FR_TEST_DISABLED path)")
         {
             auto entityList                     = MakeTargetedStressEntityListPtr(1, DcgmEntityStatusOk, 1);
             dcgmDiagPluginTestParameter_t param = MakeTargetedStressStringParameter(TS_STR_IS_ALLOWED, "False");
@@ -166,28 +213,39 @@ TEST_CASE("TargetedStress::Go handles early exits")
 
             REQUIRE(cp->GetGpuResults(cp->GetTargetedStressTestName()).at(0) == NVVS_RESULT_SKIP);
         }
-
-        SECTION("generic mode keeps disabled calibration paths runnable")
-        {
-            auto entityList = MakeTargetedStressEntityListPtr(1, DcgmEntityStatusOk, 0);
-            std::array<dcgmDiagPluginTestParameter_t, 3> params {
-                MakeTargetedStressStringParameter(TS_STR_IS_ALLOWED, "False"),
-                MakeTargetedStressStringParameter(PS_USE_GENERIC_MODE, "True"),
-                MakeTargetedStressStringParameter(TS_STR_TEST_DURATION, "0"),
-            };
-
-            cp->Go(cp->GetTargetedStressTestName(), entityList.get(), params.size(), params.data());
-
-            CHECK_NOTHROW(cp->GetGpuResults(cp->GetTargetedStressTestName()));
-        }
     }
 }
 
-TEST_CASE("TargetedStress::CheckGpuPerf validates custom perf stats")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::Go generic mode keeps disabled calibration paths runnable")
+{
+    auto cp         = std::make_unique<TestConstantPerf>((dcgmHandle_t)1,
+                                                         std::move(mockDcgmOpsUnique),
+                                                         std::move(mockCudaOpsUnique),
+                                                         std::move(mockCublasOpsUnique),
+                                                         std::move(mockCudaCommonUnique),
+                                                         &nvvsCommon);
+    auto entityList = MakeTargetedStressEntityListPtr(1, DcgmEntityStatusOk, 0);
+    std::array<dcgmDiagPluginTestParameter_t, 3> params {
+        MakeTargetedStressStringParameter(TS_STR_IS_ALLOWED, "False"),
+        MakeTargetedStressStringParameter(PS_USE_GENERIC_MODE, "True"),
+        MakeTargetedStressStringParameter(TS_STR_TEST_DURATION, "0"),
+    };
+
+    cp->Go(cp->GetTargetedStressTestName(), entityList.get(), params.size(), params.data());
+
+    CHECK_NOTHROW(cp->GetGpuResults(cp->GetTargetedStressTestName()));
+}
+
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::CheckGpuPerf validates custom perf stats")
 {
     GIVEN("an initialized targeted stress plugin")
     {
-        ConstantPerf cp((dcgmHandle_t)1);
+        TestConstantPerf cp((dcgmHandle_t)1,
+                            std::move(mockDcgmOpsUnique),
+                            std::move(mockCudaOpsUnique),
+                            std::move(mockCublasOpsUnique),
+                            std::move(mockCudaCommonUnique),
+                            &nvvsCommon);
         dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(1, DcgmEntityStatusOk, 1);
         cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
         REQUIRE(cp.Init(&entityList));
@@ -233,9 +291,15 @@ TEST_CASE("TargetedStress::CheckGpuPerf validates custom perf stats")
     }
 }
 
-TEST_CASE("TargetedStress::CheckPassFailSingleGpu skips perf checks before test completion")
+TEST_CASE_METHOD(TargetedStressTestFixture,
+                 "TargetedStress::CheckPassFailSingleGpu skips perf checks before test completion")
 {
-    ConstantPerf cp((dcgmHandle_t)1);
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
     dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(1, DcgmEntityStatusOk, 1);
     cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
     REQUIRE(cp.Init(&entityList));
@@ -251,9 +315,14 @@ TEST_CASE("TargetedStress::CheckPassFailSingleGpu skips perf checks before test 
     CHECK_FALSE(cp.CheckPassFailSingleGpu(device, errorList, timelib_usecSince1970(), timelib_usecSince1970()));
 }
 
-TEST_CASE("TargetedStress::CheckPassFail sets passing GPU results")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::CheckPassFail sets passing GPU results")
 {
-    ConstantPerf cp((dcgmHandle_t)1);
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
     dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(2, DcgmEntityStatusOk, 1);
     cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
     REQUIRE(cp.Init(&entityList));
@@ -268,17 +337,28 @@ TEST_CASE("TargetedStress::CheckPassFail sets passing GPU results")
     CHECK(cp.GetGpuResults(cp.GetTargetedStressTestName()).at(1) == NVVS_RESULT_PASS);
 }
 
-TEST_CASE("TargetedStress::RunTest rejects null entity info")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::RunTest rejects null entity info")
 {
-    ConstantPerf cp((dcgmHandle_t)1);
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
 
     CHECK_FALSE(cp.RunTest(nullptr));
 }
 
-TEST_CASE("TargetedStress::RunTest handles zero-duration CUDA setup and pass/fail checks")
+TEST_CASE_METHOD(TargetedStressTestFixture,
+                 "TargetedStress::RunTest handles zero-duration CUDA setup and pass/fail checks")
 {
-    CudaStubMemoryGuard guard;
-    ConstantPerf cp((dcgmHandle_t)1);
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(1, DcgmEntityStatusOk, 1);
     cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
     REQUIRE(cp.Init(&entityList));
@@ -286,25 +366,10 @@ TEST_CASE("TargetedStress::RunTest handles zero-duration CUDA setup and pass/fai
     cp.m_targetPerf   = 100.0;
     cp.m_useDgemm     = 1;
     cp.m_atATime      = 1;
+    cp.m_testParameters->SetDouble(TS_STR_TEST_DURATION, 0.0);
+    cp.m_testParameters->SetDouble(TS_STR_TARGET_PERF, cp.m_targetPerf);
     cp.m_testParameters->SetDouble(TS_STR_CUDA_STREAMS_PER_GPU, 1.0);
     cp.m_testParameters->SetDouble(TS_STR_CUDA_OPS_PER_STREAM, 1.0);
-    cp.m_testParameters->SetDouble(TS_STR_TARGET_PERF_MIN_RATIO, 0.0);
-
-    CHECK(cp.RunTest(&entityList));
-    CHECK(cp.GetGpuResults(cp.GetTargetedStressTestName()).at(0) == NVVS_RESULT_PASS);
-}
-
-TEST_CASE("TargetedStress::RunTest queues short CUDA worker workloads with stubs")
-{
-    CudaStubMemoryGuard guard;
-    ConstantPerf cp((dcgmHandle_t)1);
-    dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(1, DcgmEntityStatusOk, 1);
-    cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
-    REQUIRE(cp.Init(&entityList));
-    cp.m_testDuration = 0.02;
-    cp.m_targetPerf   = 1000000000.0;
-    cp.m_useDgemm     = 1;
-    cp.m_atATime      = 1;
     cp.m_testParameters->SetDouble(TS_STR_TARGET_PERF_MIN_RATIO, 0.0);
     cp.SetGpuStat(cp.GetTargetedStressTestName(), 0, PERF_STAT_NAME, 1.0);
 
@@ -312,10 +377,41 @@ TEST_CASE("TargetedStress::RunTest queues short CUDA worker workloads with stubs
     CHECK(cp.GetGpuResults(cp.GetTargetedStressTestName()).at(0) == NVVS_RESULT_PASS);
 }
 
-TEST_CASE("TargetedStress::RunTest queues SGEMM worker workloads with stubs")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::RunTest queues short CUDA worker workloads with stubs")
 {
-    CudaStubMemoryGuard guard;
-    ConstantPerf cp((dcgmHandle_t)1);
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
+    dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(1, DcgmEntityStatusOk, 1);
+    cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
+    REQUIRE(cp.Init(&entityList));
+    cp.m_testDuration = 0.02;
+    cp.m_targetPerf   = 1000000000.0;
+    cp.m_useDgemm     = 1;
+    cp.m_atATime      = 1;
+    cp.m_testParameters->SetDouble(TS_STR_TEST_DURATION, cp.m_testDuration);
+    cp.m_testParameters->SetDouble(TS_STR_TARGET_PERF, cp.m_targetPerf);
+    cp.m_testParameters->SetDouble(TS_STR_CUDA_OPS_PER_STREAM, cp.m_atATime);
+    cp.m_testParameters->SetDouble(TS_STR_TARGET_PERF_MIN_RATIO, 0.0);
+    cp.SetGpuStat(cp.GetTargetedStressTestName(), 0, PERF_STAT_NAME, 1.0);
+
+    CHECK(cp.RunTest(&entityList));
+    CHECK(cp.GetGpuResults(cp.GetTargetedStressTestName()).at(0) == NVVS_RESULT_PASS);
+}
+
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::RunTest queues SGEMM worker workloads with stubs")
+{
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(1, DcgmEntityStatusOk, 1);
     cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
     REQUIRE(cp.Init(&entityList));
@@ -324,6 +420,9 @@ TEST_CASE("TargetedStress::RunTest queues SGEMM worker workloads with stubs")
     cp.m_useDgemm     = 0;
     cp.m_atATime      = 1;
     cp.m_testParameters->SetString(TS_STR_USE_DGEMM, "False");
+    cp.m_testParameters->SetDouble(TS_STR_TEST_DURATION, cp.m_testDuration);
+    cp.m_testParameters->SetDouble(TS_STR_TARGET_PERF, cp.m_targetPerf);
+    cp.m_testParameters->SetDouble(TS_STR_CUDA_OPS_PER_STREAM, cp.m_atATime);
     cp.m_testParameters->SetDouble(TS_STR_TARGET_PERF_MIN_RATIO, 0.0);
     cp.SetGpuStat(cp.GetTargetedStressTestName(), 0, PERF_STAT_NAME, 1.0);
 
@@ -331,7 +430,7 @@ TEST_CASE("TargetedStress::RunTest queues SGEMM worker workloads with stubs")
     CHECK(cp.GetGpuResults(cp.GetTargetedStressTestName()).at(0) == NVVS_RESULT_PASS);
 }
 
-TEST_CASE("TargetedStress::CudaInit()")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::CudaInit()")
 {
     std::unique_ptr<dcgmDiagPluginEntityList_v1> entityList = std::make_unique<dcgmDiagPluginEntityList_v1>();
 
@@ -343,9 +442,13 @@ TEST_CASE("TargetedStress::CudaInit()")
         entityList->entities[i].auxField.gpu.status                             = DcgmEntityStatusOk;
         entityList->entities[i].auxField.gpu.attributes.identifiers.pciDeviceId = 1;
     }
-
-    ConstantPerf cp((dcgmHandle_t)1);
-    cudaStreamCreateResult = cudaErrorInvalidValue;
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
+    mockCudaOps->cudaStreamCreateResult = cudaErrorInvalidValue;
     cp.InitializeForEntityList(cp.GetTargetedStressTestName(), *entityList);
     CHECK(cp.Init(entityList.get()) == true);
 
@@ -375,13 +478,17 @@ TEST_CASE("TargetedStress::CudaInit()")
     CHECK(errorCodeCounts[DCGM_FR_CUDA_API] == 1);
     REQUIRE(streamErrorIndex < entityResults.numErrors);
     CHECK(entityResults.errors[streamErrorIndex].entity.entityId == 0);
-    cudaStreamCreateResult = cudaSuccess;
 }
 
-TEST_CASE("TargetedStress::CudaInit initializes streams and buffers with CUDA stubs")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::CudaInit initializes streams and buffers with CUDA stubs")
 {
-    CudaStubMemoryGuard guard;
-    ConstantPerf cp((dcgmHandle_t)1);
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(1, DcgmEntityStatusOk, 1);
     cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
     REQUIRE(cp.Init(&entityList));
@@ -406,11 +513,15 @@ TEST_CASE("TargetedStress::CudaInit initializes streams and buffers with CUDA st
     }
 }
 
-TEST_CASE("TargetedStress::CudaInit handles CUDA setup failures")
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::CudaInit handles CUDA setup failures")
 {
-    CudaStubResultGuard resultGuard;
-    CudaStubMemoryGuard memoryGuard;
-    ConstantPerf cp((dcgmHandle_t)1);
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory    = true;
     dcgmDiagPluginEntityList_v1 entityList = MakeTargetedStressEntityList(1, DcgmEntityStatusOk, 1);
     cp.InitializeForEntityList(cp.GetTargetedStressTestName(), entityList);
     REQUIRE(cp.Init(&entityList));
@@ -419,43 +530,83 @@ TEST_CASE("TargetedStress::CudaInit handles CUDA setup failures")
 
     SECTION("device count failure is reported")
     {
-        cudaGetDeviceCountResult = cudaErrorInvalidValue;
+        mockCudaOps->cudaGetDeviceCountResult = cudaErrorInvalidValue;
 
         CHECK(cp.CudaInit() == -1);
     }
 
     SECTION("invalid CUDA device index is reported")
     {
-        cp.m_device[0]->cudaDeviceIdx = cudaStubDeviceCount + 1;
+        cp.m_device[0]->cudaDeviceIdx = mockCudaOps->cudaStubDeviceCount + 1;
 
         CHECK(cp.CudaInit() == -1);
     }
 
     SECTION("device property failure is reported")
     {
-        cudaGetDevicePropertiesResult = cudaErrorInvalidValue;
+        mockCudaOps->cudaGetDevicePropertiesResult = cudaErrorInvalidValue;
 
         CHECK(cp.CudaInit() == -1);
     }
 
     SECTION("event creation failure is reported")
     {
-        cudaEventCreateResult = cudaErrorInvalidValue;
+        mockCudaOps->cudaEventCreateResult = cudaErrorInvalidValue;
 
         CHECK(cp.CudaInit() == -1);
     }
 
     SECTION("host allocation failure is reported")
     {
-        cudaHostAllocResult = cudaErrorMemoryAllocation;
+        mockCudaOps->cudaHostAllocResult = cudaErrorMemoryAllocation;
 
         CHECK(cp.CudaInit() == -1);
     }
 
     SECTION("device allocation failure is reported")
     {
-        cudaMallocResult = cudaErrorMemoryAllocation;
+        mockCudaOps->cudaMallocResult = cudaErrorMemoryAllocation;
 
         CHECK(cp.CudaInit() == -1);
     }
+}
+
+TEST_CASE_METHOD(TargetedStressTestFixture, "TargetedStress::Go reports DCGM_FR_ABORTED when stopped")
+{
+    auto entityList = MakeTargetedStressEntityListPtr(1, DcgmEntityStatusOk, 1);
+    std::array<dcgmDiagPluginTestParameter_t, 3> params {
+        MakeTargetedStressStringParameter(TS_STR_IS_ALLOWED, "True"),
+        MakeTargetedStressStringParameter(TS_STR_TEST_DURATION, "0"),
+        MakeTargetedStressStringParameter(TS_STR_TARGET_PERF_MIN_RATIO, "0.0"),
+    };
+    TestConstantPerf cp((dcgmHandle_t)1,
+                        std::move(mockDcgmOpsUnique),
+                        std::move(mockCudaOpsUnique),
+                        std::move(mockCublasOpsUnique),
+                        std::move(mockCudaCommonUnique),
+                        &nvvsCommon);
+    mockCudaOps->cudaStubAllocateMemory = true;
+    ScopedAtomic stopGuard(main_should_stop, 1);
+
+    cp.Go(cp.GetTargetedStressTestName(), entityList.get(), params.size(), params.data());
+
+    CHECK(cp.GetGpuResults(cp.GetTargetedStressTestName()).at(0) == NVVS_RESULT_SKIP);
+
+    auto entityResults = MakeUniqueZero<dcgmDiagEntityResults_v2>();
+    REQUIRE(cp.GetResults(cp.GetTargetedStressTestName(), entityResults.get()) == DCGM_ST_OK);
+
+    // The abort path may also record incidental setup/cleanup errors from non-injected dependencies,
+    // so we only assert that DCGM_FR_ABORTED is present and correctly attributed.
+    REQUIRE(entityResults->numErrors >= 1);
+    bool sawAborted = false;
+    for (unsigned int i = 0; i < entityResults->numErrors; ++i)
+    {
+        if (entityResults->errors[i].code == DCGM_FR_ABORTED)
+        {
+            sawAborted = true;
+            CHECK(entityResults->errors[i].entity.entityGroupId == 0);
+            CHECK(entityResults->errors[i].entity.entityId == 0);
+        }
+    }
+    CHECK(sawAborted);
 }

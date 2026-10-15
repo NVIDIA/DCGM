@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2025-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -203,9 +203,7 @@ public:
                                dcgm_field_entity_group_t entityGroup,
                                int64_t const flags) override;
 
-#ifndef DCGM_NVSWITCH_TEST // Allow nvsdm tests to peek in
 protected:
-#endif
     std::unique_ptr<NvsdmBase> m_nvsdm;         // NVSDM Library functions
     std::vector<NvsdmDevice> m_nvSwitchDevices; // NVSDM NvSwitch Devices
     std::vector<NvsdmPort> m_nvSwitchPorts;     // NVSDM NvSwitch Ports

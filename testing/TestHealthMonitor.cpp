@@ -41,18 +41,18 @@ TestHealthMonitor::TestHealthMonitor()
 
     // Initialize devastating XIDs
     m_devastatingXids = {
-        { 48, "Double Bit ECC Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
-        { 74, "NVLink Critical Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
+        { 48, "Double Bit ECC Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR },
+        { 74, "NVLink Critical Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_NVLINK, DCGM_FR_XID_ERROR },
         { 79, DCGM_FR_FALLEN_OFF_BUS_MSG, DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_FALLEN_OFF_BUS },
-        { 94, DCGM_FR_CONTAINED_ERROR_MSG, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_ALL, DCGM_FR_CONTAINED_ERROR },
+        { 94, DCGM_FR_CONTAINED_ERROR_MSG, DCGM_HEALTH_RESULT_WARN, DCGM_HEALTH_WATCH_MEM, DCGM_FR_CONTAINED_ERROR },
         { 95,
           DCGM_FR_UNCONTAINED_ERROR_MSG,
           DCGM_HEALTH_RESULT_FAIL,
-          DCGM_HEALTH_WATCH_ALL,
+          DCGM_HEALTH_WATCH_MEM,
           DCGM_FR_UNCONTAINED_ERROR },
         { 119, "GSP RPC Timeout", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
         { 120, "GSP Error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR },
-        { 140, "ECC unrecovered error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_ALL, DCGM_FR_XID_ERROR }
+        { 140, "ECC unrecovered error", DCGM_HEALTH_RESULT_FAIL, DCGM_HEALTH_WATCH_MEM, DCGM_FR_XID_ERROR }
     };
 
     // Initialize subsystem XIDs
@@ -657,7 +657,7 @@ int TestHealthMonitor::TestHMCheckImex()
         }
     }
 
-    dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_NVLINK);
+    dcgmHealthSystems_t newSystems = dcgmHealthSystems_t(DCGM_HEALTH_WATCH_IMEX);
     auto result                    = dcgmHealthSet(m_dcgmHandle, m_gpuGroup, newSystems);
     if (result != DCGM_ST_OK)
     {
@@ -1855,7 +1855,7 @@ int TestHealthMonitor::TestXidSeverityLevels()
                            DCGM_FR_XID_ERROR,
                            now + 1s,
                            response,
-                           DCGM_HEALTH_WATCH_ALL);
+                           DCGM_HEALTH_WATCH_MEM);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -1883,7 +1883,7 @@ int TestHealthMonitor::TestXidSeverityLevels()
                            DCGM_FR_XID_ERROR,
                            now + 3s,
                            response,
-                           DCGM_HEALTH_WATCH_ALL);
+                           DCGM_HEALTH_WATCH_MEM);
     if (result != DCGM_ST_OK)
     {
         return result;
@@ -2006,13 +2006,12 @@ dcgmReturn_t TestSingleFabricManagerStatus(dcgmHandle_t handle,
 /*************************************************************************/
 dcgmReturn_t ClearNvlinkFields(dcgmHandle_t handle, unsigned int const gpuId, long long const timestamp)
 {
-    std::array<std::pair<unsigned short, int64_t>, 8> const nvlinkFields = { {
+    std::array<std::pair<unsigned short, int64_t>, 7> const nvlinkFields = { {
         { DCGM_FI_DEV_NVLINK_CRC_FLIT_ERROR_TOTAL, 0 },
         { DCGM_FI_DEV_NVLINK_CRC_DATA_ERROR_TOTAL, 0 },
         { DCGM_FI_DEV_NVLINK_REPLAY_ERROR_TOTAL, 0 },
         { DCGM_FI_DEV_NVLINK_RECOVERY_ERROR_TOTAL, 0 },
         { DCGM_FI_DEV_NVLINK_RX_SYMBOL_ERROR_TOTAL, 0 },
-        { DCGM_FI_DEV_NVLINK_EFFECTIVE_BER_RAW, DCGM_INT64_BLANK },
         { DCGM_FI_DEV_FABRIC_HEALTH_MASK, 0 },
         { DCGM_FI_DEV_FABRIC_MANAGER_STATUS, DCGM_INT64_BLANK },
     } };

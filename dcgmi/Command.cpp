@@ -27,7 +27,9 @@
 #include <string.h>
 
 /*****************************************************************************/
-Command::Command() = default;
+Command::Command(DcgmNs::DcgmOpsAnyPtr dcgmOps)
+    : m_dcgmOps(dcgmOps)
+{}
 
 /*****************************************************************************/
 Command::~Command()
@@ -35,7 +37,7 @@ Command::~Command()
     if (m_dcgmHandle)
     {
         // Disconnect
-        dcgmReturn_t result = dcgmDisconnect(m_dcgmHandle);
+        dcgmReturn_t result = m_dcgmOps->dcgmDisconnect(m_dcgmHandle);
         if (DCGM_ST_OK != result)
         {
             std::cout << "Error: unable to close connection to specified host: " << m_hostName << std::endl;
@@ -53,7 +55,7 @@ dcgmReturn_t Command::Connect(void)
      * only connect to the remote host engine from within the command object
      */
 
-    dcgmReturn_t result = dcgmInit();
+    dcgmReturn_t result = m_dcgmOps->dcgmInit();
     if (DCGM_ST_OK != result)
     {
         if (m_silent == false)
@@ -66,7 +68,7 @@ dcgmReturn_t Command::Connect(void)
     connectParams.persistAfterDisconnect = m_persistAfterDisconnect;
     connectParams.timeoutMs              = m_timeout;
 
-    result = dcgmConnect_v3(m_hostName.c_str(), &connectParams, &m_dcgmHandle);
+    result = m_dcgmOps->dcgmConnect_v3(m_hostName.c_str(), &connectParams, &m_dcgmHandle);
     if (DCGM_ST_OK != result)
     {
         if (m_silent == false)
