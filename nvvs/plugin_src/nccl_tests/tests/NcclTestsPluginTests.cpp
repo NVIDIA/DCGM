@@ -22,6 +22,7 @@
 #include <catch2/catch_all.hpp>
 #include <filesystem>
 #include <fstream>
+#include <vector>
 
 namespace DcgmNs::Nvvs::Plugins::NcclTests
 {
@@ -91,6 +92,7 @@ public:
 
         // Simple shell script that mimics the expected nccl-tests output and exits successfully
         execFile << "#!/bin/sh\n";
+        execFile << "printf '%s\\n' \"$@\" > \"$(dirname \"$0\")/args\"\n";
         execFile << "echo \"# Out of bounds values : PASSED\"\n";
         execFile << "echo \"# Avg bus bandwidth : PASSED\"\n";
         execFile.close();
@@ -138,6 +140,19 @@ public:
     std::filesystem::path GetExecDir() const
     {
         return m_execDir;
+    }
+
+    std::vector<std::string> GetArguments() const
+    {
+        std::ifstream argsFile { m_execDir / "args" };
+        REQUIRE(argsFile.is_open());
+        std::vector<std::string> args;
+        std::string arg;
+        while (std::getline(argsFile, arg))
+        {
+            args.push_back(arg);
+        }
+        return args;
     }
 
 private:
@@ -436,6 +451,30 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
             }
         }
     }
+}
+
+TEST_CASE("NcclTestsPlugin: Runs NCCL tests on every selected GPU")
+{
+    TestNcclTestsPlugin plugin((dcgmHandle_t)1);
+    MockNcclTestsExecutableEnv mockNcclTestsExecutableEnv;
+    auto const numGpus = GENERATE(1u, 2u, 6u);
+    auto entityList    = createEntityList(numGpus);
+
+    // GPU IDs need not be consecutive or start at zero.
+    for (unsigned int i = 0; i < numGpus; i++)
+    {
+        entityList->entities[i].entity.entityId = 2 * i + 1;
+    }
+
+    // Only GPUs should contribute to the NCCL GPU count.
+    auto &cpuEntity         = entityList->entities[entityList->numEntities++].entity;
+    cpuEntity.entityGroupId = DCGM_FE_CPU;
+    cpuEntity.entityId      = 0;
+
+    plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), 0, nullptr);
+
+    REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_PASS);
+    REQUIRE(mockNcclTestsExecutableEnv.GetArguments() == std::vector<std::string> { "-g", std::to_string(numGpus) });
 }
 
 TEST_CASE("NcclTestsPlugin: Shutdown()")
