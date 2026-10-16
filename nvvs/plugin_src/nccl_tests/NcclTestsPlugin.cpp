@@ -211,7 +211,8 @@ void NcclTestsPlugin::Go(std::string const &testName,
     }
     log_debug("Running the nccl-tests plugin with the executable path {}.", ncclTestsExecutablePath.string());
 
-    std::vector<std::string> execArgv { ncclTestsExecutablePath.string() };
+    // CUDA_VISIBLE_DEVICES selects the GPUs; nccl-tests also needs their count to use all of them.
+    std::vector<std::string> execArgv { ncclTestsExecutablePath.string(), "-g", std::to_string(gpuList.size()) };
 
     std::string output;
     auto launchResult = LaunchExecutable(testName, execArgv, &output);
