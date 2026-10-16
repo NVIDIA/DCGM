@@ -455,13 +455,13 @@ TEST_CASE("NcclTestsPlugin: Go() Execution")
 
 TEST_CASE("NcclTestsPlugin: Runs NCCL tests on every selected GPU")
 {
-    TestNcclTestsPlugin plugin((dcgmHandle_t)1);
+    TestNcclTestsPlugin plugin(static_cast<dcgmHandle_t>(1));
     MockNcclTestsExecutableEnv mockNcclTestsExecutableEnv;
-    auto const numGpus = GENERATE(1u, 2u, 6u);
-    auto entityList    = createEntityList(numGpus);
+    auto const c_numGpus = GENERATE(1u, 2u, 6u);
+    auto entityList      = createEntityList(c_numGpus);
 
     // GPU IDs need not be consecutive or start at zero.
-    for (unsigned int i = 0; i < numGpus; i++)
+    for (unsigned int i = 0; i < c_numGpus; i++)
     {
         entityList->entities[i].entity.entityId = 2 * i + 1;
     }
@@ -474,7 +474,7 @@ TEST_CASE("NcclTestsPlugin: Runs NCCL tests on every selected GPU")
     plugin.Go(NCCL_TESTS_PLUGIN_NAME, entityList.get(), 0, nullptr);
 
     REQUIRE(plugin.GetResult(NCCL_TESTS_PLUGIN_NAME) == NVVS_RESULT_PASS);
-    REQUIRE(mockNcclTestsExecutableEnv.GetArguments() == std::vector<std::string> { "-g", std::to_string(numGpus) });
+    REQUIRE(mockNcclTestsExecutableEnv.GetArguments() == std::vector<std::string> { "-g", std::to_string(c_numGpus) });
 }
 
 TEST_CASE("NcclTestsPlugin: Shutdown()")
